@@ -1,0 +1,19 @@
+[project]
+name = "Brandon Japanese"
+
+[paths]
+raw_dir = "data/inbox/shirabe"
+normalized_file = "data/normalized/vocabulary.json"
+deck_dir = "data/decks"
+template_dir = "templates/japanese-study"
+dist_dir = "dist"
+
+[anki]
+default_deck_name = "Brandon Japanese"
+default_deck_id = 2059400110
+model_id_base = 1607392310
+
+[cards]
+recognition = true
+production = true
+reading = false

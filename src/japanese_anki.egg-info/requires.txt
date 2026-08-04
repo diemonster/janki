@@ -1,0 +1,6 @@
+genanki<1,>=0.13.1
+PyYAML<7,>=6
+
+[dev]
+pytest<9,>=8
+ruff<1,>=0.6

@@ -1,0 +1,18 @@
+deck:
+  name: "Brandon Japanese::Shirabe Inbox"
+  deck_id: 2059400112
+  description: "Vocabulary imported from Shirabe Jisho and enriched locally."
+  source: "../normalized/vocabulary.json"
+  output: "shirabe-inbox.apkg"
+  cards:
+    recognition: true
+    production: true
+    reading: false
+
+# Add inline notes with a matching ID to override or enrich normalized records.
+# Example:
+# notes:
+#   - id: "word:話す:はなす"
+#     furigana: "話[はな]す"
+#     romaji: "hanasu"
+notes: []

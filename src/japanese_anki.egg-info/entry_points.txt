@@ -1,0 +1,2 @@
+[console_scripts]
+janki = japanese_anki.cli:main

@@ -1,0 +1,19 @@
+{{FrontSide}}
+<hr id="answer">
+{{#Furigana}}<div class="reading">{{furigana:Furigana}}</div>{{/Furigana}}
+{{^Furigana}}{{#Reading}}<div class="reading">{{Reading}}</div>{{/Reading}}{{/Furigana}}
+<div class="meanings">{{Meanings}}</div>
+{{#PartOfSpeech}}<div class="metadata">{{PartOfSpeech}}{{#VerbGroup}} · {{VerbGroup}}{{/VerbGroup}}{{#Transitivity}} · {{Transitivity}}{{/Transitivity}}</div>{{/PartOfSpeech}}
+{{#Audio}}<div class="audio">{{Audio}}</div>{{/Audio}}
+{{#ExampleJapanese}}
+<section class="example">
+  <div class="example-japanese">{{ExampleJapanese}}</div>
+  {{#ExampleFurigana}}<div class="example-reading">{{furigana:ExampleFurigana}}</div>{{/ExampleFurigana}}
+  {{#ExampleEnglish}}<div class="example-english">{{ExampleEnglish}}</div>{{/ExampleEnglish}}
+</section>
+{{/ExampleJapanese}}
+{{#UsageNotes}}<section class="notes">{{UsageNotes}}</section>{{/UsageNotes}}
+{{#Conjugations}}<section class="conjugations"><h3>Conjugations</h3>{{Conjugations}}</section>{{/Conjugations}}
+{{#Romaji}}<details class="romaji"><summary>Romaji</summary>{{Romaji}}</details>{{/Romaji}}
+<div class="actions"><a href="shirabelookup://search?w={{ShirabeQuery}}">Open in Shirabe</a></div>
+<div class="source">{{Source}}</div>
