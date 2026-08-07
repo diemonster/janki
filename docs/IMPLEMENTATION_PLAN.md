@@ -405,7 +405,13 @@ Files: `src/japanese_anki/cli.py`, `tests/test_import_ledger.py` (new).
   shared helper in `cli.py` that `import-jpdb` (M2.5) will call — the
   design's "identical pipeline" requirement, made concrete here.
 
-### [ ] M1.W Milestone 1 wrap
+### [x] M1.W Milestone 1 wrap
+
+*Done 2026-08-07. README only, as scoped. It settles the two sections M1.4 and
+M1.5 deferred here; M1.5's validation messages turned out to be self-contained,
+naming no README section, so the new staging text stands on its own rather than
+being pointed at. `migrate-inline` was already documented by M1.7 and was
+verified, not rewritten. Every documented command was run before committing.*
 
 Depends on: all M1 tasks
 Files: `README.md`.
