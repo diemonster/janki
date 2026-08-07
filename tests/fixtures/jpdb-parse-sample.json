@@ -1,0 +1,21 @@
+{
+  "_source": "community-documented shape, not a captured response. No agent has the owner's JPDB_API_KEY, so every value below is hand-written to the shape the community documents; the vids/sids and frequency ranks are plausible placeholders, while the spellings, readings and furigana splits are real (they follow the JmdictFurigana convention). The request this stands in for: POST https://jpdb.io/api/v1/parse with body {\"text\": [\"日本語を話す。お茶と食べ物をたべる。\"], \"token_fields\": [\"vocabulary_index\", \"furigana\"], \"vocabulary_fields\": [\"vid\", \"sid\", \"spelling\", \"reading\", \"pitch_accent\", \"frequency_rank\", \"part_of_speech\"]}. IMPLEMENTATION_PLAN M2.1F: capture exactly that (same sentence, same fields), replace the \"response\" value with what comes back, and delete this key — tests read only \"response\", so nothing else changes. The five words are the furigana_to_anki golden cases (leading kanji, kanji after kana, all kana, two adjacent kanji groups, kanji-kana-kanji); keep them in the sentence or the golden tests lose their subject.",
+  "response": {
+    "tokens": [
+      [
+        [0, [["日本", "にほん"], ["語", "ご"]]],
+        [1, [["話", "はな"], "す"]],
+        [2, ["お", ["茶", "ちゃ"]]],
+        [3, [["食", "た"], "べ", ["物", "もの"]]],
+        [4, ["たべる"]]
+      ]
+    ],
+    "vocabulary": [
+      [1000001, 1000001, "日本語", "にほんご", ["LHHHH"], 1500, ["n"]],
+      [1000002, 1000002, "話す", "はなす", ["LHLL"], 800, ["v5s", "vt"]],
+      [1000003, 1000003, "お茶", "おちゃ", ["LHHH"], 3000, ["n"]],
+      [1000004, 1000004, "食べ物", "たべもの", ["LHLLL"], 2500, ["n"]],
+      [1000005, 1000005, "たべる", "たべる", ["LHLL"], 900, ["v1", "vt"]]
+    ]
+  }
+}

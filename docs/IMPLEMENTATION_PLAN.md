@@ -479,7 +479,23 @@ M2.1F is **owner-only** (it needs a live `JPDB_API_KEY`) and blocks nothing:
 M2.1 ships against a labelled community-shape fixture and every task after it
 proceeds on that. Nothing else in this milestone needs a human in the loop.
 
-### [ ] M2.1 jpdb API client (+ `jpdb ping`, POS table, /parse contract)
+### [x] M2.1 jpdb API client (+ `jpdb ping`, POS table, /parse contract)
+
+*Done 2026-08-07. Contract as written; five call-site details later tasks need.
+(1) `lookup_vocabulary` attaches the requested `vid`/`sid` to every returned dict
+even when they were not in `fields`, so no caller re-zips results against its own
+input; `DEFAULT_LOOKUP_FIELDS` is DESIGN_V2 step 3's list unchanged. (2) `as_pair`
+accepts a pair, a `{"vid","sid"}` dict (what `list_deck_vocabulary` returns) or an
+object with those attributes — pairs are the wire shape, not the call shape.
+(3) `parse()` takes one text and sends it as a list of one, and reads the response
+tokens under either nesting; `position_length_encoding` is sent only when forced
+furigana or `position`/`length` token fields are in play. (4) `pos_to_transitivity`
+joins the two named POS tables: `vt`/`vi` are JMDict POS codes, and the whole point
+of a single owner is that M2.5 does not build a third table for them. (5) The
+fixture carries five golden furigana cases, not four — `お茶` (a bracketed group
+after kana) and `日本語` (two adjacent groups) are different halves of the spacing
+rule. README is untouched: `janki jpdb ping` is documented by M2.W with the rest of
+the jpdb setup.*
 
 Depends on: M1.2
 Files: new `src/japanese_anki/jpdb.py`, `src/japanese_anki/cli.py`,
