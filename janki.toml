@@ -7,6 +7,10 @@ normalized_file = "data/normalized/vocabulary.json"
 deck_dir = "data/decks"
 template_dir = "templates/japanese-study"
 dist_dir = "dist"
+ledger_file = "data/ledger.json"
+staging_dir = "data/staging"
+media_dir = "data/media"
+scan_inbox = "data/inbox/scans"
 
 [anki]
 default_deck_name = "Brandon Japanese"
@@ -17,3 +21,17 @@ model_id_base = 1607392310
 recognition = true
 production = true
 reading = false
+
+[ai]
+extract_model = "claude-opus-5"
+enrich_model = "claude-opus-5"
+
+[tts]
+provider = "voicevox"              # or "azure"
+voicevox_url = "http://localhost:50021"
+voicevox_speaker = 46
+azure_voice = "ja-JP-NanamiNeural"
+azure_region = "westus2"
+
+# Secrets are never read from this file. Set ANTHROPIC_API_KEY, JPDB_API_KEY,
+# and AZURE_SPEECH_KEY in the environment instead.

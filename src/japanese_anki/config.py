@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import difflib
+import sys
 import tomllib
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -10,6 +13,34 @@ from japanese_anki.errors import JankiError
 
 class ConfigError(JankiError):
     pass
+
+
+# Every key janki.toml understands, by section. Used to warn about typos —
+# an unknown key is never an error, it is only silently useless without this.
+KNOWN_KEYS: dict[str, tuple[str, ...]] = {
+    "project": ("name",),
+    "paths": (
+        "raw_dir",
+        "normalized_file",
+        "deck_dir",
+        "template_dir",
+        "dist_dir",
+        "ledger_file",
+        "staging_dir",
+        "media_dir",
+        "scan_inbox",
+    ),
+    "anki": ("default_deck_name", "default_deck_id", "model_id_base"),
+    "cards": ("recognition", "production", "reading"),
+    "ai": ("extract_model", "enrich_model"),
+    "tts": (
+        "provider",
+        "voicevox_url",
+        "voicevox_speaker",
+        "azure_voice",
+        "azure_region",
+    ),
+}
 
 
 def find_project_root(start: Path | None = None) -> Path:
@@ -27,6 +58,60 @@ def _get(data: dict[str, Any], section: str, key: str, default: Any) -> Any:
     return (data.get(section) or {}).get(key, default)
 
 
+def _closest(candidate: str, options: tuple[str, ...] | list[str]) -> str | None:
+    matches = difflib.get_close_matches(candidate, list(options), n=1, cutoff=0.6)
+    return matches[0] if matches else None
+
+
+def _warn(message: str) -> None:
+    print(f"warning: janki.toml: {message}", file=sys.stderr)
+
+
+def _warn_unknown_section(section: str) -> None:
+    suggestion = _closest(section, list(KNOWN_KEYS))
+    if suggestion:
+        _warn(f"unknown section [{section}]; did you mean [{suggestion}]?")
+        return
+    valid = ", ".join(f"[{name}]" for name in sorted(KNOWN_KEYS))
+    _warn(f"unknown section [{section}]; valid sections: {valid}")
+
+
+def _warn_unknown_key(section: str, key: str) -> None:
+    if any(word in key.lower() for word in ("key", "token", "secret", "password")):
+        _warn(
+            f"'{key}' in [{section}] is ignored; secrets are never read from janki.toml. "
+            "Set ANTHROPIC_API_KEY, JPDB_API_KEY, or AZURE_SPEECH_KEY in the environment."
+        )
+        return
+    suggestion = _closest(key, KNOWN_KEYS[section])
+    if suggestion:
+        _warn(f"unknown key '{key}' in [{section}]; did you mean '{suggestion}'?")
+        return
+    for other, keys in KNOWN_KEYS.items():
+        if other != section and key in keys:
+            _warn(f"unknown key '{key}' in [{section}]; did you mean '{key}' in [{other}]?")
+            return
+    valid = ", ".join(f"'{name}'" for name in KNOWN_KEYS[section])
+    _warn(f"unknown key '{key}' in [{section}]; valid keys: {valid}")
+
+
+def check_unknown_keys(data: Mapping[str, Any]) -> None:
+    """Warn (never raise) about sections and keys janki.toml does not understand."""
+    for section, value in data.items():
+        if section not in KNOWN_KEYS:
+            if isinstance(value, Mapping):
+                _warn_unknown_section(section)
+            else:
+                _warn(f"unknown top-level key '{section}'; expected a section such as [paths]")
+            continue
+        if not isinstance(value, Mapping):
+            _warn(f"[{section}] should be a table; ignoring it")
+            continue
+        for key in value:
+            if key not in KNOWN_KEYS[section]:
+                _warn_unknown_key(section, key)
+
+
 @dataclass(frozen=True, slots=True)
 class ProjectConfig:
     root: Path
@@ -36,16 +121,37 @@ class ProjectConfig:
     deck_dir: Path
     template_dir: Path
     dist_dir: Path
+    ledger_file: Path
+    staging_dir: Path
+    media_dir: Path
+    scan_inbox: Path
     default_deck_name: str
     default_deck_id: int
     model_id_base: int
     default_cards: dict[str, bool]
+    extract_model: str
+    enrich_model: str
+    tts_provider: str
+    voicevox_url: str
+    voicevox_speaker: int
+    azure_voice: str
+    azure_region: str
 
     @classmethod
     def load(cls, root: Path | None = None) -> ProjectConfig:
         project_root = find_project_root(root)
         with (project_root / "janki.toml").open("rb") as handle:
             data = tomllib.load(handle)
+
+        check_unknown_keys(data)
+
+        # A section that is not a table would crash _get; the warning above
+        # already reported it, so drop it and fall back to the defaults.
+        data = {
+            section: value
+            for section, value in data.items()
+            if not (section in KNOWN_KEYS and not isinstance(value, Mapping))
+        }
 
         def project_path(value: str) -> Path:
             return (project_root / value).resolve()
@@ -62,6 +168,10 @@ class ProjectConfig:
                 str(_get(data, "paths", "template_dir", "templates/japanese-study"))
             ),
             dist_dir=project_path(str(_get(data, "paths", "dist_dir", "dist"))),
+            ledger_file=project_path(str(_get(data, "paths", "ledger_file", "data/ledger.json"))),
+            staging_dir=project_path(str(_get(data, "paths", "staging_dir", "data/staging"))),
+            media_dir=project_path(str(_get(data, "paths", "media_dir", "data/media"))),
+            scan_inbox=project_path(str(_get(data, "paths", "scan_inbox", "data/inbox/scans"))),
             default_deck_name=str(
                 _get(data, "anki", "default_deck_name", "Japanese Anki")
             ),
@@ -72,4 +182,11 @@ class ProjectConfig:
                 "production": bool(_get(data, "cards", "production", True)),
                 "reading": bool(_get(data, "cards", "reading", False)),
             },
+            extract_model=str(_get(data, "ai", "extract_model", "claude-opus-5")),
+            enrich_model=str(_get(data, "ai", "enrich_model", "claude-opus-5")),
+            tts_provider=str(_get(data, "tts", "provider", "voicevox")),
+            voicevox_url=str(_get(data, "tts", "voicevox_url", "http://localhost:50021")),
+            voicevox_speaker=int(_get(data, "tts", "voicevox_speaker", 46)),
+            azure_voice=str(_get(data, "tts", "azure_voice", "ja-JP-NanamiNeural")),
+            azure_region=str(_get(data, "tts", "azure_region", "westus2")),
         )
