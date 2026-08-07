@@ -709,7 +709,27 @@ potential, passive).
 - Unknown/irregular → `{}` (empty and flagged beats guessed).
 - Golden tests: one verb per godan ending, ichidan, する, くる, 行く.
 
-### [ ] M2.5 `janki import-jpdb`
+### [x] M2.5 `janki import-jpdb`
+
+*Done 2026-08-07. Contract as written; six decisions inside it, several of which
+M2.6 inherits. (1) A deck import runs `run_import` **once per deck** rather than
+pooling every deck's words. That is the only shape that satisfies the
+`source_ref` contract — a record's `source.imported_from` is its deck name — and
+it is why a word in two decks earns a ledger reference for each. `--replace` is
+therefore honoured on the first deck only; otherwise deck two would discard deck
+one. (2) The three sources (FILE, `--deck`, `--all-decks`) are mutually
+exclusive and exactly one is required: "import everything plus this file" has no
+single meaning for `--replace`. (3) `conjugate` is fed `verb_group or
+part_of_speech`, because jpdb has no verb class for an い-adjective (`adj-i` is
+not a verb code) and the part of speech is what carries the inflection there.
+(4) `meanings_chunks` keeps one line per *sense*, glosses joined — flattening
+would spill eleven fragments onto a card that should read as three meanings.
+(5) `deck_tag` slugs on unicode category, not an ASCII range, so a Japanese deck
+name keeps its characters and only separators collapse; `:` collapses too, since
+`::` is Anki's tag-hierarchy separator. The same slug names the deck's staging
+file. (6) `frequency_rank` parses to `None`, never 0, on anything unparseable —
+0 is a real rank and "never looked up" must stay distinguishable. As planned,
+`occurences` counts are not stored. README is untouched: jpdb setup is M2.W's.*
 
 Depends on: M2.1, M2.2, M2.3, M2.4, M1.5, M1.8
 Files: new `src/japanese_anki/importers/jpdb_import.py`,
