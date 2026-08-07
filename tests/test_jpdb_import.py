@@ -637,8 +637,13 @@ def test_held_entries_go_to_a_staging_file_named_after_the_deck(
 
     assert cli.main(["--root", str(root), "import-jpdb", "--all-decks"]) == 0
 
-    staged = root / "staging" / "jpdb-textbook-vol-1-lesson-1-needs-reading.yaml"
-    assert staged.exists()
+    staged_files = list((root / "staging").glob("*.yaml"))
+    assert len(staged_files) == 1
+    staged = staged_files[0]
+    # Readable-deck-name prefix, then a fingerprint of the full name so two
+    # decks whose names flatten to the same slug cannot share one file.
+    assert staged.name.startswith("jpdb-textbook-vol-1-lesson-1-")
+    assert staged.name.endswith("-needs-reading.yaml")
     held = yaml.safe_load(staged.read_text(encoding="utf-8"))
     assert [record["id"] for record in held["records"]] == ["word:話す:"]
     out = capsys.readouterr().out
@@ -798,3 +803,67 @@ def test_two_decks_whose_names_differ_only_in_case_are_not_guessed_between(
     err = capsys.readouterr().err
     assert "matches more than one jpdb deck" in err
     assert not (root / "vocabulary.json").exists()
+
+
+def test_two_decks_whose_names_flatten_alike_get_separate_staging_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 'Lesson 1' and 'Lesson: 1' both slug to lesson-1. Sharing one staging
+    # file makes the second deck's held rows permanently unstageable: it is
+    # told the file exists and to re-run, and re-running hands it to the first
+    # deck again.
+    root = _project(tmp_path)
+    decks = {
+        "list_user_decks": {"decks": [[1, "Lesson 1", 1], [2, "Lesson: 1", 1]]},
+        "deck_vocabulary": {
+            "1": {"vocabulary": [[1562350, 4280520068]]},
+            "2": {"vocabulary": [[1358340, 1564309720]]},
+        },
+    }
+    lookup = {
+        "request_list": [[1562350, 4280520068], [1358340, 1564309720]],
+        "response": {
+            "vocabulary_info": [
+                ["話す", "", 200, ["LHLL"], [["to speak"]], [["vt"]], ["v5s"], None],
+                ["食べ物", "", 2600, ["LHLLL"], [["food"]], [["n"]], ["n"], None],
+            ]
+        },
+    }
+    _patch_api(monkeypatch, RoutingTransport(decks, lookup))
+
+    assert cli.main(["--root", str(root), "import-jpdb", "--all-decks"]) == 0
+
+    staged = sorted((root / "staging").glob("*.yaml"))
+    assert len(staged) == 2
+    held = [
+        yaml.safe_load(path.read_text(encoding="utf-8"))["records"][0]["expression"]
+        for path in staged
+    ]
+    assert sorted(held) == ["話す", "食べ物"]
+
+
+def test_the_staging_filename_is_stable_across_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The fingerprint is of the deck name alone, so the same deck finds the
+    # same file next month rather than littering staging with near-duplicates.
+    root = _project(tmp_path)
+    decks = {
+        "list_user_decks": {"decks": [[1, "Lesson 1", 1]]},
+        "deck_vocabulary": {"1": {"vocabulary": [[1562350, 4280520068]]}},
+    }
+    lookup = {
+        "request_list": [[1562350, 4280520068]],
+        "response": {
+            "vocabulary_info": [
+                ["話す", "", 200, ["LHLL"], [["to speak"]], [["vt"]], ["v5s"], None]
+            ]
+        },
+    }
+    _patch_api(monkeypatch, RoutingTransport(decks, lookup))
+
+    cli.main(["--root", str(root), "import-jpdb", "--all-decks"])
+    first = [path.name for path in (root / "staging").glob("*.yaml")]
+    cli.main(["--root", str(root), "import-jpdb", "--all-decks"])
+
+    assert [path.name for path in (root / "staging").glob("*.yaml")] == first

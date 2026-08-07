@@ -309,6 +309,22 @@ def enrich_records(
             continue
         token, entry = found
         jpdb_reading = str(entry.get("reading") or "").strip()
+        if not record.reading and str(entry.get("spelling", "")).strip() != (
+            record.expression
+        ):
+            # A record with a reading proves the entry is the right word by
+            # matching it against the entry's reading set below. One without a
+            # reading has nothing to prove it with, and jpdb resolves an
+            # inflected surface form to its lemma — so 行った would be filled
+            # with 行く's pitch accent and frequency rank, which describe a
+            # different word.
+            result.warnings.append(
+                f"{record_id}: jpdb resolved {record.expression} to its entry for "
+                f"{str(entry.get('spelling', '')).strip() or 'another word'}, and this "
+                "record has no reading to confirm they are the same word. Nothing was "
+                "written; fill in the reading first."
+            )
+            continue
         if record.reading and record.reading != jpdb_reading:
             known = _readings_for(client, entry)
             if record.reading not in known:
@@ -366,6 +382,14 @@ def suggest_readings(
 
     The unforced parse is the only one that makes sense here: forcing would
     need the reading that is missing.
+
+    The suggestion comes from the token's **furigana**, not the dictionary
+    entry's ``reading``. Those differ exactly when they matter most: a held row
+    whose expression is an inflected form (行った, off a photographed vocabulary
+    table) resolves to the entry for 行く, whose reading is いく — which does not
+    read 行った. A reviewer who trusted that and typed it in would mint
+    ``word:行った:いく`` permanently. The furigana over the surface form gives
+    いった, and it is the dictionary's segmentation either way.
     """
     result = SuggestionResult(records=list(records))
     for index, record in enumerate(result.records):
@@ -379,10 +403,20 @@ def suggest_readings(
                 "no reading suggested"
             )
             continue
-        reading = str(found[1].get("reading") or "").strip()
+        token, entry = found
+        reading = jpdb.furigana_to_reading(token.get("furigana"))
+        spelling = str(entry.get("spelling", "")).strip()
+        if not reading and spelling == record.expression:
+            # No furigana on a token whose entry *is* this word: an all-kana
+            # expression, where the entry's reading describes the same surface
+            # form and can be trusted.
+            reading = str(entry.get("reading") or "").strip()
         if not reading:
             result.warnings.append(
-                f"{record.id}: jpdb has no reading for {record.expression}"
+                f"{record.id}: jpdb resolved {record.expression} to its entry for "
+                f"{spelling or 'another word'} and stated no furigana for the form "
+                "as written, so no reading was suggested — the entry's own reading "
+                "would be the wrong word's"
             )
             continue
         result.records[index] = annotate(record, suggested_reading=reading)

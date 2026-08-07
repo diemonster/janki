@@ -697,3 +697,167 @@ def test_enrichable_fields_can_never_include_the_reading() -> None:
     # against, so an addition to it is an addition to what may be overwritten.
     assert "reading" not in enrich.ENRICHABLE_FIELDS
     assert "id" not in enrich.ENRICHABLE_FIELDS
+
+
+# --- the lemma trap ---------------------------------------------------------
+
+
+# 行った parses to one token whose entry is the *lemma* 行く. The token's
+# furigana describes the surface form; the entry's reading does not.
+ITTA_FURIGANA = [["行", "い"], "った"]
+IKU = vocab(1578850, 777, "行く", "いく", ["LHL"], 300, ["vi", "v5k-s"])
+
+
+def itta_api() -> FakeApi:
+    return FakeApi(
+        unforced={"行った": parse_response((ITTA_FURIGANA, IKU))},
+        senses={(1578850, 777): {"reading": "いく", "alt_sids": []}},
+    )
+
+
+def test_a_held_inflected_form_is_suggested_its_own_reading_not_the_lemmas() -> None:
+    # The bug this guards: suggesting いく for 行った would have a reviewer mint
+    # word:行った:いく permanently — the exact unrecoverable outcome the staging
+    # review exists to prevent.
+    api = itta_api()
+    row = held(id="word:行った:", expression="行った", reading="")
+
+    result = suggest_readings(client_for(api), [row])
+
+    assert result.suggested == {"word:行った:": "いった"}
+    assert result.records[0].source.raw_fields["suggested_reading"] == "いった"
+
+
+def test_an_inflected_form_with_no_reading_is_not_enriched_from_the_lemma() -> None:
+    # Same trap in the main pass: 行く's pitch accent and frequency rank
+    # describe a different word, and this record has no reading to prove the
+    # entry is the right one.
+    api = itta_api()
+    handwritten = VocabularyRecord(id="word:行った:", expression="行った", reading="")
+
+    result = enrich_records(client_for(api), [handwritten])
+
+    assert result.changes == {}
+    assert result.records[0].pitch_accent == []
+    assert "no reading to confirm" in result.warnings[0]
+
+
+def test_an_all_kana_expression_still_falls_back_to_the_entry_reading() -> None:
+    # jpdb sends null furigana for an all-kana token, and there the entry is
+    # the same surface form, so its reading can be trusted.
+    api = FakeApi(
+        {"たべる": parse_response((None, vocab(3, 4, "たべる", "たべる", [], 13600, ["v1"])))}
+    )
+    row = held(id="word:たべる:話す", expression="たべる", reading="話す")
+
+    result = suggest_readings(client_for(api), [row])
+
+    assert result.suggested == {"word:たべる:話す": "たべる"}
+
+
+def test_furigana_to_reading_spells_out_the_surface_form() -> None:
+    assert jpdb.furigana_to_reading(ITTA_FURIGANA) == "いった"
+    assert jpdb.furigana_to_reading(HANASU_FURIGANA) == "はなす"
+    assert jpdb.furigana_to_reading([["日", "にっ"], ["本", "ぽん"], ["語", "ご"]]) == "にっぽんご"
+    assert jpdb.furigana_to_reading(None) == ""
+
+
+# --- the staging file is a reviewer's working document ----------------------
+
+
+STAGING_WITH_REVIEW_NOTES = """\
+# Held out of shirabe-export.csv on 2026-08-07 — check these with my teacher.
+source_file: export.csv
+records:
+  # not sure this one is even worth a card
+  - id: 'word:話す:'
+    expression: 話す
+    reading: ''
+    my_note: ask about the intransitive pair
+    source:
+      type: shirabe
+      imported_from: export.csv
+      raw_fields:
+        hold_reason: missing reading
+"""
+
+
+def test_annotating_a_staging_file_keeps_the_reviewers_comments_and_keys(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = project(tmp_path, [])
+    staging = root / "review.yaml"
+    staging.write_text(STAGING_WITH_REVIEW_NOTES, encoding="utf-8")
+    patch_api(monkeypatch, hanasu_api())
+
+    code = cli.main(
+        ["--root", str(root), "enrich", "--jpdb", "--staging", str(staging), "--yes"]
+    )
+
+    assert code == 0
+    text = staging.read_text(encoding="utf-8")
+    # The annotation landed...
+    assert "suggested_reading: はなす" in text
+    # ...and nothing the reviewer wrote was rewritten out from under them.
+    assert "# Held out of shirabe-export.csv on 2026-08-07" in text
+    assert "# not sure this one is even worth a card" in text
+    assert "my_note: ask about the intransitive pair" in text
+    written = yaml.safe_load(text)
+    assert written["records"][0]["my_note"] == "ask about the intransitive pair"
+    assert written["source_file"] == "export.csv"
+
+
+def test_annotating_adds_no_empty_schema_fields_the_file_left_out(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A row a human wrote by hand stays as short as they wrote it.
+    root = project(tmp_path, [])
+    staging = root / "review.yaml"
+    staging.write_text(STAGING_WITH_REVIEW_NOTES, encoding="utf-8")
+    patch_api(monkeypatch, hanasu_api())
+
+    cli.main(
+        ["--root", str(root), "enrich", "--jpdb", "--staging", str(staging), "--yes"]
+    )
+
+    row = yaml.safe_load(staging.read_text(encoding="utf-8"))["records"][0]
+    assert "audio" not in row
+    assert "examples" not in row
+    assert "pitch_accent" not in row
+
+
+def test_a_row_jpdb_could_not_help_with_is_reported_before_the_prompt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # One row jpdb helps with and one it does not: the prompt asks about the
+    # first, and answering "no" must not be the reason the second was never
+    # mentioned. Pre-fix the warnings printed after the gate, so a declined
+    # run discarded them entirely.
+    root = project(tmp_path, [])
+    staging = root / "review.yaml"
+    staging.write_text(
+        yaml.safe_dump(
+            {
+                "records": [
+                    held().to_dict(),
+                    held(id="word:謎:", expression="謎", reading="").to_dict(),
+                ]
+            },
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+    api = FakeApi(
+        {"話す": parse_response((HANASU_FURIGANA, HANASU)), "謎": parse_response()}
+    )
+    patch_api(monkeypatch, api)
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt: "n")
+
+    code = cli.main(["--root", str(root), "enrich", "--jpdb", "--staging", str(staging)])
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert "one word" in captured.err
+    # Declined, so the file is untouched.
+    assert "suggested_reading" not in staging.read_text(encoding="utf-8")

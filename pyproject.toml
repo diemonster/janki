@@ -13,6 +13,12 @@ authors = [{ name = "Brandon" }]
 dependencies = [
   "genanki>=0.13.1,<1",
   "PyYAML>=6,<7",
+  # Only for rewriting a staging file a human is part-way through reviewing
+  # (`staging.rewrite_staging`). PyYAML discards comments and any key outside
+  # the record schema on a load/dump round trip, which for that one file means
+  # deleting a reviewer's own notes; ruamel round-trips them. Everything janki
+  # *writes from scratch* still goes through PyYAML.
+  "ruamel.yaml>=0.18,<1",
 ]
 
 [project.optional-dependencies]

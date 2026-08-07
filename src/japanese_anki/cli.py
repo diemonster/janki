@@ -12,6 +12,7 @@ from japanese_anki import enrich, jpdb, ledger, migrate, status
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import AnkiBuildError, build_deck, resolve_deck_records
+from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.importers import jpdb_import
 from japanese_anki.importers.shirabe import import_file, inspect_file
 from japanese_anki.io import (
@@ -27,7 +28,12 @@ from japanese_anki.io import (
 )
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.preview import build_preview
-from japanese_anki.staging import StagingError, read_staging, write_staging
+from japanese_anki.staging import (
+    StagingError,
+    read_staging,
+    rewrite_staging,
+    write_staging,
+)
 from japanese_anki.validation import has_errors, validate_records
 
 
@@ -593,12 +599,24 @@ def command_import_jpdb(args: argparse.Namespace) -> int:
 
 
 def _slug_for_file(name: str) -> str:
-    """A deck name reduced to something safe as part of a filename.
+    """A deck name reduced to something safe, readable and unique in a filename.
 
     Deck names carry colons, slashes and spaces; a staging file named after one
-    verbatim would land in the wrong directory or refuse to be created.
+    verbatim would land in the wrong directory or refuse to be created. The
+    flattening that fixes that is lossy — ``Lesson 1``, ``lesson-1`` and
+    ``Lesson: 1`` all reduce to ``lesson-1`` — so a fingerprint of the full name
+    is appended. Without it, two such decks share one needs-reading file: the
+    first deck writes it, the second is told the file already exists and to
+    resolve it and re-run, and re-running has the first deck claim it again.
+    The advice can never converge and those held rows are never stageable.
+
+    The fingerprint is of the deck name alone, so it is stable across runs — the
+    same deck finds the same file next month — and it is deliberately *not* the
+    tag: ``jpdb:<slug>`` is what a re-import matches on and what a human types
+    into a deck filter, so it stays readable and its collisions stay harmless.
     """
-    return jpdb_import.deck_tag(name).removeprefix("jpdb:") or "deck"
+    slug = jpdb_import.deck_tag(name).removeprefix("jpdb:")
+    return f"{slug}-{short_fingerprint(name, length=8)}" if slug else "deck"
 
 
 def _confirm_enrich(count: int, assume_yes: bool) -> bool:
@@ -619,25 +637,29 @@ def _enrich_staging(
     """Annotate a needs-reading staging file with the readings jpdb proposes.
 
     The whole API pass happens before the file is touched. A staging file holds
-    hand-typed readings that exist nowhere else, so a run that dies halfway
-    must leave the reviewer exactly what they had — which is also why this is
-    the one caller that legitimately passes ``force=True`` to ``write_staging``
-    (the no-overwrite guard is there to stop an *import* landing on a review in
-    progress; the file being annotated here is by definition already there).
+    hand-typed readings that exist nowhere else, so a run that dies halfway must
+    leave the reviewer exactly what they had — and the write itself goes through
+    ``rewrite_staging``, which edits the document rather than re-rendering it, so
+    a comment or a key the reviewer added survives being annotated.
     """
-    records, meta = read_staging(path)
+    records, _meta = read_staging(path)
     result = enrich.suggest_readings(client, records)
     if not result.held:
         print(f"No held rows in {path}; nothing to suggest readings for.")
         return 0
 
+    # Before the gate, not after it: a row jpdb could not help with is part of
+    # what the user is being asked to approve, and answering "no" must not be
+    # the reason they never saw it.
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
     for record_id, reading in result.suggested.items():
         print(f"  {record_id}: {reading}")
     if result.suggested:
         if not _confirm_enrich(len(result.suggested), assume_yes):
             print("Aborted: the staging file was not touched.", file=sys.stderr)
             return 1
-        write_staging(path, result.records, meta, force=True)
+        rewrite_staging(path, result.records)
 
     print(
         f"Suggested a reading for {len(result.suggested)} of {result.held} "
@@ -647,8 +669,6 @@ def _enrich_staging(
         "  Each is a proposal in 'suggested_reading'; the row stays held until a "
         "human types the reading into 'reading' and deletes the row's 'id:' line."
     )
-    for warning in result.warnings:
-        print(f"warning: {warning}", file=sys.stderr)
     return 0
 
 

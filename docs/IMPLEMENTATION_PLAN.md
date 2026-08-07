@@ -803,8 +803,28 @@ record's reading is empty: it inflects the *expression*, and the reading only
 ever guards against the two disagreeing. Romaji is not, having nothing to
 transliterate. (6) The reading set for the mismatch check is gathered across
 the entry's `alt_sids`, because a homograph's other reading lives on its other
-sense, not on the one `/parse` happened to pick. README is untouched: the enrich
-walkthrough is M2.W's, with the rest of the jpdb setup.*
+sense, not on the one `/parse` happened to pick. (7) A suggestion, and any
+dictionary fact, comes from the token's **furigana** rather than the entry's
+`reading` wherever the two can differ: jpdb resolves an inflected surface form
+to its lemma, so 行った answers with 行く's entry, and `suggested_reading: いく`
+is a reading a reviewer could type into a permanent `word:行った:いく`. A record
+with no reading at all cannot prove the entry is even the same word, so it is
+warned and skipped rather than filled from the lemma. README is untouched: the
+enrich walkthrough is M2.W's, with the rest of the jpdb setup.
+
+**Two later additions, both from review** (see the commits after this task):
+`--staging` writes through a new `staging.rewrite_staging`, which edits the
+document instead of re-rendering it from records — a staging file under review
+is the one place in this repository holding work that exists nowhere else, and
+`write_staging`'s load-then-dump round trip silently deleted a reviewer's YAML
+comments and any key outside the record schema. That is what `ruamel.yaml` was
+added for, scoped to that one function; everything janki writes from scratch
+still goes through PyYAML. And `cli._slug_for_file` now appends a fingerprint of
+the deck name, because `Lesson 1`, `lesson-1` and `Lesson: 1` all flatten to one
+slug and so shared one needs-reading file — the second deck's rows were told to
+resolve a file the first deck reclaims on every re-run, advice that never
+converges. The tag stays collision-prone on purpose: it is what a human types
+into a deck filter.*
 
 Depends on: M2.1, M2.2, M2.3, M2.4, M1.3, M2.5 (shared import/POS
 plumbing settled first)
