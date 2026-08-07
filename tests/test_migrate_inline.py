@@ -22,6 +22,7 @@ from typing import Any
 import pytest
 import yaml
 from test_anki_builder_contract import FakeDeck, FakeModel, FakeNote, FakePackage
+from test_import_ledger import make_unwritable
 
 from japanese_anki import cli, ledger, migrate
 from japanese_anki.config import ProjectConfig
@@ -310,6 +311,133 @@ def test_a_deck_shape_the_text_edit_cannot_handle_says_the_comments_are_gone(
     ]
 
 
+def test_a_text_edit_that_would_mean_something_else_is_caught_and_discarded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The parse-back-and-compare guard is the only thing standing between a
+    # heuristic text edit and a corrupted curated deck file — the module
+    # docstring's "the shortcut can never produce a file that means something
+    # else" — and deleting it whole used to leave the suite green. Here the
+    # edit is well-formed YAML that says the wrong thing, which no shape check
+    # upstream can catch: only reading the result back does.
+    root = _fixture_project(tmp_path)
+    guarded = root / "data" / "decks" / "personal-vocabulary.yaml"
+    real_append = migrate._append_to_sequence
+
+    def wrong(lines, block, indent, key, current, value):
+        edited = real_append(lines, block, indent, key, current, value)
+        if edited is None:
+            return None
+        return [line.replace("word:", "WRONG:") for line in edited]
+
+    assert _migrate(root) == 0  # creates exclude_ids as a block sequence
+    (root / "data" / "decks" / "adjectives.yaml").write_text(
+        yaml.safe_dump(
+            {"deck": {"name": "Adjectives"}, "notes": [_raw("高い", "たかい")]},
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(migrate, "_append_to_sequence", wrong)
+    capsys.readouterr()
+
+    assert _migrate(root, "adjectives.yaml") == 0
+
+    assert "re-serialized" in capsys.readouterr().err
+    assert "WRONG:" not in guarded.read_text(encoding="utf-8")
+    assert _deck_config(root, "personal-vocabulary.yaml")["deck"]["exclude_ids"] == [
+        *VERB_IDS,
+        "word:高い:たかい",
+    ]
+
+
+def test_a_rewrite_of_exclude_ids_that_is_not_an_append_falls_back(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # `value[:len(current)] != current` refuses anything but an append. A deck
+    # whose owner reordered exclude_ids by hand is exactly that: appending the
+    # tail would produce a list nobody asked for, in the wrong order.
+    root = _fixture_project(tmp_path)
+    guarded = root / "data" / "decks" / "personal-vocabulary.yaml"
+    guarded.write_text(
+        "# keep me\n"
+        "deck:\n"
+        '  name: "Inbox"\n'
+        '  source: "../normalized/vocabulary.json"\n'
+        "  exclude_ids:\n"
+        "    - word:古い:ふるい\n"
+        "    - word:安い:やすい\n",
+        encoding="utf-8",
+    )
+    # The migration appends to what is there, so force a genuine rewrite by
+    # having the deck already name one of the ids about to be added, out of
+    # order: the merged list is not a prefix-preserving extension.
+    raw = yaml.safe_load(guarded.read_text(encoding="utf-8"))
+    reordered = ["word:安い:やすい", "word:古い:ふるい", "word:新しい:あたらしい"]
+
+    assert migrate.rewrite_deck_file(guarded, raw, {"exclude_ids": reordered}) is True
+
+    text = guarded.read_text(encoding="utf-8")
+    assert "# keep me" not in text  # the fallback fired and said so via its return
+    assert yaml.safe_load(text)["deck"]["exclude_ids"] == reordered
+
+
+def test_a_comment_at_the_key_indent_falls_back_rather_than_guessing(
+    tmp_path: Path,
+) -> None:
+    # `len(items) != len(current)` refuses a block whose item lines do not
+    # correspond one-for-one with the values parsed from it. A comment at the
+    # *mapping's* indent, between two items, closes the block for the text scan
+    # while YAML reads straight past it — so the scan sees one item where the
+    # parse saw two, and nothing in the text can say where the last one ends.
+    root = _fixture_project(tmp_path)
+    guarded = root / "data" / "decks" / "personal-vocabulary.yaml"
+    guarded.write_text(
+        "deck:\n"
+        '  name: "Inbox"\n'
+        '  source: "../normalized/vocabulary.json"\n'
+        "  exclude_ids:\n"
+        "    - word:古い:ふるい\n"
+        "  # migrated out of verbs.yaml\n"
+        "    - word:安い:やすい\n",
+        encoding="utf-8",
+    )
+    raw = yaml.safe_load(guarded.read_text(encoding="utf-8"))
+    updated = [*raw["deck"]["exclude_ids"], "word:高い:たかい"]
+
+    assert migrate.rewrite_deck_file(guarded, raw, {"exclude_ids": updated}) is True
+
+    text = guarded.read_text(encoding="utf-8")
+    assert "# migrated out of verbs.yaml" not in text  # the fallback fired
+    assert yaml.safe_load(text)["deck"]["exclude_ids"] == updated
+
+
+def test_an_item_indent_comment_is_kept_by_the_text_edit(tmp_path: Path) -> None:
+    # The other side of the same line: a comment indented with the items does
+    # not close the block, so the append still happens and the comment survives.
+    root = _fixture_project(tmp_path)
+    guarded = root / "data" / "decks" / "personal-vocabulary.yaml"
+    guarded.write_text(
+        "deck:\n"
+        '  name: "Inbox"\n'
+        '  source: "../normalized/vocabulary.json"\n'
+        "  exclude_ids:\n"
+        "    - word:古い:ふるい\n"
+        "    # migrated out of verbs.yaml\n"
+        "    - word:安い:やすい\n",
+        encoding="utf-8",
+    )
+    raw = yaml.safe_load(guarded.read_text(encoding="utf-8"))
+    updated = [*raw["deck"]["exclude_ids"], "word:高い:たかい"]
+
+    assert migrate.rewrite_deck_file(guarded, raw, {"exclude_ids": updated}) is False
+
+    text = guarded.read_text(encoding="utf-8")
+    assert "    # migrated out of verbs.yaml" in text
+    assert yaml.safe_load(text)["deck"]["exclude_ids"] == updated
+
+
 def test_a_failed_guard_rewrite_leaves_the_normalized_file_untouched(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -417,17 +545,23 @@ def test_migrating_after_a_rebuild_registers_nothing_and_says_so(
 
 
 def test_a_ledger_that_cannot_be_saved_still_gets_a_full_transcript(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, request: pytest.FixtureRequest, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # Every file but the ledger is already written by this point. Printing only
     # `error: ...` would tell the user the migration did not happen over a deck
     # it has already rewritten.
+    #
+    # A real unwritable directory, not a monkeypatched `Ledger.save`: a
+    # monkeypatch raising LedgerError tests the one shape a real save almost
+    # never has. Every single-process I/O failure goes through the atomic
+    # writer and comes back a DataError, which used to escape this reporting.
     root = _fixture_project(tmp_path)
-
-    def refuse(self: ledger.Ledger) -> None:
-        raise ledger.LedgerError("Could not write ledger.json: Permission denied")
-
-    monkeypatch.setattr(ledger.Ledger, "save", refuse)
+    (root / "janki.toml").write_text(
+        CONFIG.replace('ledger_file = "data/ledger.json"', 'ledger_file = "ledger/ledger.json"'),
+        encoding="utf-8",
+    )
+    (root / "ledger").mkdir()
+    make_unwritable(root / "ledger", request)
 
     assert _migrate(root) == 1
 

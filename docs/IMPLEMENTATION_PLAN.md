@@ -340,9 +340,13 @@ Design: DESIGN_V2 "The ledger" (status + duplicate detection).
   than one ID regardless of reading — a shared vid is the same
   dictionary word even when a reading was hand-corrected or is empty,
   which pass (b) cannot see. Vids compare numerically where possible
-  (`1577980` == `"1577980.0"`); a vid group whose IDs an earlier group
-  already covers is not reported twice. Output: grouped pairs + a
-  reminder that resolution is manual.
+  (`1577980` == `"1577980.0"`) and a value that is not a positive
+  integer is not a vid at all (`"None"` from a stringified null, `-`,
+  `n/a`): a placeholder is shared by every record that has no vid, so
+  grouping on one would report the whole file as a single duplicate
+  under a heading whose remedy is deletion. A vid group whose IDs an
+  earlier group already covers is not reported twice. Output: grouped
+  pairs + a reminder that resolution is manual.
 - `--rebuild`: reconstruct `sources` from each record's `source`, and
   `audio` entries from files in `media_dir` matching the filename
   fingerprint formulas; print that export state is not reconstructible.
@@ -425,6 +429,19 @@ silently keep a re-imported record out of a deck. And a `book.save()` that fails
 is now a warning printed *after* the full summary rather than an `error:` instead
 of one: vocabulary.json and the staging file are already written by then, so the
 bare error told the user the import had not happened.*
+
+*Amended 2026-08-07 by the review of that amendment. "Discarded from this file" is
+not "gone from the collection": the ledger is collection-wide, the collection is
+the normalized file **plus every deck's inline notes** (`status.collect_records`),
+and `--output` can point `--replace` at a file the collection does not contain at
+all. An id is therefore pruned only when `status.surviving_ids` can be built and
+does not hold it; when it cannot be — an `--output` elsewhere, a deck that will
+not parse — every entry stays and the summary says why. Removing an entry
+destroys `added_at` and `exports`, which `--rebuild` documents as not
+reconstructible; leaving one only over-reports, which `status` shows. Relatedly,
+`Ledger.save` now re-raises the atomic writer's `DataError` as `LedgerError`, so
+the warning-over-a-full-summary path above actually fires: `DataError` is a
+sibling under `JankiError`, and every real filesystem failure has that shape.*
 
 Depends on: M1.1, M1.3
 Files: `src/japanese_anki/cli.py`, `tests/test_import_ledger.py` (new).

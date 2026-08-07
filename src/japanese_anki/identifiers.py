@@ -14,6 +14,13 @@ def normalize_identity_part(value: str) -> str:
 # one contiguous BMP run: 𠮟 (U+20B9F, the JIS2004 form of しかる) and 𩸽
 # (U+29E3D, hokke) are ordinary Japanese words that Shirabe exports, and both
 # sit above U+FFFF.
+#
+# These ranges list ideographs only. The Han blocks that are *spellings* of an
+# ideograph — Kangxi Radicals ⼀ U+2F00, CJK Radicals Supplement, the Hangzhou
+# numerals, circled and squared forms ㊀ U+3280 / ㍻ U+337B — are deliberately
+# absent: ``contains_kanji`` normalizes first, which folds every one of them
+# into a code point that is already here. Adding them would be a second, drifting
+# answer to a question NFKC has already settled.
 _HAN_RANGES: tuple[tuple[int, int], ...] = (
     (0x3005, 0x3005),  # 々, the iteration mark: kanji for identity purposes
     (0x3007, 0x3007),  # 〇, ideographic number zero: a numeral kanji (れい/まる)
@@ -36,11 +43,23 @@ def contains_kanji(value: str) -> bool:
     a warning — it mints ``word:<kanji>:<kanji>``, an ID that can never be
     corrected without orphaning Anki review history.
 
+    **The test is on the normalized form**, the same string
+    :func:`stable_record_id` would put in the ID. That is what makes the gate
+    and the ID-minter incapable of disagreeing: 450 assigned code points —
+    Kangxi Radicals, the CJK Radicals Supplement, Hangzhou numerals, circled
+    and squared ideographs — are not ideographs themselves but NFKC-fold into
+    one, so a raw-string test called ⼀ (U+2F00) non-kanji while the minter
+    turned it into 一 (U+4E00) and stamped ``word:一:一``. Widening the ranges
+    instead has been tried twice and recurred twice; normalizing ends the class.
+
     Iteration is over code points (Python strings iterate that way, so a
     supplementary-plane kanji is one character here rather than two surrogate
     halves) and the ranges cover every plane kanji live in.
     """
-    return any(any(low <= code <= high for low, high in _HAN_RANGES) for code in map(ord, value))
+    return any(
+        any(low <= code <= high for low, high in _HAN_RANGES)
+        for code in map(ord, normalize_identity_part(value))
+    )
 
 
 def stable_record_id(expression: str, reading: str = "") -> str:

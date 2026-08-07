@@ -20,7 +20,10 @@ class ShirabeImportError(JankiError):
 # csv.field_size_limit defaults to 128KB, which a long pasted article in a
 # Notes cell exceeds. Raised generously (1 GiB fits a C long everywhere) so a
 # big field imports instead of crashing; a field bigger than this is a broken
-# file, reported through _rows.
+# file, reported through _rows. The limit counts *characters* and CPython's
+# _csv buffers them, so reaching it takes roughly 12 GB of RAM — a file that
+# large will hit MemoryError first, which is not a JankiError and is not this
+# module's to catch.
 _CSV_FIELD_LIMIT = 2**30
 
 
@@ -30,6 +33,12 @@ def _rows(reader: csv.DictReader, path: Path) -> Iterable[dict[str, str | None]]
     ``csv.Error`` (oversized field, embedded NUL) and a bad byte past the
     sniffing sample both surface mid-iteration; without this they escape as
     raw tracebacks naming neither the file nor the row.
+
+    ``reader.line_num`` is the last line the parser *finished*, so the offending
+    line is one past it. The ``+ 1`` is what makes ``path:N`` here mean the same
+    thing it means everywhere else in this module, where rows are numbered with
+    ``enumerate(..., start=2)`` and the header is line 1 — without it every
+    message pointed the user at a perfectly good row.
     """
     iterator = iter(reader)
     while True:
@@ -39,7 +48,7 @@ def _rows(reader: csv.DictReader, path: Path) -> Iterable[dict[str, str | None]]
             return
         except csv.Error as exc:
             raise ShirabeImportError(
-                f"{path.name}:{reader.line_num}: could not parse the CSV: {exc}"
+                f"{path.name}:{reader.line_num + 1}: could not parse the CSV: {exc}"
             ) from exc
         except UnicodeDecodeError as exc:
             raise ShirabeImportError(

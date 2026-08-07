@@ -148,12 +148,22 @@ _EMPTY_CONTAINERS = (str, bytes, list, tuple, set, frozenset, dict)
 
 
 def _copy_value(value: Any) -> Any:
-    """Detach a value so merged records never alias the caller's input.
+    """Detach a value so merged records never alias the *incoming* records.
 
     A shallow copy is not a detachment: an ``examples`` list holds
     ``ExampleSentence`` instances and ``conjugations`` holds dict values, and
-    copying only the outer container leaves the caller able to mutate what the
-    merged record holds inside it.
+    copying only the outer container leaves the importer able to mutate what the
+    merged record holds inside it. The import is the side that has to be
+    detached: it is freshly constructed data the caller may still be walking.
+
+    The existing side is deliberately *not* copied. An untouched record is
+    carried through by reference and a merged one keeps every container the
+    merge did not write to, so ``merged[i].examples`` may be the very list
+    ``existing[i].examples`` is. That is a deliberate trade — one deepcopy per
+    untouched record on every merge, for an aliasing no caller has — and the
+    rule it buys is: **treat the records you passed in as spent**. The same
+    applies to ``MergeOutcome.conflicts``, which reports live values from both
+    sides rather than snapshots of them.
     """
     return copy.deepcopy(value)
 

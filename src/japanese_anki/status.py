@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
+import re
 from collections import Counter
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
@@ -144,6 +145,33 @@ def collect_records(config: ProjectConfig) -> RecordUniverse:
     )
 
 
+def surviving_ids(
+    config: ProjectConfig, records: Iterable[VocabularyRecord]
+) -> tuple[set[str], list[str]]:
+    """Every record id the collection still carries, ``records`` being its file.
+
+    The same definition of "the collection" :func:`collect_records` uses — the
+    normalized file plus every deck's inline notes — reduced to ids, and asked
+    the one question ``--replace`` has to answer before it deletes a ledger
+    entry: *is this id really gone?* The records are passed in rather than
+    re-read because the caller has just written them.
+
+    A deck that will not resolve is named in the second element instead of being
+    skipped. Its ids are unknown, so nothing can be *proved* absent, and a
+    ledger entry holds ``added_at`` and ``exports`` that nothing reconstructs.
+    """
+    ids = {record.id for record in records}
+    unreadable: list[str] = []
+    for deck_path in deck_files(config):
+        try:
+            _, deck_records = resolve_deck_records(deck_path)
+        except JankiError as exc:
+            unreadable.append(f"{deck_path}: {exc}")
+            continue
+        ids.update(record.id for record in deck_records)
+    return ids, unreadable
+
+
 # ---------------------------------------------------------------------------
 # The summary
 # ---------------------------------------------------------------------------
@@ -174,6 +202,15 @@ def collect_staged(config: ProjectConfig) -> tuple[list[StagedFile], list[str]]:
     staged: list[StagedFile] = []
     warnings: list[str] = []
     if not config.staging_dir.is_dir():
+        # "No staging directory yet" and "staging_dir points at something that
+        # is not a directory" are different answers. The second is a
+        # misconfiguration: reporting "none" for it hides the problem until the
+        # next import that needs to stage a row dies on it.
+        if config.staging_dir.exists() or config.staging_dir.is_symlink():
+            warnings.append(
+                f"staging_dir {config.staging_dir} is not a directory, so no review "
+                "queue could be read"
+            )
         return staged, warnings
     for path in sorted(
         [*config.staging_dir.glob("*.yaml"), *config.staging_dir.glob("*.yml")]
@@ -321,12 +358,21 @@ def format_report(report: StatusReport) -> list[str]:
     else:
         lines.append(f"Missing pitch accent: {len(report.missing_pitch_accent)}")
 
-    if report.staged:
-        files = len(report.staged)
+    # An empty staging file is not a review queue: a reviewer who decided no row
+    # was worth keeping leaves `records: []` behind, and counting that file as
+    # "staged for review" reports a queue with nothing in it.
+    waiting = [item for item in report.staged if item.ids]
+    empty = [item for item in report.staged if not item.ids]
+    if waiting:
         lines.append(
-            f"Staged for review: {report.staged_count} row(s) in {files} "
+            f"Staged for review: {report.staged_count} row(s) in {len(waiting)} "
             f"file(s) under {display_path(report.staging_dir, root)} "
             "(not in the collection until a human resolves them)"
+        )
+    elif empty:
+        lines.append(
+            f"Staged for review: none ({len(empty)} empty file(s) under "
+            f"{display_path(report.staging_dir, root)} that can be deleted)"
         )
     else:
         lines.append("Staged for review: none")
@@ -334,16 +380,25 @@ def format_report(report: StatusReport) -> list[str]:
 
 
 def format_staged(report: StatusReport) -> list[str]:
-    if not report.staged:
-        return ["Staged for review: none."]
-    lines = [f"Staged for review ({report.staged_count}):"]
+    waiting = [item for item in report.staged if item.ids]
+    lines: list[str] = []
+    if waiting:
+        lines.append(f"Staged for review ({report.staged_count}):")
+        for item in waiting:
+            lines.append(f"{display_path(item.path, report.root)} ({len(item.ids)}):")
+            for record_id in item.ids:
+                reason = item.reasons.get(record_id) or ""
+                lines.append(f"  {record_id}{f' — {reason}' if reason else ''}")
+        lines.append("Resolve them in place, move them into the records file, then run")
+        lines.append("'janki status --rebuild' so the ledger learns about them.")
+    else:
+        lines.append("Staged for review: none.")
     for item in report.staged:
-        lines.append(f"{display_path(item.path, report.root)} ({len(item.ids)}):")
-        for record_id in item.ids:
-            reason = item.reasons.get(record_id) or ""
-            lines.append(f"  {record_id}{f' — {reason}' if reason else ''}")
-    lines.append("Resolve them in place, move them into the records file, then run")
-    lines.append("'janki status --rebuild' so the ledger learns about them.")
+        if not item.ids:
+            lines.append(
+                f"{display_path(item.path, report.root)} holds no rows — nothing is "
+                "waiting in it, so it can be deleted."
+            )
     return lines
 
 
@@ -382,12 +437,24 @@ class DuplicateGroup:
     ids: list[str]
 
 
+# jpdb vocabulary ids are positive integers. Nothing else may be grouped on:
+# see :func:`_jpdb_vid`.
+_VID_PATTERN = re.compile(r"\d+")
+
+
 def _jpdb_vid(record: VocabularyRecord) -> str:
     """The jpdb vocabulary id an importer stashed in the source row, if any.
 
     Compared numerically where possible: a round-tripped file can hold the
     same vid as ``1577980``, ``"1577980"`` or ``1577980.0``, and a typing
     accident must not hide a duplicate.
+
+    Anything that is not a plausible vid answers ``""`` — a jpdb vid is a
+    positive integer, and this value *groups records for deletion*. A column of
+    placeholders (``-``, ``n/a``, ``unknown``, a JSON ``null`` a loader
+    stringified) is shared by every record that has no vid at all, so accepting
+    one would collapse the whole file into a single "duplicate" group whose
+    printed remedy is to delete the others.
     """
     raw = str(record.source.raw_fields.get("vid", "")).strip()
     if not raw:
@@ -395,8 +462,10 @@ def _jpdb_vid(record: VocabularyRecord) -> str:
     try:
         number = float(raw)
     except ValueError:
-        return raw
-    return str(int(number)) if number.is_integer() else raw
+        candidate = raw
+    else:
+        candidate = str(int(number)) if number.is_integer() else raw
+    return candidate if _VID_PATTERN.fullmatch(candidate) else ""
 
 
 def find_duplicates(records: Iterable[VocabularyRecord]) -> list[DuplicateGroup]:
@@ -615,17 +684,27 @@ def rebuild(
     provider and voice, and must not be replaced by a rebuilt one that does not.
     """
     media = _media_by_fingerprint(media_dir)
-    claimed: set[str] = set()
+    # Keyed by path, not by name: `media` is built with rglob, so two files in
+    # different sub-directories can share both a fingerprint and a basename, and
+    # a name-keyed set would report the loser as claimed — counted as neither
+    # ambiguous nor unmatched, and so absent from the accounting entirely.
+    claimed: set[Path] = set()
     sources = word_audio = example_audio = unprovable = 0
 
     for record in records:
-        source = (sources_by_id or {}).get(record.id, record.source)
+        # Only a *default* source defers to the normalized file. A deck note
+        # that states its own source said something deliberate, into a file that
+        # is committed to git; the fallback exists for the note that said
+        # nothing and therefore carries `SourceReference()` by construction.
+        source = record.source
+        if source == SourceReference():
+            source = (sources_by_id or {}).get(record.id, source)
         if book.record_source_seen(record.id, source.type or "manual", source.imported_from):
             sources += 1
 
         word_file = _first(media.get(word_audio_filename_fingerprint(record)))
         if word_file is not None:
-            claimed.add(word_file.name)
+            claimed.add(word_file)
             if not _has_audio_entry(book, record.id, word_file.name):
                 content_fp = _rebuilt_word_content_fp(record)
                 if not content_fp:
@@ -647,7 +726,7 @@ def rebuild(
             example_file = _first(media.get(example_audio_filename_fingerprint(record, example)))
             if example_file is None:
                 continue
-            claimed.add(example_file.name)
+            claimed.add(example_file)
             if _has_audio_entry(book, record.id, example_file.name):
                 continue
             # An example audio filename is addressed by the sentence text, so
@@ -665,13 +744,15 @@ def rebuild(
 
     unmatched = ambiguous = 0
     for paths in media.values():
-        names = [path.name for path in paths]
-        if any(name in claimed for name in names):
+        if any(path in claimed for path in paths):
             # The fingerprint bound to a record; every unclaimed twin is a
-            # competing candidate the user must know exists.
-            ambiguous += sum(1 for name in names if name not in claimed)
+            # competing candidate the user must know exists. The ledger entry
+            # stores only `path.name`, so two twins with one basename are still
+            # indistinguishable *in the ledger* — a separate, pre-existing
+            # ambiguity — but the summary now counts both files.
+            ambiguous += sum(1 for path in paths if path not in claimed)
         else:
-            unmatched += len(names)
+            unmatched += len(paths)
     return RebuildSummary(
         sources=sources,
         word_audio=word_audio,

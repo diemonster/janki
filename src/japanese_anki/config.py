@@ -129,8 +129,12 @@ def _warn_unknown_key(section: str, key: str) -> None:
         if other != section and key in keys:
             _warn(f"unknown key '{key}' in [{section}]; did you mean '{key}' in [{other}]?")
             return
-    # Whole words only: 'monkey_dir' and 'deck_key' are not credentials. The
-    # fused list catches one-word spellings ('apikey') the word split misses.
+    # Whole words only, so 'monkey_dir' is not a credential. The fused list
+    # catches one-word spellings ('apikey') the word split misses. A compound
+    # whose *own words* include one of these does get the lecture — 'deck_key'
+    # splits to {'deck', 'key'} and is warned about — which is the intended
+    # trade: a false lecture costs a line of stderr, a missed one costs a
+    # secret committed to git.
     if (
         _SECRET_WORDS & set(key.lower().split("_"))
         or key.lower().replace("_", "") in _SECRET_FUSED
@@ -216,19 +220,25 @@ class ProjectConfig:
         return cls(
             root=project_root,
             name=_str(data, "project", "name", "Japanese Anki"),
-            raw_dir=project_path(str(_get(data, "paths", "raw_dir", "data/inbox/shirabe"))),
+            # Every [paths] key goes through _str for the same reason the rest
+            # do, and more urgently: these decide where records, the ledger and
+            # the review queue are written. An unquoted path coerced to
+            # `<root>/123`, `<root>/True` or `<root>/['a', 'b']` has janki
+            # reading and writing under a Python repr while the real file sits
+            # untouched and `janki status` reports 0 records.
+            raw_dir=project_path(_str(data, "paths", "raw_dir", "data/inbox/shirabe")),
             normalized_file=project_path(
-                str(_get(data, "paths", "normalized_file", "data/normalized/vocabulary.json"))
+                _str(data, "paths", "normalized_file", "data/normalized/vocabulary.json")
             ),
-            deck_dir=project_path(str(_get(data, "paths", "deck_dir", "data/decks"))),
+            deck_dir=project_path(_str(data, "paths", "deck_dir", "data/decks")),
             template_dir=project_path(
-                str(_get(data, "paths", "template_dir", "templates/japanese-study"))
+                _str(data, "paths", "template_dir", "templates/japanese-study")
             ),
-            dist_dir=project_path(str(_get(data, "paths", "dist_dir", "dist"))),
-            ledger_file=project_path(str(_get(data, "paths", "ledger_file", "data/ledger.json"))),
-            staging_dir=project_path(str(_get(data, "paths", "staging_dir", "data/staging"))),
-            media_dir=project_path(str(_get(data, "paths", "media_dir", "data/media"))),
-            scan_inbox=project_path(str(_get(data, "paths", "scan_inbox", "data/inbox/scans"))),
+            dist_dir=project_path(_str(data, "paths", "dist_dir", "dist")),
+            ledger_file=project_path(_str(data, "paths", "ledger_file", "data/ledger.json")),
+            staging_dir=project_path(_str(data, "paths", "staging_dir", "data/staging")),
+            media_dir=project_path(_str(data, "paths", "media_dir", "data/media")),
+            scan_inbox=project_path(_str(data, "paths", "scan_inbox", "data/inbox/scans")),
             default_deck_name=_str(data, "anki", "default_deck_name", "Japanese Anki"),
             default_deck_id=_int(data, "anki", "default_deck_id", 2059400110),
             model_id_base=_int(data, "anki", "model_id_base", 1607392310),

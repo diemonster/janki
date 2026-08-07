@@ -268,6 +268,57 @@ def test_an_unreadable_staging_file_is_a_warning_not_a_dead_report(
     assert "Records: 1" in captured.out
 
 
+def test_a_staging_dir_that_is_not_a_directory_is_a_warning_not_silence(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # `is_dir()` conflated "no staging directory yet" (report none) with
+    # "staging_dir points at a file" (a misconfiguration). The second reported
+    # none too, so the user found out only when the next import that had to
+    # stage a row died on `File exists`.
+    root = _project(tmp_path, [_raw("話す", "はなす")])
+    (root / "data").mkdir(parents=True, exist_ok=True)
+    (root / "data" / "staging").write_text("not a directory\n", encoding="utf-8")
+
+    assert _status(root, "--staged") == 0
+
+    captured = capsys.readouterr()
+    assert "warning:" in captured.err
+    assert "is not a directory" in captured.err
+    assert "Records: 1" in captured.out
+
+
+def test_a_staging_file_with_no_rows_is_not_a_review_queue(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # README step 3 is "delete the rows not worth keeping"; a reviewer who kept
+    # none leaves `records: []`. Reporting a queue and printing a bare "(0):"
+    # heading over it describes work that is already done.
+    root = _project(tmp_path, [_raw("話す", "はなす")])
+    _stage(root, "shirabe-export-needs-reading.yaml", [])
+
+    assert _status(root, "--staged") == 0
+
+    out = capsys.readouterr().out
+    assert "Staged for review: none (1 empty file(s) under data/staging" in out
+    assert "holds no rows" in out
+    assert "(0):" not in out
+
+
+def test_an_empty_staging_file_does_not_hide_the_rows_still_waiting(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")])
+    _stage(root, "shirabe-done-needs-reading.yaml", [])
+    _stage(root, "shirabe-export-needs-reading.yaml", ["word:食べ物:"])
+
+    assert _status(root, "--staged") == 0
+
+    out = capsys.readouterr().out
+    assert "Staged for review: 1 row(s) in 1 file(s) under data/staging" in out
+    assert "word:食べ物: — missing reading" in out
+    assert "shirabe-done-needs-reading.yaml holds no rows" in out
+
+
 def test_a_deck_that_cannot_be_read_is_a_warning_not_a_dead_report(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -362,6 +413,82 @@ def test_build_reports_a_malformed_note_as_a_clean_error(
     assert err.startswith("error:")
     assert "broken.yaml" in err
     assert "examples" in err
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("include_ids", 5),
+        ("exclude_ids", "word:話す:はなす"),
+        ("include_tags", "n5"),
+        ("exclude_tags", 1.5),
+        ("exclude_ids", 0),  # falsy, but still not a list
+        ("cards", 1.5),
+        ("cards", ["recognition"]),
+        ("cards", ""),
+    ],
+)
+def test_a_deck_filter_of_the_wrong_shape_is_skipped_not_a_dead_report(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], key: str, value: Any
+) -> None:
+    # `{str(v) for v in deck_config.get("include_ids") or []}` over a scalar
+    # raises TypeError, which is not a JankiError — so the command contracted
+    # to warn and skip one broken deck reported nothing at all.
+    root = _project(
+        tmp_path,
+        [_raw("話す", "はなす")],
+        {"broken": {"deck": {"name": "Broken", key: value}, "notes": []}},
+    )
+
+    assert _status(root) == 0
+
+    captured = capsys.readouterr()
+    assert "warning: skipping deck" in captured.err
+    assert "broken.yaml" in captured.err
+    assert f"deck.{key}" in captured.err
+    assert "Records: 1" in captured.out
+
+
+@pytest.mark.parametrize("key", ["include_ids", "exclude_tags", "cards"])
+def test_build_and_validate_name_the_deck_file_for_a_malformed_filter(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], key: str
+) -> None:
+    root = _project(
+        tmp_path, [], {"broken": {"deck": {"name": "Broken", key: 5}, "notes": []}}
+    )
+    deck = str(root / "decks" / "broken.yaml")
+
+    assert cli.main(["--root", str(root), "build", deck]) == 1
+    assert cli.main(["--root", str(root), "validate", deck]) == 1
+
+    err = capsys.readouterr().err
+    assert "Traceback" not in err
+    assert err.count("error:") == 2
+    assert err.count("broken.yaml") == 2
+
+
+def test_real_deck_filters_still_filter(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    root = _project(
+        tmp_path,
+        [_raw("話す", "はなす", tags=["n5"]), _raw("食べる", "たべる", tags=["n4"])],
+        {
+            "vocabulary": {
+                "deck": {
+                    "name": "Vocabulary",
+                    "source": "../vocabulary.json",
+                    "include_tags": ["n5"],
+                    "exclude_ids": [],
+                    "cards": {"reading": True},
+                },
+                "notes": [],
+            }
+        },
+    )
+
+    assert _status(root, "--unexported") == 0
+
+    out = capsys.readouterr().out
+    assert "vocabulary 1 of 1" in out
 
 
 # --- detail flags -----------------------------------------------------------
@@ -563,6 +690,58 @@ def test_different_jpdb_vids_do_not_make_a_duplicate() -> None:
     assert status_module.find_duplicates([first, second]) == []
 
 
+def test_a_null_vid_column_does_not_collapse_the_file_into_one_group(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # `str(None)` used to be a grouping key, so every record with a null vid
+    # landed in one group whose printed remedy is "delete the other" — said
+    # over three live, unrelated records.
+    root = _project(
+        tmp_path,
+        [
+            _raw("行く", "いく", source={"type": "jpdb", "raw_fields": {"vid": None}}),
+            _raw("話す", "はなす", source={"type": "jpdb", "raw_fields": {"vid": None}}),
+            _raw("食べる", "たべる", source={"type": "jpdb", "raw_fields": {"vid": None}}),
+        ],
+    )
+
+    assert _status(root, "--duplicates") == 0
+
+    out = capsys.readouterr().out
+    assert "Duplicate candidates: none." in out
+    assert "delete the other" not in out
+
+
+@pytest.mark.parametrize("placeholder", ["None", "-", "n/a", "unknown", "0x10", "-5"])
+def test_a_placeholder_in_the_vid_column_is_not_a_vid(placeholder: str) -> None:
+    # An import column of placeholders is shared by every record that has no
+    # vid at all; grouping on one names unrelated records as copies of each
+    # other, under a report whose remedy is deletion.
+    vid = {"source": {"type": "jpdb", "raw_fields": {"vid": placeholder}}}
+    records = [
+        _record("行く", "いく", **vid),
+        _record("話す", "はなす", **vid),
+        _record("食べる", "たべる", **vid),
+    ]
+
+    assert status_module.find_duplicates(records) == []
+
+
+def test_a_real_vid_still_groups_when_placeholders_are_around() -> None:
+    real = {"source": {"type": "jpdb", "raw_fields": {"vid": "1577980"}}}
+    none = {"source": {"type": "jpdb", "raw_fields": {"vid": "None"}}}
+    groups = status_module.find_duplicates(
+        [
+            _record("引っ越す", "ひっこす", **real),
+            _record("引越す", "ひきこす", **real),
+            _record("行く", "いく", **none),
+            _record("話す", "はなす", **none),
+        ]
+    )
+
+    assert [(group.kind, group.key) for group in groups] == [("vid", "1577980")]
+
+
 def test_duplicates_output_says_resolution_is_manual(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -739,6 +918,73 @@ def test_rebuild_accounts_for_every_twin_that_claims_one_fingerprint(
 
     audio = ledger.load(root / "ledger.json").records[record.id]["audio"]
     assert [item["file"] for item in audio] == [wav.name]
+
+
+def test_rebuild_counts_every_unclaimed_twin_of_an_unmatched_fingerprint(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The other half of the list `_media_by_fingerprint` returns: two files
+    # claim one fingerprint and no record wants either. Reporting "1 file"
+    # while two sit on disk is the disappearance the list exists to prevent.
+    root = _project(tmp_path, [])
+    orphan = _media_file(root, "0123456789ab")
+    orphan.with_suffix(".mp3").write_bytes(b"ID3")
+
+    assert _status(root, "--rebuild") == 0
+
+    assert "2 janki-* file(s) matched no record" in capsys.readouterr().out
+
+
+def test_rebuild_sees_twins_that_share_a_basename_in_different_folders(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # `media` is built with rglob, so one basename can occur twice. Accounting
+    # keyed by name called the loser claimed — counted as neither ambiguous nor
+    # unmatched, and so absent from the summary entirely.
+    record = _record("話す", "はなす")
+    root = _project(tmp_path, [record.to_dict()])
+    first = _media_file(root, word_audio_filename_fingerprint(record))
+    second = root / "media" / "elsewhere" / first.name
+    second.parent.mkdir(parents=True)
+    second.write_bytes(b"RIFF")
+
+    assert _status(root, "--rebuild") == 0
+
+    out = capsys.readouterr().out
+    assert "1 janki-* file(s) share a fingerprint" in out
+    assert "matched no record" not in out
+
+
+def test_rebuild_keeps_a_source_a_deck_note_states_deliberately(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The normalized fallback is for the note that said *nothing* about its
+    # source and so carries SourceReference() by construction. A note that
+    # re-sources a record said something, into a file committed to git.
+    root = _project(
+        tmp_path,
+        [_raw("話す", "はなす")],  # source: shirabe, imported_from export.csv
+        {
+            "verbs": {
+                "deck": {"name": "Verbs"},
+                "notes": [
+                    {
+                        "id": "word:話す:はなす",
+                        "expression": "話す",
+                        "reading": "はなす",
+                        "meanings": ["to speak"],
+                        "source": {"type": "jpdb", "imported_from": "jpdb-deck-42"},
+                    }
+                ],
+            }
+        },
+    )
+
+    assert _status(root, "--rebuild") == 0
+
+    capsys.readouterr()
+    entry = ledger.load(root / "ledger.json").records["word:話す:はなす"]
+    assert entry["sources"] == [{"type": "jpdb", "ref": "jpdb-deck-42", "seen_at": TODAY}]
 
 
 def test_rebuild_records_the_normalized_records_own_provenance_for_shadowed_ids(

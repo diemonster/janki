@@ -329,6 +329,81 @@ def test_a_staging_file_with_work_left_is_still_asked_to_be_resolved(
     assert "Its review is finished" not in out
 
 
+@pytest.mark.parametrize(
+    "content",
+    [
+        "records: not-a-list\n",  # read_staging refuses it
+        "records:\n  - [not, a, mapping]\n",  # likewise, one level down
+        "records:\n  - id: word:話す:\n    expression: 話す\n",  # validate refuses it
+    ],
+)
+def test_a_staging_file_that_cannot_be_read_keeps_the_cautious_advice(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], content: str
+) -> None:
+    # The branch that decides between "keep this file" and "move its records
+    # into your records file and delete it", over a file of hand-typed readings
+    # nothing can regenerate. Any failure to read has to land on the advice
+    # that keeps it: flipping `except JankiError: return False` to `return
+    # True` used to leave the whole suite green.
+    root, source = _project(tmp_path)
+    staged_path = root / "staging" / "shirabe-export-needs-reading.yaml"
+    staged_path.parent.mkdir(parents=True)
+    staged_path.write_text(content, encoding="utf-8")
+
+    assert cli.main(["--root", str(root), "import-shirabe", str(source)]) == 0
+
+    out = capsys.readouterr().out
+    assert "Resolve that file, then re-run this import." in out
+    assert "review is finished" not in out
+    assert "delete it" not in out
+    assert staged_path.read_text(encoding="utf-8") == content
+
+
+def test_a_staging_file_with_no_rows_is_not_called_a_finished_review(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # README step 3 is "delete the rows not worth keeping"; a reviewer who kept
+    # none leaves `records: []`. `validate` calls that a warning, not an error,
+    # so it used to read as a finished review — and the import told its owner to
+    # move records that do not exist.
+    root, source = _project(tmp_path)
+    staged_path = root / "staging" / "shirabe-export-needs-reading.yaml"
+    staged_path.parent.mkdir(parents=True)
+    staged_path.write_text("records: []\n", encoding="utf-8")
+
+    assert cli.main(["--root", str(root), "import-shirabe", str(source)]) == 0
+
+    out = capsys.readouterr().out
+    assert "it holds no rows" in out
+    assert "review is finished" not in out
+    assert "move its records" not in out
+
+
+def test_a_finished_review_is_described_the_way_validate_reports_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # "'janki validate' finds nothing wrong with it" is not what the user sees
+    # when they run it: validate reports warnings as well as errors, and this
+    # branch only ever checked for errors.
+    root, source = _project(tmp_path)
+    staged_path = root / "staging" / "shirabe-export-needs-reading.yaml"
+    staged_path.parent.mkdir(parents=True)
+    staged_path.write_text(
+        "records:\n"
+        "  - id: word:話す:はなす\n"
+        "    expression: 話す\n"
+        "    reading: はなす\n"
+        "    meanings: [to speak]\n",
+        encoding="utf-8",
+    )
+
+    assert cli.main(["--root", str(root), "import-shirabe", str(source)]) == 0
+
+    out = capsys.readouterr().out
+    assert "'janki validate' reports no errors for it" in out
+    assert "finds nothing wrong" not in out
+
+
 def test_import_without_reading_less_rows_writes_no_staging_file(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

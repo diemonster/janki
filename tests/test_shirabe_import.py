@@ -161,6 +161,50 @@ def test_a_field_over_the_generous_cap_is_a_clean_error(
     assert "could not parse the CSV" in message
 
 
+@pytest.mark.parametrize("good_rows", [0, 1, 5])
+def test_a_parse_error_names_the_line_the_bad_row_is_actually_on(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, good_rows: int
+) -> None:
+    # `reader.line_num` is the last line the parser *finished*, so it named the
+    # header for a bad row 2 — and every other `path:N` message in this module
+    # is a file line number (`enumerate(..., start=2)`, header = line 1). A
+    # user opening the line named found a perfectly good row.
+    monkeypatch.setattr(shirabe, "_CSV_FIELD_LIMIT", 100)
+    good = "".join(f"かな{index},かな{index},row {index}\n" for index in range(good_rows))
+    source = tmp_path / "oversize.csv"
+    source.write_text(
+        f"Word,Reading,Definition\n{good}ありがとう,ありがとう,{'x' * 200}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ShirabeImportError) as excinfo:
+        import_file(source)
+
+    bad_line = 2 + good_rows  # the header is line 1
+    assert str(excinfo.value).startswith(f"oversize.csv:{bad_line}: ")
+    lines = source.read_text(encoding="utf-8").splitlines()
+    assert lines[bad_line - 1].startswith("ありがとう")
+
+
+def test_a_reading_that_only_normalizes_into_kanji_is_held_back(tmp_path: Path) -> None:
+    # ⼀ is U+2F00 KANGXI RADICAL ONE, which NFKC folds to 一 (U+4E00). The
+    # gate used to test the raw string and let the row through, while
+    # `stable_record_id` normalized and minted word:一:一 — an id that can never
+    # be corrected without orphaning its Anki review history. `janki validate`
+    # saw nothing wrong either, because it asks the same function.
+    source = tmp_path / "radicals.csv"
+    source.write_text("Word,Reading,Definition\n一,⼀,one\n⼀,,one radical\n", encoding="utf-8")
+
+    result = import_file(source)
+
+    assert result.records == []
+    assert [record.id for record in result.needs_reading] == ["word:一:一", "word:一:"]
+    assert [annotations(record)["hold_reason"] for record in result.needs_reading] == [
+        "reading contains kanji",
+        "missing reading",
+    ]
+
+
 def _write_late_bad_byte(path: Path, rows_before_bad: int) -> None:
     """A CSV whose first 8KB+ is valid UTF-8 with an invalid byte further on."""
     filler = "".join(

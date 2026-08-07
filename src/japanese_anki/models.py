@@ -21,6 +21,21 @@ class ModelError(JankiError):
     """
 
 
+_EXCERPT_LIMIT = 120
+
+
+def _excerpt(value: Any) -> str:
+    """``repr(value)``, short enough to read on one line.
+
+    The realistic trigger for these errors is a long pasted block scalar
+    written where a list or a mapping belongs, and an error message as large as
+    the malformed field is not a clean error. The type name is the actionable
+    half; the value is context.
+    """
+    text = repr(value)
+    return text if len(text) <= _EXCERPT_LIMIT else text[: _EXCERPT_LIMIT - 3] + "..."
+
+
 def _checked_mapping(value: Any, field_name: str, what: str) -> dict[str, Any]:
     """``value`` as the mapping ``field_name`` requires, or a clean error.
 
@@ -33,11 +48,20 @@ def _checked_mapping(value: Any, field_name: str, what: str) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
     raise ModelError(
-        f"'{field_name}' must be {what}, got {type(value).__name__} ({value!r})"
+        f"'{field_name}' must be {what}, got {type(value).__name__} ({_excerpt(value)})"
     )
 
 
-def _string_list(value: Any) -> list[str]:
+def _string_list(value: Any, field_name: str) -> list[str]:
+    """``value`` as the list of strings ``field_name`` requires, or an error.
+
+    The fallback used to be ``[str(value)]``, which turned a mapping written
+    under ``meanings:`` into one list entry holding its Python repr — silent
+    coercion of exactly the kind ``_checked_mapping`` exists to refuse, and
+    worse here: the repr is rendered onto an Anki card and written back to
+    vocabulary.json, where the next import treats it as curated content it must
+    not overwrite.
+    """
     if value is None:
         return []
     if isinstance(value, str):
@@ -45,7 +69,10 @@ def _string_list(value: Any) -> list[str]:
         return [stripped] if stripped else []
     if isinstance(value, list | tuple | set):
         return [str(item).strip() for item in value if str(item).strip()]
-    return [str(value).strip()]
+    raise ModelError(
+        f"'{field_name}' must be a string or a list of strings, got "
+        f"{type(value).__name__} ({_excerpt(value)})"
+    )
 
 
 @dataclass(slots=True)
@@ -81,11 +108,16 @@ class SourceReference:
             row = int(row_value) if row_value not in (None, "") else None
         except (TypeError, ValueError):
             row = None
+        # A ``None`` is dropped rather than stringified: ``str(None)`` is the
+        # literal ``"None"``, a non-empty value nobody typed, and downstream
+        # readers group records by these strings (``status --duplicates`` on
+        # ``vid``). An absent key is what a null column means.
         raw_fields = {
             str(key): str(value)
             for key, value in _checked_mapping(
                 data.get("raw_fields"), "source.raw_fields", "a mapping"
             ).items()
+            if value is not None
         }
         return cls(
             type=str(data.get("type", "manual")).strip() or "manual",
@@ -125,7 +157,7 @@ class VocabularyRecord:
         if not isinstance(examples_value, list | tuple):
             raise ModelError(
                 "'examples' must be a list of example mappings, got "
-                f"{type(examples_value).__name__} ({examples_value!r})"
+                f"{type(examples_value).__name__} ({_excerpt(examples_value)})"
             )
         conjugations = {
             str(key).strip(): str(value).strip()
@@ -140,13 +172,13 @@ class VocabularyRecord:
             reading=reading,
             furigana=str(data.get("furigana", "")).strip(),
             romaji=str(data.get("romaji", "")).strip(),
-            meanings=_string_list(data.get("meanings")),
+            meanings=_string_list(data.get("meanings"), "meanings"),
             part_of_speech=str(data.get("part_of_speech", "")).strip(),
             verb_group=str(data.get("verb_group", "")).strip(),
             transitivity=str(data.get("transitivity", "")).strip(),
             examples=[ExampleSentence.from_dict(item) for item in examples_value],
             conjugations=conjugations,
-            tags=_string_list(data.get("tags")),
+            tags=_string_list(data.get("tags"), "tags"),
             usage_notes=str(data.get("usage_notes", "")).strip(),
             audio=str(data.get("audio", "")).strip(),
             image=str(data.get("image", "")).strip(),

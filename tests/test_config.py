@@ -6,7 +6,7 @@ from textwrap import dedent
 
 import pytest
 
-from japanese_anki.config import ConfigError, ProjectConfig
+from japanese_anki.config import KNOWN_KEYS, ConfigError, ProjectConfig
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -326,6 +326,49 @@ def test_a_non_string_name_or_url_is_refused_not_coerced(
         ProjectConfig.load(tmp_path)
 
     assert key in str(excinfo.value)
+
+
+@pytest.mark.parametrize("key", KNOWN_KEYS["paths"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        "123",  # str(123) is "123": a directory named after a forgotten quote
+        "true",  # str(True) is "True"
+        '["a", "b"]',  # someone assuming several deck dirs are supported
+        "{ a = 1 }",
+    ],
+)
+def test_a_non_string_path_is_refused_not_coerced(
+    tmp_path: Path, key: str, value: str
+) -> None:
+    """These nine decide where records, the ledger and staging are written.
+
+    Coerced, they resolve to `<root>/123` or `<root>/['a', 'b']`: janki then
+    reads and writes under a Python repr while the real file sits untouched and
+    `janki status` reports 0 records, with no error and no warning.
+    """
+    _write_config(tmp_path, f"""
+        [paths]
+        {key} = {value}
+        """)
+
+    with pytest.raises(ConfigError) as excinfo:
+        ProjectConfig.load(tmp_path)
+
+    assert key in str(excinfo.value)
+
+
+def test_real_string_paths_still_load(tmp_path: Path) -> None:
+    root = _write_config(tmp_path, """
+        [paths]
+        normalized_file = "records/vocab.json"
+        staging_dir = "queue"
+        """)
+
+    config = ProjectConfig.load(tmp_path)
+
+    assert config.normalized_file == root / "records/vocab.json"
+    assert config.staging_dir == root / "queue"
 
 
 def test_a_fused_credential_spelling_still_gets_the_secrets_warning(

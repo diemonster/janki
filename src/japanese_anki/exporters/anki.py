@@ -164,6 +164,37 @@ def _merge_inline_record(base: VocabularyRecord | None, raw: dict[str, Any]) -> 
     return VocabularyRecord.from_dict(data)
 
 
+# The ``deck:`` keys whose shape this module iterates or unpacks, and the noun
+# each one holds. A scalar written where a list belongs used to escape as
+# ``TypeError: 'int' object is not iterable`` — not a JankiError, so `janki
+# status` (whose contract is to warn and skip one broken deck) died on it, and
+# `build`/`validate` printed a traceback instead of naming the file.
+_DECK_LIST_KEYS: dict[str, str] = {
+    "include_ids": "ids",
+    "exclude_ids": "ids",
+    "include_tags": "tags",
+    "exclude_tags": "tags",
+}
+
+
+def _deck_string_set(deck_config: dict[str, Any], key: str, deck_path: Path) -> set[str]:
+    """One deck filter as the set of strings it names, or a clean error.
+
+    Only an absent key (``exclude_ids:`` with nothing after it) reads as "no
+    filter"; ``0`` and ``""`` are values written where a list belongs, and the
+    old ``or []`` swallowed them along with the scalars.
+    """
+    value = deck_config.get(key)
+    if value is None:
+        return set()
+    if not isinstance(value, list | tuple):
+        raise DataError(
+            f"deck.{key} must be a list of {_DECK_LIST_KEYS[key]}, got "
+            f"{type(value).__name__}: {deck_path}"
+        )
+    return {str(item) for item in value}
+
+
 def resolve_deck_records(deck_path: Path) -> tuple[dict[str, Any], list[VocabularyRecord]]:
     raw = load_structured(deck_path)
     if not isinstance(raw, dict):
@@ -171,6 +202,15 @@ def resolve_deck_records(deck_path: Path) -> tuple[dict[str, Any], list[Vocabula
     deck_config = raw.get("deck") or {}
     if not isinstance(deck_config, dict):
         raise DataError(f"The deck section must be a mapping: {deck_path}")
+    # Checked here rather than in `_resolve_card_types`, which only `build`
+    # reaches: every path into a deck file comes through this function, so this
+    # is where a deck's shape is refused once for all three commands.
+    cards = deck_config.get("cards")
+    if cards is not None and not isinstance(cards, dict):
+        raise DataError(
+            f"deck.cards must be a mapping of card type to true/false, got "
+            f"{type(cards).__name__}: {deck_path}"
+        )
 
     by_id: dict[str, VocabularyRecord] = {}
     source_value = deck_config.get("source")
@@ -195,10 +235,10 @@ def resolve_deck_records(deck_path: Path) -> tuple[dict[str, Any], list[Vocabula
         by_id[merged.id] = merged
 
     records = list(by_id.values())
-    include_ids = {str(value) for value in deck_config.get("include_ids") or []}
-    exclude_ids = {str(value) for value in deck_config.get("exclude_ids") or []}
-    include_tags = {str(value) for value in deck_config.get("include_tags") or []}
-    exclude_tags = {str(value) for value in deck_config.get("exclude_tags") or []}
+    include_ids = _deck_string_set(deck_config, "include_ids", deck_path)
+    exclude_ids = _deck_string_set(deck_config, "exclude_ids", deck_path)
+    include_tags = _deck_string_set(deck_config, "include_tags", deck_path)
+    exclude_tags = _deck_string_set(deck_config, "exclude_tags", deck_path)
 
     if include_ids:
         records = [record for record in records if record.id in include_ids]
@@ -227,6 +267,9 @@ def _card_mask(card_types: list[str]) -> int:
 def _resolve_card_types(
     deck_config: dict[str, Any], project_config: ProjectConfig
 ) -> list[str]:
+    """Which card types to build. ``deck_config`` comes from
+    :func:`resolve_deck_records`, which has already refused a ``cards`` that is
+    not a mapping — that check names the deck file, which this frame cannot."""
     card_config = dict(project_config.default_cards)
     card_config.update(deck_config.get("cards") or {})
     card_types = [name for name in CARD_FILES if bool(card_config.get(name, False))]

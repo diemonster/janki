@@ -134,20 +134,25 @@ def _held_summary(held_unit: str) -> str:
     return _HELD_SUMMARY.format(unit=held_unit)
 
 
-def _staging_file_is_clean(path: Path) -> bool:
-    """Whether a staging file already under review has nothing left to fix.
+def _staging_state(path: Path) -> str:
+    """What a staging file already under review still needs.
 
-    A file whose rows all validate has been resolved, and telling its owner to
-    "resolve that file, then re-run" would be a nag with no satisfiable end —
-    re-running never consumes it. Any failure to read it counts as not clean:
-    this decides which advice to print, and the cautious advice is the one that
-    keeps the file.
+    ``"clean"`` — every row validates, so the review has been resolved and
+    telling its owner to "resolve that file, then re-run" would be a nag with no
+    satisfiable end, since re-running never consumes it. ``"empty"`` — it holds
+    no rows at all, which ``validate`` calls a warning and not an error, so
+    calling it clean would tell its owner to move records that do not exist.
+    ``"unresolved"`` — anything else, *including any failure to read it*: this
+    decides which advice to print, and the cautious advice is the one that keeps
+    a file of hand-typed readings nothing can regenerate.
     """
     try:
         records, _ = read_staging(path)
-        return not has_errors(validate_records(records, path))
     except JankiError:
-        return False
+        return "unresolved"
+    if not records:
+        return "empty"
+    return "unresolved" if has_errors(validate_records(records, path)) else "clean"
 
 
 def _stage_needs_reading(
@@ -188,12 +193,22 @@ def _stage_needs_reading(
         )
     if target.is_file():
         held = f"Held {len(records)} {summary} out of the import. {target} already "
-        if _staging_file_is_clean(target):
+        state = _staging_state(target)
+        if state == "empty":
+            # Nothing to move and nothing to resolve: the reviewer kept none of
+            # the rows. Reusing the "move its records" text would name records
+            # that do not exist.
+            return (
+                held + "exists and was left untouched — it holds no rows, so nothing "
+                "is waiting in it. Delete it, then re-run this import to stage these "
+                "rows there."
+            )
+        if state == "clean":
             # The review is done; the import cannot consume the file, so the
             # only honest instruction is the one that ends the loop.
             return (
                 held + "exists and was left untouched. Its review is finished — "
-                "'janki validate' finds nothing wrong with it — so move its records "
+                "'janki validate' reports no errors for it — so move its records "
                 "into your records file, run 'janki status --rebuild' so the ledger "
                 "learns about them, and delete it."
             )
@@ -235,6 +250,12 @@ def _save_ledger(book: ledger.Ledger) -> ledger.LedgerError | None:
     A failing save must not take the summary down with it: the records are
     already written at this point, and an `error:` with no transcript tells the
     user the command did nothing when in fact it did almost everything.
+
+    ``LedgerError`` is the whole contract, and it is ``ledger.Ledger.save``'s
+    job to keep it that way: the filesystem failures a real save hits
+    (permission denied, read-only mount, ENOSPC) reach it as ``DataError`` from
+    the atomic writer, which is a sibling under ``JankiError`` and would sail
+    straight past this handler into the generic one in ``main``.
     """
     try:
         book.save()
@@ -249,6 +270,66 @@ def _report_ledger_failure(exc: ledger.LedgerError) -> None:
         "The records are written; the ledger is not. Run 'janki status --rebuild' "
         "once that file is writable to recover the entries it did not get.",
         file=sys.stderr,
+    )
+
+
+def _prune_discarded(
+    config: ProjectConfig,
+    book: ledger.Ledger,
+    discarded: Sequence[str],
+    kept_ids: Sequence[str],
+    written: Sequence[VocabularyRecord],
+    output_path: Path,
+) -> tuple[int, str]:
+    """Drop the ledger entries of records ``--replace`` removed from the collection.
+
+    Returns ``(entries dropped, why none were)``.
+
+    "Discarded from this file" is not "gone from the collection". The ledger is
+    collection-wide while ``--replace`` rewrites exactly one file, and the
+    collection is the normalized file *plus every deck's inline notes* (see
+    ``status.collect_records``) — so a record ``--replace`` dropped from
+    vocabulary.json may still be sitting in a deck, and ``--output`` can point
+    ``--replace`` at a file that is not part of the collection at all.
+
+    The asymmetry decides every judgement call here. An entry left behind
+    over-reports the collection, which ``status`` shows and a later import
+    fixes. An entry removed by mistake destroys ``added_at`` and ``exports``,
+    which ``status --rebuild`` documents as *not* reconstructible by anything.
+    So an id is pruned only when the surviving set can be built and does not
+    contain it; when it cannot be built — an ``--output`` outside the
+    collection, a deck that will not parse — every entry stays and the caller
+    says why.
+    """
+    keep = set(kept_ids)
+    candidates = [
+        record_id
+        for record_id in dict.fromkeys(discarded)
+        if record_id not in keep and record_id in book.records
+    ]
+    if not candidates:
+        return 0, ""
+    if output_path.resolve() != config.normalized_file.resolve():
+        return 0, (
+            f"--output wrote {output_path}, which is not the records file, so the "
+            f"{len(candidates)} discarded record(s) may still be in the collection: "
+            "their ledger entries were kept."
+        )
+    surviving, unreadable = status.surviving_ids(config, written)
+    if unreadable:
+        return 0, (
+            f"the collection could not be read in full ({'; '.join(unreadable)}), so "
+            f"the {len(candidates)} discarded record(s) kept their ledger entries."
+        )
+    dropped = sum(
+        book.remove(record_id) for record_id in candidates if record_id not in surviving
+    )
+    still_here = len(candidates) - dropped
+    if not still_here:
+        return dropped, ""
+    return dropped, (
+        f"{still_here} of the discarded record(s) are still in the collection (a deck "
+        "carries them inline), so their ledger entries were kept."
     )
 
 
@@ -355,11 +436,10 @@ def run_import(
     # --replace discards records; their ledger entries would otherwise outlive
     # them forever, over-reporting the collection and — once M5.6 makes
     # `build --only-new` read `exports` — silently omitting a re-imported record
-    # from a deck because a dead entry says it was already exported.
-    dropped = sum(
-        book.remove(record_id)
-        for record_id in discarded
-        if record_id not in incoming_ids
+    # from a deck because a dead entry says it was already exported. Only what
+    # actually left the collection is pruned; see _prune_discarded.
+    dropped, kept_reason = _prune_discarded(
+        config, book, discarded, list(incoming_ids), merged, output_path
     )
     ledger_error = _save_ledger(book)
 
@@ -373,6 +453,8 @@ def run_import(
             f"  Dropped {dropped} ledger entr{'y' if dropped == 1 else 'ies'} "
             "for records --replace discarded."
         )
+    if kept_reason and ledger_error is None:
+        print(f"  Kept ledger entries: {kept_reason}")
     if warnings:
         print("Warnings:")
         for warning in warnings:

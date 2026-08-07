@@ -9,9 +9,12 @@ inherits the whole sequence instead of re-deriving it. See DESIGN_V2
 from __future__ import annotations
 
 import json
+import os
+import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 from japanese_anki import cli, ledger
 from japanese_anki.config import ProjectConfig
@@ -36,6 +39,51 @@ def _project(tmp_path: Path, csv_text: str = CSV) -> tuple[Path, Path]:
 
 def _import(root: Path, source: Path, *extra: str) -> int:
     return cli.main(["--root", str(root), "import-shirabe", str(source), *extra])
+
+
+def make_unwritable(directory: Path, request: pytest.FixtureRequest) -> None:
+    """Take away write permission for the rest of the test, then give it back.
+
+    The restore is a finalizer rather than a `finally`: a failing assertion must
+    not leave a directory tmp_path cleanup cannot empty.
+    """
+    if os.geteuid() == 0:
+        pytest.skip("root ignores directory modes")
+    directory.chmod(0o555)
+    request.addfinalizer(lambda: directory.chmod(0o755))
+
+
+def _unwritable_ledger_project(
+    tmp_path: Path, request: pytest.FixtureRequest, csv_text: str = CSV
+) -> tuple[Path, Path]:
+    """A project whose ledger directory refuses writes, and nothing else does.
+
+    The ledger gets a directory of its own so the import can still write
+    vocabulary.json and the staging file — the point is a *late* failure, over
+    work that already landed.
+    """
+    (tmp_path / "janki.toml").write_text(
+        "[paths]\n"
+        'normalized_file = "vocabulary.json"\n'
+        'ledger_file = "ledger/ledger.json"\n'
+        'staging_dir = "staging"\n',
+        encoding="utf-8",
+    )
+    source = tmp_path / "export.csv"
+    source.write_text(csv_text, encoding="utf-8")
+    (tmp_path / "ledger").mkdir()
+    make_unwritable(tmp_path / "ledger", request)
+    return tmp_path, source
+
+
+def _deck(root: Path, stem: str, deck: dict) -> Path:
+    deck_dir = root / "data" / "decks"
+    deck_dir.mkdir(parents=True, exist_ok=True)
+    path = deck_dir / f"{stem}.yaml"
+    path.write_text(
+        yaml.safe_dump(deck, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
+    return path
 
 
 def _entries(root: Path) -> dict[str, dict]:
@@ -183,6 +231,127 @@ def test_replace_drops_the_ledger_entries_of_the_records_it_discarded(
     assert [record["id"] for record in stored] == ["word:話す:はなす"]
 
 
+def test_replace_keeps_the_entry_of_a_record_a_deck_still_carries_inline(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The collection is the normalized file *plus every deck's inline notes*
+    # (status.collect_records). A record --replace dropped from one file but
+    # still exported by a deck has not left the collection, and its entry holds
+    # `added_at` and `exports` that `status --rebuild` documents as
+    # unreconstructible by anything.
+    root, source = _project(tmp_path)
+    assert _import(root, source) == 0
+    _deck(
+        root,
+        "extra",
+        {
+            "deck": {"name": "Extra"},
+            "notes": [
+                {"id": "word:電話:でんわ", "expression": "電話", "reading": "でんわ"}
+            ],
+        },
+    )
+    book = ledger.load(root / "ledger.json")
+    book.record_export("word:電話:でんわ", "extra", at="2026-01-02")
+    book.save()
+    smaller = tmp_path / "tiny.csv"
+    smaller.write_text("Word,Reading,Definition\n話す,はなす,to speak\n", encoding="utf-8")
+    capsys.readouterr()
+
+    assert _import(root, smaller, "--replace", "--yes") == 0
+
+    out = capsys.readouterr().out
+    assert "Dropped" not in out
+    assert "still in the collection" in out
+    assert _entries(root)["word:電話:でんわ"]["exports"] == {"extra": "2026-01-02"}
+
+
+def test_replace_into_another_file_prunes_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # --output can point --replace at a file the collection does not contain,
+    # so "discarded from it" says nothing about the records file the ledger is
+    # keyed against. Exit 0 and "Dropped 1 ledger entry" was simply false.
+    root, source = _project(tmp_path)
+    assert _import(root, source) == 0
+    other = root / "other.json"
+    other.write_text((root / "vocabulary.json").read_text(encoding="utf-8"), encoding="utf-8")
+    smaller = tmp_path / "tiny.csv"
+    smaller.write_text("Word,Reading,Definition\n話す,はなす,to speak\n", encoding="utf-8")
+    capsys.readouterr()
+
+    assert (
+        _import(root, smaller, "--output", str(other), "--replace", "--yes") == 0
+    )
+
+    out = capsys.readouterr().out
+    assert "Dropped" not in out
+    assert "not the records file" in out
+    assert sorted(_entries(root)) == ["word:話す:はなす", "word:電話:でんわ"]
+    stored = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    assert [record["id"] for record in stored] == ["word:話す:はなす", "word:電話:でんわ"]
+
+
+def test_replace_prunes_nothing_while_a_deck_cannot_be_read(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A deck that will not parse may be the very thing still carrying the id.
+    # Absence cannot be proved, so nothing is removed — an orphaned entry is
+    # recoverable and a deleted one is not.
+    root, source = _project(tmp_path)
+    assert _import(root, source) == 0
+    (root / "data" / "decks").mkdir(parents=True)
+    (root / "data" / "decks" / "broken.yaml").write_text(
+        "deck:\nnotes: not-a-list\n", encoding="utf-8"
+    )
+    smaller = tmp_path / "tiny.csv"
+    smaller.write_text("Word,Reading,Definition\n話す,はなす,to speak\n", encoding="utf-8")
+    capsys.readouterr()
+
+    assert _import(root, smaller, "--replace", "--yes") == 0
+
+    out = capsys.readouterr().out
+    assert "Dropped" not in out
+    assert "could not be read in full" in out
+    assert sorted(_entries(root)) == ["word:話す:はなす", "word:電話:でんわ"]
+
+
+def test_replace_over_an_unreadable_records_file_still_asks_first(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The count is unknown, so `bool(count)` is False — but the file exists and
+    # may hold every curated record the user owns. Dropping the `unreadable or`
+    # would have --replace overwrite it with no prompt at all.
+    root, source = _project(tmp_path)
+    (root / "vocabulary.json").write_text("{not json", encoding="utf-8")
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda prompt: "n")
+
+    assert _import(root, source, "--replace") == 1
+
+    captured = capsys.readouterr()
+    assert "could not read the existing records" in captured.err
+    assert "Aborted: nothing was written." in captured.err
+    assert (root / "vocabulary.json").read_text(encoding="utf-8") == "{not json"
+    assert not (root / "ledger.json").exists()
+
+
+def test_replace_over_an_unreadable_records_file_proceeds_on_yes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, source = _project(tmp_path)
+    (root / "vocabulary.json").write_text("{not json", encoding="utf-8")
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda prompt: "y")
+
+    assert _import(root, source, "--replace") == 0
+
+    assert sorted(_entries(root)) == ["word:話す:はなす", "word:電話:でんわ"]
+    stored = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    assert [record["id"] for record in stored] == ["word:話す:はなす", "word:電話:でんわ"]
+    assert "Dropped" not in capsys.readouterr().out
+
+
 def test_replace_keeps_the_entries_of_the_records_it_re_imported(tmp_path: Path) -> None:
     # A record present on both sides was not discarded: its entry keeps its
     # original added_at and its accumulated sources.
@@ -197,17 +366,19 @@ def test_replace_keeps_the_entries_of_the_records_it_re_imported(tmp_path: Path)
 
 
 def test_a_ledger_that_cannot_be_saved_still_prints_the_whole_summary(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, request: pytest.FixtureRequest, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # vocabulary.json and the staging file are both already written when the
     # ledger is saved. Printing only `error: ...` tells the user the import did
     # not happen over records it has already replaced.
-    root, source = _project(tmp_path, CSV + "本,,book\n")
-
-    def refuse(self: ledger.Ledger) -> None:
-        raise ledger.LedgerError("Could not write ledger.json: Permission denied")
-
-    monkeypatch.setattr(ledger.Ledger, "save", refuse)
+    #
+    # The failure is a real one — an unwritable directory — not a monkeypatched
+    # `Ledger.save`. A monkeypatch raising LedgerError tests the one shape a
+    # real save almost never has (it is reachable only from the concurrent
+    # writer check); every single-process I/O failure reaches the atomic writer
+    # and comes back as DataError, which used to sail past this reporting
+    # entirely.
+    root, source = _unwritable_ledger_project(tmp_path, request, CSV + "本,,book\n")
 
     assert _import(root, source) == 1
 

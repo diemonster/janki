@@ -94,6 +94,20 @@ def test_a_reading_written_in_supplementary_plane_kanji_is_an_error() -> None:
     assert any("reading is written in kanji" in message for message in _issue_messages(record))
 
 
+def test_a_record_that_got_in_with_a_normalizing_kanji_reading_is_still_reported() -> None:
+    # The id here is what an import that missed U+2F00 minted: both halves are
+    # 一 after NFKC. Validation is the second line of defence and used to miss
+    # it for the same reason the import gate did — one function, so one fix.
+    record = VocabularyRecord(
+        id="word:一:一",
+        expression="一",
+        reading="⼀",  # U+2F00 KANGXI RADICAL ONE
+        meanings=["one"],
+    )
+
+    assert any("reading is written in kanji" in message for message in _issue_messages(record))
+
+
 def test_the_staging_hint_says_what_to_do_without_sending_the_reader_elsewhere() -> None:
     # The remedy has to be readable from the error. Pointing at a document that
     # describes the review the reader just performed is how this check stopped

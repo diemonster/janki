@@ -52,7 +52,7 @@ from typing import Any
 
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import short_fingerprint
-from japanese_anki.io import atomic_write_text
+from japanese_anki.io import DataError, atomic_write_text
 from japanese_anki.models import ExampleSentence, VocabularyRecord
 
 
@@ -221,6 +221,16 @@ class Ledger:
         still the one that was read. A second in-flight ledger on the same path
         — two commands, or one command that called ``load`` twice — would
         otherwise silently drop everything the first one wrote.
+
+        **Every failure to save is a LedgerError**, including the filesystem
+        ones the atomic writer reports as ``DataError``. This module owns the
+        invariant "the ledger did not get written", and its callers say so in
+        their own words — ``cli._save_ledger`` turns it into a warning over a
+        full transcript rather than an ``error:`` that reads as "nothing
+        happened". A ``DataError`` escaping from here is a *sibling* of
+        LedgerError under JankiError, so it would sail straight past every one
+        of those handlers; permission denied, a read-only mount and ENOSPC are
+        the shapes a real save failure actually has.
         """
         if self.guarded and self._text_on_disk() != self.baseline:
             raise LedgerError(
@@ -235,7 +245,10 @@ class Ledger:
             "pending_batches": self.pending_batches,
         }
         text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-        atomic_write_text(self.path, text)
+        try:
+            atomic_write_text(self.path, text)
+        except DataError as exc:
+            raise LedgerError(str(exc)) from exc
         # What we just wrote is now what we have read: saving twice in one
         # command is fine, it is saving over *someone else* that is not.
         self.baseline = text

@@ -9,6 +9,7 @@ one module.
 from __future__ import annotations
 
 import json
+import os
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
@@ -191,6 +192,32 @@ def test_the_ledger_is_written_through_the_atomic_writer(
     assert [target for target, _ in calls] == [path]
     assert json.loads(calls[0][1])["records"]["word:話す:はなす"]["added_at"] == "2026-08-06"
     # Nothing else wrote the file behind the helper's back.
+    assert not path.exists()
+
+
+def test_a_filesystem_failure_to_save_is_a_ledger_error(tmp_path: Path) -> None:
+    # The shape a real save failure actually has. The atomic writer reports
+    # every filesystem failure (permission denied, read-only mount, ENOSPC) as
+    # DataError, a *sibling* of LedgerError under JankiError. Left unwrapped it
+    # sails past every `except LedgerError` its callers wrote — including
+    # `cli._save_ledger`, whose whole job is to stop a failed ledger write from
+    # printing a bare `error:` over a command that wrote everything else.
+    if os.geteuid() == 0:
+        pytest.skip("root ignores directory modes")
+    directory = tmp_path / "unwritable"
+    directory.mkdir()
+    path = directory / "ledger.json"
+    book = ledger_module.load(path)
+    book.record_added("word:話す:はなす", at="2026-08-06")
+    directory.chmod(0o555)
+
+    try:
+        with pytest.raises(LedgerError) as error:
+            book.save()
+    finally:
+        directory.chmod(0o755)
+
+    assert str(path) in str(error.value)
     assert not path.exists()
 
 
