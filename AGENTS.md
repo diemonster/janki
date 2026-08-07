@@ -17,7 +17,13 @@ is the durable source of truth; generated `.apkg` files are build artifacts.
 - Use deterministic note IDs and GUIDs so rebuilt decks update notes instead of duplicating them.
 - Surface source filename and row number in import errors.
 - Never silently discard an input row or unknown source column.
-- Run `ruff check .`, `pytest`, and at least one sample deck build before considering work complete.
+- Run `make gates` before considering work complete: it runs ruff, pytest,
+  and a sample deck build. Run it rather than its parts. Bare `pytest` and
+  bare `janki` resolve through the venv's editable install to the *primary*
+  worktree, so inside a linked worktree they exercise code your branch never
+  changed and report green. `make gates` derives every path from the
+  checkout it lives in; `conftest.py` does the same for pytest and aborts if
+  the package still resolves elsewhere.
 
 ## Japanese-content rules
 

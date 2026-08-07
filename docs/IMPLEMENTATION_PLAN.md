@@ -20,11 +20,13 @@ marked "supersedes design").
    the highest-contention; land them smallest-first and rebase.
 3. Before starting, read: `DESIGN_V2.md` (the section named in the task),
    `AGENTS.md` (project rules), and the files listed under **Files**.
-4. Definition of done, every task, no exceptions
-   (`AGENTS.md` requires all of these):
-   - `ruff check .` clean
-   - `pytest` green (including the new tests the task specifies)
-   - `janki build data/decks/verbs.yaml` succeeds
+4. Definition of done, every task, no exceptions:
+   - **`make gates` passes** — ruff clean, pytest green (including the
+     new tests the task specifies), sample deck builds. Run `make gates`,
+     not its three parts: it anchors itself to the checkout it lives in,
+     while a bare `pytest`/`janki` inside a linked worktree runs the
+     *primary* worktree's code and reports green for a branch it never
+     executed. You do not need to set `PYTHONPATH` or name a venv.
    - README/docs updated when user-visible behavior changed
    - the checkbox here flipped to `[x]`
 5. Never modify `data/inbox/`. Never change `stable_record_id`, GUID
@@ -79,18 +81,19 @@ marked "supersedes design").
 - **Field-diff output** (shared helper, first built in M2.6, reused by
   M4.2/M4.3): per record, per field, one indented line of the form
   `<field>: <old> -> <new>` under a `<record id>` header.
-- **Mutation testing must set `PYTHONDONTWRITEBYTECODE=1`** and clear
-  `__pycache__` between mutants. CPython validates a `.pyc` against its
-  source's *mtime in whole seconds and byte size*, so the two edits a
-  mutation sweep makes back-to-back — revert mutant A, apply mutant B —
-  land in the same second at the same size (`==` → `!=`, `<` → `<=`,
-  swapped arguments) and Python silently reuses A's bytecode. Mutant B
-  never runs, its result is really A's, and a test gap gets reported as
-  covered. This fails *toward* false confidence, so it does not announce
-  itself. Run mutants as
-  `PYTHONDONTWRITEBYTECODE=1 <python> -m pytest`, and prove the harness
-  works before trusting a clean sweep: apply one mutant you are certain
-  is unguarded and confirm it survives.
+- **Mutation testing** is safe by default and must stay that way.
+  CPython validates a `.pyc` against its source's *mtime in whole seconds
+  and byte size*, so a sweep's back-to-back edits — revert mutant A,
+  apply mutant B — land in the same second at the same size (`==` → `!=`,
+  `<` → `<=`, swapped arguments) and Python silently reuses A's bytecode.
+  Mutant B never runs, its result is really A's, and a test gap is
+  reported as covered. It fails *toward* false confidence, so it never
+  announces itself. `conftest.py` purges `src/**/__pycache__` and sets
+  `sys.dont_write_bytecode` before the first import, and the `Makefile`
+  exports `PYTHONDONTWRITEBYTECODE=1` for the CLI paths pytest cannot
+  reach — so run mutants through `make test` / `make gates` and do not
+  bypass either. Still prove the harness before trusting a clean sweep:
+  apply one mutant you are certain is unguarded and confirm it survives.
 
 ---
 
