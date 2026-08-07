@@ -12,12 +12,13 @@ except ImportError:  # pragma: no cover - exercised by the bootstrap environment
     genanki = None
 
 from japanese_anki.config import ProjectConfig
+from japanese_anki.errors import JankiError
 from japanese_anki.io import DataError, load_records, load_structured
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.validation import has_errors, validate_records
 
 
-class AnkiBuildError(RuntimeError):
+class AnkiBuildError(JankiError):
     pass
 
 

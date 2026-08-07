@@ -7,7 +7,6 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from japanese_anki.config import ProjectConfig
 from japanese_anki.exporters import anki
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 

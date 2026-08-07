@@ -8,7 +8,6 @@ pytest.importorskip("genanki")
 from japanese_anki.config import ProjectConfig
 from japanese_anki.exporters.anki import build_deck
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 

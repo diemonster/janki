@@ -2,7 +2,6 @@ from pathlib import Path
 
 from japanese_anki.importers.shirabe import import_file, inspect_file
 
-
 FIXTURE = Path(__file__).parent / "fixtures" / "shirabe-sample.csv"
 
 

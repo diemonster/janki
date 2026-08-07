@@ -25,7 +25,7 @@ class ExampleSentence:
     english: str = ""
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any] | None) -> "ExampleSentence":
+    def from_dict(cls, data: dict[str, Any] | None) -> ExampleSentence:
         data = data or {}
         return cls(
             japanese=str(data.get("japanese", "")).strip(),
@@ -43,7 +43,7 @@ class SourceReference:
     raw_fields: dict[str, str] = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any] | None) -> "SourceReference":
+    def from_dict(cls, data: dict[str, Any] | None) -> SourceReference:
         data = data or {}
         row_value = data.get("row")
         try:
@@ -82,7 +82,7 @@ class VocabularyRecord:
     source: SourceReference = field(default_factory=SourceReference)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "VocabularyRecord":
+    def from_dict(cls, data: dict[str, Any]) -> VocabularyRecord:
         expression = str(data.get("expression", "")).strip()
         reading = str(data.get("reading", "")).strip()
         record_id = str(data.get("id", "")).strip() or stable_record_id(expression, reading)

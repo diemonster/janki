@@ -88,7 +88,24 @@ Lane map (derived from deps): {M1.2} → {M1.1, M1.6} → {M1.3, M1.5} →
 {M1.4, M1.7, M1.8}. The last wave's three tasks all touch `cli.py` —
 land smallest-first.
 
-### [ ] M1.2 Error base + atomic writes
+### [x] M1.2 Error base + atomic writes
+
+*Done 2026-08-06, revised same day after adversarial review. Scope notes:
+(1) the repo had 8 pre-existing `ruff` violations (unrelated files) that
+made the "ruff clean" gate unsatisfiable for every task; cleared with
+`ruff check --fix` in the same change. (2) Review hardening: the temp file
+is uniquely named via `tempfile.mkstemp` (a fixed `path.tmp` name lets
+concurrent writers corrupt each other — the contract below was amended),
+content is fsynced before the rename (+ best-effort directory fsync),
+symlinked targets are resolved so writes go through to the real file,
+permission bits of an existing target are preserved, cleanup can never
+mask the original error, output is always LF, and filesystem `OSError`s
+surface as `DataError` so the CLI prints `error: ...` instead of a
+traceback naming a temp file. (3) Small pre-existing clean-error gaps
+fixed in passing, per the behavior-vs-HEAD review: `load_structured` and
+the CSV reader wrap all `OSError`s (not just missing-file), and
+`load_records` rejects non-mapping items with a `DataError` instead of an
+`AttributeError` traceback.*
 
 Depends on: — (first task; several others build on it)
 Files: new `src/japanese_anki/errors.py`, `src/japanese_anki/io.py`,

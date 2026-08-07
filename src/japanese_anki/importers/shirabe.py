@@ -3,15 +3,16 @@ from __future__ import annotations
 import csv
 import re
 import unicodedata
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
+from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import stable_record_id
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
 
 
-class ShirabeImportError(RuntimeError):
+class ShirabeImportError(JankiError):
     pass
 
 
@@ -112,7 +113,7 @@ def _open_reader(path: Path) -> tuple[csv.DictReader, object, str]:
 def inspect_file(path: Path, sample_size: int = 5) -> InspectionResult:
     try:
         reader, handle, delimiter = _open_reader(path)
-    except (FileNotFoundError, UnicodeDecodeError) as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         raise ShirabeImportError(f"Could not read {path}: {exc}") from exc
 
     try:

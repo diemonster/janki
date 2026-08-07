@@ -5,8 +5,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from japanese_anki.errors import JankiError
 
-class ConfigError(RuntimeError):
+
+class ConfigError(JankiError):
     pass
 
 
@@ -40,7 +42,7 @@ class ProjectConfig:
     default_cards: dict[str, bool]
 
     @classmethod
-    def load(cls, root: Path | None = None) -> "ProjectConfig":
+    def load(cls, root: Path | None = None) -> ProjectConfig:
         project_root = find_project_root(root)
         with (project_root / "janki.toml").open("rb") as handle:
             data = tomllib.load(handle)

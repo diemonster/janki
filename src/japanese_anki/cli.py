@@ -6,11 +6,11 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from japanese_anki.config import ConfigError, ProjectConfig
+from japanese_anki.config import ProjectConfig
+from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import AnkiBuildError, build_deck, resolve_deck_records
-from japanese_anki.importers.shirabe import ShirabeImportError, import_file, inspect_file
+from japanese_anki.importers.shirabe import import_file, inspect_file
 from japanese_anki.io import (
-    DataError,
     load_records,
     load_structured,
     merge_records,
@@ -201,7 +201,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return int(args.handler(args))
-    except (AnkiBuildError, ConfigError, DataError, ShirabeImportError) as exc:
+    except JankiError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
