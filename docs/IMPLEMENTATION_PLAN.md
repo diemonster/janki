@@ -292,7 +292,25 @@ Design: DESIGN_V2 "Readings are ID-constitutive" + "Staging file shape".
   point at staging review generically ("route through data/staging
   review; see README") — no config plumbing into validation.
 
-### [ ] M1.4 `janki status`
+### [x] M1.4 `janki status`
+
+*Done 2026-08-06. Contract as written; five decisions taken inside it.
+(1) Where an id exists both in the normalized file and as an inline deck note,
+the deck-resolved record wins — it is what that deck exports today and what
+M1.7 will make authoritative. (2) A deck file that cannot be read is a warning
+on stderr and a skipped deck, not a dead report: status is the command you run
+to find out what is wrong. (3) Under `--format ids` every human-readable line
+(warnings, the `--rebuild` report) goes to stderr so stdout is nothing but ids;
+with no detail flag the id list is every record. (4) `--rebuild` writes audio
+entries as `provider: "unknown"`, `voice: -1`, `rebuilt: true` — a file on disk
+does not say which engine spoke it, and the configured provider would be a
+plausible lie — and never replaces an existing entry that does know. (5) A
+rebuilt entry gets a content fingerprint only where the filename proves the
+content (example audio always; word audio only while the record carries no
+accent data, since the filename covers the id and so the reading, but never the
+pattern). Unprovable word audio is recorded with an empty fingerprint and
+therefore reported stale, which is the safe direction. The README `status`
+section is still M1.W's.*
 
 Depends on: M1.3
 Files: `src/japanese_anki/cli.py`, new `src/japanese_anki/status.py`,

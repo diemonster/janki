@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 
+from japanese_anki import ledger, status
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import AnkiBuildError, build_deck, resolve_deck_records
@@ -253,6 +254,59 @@ def command_build(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_status(args: argparse.Namespace) -> int:
+    config = _load_config(args)
+    book = ledger.load(config.ledger_file)
+    universe = status.collect_records(config)
+
+    # With --format ids, stdout carries nothing but ids so the output can be
+    # piped straight into another command; everything a human reads goes to
+    # stderr.
+    ids_only = args.format == "ids"
+    prose = sys.stderr if ids_only else sys.stdout
+
+    for warning in universe.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+
+    if args.rebuild:
+        summary = status.rebuild(book, universe.records, config.media_dir)
+        book.save()
+        for line in status.format_rebuild(summary, config.root):
+            print(line, file=prose)
+
+    report = status.build_report(config, universe, book)
+    groups = status.find_duplicates(universe.records) if args.duplicates else []
+
+    if ids_only:
+        for record_id in status.selected_ids(
+            report,
+            groups,
+            unexported=args.unexported,
+            missing_audio=args.missing_audio,
+            duplicates=args.duplicates,
+        ):
+            print(record_id)
+        return 0
+
+    for line in status.format_report(report):
+        print(line)
+    if args.unexported:
+        for line in status.format_unexported(report):
+            print(line)
+    if args.missing_audio:
+        for line in status.format_missing_audio(report):
+            print(line)
+    if args.duplicates:
+        for line in status.format_duplicates(groups):
+            print(line)
+    if not (args.unexported or args.missing_audio or args.duplicates):
+        print(
+            "Details: --unexported, --missing-audio, --duplicates "
+            "(add --format ids to pipe them)."
+        )
+    return 0
+
+
 def command_preview(args: argparse.Namespace) -> int:
     config = _load_config(args)
     output = args.output or (config.dist_dir / f"{args.deck.stem}-preview.html")
@@ -315,6 +369,43 @@ def build_parser() -> argparse.ArgumentParser:
     build_command.add_argument("--all", action="store_true")
     build_command.add_argument("--output", type=_path)
     build_command.set_defaults(handler=command_build)
+
+    status_parser = subparsers.add_parser(
+        "status", help="Summarize records, ledger state, and duplicate candidates"
+    )
+    status_parser.add_argument(
+        "--unexported",
+        action="store_true",
+        help="List the record ids each deck has never been built with.",
+    )
+    status_parser.add_argument(
+        "--missing-audio",
+        action="store_true",
+        help="List the record ids that have no word audio.",
+    )
+    status_parser.add_argument(
+        "--duplicates",
+        action="store_true",
+        help=(
+            "List records that look like the same word twice: one expression under two "
+            "ids, or one reading under a kanji and a kana spelling."
+        ),
+    )
+    status_parser.add_argument(
+        "--rebuild",
+        action="store_true",
+        help=(
+            "Reconstruct the ledger entries records and media files still prove "
+            "(sources and audio) and write the ledger. Export state cannot be rebuilt."
+        ),
+    )
+    status_parser.add_argument(
+        "--format",
+        choices=("text", "ids"),
+        default="text",
+        help="'ids' prints bare record ids, one per line, for piping into other commands.",
+    )
+    status_parser.set_defaults(handler=command_status)
 
     preview_parser = subparsers.add_parser("preview", help="Build a static HTML preview")
     preview_parser.add_argument("deck", type=_path)
