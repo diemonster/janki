@@ -41,6 +41,11 @@ META_KEYS: tuple[str, ...] = ("source_file", "extracted_at", "model", "review_no
 
 _RECORDS_KEY = "records"
 
+# ``read_staging`` parses by suffix (via ``load_structured``), so a staging file
+# written under any other suffix would be write-only: the write succeeds and
+# every read of it fails.
+STAGING_SUFFIXES: tuple[str, ...] = (".yaml", ".yml")
+
 
 def _stringify(value: Any) -> str:
     """Render an annotation value as a string ``raw_fields`` can hold."""
@@ -85,9 +90,18 @@ def write_staging(
     """Write ``records`` and ``meta`` to a staging file at ``path``.
 
     Refuses to overwrite an existing file unless ``force`` is true: the file on
-    disk may hold hand-edited readings that exist nowhere else.
+    disk may hold hand-edited readings that exist nowhere else. Also refuses a
+    suffix :func:`read_staging` could not parse — the content is YAML whatever
+    the name says, so any other suffix produces a file only this function can
+    make sense of.
     """
     path = Path(path)
+    if path.suffix.lower() not in STAGING_SUFFIXES:
+        raise StagingError(
+            f"Staging files are YAML: {path} would be written as YAML under a "
+            f"'{path.suffix}' name and read_staging parses by suffix, so nothing "
+            f"could read it back. Use {' or '.join(STAGING_SUFFIXES)}."
+        )
     if path.exists() and not force:
         raise StagingError(
             f"Staging file already exists: {path}. It may hold review edits that are "

@@ -140,6 +140,9 @@ def test_a_full_entry_round_trips(tmp_path: Path) -> None:
 
 
 def test_unknown_keys_written_by_a_future_janki_survive_a_rewrite(tmp_path: Path) -> None:
+    # Both levels: a key inside a record entry, and a whole top-level section.
+    # save() rebuilds the payload from its own keys, so the section is the one
+    # that gets silently deleted — and it is the one a later milestone adds.
     path = tmp_path / "ledger.json"
     path.write_text(
         json.dumps(
@@ -147,6 +150,7 @@ def test_unknown_keys_written_by_a_future_janki_survive_a_rewrite(tmp_path: Path
                 "version": 1,
                 "records": {"word:話す:はなす": {"added_at": "2026-08-06", "future": "keep"}},
                 "pending_batches": {},
+                "promote_queue": {"shirabe-export-needs-reading.yaml": ["word:話す:"]},
             }
         ),
         encoding="utf-8",
@@ -156,7 +160,71 @@ def test_unknown_keys_written_by_a_future_janki_survive_a_rewrite(tmp_path: Path
     book.record_export("word:話す:はなす", "verbs", at="2026-08-12")
     book.save()
 
-    assert ledger_module.load(path).records["word:話す:はなす"]["future"] == "keep"
+    reloaded = ledger_module.load(path)
+    written = json.loads(path.read_text(encoding="utf-8"))
+    queue = {"shirabe-export-needs-reading.yaml": ["word:話す:"]}
+
+    assert reloaded.records["word:話す:はなす"]["future"] == "keep"
+    assert written["promote_queue"] == queue
+    assert reloaded.extra == {"promote_queue": queue}
+
+
+def test_the_ledger_is_written_through_the_atomic_writer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Asserted directly, not by "no .tmp file is left behind": a plain
+    # write_text leaves none either, so that proves nothing. A crash or a full
+    # disk mid-write is what truncates data/ledger.json, and a truncated JSON
+    # file is not recoverable — it just fails to parse on the next run.
+    path = tmp_path / "ledger.json"
+    calls: list[tuple[Path, str]] = []
+    monkeypatch.setattr(
+        ledger_module,
+        "atomic_write_text",
+        lambda target, text: calls.append((target, text)),
+    )
+
+    book = ledger_module.load(path)
+    book.record_added("word:話す:はなす", at="2026-08-06")
+    book.save()
+
+    assert [target for target, _ in calls] == [path]
+    assert json.loads(calls[0][1])["records"]["word:話す:はなす"]["added_at"] == "2026-08-06"
+    # Nothing else wrote the file behind the helper's back.
+    assert not path.exists()
+
+
+def test_saving_over_a_ledger_that_changed_on_disk_is_refused(tmp_path: Path) -> None:
+    # Two live ledgers on one path: whichever saves second would otherwise
+    # overwrite everything the first wrote, and the atomic writer guarantees the
+    # loser still finds a perfectly well-formed file, so the loss is silent.
+    path = tmp_path / "ledger.json"
+    first = ledger_module.load(path)
+    second = ledger_module.load(path)
+
+    first.record_added("word:話す:はなす", at="2026-08-06")
+    first.save()
+    second.record_added("word:食べる:たべる", at="2026-08-06")
+
+    with pytest.raises(LedgerError) as error:
+        second.save()
+
+    assert "changed on disk" in str(error.value)
+    assert list(ledger_module.load(path).records) == ["word:話す:はなす"]
+
+
+def test_saving_twice_from_one_ledger_is_fine(tmp_path: Path) -> None:
+    # The guard is about a *second* ledger, not a second save: a command that
+    # saves, does more work, and saves again must not trip over its own write.
+    path = tmp_path / "ledger.json"
+    book = ledger_module.load(path)
+
+    book.record_added("word:話す:はなす", at="2026-08-06")
+    book.save()
+    book.record_added("word:食べる:たべる", at="2026-08-06")
+    book.save()
+
+    assert sorted(ledger_module.load(path).records) == ["word:話す:はなす", "word:食べる:たべる"]
 
 
 @pytest.mark.parametrize(
@@ -177,13 +245,25 @@ def test_an_unreadable_ledger_is_a_clean_error(tmp_path: Path, content: str) -> 
         ledger_module.load(path)
 
 
-def test_dates_must_be_plain_iso_days(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "value",
+    [
+        "2026/08/06",  # rejected by fromisoformat itself
+        "2026-08-06T09:30:00",  # ditto, on 3.11+
+        # These two are the reason the round-trip check exists: fromisoformat
+        # accepts both and quietly normalises them to 2026-08-06, so without
+        # the check a compact or week date would enter the ledger as a plain
+        # day and the stored format would be enforced by nothing.
+        "20260806",
+        "2026-W32-4",
+    ],
+)
+def test_dates_must_be_plain_iso_days(tmp_path: Path, value: str) -> None:
     book = ledger_module.load(tmp_path / "ledger.json")
 
     with pytest.raises(LedgerError):
-        book.record_added("word:話す:はなす", at="2026/08/06")
-    with pytest.raises(LedgerError):
-        book.record_added("word:話す:はなす", at="2026-08-06T09:30:00")
+        book.record_added("word:話す:はなす", at=value)
+    assert book.records == {}
 
 
 def test_dates_default_to_today(tmp_path: Path) -> None:
@@ -288,6 +368,42 @@ def test_re_running_the_same_enrichment_pass_records_nothing_new(tmp_path: Path)
     assert len(book.records["word:話す:はなす"]["enriched"]) == 1
 
 
+def test_re_running_the_same_pass_months_later_still_records_nothing(tmp_path: Path) -> None:
+    # A pass is identified by what it did, never by when. Comparing the date
+    # too makes every mutator idempotent for one calendar day only, so a
+    # monthly enrich leaves `janki status` reporting one record enriched five
+    # times by the same pass with the same fields.
+    book = ledger_module.load(tmp_path / "ledger.json")
+    book.record_enriched("word:話す:はなす", kind="jpdb", fields=["pitch_accent"], at="2026-08-01")
+
+    assert (
+        book.record_enriched(
+            "word:話す:はなす", kind="jpdb", fields=["pitch_accent"], at="2026-09-01"
+        )
+        is False
+    )
+
+    entries = book.records["word:話す:はなす"]["enriched"]
+    assert len(entries) == 1
+    assert entries[0]["at"] == "2026-08-01"  # the first run, as with sources
+
+
+def test_a_pass_that_wrote_different_fields_is_a_different_pass(tmp_path: Path) -> None:
+    book = ledger_module.load(tmp_path / "ledger.json")
+    book.record_enriched("word:話す:はなす", kind="jpdb", fields=["pitch_accent"], at="2026-08-01")
+
+    assert (
+        book.record_enriched(
+            "word:話す:はなす",
+            kind="jpdb",
+            fields=["pitch_accent", "frequency_rank"],
+            at="2026-09-01",
+        )
+        is True
+    )
+    assert len(book.records["word:話す:はなす"]["enriched"]) == 2
+
+
 def test_enrichment_arguments_are_checked(tmp_path: Path) -> None:
     book = ledger_module.load(tmp_path / "ledger.json")
 
@@ -298,6 +414,28 @@ def test_enrichment_arguments_are_checked(tmp_path: Path) -> None:
     with pytest.raises(LedgerError):
         book.record_enriched("word:話す:はなす", kind="jpdb", fields=[])
     assert book.records == {}
+
+
+def test_a_jpdb_pass_cannot_be_attributed_to_a_model(tmp_path: Path) -> None:
+    # jpdb is a dictionary lookup, not one model among many. An AI pass
+    # copy-pasted from the jpdb call keeps `model=config.enrich_model`, and the
+    # ledger would then record AI work as jpdb work for `status` to misreport.
+    book = ledger_module.load(tmp_path / "ledger.json")
+
+    with pytest.raises(LedgerError) as error:
+        book.record_enriched(
+            "word:話す:はなす", kind="jpdb", model="claude-opus-5", fields=["pitch_accent"]
+        )
+
+    assert "claude-opus-5" in str(error.value)
+    assert book.records == {}
+    # Saying it explicitly is still allowed: it is what gets written anyway.
+    assert (
+        book.record_enriched(
+            "word:話す:はなす", kind="jpdb", model="jpdb", fields=["pitch_accent"]
+        )
+        is True
+    )
 
 
 def test_regenerated_audio_replaces_the_entry_for_that_file(tmp_path: Path) -> None:
@@ -340,6 +478,26 @@ def test_regenerated_audio_replaces_the_entry_for_that_file(tmp_path: Path) -> N
     assert entries[0]["accent_unverified"] is True
 
 
+def test_re_recording_identical_audio_months_later_reports_no_change(tmp_path: Path) -> None:
+    # Same file, same voice, same content fingerprint: nothing was regenerated,
+    # so nothing changed and the ledger must not be marked dirty over a date.
+    book = ledger_module.load(tmp_path / "ledger.json")
+    arguments = {
+        "file": "janki-abc.wav",
+        "of": "word",
+        "provider": "voicevox",
+        "voice": 46,
+        "content_fp": "1a2b3c",
+    }
+    book.record_audio("word:話す:はなす", **arguments, at="2026-08-01")
+
+    assert book.record_audio("word:話す:はなす", **arguments, at="2026-09-01") is False
+
+    entries = book.records["word:話す:はなす"]["audio"]
+    assert len(entries) == 1
+    assert entries[0]["at"] == "2026-08-01"
+
+
 def test_audio_arguments_are_checked(tmp_path: Path) -> None:
     book = ledger_module.load(tmp_path / "ledger.json")
     arguments = {
@@ -356,6 +514,43 @@ def test_audio_arguments_are_checked(tmp_path: Path) -> None:
         book.record_audio("word:話す:はなす", **{**arguments, "file": "  "})
     with pytest.raises(LedgerError):
         book.record_audio("word:話す:はなす", **{**arguments, "voice": "nanami"})
+
+
+def test_detail_the_ledger_could_not_write_is_refused_at_the_call_site(tmp_path: Path) -> None:
+    # Unchecked, a Path or a datetime in **details surfaces at save() as a bare
+    # TypeError from json.dumps — not a JankiError, so cli.main() lets it out as
+    # a traceback, which is exactly what M1.2 hardened the CLI against.
+    book = ledger_module.load(tmp_path / "ledger.json")
+
+    with pytest.raises(LedgerError) as audio_error:
+        book.record_audio(
+            "word:話す:はなす",
+            file="janki-abc.wav",
+            of="word",
+            provider="voicevox",
+            voice=46,
+            content_fp="1a2b3c",
+            src=Path("/x/y.wav"),
+        )
+    with pytest.raises(LedgerError) as source_error:
+        book.record_source_seen("word:話す:はなす", "jpdb", "deck:Mining", fetched=date.today())
+
+    # The message names the caller's own key, not a line inside save().
+    assert "'src'" in str(audio_error.value)
+    assert "'fetched'" in str(source_error.value)
+    assert book.records == {}
+    book.save()  # nothing was stored, so the file is still writable
+
+
+def test_serialisable_detail_is_still_accepted(tmp_path: Path) -> None:
+    book = ledger_module.load(tmp_path / "ledger.json")
+
+    book.record_source_seen("word:話す:はなす", "jpdb", "deck:Mining", vid=1577980, tags=["a"])
+    book.save()
+
+    assert ledger_module.load(tmp_path / "ledger.json").records["word:話す:はなす"]["sources"][
+        0
+    ]["tags"] == ["a"]
 
 
 def test_rebuilding_the_same_deck_twice_records_one_export(tmp_path: Path) -> None:

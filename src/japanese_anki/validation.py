@@ -4,13 +4,20 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from japanese_anki.identifiers import contains_kanji
 from japanese_anki.models import VocabularyRecord
 
 # An ID minted from an expression with no reading: ``word:話す:``. The reading is
 # part of the ID, so this one cannot be repaired in place once Anki has seen it.
 _READINGLESS_ID = re.compile(r"^word:(?P<expression>.*):$")
 
-_STAGING_HINT = "route through data/staging review; see README"
+# Self-contained on purpose: the remedy has to be readable from the error, not
+# from a document. Pointing a reviewer at the review they just did is how this
+# check stops being actionable.
+_STAGING_HINT = (
+    "route through data/staging review — fill in the reading and delete the record's "
+    "'id:' line so the ID is re-minted from expression + reading"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,10 +35,6 @@ class ValidationIssue:
         return f"{prefix} {location}: {self.message}" if location else f"{prefix} {self.message}"
 
 
-def _contains_kanji(value: str) -> bool:
-    return any("\u3400" <= char <= "\u9fff" for char in value)
-
-
 def _is_readingless_kanji_id(record_id: str) -> bool:
     """True for ``word:<kanji expression>:``, an ID whose reading slot is empty.
 
@@ -40,7 +43,7 @@ def _is_readingless_kanji_id(record_id: str) -> bool:
     Anki's GUID derives from.
     """
     match = _READINGLESS_ID.match(record_id)
-    return bool(match) and _contains_kanji(match.group("expression"))
+    return bool(match) and contains_kanji(match.group("expression"))
 
 
 def validate_record(record: VocabularyRecord, source: str = "") -> list[ValidationIssue]:
@@ -55,7 +58,7 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
         add("error", "missing stable ID")
     if not record.expression:
         add("error", "missing expression")
-    if _contains_kanji(record.expression) and not record.reading:
+    if contains_kanji(record.expression) and not record.reading:
         add("error", f"expression contains kanji but reading is missing; {_STAGING_HINT}")
     elif _is_readingless_kanji_id(record.id):
         # Reported once the reading is filled in and the ID still is not: while the
@@ -65,6 +68,17 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
             "error",
             "ID was minted without a reading (word:<expression>:) and cannot be "
             f"corrected in place without orphaning review history; {_STAGING_HINT}",
+        )
+    elif contains_kanji(record.reading):
+        # The ID looks well formed (word:<expression>:<reading>) and is not: a
+        # reading is kana, and this one is the written form copied across. It is
+        # what an importer mints when a row supplies only one of the two columns,
+        # and it is just as permanent as the empty-reading shape above.
+        add(
+            "error",
+            "reading is written in kanji, so the ID's reading slot holds a spelling "
+            "rather than a pronunciation and cannot be corrected in place without "
+            f"orphaning review history; {_STAGING_HINT}",
         )
     if not record.meanings:
         add("error", "at least one English meaning is required")

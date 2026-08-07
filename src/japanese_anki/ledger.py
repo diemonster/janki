@@ -28,8 +28,17 @@ jpdb pass and the AI pass each append, so neither overwrites the other's record
 of what it wrote.
 
 Mutators only touch memory and report whether they changed anything; call
-:meth:`Ledger.save` once when a command is done. Every mutator is idempotent —
-re-running an import or a build must not grow the file.
+:meth:`Ledger.save` once when a command is done. Every mutator is idempotent,
+and idempotent by *identity* rather than by date: re-running the same
+enrichment pass or re-recording byte-identical audio next month is still a
+no-op, and the stored date stays the first run's. Re-running an import or a
+build must not grow the file, ever, not just today.
+
+:meth:`Ledger.save` is a whole-file rewrite, so **load once per command and
+save once**. Two live :class:`Ledger` objects on one path would otherwise lose
+whichever saved first — silently, since the atomic writer guarantees the loser
+still finds a well-formed file. ``save`` refuses to overwrite a file that
+changed since it was read rather than clobber it.
 """
 
 from __future__ import annotations
@@ -69,8 +78,10 @@ def _iso_date(value: str | None) -> str:
         parsed = date.fromisoformat(str(value))
     except (TypeError, ValueError) as exc:
         raise LedgerError(f"Ledger dates must look like YYYY-MM-DD, got {value!r}") from exc
-    # fromisoformat also accepts full timestamps and compact forms; the ledger
-    # stores plain dates only, so anything that does not round-trip is wrong.
+    # fromisoformat accepts far more than the one format the ledger stores: the
+    # compact form '20260806' and the week date '2026-W32-4' both parse, and
+    # both normalise to 2026-08-06 without complaint. (A timestamp is rejected
+    # outright on 3.11+.) Anything that does not round-trip is not a plain day.
     if parsed.isoformat() != str(value):
         raise LedgerError(f"Ledger dates must look like YYYY-MM-DD, got {value!r}")
     return parsed.isoformat()
@@ -136,8 +147,34 @@ def example_audio_content_fingerprint(example: ExampleSentence) -> str:
     return short_fingerprint(example.japanese)
 
 
-def _without_seen_at(source: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in source.items() if key != "seen_at"}
+def _without(reference: dict[str, Any], key: str) -> dict[str, Any]:
+    """A reference minus its date field, which is its identity.
+
+    ``key`` is the date key of that reference (``at`` or ``seen_at``). Dates say
+    when a mutator ran, never what it recorded, so comparing them would make
+    every mutator idempotent within one calendar day and no longer.
+    """
+    return {name: value for name, value in reference.items() if name != key}
+
+
+def _checked_details(caller: str, details: dict[str, Any]) -> dict[str, Any]:
+    """Refuse detail the ledger could not write, naming the caller's own key.
+
+    Without this the failure surfaces much later, inside :meth:`Ledger.save`, as
+    a bare ``TypeError`` from ``json.dumps`` — which is not a ``JankiError``, so
+    ``cli.main`` does not catch it and the user gets a traceback instead of
+    ``error: ...``. Every other failure in this module is a clean LedgerError.
+    """
+    for key, value in details.items():
+        try:
+            json.dumps(value)
+        except (TypeError, ValueError) as exc:
+            raise LedgerError(
+                f"{caller} detail '{key}' is not JSON-serialisable "
+                f"({type(value).__name__}); the ledger is a JSON file, so convert it "
+                "to a string or a number at the call site"
+            ) from exc
+    return details
 
 
 @dataclass
@@ -147,23 +184,61 @@ class Ledger:
     path: Path
     records: dict[str, dict[str, Any]] = field(default_factory=dict)
     pending_batches: dict[str, Any] = field(default_factory=dict)
+    # Top-level keys this version does not know about. A later janki (or a
+    # human) may add a whole section beside ``records``; dropping it because
+    # ``save`` rebuilds the payload from three literals would delete data this
+    # version never even read.
+    extra: dict[str, Any] = field(default_factory=dict)
+    # Exactly what :func:`load` read, so ``save`` can tell whether the file
+    # changed underneath it. ``None`` means the file was absent.
+    baseline: str | None = field(default=None, compare=False, repr=False)
+    # Only a ledger that read the file has something to compare against; one
+    # built directly is in-memory state that never claimed to mirror a file.
+    guarded: bool = field(default=False, compare=False, repr=False)
 
     # -- persistence -------------------------------------------------------
+
+    def _text_on_disk(self) -> str | None:
+        try:
+            return self.path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            raise LedgerError(
+                f"Could not read ledger {self.path}: {exc.strerror or exc}"
+            ) from exc
 
     def save(self) -> None:
         """Write the whole file atomically, in a stable order.
 
         ``sort_keys`` orders record ids — and every nested key, including keys
         a caller passed as extra detail — so a ledger diff only ever shows what
-        actually changed.
+        actually changed. Unrecognised top-level keys are written back
+        unchanged: a section this version does not understand is not this
+        version's to delete.
+
+        This is a whole-file read-modify-write, so it first checks the file is
+        still the one that was read. A second in-flight ledger on the same path
+        — two commands, or one command that called ``load`` twice — would
+        otherwise silently drop everything the first one wrote.
         """
+        if self.guarded and self._text_on_disk() != self.baseline:
+            raise LedgerError(
+                f"Ledger {self.path} changed on disk since it was read; saving now "
+                "would discard those changes. Load the ledger once per command and "
+                "save once, then re-run."
+            )
         payload = {
+            **self.extra,
             "version": LEDGER_VERSION,
             "records": self.records,
             "pending_batches": self.pending_batches,
         }
         text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
         atomic_write_text(self.path, text)
+        # What we just wrote is now what we have read: saving twice in one
+        # command is fine, it is saving over *someone else* that is not.
+        self.baseline = text
 
     # -- mutators ----------------------------------------------------------
 
@@ -216,6 +291,7 @@ class Ledger:
         kind = str(source_type).strip()
         if not kind:
             raise LedgerError("A source reference needs a type (shirabe, jpdb, pdf, ...)")
+        _checked_details("record_source_seen", details)
         entry = self._entry(record_id, seen_at)
         reference: dict[str, Any] = {
             "type": kind,
@@ -224,9 +300,9 @@ class Ledger:
             "seen_at": _iso_date(seen_at),
         }
         sources = entry.setdefault("sources", [])
-        target = _without_seen_at(reference)
+        target = _without(reference, "seen_at")
         for existing in sources:
-            if isinstance(existing, dict) and _without_seen_at(existing) == target:
+            if isinstance(existing, dict) and _without(existing, "seen_at") == target:
                 return False
         sources.append(reference)
         return True
@@ -244,8 +320,12 @@ class Ledger:
 
         Entries accumulate rather than replace: a jpdb pass and an AI pass
         describe different work, and neither may erase the other's record of
-        what it wrote. Re-running the same pass on the same day changes
-        nothing.
+        what it wrote. A pass is identified by ``(kind, model, fields)`` and
+        nothing else — re-running it changes nothing however long ago it last
+        ran, and the stored ``at`` stays the first run's, the same way
+        ``record_source_seen`` ignores ``seen_at``. Otherwise a monthly
+        ``janki enrich`` would leave ``status`` reporting one record enriched
+        five times by the same pass with the same fields.
         """
         if kind not in ENRICHMENT_KINDS:
             raise LedgerError(
@@ -258,19 +338,29 @@ class Ledger:
                 "record_enriched needs the field names the pass wrote; "
                 "a pass that wrote nothing has nothing to record"
             )
-        if model is None:
-            if kind != "jpdb":
-                raise LedgerError(f"record_enriched(kind='{kind}') needs the model that ran")
+        if kind == "jpdb":
+            # jpdb is a dictionary lookup, not a model that could have been any
+            # other model. Accepting one here is how an AI pass copy-pasted from
+            # this call ends up recorded as jpdb work.
+            if model is not None and str(model) != "jpdb":
+                raise LedgerError(
+                    f"record_enriched(kind='jpdb') writes model 'jpdb'; got {model!r}. "
+                    "An enrichment pass driven by a model is kind='ai'."
+                )
             model = "jpdb"
+        elif model is None:
+            raise LedgerError(f"record_enriched(kind='{kind}') needs the model that ran")
         reference = {
             "at": _iso_date(at),
             "kind": kind,
             "model": str(model),
             "fields": names,
         }
+        identity = _without(reference, "at")
         entries = self._entry(record_id, at).setdefault("enriched", [])
-        if reference in entries:
-            return False
+        for existing in entries:
+            if isinstance(existing, dict) and _without(existing, "at") == identity:
+                return False
         entries.append(reference)
         return True
 
@@ -291,7 +381,10 @@ class Ledger:
         Entries are keyed by file name: regenerating audio for the same
         content-addressed file (a new voice, say) replaces its entry rather
         than adding a second, so ``stale_audio`` never has to guess which of
-        two entries describes the file on disk.
+        two entries describes the file on disk. An entry that differs only in
+        ``at`` describes the same file saying the same thing, so re-recording
+        it reports no change and keeps the original date — a re-run that
+        regenerated nothing must not mark the ledger dirty.
         """
         if of not in AUDIO_KINDS:
             raise LedgerError(
@@ -304,6 +397,7 @@ class Ledger:
             voice_id = int(voice)
         except (TypeError, ValueError) as exc:
             raise LedgerError(f"Audio voice must be an integer, got {voice!r}") from exc
+        _checked_details("record_audio", details)
         reference: dict[str, Any] = {
             "file": name,
             "of": of,
@@ -316,7 +410,7 @@ class Ledger:
         entries = self._entry(record_id, at).setdefault("audio", [])
         for index, existing in enumerate(entries):
             if isinstance(existing, dict) and existing.get("file") == name:
-                if existing == reference:
+                if _without(existing, "at") == _without(reference, "at"):
                     return False
                 entries[index] = reference
                 return True
@@ -437,12 +531,12 @@ def load(path: Path) -> Ledger:
     try:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
-        return Ledger(path=path)
+        return Ledger(path=path, baseline=None, guarded=True)
     except OSError as exc:
         raise LedgerError(f"Could not read ledger {path}: {exc.strerror or exc}") from exc
 
     if not text.strip():
-        return Ledger(path=path)
+        return Ledger(path=path, baseline=text, guarded=True)
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
@@ -474,4 +568,15 @@ def load(path: Path) -> Ledger:
     if not isinstance(pending_batches, dict):
         raise LedgerError(f"Ledger {path}: 'pending_batches' must be an object")
 
-    return Ledger(path=path, records=dict(records), pending_batches=dict(pending_batches))
+    return Ledger(
+        path=path,
+        records=dict(records),
+        pending_batches=dict(pending_batches),
+        extra={
+            key: value
+            for key, value in data.items()
+            if key not in {"version", "records", "pending_batches"}
+        },
+        baseline=text,
+        guarded=True,
+    )

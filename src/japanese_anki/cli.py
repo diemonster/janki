@@ -25,7 +25,7 @@ from japanese_anki.io import (
 )
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.preview import build_preview
-from japanese_anki.staging import write_staging
+from japanese_anki.staging import StagingError, write_staging
 from japanese_anki.validation import has_errors, validate_records
 
 
@@ -105,28 +105,47 @@ def _confirm_replace(count: int | None, assume_yes: bool) -> bool:
 
 
 _NEEDS_READING_NOTES = (
-    "Every record here has kanji but no reading. The reading is part of the record ID, "
-    "so importing one would mint word:<expression>: — an ID that cannot be corrected "
-    "later without orphaning its Anki review history. Fill in 'reading' for the rows "
-    "worth keeping, delete the rest, and promote the file once a human has confirmed "
-    "the readings."
+    "Every record here has a reading janki cannot use: it is missing, or it is written "
+    "in kanji. The reading is part of the record ID, so importing one would mint "
+    "word:<expression>: or word:<kanji>:<kanji> — an ID that cannot be corrected later "
+    "without orphaning its Anki review history. For each row worth keeping, fill in "
+    "'reading' with kana AND delete that row's 'id:' line: the ID here is the malformed "
+    "one, and an empty ID is re-minted from expression + reading when the file is read. "
+    "Delete the rows not worth keeping. Then run 'janki validate' on this file — it "
+    "lists every row still malformed — and promote it once a human has confirmed the "
+    "readings."
 )
+
+_HELD_SUMMARY = "row(s) whose reading janki cannot use (missing, or written in kanji)"
 
 
 def _stage_needs_reading(
     config: ProjectConfig, source_path: Path, records: list[VocabularyRecord]
-) -> None:
-    """Divert reading-less kanji rows to a staging file instead of importing them."""
+) -> str:
+    """Divert rows with an unusable reading to staging; return what to print.
+
+    Called *before* the records are written. These rows exist nowhere but the
+    source CSV — they are deliberately excluded from the records — so a staging
+    failure has to abort the import, not report failure after vocabulary.json
+    has already been replaced.
+    """
     if not records:
-        return
+        return ""
     target = config.staging_dir / f"shirabe-{source_path.stem}-needs-reading.yaml"
-    if target.exists():
-        print(
-            f"Held {len(records)} row(s) with kanji but no reading out of the import. "
-            f"{target} already exists and was left untouched — it may hold review edits "
-            "that are not in git. Resolve that file, then re-run this import."
+    if target.is_dir():
+        # Not the "may hold review edits" case: a directory holds no edits, and
+        # calling it one would have the import claim to protect something that
+        # does not exist while the held rows go nowhere.
+        raise StagingError(
+            f"{target} is a directory, so the {len(records)} {_HELD_SUMMARY} cannot be "
+            "staged there. Move it aside and re-run this import."
         )
-        return
+    if target.is_file():
+        return (
+            f"Held {len(records)} {_HELD_SUMMARY} out of the import. {target} already "
+            "exists and was left untouched — it may hold review edits that are not in "
+            "git. Resolve that file, then re-run this import."
+        )
     write_staging(
         target,
         records,
@@ -136,10 +155,11 @@ def _stage_needs_reading(
             "review_notes": _NEEDS_READING_NOTES,
         },
     )
-    print(
-        f"Held {len(records)} row(s) with kanji but no reading out of the import and "
-        f"wrote them to {target} for reading review — a record without a reading gets a "
-        "malformed, uncorrectable ID."
+    return (
+        f"Held {len(records)} {_HELD_SUMMARY} out of the import and wrote them to "
+        f"{target} for reading review — a record without a usable reading gets a "
+        f"malformed, uncorrectable ID. Run 'janki validate {target}' to see what is "
+        "still outstanding."
     )
 
 
@@ -172,11 +192,17 @@ def command_import_shirabe(args: argparse.Namespace) -> int:
     else:
         existing = load_records(output_path) if output_path.exists() else []
 
+    # Stage before committing the records: the held rows have no other home, and
+    # a failure here must leave the import having done nothing rather than exit
+    # non-zero over an output file it has already replaced.
+    held_message = _stage_needs_reading(config, args.file, result.needs_reading)
+
     records, outcomes = merge_records(existing, result.records, prefer_incoming)
     save_records_json(output_path, records)
     print(f"Imported {len(result.records)} source rows into {output_path}")
     _print_merge_summary(outcomes)
-    _stage_needs_reading(config, args.file, result.needs_reading)
+    if held_message:
+        print(held_message)
     if result.warnings:
         print("Warnings:")
         for warning in result.warnings:

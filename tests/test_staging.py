@@ -13,6 +13,7 @@ import pytest
 import yaml
 
 from japanese_anki import cli
+from japanese_anki import staging as staging_module
 from japanese_anki.io import DataError, load_records
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
 from japanese_anki.staging import (
@@ -158,6 +159,41 @@ def test_read_staging_reports_a_malformed_file(tmp_path: Path) -> None:
         read_staging(tmp_path / "missing.yaml")
 
 
+def test_a_staging_file_is_written_through_the_atomic_writer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A staging file holds hand-edited readings that exist nowhere else — not
+    # in git, not in the source CSV once it is gone. A direct write_text here
+    # leaves no .tmp file either, so only the call itself proves the contract.
+    path = tmp_path / "candidates.yaml"
+    calls: list[tuple[Path, str]] = []
+    monkeypatch.setattr(
+        staging_module,
+        "atomic_write_text",
+        lambda target, text: calls.append((target, text)),
+    )
+
+    write_staging(path, [_record()], {"source_file": "export.csv"})
+
+    assert [target for target, _ in calls] == [path]
+    assert yaml.safe_load(calls[0][1])["records"][0]["id"] == "word:話す:はなす"
+    assert not path.exists()
+
+
+@pytest.mark.parametrize("name", ["candidates.json", "candidates", "candidates.txt"])
+def test_write_staging_refuses_a_suffix_nothing_could_read_back(
+    tmp_path: Path, name: str
+) -> None:
+    # The content is YAML whatever the name says, and read_staging dispatches on
+    # the suffix — so a .json staging file writes fine and every read of it
+    # fails with a parse error far from the call that created it.
+    with pytest.raises(StagingError) as error:
+        write_staging(tmp_path / name, [_record()], {})
+
+    assert "YAML" in str(error.value)
+    assert not (tmp_path / name).exists()
+
+
 def test_an_empty_records_list_reads_back_as_no_records(tmp_path: Path) -> None:
     path = tmp_path / "candidates.yaml"
     write_staging(path, [], {"source_file": "export.csv"})
@@ -198,8 +234,10 @@ def test_import_stages_reading_less_kanji_rows_and_says_why(
     staged_path = root / "staging" / "shirabe-export-needs-reading.yaml"
     out = capsys.readouterr().out
     assert str(staged_path) in out
-    assert "kanji but no reading" in out
+    assert "reading janki cannot use" in out
     assert "話す contains kanji but has no reading" in out
+    # The review signal is named, so a reviewer can reach it without guessing.
+    assert f"janki validate {staged_path}" in out
 
     # The malformed row never reaches vocabulary.json.
     assert _stored_ids(root) == ["word:電話:でんわ"]
@@ -239,4 +277,66 @@ def test_import_without_reading_less_rows_writes_no_staging_file(
     assert cli.main(["--root", str(root), "import-shirabe", str(source)]) == 0
 
     assert not (root / "staging").exists()
+
+
+def test_the_staging_notes_lead_to_a_state_validate_accepts(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The instructions embedded in every staging file have to terminate. Filling
+    # in the reading alone leaves the malformed `id:` behind, and validate keeps
+    # erroring on the very review the reviewer just performed — so the notes
+    # must say to delete the id line, and doing so must actually clear it.
+    root, source = _project(tmp_path)
+    assert cli.main(["--root", str(root), "import-shirabe", str(source)]) == 0
+    staged_path = root / "staging" / "shirabe-export-needs-reading.yaml"
+    capsys.readouterr()
+
+    payload = yaml.safe_load(staged_path.read_text(encoding="utf-8"))
+    notes = payload["review_notes"]
+    assert "'id:' line" in notes
+    assert "janki validate" in notes
+
+    # Follow them literally: fill in the reading, drop the id, keep the row.
+    for record in payload["records"]:
+        record["reading"] = "はなす"
+        del record["id"]
+    staged_path.write_text(yaml.safe_dump(payload, allow_unicode=True), encoding="utf-8")
+
+    assert cli.main(["--root", str(root), "validate", str(staged_path)]) == 0
+    assert "0 error(s)" in capsys.readouterr().out
+    assert [record.id for record in load_records(staged_path)] == ["word:話す:はなす"]
+
+
+def test_a_staging_failure_leaves_the_records_untouched(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Staging runs before the records are written. Otherwise the command
+    # replaces vocabulary.json, then fails to stage, then exits non-zero — so
+    # the caller is told the import did not happen while the held rows exist
+    # nowhere on disk at all.
+    root, source = _project(tmp_path)
+    (root / "staging").write_text("not a directory\n", encoding="utf-8")
+
+    assert cli.main(["--root", str(root), "import-shirabe", str(source)]) == 1
+
+    assert "error:" in capsys.readouterr().err
+    assert not (root / "vocabulary.json").exists()
+
+
+def test_a_directory_at_the_staging_path_is_reported_as_one(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A directory `exists()`, so the review-edits branch claimed to be
+    # protecting hand edits that cannot be there while the held rows were
+    # silently never staged and the import still exited 0.
+    root, source = _project(tmp_path)
+    staged_path = root / "staging" / "shirabe-export-needs-reading.yaml"
+    staged_path.mkdir(parents=True)
+
+    assert cli.main(["--root", str(root), "import-shirabe", str(source)]) == 1
+
+    err = capsys.readouterr().err
+    assert "is a directory" in err
+    assert "review edits" not in err
+    assert not (root / "vocabulary.json").exists()
     assert "needs-reading" not in capsys.readouterr().out
