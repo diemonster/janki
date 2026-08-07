@@ -153,10 +153,11 @@ Conflicts (existing values kept; --prefer-incoming FIELD takes the import's):
 
 `--prefer-incoming FIELD[,FIELD]` opts individual fields back into
 overwriting, which is what you want for a deliberate refresh from a corrected
-export. It accepts any content field — `furigana`, `romaji`, `meanings`,
-`part_of_speech`, `verb_group`, `transitivity`, `examples`, `conjugations`,
-`usage_notes`, `audio`, `image` — and refuses `id`, `expression`, `reading`,
-`tags`, and `source`. Those five are not preferences: the first three are the
+export. It accepts any content field of a record — everything except the five it
+refuses: `id`, `expression`, `reading`, `tags`, and `source`. (The accepted
+set is derived from the record schema rather than hard-coded, so it grows
+with it; `janki import-shirabe --prefer-incoming nope` lists the current
+names in its error.) Those five are not preferences: the first three are the
 record's identity (the ID is derived from expression and reading, and the Anki
 GUID from the ID), tags are always unioned, and source sticks with the first
 import. A conflict on one of those — an `expression` or `reading` edited
@@ -239,7 +240,7 @@ Never exported: personal-vocabulary 0 of 0, verbs 3 of 3
 Missing word audio: 3 of 3
 Stale audio: 0
 Missing enrichment: 2 (no example sentence, or no usage notes)
-Missing pitch accent: n/a until the pitch-accent schema lands (M2.2)
+Missing pitch accent: 3
 Staged for review: none
 ```
 
@@ -378,8 +379,8 @@ requests include:
 - The Shirabe deep link currently uses `shirabelookup://search?w=...`. That URL
   scheme is unverified against a real installed app — test it on your iPhone
   before relying on it.
-- Pitch accent and synthesized audio are not in the pipeline yet. They are
-  planned rather than ruled out: pitch accent comes from jpdb's dictionary data
-  in Milestone 2, generated audio from TTS in Milestone 5. Neither will ever be
-  guessed — until the data is there `janki status` says "n/a" instead of
-  inventing a number. See `docs/DESIGN_V2.md`.
+- Records now carry pitch accent and a frequency rank, but nothing fills them
+  in yet — `janki enrich --jpdb` does that later in Milestone 2, from jpdb's
+  dictionary data. Generated audio arrives in Milestone 5. Neither is ever
+  guessed: an empty field means the dictionary did not say, and `janki status`
+  counts it as missing rather than inventing a value. See `docs/DESIGN_V2.md`.

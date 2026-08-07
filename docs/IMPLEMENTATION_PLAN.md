@@ -572,7 +572,7 @@ this; do not claim it, and do not block on it.
   green against the captured response, or the golden expectations were
   wrong and must be corrected with the reasoning stated.
 
-### [ ] M2.2 Schema additions
+### [x] M2.2 Schema additions
 
 Depends on: M1.1, M1.5 (validation.py contention — land M1.5 first)
 Files: `src/japanese_anki/models.py`, `src/japanese_anki/validation.py`,

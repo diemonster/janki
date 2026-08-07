@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 from datetime import date
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -161,18 +160,24 @@ def test_summary_reports_exports_audio_enrichment_and_staleness(
     assert "Missing enrichment: 1" in out
 
 
-def test_pitch_accent_counts_wait_for_the_schema(
+def test_pitch_accent_is_counted_now_that_the_schema_carries_it(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # M2.2 adds pitch_accent to the record schema; until then the honest
-    # answer is that the question cannot be asked yet.
-    root = _project(tmp_path, [_raw("話す", "はなす")])
+    # Before M2.2 the honest answer was that the question could not be asked
+    # yet. The field exists now, so the line is a real count —
+    # `pitch_accent_supported` reads `dataclasses.fields`, so it flipped on its
+    # own when the field landed.
+    root = _project(
+        tmp_path,
+        [_raw("話す", "はなす", pitch_accent=["LHHH"]), _raw("食べる", "たべる")],
+    )
 
     assert _status(root) == 0
 
     out = capsys.readouterr().out
-    assert status_module.pitch_accent_supported() is False
-    assert "Missing pitch accent: n/a until the pitch-accent schema lands (M2.2)" in out
+    assert status_module.pitch_accent_supported() is True
+    assert "Missing pitch accent: 1" in out
+    assert "n/a until the pitch-accent schema lands" not in out
 
 
 # --- the review queue -------------------------------------------------------
@@ -876,16 +881,11 @@ def test_rebuild_leaves_a_real_audio_entry_alone(
 
 
 def test_rebuilt_word_audio_claims_no_content_it_cannot_prove(tmp_path: Path) -> None:
-    # Post-M2.2 shape: the filename fingerprint covers the record id, so it
-    # proves the reading but not the accent the audio was generated with.
+    # A record carrying an accent pattern: the filename fingerprint covers the
+    # record id, so it proves the reading but not the accent the audio on disk
+    # was generated with.
     record = _record("話す", "はなす")
-    accented = SimpleNamespace(
-        id=record.id,
-        reading=record.reading,
-        examples=[],
-        source=record.source,
-        pitch_accent=["LHH"],
-    )
+    accented = _record("話す", "はなす", pitch_accent=["LHH"])
     media = tmp_path / "media"
     media.mkdir()
     fingerprint = word_audio_filename_fingerprint(record)

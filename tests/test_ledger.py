@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -54,15 +54,9 @@ def _enriched(record: VocabularyRecord) -> VocabularyRecord:
     return record
 
 
-def _accented(record: VocabularyRecord, pattern: str) -> SimpleNamespace:
-    """A stand-in for the post-M2.2 record shape (``pitch_accent`` lands in M2.2)."""
-    return SimpleNamespace(
-        id=record.id,
-        reading=record.reading,
-        examples=record.examples,
-        usage_notes=record.usage_notes,
-        pitch_accent=[pattern],
-    )
+def _accented(record: VocabularyRecord, pattern: str) -> VocabularyRecord:
+    """``record`` with a jpdb accent pattern on it."""
+    return replace(record, pitch_accent=[pattern])
 
 
 # -- loading and saving ------------------------------------------------------
@@ -684,9 +678,8 @@ def test_word_content_fingerprint_follows_the_selected_accent() -> None:
     record = _record()
     plain = word_audio_content_fingerprint(record)
 
-    # pitch_accent lands in M2.2; today's records answer "" and are
-    # fingerprinted on the reading alone. Once a pattern exists, audio
-    # generated without one is detectably out of date.
+    # A record with no pattern is fingerprinted on the reading alone. Once a
+    # pattern exists, audio generated without one is detectably out of date.
     assert word_audio_content_fingerprint(_accented(record, "LHHH")) != plain
     assert word_audio_content_fingerprint(_accented(record, "LHHH")) == short_fingerprint(
         record.reading + "LHHH"
@@ -787,8 +780,8 @@ def test_records_with_no_audio_are_missing_not_stale(tmp_path: Path) -> None:
 
 
 def test_word_audio_goes_stale_once_a_pitch_pattern_arrives(tmp_path: Path) -> None:
-    # The M2.2 schema change is exactly this transition: audio synthesized
-    # before the accent was known must be regenerated with it.
+    # The transition an enrichment pass creates: audio synthesized before the
+    # accent was known must be regenerated with it.
     book = ledger_module.load(tmp_path / "ledger.json")
     record = _record()
     book.record_audio(
