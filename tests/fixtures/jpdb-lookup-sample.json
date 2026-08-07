@@ -1,0 +1,72 @@
+{
+  "_captured": "Real POST https://jpdb.io/api/v1/lookup-vocabulary response, captured 2026-08-07 with the repo owner's JPDB_API_KEY (IMPLEMENTATION_PLAN M2.5). Request body: {\"list\": [[1464530, 3361009543], [1562350, 4280520068], [1358280, 1573826265]], \"fields\": [\"spelling\", \"reading\", \"frequency_rank\", \"pitch_accent\", \"meanings_chunks\", \"meanings_part_of_speech\", \"part_of_speech\", \"card_state\"]}. Tests read only \"response\". Three entries chosen for coverage: a noun, a transitive godan verb with three senses, and an all-kana transitive ichidan verb.",
+  "_notes": [
+    "meanings_chunks is one list per SENSE, whose members are that sense's glosses. 話す has three senses and eleven glosses; the importer keeps three meanings, not eleven.",
+    "card_state is null for a word in no deck and a list of state words otherwise ([\"locked\", \"new\"]). raw_fields is a string map, so it is joined, and null becomes an absent key rather than the string \"None\".",
+    "This response reads 日本語 as にほんご with accent LHHHH. The captured /parse response reads the SAME vid+sid as にっぽんご with accent LHHHHH. The two endpoints genuinely disagree for one pair, and the accent tracks whichever reading the endpoint chose. Do not \"fix\" either fixture to match the other: this disagreement is why M2.6 warns on a reading mismatch instead of overwriting.",
+    "meanings_part_of_speech is requested and captured but not mapped onto a record: the record carries one part_of_speech, and the top-level part_of_speech field is the whole entry's. Kept in the request so the fixture documents the real response width."
+  ],
+  "request_fields": [
+    "spelling",
+    "reading",
+    "frequency_rank",
+    "pitch_accent",
+    "meanings_chunks",
+    "meanings_part_of_speech",
+    "part_of_speech",
+    "card_state"
+  ],
+  "request_list": [
+    [1464530, 3361009543],
+    [1562350, 4280520068],
+    [1358280, 1573826265]
+  ],
+  "response": {
+    "vocabulary_info": [
+      [
+        "日本語",
+        "にほんご",
+        4800,
+        ["LHHHH"],
+        [["Japanese (language)"]],
+        [["n"]],
+        ["n"],
+        null
+      ],
+      [
+        "話す",
+        "はなす",
+        200,
+        ["LHLL"],
+        [
+          ["to talk", "to speak", "to converse", "to chat"],
+          ["to tell", "to explain", "to narrate", "to mention", "to describe", "to discuss"],
+          ["to speak (a language)"]
+        ],
+        [
+          ["vt", "v5", "v5s"],
+          ["vt", "v5", "v5s"],
+          ["vt", "v5", "v5s"]
+        ],
+        ["vt", "v5", "v5s"],
+        ["locked", "new"]
+      ],
+      [
+        "たべる",
+        "たべる",
+        13600,
+        ["LHLL"],
+        [
+          ["to eat"],
+          ["to live on (e.g. a salary)", "to live off", "to subsist on"]
+        ],
+        [
+          ["vt", "v1"],
+          ["vt", "v1"]
+        ],
+        ["vt", "v1"],
+        null
+      ]
+    ]
+  }
+}

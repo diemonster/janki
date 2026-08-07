@@ -12,6 +12,7 @@ from japanese_anki import jpdb, ledger, migrate, status
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import AnkiBuildError, build_deck, resolve_deck_records
+from japanese_anki.importers import jpdb_import
 from japanese_anki.importers.shirabe import import_file, inspect_file
 from japanese_anki.io import (
     MERGE_LABELS,
@@ -489,6 +490,102 @@ def command_import_shirabe(args: argparse.Namespace) -> int:
     )
 
 
+def command_import_jpdb(args: argparse.Namespace) -> int:
+    """Import from jpdb — a userscript CSV, or decks straight from the API.
+
+    A deck import runs the whole pipeline **once per deck** rather than pooling
+    every deck's words into one pass. That is what keeps ``run_import``'s
+    ``source_ref`` contract satisfiable: a record's ``source.imported_from`` is
+    the deck it came from, so one label per call is the only shape that matches
+    it. A word in two decks earns a ledger reference for each, which is the
+    truth about where it came from, and the second pass merges over the first
+    with the usual existing-wins semantics.
+    """
+    chosen = [
+        label
+        for label, given in (
+            ("FILE", args.file is not None),
+            ("--deck", bool(args.deck)),
+            ("--all-decks", args.all_decks),
+        )
+        if given
+    ]
+    if len(chosen) != 1:
+        raise JankiError(
+            "import-jpdb needs exactly one source: a CSV file, --deck NAME "
+            f"(repeatable), or --all-decks. Got {', '.join(chosen) or 'none'}."
+        )
+
+    config = _load_config(args)
+    prefer_incoming = parse_prefer_incoming(args.prefer_incoming)
+    output_path = (args.output or config.normalized_file).resolve()
+
+    if args.file is not None:
+        source_path = args.file.resolve()
+        result = jpdb_import.import_csv(source_path)
+        return run_import(
+            config,
+            result.records,
+            source_type="jpdb",
+            source_ref=source_path.name,
+            output_path=output_path,
+            unit="source rows",
+            staging_stem=f"jpdb-{source_path.stem}",
+            needs_reading=result.needs_reading,
+            warnings=result.warnings,
+            prefer_incoming=prefer_incoming,
+            replace=args.replace,
+            assume_yes=args.yes,
+        )
+
+    client = jpdb.JpdbClient(jpdb.api_key_from_env())
+    available = client.list_user_decks()
+    decks = available if args.all_decks else jpdb_import.select_decks(available, args.deck)
+    if not decks:
+        print("No jpdb decks on this account; nothing to import.", file=sys.stderr)
+        return 0
+
+    exit_code = 0
+    for index, deck in enumerate(decks):
+        name = str(deck.get("name", "")).strip()
+        if len(decks) > 1:
+            # A blank line between decks: each pass prints a full summary, and
+            # run together they read as one confusing report.
+            print(f"{'' if index == 0 else chr(10)}jpdb deck: {name}")
+        result = jpdb_import.import_deck(client, deck)
+        # --replace against several decks would have deck two discard deck one.
+        # It is honoured on the first pass only; the rest merge, which is what
+        # "replace the collection with these decks" has to mean.
+        code = run_import(
+            config,
+            result.records,
+            source_type="jpdb",
+            # The deck name, matching what the importer stored as each record's
+            # own `source.imported_from` — see run_import's contract.
+            source_ref=name,
+            output_path=output_path,
+            unit="jpdb entries",
+            staging_stem=f"jpdb-{_slug_for_file(name)}",
+            needs_reading=result.needs_reading,
+            held_unit="entr(y/ies)",
+            warnings=result.warnings,
+            prefer_incoming=prefer_incoming,
+            replace=args.replace and index == 0,
+            assume_yes=args.yes,
+        )
+        exit_code = exit_code or code
+    return exit_code
+
+
+def _slug_for_file(name: str) -> str:
+    """A deck name reduced to something safe as part of a filename.
+
+    Deck names carry colons, slashes and spaces; a staging file named after one
+    verbatim would land in the wrong directory or refuse to be created.
+    """
+    return jpdb_import.deck_tag(name).removeprefix("jpdb:") or "deck"
+
+
 def _validate_path(path: Path) -> tuple[list, int]:
     raw = load_structured(path)
     if isinstance(raw, dict) and "deck" in raw:
@@ -721,6 +818,53 @@ def build_parser() -> argparse.ArgumentParser:
         help="Answer the --replace confirmation prompt with yes.",
     )
     import_parser.set_defaults(handler=command_import_shirabe)
+
+    jpdb_import_parser = subparsers.add_parser(
+        "import-jpdb",
+        help="Import jpdb decks over the API, or a JPDB-Export userscript CSV",
+    )
+    jpdb_import_parser.add_argument(
+        "file",
+        type=_path,
+        nargs="?",
+        help="A JPDB-Export userscript CSV. Omit to import decks over the API.",
+    )
+    jpdb_import_parser.add_argument(
+        "--deck",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="A jpdb deck to import, by name. Repeat for several.",
+    )
+    jpdb_import_parser.add_argument(
+        "--all-decks",
+        action="store_true",
+        help="Import every deck on the account.",
+    )
+    jpdb_import_parser.add_argument("--output", type=_path)
+    jpdb_import_parser.add_argument(
+        "--replace",
+        action="store_true",
+        help=(
+            "Replace output instead of merging with existing normalized records; "
+            "prompts for confirmation on a terminal unless --yes. With several "
+            "decks it applies to the first only, so the rest are not discarded."
+        ),
+    )
+    jpdb_import_parser.add_argument(
+        "--prefer-incoming",
+        metavar="FIELD[,FIELD]",
+        help=(
+            "Content fields the import may overwrite. By default an import only "
+            "fills fields that are empty."
+        ),
+    )
+    jpdb_import_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Answer the --replace confirmation prompt with yes.",
+    )
+    jpdb_import_parser.set_defaults(handler=command_import_jpdb)
 
     validate_parser = subparsers.add_parser("validate", help="Validate records or decks")
     validate_parser.add_argument("path", type=_path, nargs="?")

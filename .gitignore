@@ -27,5 +27,11 @@ dist/*-preview.html
 .env.*
 !.env.example
 
+# Claude Code state and config, all of it local to a machine. settings.json
+# pins per-developer model choices and agents/ is personal tooling, so neither
+# is something a clone should inherit; AGENTS.md is the instructions that are
+# meant to be shared, and it is tracked.
+.claude/
+
 # macOS
 .DS_Store
