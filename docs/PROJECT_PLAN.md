@@ -5,16 +5,25 @@
 Create a reproducible local pipeline that converts Japanese study material into
 Anki decks without making Anki's database the only copy of the learning content.
 
+> **Design v2 (2026-08):** the architecture below is being extended with
+> jpdb.io and PDF data sources, a machine-written word ledger, built-in AI
+> enrichment via the Claude API, and TTS pronunciation audio. The full
+> design, schemas, and rationale live in `docs/DESIGN_V2.md`; that document
+> supersedes this one where they disagree.
+
 ## Architecture
 
 ```text
-Shirabe CSV / manual YAML / class material
+Shirabe CSV / jpdb API / PDFs / manual YAML
                   |
                   v
-        importers and normalization
+   importers, AI extraction + staging review
                   |
                   v
-      canonical vocabulary records
+      canonical vocabulary records  +  word ledger (state)
+                  |
+                  v
+   enrichment (jpdb dictionary data, Claude API, TTS audio)
                   |
                   v
         validation and curation
@@ -32,53 +41,82 @@ Shirabe CSV / manual YAML / class material
 ## Design principles
 
 1. Raw exports are immutable.
-2. Normalization is mechanical and reproducible.
-3. Human curation lives in readable JSON or YAML.
+2. Normalization is mechanical and reproducible; where it cannot be (PDFs),
+   AI output is staged for human review before entering the canonical store.
+3. Human curation lives in readable JSON or YAML. Imports must never
+   overwrite it — the existing-wins merge that enforces this lands in
+   Phase 2 (today's merge is still incoming-wins).
 4. Validation fails loudly rather than dropping data.
 5. Note IDs and Anki GUIDs are deterministic.
-6. Generated packages can always be deleted and rebuilt.
-7. Japanese-learning conventions are explicit in `AGENTS.md` and the style guide.
+6. Generated packages can always be deleted and rebuilt; generated AI/TTS
+   content is cached in the repo so rebuilds are free.
+7. Facts are looked up (jpdb dictionary data), judgment is generated
+   (Claude), and rules are computed (conjugations) — never the other way
+   around.
+8. Japanese-learning conventions are explicit in `AGENTS.md` and the style guide.
 
 ## Milestones
 
-### Phase 1: usable starter
+### Phase 1: usable starter (done)
 
-- CSV inspection.
-- Alias-based Shirabe import.
-- Canonical schema.
-- Validation.
-- Recognition, production, and reading templates.
-- `.apkg` generation.
-- Static preview.
+- CSV inspection, alias-based Shirabe import, canonical schema, validation,
+  recognition/production/reading templates, `.apkg` generation, static preview.
 
-### Phase 2: real Shirabe fixture
+### Phase 2: v2 foundations
 
-- Add an export from the installed Shirabe version as an anonymized test fixture.
-- Adjust aliases and parsing to match its exact columns.
-- Verify the `shirabelookup://` deep link on iOS.
+- Curation-safe merge (existing-wins) with per-record outcome reporting,
+  including the test-suite and CLI-output rewrite it requires.
+- Readings become ID-constitutive: reading-less kanji rows go to staging,
+  never straight into the normalized store.
+- `data/ledger.json` word ledger + `janki status` (incl. duplicate
+  detection across spellings/readings); `janki migrate-inline` for the
+  existing inline deck notes.
+- Atomic file writes and a shared `JankiError` base the CLI catches once
+  (no per-error registration) — both landed with task M1.2; config
+  additions with unknown-key warnings.
 
-### Phase 3: curation helpers
+### Phase 3: jpdb.io
 
-- Commands for selecting records into decks.
-- Interactive handling of ambiguous readings or definitions.
-- Better merge reports showing added, updated, unchanged, and conflicting rows.
+- API client (Bearer auth, batched column-oriented responses, backoff).
+- `janki import-jpdb` (deck sync + userscript-CSV files), reviews import
+  (+ documented `exclude_tags: [jpdb-known]` deck filtering).
+- `janki enrich --jpdb`: furigana, pitch accent, frequency, POS from
+  dictionary data, plus rule-based romaji and conjugation generation.
+  Schema gains `pitch_accent` / `audio_accent` / `frequency_rank` and
+  per-example audio — all four in one change (task M2.2), including the
+  audio-related fields, though audio itself is Phase 6.
 
-### Phase 4: richer cards
+### Phase 4: PDFs and photos
 
-- Optional embedded audio.
-- Images and kanji-writing cards.
-- Grammar and sentence note types.
-- Transitivity-pair and conjugation practice cards.
+- `janki extract` — Claude vision + structured outputs → `data/staging/`,
+  accepting PDFs and phone photos, annotating already-known words.
+- Human review, then `janki promote` with a dictionary reading-set
+  cross-check and partial promotion.
 
-### Phase 5: direct local sync
+### Phase 5: AI enrichment
 
-- Optional AnkiConnect integration.
-- Dry-run diff before modifying a live Anki collection.
-- Explicit backup and rollback instructions.
+- `janki enrich --ai` with mechanical QC (target-word presence, furigana
+  verified via jpdb parse), staging routing for large runs,
+  `--polish-meanings`, and split batch submit/fetch.
 
-## Non-goals for the starter
+### Phase 6: audio
 
-- Automatic pitch-accent generation.
-- Automatic furigana segmentation for arbitrary mixed-kanji words.
-- Bidirectional synchronization with Shirabe.
+- Pitch-pattern → AquesTalk conversion module with a golden test set.
+- `janki audio`: VOICEVOX word audio with forced reading + accent
+  (accent_phrases flow), optional Azure sentence audio; content-fingerprint
+  file naming with stale-audio detection.
+- Exporter media-dir resolution, notetype-upgrade verification against a
+  live collection, template updates, `build --only-new`, `janki refresh`.
+
+### Phase 7: direct local sync (unchanged, later)
+
+- Optional AnkiConnect integration; dry-run diff before modifying a live
+  collection; explicit backup and rollback instructions.
+
+## Non-goals
+
+- *Guessed* pitch accent or furigana segmentation — both now come from jpdb
+  dictionary data instead; when the dictionary doesn't know, the field
+  stays empty and flagged.
+- Bidirectional synchronization with Shirabe or jpdb.
 - Direct modification of Anki's SQLite collection.
