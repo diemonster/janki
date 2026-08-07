@@ -197,6 +197,17 @@ def test_the_records_move_into_the_normalized_file_under_the_same_ids(
                 # Stored records carry the whole SourceReference; the note only
                 # wrote the keys it cared about.
                 assert by_id[note["id"]][key].items() >= value.items()
+            elif key == "examples":
+                # Same tolerance one level down: a stored example carries every
+                # schema field, and the note wrote only the ones it had. M2.2's
+                # `ExampleSentence.audio` is the first such field — empty until
+                # `janki audio` fills it, so the migration still moved the
+                # example across unchanged.
+                for stored_example, written in zip(
+                    by_id[note["id"]][key], value, strict=True
+                ):
+                    assert stored_example.items() >= written.items()
+                    assert stored_example["audio"] == ""
             else:
                 assert by_id[note["id"]][key] == value, key
 

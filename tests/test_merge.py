@@ -15,6 +15,7 @@ import pytest
 
 from japanese_anki import cli
 from japanese_anki.io import (
+    MERGEABLE_FIELDS,
     DataError,
     merge_records,
     parse_prefer_incoming,
@@ -283,6 +284,39 @@ def test_zero_is_a_value_not_a_hole() -> None:
     assert "romaji" not in outcomes["word:話す:はなす"].filled_fields
 
 
+def test_the_schema_additions_merge_without_being_enumerated_anywhere() -> None:
+    # MERGEABLE_FIELDS is derived from `dataclasses.fields(VocabularyRecord)`,
+    # so M2.2's three fields merge with no edit to io.py. Verified here rather
+    # than assumed: an enumeration that silently missed them would leave the
+    # new fields unfillable and unreported.
+    assert {"pitch_accent", "audio_accent", "frequency_rank"} <= set(MERGEABLE_FIELDS)
+
+    merged, outcomes = merge_records(
+        [_curated()],
+        [_imported(pitch_accent=["LHHH"], audio_accent="LHHL", frequency_rank=0)],
+    )
+
+    record = merged[0]
+    assert record.pitch_accent == ["LHHH"]
+    assert record.audio_accent == "LHHL"
+    # 0 is a rank, not a hole: an empty field accepted it.
+    assert record.frequency_rank == 0
+    filled = outcomes["word:話す:はなす"].filled_fields
+    assert {"pitch_accent", "audio_accent", "frequency_rank"} <= set(filled)
+
+
+def test_a_stored_frequency_rank_of_zero_conflicts_instead_of_being_refilled() -> None:
+    # The other half of the same rule, on the field it was written for: once a
+    # rank is stored, even the falsy one, a differing import is a conflict.
+    existing = _curated()
+    existing.frequency_rank = 0
+
+    merged, outcomes = merge_records([existing], [_imported(frequency_rank=5000)])
+
+    assert merged[0].frequency_rank == 0
+    assert ("frequency_rank", 0, 5000) in outcomes["word:話す:はなす"].conflicts
+
+
 def test_outcomes_cover_exactly_the_incoming_ids() -> None:
     untouched = VocabularyRecord(
         id="word:食べる:たべる", expression="食べる", reading="たべる"
@@ -448,7 +482,7 @@ def test_import_prefer_incoming_overwrites_the_named_fields(
     assert record["furigana"] == "話[はな]す"  # untouched fields still win
 
 
-@pytest.mark.parametrize("value", ["tags", "frequency_rank"])
+@pytest.mark.parametrize("value", ["tags", "not_a_field"])
 def test_import_rejects_bad_prefer_incoming_before_writing(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], value: str
 ) -> None:

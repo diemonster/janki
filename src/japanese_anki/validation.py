@@ -11,6 +11,10 @@ from japanese_anki.models import VocabularyRecord
 # part of the ID, so this one cannot be repaired in place once Anki has seen it.
 _READINGLESS_ID = re.compile(r"^word:(?P<expression>.*):$")
 
+# A jpdb accent pattern: one H or L per kana of the reading, plus one for the
+# particle that would follow the word. Anything else is not a pattern at all.
+_PITCH_PATTERN = re.compile(r"^[HL]+$")
+
 # Self-contained on purpose: the remedy has to be readable from the error, not
 # from a document. Pointing a reviewer at the review they just did is how this
 # check stops being actionable. No literal path either — the staging directory
@@ -46,6 +50,21 @@ def _is_readingless_kanji_id(record_id: str) -> bool:
     """
     match = _READINGLESS_ID.match(record_id)
     return bool(match) and contains_kanji(match.group("expression"))
+
+
+def _accent_patterns(record: VocabularyRecord) -> list[tuple[str, str]]:
+    """Every accent pattern on the record, labelled by where it came from.
+
+    ``audio_accent`` is checked by the same rules as ``pitch_accent``: it is the
+    pattern audio generation actually uses when set, so a typo there is the one
+    that reaches the synthesizer.
+    """
+    patterns = [
+        (f"pitch_accent[{index}]", pattern) for index, pattern in enumerate(record.pitch_accent)
+    ]
+    if record.audio_accent:
+        patterns.append(("audio_accent", record.audio_accent))
+    return patterns
 
 
 def validate_record(record: VocabularyRecord, source: str = "") -> list[ValidationIssue]:
@@ -90,6 +109,26 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
         add("warning", "furigana is present but the plain reading is empty")
     if record.verb_group and not record.part_of_speech:
         add("warning", "verb group is present but part of speech is empty")
+    for label, pattern in _accent_patterns(record):
+        if not _PITCH_PATTERN.match(pattern):
+            add(
+                "error",
+                f"{label} {pattern!r} is not an accent pattern: expected only "
+                "'H' and 'L', one per kana of the reading plus the following particle",
+            )
+        elif record.reading and len(pattern) != len(record.reading) + 1:
+            # A warning, not an error: that the pattern covers the particle slot
+            # is community-verified rather than documented, so a mismatch means
+            # "look at this", not "this file is wrong". Audio generation (M5.1)
+            # refuses such a pattern instead of guessing the alignment, so the
+            # record simply gets no audio until someone checks it.
+            add(
+                "warning",
+                f"{label} {pattern!r} has {len(pattern)} position(s) for a "
+                f"{len(record.reading)}-kana reading; {len(record.reading) + 1} were "
+                "expected (one per kana plus the following particle) and audio "
+                "generation will skip this record rather than guess",
+            )
     for index, example in enumerate(record.examples, start=1):
         if example.japanese and not example.english:
             add("warning", f"example {index} has Japanese but no English translation")

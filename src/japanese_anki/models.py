@@ -75,12 +75,47 @@ def _string_list(value: Any, field_name: str) -> list[str]:
     )
 
 
+def _optional_int(value: Any, field_name: str) -> int | None:
+    """``value`` as the optional whole number ``field_name`` requires.
+
+    Empty (``None`` or ``""``) is the absent value, the way every other field
+    here reads emptiness; ``0`` is a number and survives. A string is accepted
+    because both of this project's readers hand one over — CSV columns are
+    always text, and a JSON export that wrote ``1234.0`` round-trips through
+    ``float``. Anything else is a ``ModelError`` rather than a silent ``None``:
+    a rank that vanished on load looks exactly like a rank nobody has fetched
+    yet, so the next enrichment pass would overwrite the value instead of
+    reporting it. ``bool`` is refused explicitly — it is an ``int`` subclass in
+    Python, and ``frequency_rank: true`` meaning rank 1 is nonsense.
+    """
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        raise ModelError(f"'{field_name}' must be a whole number or empty, got bool ({value!r})")
+    if isinstance(value, int):
+        return value
+    try:
+        number = float(str(value).strip())
+    except (TypeError, ValueError):
+        raise ModelError(
+            f"'{field_name}' must be a whole number or empty, got "
+            f"{type(value).__name__} ({_excerpt(value)})"
+        ) from None
+    if not number.is_integer():
+        raise ModelError(
+            f"'{field_name}' must be a whole number or empty, got {_excerpt(value)}"
+        )
+    return int(number)
+
+
 @dataclass(slots=True)
 class ExampleSentence:
     japanese: str = ""
     furigana: str = ""
     romaji: str = ""
     english: str = ""
+    # Media-dir-relative filename of this sentence's generated audio (M5.3).
+    audio: str = ""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> ExampleSentence:
@@ -90,6 +125,7 @@ class ExampleSentence:
             furigana=str(data.get("furigana", "")).strip(),
             romaji=str(data.get("romaji", "")).strip(),
             english=str(data.get("english", "")).strip(),
+            audio=str(data.get("audio", "")).strip(),
         )
 
 
@@ -144,6 +180,17 @@ class VocabularyRecord:
     usage_notes: str = ""
     audio: str = ""
     image: str = ""
+    # jpdb-style accent patterns over the reading's kana plus the following
+    # particle slot ("LHHH"); possibly several, first entry primary. Written by
+    # enrichment (M2.6), read by the pitch converter (M5.1) and the exporter
+    # (M5.4) — no note field carries it before then.
+    pitch_accent: list[str] = field(default_factory=list)
+    # Per-record override of the pattern audio generation forces. Empty means
+    # "use pitch_accent[0]".
+    audio_accent: str = ""
+    # jpdb corpus rank. ``None`` is "never looked up"; the rank itself is a
+    # number, so 0 would be a value and not a hole.
+    frequency_rank: int | None = None
     source: SourceReference = field(default_factory=SourceReference)
 
     @classmethod
@@ -182,6 +229,9 @@ class VocabularyRecord:
             usage_notes=str(data.get("usage_notes", "")).strip(),
             audio=str(data.get("audio", "")).strip(),
             image=str(data.get("image", "")).strip(),
+            pitch_accent=_string_list(data.get("pitch_accent"), "pitch_accent"),
+            audio_accent=str(data.get("audio_accent", "")).strip(),
+            frequency_rank=_optional_int(data.get("frequency_rank"), "frequency_rank"),
             source=SourceReference.from_dict(data.get("source")),
         )
 

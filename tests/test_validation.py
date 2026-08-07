@@ -1,3 +1,5 @@
+import pytest
+
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.validation import has_errors, validate_records
 
@@ -121,6 +123,85 @@ def test_the_staging_hint_says_what_to_do_without_sending_the_reader_elsewhere()
     # No hardcoded path either: staging_dir is configurable, and a project
     # with staging_dir = "review" has no data/staging directory to look for.
     assert "data/staging" not in message
+
+
+# --- accent patterns (M2.2's schema additions) ------------------------------
+
+
+def _accented(pattern: str, *, audio_accent: str = "", reading: str = "はなす") -> VocabularyRecord:
+    return VocabularyRecord(
+        id=f"word:話す:{reading}",
+        expression="話す",
+        reading=reading,
+        meanings=["to speak"],
+        pitch_accent=[pattern] if pattern else [],
+        audio_accent=audio_accent,
+    )
+
+
+def test_a_well_formed_accent_pattern_is_not_flagged() -> None:
+    # One position per kana of はなす plus the particle slot that follows it.
+    assert _issue_messages(_accented("LHHH")) == []
+
+
+@pytest.mark.parametrize("pattern", ["LHH-", "lhhh", "L H H H", "0110", "HLLLx"])
+def test_a_pattern_that_is_not_h_and_l_is_an_error(pattern: str) -> None:
+    # Not a pattern at all: the converter reads it position by position, so
+    # anything else is unusable rather than merely suspicious.
+    record = _accented(pattern)
+
+    assert has_errors(validate_records([record]))
+    assert any("is not an accent pattern" in message for message in _issue_messages(record))
+
+
+def test_a_pattern_of_the_wrong_length_warns_rather_than_erroring() -> None:
+    # That the pattern covers the following particle is community-verified, not
+    # documented, so a mismatch means "look at this", not "this file is wrong".
+    record = _accented("LHH")  # 3 positions for a 3-kana reading; 4 expected
+
+    issues = validate_records([record])
+
+    assert not has_errors(issues)
+    assert any(
+        issue.level == "warning" and "4 were expected" in issue.message for issue in issues
+    )
+
+
+def test_the_audio_override_is_held_to_the_same_rules() -> None:
+    # audio_accent is the pattern synthesis actually uses when it is set, so a
+    # typo there is the one that reaches the engine.
+    record = _accented("LHHH", audio_accent="HxL")
+
+    messages = _issue_messages(record)
+
+    assert has_errors(validate_records([record]))
+    assert any("audio_accent" in message and "not an accent pattern" in message
+               for message in messages)
+    assert not any("pitch_accent[0]" in message for message in messages)
+
+
+def test_the_length_warning_stays_quiet_while_the_reading_is_empty() -> None:
+    # A record with no reading is already reported for that; measuring a pattern
+    # against a reading nobody has typed adds a second line for one fix.
+    record = VocabularyRecord(
+        id="word:ありがとう:ありがとう",
+        expression="ありがとう",
+        reading="",
+        meanings=["thank you"],
+        pitch_accent=["LHHH"],
+    )
+
+    assert _issue_messages(record) == []
+
+
+def test_every_pattern_on_the_record_is_checked_not_just_the_primary() -> None:
+    record = _accented("LHHH")
+    record.pitch_accent = ["LHHH", "not-a-pattern"]
+
+    messages = _issue_messages(record)
+
+    assert any("pitch_accent[1]" in message for message in messages)
+    assert not any("pitch_accent[0]" in message for message in messages)
 
 
 def test_a_kana_only_record_is_not_flagged_for_its_id() -> None:

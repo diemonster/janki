@@ -128,6 +128,93 @@ def test_a_model_error_excerpts_the_offending_value_rather_than_printing_it() ->
     assert message.endswith("...)")
 
 
+# --- the M2.2 schema additions ----------------------------------------------
+
+
+def test_the_new_schema_fields_default_to_empty() -> None:
+    # Nothing writes them yet (jpdb enrichment does, in M2.6), so every record
+    # loaded today gets the defaults — and each default has to read as *empty*
+    # to the merge, or the first enrichment pass would find no holes to fill.
+    record = VocabularyRecord.from_dict(_raw())
+
+    assert record.pitch_accent == []
+    assert record.audio_accent == ""
+    assert record.frequency_rank is None
+    assert VocabularyRecord.from_dict(
+        _raw(examples=[{"japanese": "毎日食べる。"}])
+    ).examples[0].audio == ""
+
+
+def test_the_new_fields_round_trip_through_to_dict() -> None:
+    # The one-time whole-file rewrite the design predicts: every stored record
+    # gains these keys the next time vocabulary.json is saved.
+    stored = VocabularyRecord.from_dict(
+        _raw(
+            pitch_accent=["LHHH", "LHHL"],
+            audio_accent="LHHL",
+            frequency_rank=1234,
+            examples=[{"japanese": "毎日食べる。", "audio": "janki-abc.wav"}],
+        )
+    ).to_dict()
+
+    assert stored["pitch_accent"] == ["LHHH", "LHHL"]
+    assert stored["audio_accent"] == "LHHL"
+    assert stored["frequency_rank"] == 1234
+    assert stored["examples"][0]["audio"] == "janki-abc.wav"
+    assert VocabularyRecord.from_dict(stored).to_dict() == stored
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("LHHH", ["LHHH"]), (["LHHH", "LHHL"], ["LHHH", "LHHL"]), (None, []), ("", [])],
+)
+def test_pitch_accent_accepts_one_pattern_or_several(value: Any, expected: list[str]) -> None:
+    # A single pattern written as a bare string is the shape a hand-edited YAML
+    # file takes; it reads as the one-entry list the field is documented as.
+    assert VocabularyRecord.from_dict(_raw(pitch_accent=value)).pitch_accent == expected
+
+
+@pytest.mark.parametrize("value", [{"primary": "LHHH"}, 5, True])
+def test_a_malformed_pitch_accent_is_a_clean_model_error(value: Any) -> None:
+    with pytest.raises(ModelError) as excinfo:
+        VocabularyRecord.from_dict(_raw(pitch_accent=value))
+
+    assert "pitch_accent" in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (1234, 1234),
+        # CSV columns are text and a JSON export can round-trip an int through
+        # float; both are the same rank.
+        ("1234", 1234),
+        (1234.0, 1234),
+        # Zero is a rank, not an absence: the merge would refill a hole.
+        (0, 0),
+        (None, None),
+        ("", None),
+    ],
+)
+def test_frequency_rank_coerces_the_shapes_a_source_actually_writes(
+    value: Any, expected: int | None
+) -> None:
+    assert VocabularyRecord.from_dict(_raw(frequency_rank=value)).frequency_rank == expected
+
+
+@pytest.mark.parametrize("value", ["very common", 12.5, [1234], True])
+def test_a_frequency_rank_that_is_not_a_number_is_a_clean_model_error(value: Any) -> None:
+    # Silently dropping it to None would be worse than refusing: a rank that
+    # vanished on load looks exactly like one nobody has fetched yet, so the
+    # next enrichment pass overwrites it instead of reporting it.
+    with pytest.raises(ModelError) as excinfo:
+        VocabularyRecord.from_dict(_raw(frequency_rank=value))
+
+    message = str(excinfo.value)
+    assert "frequency_rank" in message
+    assert "whole number" in message
+
+
 def test_a_null_raw_field_is_dropped_rather_than_stringified() -> None:
     # `str(None)` is the literal "None": a non-empty value nobody typed, which
     # `status --duplicates` would then group records on. An absent key is what
