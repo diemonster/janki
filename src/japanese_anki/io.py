@@ -142,6 +142,15 @@ MERGEABLE_FIELDS: tuple[str, ...] = tuple(
 _EMPTY_CONTAINERS = (str, bytes, list, tuple, set, frozenset, dict)
 
 
+def _copy_value(value: Any) -> Any:
+    """Detach a container so merged records never alias the caller's input."""
+    if isinstance(value, list):
+        return list(value)
+    if isinstance(value, dict):
+        return dict(value)
+    return value
+
+
 def _is_empty(value: Any) -> bool:
     """Empty means ``""``, ``[]``, ``{}`` or ``None`` — and nothing else.
 
@@ -174,19 +183,22 @@ class MergeOutcome:
 
 
 def validate_prefer_incoming(fields: Iterable[str]) -> tuple[str, ...]:
-    """Check field names destined for ``merge_records(prefer_incoming=...)``."""
+    """Check field names destined for ``merge_records(prefer_incoming=...)``.
+
+    Messages are worded for library callers; ``parse_prefer_incoming`` names
+    the CLI flag for people who actually typed one.
+    """
     names = tuple(fields)
     for name in names:
         if name in PREFER_INCOMING_PROTECTED:
             raise DataError(
-                f"--prefer-incoming cannot take '{name}': tags are always unioned, "
-                "source stays with the first import, and id/expression/reading are "
-                "the record's identity."
+                f"'{name}' cannot be preferred from the import: tags are always "
+                "unioned, source stays with the first import, and "
+                "id/expression/reading are the record's identity."
             )
         if name not in MERGEABLE_FIELDS:
             raise DataError(
-                f"Unknown field '{name}' for --prefer-incoming. "
-                f"Valid fields: {', '.join(MERGEABLE_FIELDS)}"
+                f"Unknown field '{name}'. Valid fields: {', '.join(MERGEABLE_FIELDS)}"
             )
     return names
 
@@ -195,9 +207,15 @@ def parse_prefer_incoming(value: str | None) -> tuple[str, ...]:
     """Parse a ``--prefer-incoming FIELD[,FIELD]`` option value."""
     if not value:
         return ()
-    return validate_prefer_incoming(
-        part.strip() for part in value.split(",") if part.strip()
-    )
+    names = [part.strip() for part in value.split(",") if part.strip()]
+    if not names:
+        # Separators only: the flag was passed but names nothing. Silently
+        # merging as if it were absent would hide the typo.
+        raise DataError(f"--prefer-incoming got no field names in {value!r}")
+    try:
+        return validate_prefer_incoming(names)
+    except DataError as exc:
+        raise DataError(f"--prefer-incoming: {exc}") from exc
 
 
 def _merge_one(
@@ -213,7 +231,9 @@ def _merge_one(
         if _is_empty(new_value) or old_value == new_value:
             continue
         if _is_empty(old_value) or name in prefer_incoming:
-            changes[name] = new_value
+            # Copy containers: the merged record must not alias the caller's
+            # input, or a later mutation of the import silently edits the store.
+            changes[name] = _copy_value(new_value)
             filled.append(name)
             continue
         conflicts.append((name, old_value, new_value))
@@ -221,7 +241,10 @@ def _merge_one(
     tags = sorted(set(old.tags) | set(new.tags))
     if tags != old.tags:
         changes["tags"] = tags
-        filled.append("tags")
+        # Only a genuinely new tag counts as a write; re-sorting a hand-edited
+        # list is not a change the user needs to scan the summary for.
+        if set(tags) != set(old.tags):
+            filled.append("tags")
 
     merged = replace(old, **changes) if changes else old
     if conflicts:
@@ -241,7 +264,9 @@ def _combine_outcomes(first: MergeOutcome, second: MergeOutcome) -> MergeOutcome
     conflicts = first.conflicts + [
         item for item in second.conflicts if item not in first.conflicts
     ]
-    if first.label == "added":
+    if first.label == "added" and not conflicts and not filled:
+        # Stays a plain "added" only when the later row said nothing new;
+        # otherwise the summary count would contradict the detail it prints.
         label = "added"
     elif conflicts:
         label = "conflicting"
@@ -274,13 +299,23 @@ def merge_records(
     the first row is lost.
     """
     prefer = frozenset(validate_prefer_incoming(prefer_incoming))
-    by_id = {record.id: record for record in existing}
+    by_id: dict[str, VocabularyRecord] = {}
+    for record in existing:
+        if record.id in by_id:
+            # Keying by id would drop one of them — with its curation — and the
+            # outcome map would never mention it. Refuse rather than choose.
+            raise DataError(
+                f"{record.id} appears more than once in the existing records; "
+                "merging would silently discard one. Run 'janki validate' and "
+                "resolve the duplicate first."
+            )
+        by_id[record.id] = record
     outcomes: dict[str, MergeOutcome] = {}
 
     for new in incoming:
         old = by_id.get(new.id)
         if old is None:
-            by_id[new.id] = new
+            by_id[new.id] = replace(new)
             outcomes[new.id] = MergeOutcome(label="added")
             continue
         merged, outcome = _merge_one(old, new, prefer)

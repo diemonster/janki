@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -64,6 +65,83 @@ def test_import_fills_empty_fields_and_never_overwrites_curation() -> None:
     # part_of_speech was empty, so the import fills it.
     assert record.part_of_speech == "verb"
     assert outcomes["word:話す:はなす"].filled_fields == ["part_of_speech", "tags"]
+
+
+# A non-empty, *different* value for every mergeable field, so the both-sides-
+# populated branch is exercised for each one. AGENTS.md names examples, notes,
+# conjugations and furigana specifically as things an import must never erase.
+_CURATED_VALUES: dict[str, object] = {
+    "furigana": "話[はな]す",
+    "romaji": "hanasu",
+    "meanings": ["to speak"],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "intransitive",
+    "examples": [ExampleSentence(japanese="毎日話す。", english="I speak every day.")],
+    "conjugations": {"past": "話した", "te_form": "話して"},
+    "usage_notes": "Curated note",
+    "audio": "../media/audio/janki-curated.wav",
+    "image": "../media/img/curated.png",
+}
+_IMPORTED_VALUES: dict[str, object] = {
+    "furigana": "話[はなし]す",
+    "romaji": "hanashisu",
+    "meanings": ["to talk"],
+    "part_of_speech": "noun",
+    "verb_group": "ichidan",
+    "transitivity": "transitive",
+    "examples": [ExampleSentence(japanese="CSV の例。", english="From the CSV.")],
+    "conjugations": {"past": "WRONG"},
+    "usage_notes": "Imported note",
+    "audio": "from-import.mp3",
+    "image": "from-import.png",
+}
+
+
+@pytest.mark.parametrize("name", sorted(_CURATED_VALUES))
+def test_every_populated_field_survives_an_import_that_disagrees(name: str) -> None:
+    """One field at a time: curation wins and the disagreement is reported.
+
+    Without this, a merge that unconditionally overwrote examples,
+    conjugations, audio or image passed the whole suite.
+    """
+    curated = _curated()
+    existing = [replace(curated, **{name: _CURATED_VALUES[name]})]
+    overrides: dict[str, object] = {name: _IMPORTED_VALUES[name]}
+    if name != "meanings":
+        # Match the curated meanings so the field under test is the only clash.
+        overrides["meanings"] = ["to speak"]
+    incoming = [_imported(**overrides)]
+
+    merged, outcomes = merge_records(existing, incoming)
+
+    assert getattr(merged[0], name) == _CURATED_VALUES[name]
+    outcome = outcomes["word:話す:はなす"]
+    assert name in [field_name for field_name, _, _ in outcome.conflicts]
+    assert name not in outcome.filled_fields
+    assert outcome.label == "conflicting"
+
+
+def test_merged_records_do_not_alias_the_import() -> None:
+    """Filling a field must copy it, or later edits to the import leak in."""
+    incoming_examples = [ExampleSentence(japanese="例。", english="Example.")]
+    existing = [replace(_curated(), examples=[], usage_notes="")]
+    merged, _ = merge_records(existing, [_imported(examples=incoming_examples)])
+
+    incoming_examples.append(ExampleSentence(japanese="MUTATED", english="MUTATED"))
+
+    assert [example.japanese for example in merged[0].examples] == ["例。"]
+
+
+def test_a_duplicate_id_in_the_stored_file_is_refused_not_silently_dropped() -> None:
+    """Two stored records sharing an id would collapse last-wins on merge."""
+    first = replace(_curated(), usage_notes="CURATED NOTE A")
+    second = replace(_curated(), usage_notes="CURATED NOTE B", examples=[])
+
+    with pytest.raises(DataError) as excinfo:
+        merge_records([first, second], [_imported()])
+
+    assert "word:話す:はなす" in str(excinfo.value)
 
 
 def test_tags_are_a_sorted_union() -> None:

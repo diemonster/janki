@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 from textwrap import dedent
 
 import pytest
 
-from japanese_anki.config import ProjectConfig
+from japanese_anki.config import ConfigError, ProjectConfig
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -79,7 +80,7 @@ def test_new_sections_override_defaults_and_paths_resolve_against_the_root(
     assert config.tts_provider == "azure"
     assert config.voicevox_url == "http://voice.local:1234"
     assert config.voicevox_speaker == 8
-    assert isinstance(config.voicevox_speaker, int)
+    assert config.voicevox_speaker == 8
     assert config.azure_voice == "ja-JP-KeitaNeural"
     assert config.azure_region == "japaneast"
     assert capsys.readouterr().err == ""
@@ -181,7 +182,10 @@ def test_secrets_in_toml_are_ignored_and_point_at_the_environment(
     stderr = capsys.readouterr().err
     assert "anthropic_api_key" in stderr
     assert "ANTHROPIC_API_KEY" in stderr
-    assert not hasattr(config, "anthropic_api_key")
+    # hasattr would be False for any undeclared name under slots=True, so
+    # assert the secret reached no field at all.
+    loaded = {str(value) for value in dataclasses.asdict(config).values()}
+    assert not any("sk-not-a-real-key" in value for value in loaded)
 
 
 def test_a_section_that_is_not_a_table_warns_instead_of_crashing(
@@ -209,3 +213,51 @@ def test_the_repository_config_loads_without_warnings(
     assert config.name == "Brandon Japanese"
     assert config.deck_dir == PROJECT_ROOT / "data/decks"
     assert config.ledger_file == PROJECT_ROOT / "data/ledger.json"
+
+
+@pytest.mark.parametrize(
+    ("value", "why"),
+    [
+        ('"zundamon"', "a string that is not a number"),
+        ("true", "a boolean, which int() would silently accept as 1"),
+        ("46.9", "a float, which int() would silently truncate"),
+    ],
+)
+def test_a_non_integer_speaker_is_refused_not_coerced(
+    tmp_path: Path, value: str, why: str
+) -> None:
+    """A wrong speaker id would synthesize every card in the wrong voice."""
+    _write_config(tmp_path, f"""
+        [tts]
+        voicevox_speaker = {value}
+        """)
+
+    with pytest.raises(ConfigError) as excinfo:
+        ProjectConfig.load(tmp_path)
+
+    assert "voicevox_speaker" in str(excinfo.value), why
+
+
+def test_unparseable_toml_is_a_clean_error(tmp_path: Path) -> None:
+    _write_config(tmp_path, "[paths\nraw_dir = 'x'")
+
+    with pytest.raises(ConfigError) as excinfo:
+        ProjectConfig.load(tmp_path)
+
+    assert "janki.toml" in str(excinfo.value)
+
+
+def test_an_unknown_key_containing_key_still_gets_its_typo_hint(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """'monkey_dir' is not a credential; it is a typo for a path key."""
+    _write_config(tmp_path, """
+        [paths]
+        monkey_dir = "data/x"
+        """)
+
+    ProjectConfig.load(tmp_path)
+
+    stderr = capsys.readouterr().err
+    assert "secrets are never read" not in stderr
+    assert "valid keys" in stderr or "did you mean" in stderr

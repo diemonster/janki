@@ -58,6 +58,19 @@ def _get(data: dict[str, Any], section: str, key: str, default: Any) -> Any:
     return (data.get(section) or {}).get(key, default)
 
 
+def _int(data: dict[str, Any], section: str, key: str, default: int) -> int:
+    """Read an integer setting, refusing values that only look like one.
+
+    A mistyped speaker id or deck id must fail loudly: silently coercing
+    ``true`` to 1 or truncating 46.9 would point every card at the wrong voice
+    or the wrong deck.
+    """
+    value = _get(data, section, key, default)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ConfigError(f"[{section}] {key} must be an integer, got {value!r}")
+    return value
+
+
 def _closest(candidate: str, options: tuple[str, ...] | list[str]) -> str | None:
     matches = difflib.get_close_matches(candidate, list(options), n=1, cutoff=0.6)
     return matches[0] if matches else None
@@ -76,13 +89,11 @@ def _warn_unknown_section(section: str) -> None:
     _warn(f"unknown section [{section}]; valid sections: {valid}")
 
 
+_SECRET_WORDS = frozenset({"key", "keys", "token", "tokens", "secret", "password"})
+
+
 def _warn_unknown_key(section: str, key: str) -> None:
-    if any(word in key.lower() for word in ("key", "token", "secret", "password")):
-        _warn(
-            f"'{key}' in [{section}] is ignored; secrets are never read from janki.toml. "
-            "Set ANTHROPIC_API_KEY, JPDB_API_KEY, or AZURE_SPEECH_KEY in the environment."
-        )
-        return
+    # A real typo hint beats the secrets lecture, so try both matches first.
     suggestion = _closest(key, KNOWN_KEYS[section])
     if suggestion:
         _warn(f"unknown key '{key}' in [{section}]; did you mean '{suggestion}'?")
@@ -91,6 +102,13 @@ def _warn_unknown_key(section: str, key: str) -> None:
         if other != section and key in keys:
             _warn(f"unknown key '{key}' in [{section}]; did you mean '{key}' in [{other}]?")
             return
+    # Whole words only: 'monkey_dir' and 'deck_key' are not credentials.
+    if _SECRET_WORDS & set(key.lower().split("_")):
+        _warn(
+            f"'{key}' in [{section}] is ignored; secrets are never read from janki.toml. "
+            "Set ANTHROPIC_API_KEY, JPDB_API_KEY, or AZURE_SPEECH_KEY in the environment."
+        )
+        return
     valid = ", ".join(f"'{name}'" for name in KNOWN_KEYS[section])
     _warn(f"unknown key '{key}' in [{section}]; valid keys: {valid}")
 
@@ -140,8 +158,16 @@ class ProjectConfig:
     @classmethod
     def load(cls, root: Path | None = None) -> ProjectConfig:
         project_root = find_project_root(root)
-        with (project_root / "janki.toml").open("rb") as handle:
-            data = tomllib.load(handle)
+        config_path = project_root / "janki.toml"
+        try:
+            with config_path.open("rb") as handle:
+                data = tomllib.load(handle)
+        except tomllib.TOMLDecodeError as exc:
+            raise ConfigError(f"Could not parse {config_path}: {exc}") from exc
+        except OSError as exc:
+            raise ConfigError(
+                f"Could not read {config_path}: {exc.strerror or exc}"
+            ) from exc
 
         check_unknown_keys(data)
 
@@ -175,8 +201,8 @@ class ProjectConfig:
             default_deck_name=str(
                 _get(data, "anki", "default_deck_name", "Japanese Anki")
             ),
-            default_deck_id=int(_get(data, "anki", "default_deck_id", 2059400110)),
-            model_id_base=int(_get(data, "anki", "model_id_base", 1607392310)),
+            default_deck_id=_int(data, "anki", "default_deck_id", 2059400110),
+            model_id_base=_int(data, "anki", "model_id_base", 1607392310),
             default_cards={
                 "recognition": bool(_get(data, "cards", "recognition", True)),
                 "production": bool(_get(data, "cards", "production", True)),
@@ -186,7 +212,7 @@ class ProjectConfig:
             enrich_model=str(_get(data, "ai", "enrich_model", "claude-opus-5")),
             tts_provider=str(_get(data, "tts", "provider", "voicevox")),
             voicevox_url=str(_get(data, "tts", "voicevox_url", "http://localhost:50021")),
-            voicevox_speaker=int(_get(data, "tts", "voicevox_speaker", 46)),
+            voicevox_speaker=_int(data, "tts", "voicevox_speaker", 46),
             azure_voice=str(_get(data, "tts", "azure_voice", "ja-JP-NanamiNeural")),
             azure_region=str(_get(data, "tts", "azure_region", "westus2")),
         )

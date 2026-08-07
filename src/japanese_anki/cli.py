@@ -14,6 +14,7 @@ from japanese_anki.exporters.anki import AnkiBuildError, build_deck, resolve_dec
 from japanese_anki.importers.shirabe import import_file, inspect_file
 from japanese_anki.io import (
     MERGE_LABELS,
+    DataError,
     MergeOutcome,
     load_records,
     load_structured,
@@ -86,13 +87,19 @@ def _print_merge_summary(outcomes: dict[str, MergeOutcome]) -> None:
         )
 
 
-def _confirm_replace(count: int, assume_yes: bool) -> bool:
+def _confirm_replace(count: int | None, assume_yes: bool) -> bool:
     if assume_yes:
         return True
     if not sys.stdin.isatty():
         # Fat-finger protection, not CI protection: unattended runs proceed.
         return True
-    answer = input(f"Replace {count} existing records? [y/N] ")
+    what = "the existing records" if count is None else f"{count} existing records"
+    try:
+        answer = input(f"Replace {what}? [y/N] ")
+    except (EOFError, KeyboardInterrupt):
+        # Closed stdin or Ctrl-C at the prompt reads as "no", not a traceback.
+        print()
+        return False
     return answer.strip().lower() in {"y", "yes"}
 
 
@@ -141,12 +148,28 @@ def command_import_shirabe(args: argparse.Namespace) -> int:
     result = import_file(args.file.resolve())
     output_path = (args.output or config.normalized_file).resolve()
 
-    existing = load_records(output_path) if output_path.exists() else []
     if args.replace:
-        if existing and not _confirm_replace(len(existing), args.yes):
+        # --replace only needs the count, so an unreadable file must not block
+        # the one command that can recover from it.
+        count: int | None = None
+        unreadable = False
+        if output_path.exists():
+            try:
+                count = len(load_records(output_path))
+            except DataError as exc:
+                print(
+                    f"warning: could not read the existing records to count them: {exc}",
+                    file=sys.stderr,
+                )
+                unreadable = True
+        # Nothing to lose when the file is absent or empty; still confirm when
+        # it exists but could not be read, since it may hold curated records.
+        if (unreadable or bool(count)) and not _confirm_replace(count, args.yes):
             print("Aborted: nothing was written.", file=sys.stderr)
             return 1
-        existing = []
+        existing: list[VocabularyRecord] = []
+    else:
+        existing = load_records(output_path) if output_path.exists() else []
 
     records, outcomes = merge_records(existing, result.records, prefer_incoming)
     save_records_json(output_path, records)
@@ -263,7 +286,10 @@ def build_parser() -> argparse.ArgumentParser:
     import_parser.add_argument(
         "--replace",
         action="store_true",
-        help="Replace output instead of merging with existing normalized records.",
+        help=(
+            "Replace output instead of merging with existing normalized records; "
+            "prompts for confirmation on a terminal unless --yes."
+        ),
     )
     import_parser.add_argument(
         "--prefer-incoming",
