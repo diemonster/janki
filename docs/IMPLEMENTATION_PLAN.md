@@ -127,7 +127,7 @@ new `tests/test_io_atomic.py`.
   intact when the serializer raises mid-write; a brand-new
   `JankiError` subclass is caught by `main()` without registration.
 
-### [ ] M1.1 Curation-safe merge + import CLI update
+### [x] M1.1 Curation-safe merge + import CLI update
 
 Depends on: M1.2
 Files: `src/japanese_anki/io.py`, `src/japanese_anki/cli.py`,

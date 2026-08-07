@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import json
 import os
 import stat
 import tempfile
+from collections.abc import Iterable
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -113,42 +116,176 @@ def save_records_json(path: Path, records: list[VocabularyRecord]) -> None:
     atomic_write_text(path, text)
 
 
+MERGE_LABELS: tuple[str, ...] = ("added", "filled", "unchanged", "conflicting")
+
+# Fields nobody may opt into incoming-wins behavior for: ``tags`` is always a
+# union, ``source`` belongs to whoever saw the record first, and
+# id/expression/reading are the record's identity (the id is derived from the
+# latter two, so overwriting them would orphan Anki's GUIDs).
+PREFER_INCOMING_PROTECTED: frozenset[str] = frozenset(
+    {"id", "expression", "reading", "tags", "source"}
+)
+
+# Derived from the dataclass so schema additions (M2.2) merge automatically.
+_RECORD_FIELDS: tuple[str, ...] = tuple(
+    item.name for item in dataclasses.fields(VocabularyRecord)
+)
+# Everything that resolves field-by-field: id is identity, tags are unioned and
+# source sticks, so those three are handled separately.
+_CONTENT_FIELDS: tuple[str, ...] = tuple(
+    name for name in _RECORD_FIELDS if name not in {"id", "tags", "source"}
+)
+MERGEABLE_FIELDS: tuple[str, ...] = tuple(
+    name for name in _RECORD_FIELDS if name not in PREFER_INCOMING_PROTECTED
+)
+
+_EMPTY_CONTAINERS = (str, bytes, list, tuple, set, frozenset, dict)
+
+
+def _is_empty(value: Any) -> bool:
+    """Empty means ``""``, ``[]``, ``{}`` or ``None`` — and nothing else.
+
+    Zero and ``False`` are *values*: a ``frequency_rank`` of 0 or an explicit
+    false flag must never look like a hole an import can fill.
+    """
+    if value is None:
+        return True
+    if isinstance(value, _EMPTY_CONTAINERS):
+        return len(value) == 0
+    return False
+
+
+@dataclass(frozen=True, slots=True)
+class MergeOutcome:
+    """What a merge did to one incoming record.
+
+    ``label`` is one of ``MERGE_LABELS``, with precedence
+    conflicting > filled > unchanged. ``filled_fields`` lists every field the
+    merge wrote — empty fields filled from the import, a grown ``tags`` union,
+    and ``prefer_incoming`` overrides. ``conflicts`` holds
+    ``(field, existing, incoming)`` for fields where both sides were non-empty
+    and different; those keep the existing value and are reported, never
+    silently resolved.
+    """
+
+    label: str
+    filled_fields: list[str] = field(default_factory=list)
+    conflicts: list[tuple[str, Any, Any]] = field(default_factory=list)
+
+
+def validate_prefer_incoming(fields: Iterable[str]) -> tuple[str, ...]:
+    """Check field names destined for ``merge_records(prefer_incoming=...)``."""
+    names = tuple(fields)
+    for name in names:
+        if name in PREFER_INCOMING_PROTECTED:
+            raise DataError(
+                f"--prefer-incoming cannot take '{name}': tags are always unioned, "
+                "source stays with the first import, and id/expression/reading are "
+                "the record's identity."
+            )
+        if name not in MERGEABLE_FIELDS:
+            raise DataError(
+                f"Unknown field '{name}' for --prefer-incoming. "
+                f"Valid fields: {', '.join(MERGEABLE_FIELDS)}"
+            )
+    return names
+
+
+def parse_prefer_incoming(value: str | None) -> tuple[str, ...]:
+    """Parse a ``--prefer-incoming FIELD[,FIELD]`` option value."""
+    if not value:
+        return ()
+    return validate_prefer_incoming(
+        part.strip() for part in value.split(",") if part.strip()
+    )
+
+
+def _merge_one(
+    old: VocabularyRecord, new: VocabularyRecord, prefer_incoming: frozenset[str]
+) -> tuple[VocabularyRecord, MergeOutcome]:
+    changes: dict[str, Any] = {}
+    filled: list[str] = []
+    conflicts: list[tuple[str, Any, Any]] = []
+
+    for name in _CONTENT_FIELDS:
+        old_value = getattr(old, name)
+        new_value = getattr(new, name)
+        if _is_empty(new_value) or old_value == new_value:
+            continue
+        if _is_empty(old_value) or name in prefer_incoming:
+            changes[name] = new_value
+            filled.append(name)
+            continue
+        conflicts.append((name, old_value, new_value))
+
+    tags = sorted(set(old.tags) | set(new.tags))
+    if tags != old.tags:
+        changes["tags"] = tags
+        filled.append("tags")
+
+    merged = replace(old, **changes) if changes else old
+    if conflicts:
+        label = "conflicting"
+    elif filled:
+        label = "filled"
+    else:
+        label = "unchanged"
+    return merged, MergeOutcome(label=label, filled_fields=filled, conflicts=conflicts)
+
+
+def _combine_outcomes(first: MergeOutcome, second: MergeOutcome) -> MergeOutcome:
+    """Fold two passes over one id (an import carrying the same word twice)."""
+    filled = first.filled_fields + [
+        name for name in second.filled_fields if name not in first.filled_fields
+    ]
+    conflicts = first.conflicts + [
+        item for item in second.conflicts if item not in first.conflicts
+    ]
+    if first.label == "added":
+        label = "added"
+    elif conflicts:
+        label = "conflicting"
+    elif filled:
+        label = "filled"
+    else:
+        label = "unchanged"
+    return MergeOutcome(label=label, filled_fields=filled, conflicts=conflicts)
+
+
 def merge_records(
-    existing: list[VocabularyRecord], incoming: list[VocabularyRecord]
-) -> tuple[list[VocabularyRecord], dict[str, int]]:
-    """Merge mechanical imports while preserving existing human enrichment."""
+    existing: list[VocabularyRecord],
+    incoming: list[VocabularyRecord],
+    prefer_incoming: Iterable[str] = (),
+) -> tuple[list[VocabularyRecord], dict[str, MergeOutcome]]:
+    """Merge an import into stored records without destroying curation.
+
+    Existing wins: an incoming value lands only where the existing field is
+    empty (``""``/``[]``/``{}``/``None`` — zero is a value, not a hole). Where
+    both sides are non-empty and differ, the existing value is kept and the
+    disagreement is reported as a conflict. ``tags`` is a sorted union;
+    ``source`` is the existing record's, unconditionally — the first sighting
+    sticks and later ones belong in the ledger. Fields named in
+    ``prefer_incoming`` fall back to incoming-wins for deliberate refreshes.
+
+    Returns the merged records sorted by id, plus an outcome map covering
+    **exactly the incoming record ids** — existing records the import never
+    mentioned are carried through untouched and do not appear. An id the
+    import carries twice gets one folded outcome, so nothing it reported on
+    the first row is lost.
+    """
+    prefer = frozenset(validate_prefer_incoming(prefer_incoming))
     by_id = {record.id: record for record in existing}
-    counts = {"added": 0, "updated": 0, "unchanged": 0}
+    outcomes: dict[str, MergeOutcome] = {}
 
     for new in incoming:
         old = by_id.get(new.id)
         if old is None:
             by_id[new.id] = new
-            counts["added"] += 1
+            outcomes[new.id] = MergeOutcome(label="added")
             continue
-
-        merged = VocabularyRecord(
-            id=old.id,
-            expression=new.expression or old.expression,
-            reading=new.reading or old.reading,
-            furigana=new.furigana or old.furigana,
-            romaji=new.romaji or old.romaji,
-            meanings=new.meanings or old.meanings,
-            part_of_speech=new.part_of_speech or old.part_of_speech,
-            verb_group=new.verb_group or old.verb_group,
-            transitivity=new.transitivity or old.transitivity,
-            examples=new.examples or old.examples,
-            conjugations=new.conjugations or old.conjugations,
-            tags=sorted(set(old.tags) | set(new.tags)),
-            usage_notes=new.usage_notes or old.usage_notes,
-            audio=new.audio or old.audio,
-            image=new.image or old.image,
-            source=new.source,
-        )
-        if merged.to_dict() == old.to_dict():
-            counts["unchanged"] += 1
-        else:
-            counts["updated"] += 1
+        merged, outcome = _merge_one(old, new, prefer)
         by_id[new.id] = merged
+        seen = outcomes.get(new.id)
+        outcomes[new.id] = _combine_outcomes(seen, outcome) if seen else outcome
 
-    return sorted(by_id.values(), key=lambda item: item.id), counts
+    return sorted(by_id.values(), key=lambda item: item.id), outcomes

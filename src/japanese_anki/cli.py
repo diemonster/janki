@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -11,9 +12,12 @@ from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import AnkiBuildError, build_deck, resolve_deck_records
 from japanese_anki.importers.shirabe import import_file, inspect_file
 from japanese_anki.io import (
+    MERGE_LABELS,
+    MergeOutcome,
     load_records,
     load_structured,
     merge_records,
+    parse_prefer_incoming,
     save_records_json,
 )
 from japanese_anki.preview import build_preview
@@ -47,23 +51,65 @@ def command_inspect(args: argparse.Namespace) -> int:
     return 0
 
 
+def _format_merge_value(value: object) -> str:
+    if isinstance(value, str):
+        text = value
+    elif isinstance(value, list) and all(isinstance(item, str) for item in value):
+        text = "; ".join(value)
+    else:
+        text = str(value)
+    text = " ".join(text.split())
+    return text if len(text) <= 60 else f"{text[:57]}..."
+
+
+def _print_merge_summary(outcomes: dict[str, MergeOutcome]) -> None:
+    counts = Counter(outcome.label for outcome in outcomes.values())
+    print(
+        "Merge result: "
+        + ", ".join(f"{counts.get(label, 0)} {label}" for label in MERGE_LABELS)
+    )
+    conflicts = [
+        (record_id, conflict)
+        for record_id, outcome in sorted(outcomes.items())
+        for conflict in outcome.conflicts
+    ]
+    if not conflicts:
+        return
+    print("Conflicts (existing values kept; --prefer-incoming FIELD takes the import's):")
+    for record_id, (name, existing_value, incoming_value) in conflicts:
+        print(
+            f"  {record_id} {name}: existing {_format_merge_value(existing_value)} "
+            f"| incoming {_format_merge_value(incoming_value)}"
+        )
+
+
+def _confirm_replace(count: int, assume_yes: bool) -> bool:
+    if assume_yes:
+        return True
+    if not sys.stdin.isatty():
+        # Fat-finger protection, not CI protection: unattended runs proceed.
+        return True
+    answer = input(f"Replace {count} existing records? [y/N] ")
+    return answer.strip().lower() in {"y", "yes"}
+
+
 def command_import_shirabe(args: argparse.Namespace) -> int:
     config = _load_config(args)
+    prefer_incoming = parse_prefer_incoming(args.prefer_incoming)
     result = import_file(args.file.resolve())
     output_path = (args.output or config.normalized_file).resolve()
-    records = result.records
-    counts = {"added": len(records), "updated": 0, "unchanged": 0}
 
-    if output_path.exists() and not args.replace:
-        existing = load_records(output_path)
-        records, counts = merge_records(existing, records)
+    existing = load_records(output_path) if output_path.exists() else []
+    if args.replace:
+        if existing and not _confirm_replace(len(existing), args.yes):
+            print("Aborted: nothing was written.", file=sys.stderr)
+            return 1
+        existing = []
 
+    records, outcomes = merge_records(existing, result.records, prefer_incoming)
     save_records_json(output_path, records)
     print(f"Imported {len(result.records)} source rows into {output_path}")
-    print(
-        f"Merge result: {counts['added']} added, {counts['updated']} updated, "
-        f"{counts['unchanged']} unchanged"
-    )
+    _print_merge_summary(outcomes)
     if result.warnings:
         print("Warnings:")
         for warning in result.warnings:
@@ -175,6 +221,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--replace",
         action="store_true",
         help="Replace output instead of merging with existing normalized records.",
+    )
+    import_parser.add_argument(
+        "--prefer-incoming",
+        metavar="FIELD[,FIELD]",
+        help=(
+            "Content fields the import may overwrite. By default an import only "
+            "fills fields that are empty."
+        ),
+    )
+    import_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Answer the --replace confirmation prompt with yes.",
     )
     import_parser.set_defaults(handler=command_import_shirabe)
 
