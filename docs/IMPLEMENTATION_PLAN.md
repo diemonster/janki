@@ -769,7 +769,7 @@ Design: DESIGN_V2 "jpdb.io > Deck sync" + "Manual export files".
   The second mints `word:<kanji>:<kanji>` — well-formed-looking and
   permanently invalid — so it cannot be left to the empty-reading check.
 
-### [ ] M2.6 `janki enrich --jpdb`
+### [~] claimed task/m2.6 2026-08-07 — M2.6 `janki enrich --jpdb`
 
 Depends on: M2.1, M2.2, M2.3, M2.4, M1.3, M2.5 (shared import/POS
 plumbing settled first)
