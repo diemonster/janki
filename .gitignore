@@ -19,5 +19,13 @@ dist/*-preview.html
 # are committed, and both ship a .gitkeep so they exist in a fresh clone.
 # See AGENTS.md "Data lifecycle".
 
+# Secrets. Nothing in janki reads a .env file — keys come from the real
+# environment (JPDB_API_KEY, ANTHROPIC_API_KEY, AZURE_SPEECH_KEY). This
+# entry exists so that a .env kept here for convenience can never be
+# committed by an "add everything" commit.
+.env
+.env.*
+!.env.example
+
 # macOS
 .DS_Store
