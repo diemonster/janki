@@ -817,3 +817,38 @@ def pos_to_transitivity(codes: Any) -> str:
         if transitivity:
             return transitivity
     return ""
+
+
+# The remaining wire-value normalizers live here for the same reason the POS
+# tables do: `import-jpdb` and `enrich --jpdb` read the same fields off the same
+# endpoints, and a second definition of what `pitch_accent` or `frequency_rank`
+# means is a second thing to keep in step.
+
+
+def accent_patterns(value: Any) -> list[str]:
+    """jpdb's ``pitch_accent`` as a list of patterns.
+
+    One entry per pattern, first primary. A word with several accepted accents
+    really does come back with several (confirmed by the M2.1F capture), so a
+    lone string is the shape to widen, not the shape to expect.
+    """
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    if not isinstance(value, Sequence):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def frequency_rank(value: Any) -> int | None:
+    """jpdb's ``frequency_rank`` as an int, or ``None``.
+
+    ``None`` is "never looked up" and 0 would be a real rank, so an unparseable
+    value must not become a number. ``bool`` is rejected explicitly because it
+    is an ``int`` in Python and ``True`` would silently rank a word first.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None

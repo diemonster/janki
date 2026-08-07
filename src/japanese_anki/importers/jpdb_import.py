@@ -113,28 +113,6 @@ def _meanings(chunks: Any) -> list[str]:
     return senses
 
 
-def _accent(value: Any) -> list[str]:
-    if isinstance(value, str):
-        return [value] if value.strip() else []
-    if not isinstance(value, Sequence):
-        return []
-    return [str(item).strip() for item in value if str(item).strip()]
-
-
-def _rank(value: Any) -> int | None:
-    """``frequency_rank`` as an int, or ``None``.
-
-    ``None`` is "never looked up" and 0 would be a real rank, so an
-    unparseable value must not become a number.
-    """
-    if value is None or isinstance(value, bool):
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
-
 def _card_state(value: Any) -> str:
     """jpdb's card state, flattened for ``raw_fields``.
 
@@ -196,8 +174,8 @@ def record_from_entry(
         transitivity=jpdb.pos_to_transitivity(codes),
         conjugations=conjugations,
         tags=sorted({"jpdb", deck_tag(deck_name)}),
-        pitch_accent=_accent(entry.get("pitch_accent")),
-        frequency_rank=_rank(entry.get("frequency_rank")),
+        pitch_accent=jpdb.accent_patterns(entry.get("pitch_accent")),
+        frequency_rank=jpdb.frequency_rank(entry.get("frequency_rank")),
         source=SourceReference(
             type="jpdb",
             imported_from=source_ref,

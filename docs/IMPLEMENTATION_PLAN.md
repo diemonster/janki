@@ -769,7 +769,34 @@ Design: DESIGN_V2 "jpdb.io > Deck sync" + "Manual export files".
   The second mints `word:<kanji>:<kanji>` — well-formed-looking and
   permanently invalid — so it cannot be left to the empty-reading check.
 
-### [~] claimed task/m2.6 2026-08-07 — M2.6 `janki enrich --jpdb`
+### [x] M2.6 `janki enrich --jpdb`
+
+*Done 2026-08-07. Contract as written; one deviation and six decisions.
+**Deviation:** the two remaining jpdb wire-value normalizers (`pitch_accent`,
+`frequency_rank`) moved out of M2.5's importer into `jpdb.py` beside the POS
+tables, so this task touched `jpdb.py` and `importers/jpdb_import.py` beyond its
+Files list. Enrichment reads the same fields off the same endpoints as the
+import does, and a second definition of what `frequency_rank: 0` means is the
+third POS table this plan already refused once. (1) `--staging FILE` is a
+distinct *target*, not an add-on to a normal pass: it takes neither
+`--force-fields` nor record ids, and writes no records and no ledger entries —
+a held row is not a record yet, and the ledger describes records. (2) A parse
+that resolves to more than one dictionary entry is a **warning and no write**,
+not a first-token guess: an entry whose spelling *is* the expression wins, and
+failing that a single resolving token, but 食べ物屋 splitting into 食べ物 + 屋
+has no entry whose pitch accent describes the record. (3) `meanings` is
+deliberately not enrichable. jpdb's glosses are a dictionary's; a record that
+reached janki from a textbook carries what that textbook taught, and filling
+that hole is M4.2's call with a pass that can read the record's examples.
+(4) An empty proposal never blanks a field — including under `--force-fields`,
+where the field being non-empty is exactly the case, so "jpdb had nothing" must
+not read as "blank it". (5) The conjugation table is written even when the
+record's reading is empty: it inflects the *expression*, and the reading only
+ever guards against the two disagreeing. Romaji is not, having nothing to
+transliterate. (6) The reading set for the mismatch check is gathered across
+the entry's `alt_sids`, because a homograph's other reading lives on its other
+sense, not on the one `/parse` happened to pick. README is untouched: the enrich
+walkthrough is M2.W's, with the rest of the jpdb setup.*
 
 Depends on: M2.1, M2.2, M2.3, M2.4, M1.3, M2.5 (shared import/POS
 plumbing settled first)
