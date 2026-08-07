@@ -1,0 +1,18 @@
+# Python bytecode and packaging metadata
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environment
+.venv/
+
+# Tool caches
+.pytest_cache/
+.ruff_cache/
+
+# Generated Anki packages and previews (dist/.gitkeep is tracked)
+dist/*.apkg
+dist/*-preview.html
+
+# macOS
+.DS_Store
