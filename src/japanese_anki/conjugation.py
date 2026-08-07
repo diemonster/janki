@@ -9,16 +9,20 @@ an empty dict**. A conjugation janki declines to produce leaves the record's
 ``conjugations`` field empty, which ``janki status`` counts and a human fills
 in; a conjugation janki gets wrong ships onto a flashcard and is memorised.
 So every table below is either exact for the whole class it covers or absent,
-and the three ways this module says "I don't know" are all the same way:
+and the four ways this module says "I don't know" are all the same way:
 
 * the verb group is not one it knows (``irregular``, ``""``, a typo),
 * the expression does not end the way that group must end (a godan verb whose
   dictionary form ends in ``い``, an expression that ends in kanji because the
   okurigana was left off),
+* the expression and the reading do not inflect alike (``話す`` / ``はなした``
+  are two different words, whichever one the record meant),
 * the expression is on one of the small hand-written exception lists — either
-  a form the rule would get wrong (``有る`` → not ``有らない``) or one where
-  usage is genuinely split (``ゆく`` → ``ゆいて`` and ``行って`` are both
-  attested; pick neither).
+  a form the rule would get wrong (``有る`` → not ``有らない``, ``得る`` read
+  ``うる`` → not ``得らない``) or one where usage is genuinely split (``ゆく``
+  → ``ゆいて`` and ``行って`` are both attested; pick neither) — or it is a
+  compound built on a verb that has one (``置いてある`` is ``置いてない``, not
+  ``置いてあらない``).
 
 Where an exception *does* have one exact answer it is written out as data
 rather than refused: ``ある``'s negative is ``ない``, ``行く``'s te-form is
