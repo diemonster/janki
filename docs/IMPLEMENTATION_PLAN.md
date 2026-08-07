@@ -169,7 +169,15 @@ CLI (`command_import_shirabe`):
   guard is fat-finger protection, not CI protection). Test via
   monkeypatched `sys.stdin.isatty` / `builtins.input`.
 
-### [ ] M1.6 Config v2
+### [x] M1.6 Config v2
+
+*Done 2026-08-06. Two small additions beyond the contract, both inside the
+unknown-key warning: a secret-looking key in TOML (`*key*`, `*token*`,
+`*secret*`, `*password*`) is warned about by name pointing at the env vars
+instead of being reported as a typo, and a known section whose value is not
+a table warns and falls back to defaults rather than crashing `_get` with an
+`AttributeError`. TOML key for the provider is `[tts] provider` (per
+DESIGN_V2); the dataclass field is `tts_provider` (per this plan).*
 
 Depends on: M1.2 (both edit `config.py` — M1.2 re-parents `ConfigError`)
 Files: `src/japanese_anki/config.py`, `janki.toml`,
