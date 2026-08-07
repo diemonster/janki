@@ -1,0 +1,45 @@
+{
+  "pending_batches": {},
+  "records": {
+    "word:行く:いく": {
+      "added_at": "2026-08-07",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "data/decks/verbs.yaml",
+          "seen_at": "2026-08-07",
+          "type": "manual"
+        }
+      ]
+    },
+    "word:話す:はなす": {
+      "added_at": "2026-08-07",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "data/decks/verbs.yaml",
+          "seen_at": "2026-08-07",
+          "type": "manual"
+        }
+      ]
+    },
+    "word:食べる:たべる": {
+      "added_at": "2026-08-07",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "data/decks/verbs.yaml",
+          "seen_at": "2026-08-07",
+          "type": "manual"
+        }
+      ]
+    }
+  },
+  "version": 1
+}

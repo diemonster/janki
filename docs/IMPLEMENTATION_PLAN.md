@@ -343,7 +343,24 @@ Design: DESIGN_V2 "The ledger" (status + duplicate detection).
 - Record universe = normalized file **plus inline deck notes** (via
   `resolve_deck_records` per deck YAML) until M1.7 migrates them.
 
-### [ ] M1.7 `janki migrate-inline`
+### [x] M1.7 `janki migrate-inline`
+
+*Done 2026-08-07, and run on this repository: `data/decks/verbs.yaml`'s three
+notes now live in `data/normalized/vocabulary.json`. Scope notes. (1) Migrating
+into the shared normalized file would have handed
+`data/decks/personal-vocabulary.yaml` — which reads every record in that file
+with no filter — three notes carrying the starter deck's GUIDs. Preserving that
+deck's contents is part of an honest migration, so the command gives every other
+deck reading the same file an `exclude_ids:` entry for the records it did not
+have before (unless its own `include_ids:` names one) and reports it. (2)
+`include_ids:` is written only when the deck had no `source:` yet; a deck that
+already read the normalized file keeps its own membership rule, since pinning it
+would freeze out the imports it exists to receive. (3) Notes with no `id:` are
+migrated too, under the id their cards already use — the plan said "with an
+`id`", but leaving them behind would leave the `notes:` section this command
+promises to remove. (4) `io._is_empty` became public `io.is_empty`: migrate
+decides which inline fields to prefer with the merge's own emptiness rule rather
+than a copy of it.*
 
 Depends on: M1.1, M1.3
 Files: `src/japanese_anki/cli.py`, new `src/japanese_anki/migrate.py`

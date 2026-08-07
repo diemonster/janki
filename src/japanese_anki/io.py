@@ -158,8 +158,13 @@ def _copy_value(value: Any) -> Any:
     return copy.deepcopy(value)
 
 
-def _is_empty(value: Any) -> bool:
+def is_empty(value: Any) -> bool:
     """Empty means ``""``, ``[]``, ``{}`` or ``None`` — and nothing else.
+
+    Public because the merge's notion of "a hole an import may fill" is a
+    project-wide rule, not a private detail of this module: ``migrate.py``
+    decides which inline fields to prefer with the same test, and a second
+    copy of it would drift.
 
     Zero and ``False`` are *values*: a ``frequency_rank`` of 0 or an explicit
     false flag must never look like a hole an import can fill.
@@ -235,9 +240,9 @@ def _merge_one(
     for name in _CONTENT_FIELDS:
         old_value = getattr(old, name)
         new_value = getattr(new, name)
-        if _is_empty(new_value) or old_value == new_value:
+        if is_empty(new_value) or old_value == new_value:
             continue
-        if _is_empty(old_value) or name in prefer_incoming:
+        if is_empty(old_value) or name in prefer_incoming:
             # Copy containers: the merged record must not alias the caller's
             # input, or a later mutation of the import silently edits the store.
             changes[name] = _copy_value(new_value)

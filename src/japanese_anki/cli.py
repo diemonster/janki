@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 
-from japanese_anki import ledger, status
+from japanese_anki import ledger, migrate, status
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import AnkiBuildError, build_deck, resolve_deck_records
@@ -345,6 +345,32 @@ def command_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_migrate_inline(args: argparse.Namespace) -> int:
+    config = _load_config(args)
+    # Load once, save once: the ledger is a whole-file rewrite.
+    book = ledger.load(config.ledger_file)
+    result = migrate.migrate_inline(args.deck.resolve(), config, book)
+
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    if not result.changed:
+        print(
+            f"Nothing to migrate: {args.deck} has no inline notes. "
+            "Its records already live in the normalized file."
+        )
+        return 0
+
+    print(
+        f"Migrated {len(result.migrated)} inline note(s) from {args.deck} into "
+        f"{result.normalized_file}"
+    )
+    _print_merge_summary(result.outcomes)
+    for line in migrate.format_details(result, config.root):
+        print(line)
+    book.save()
+    return 0
+
+
 def command_preview(args: argparse.Namespace) -> int:
     config = _load_config(args)
     output = args.output or (config.dist_dir / f"{args.deck.stem}-preview.html")
@@ -444,6 +470,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="'ids' prints bare record ids, one per line, for piping into other commands.",
     )
     status_parser.set_defaults(handler=command_status)
+
+    migrate_parser = subparsers.add_parser(
+        "migrate-inline",
+        help="Move a deck's inline notes into the normalized records file",
+    )
+    migrate_parser.add_argument("deck", type=_path)
+    migrate_parser.set_defaults(handler=command_migrate_inline)
 
     preview_parser = subparsers.add_parser("preview", help="Build a static HTML preview")
     preview_parser.add_argument("deck", type=_path)

@@ -8,10 +8,6 @@ deck:
     recognition: true
     production: true
     reading: false
-  exclude_ids:
-  - word:行く:いく
-  - word:話す:はなす
-  - word:食べる:たべる
 
 # Add inline notes with a matching ID to override or enrich normalized records.
 # Example:

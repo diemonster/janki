@@ -73,7 +73,8 @@ Validate the result:
 janki validate data/normalized/vocabulary.json
 ```
 
-Build the personal vocabulary deck, which reads all normalized records:
+Build the personal vocabulary deck, which reads the normalized records (all of
+them except the few its `exclude_ids` leaves to the starter deck):
 
 ```bash
 janki build data/decks/personal-vocabulary.yaml
@@ -108,7 +109,29 @@ janki build --all
 
 # Generate a browser preview
 janki preview data/decks/verbs.yaml
+
+# Move a deck's inline notes into the normalized records file
+janki migrate-inline data/decks/verbs.yaml
 ```
+
+## Inline deck notes
+
+A deck YAML may carry `notes:` of its own. That was how the starter deck began,
+and it is a dead end: enrichment and audio only ever write to
+`data/normalized/vocabulary.json`, so a record living inside a deck file can
+never gain examples, pitch accent or audio.
+
+`janki migrate-inline DECK.yaml` moves those notes into the normalized file
+under the same IDs — GUIDs, and the review history behind them, are preserved —
+and leaves the deck as a filter over shared records (`source:` plus an
+`include_ids:` list pinning exactly what it exported before). Any other deck
+reading the same normalized file would suddenly resolve the moved records and
+emit notes with the migrated deck's GUIDs, so those decks get an `exclude_ids:`
+entry and the command says which. Running it again on a deck with no inline
+notes does nothing.
+
+Inline notes that *override* a normalized record (a matching `id` plus the few
+fields you want to change) remain supported and are not affected.
 
 ## Data model
 
