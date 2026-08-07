@@ -578,9 +578,26 @@ Files: `tests/fixtures/jpdb-parse-sample.json`,
 **Requires a human with the repo owner's `JPDB_API_KEY`.** No agent can do
 this; do not claim it, and do not block on it.
 
-- Capture one real `/parse` response (small script or curl, key from the
-  env var — document the exact command in the PR) and replace the
-  community-shape fixture with it, dropping the `_source` marker.
+- Capture one real `/parse` response and replace the community-shape
+  fixture with it, dropping the `_source` marker. The four words below
+  are exactly the four golden cases the fixture must carry
+  (leading-kanji, mid-kanji/okurigana, all-kana, multi-kanji compound),
+  and the field lists are `DEFAULT_TOKEN_FIELDS` /
+  `DEFAULT_VOCABULARY_FIELDS` — keep them in sync if those change:
+
+  ```sh
+  curl -sS https://jpdb.io/api/v1/parse \
+    -H "Authorization: Bearer $JPDB_API_KEY" \
+    -H 'Content-Type: application/json' \
+    -d '{"text":["話す","お茶","たべる","日本語"],
+         "token_fields":["vocabulary_index","furigana"],
+         "vocabulary_fields":["vid","sid","spelling","reading",
+                              "pitch_accent","frequency_rank","part_of_speech"]}' \
+    | python -m json.tool > tests/fixtures/jpdb-parse-sample.json
+  ```
+
+  Then run `make gates`. The key is read from the environment; it must
+  not be pasted into the repo.
 - If the live shape differs from the community one, fix `jpdb.py`'s
   parser and amend M2.1's `/parse` contract above in the same change.
 - Re-run `pytest`: M2.1's `furigana_to_anki` golden tests must stay
