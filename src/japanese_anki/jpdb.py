@@ -629,16 +629,25 @@ def furigana_to_anki(segments: Any) -> str:
 
         [["話", "はな"], "す"]                   -> 話[はな]す
         ["お", ["茶", "ちゃ"]]                   -> お 茶[ちゃ]
-        [["日本", "にほん"], ["語", "ご"]]       -> 日本[にほん] 語[ご]
+        [["日", "にっ"], ["本", "ぽん"], ["語", "ご"]] -> 日[にっ] 本[ぽん] 語[ご]
+
+    Note the third case: jpdb segments 日本語 per kanji, not as the 日本 + 語
+    compound a human would write, and reads it にっぽんご. Segmentation and
+    reading are both the dictionary's to decide — this function only formats
+    what it is handed.
 
     ``None`` or an empty list renders as ``""``: an all-kana token needs no
     furigana markup at all, and an empty string is what "nothing to write"
-    looks like to the fill-empty enrichment rules.
+    looks like to the fill-empty enrichment rules. jpdb does send ``None``
+    rather than a lone kana segment for all-kana tokens (confirmed by the
+    M2.1F capture), and the note templates fall back to ``{{Reading}}`` when
+    ``{{Furigana}}`` is empty, so nothing is lost on the card.
 
-    Parsed defensively — the shape is community-documented, not captured (see
-    IMPLEMENTATION_PLAN M2.1F) — but never *silently*: a segment this cannot
-    read raises rather than being dropped, because a dropped segment produces
-    plausible-looking furigana with a kanji missing its reading.
+    The shape is confirmed against a real capture (``tests/fixtures/
+    jpdb-parse-sample.json``), but still parsed defensively and never
+    *silently*: a segment this cannot read raises rather than being dropped,
+    because a dropped segment produces plausible-looking furigana with a kanji
+    missing its reading.
     """
     if segments is None:
         return ""
