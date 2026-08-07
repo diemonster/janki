@@ -630,7 +630,24 @@ Design: DESIGN_V2 "Division of labor" (romaji row).
   katakana accepted (normalized to hiragana first), ー long-vowel marks.
 - Pure, table-driven, no deps. Golden tests per rule + a mixed sentence.
 
-### [ ] M2.4 Conjugation tables
+### [x] M2.4 Conjugation tables
+
+*Done 2026-08-07. Contract as written, plus four refusals the contract implies
+but no bullet named. (1) `verb_group` values come from `jpdb.GODAN/ICHIDAN/
+SURU/KURU` by import, not by restated literal, so the writer and the reader of
+the field cannot drift; a small alias table also accepts `五段`/`u-verb`/
+`group1` and friends for hand-typed decks. (2) `i-adjective` is accepted as a
+`verb_group` and forwarded to `conjugate_i_adjective`, since a caller holding
+one "how does this inflect" field will put it there. (3) Three classes return
+`{}` beyond "unknown group": an expression that cannot end the way its group
+must (`高い` as godan), an expression and reading that inflect differently
+(`話す`/`はなした`), and the hand-written unsafe list (`ゆく`, `有る`, `在る`,
+`である`, `得る` as godan — jpdb's `v5uru` routes exactly that word here and
+its negative is `得ない`, never `得らない`). (4) A compound ending in a verb
+with a hand-written table is refused rather than mechanically built:
+`置いてある` is `置いてない`, not `置いてあらない`. Every entry in every
+exception list has a test, and a coverage test fails if a list grows an entry
+no case pins.*
 
 Depends on: —
 Files: new `src/japanese_anki/conjugation.py`,
