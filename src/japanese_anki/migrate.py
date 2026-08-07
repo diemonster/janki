@@ -23,12 +23,14 @@ person who typed the command:
 * **Running it twice is safe.** A deck with no inline notes left has nothing to
   migrate and is not rewritten.
 
-Deck files are edited in place as *text* wherever the change is an addition:
-YAML comments are documentation, and re-serializing a file to add one key
-deletes them. The edited text is parsed back and compared against the mapping
-the edit was supposed to produce; anything short of an exact match falls back to
-a full re-serialization, so the shortcut can never produce a file that means
-something else.
+Deck files are edited in place as *text* wherever the change is an addition —
+a new key, or a new item on an existing block sequence: YAML comments are
+documentation, and re-serializing a file to add one id deletes them. The edited
+text is parsed back and compared against the mapping the edit was supposed to
+produce; anything short of an exact match falls back to a full re-serialization,
+so the shortcut can never produce a file that means something else. That
+fallback is reported as a warning rather than taken quietly, because what it
+costs is hand-written documentation in a curated file.
 """
 
 from __future__ import annotations
@@ -102,6 +104,12 @@ class MigrationResult:
     guards: list[DeckGuard] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     written: list[Path] = field(default_factory=list)
+    # What the ledger actually gained, not how many notes moved. The mutators
+    # return a bool precisely so a command can report the truth: a migration
+    # after a `status --rebuild` registers nothing new, and saying otherwise
+    # would have the transcript claim work that did not happen.
+    ledger_added: int = 0
+    ledger_sources: int = 0
 
     @property
     def migrated_ids(self) -> list[str]:
@@ -139,52 +147,133 @@ def _top_level_block(lines: list[str], key: str) -> tuple[int, int] | None:
 
     The block runs from the key's own line to the next line that starts in
     column zero with something other than whitespace — a sibling key, or a
-    comment introducing one.
+    comment introducing one. A column-zero ``- `` is *not* a sibling: YAML lets
+    a block sequence sit at its key's own indent, so ``notes:`` followed by
+    unindented items is one block, and treating the first item as the next key
+    would leave the items behind when the block is deleted.
     """
     pattern = re.compile(rf"^{re.escape(key)}\s*:")
+    item = re.compile(r"^-(\s|$)")
     start: int | None = None
     for index, line in enumerate(lines):
         if start is None:
             if pattern.match(line):
                 start = index
             continue
-        if line.strip() and not line[:1].isspace():
+        if line.strip() and not line[:1].isspace() and not item.match(line):
             return start, index
     return (start, len(lines)) if start is not None else None
 
 
-def _edit_deck_text(
-    text: str, updates: dict[str, Any], drop_keys: tuple[str, ...]
-) -> str | None:
-    """Append ``updates`` to the ``deck:`` mapping and delete ``drop_keys``.
+def _indent_of(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
 
-    A line-level edit, so every other byte — comments, quoting, blank lines —
-    survives. Returns ``None`` when the file's shape is not the plain one this
-    handles, leaving the caller to re-serialize instead.
-    """
-    lines = text.splitlines()
-    block = _top_level_block(lines, "deck")
-    if block is None:
-        return None
+
+def _add_key(
+    lines: list[str], block: tuple[int, int], indent: int, key: str, value: Any
+) -> list[str]:
+    """Insert a brand-new ``key:`` at the end of the ``deck:`` mapping."""
     start, end = block
-    body = [line for line in lines[start + 1 : end] if line.strip()]
-    if not body or any(not line[:1].isspace() for line in body):
-        return None
-    indent = " " * min(len(line) - len(line.lstrip(" ")) for line in body)
-
     # After the mapping's last populated line: a dedent to the mapping's own
     # indent closes whatever nested block that line belonged to.
     insert_at = start + 1
     for index in range(start + 1, end):
         if lines[index].strip():
             insert_at = index + 1
+    addition = [" " * indent + line for line in _dump_mapping({key: value}).splitlines()]
+    edited = list(lines)
+    edited[insert_at:insert_at] = addition
+    return edited
 
+
+def _append_to_sequence(
+    lines: list[str],
+    block: tuple[int, int],
+    indent: int,
+    key: str,
+    current: Any,
+    value: Any,
+) -> list[str] | None:
+    """Append ``value``'s new items to an existing block sequence.
+
+    Adding an id to an ``exclude_ids:`` list *is* an addition, so it belongs on
+    the text path like any other: a deck guarded a second time must not pay for
+    it with its comments. Returns ``None`` for anything that is not a plain
+    block sequence gaining items at the end — a flow list, an empty one, a
+    replacement, a reordering — leaving the caller to re-serialize and say so.
+    """
+    if not isinstance(current, list) or not isinstance(value, list):
+        return None
+    if value[: len(current)] != current:
+        return None  # a rewrite, not an append
+    new_items = value[len(current) :]
+    if not new_items:
+        return None
+    start, end = block
+    pattern = re.compile(rf"^ {{{indent}}}{re.escape(key)}\s*:")
+    index = next((probe for probe in range(start + 1, end) if pattern.match(lines[probe])), None)
+    if index is None:
+        return None
+    # The value ends at the next sibling key. A block sequence may sit at the
+    # mapping's own indent (``exclude_ids:`` then ``  - id`` under two-space
+    # keys), so indent alone does not close the value — an item line does not.
+    stop = end
+    for probe in range(index + 1, end):
+        line = lines[probe]
+        if not line.strip():
+            continue
+        if _indent_of(line) <= indent and not line.lstrip(" ").startswith("- "):
+            stop = probe
+            break
+    items = [
+        probe for probe in range(index + 1, stop) if lines[probe].lstrip(" ").startswith("- ")
+    ]
+    if not items or len(items) != len(current):
+        # An empty or flow-style list, or items spanning more than a line each:
+        # nothing here can say where the last one ends.
+        return None
+    item_indent = " " * _indent_of(lines[items[-1]])
     addition: list[str] = []
+    for item in new_items:
+        dumped = _dump_mapping({key: [item]}).splitlines()
+        if len(dumped) != 2:  # an item the dumper wrapped or nested
+            return None
+        addition.append(item_indent + dumped[1])
+    edited = list(lines)
+    edited[items[-1] + 1 : items[-1] + 1] = addition
+    return edited
+
+
+def _edit_deck_text(
+    text: str,
+    deck_config: dict[str, Any],
+    updates: dict[str, Any],
+    drop_keys: tuple[str, ...],
+) -> str | None:
+    """Apply ``updates`` to the ``deck:`` mapping and delete ``drop_keys``.
+
+    A line-level edit, so every other byte — comments, quoting, blank lines —
+    survives. Returns ``None`` when the file's shape is not the plain one this
+    handles, leaving the caller to re-serialize instead.
+    """
+    lines = text.splitlines()
     for key, value in updates.items():
-        addition.extend(
-            indent + line for line in _dump_mapping({key: value}).splitlines()
+        block = _top_level_block(lines, "deck")
+        if block is None:
+            return None
+        start, end = block
+        body = [line for line in lines[start + 1 : end] if line.strip()]
+        if not body or any(not line[:1].isspace() for line in body):
+            return None
+        indent = min(_indent_of(line) for line in body)
+        edited = (
+            _append_to_sequence(lines, block, indent, key, deck_config[key], value)
+            if key in deck_config
+            else _add_key(lines, block, indent, key, value)
         )
-    lines[insert_at:insert_at] = addition
+        if edited is None:
+            return None
+        lines = edited
 
     for key in drop_keys:
         dropped = _top_level_block(lines, key)
@@ -200,29 +289,31 @@ def rewrite_deck_file(
     raw: dict[str, Any],
     updates: dict[str, Any],
     drop_keys: tuple[str, ...] = (),
-) -> None:
+) -> bool:
     """Write ``path`` with ``updates`` in its deck mapping and ``drop_keys`` gone.
 
     The in-place text edit is used only when it can be *proved* right: the
     result is parsed and must equal, key for key, the mapping this was meant to
-    produce. It is also skipped outright when a key already exists (replacing a
-    value in place would mean understanding how much of the file that value
-    spans), and then the whole document is re-serialized.
+    produce. Anything else falls back to re-serializing the whole document,
+    which is correct but loses every comment, quote style and blank line in it.
+
+    Returns whether that fallback fired, so the caller can say so out loud: the
+    file is curated by hand, and losing its documentation silently is how a
+    second migration quietly deletes work nobody asked it to touch.
     """
     deck_config = raw.get("deck") or {}
     expected = {key: value for key, value in raw.items() if key not in drop_keys}
     expected["deck"] = {**deck_config, **updates}
 
-    edited: str | None = None
-    if not set(updates) & set(deck_config):
-        edited = _edit_deck_text(_read_text(path), updates, drop_keys)
-        if edited is not None:
-            try:
-                if yaml.safe_load(edited) != expected:
-                    edited = None
-            except yaml.YAMLError:
+    edited = _edit_deck_text(_read_text(path), deck_config, updates, drop_keys)
+    if edited is not None:
+        try:
+            if yaml.safe_load(edited) != expected:
                 edited = None
+        except yaml.YAMLError:
+            edited = None
     atomic_write_text(path, edited if edited is not None else _dump_mapping(expected))
+    return edited is None
 
 
 # ---------------------------------------------------------------------------
@@ -329,7 +420,14 @@ def _guard_other_decks(
     A deck that reads the file the migrated records are about to land in would
     start resolving them — silently gaining notes whose GUIDs the migrated deck
     also emits. Every migrated id it does not already resolve is added to its
-    ``exclude_ids``, unless its own ``include_ids`` asks for that id by name.
+    ``exclude_ids``.
+
+    A deck with a non-empty ``include_ids`` gets none: ``resolve_deck_records``
+    applies ``include_ids`` first, so its membership is already closed and every
+    id excluded from it would be dead config — one line per record migrated from
+    anywhere else, forever, in a file a human reads. What such a deck does still
+    get is the report: an id its own ``include_ids`` names is one it asked for
+    by name and is about to start exporting.
     """
     guards: list[DeckGuard] = []
     warnings: list[str] = []
@@ -350,11 +448,9 @@ def _guard_other_decks(
         requested = {str(value) for value in other_config.get("include_ids") or []}
         guard = DeckGuard(
             path=other,
-            excluded_ids=[
-                record_id
-                for record_id in migrated_ids
-                if record_id not in have and record_id not in requested
-            ],
+            excluded_ids=[]
+            if requested
+            else [record_id for record_id in migrated_ids if record_id not in have],
             requested_ids=[
                 record_id
                 for record_id in migrated_ids
@@ -462,6 +558,7 @@ def migrate_inline(deck_path: Path, config: ProjectConfig, book: Ledger) -> Migr
     # failure part-way through leaves decks with a harmless no-op filter rather
     # than notes they never had.
     written: list[Path] = []
+    reserialized: list[Path] = []
     for guard in guards:
         if not guard.excluded_ids:
             continue
@@ -474,7 +571,8 @@ def migrate_inline(deck_path: Path, config: ProjectConfig, book: Ledger) -> Migr
         merged_excludes.extend(
             record_id for record_id in guard.excluded_ids if record_id not in merged_excludes
         )
-        rewrite_deck_file(guard.path, other_raw, {"exclude_ids": merged_excludes})
+        if rewrite_deck_file(guard.path, other_raw, {"exclude_ids": merged_excludes}):
+            reserialized.append(guard.path)
         written.append(guard.path)
 
     save_records_json(normalized_file, records)
@@ -484,13 +582,32 @@ def migrate_inline(deck_path: Path, config: ProjectConfig, book: Ledger) -> Migr
     if added_source:
         updates["source"] = source_value
         updates["include_ids"] = include_ids
-    rewrite_deck_file(deck_path, raw, updates, drop_keys=("notes",))
+    if rewrite_deck_file(deck_path, raw, updates, drop_keys=("notes",)):
+        reserialized.append(deck_path)
     written.append(deck_path)
 
-    deck_ref = _repo_path(deck_path, config.root)
+    for path in reserialized:
+        warnings.append(
+            f"{path} could not be updated as a text edit, so the whole file was "
+            "re-serialized: its YAML comments, quote styles and blank lines are "
+            "gone. The deck's meaning is unchanged — check `git diff` and put back "
+            "anything you want to keep."
+        )
+
+    added = sources = 0
     for record in migrated:
-        book.record_added(record.id)
-        book.record_source_seen(record.id, record.source.type or "manual", ref=deck_ref)
+        # The reference is the one `status --rebuild` reconstructs from the
+        # record that now lives in the normalized file — its own `source.type`
+        # and `source.imported_from`. A reference's identity is every key but
+        # the date, so any other shape (the deck path, say) would have the
+        # documented recovery command append a second, near-duplicate entry to
+        # every migrated record. The deck the note came from is reported on
+        # stdout instead: it is where the note lived, not where it came from.
+        stored = merged[record.id]
+        added += book.record_added(record.id)
+        sources += book.record_source_seen(
+            record.id, stored.source.type or "manual", stored.source.imported_from
+        )
 
     return MigrationResult(
         deck_path=deck_path,
@@ -503,6 +620,8 @@ def migrate_inline(deck_path: Path, config: ProjectConfig, book: Ledger) -> Migr
         guards=guards,
         warnings=warnings,
         written=written,
+        ledger_added=added,
+        ledger_sources=sources,
     )
 
 
@@ -532,5 +651,4 @@ def format_details(result: MigrationResult, root: Path) -> list[str]:
             "  Added them to its exclude_ids so its contents are exactly what they "
             "were. Delete those ids if you do want that deck to have them."
         )
-    lines.append(f"Ledger: registered {len(result.migrated)} record(s).")
     return lines

@@ -44,6 +44,18 @@ is the durable source of truth; generated `.apkg` files are build artifacts.
 1. `data/inbox/`: untouched source exports.
 2. `data/normalized/`: mechanical conversion into the canonical schema.
 3. `data/decks/`: curated deck definitions and human edits.
-4. `dist/`: generated `.apkg` and preview files.
+4. `data/staging/`: rows an import held back for a human — **committed**, so a
+   reading typed in by hand is recoverable. Delete a staging file once its rows
+   have moved into `data/normalized/` and `janki status --rebuild` has run.
+5. `data/media/`: generated audio, content-addressed — **committed**, so a
+   rebuild is free (`docs/PROJECT_PLAN.md` design principle 6).
+6. `data/ledger.json`: machine-written operational state — **committed**, never
+   hand-edited. `janki status --rebuild` reconstructs what records and media
+   still prove.
+7. `dist/`: generated `.apkg` and preview files — **not** committed.
+
+Only `dist/` is disposable. Everything under `data/` is tracked, including the
+two directories that start empty (`.gitkeep`), because the repository — not
+Anki's database and not an uncommitted working tree — is the source of truth.
 
 A new import must not erase manually curated examples, notes, conjugations, or furigana.

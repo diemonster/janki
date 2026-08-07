@@ -175,6 +175,99 @@ def test_pitch_accent_counts_wait_for_the_schema(
     assert "Missing pitch accent: n/a until the pitch-accent schema lands (M2.2)" in out
 
 
+# --- the review queue -------------------------------------------------------
+
+
+def _stage(root: Path, name: str, ids: list[str]) -> Path:
+    staging = root / "data" / "staging"
+    staging.mkdir(parents=True, exist_ok=True)
+    path = staging / name
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "source_file": "export.csv",
+                "records": [
+                    {
+                        "id": record_id,
+                        "expression": record_id.split(":")[1],
+                        "reading": "",
+                        "source": {"raw_fields": {"hold_reason": "missing reading"}},
+                    }
+                    for record_id in ids
+                ],
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_status_says_when_nothing_is_waiting_for_a_human(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")])
+
+    assert _status(root) == 0
+
+    assert "Staged for review: none" in capsys.readouterr().out
+
+
+def test_status_counts_the_rows_an_import_held_back(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Held rows are the one category of record that is not in the collection
+    # and needs a person. A user who misses the one-off line in the import
+    # output had no other way to find out they exist.
+    root = _project(tmp_path, [_raw("話す", "はなす")])
+    _stage(root, "shirabe-export-needs-reading.yaml", ["word:食べ物:", "word:本:"])
+
+    assert _status(root) == 0
+
+    out = capsys.readouterr().out
+    assert "Staged for review: 2 row(s) in 1 file(s) under data/staging" in out
+
+
+def test_the_staged_detail_flag_names_the_ids_and_why_they_are_held(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")])
+    _stage(root, "shirabe-export-needs-reading.yaml", ["word:食べ物:"])
+
+    assert _status(root, "--staged") == 0
+
+    out = capsys.readouterr().out
+    assert "word:食べ物: — missing reading" in out
+    assert "janki status --rebuild" in out
+
+
+def test_staged_ids_pipe_like_every_other_detail_flag(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")])
+    _stage(root, "shirabe-export-needs-reading.yaml", ["word:食べ物:"])
+
+    assert _status(root, "--staged", "--format", "ids") == 0
+
+    assert capsys.readouterr().out == "word:食べ物:\n"
+
+
+def test_an_unreadable_staging_file_is_a_warning_not_a_dead_report(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")])
+    staging = root / "data" / "staging"
+    staging.mkdir(parents=True)
+    (staging / "broken.yaml").write_text("records: not-a-list\n", encoding="utf-8")
+
+    assert _status(root) == 0
+
+    captured = capsys.readouterr()
+    assert "warning: skipping staging file" in captured.err
+    assert "Records: 1" in captured.out
+
+
 def test_a_deck_that_cannot_be_read_is_a_warning_not_a_dead_report(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

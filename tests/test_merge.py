@@ -470,7 +470,9 @@ def test_replace_prompts_on_a_tty_and_a_no_answer_writes_nothing(
 
     assert _import(root, "--replace") == 1
 
-    assert prompts == ["Replace 1 existing records? [y/N] "]
+    # The prompt names the ledger too: --replace now prunes the entries of the
+    # records it discards, and that is not recoverable from the records file.
+    assert prompts == ["Replace 1 existing records (their ledger entries go too)? [y/N] "]
     assert capsys.readouterr().err.strip() == "Aborted: nothing was written."
     assert list(_stored(root)) == ["word:話す:はなす"]
 

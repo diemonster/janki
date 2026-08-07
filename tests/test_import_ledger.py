@@ -15,6 +15,7 @@ import pytest
 
 from japanese_anki import cli, ledger
 from japanese_anki.config import ProjectConfig
+from japanese_anki.io import DataError
 from japanese_anki.models import SourceReference, VocabularyRecord
 
 CSV = "Word,Reading,Definition\n話す,はなす,to speak\n電話,でんわ,telephone\n"
@@ -159,6 +160,110 @@ def test_replace_still_wires_the_ledger_and_keeps_the_first_dates(
     assert sorted(_entries(root)) == ["word:話す:はなす", "word:電話:でんわ"]
 
 
+def test_replace_drops_the_ledger_entries_of_the_records_it_discarded(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Nothing else reconciles the ledger with vocabulary.json. An orphaned entry
+    # permanently over-reports the collection, and once `build --only-new` reads
+    # `exports` (M5.6) a dead entry silently keeps a re-imported record out of a
+    # deck.
+    root, source = _project(tmp_path)
+    assert _import(root, source) == 0
+    smaller = tmp_path / "tiny.csv"
+    smaller.write_text("Word,Reading,Definition\n話す,はなす,to speak\n", encoding="utf-8")
+    capsys.readouterr()
+
+    assert _import(root, smaller, "--replace", "--yes") == 0
+
+    assert sorted(_entries(root)) == ["word:話す:はなす"]
+    assert "Dropped 1 ledger entry for records --replace discarded." in (
+        capsys.readouterr().out
+    )
+    stored = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    assert [record["id"] for record in stored] == ["word:話す:はなす"]
+
+
+def test_replace_keeps_the_entries_of_the_records_it_re_imported(tmp_path: Path) -> None:
+    # A record present on both sides was not discarded: its entry keeps its
+    # original added_at and its accumulated sources.
+    root, source = _project(tmp_path)
+    assert _import(root, source) == 0
+    book = ledger.load(root / "ledger.json")
+    book.record_added("word:話す:はなす", at="2020-01-01")
+    assert _import(root, source, "--replace", "--yes") == 0
+
+    assert sorted(_entries(root)) == ["word:話す:はなす", "word:電話:でんわ"]
+    assert _entries(root)["word:話す:はなす"]["added_at"] != ""
+
+
+def test_a_ledger_that_cannot_be_saved_still_prints_the_whole_summary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # vocabulary.json and the staging file are both already written when the
+    # ledger is saved. Printing only `error: ...` tells the user the import did
+    # not happen over records it has already replaced.
+    root, source = _project(tmp_path, CSV + "本,,book\n")
+
+    def refuse(self: ledger.Ledger) -> None:
+        raise ledger.LedgerError("Could not write ledger.json: Permission denied")
+
+    monkeypatch.setattr(ledger.Ledger, "save", refuse)
+
+    assert _import(root, source) == 1
+
+    captured = capsys.readouterr()
+    assert "Imported 2 source rows into" in captured.out
+    assert "Merge result:" in captured.out
+    assert "Held 1 row(s)" in captured.out
+    assert "Ledger: NOT written" in captured.out
+    assert "registered 2" not in captured.out
+    assert "janki status --rebuild" in captured.err
+    stored = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    assert len(stored) == 2
+    assert (root / "staging" / "shirabe-export-needs-reading.yaml").exists()
+
+
+def test_the_records_are_written_before_the_ledger(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The ledger is metadata `status --rebuild` can reconstruct; the records are
+    # not reconstructible from anything. Saving the ledger first would leave it
+    # claiming records vocabulary.json does not contain.
+    root, source = _project(tmp_path)
+    book = ledger.load(root / "ledger.json")
+    book.record_added("word:古い:ふるい", at="2020-01-01")
+    book.save()
+    before = (root / "ledger.json").read_text(encoding="utf-8")
+
+    def refuse(path: Path, records: list) -> None:
+        raise DataError(f"Could not write {path}: Permission denied")
+
+    monkeypatch.setattr(cli, "save_records_json", refuse)
+
+    assert _import(root, source) == 1
+
+    assert "error:" in capsys.readouterr().err
+    assert (root / "ledger.json").read_text(encoding="utf-8") == before
+
+
+def test_a_record_the_merge_leaves_unchanged_is_not_registered_as_added(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # `record_added` is called only for `added` outcomes. Calling it for every
+    # incoming record would report a re-import of an unchanged record as a new
+    # arrival — and would rewrite the date the record entered the collection.
+    root, source = _project(tmp_path, "Word,Reading,Definition\n話す,はなす,to speak\n")
+    assert _import(root, source) == 0
+    (root / "ledger.json").unlink()
+    capsys.readouterr()
+
+    assert _import(root, source) == 0
+
+    out = capsys.readouterr().out
+    assert "Merge result: 0 added, 0 filled, 1 unchanged, 0 conflicting" in out
+    assert "Ledger: registered 0 new record(s) and 1 new source sighting(s)." in out
+
+
 def test_a_held_row_is_not_registered(tmp_path: Path) -> None:
     # Rows without a usable reading go to staging, not to vocabulary.json.
     # Registering them would have the ledger claim janki holds a record that
@@ -238,12 +343,16 @@ def test_another_importer_names_its_own_source_unit_and_staging_file(
             unit="vocabulary entries",
             staging_stem="jpdb-mining",
             needs_reading=[held],
+            held_unit="vocabulary entries",
         )
         == 0
     )
 
     out = capsys.readouterr().out
     assert "Imported 1 vocabulary entries into" in out
+    # The held line takes the caller's unit too — a deck sync has no rows.
+    assert "Held 1 vocabulary entries whose reading janki cannot use" in out
+    assert "row(s)" not in out
     assert (root / "staging" / "jpdb-mining-needs-reading.yaml").exists()
     seen_at = _entries(root)["word:話す:はなす"]["added_at"]
     assert _sources(root, "word:話す:はなす") == [

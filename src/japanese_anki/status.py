@@ -43,6 +43,7 @@ from japanese_anki.ledger import (
     word_audio_filename_fingerprint,
 )
 from japanese_anki.models import SourceReference, VocabularyRecord
+from japanese_anki.staging import read_staging
 
 # Every media file janki generates is named ``janki-<filename fingerprint>``;
 # the prefix is what tells a rebuild (and M5.3's --prune) which files are ours.
@@ -154,6 +155,48 @@ def pitch_accent_supported() -> bool:
 
 
 @dataclass(frozen=True, slots=True)
+class StagedFile:
+    """One staging file and the ids waiting in it."""
+
+    path: Path
+    ids: list[str]
+    reasons: dict[str, str]
+
+
+def collect_staged(config: ProjectConfig) -> tuple[list[StagedFile], list[str]]:
+    """Every row waiting for a human under ``staging_dir``.
+
+    Held rows are the one category of record that is *not* in the collection and
+    needs a person, so a report that never mentions them lets a review queue sit
+    unnoticed forever. Unreadable files are warnings, not a dead report — the
+    same rule the deck scan follows.
+    """
+    staged: list[StagedFile] = []
+    warnings: list[str] = []
+    if not config.staging_dir.is_dir():
+        return staged, warnings
+    for path in sorted(
+        [*config.staging_dir.glob("*.yaml"), *config.staging_dir.glob("*.yml")]
+    ):
+        try:
+            records, _ = read_staging(path)
+        except JankiError as exc:
+            warnings.append(f"skipping staging file {path}: {exc}")
+            continue
+        staged.append(
+            StagedFile(
+                path=path,
+                ids=[record.id for record in records],
+                reasons={
+                    record.id: str(record.source.raw_fields.get("hold_reason", ""))
+                    for record in records
+                },
+            )
+        )
+    return staged, warnings
+
+
+@dataclass(frozen=True, slots=True)
 class DeckStatus:
     stem: str
     total: int
@@ -179,13 +222,24 @@ class StatusReport:
     # None means "the schema has no pitch accent yet", which is not the same
     # answer as "no record is missing one".
     missing_pitch_accent: list[str] | None
+    staging_dir: Path
+    staged: list[StagedFile] = field(default_factory=list)
 
     @property
     def total(self) -> int:
         return len(self.record_ids)
 
+    @property
+    def staged_count(self) -> int:
+        return sum(len(item.ids) for item in self.staged)
 
-def build_report(config: ProjectConfig, universe: RecordUniverse, book: Ledger) -> StatusReport:
+
+def build_report(
+    config: ProjectConfig,
+    universe: RecordUniverse,
+    book: Ledger,
+    staged: Sequence[StagedFile] = (),
+) -> StatusReport:
     records = universe.records
     missing_pitch: list[str] | None = None
     if pitch_accent_supported():
@@ -219,6 +273,8 @@ def build_report(config: ProjectConfig, universe: RecordUniverse, book: Ledger) 
         stale_audio=book.stale_audio(records),
         missing_enrichment=Ledger.missing_enrichment(records),
         missing_pitch_accent=missing_pitch,
+        staging_dir=config.staging_dir,
+        staged=list(staged),
     )
 
 
@@ -264,6 +320,30 @@ def format_report(report: StatusReport) -> list[str]:
         lines.append("Missing pitch accent: n/a until the pitch-accent schema lands (M2.2)")
     else:
         lines.append(f"Missing pitch accent: {len(report.missing_pitch_accent)}")
+
+    if report.staged:
+        files = len(report.staged)
+        lines.append(
+            f"Staged for review: {report.staged_count} row(s) in {files} "
+            f"file(s) under {display_path(report.staging_dir, root)} "
+            "(not in the collection until a human resolves them)"
+        )
+    else:
+        lines.append("Staged for review: none")
+    return lines
+
+
+def format_staged(report: StatusReport) -> list[str]:
+    if not report.staged:
+        return ["Staged for review: none."]
+    lines = [f"Staged for review ({report.staged_count}):"]
+    for item in report.staged:
+        lines.append(f"{display_path(item.path, report.root)} ({len(item.ids)}):")
+        for record_id in item.ids:
+            reason = item.reasons.get(record_id) or ""
+            lines.append(f"  {record_id}{f' — {reason}' if reason else ''}")
+    lines.append("Resolve them in place, move them into the records file, then run")
+    lines.append("'janki status --rebuild' so the ledger learns about them.")
     return lines
 
 
@@ -651,6 +731,7 @@ def selected_ids(
     unexported: bool = False,
     missing_audio: bool = False,
     duplicates: bool = False,
+    staged: bool = False,
 ) -> list[str]:
     """The ids the chosen detail flags name, deduplicated, in report order.
 
@@ -667,6 +748,9 @@ def selected_ids(
     if duplicates:
         for group in duplicate_groups:
             chosen.extend(group.ids)
-    if not (unexported or missing_audio or duplicates):
+    if staged:
+        for item in report.staged:
+            chosen.extend(item.ids)
+    if not (unexported or missing_audio or duplicates or staged):
         chosen = list(report.record_ids)
     return list(dict.fromkeys(chosen))

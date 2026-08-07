@@ -120,6 +120,24 @@ def test_write_staging_refuses_to_overwrite_review_edits(tmp_path: Path) -> None
     assert path.read_text(encoding="utf-8") == edited
 
 
+def test_a_metadata_key_outside_the_contract_is_written_with_a_warning(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # META_KEYS is the contract M3.3 and M2.6 write against. A warning is the
+    # right strength: read_staging hands every non-`records` key back, so a note
+    # a reviewer added by hand must survive a round trip — what this catches is
+    # a *writer* inventing a key nothing downstream reads.
+    path = tmp_path / "candidates.yaml"
+
+    write_staging(path, [_record()], {"source_file": "export.csv", "reviewer": "me"})
+
+    err = capsys.readouterr().err
+    assert "reviewer" in err
+    assert "source_file" not in err.split("is not one of")[0]
+    _, meta = read_staging(path)
+    assert meta["reviewer"] == "me"
+
+
 def test_force_overwrites(tmp_path: Path) -> None:
     path = tmp_path / "candidates.yaml"
     write_staging(path, [_record()], {"source_file": "export.csv"})
@@ -269,6 +287,48 @@ def test_import_never_overwrites_an_existing_needs_reading_file(
     assert _stored_ids(root) == ["word:電話:でんわ"]
 
 
+def test_a_resolved_staging_file_is_told_it_is_finished_not_to_resolve_itself(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The nag with no exit. Re-importing the same CSV can never consume the
+    # staging file, so "Resolve that file, then re-run this import" repeats
+    # forever over a file that is already resolved — while the file's own
+    # review_notes say to keep it. Once `validate` is happy with it, the import
+    # says the one thing that ends the loop.
+    root, source = _project(tmp_path)
+    staged_path = root / "staging" / "shirabe-export-needs-reading.yaml"
+    staged_path.parent.mkdir(parents=True)
+    staged_path.write_text(
+        "records:\n"
+        "  - id: word:話す:はなす\n"
+        "    expression: 話す\n"
+        "    reading: はなす\n"
+        "    meanings: [to speak]\n",
+        encoding="utf-8",
+    )
+
+    assert cli.main(["--root", str(root), "import-shirabe", str(source)]) == 0
+
+    out = capsys.readouterr().out
+    assert "Its review is finished" in out
+    assert "janki status --rebuild" in out
+    assert "Resolve that file" not in out
+
+
+def test_a_staging_file_with_work_left_is_still_asked_to_be_resolved(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, source = _project(tmp_path)
+    assert cli.main(["--root", str(root), "import-shirabe", str(source)]) == 0
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "import-shirabe", str(source)]) == 0
+
+    out = capsys.readouterr().out
+    assert "Resolve that file, then re-run this import." in out
+    assert "Its review is finished" not in out
+
+
 def test_import_without_reading_less_rows_writes_no_staging_file(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -342,11 +402,14 @@ def test_a_directory_at_the_staging_path_is_reported_as_one(
     assert "needs-reading" not in capsys.readouterr().out
 
 
-def test_the_staging_notes_do_not_promise_a_command_that_does_not_exist(
+def test_the_staging_notes_give_an_exit_that_exists_today(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # 'janki promote' ships in Milestone 3. Until it does, telling the reviewer
-    # to promote the file dead-ends the whole review at an argparse error.
+    # to promote the file dead-ends the whole review at an argparse error — and
+    # telling them to *keep* the file until then contradicts the import's own
+    # "resolve that file" message, leaving two live instructions that cannot
+    # both be satisfied. The notes name the three steps that work today.
     root, source = _project(tmp_path)
     assert cli.main(["--root", str(root), "import-shirabe", str(source)]) == 0
     capsys.readouterr()
@@ -354,5 +417,9 @@ def test_the_staging_notes_do_not_promise_a_command_that_does_not_exist(
 
     notes = yaml.safe_load(staged_path.read_text(encoding="utf-8"))["review_notes"]
 
-    assert "'janki promote' does not exist yet" in notes
-    assert "by hand" in notes
+    assert "move its records into vocabulary.json" in notes
+    assert "janki status --rebuild" in notes
+    assert "delete this file" in notes
+    assert "keep this file" not in notes
+    # Promote is named as the thing that will automate them, not as a wait.
+    assert "ships in Milestone 3" in notes

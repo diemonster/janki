@@ -10,13 +10,17 @@ Per-record review annotations (``hold_reason``, ``already_known``,
 so a staged record round-trips through ``VocabularyRecord.from_dict`` with no
 schema additions and no bespoke loader.
 
-Staging files hold un-committed human edits — the one thing in this repo git
-cannot recover — so :func:`write_staging` refuses to overwrite one unless the
-caller explicitly passes ``force=True``.
+``data/staging/`` is tracked (see AGENTS.md "Data lifecycle"), so a reading
+typed in by hand is recoverable once it is committed — but only then, and a
+review is usually mid-flight when the next import runs. :func:`write_staging`
+therefore refuses to overwrite an existing file unless the caller explicitly
+passes ``force=True``. In-place annotation of a file under review (M2.6's
+``--staging``) is the case that legitimately passes it.
 """
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Iterable, Mapping
 from dataclasses import replace
 from pathlib import Path
@@ -37,6 +41,10 @@ class StagingError(JankiError):
 ANNOTATION_KEYS: tuple[str, ...] = ("hold_reason", "already_known", "suggested_reading")
 
 # Metadata keys that sit beside ``records:``; the record loader ignores them.
+# Enforced by :func:`write_staging` as a warning, not a refusal: `read_staging`
+# hands back every non-``records`` key it finds, so a note a reviewer added by
+# hand has to survive a round trip. What the warning catches is a *writer*
+# inventing a key nothing downstream reads.
 META_KEYS: tuple[str, ...] = ("source_file", "extracted_at", "model", "review_notes")
 
 _RECORDS_KEY = "records"
@@ -90,10 +98,11 @@ def write_staging(
     """Write ``records`` and ``meta`` to a staging file at ``path``.
 
     Refuses to overwrite an existing file unless ``force`` is true: the file on
-    disk may hold hand-edited readings that exist nowhere else. Also refuses a
-    suffix :func:`read_staging` could not parse — the content is YAML whatever
-    the name says, so any other suffix produces a file only this function can
-    make sense of.
+    disk may hold hand-edited readings not yet committed. Also refuses a suffix
+    :func:`read_staging` could not parse — the content is YAML whatever the name
+    says, so any other suffix produces a file only this function can make sense
+    of. A metadata key outside :data:`META_KEYS` is written, with a warning: it
+    is readable but nothing downstream looks at it.
     """
     path = Path(path)
     if path.suffix.lower() not in STAGING_SUFFIXES:
@@ -104,8 +113,8 @@ def write_staging(
         )
     if path.exists() and not force:
         raise StagingError(
-            f"Staging file already exists: {path}. It may hold review edits that are "
-            "not in git; move it aside or re-run with force to overwrite."
+            f"Staging file already exists: {path}. It may hold review edits you have "
+            "not committed; move it aside or re-run with force to overwrite."
         )
 
     payload: dict[str, Any] = {}
@@ -113,6 +122,13 @@ def write_staging(
         name = str(key)
         if name == _RECORDS_KEY:
             raise StagingError(f"Staging metadata cannot use the reserved key '{_RECORDS_KEY}'")
+        if name not in META_KEYS:
+            print(
+                f"warning: staging metadata key '{name}' in {path} is not one of "
+                f"{', '.join(META_KEYS)}; it will be written and read back, but no "
+                "janki command looks at it",
+                file=sys.stderr,
+            )
         payload[name] = value
     payload[_RECORDS_KEY] = [record.to_dict() for record in records]
 

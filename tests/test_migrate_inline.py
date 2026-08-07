@@ -23,9 +23,10 @@ import pytest
 import yaml
 from test_anki_builder_contract import FakeDeck, FakeModel, FakeNote, FakePackage
 
-from japanese_anki import cli, ledger
+from japanese_anki import cli, ledger, migrate
 from japanese_anki.config import ProjectConfig
 from japanese_anki.exporters import anki
+from japanese_anki.io import DataError
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_DECKS = Path(__file__).parent / "fixtures" / "inline-deck"
@@ -244,6 +245,97 @@ def test_editing_a_deck_file_in_place_keeps_its_comments(tmp_path: Path) -> None
     assert set(original.splitlines()) - set(text.splitlines()) == set()
 
 
+def test_a_second_migration_appends_to_exclude_ids_without_eating_the_comments(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The first migration creates `exclude_ids:`; every migration after it is
+    # appending an id to a list that now exists. That is an addition like any
+    # other, so it must not cost a curated deck file its comment block, its
+    # quote styles or its blank lines.
+    root = _fixture_project(tmp_path)
+    assert _migrate(root) == 0
+    guarded = root / "data" / "decks" / "personal-vocabulary.yaml"
+    after_first = guarded.read_text(encoding="utf-8")
+    (root / "data" / "decks" / "adjectives.yaml").write_text(
+        yaml.safe_dump(
+            {"deck": {"name": "Adjectives"}, "notes": [_raw("高い", "たかい")]},
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    capsys.readouterr()
+
+    assert _migrate(root, "adjectives.yaml") == 0
+
+    text = guarded.read_text(encoding="utf-8")
+    # Every line the first migration left is still there, in order, plus one.
+    assert [line for line in text.splitlines() if line not in ("  - word:高い:たかい",)] == (
+        after_first.splitlines()
+    )
+    assert _deck_config(root, "personal-vocabulary.yaml")["deck"]["exclude_ids"] == [
+        *VERB_IDS,
+        "word:高い:たかい",
+    ]
+    assert "re-serialized" not in capsys.readouterr().err
+
+
+def test_a_deck_shape_the_text_edit_cannot_handle_says_the_comments_are_gone(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The parse-back-and-compare safety net still falls back to re-serializing
+    # an unrecognised shape, and that deletes hand-written documentation from a
+    # curated file. It may do that; it may not do it quietly.
+    root = _fixture_project(tmp_path)
+    guarded = root / "data" / "decks" / "personal-vocabulary.yaml"
+    guarded.write_text(
+        "# keep me\n"
+        "deck:\n"
+        '  name: "Inbox"\n'
+        '  source: "../normalized/vocabulary.json"\n'
+        "  exclude_ids: [word:古い:ふるい]\n",  # a flow sequence: no item lines to append after
+        encoding="utf-8",
+    )
+
+    assert _migrate(root) == 0
+
+    err = capsys.readouterr().err
+    assert "re-serialized" in err
+    assert "personal-vocabulary.yaml" in err
+    assert "# keep me" not in guarded.read_text(encoding="utf-8")
+    # The meaning is preserved even though the formatting is not.
+    assert _deck_config(root, "personal-vocabulary.yaml")["deck"]["exclude_ids"] == [
+        "word:古い:ふるい",
+        *VERB_IDS,
+    ]
+
+
+def test_a_failed_guard_rewrite_leaves_the_normalized_file_untouched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Guards are written before the records for a reason: a guard rewrite that
+    # fails after vocabulary.json is already written leaves every other deck
+    # reading that file resolving the migrated records with no exclude_ids —
+    # two .apkg files carrying one GUID, the hazard this module exists to
+    # prevent.
+    root = _fixture_project(tmp_path)
+    normalized = root / "data" / "normalized" / "vocabulary.json"
+    before = normalized.read_bytes()
+    real_write = migrate.atomic_write_text
+
+    def refuse(path: Path, text: str) -> None:
+        if Path(path).name == "personal-vocabulary.yaml":
+            raise DataError(f"Could not write {path}: Permission denied")
+        real_write(path, text)
+
+    monkeypatch.setattr(migrate, "atomic_write_text", refuse)
+
+    assert _migrate(root) == 1
+
+    assert "error:" in capsys.readouterr().err
+    assert normalized.read_bytes() == before
+
+
 # --- idempotence ------------------------------------------------------------
 
 
@@ -278,13 +370,73 @@ def test_migrated_records_are_registered_in_the_ledger(tmp_path: Path) -> None:
     book = ledger.load(root / "data" / "ledger.json")
     assert sorted(book.records) == sorted(VERB_IDS)
     for record_id in VERB_IDS:
+        # The reference is the record's own source, exactly as `status
+        # --rebuild` reconstructs it — not the deck the note used to live in.
         assert book.records[record_id]["sources"] == [
             {
                 "type": "manual",
-                "ref": "data/decks/verbs.yaml",
+                "ref": "",
                 "seen_at": book.records[record_id]["added_at"],
             }
         ]
+
+
+def test_a_rebuild_after_a_migration_leaves_the_ledger_byte_identical(
+    tmp_path: Path,
+) -> None:
+    # `status --rebuild` is the documented ledger-recovery command and the
+    # ledger is a git-tracked file. If migrate wrote a reference of any other
+    # shape, one rebuild would append a second, near-duplicate entry to every
+    # migrated record and report it as a recovery.
+    root = _fixture_project(tmp_path)
+    assert _migrate(root) == 0
+    before = (root / "data" / "ledger.json").read_text(encoding="utf-8")
+
+    assert cli.main(["--root", str(root), "status", "--rebuild"]) == 0
+
+    assert (root / "data" / "ledger.json").read_text(encoding="utf-8") == before
+
+
+def test_migrating_after_a_rebuild_registers_nothing_and_says_so(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The same divergence in the other order, and the reporting that goes with
+    # it: `record_added` returned False for all three, so claiming three
+    # registrations would be a transcript describing work that did not happen.
+    root = _fixture_project(tmp_path)
+    assert cli.main(["--root", str(root), "status", "--rebuild"]) == 0
+    seeded = (root / "data" / "ledger.json").read_text(encoding="utf-8")
+    capsys.readouterr()
+
+    assert _migrate(root) == 0
+
+    assert (root / "data" / "ledger.json").read_text(encoding="utf-8") == seeded
+    assert "Ledger: registered 0 new record(s) and 0 new source sighting(s)." in (
+        capsys.readouterr().out
+    )
+
+
+def test_a_ledger_that_cannot_be_saved_still_gets_a_full_transcript(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Every file but the ledger is already written by this point. Printing only
+    # `error: ...` would tell the user the migration did not happen over a deck
+    # it has already rewritten.
+    root = _fixture_project(tmp_path)
+
+    def refuse(self: ledger.Ledger) -> None:
+        raise ledger.LedgerError("Could not write ledger.json: Permission denied")
+
+    monkeypatch.setattr(ledger.Ledger, "save", refuse)
+
+    assert _migrate(root) == 1
+
+    captured = capsys.readouterr()
+    assert "Migrated 3 inline note(s)" in captured.out
+    assert "Ledger: NOT written" in captured.out
+    assert "registered 3" not in captured.out
+    assert "janki status --rebuild" in captured.err
+    assert [record["id"] for record in _records(root)] == sorted(VERB_IDS)
 
 
 # --- merge semantics --------------------------------------------------------
@@ -444,9 +596,13 @@ def test_a_deck_that_already_reads_the_normalized_file_is_not_pinned(
     assert [record["id"] for record in _records(root)] == ["word:話す:はなす"]
 
 
-def test_a_deck_that_asks_for_a_migrated_id_by_name_keeps_it(
+def test_a_deck_whose_membership_is_already_closed_gets_no_dead_exclude_ids(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    # `resolve_deck_records` applies include_ids first, so a deck that has one
+    # can never gain a record from the normalized file. Every exclude_ids entry
+    # written into it would be provably dead config — and migrate pins the decks
+    # it migrates, so those are exactly the decks that would accumulate it.
     root = _project(
         tmp_path,
         {
@@ -468,9 +624,16 @@ def test_a_deck_that_asks_for_a_migrated_id_by_name_keeps_it(
     assert _migrate(root) == 0
 
     deck = _deck_config(root, "wanted.yaml")["deck"]
-    assert deck["exclude_ids"] == ["word:行く:いく"]
+    assert "exclude_ids" not in deck
     assert deck["include_ids"] == ["word:話す:はなす"]
-    assert "include_ids" in capsys.readouterr().err
+    # Membership is what include_ids says and nothing else, which is why an
+    # exclude entry for 行く would have changed nothing.
+    _, resolved = anki.resolve_deck_records(root / "data" / "decks" / "wanted.yaml")
+    assert [record.id for record in resolved] == ["word:話す:はなす"]
+    # The id it asked for by name is still announced: that one is a real change.
+    err = capsys.readouterr().err
+    assert "include_ids" in err
+    assert "word:話す:はなす" in err
 
 
 def test_a_deck_that_does_not_read_the_normalized_file_is_left_alone(

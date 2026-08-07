@@ -168,6 +168,14 @@ output file holds records (or exists but cannot be read); `--yes` answers that
 prompt. A non-interactive run proceeds without asking — the prompt is
 fat-finger protection, not a lock, and the records are in git either way.
 
+The ledger follows the records: every discarded record's ledger entry is
+dropped too, and the summary says how many. That is the point of the prompt's
+wording — a record that comes back in a later import comes back as new, with a
+new `added_at` and no memory of the decks it used to be exported to. Leaving the
+entries behind would be worse: `janki status` would over-report the collection
+forever, and once `build --only-new` reads export state a dead entry would keep
+a re-imported record out of its deck.
+
 ## Rows held back for reading review
 
 A record's ID is minted from its expression *and* its reading
@@ -191,12 +199,25 @@ To resolve them, edit that staging file:
 3. Delete the rows not worth keeping.
 4. Run `janki validate data/staging/<file>.yaml`. It lists every row still
    malformed and exits non-zero until the file is clean.
+5. Move the surviving records into `data/normalized/vocabulary.json`, run
+   `janki status --rebuild` so the ledger learns about them, and delete the
+   staging file. Without the rebuild the records exist but the ledger has never
+   heard of them, so `janki status` under-reports the collection and a later
+   import of the same word registers nothing.
 
-`janki promote`, which will move confirmed staged records into
-`vocabulary.json`, ships in Milestone 3. Until then, keep the staging file and
-move confirmed records across by hand. Re-running the same import does not
-overwrite a staging file that already exists — it reports the path and the
-number of rows it held, and leaves your review edits alone.
+`janki promote` will do step 5 for you; it ships in Milestone 3. There is no
+reason to wait for it — a resolved staging file is finished work, and leaving it
+in place only means the next import of the same export keeps mentioning it.
+
+Re-running the same import never overwrites a staging file that already exists.
+While the file still has errors it reports the path and the count and tells you
+to resolve it; once `janki validate` is happy with it, the message changes to
+say the review is finished and to move the records across, because re-running an
+import can never consume that file itself.
+
+`data/staging/` is committed, like everything else under `data/`. Commit a
+review in progress and a hand-typed reading is recoverable; leave it
+uncommitted and it exists only in your working tree.
 
 ## The ledger and `janki status`
 
@@ -219,6 +240,7 @@ Missing word audio: 3 of 3
 Stale audio: 0
 Missing enrichment: 2 (no example sentence, or no usage notes)
 Missing pitch accent: n/a until the pitch-accent schema lands (M2.2)
+Staged for review: none
 ```
 
 The detail flags:
@@ -227,6 +249,7 @@ The detail flags:
 janki status --unexported     # per deck, the record ids it was never built with
 janki status --missing-audio  # record ids with no word audio
 janki status --duplicates     # records that look like the same word twice
+janki status --staged         # ids waiting in data/staging, and why
 janki status --format ids     # bare ids on stdout, one per line, for piping
 janki status --rebuild        # recover the ledger from records and media on disk
 ```
@@ -240,12 +263,19 @@ re-IDing a record would orphan that history anyway.
 every human-readable line moves to stderr — so it can be piped. Combined with
 a detail flag it emits that flag's IDs; on its own it emits every record.
 
+`--staged` lists the rows an import held back for reading review, with the
+reason each was held. The summary always carries a `Staged for review:` line so
+a review queue cannot sit unnoticed.
+
 `--rebuild` reconstructs what is still provable after a lost or corrupted
 ledger: source references from each record's own `source` block, and audio
 entries from the files under `data/media`. Export state is not reconstructible
 — the ledger was the only place that held it. Nothing is lost when it goes,
 because GUIDs are deterministic and re-exporting a note updates it rather than
-duplicating it.
+duplicating it. It is also the command that teaches the ledger about records you
+moved into `vocabulary.json` by hand, and running it when nothing is missing is
+a no-op: every writer records a source reference in the same shape `--rebuild`
+reconstructs, so it never grows the file.
 
 Parts of the ledger are still unwritten while the rest of the pipeline is
 built. Nothing writes `enriched` at all, and the only writer of `audio` is
@@ -263,11 +293,16 @@ never gain examples, pitch accent or audio.
 `janki migrate-inline DECK.yaml` moves those notes into the normalized file
 under the same IDs — GUIDs, and the review history behind them, are preserved —
 and leaves the deck as a filter over shared records (`source:` plus an
-`include_ids:` list pinning exactly what it exported before). Any other deck
-reading the same normalized file would suddenly resolve the moved records and
-emit notes with the migrated deck's GUIDs, so those decks get an `exclude_ids:`
-entry and the command says which. Running it again on a deck with no inline
-notes does nothing.
+`include_ids:` list pinning exactly what it exported before). A deck that
+*already* read the normalized file keeps its own membership rule instead and
+gets no `include_ids:` — pinning it would freeze out the imports it exists to
+receive — and the command says so.
+
+Any other deck reading the same normalized file would suddenly resolve the moved
+records and emit notes with the migrated deck's GUIDs, so those decks get an
+`exclude_ids:` entry and the command says which. A deck whose own `include_ids:`
+already closes its membership gets none: an exclusion there could never change
+what it exports. Running it again on a deck with no inline notes does nothing.
 
 Inline notes that *override* a normalized record (a matching `id` plus the few
 fields you want to change) remain supported and are not affected.

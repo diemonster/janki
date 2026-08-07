@@ -14,5 +14,10 @@ __pycache__/
 dist/*.apkg
 dist/*-preview.html
 
+# Nothing under data/ is ignored, deliberately. data/staging/ holds hand-typed
+# readings and data/media/ holds cached audio; both are only recoverable if they
+# are committed, and both ship a .gitkeep so they exist in a fresh clone.
+# See AGENTS.md "Data lifecycle".
+
 # macOS
 .DS_Store

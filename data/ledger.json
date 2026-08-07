@@ -8,7 +8,7 @@
       "exports": {},
       "sources": [
         {
-          "ref": "data/decks/verbs.yaml",
+          "ref": "",
           "seen_at": "2026-08-07",
           "type": "manual"
         }
@@ -21,7 +21,7 @@
       "exports": {},
       "sources": [
         {
-          "ref": "data/decks/verbs.yaml",
+          "ref": "",
           "seen_at": "2026-08-07",
           "type": "manual"
         }
@@ -34,7 +34,7 @@
       "exports": {},
       "sources": [
         {
-          "ref": "data/decks/verbs.yaml",
+          "ref": "",
           "seen_at": "2026-08-07",
           "type": "manual"
         }

@@ -26,7 +26,7 @@ from japanese_anki.io import (
 )
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.preview import build_preview
-from japanese_anki.staging import StagingError, write_staging
+from japanese_anki.staging import StagingError, read_staging, write_staging
 from japanese_anki.validation import has_errors, validate_records
 
 
@@ -105,7 +105,7 @@ def _confirm_replace(count: int | None, assume_yes: bool) -> bool:
         return True
     what = "the existing records" if count is None else f"{count} existing records"
     try:
-        answer = input(f"Replace {what}? [y/N] ")
+        answer = input(f"Replace {what} (their ledger entries go too)? [y/N] ")
     except (EOFError, KeyboardInterrupt):
         # Closed stdin or Ctrl-C at the prompt reads as "no", not a traceback.
         print()
@@ -121,12 +121,33 @@ _NEEDS_READING_NOTES = (
     "'reading' with kana AND delete that row's 'id:' line: the ID here is the malformed "
     "one, and an empty ID is re-minted from expression + reading when the file is read. "
     "Delete the rows not worth keeping. Then run 'janki validate' on this file — it "
-    "lists every row still malformed. 'janki promote' does not exist yet (it ships in "
-    "Milestone 3): keep this file until it does, or move the confirmed records into "
-    "vocabulary.json by hand."
+    "lists every row still malformed. Once it is clean, this file is finished: move its "
+    "records into vocabulary.json, run 'janki status --rebuild' so the ledger learns "
+    "about them, and delete this file. ('janki promote' ships in Milestone 3 and will "
+    "do those three steps for you; there is no need to wait for it.)"
 )
 
-_HELD_SUMMARY = "row(s) whose reading janki cannot use (missing, or written in kanji)"
+_HELD_SUMMARY = "{unit} whose reading janki cannot use (missing, or written in kanji)"
+
+
+def _held_summary(held_unit: str) -> str:
+    return _HELD_SUMMARY.format(unit=held_unit)
+
+
+def _staging_file_is_clean(path: Path) -> bool:
+    """Whether a staging file already under review has nothing left to fix.
+
+    A file whose rows all validate has been resolved, and telling its owner to
+    "resolve that file, then re-run" would be a nag with no satisfiable end —
+    re-running never consumes it. Any failure to read it counts as not clean:
+    this decides which advice to print, and the cautious advice is the one that
+    keeps the file.
+    """
+    try:
+        records, _ = read_staging(path)
+        return not has_errors(validate_records(records, path))
+    except JankiError:
+        return False
 
 
 def _stage_needs_reading(
@@ -134,6 +155,7 @@ def _stage_needs_reading(
     staging_stem: str,
     source_ref: str,
     records: Sequence[VocabularyRecord],
+    held_unit: str = "row(s)",
 ) -> str:
     """Divert rows with an unusable reading to staging; return what to print.
 
@@ -142,15 +164,17 @@ def _stage_needs_reading(
     so a staging failure has to abort the import, not report failure after
     vocabulary.json has already been replaced.
 
-    ``staging_stem`` names the file (``<stem>-needs-reading.yaml``) and
-    ``source_ref`` is recorded in it as the origin. Both are the importer's to
-    choose: a jpdb deck sync has no CSV file to take a stem from.
+    ``staging_stem`` names the file (``<stem>-needs-reading.yaml``),
+    ``source_ref`` is recorded in it as the origin, and ``held_unit`` is what
+    one held item is called. All three are the importer's to choose: a jpdb deck
+    sync has no CSV file to take a stem from and no rows to count.
     """
     if not records:
         return ""
+    summary = _held_summary(held_unit)
     if not staging_stem.strip():
         raise StagingError(
-            f"Cannot stage {len(records)} {_HELD_SUMMARY}: the import did not say what "
+            f"Cannot stage {len(records)} {summary}: the import did not say what "
             "to name the staging file."
         )
     target = config.staging_dir / f"{staging_stem}-needs-reading.yaml"
@@ -159,29 +183,72 @@ def _stage_needs_reading(
         # calling it one would have the import claim to protect something that
         # does not exist while the held rows go nowhere.
         raise StagingError(
-            f"{target} is a directory, so the {len(records)} {_HELD_SUMMARY} cannot be "
+            f"{target} is a directory, so the {len(records)} {summary} cannot be "
             "staged there. Move it aside and re-run this import."
         )
     if target.is_file():
+        held = f"Held {len(records)} {summary} out of the import. {target} already "
+        if _staging_file_is_clean(target):
+            # The review is done; the import cannot consume the file, so the
+            # only honest instruction is the one that ends the loop.
+            return (
+                held + "exists and was left untouched. Its review is finished — "
+                "'janki validate' finds nothing wrong with it — so move its records "
+                "into your records file, run 'janki status --rebuild' so the ledger "
+                "learns about them, and delete it."
+            )
         return (
-            f"Held {len(records)} {_HELD_SUMMARY} out of the import. {target} already "
-            "exists and was left untouched — it may hold review edits that are not in "
-            "git. Resolve that file, then re-run this import."
+            held + "exists and was left untouched — it may hold review edits you have "
+            "not committed. Resolve that file, then re-run this import."
         )
     write_staging(
         target,
         list(records),
         {
+            # A historical key name: staging files predate importers that have
+            # no file to name, and it holds whatever `source_ref` the importer
+            # chose — a CSV filename, a jpdb deck. It is part of staging.py's
+            # META_KEYS contract, so it is not this call site's to rename.
             "source_file": source_ref,
             "extracted_at": date.today().isoformat(),
             "review_notes": _NEEDS_READING_NOTES,
         },
     )
     return (
-        f"Held {len(records)} {_HELD_SUMMARY} out of the import and wrote them to "
+        f"Held {len(records)} {summary} out of the import and wrote them to "
         f"{target} for reading review — a record without a usable reading gets a "
         f"malformed, uncorrectable ID. Run 'janki validate {target}' to see what is "
         "still outstanding."
+    )
+
+
+def _ledger_line(added: int, sources: int, *, written: bool) -> str:
+    """The one sentence every writing command says about the ledger."""
+    if not written:
+        return "Ledger: NOT written — the records landed, the ledger did not (see above)."
+    return f"Ledger: registered {added} new record(s) and {sources} new source sighting(s)."
+
+
+def _save_ledger(book: ledger.Ledger) -> ledger.LedgerError | None:
+    """Save the ledger, returning the failure instead of raising it.
+
+    A failing save must not take the summary down with it: the records are
+    already written at this point, and an `error:` with no transcript tells the
+    user the command did nothing when in fact it did almost everything.
+    """
+    try:
+        book.save()
+    except ledger.LedgerError as exc:
+        return exc
+    return None
+
+
+def _report_ledger_failure(exc: ledger.LedgerError) -> None:
+    print(f"warning: {exc}", file=sys.stderr)
+    print(
+        "The records are written; the ledger is not. Run 'janki status --rebuild' "
+        "once that file is writable to recover the entries it did not get.",
+        file=sys.stderr,
     )
 
 
@@ -195,6 +262,7 @@ def run_import(
     unit: str,
     staging_stem: str,
     needs_reading: Sequence[VocabularyRecord] = (),
+    held_unit: str = "row(s)",
     warnings: Sequence[str] = (),
     prefer_incoming: Sequence[str] = (),
     replace: bool = False,
@@ -205,8 +273,18 @@ def run_import(
     The one pipeline every importer shares. ``import-shirabe`` calls it today
     and ``import-jpdb`` calls it from Milestone 2, so nothing here may assume a
     CSV: what the source is called (``source_type``/``source_ref``), what one
-    incoming item is called in the summary (``unit``), and what a staging file
-    for it is named (``staging_stem``) are all the caller's to say.
+    incoming item is called in the summary (``unit``), what one *held* item is
+    called (``held_unit``), and what a staging file for it is named
+    (``staging_stem``) are all the caller's to say.
+
+    **``source_ref`` must be the same value the importer stored as each
+    record's own ``source.imported_from``.** ``status --rebuild`` reconstructs
+    a source reference from that field, and a reference's identity is every key
+    but ``seen_at`` — so a ``source_ref`` of any other shape (or any extra
+    detail passed alongside it) has the documented recovery command append a
+    second, near-duplicate reference to every record it just imported. This is a
+    cross-module contract: ``migrate.migrate_inline`` satisfies it too, and
+    M2.5's importer must.
 
     Ordering is load-bearing, in both directions:
 
@@ -216,8 +294,10 @@ def run_import(
       that the import did not happen over records it has already rewritten.
     * The records are written before the ledger. The ledger is metadata and
       ``janki status --rebuild`` can reconstruct it; the records cannot be
-      reconstructed from anything.
+      reconstructed from anything. A ledger that will not save is therefore a
+      warning over a full summary, never an error instead of one.
     """
+    discarded: list[str] = []
     if replace:
         # --replace only needs the count, so an unreadable file must not block
         # the one command that can recover from it.
@@ -225,10 +305,14 @@ def run_import(
         unreadable = False
         if output_path.exists():
             try:
-                count = len(load_records(output_path))
+                replaced = load_records(output_path)
+                count = len(replaced)
+                discarded = [record.id for record in replaced]
             except DataError as exc:
                 print(
-                    f"warning: could not read the existing records to count them: {exc}",
+                    f"warning: could not read the existing records to count them: {exc}. "
+                    "Their ledger entries cannot be identified either, so they stay — "
+                    "the ids are unknown, and guessing would drop live records.",
                     file=sys.stderr,
                 )
                 unreadable = True
@@ -245,7 +329,9 @@ def run_import(
     # whole-file rewrite, so a command loads it once and saves it once.
     book = ledger.load(config.ledger_file)
 
-    held_message = _stage_needs_reading(config, staging_stem, source_ref, needs_reading)
+    held_message = _stage_needs_reading(
+        config, staging_stem, source_ref, needs_reading, held_unit
+    )
 
     merged, outcomes = merge_records(existing, list(records), prefer_incoming)
     save_records_json(output_path, merged)
@@ -260,24 +346,40 @@ def run_import(
     # Every incoming record, added or not. This is what makes "later sightings
     # go to the ledger" true: the merge leaves the record's own `source` alone,
     # so a re-import's provenance would otherwise be lost. Keep the reference to
-    # {type, ref} — `status --rebuild` writes exactly that shape, and a
-    # reference's identity is every key but the date, so extra detail here would
-    # have a rebuilt ledger grow a second near-duplicate per record.
+    # {type, ref} — see the docstring's cross-module contract.
+    incoming_ids = dict.fromkeys(record.id for record in records)
     seen = sum(
         book.record_source_seen(record_id, source_type, source_ref)
-        for record_id in dict.fromkeys(record.id for record in records)
+        for record_id in incoming_ids
     )
-    book.save()
+    # --replace discards records; their ledger entries would otherwise outlive
+    # them forever, over-reporting the collection and — once M5.6 makes
+    # `build --only-new` read `exports` — silently omitting a re-imported record
+    # from a deck because a dead entry says it was already exported.
+    dropped = sum(
+        book.remove(record_id)
+        for record_id in discarded
+        if record_id not in incoming_ids
+    )
+    ledger_error = _save_ledger(book)
 
     print(f"Imported {len(records)} {unit} into {output_path}")
     _print_merge_summary(outcomes)
     if held_message:
         print(held_message)
-    print(f"Ledger: registered {added} new record(s) and {seen} new source sighting(s).")
+    print(_ledger_line(added, seen, written=ledger_error is None))
+    if dropped and ledger_error is None:
+        print(
+            f"  Dropped {dropped} ledger entr{'y' if dropped == 1 else 'ies'} "
+            "for records --replace discarded."
+        )
     if warnings:
         print("Warnings:")
         for warning in warnings:
             print(f"  - {warning}")
+    if ledger_error is not None:
+        _report_ledger_failure(ledger_error)
+        return 1
     return 0
 
 
@@ -379,6 +481,7 @@ def command_status(args: argparse.Namespace) -> int:
     config = _load_config(args)
     book = ledger.load(config.ledger_file)
     universe = status.collect_records(config)
+    staged, staged_warnings = status.collect_staged(config)
 
     # With --format ids, stdout carries nothing but ids so the output can be
     # piped straight into another command; everything a human reads goes to
@@ -386,7 +489,7 @@ def command_status(args: argparse.Namespace) -> int:
     ids_only = args.format == "ids"
     prose = sys.stderr if ids_only else sys.stdout
 
-    for warning in universe.warnings:
+    for warning in [*universe.warnings, *staged_warnings]:
         print(f"warning: {warning}", file=sys.stderr)
 
     if args.rebuild:
@@ -397,7 +500,7 @@ def command_status(args: argparse.Namespace) -> int:
         for line in status.format_rebuild(summary, config.root):
             print(line, file=prose)
 
-    report = status.build_report(config, universe, book)
+    report = status.build_report(config, universe, book, staged)
     groups = status.find_duplicates(universe.records) if args.duplicates else []
 
     if ids_only:
@@ -407,6 +510,7 @@ def command_status(args: argparse.Namespace) -> int:
             unexported=args.unexported,
             missing_audio=args.missing_audio,
             duplicates=args.duplicates,
+            staged=args.staged,
         ):
             print(record_id)
         return 0
@@ -422,9 +526,12 @@ def command_status(args: argparse.Namespace) -> int:
     if args.duplicates:
         for line in status.format_duplicates(groups):
             print(line)
-    if not (args.unexported or args.missing_audio or args.duplicates):
+    if args.staged:
+        for line in status.format_staged(report):
+            print(line)
+    if not (args.unexported or args.missing_audio or args.duplicates or args.staged):
         print(
-            "Details: --unexported, --missing-audio, --duplicates "
+            "Details: --unexported, --missing-audio, --duplicates, --staged "
             "(add --format ids to pipe them)."
         )
     return 0
@@ -445,6 +552,10 @@ def command_migrate_inline(args: argparse.Namespace) -> int:
         )
         return 0
 
+    # The ledger is saved before the transcript that describes it: everything
+    # else is already on disk, and a summary claiming registrations that did not
+    # persist is worse than a summary that says so.
+    ledger_error = _save_ledger(book)
     print(
         f"Migrated {len(result.migrated)} inline note(s) from {args.deck} into "
         f"{result.normalized_file}"
@@ -452,7 +563,14 @@ def command_migrate_inline(args: argparse.Namespace) -> int:
     _print_merge_summary(result.outcomes)
     for line in migrate.format_details(result, config.root):
         print(line)
-    book.save()
+    print(
+        _ledger_line(
+            result.ledger_added, result.ledger_sources, written=ledger_error is None
+        )
+    )
+    if ledger_error is not None:
+        _report_ledger_failure(ledger_error)
+        return 1
     return 0
 
 
@@ -538,6 +656,14 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "List records that look like the same word twice: one expression under two "
             "ids, or one reading under a kanji and a kana spelling."
+        ),
+    )
+    status_parser.add_argument(
+        "--staged",
+        action="store_true",
+        help=(
+            "List the record ids waiting in data/staging for a human, with the "
+            "reason each was held back."
         ),
     )
     status_parser.add_argument(
