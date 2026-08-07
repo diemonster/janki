@@ -690,3 +690,111 @@ def test_a_named_deck_that_does_not_exist_fails_before_anything_is_written(
 
     assert "No jpdb deck named 'Lesson 9'" in capsys.readouterr().err
     assert not (root / "vocabulary.json").exists()
+
+
+# --- --replace across several decks -----------------------------------------
+
+
+def _replace_project(tmp_path: Path) -> Path:
+    """A project holding one record --replace would discard."""
+    root = _project(tmp_path)
+    (root / "vocabulary.json").write_text(
+        json.dumps(
+            [{"id": "word:古い:ふるい", "expression": "古い", "reading": "ふるい"}],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    return root
+
+
+def test_replace_discards_the_existing_records_on_a_single_deck(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _replace_project(tmp_path)
+    _patch_api(monkeypatch, RoutingTransport(_fixture(DECKS_FIXTURE), _fixture(LOOKUP_FIXTURE)))
+
+    code = cli.main(
+        [
+            "--root",
+            str(root),
+            "import-jpdb",
+            "--deck",
+            "Textbook Vol. 1: Lesson 1",
+            "--replace",
+            "--yes",
+        ]
+    )
+
+    assert code == 0
+    assert "word:古い:ふるい" not in _stored(root)
+
+
+def test_replace_applies_to_the_first_deck_only_so_deck_two_keeps_deck_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The rule that makes --replace mean "replace the collection with these
+    # decks": honoured on every pass, deck two would erase deck one.
+    root = _replace_project(tmp_path)
+    decks = _fixture(DECKS_FIXTURE)
+    lookup = _fixture(LOOKUP_FIXTURE)
+    lookup["request_list"] += [[1358340, 1564309720], [1002430, 3202573393]]
+    lookup["response"]["vocabulary_info"] += [
+        ["食べ物", "たべもの", 2600, ["LHLLL"], [["food"]], [["n"]], ["n"], None],
+        ["お茶", "おちゃ", 1600, ["LHHH"], [["tea"]], [["n"]], ["n"], None],
+    ]
+    _patch_api(monkeypatch, RoutingTransport(decks, lookup))
+
+    code = cli.main(
+        ["--root", str(root), "import-jpdb", "--all-decks", "--replace", "--yes"]
+    )
+
+    assert code == 0
+    stored = _stored(root)
+    assert "word:古い:ふるい" not in stored
+    assert "word:話す:はなす" in stored
+    assert "word:お茶:おちゃ" in stored
+
+
+def test_declining_the_replace_prompt_imports_no_deck_at_all(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # "No" means no. Continuing to deck two would leave a collection missing
+    # exactly the deck the user was asked about, under a summary that reads
+    # like a complete import.
+    root = _replace_project(tmp_path)
+    _patch_api(monkeypatch, RoutingTransport(_fixture(DECKS_FIXTURE), _fixture(LOOKUP_FIXTURE)))
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt: "n")
+
+    code = cli.main(
+        ["--root", str(root), "import-jpdb", "--all-decks", "--replace"]
+    )
+
+    assert code == 1
+    assert _stored(root) == {
+        "word:古い:ふるい": _stored(root)["word:古い:ふるい"]
+    }
+    err = capsys.readouterr().err
+    assert "2 deck(s) not imported" in err
+
+
+def test_two_decks_whose_names_differ_only_in_case_are_not_guessed_between(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Names are matched case-insensitively, so this collision is invisible to
+    # the matcher; picking either would import the wrong deck's words.
+    root = _project(tmp_path)
+    decks = _fixture(DECKS_FIXTURE)
+    decks["list_user_decks"]["decks"].append([4, "textbook vol. 1: lesson 1", 0])
+    decks["deck_vocabulary"]["4"] = {"vocabulary": []}
+    _patch_api(monkeypatch, RoutingTransport(decks, _fixture(LOOKUP_FIXTURE)))
+
+    code = cli.main(
+        ["--root", str(root), "import-jpdb", "--deck", "Textbook Vol. 1: Lesson 1"]
+    )
+
+    assert code == 1
+    err = capsys.readouterr().err
+    assert "matches more than one jpdb deck" in err
+    assert not (root / "vocabulary.json").exists()

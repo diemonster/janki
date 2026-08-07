@@ -729,7 +729,15 @@ name keeps its characters and only separators collapse; `:` collapses too, since
 `::` is Anki's tag-hierarchy separator. The same slug names the deck's staging
 file. (6) `frequency_rank` parses to `None`, never 0, on anything unparseable —
 0 is a real rank and "never looked up" must stay distinguishable. As planned,
-`occurences` counts are not stored. README is untouched: jpdb setup is M2.W's.*
+`occurences` counts are not stored. README is untouched: jpdb setup is M2.W's.
+**One contract item was not met:** "check the userscript's actual output header
+before hardcoding" did not happen — the JPDB-Export userscript was unreachable
+from the environment this ran in. Both `reading` and `furigana reading` map, the
+guess is flagged as such in `csv_base.py` and in the test that pins it, and a
+header that turns out to be neither fails loudly (the column goes unmapped and
+the row is held for reading review rather than imported wrong). Verifying it
+against a real export belongs to M2.W or a follow-up, and is owner-only for the
+same reason M2.1F is.*
 
 Depends on: M2.1, M2.2, M2.3, M2.4, M1.5, M1.8
 Files: new `src/japanese_anki/importers/jpdb_import.py`,

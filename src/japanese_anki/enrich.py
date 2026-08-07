@@ -286,8 +286,11 @@ def enrich_records(
         targets = list(dict.fromkeys(ids))
         if missing := [record_id for record_id in targets if record_id not in by_id]:
             raise EnrichError(
-                f"No record with id {', '.join(repr(item) for item in missing)}. "
-                "Run 'janki status --format ids' for the ids janki holds."
+                f"No record with id {', '.join(repr(item) for item in missing)} in the "
+                "normalized file. Enrichment reads that file only, so an id that "
+                "'janki status --format ids' lists but this rejects belongs to an "
+                "inline deck note ('janki migrate-inline' moves it) or a staged row "
+                "(finish its reading review first)."
             )
 
     for record_id in targets:

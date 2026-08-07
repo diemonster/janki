@@ -545,7 +545,6 @@ def command_import_jpdb(args: argparse.Namespace) -> int:
         print("No jpdb decks on this account; nothing to import.", file=sys.stderr)
         return 0
 
-    exit_code = 0
     for index, deck in enumerate(decks):
         name = str(deck.get("name", "")).strip()
         if len(decks) > 1:
@@ -573,8 +572,24 @@ def command_import_jpdb(args: argparse.Namespace) -> int:
             replace=args.replace and index == 0,
             assume_yes=args.yes,
         )
-        exit_code = exit_code or code
-    return exit_code
+        if code != 0:
+            # A pass that did not land stops the run rather than being carried
+            # as an exit code past the decks after it. Both ways it fails say
+            # so: a declined --replace has already printed "nothing was
+            # written", and importing the *rest* of the account on top of that
+            # refusal would leave a collection missing exactly one deck, with
+            # the summary of every other deck reading like a complete import.
+            remaining = [
+                str(other.get("name", "")).strip() for other in decks[index + 1 :]
+            ]
+            if remaining:
+                print(
+                    f"Stopped at '{name}': {len(remaining)} deck(s) not imported "
+                    f"({', '.join(remaining)}).",
+                    file=sys.stderr,
+                )
+            return code
+    return 0
 
 
 def _slug_for_file(name: str) -> str:
@@ -706,7 +721,23 @@ def command_enrich(args: argparse.Namespace) -> int:
     if ledger_error is None:
         print(f"Ledger: recorded a jpdb pass over {len(result.changes)} record(s).")
     else:
-        _report_ledger_failure(ledger_error)
+        # Deliberately not `_report_ledger_failure`: its advice is
+        # `status --rebuild`, which reconstructs source references and audio
+        # from what the records prove. An `enriched` entry is provable by
+        # nothing — filled fields do not say who filled them — so that advice
+        # would promise a recovery that silently never happens. Nor does
+        # re-running recover it: the fields are full now, so the next pass
+        # skips these records before it reaches the ledger. Say that, rather
+        # than send someone after a fix that does not exist.
+        print(f"warning: {ledger_error}", file=sys.stderr)
+        print(
+            "The records are enriched; the ledger entry recording it is not, and "
+            "nothing can reconstruct it — neither 'status --rebuild' (an "
+            "enrichment pass is not provable from the records) nor a re-run (the "
+            "fields are filled now, so the next pass skips them). The records are "
+            "correct; 'status' will simply not know jpdb is what filled them.",
+            file=sys.stderr,
+        )
         return 1
     return 0
 

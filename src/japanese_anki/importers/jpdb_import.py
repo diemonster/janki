@@ -193,21 +193,43 @@ def select_decks(
     at a shell prompt, but nothing further — two decks whose names differ only
     in punctuation are two decks, and quietly picking one would import the
     wrong 500 words.
+
+    An account holding two decks whose names differ *only* in case is the same
+    hazard wearing the fold this function deliberately applies, so it is an
+    error naming both rather than a silent pick: nothing here can know which
+    one was meant, and `--all-decks` imports both anyway.
     """
-    by_name = {str(deck.get("name", "")).strip().lower(): dict(deck) for deck in decks}
+    by_name: dict[str, list[dict[str, Any]]] = {}
+    for deck in decks:
+        by_name.setdefault(str(deck.get("name", "")).strip().lower(), []).append(
+            dict(deck)
+        )
     chosen: list[dict[str, Any]] = []
     missing: list[str] = []
+    ambiguous: list[str] = []
     for name in wanted:
-        deck = by_name.get(name.strip().lower())
-        if deck is None:
+        matches = by_name.get(name.strip().lower())
+        if not matches:
             missing.append(name)
-        elif deck not in chosen:
-            chosen.append(deck)
+        elif len(matches) > 1:
+            ambiguous.append(name)
+        elif matches[0] not in chosen:
+            chosen.append(matches[0])
     if missing:
         known = ", ".join(sorted(str(deck.get("name", "")) for deck in decks)) or "none"
         raise JpdbImportError(
             f"No jpdb deck named {', '.join(repr(name) for name in missing)}. "
             f"Decks on this account: {known}"
+        )
+    if ambiguous:
+        collisions = ", ".join(
+            " / ".join(repr(str(deck.get("name", ""))) for deck in by_name[name.strip().lower()])
+            for name in ambiguous
+        )
+        raise JpdbImportError(
+            f"{', '.join(repr(name) for name in ambiguous)} matches more than one "
+            f"jpdb deck ({collisions}); deck names are matched case-insensitively. "
+            "Rename one on jpdb, or use --all-decks to import both."
         )
     return chosen
 
