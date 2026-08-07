@@ -240,7 +240,18 @@ refinement below).
 - Dates are ISO `YYYY-MM-DD` strings. `LedgerError` defined here.
 - A missing ledger file is an empty ledger, never an error.
 
-### [ ] M1.5 Reading rules + staging module
+### [x] M1.5 Reading rules + staging module
+
+*Done 2026-08-06. Both "current-code facts" below re-verified against the tree
+before any edit; both held. Three small decisions inside the contract:
+(1) `StagingError(JankiError)` is defined in `staging.py` (the Conventions list
+of error homes predates this module); (2) the malformed-ID error is reported
+when the missing-reading error is not — while the reading is still empty the
+existing message states the same fault, and a staging file under review would
+otherwise carry two errors per row for one fix, so the new check fires exactly
+where it adds information (a reading filled in without a re-mint); (3) the
+README section the validation messages point at belongs to M1.W, which still
+owes it.*
 
 Depends on: M1.1 (rewrites the same CLI function), M1.2, M1.6
 Files: new `src/japanese_anki/staging.py`,

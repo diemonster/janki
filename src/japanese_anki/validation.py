@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from japanese_anki.models import VocabularyRecord
+
+# An ID minted from an expression with no reading: ``word:話す:``. The reading is
+# part of the ID, so this one cannot be repaired in place once Anki has seen it.
+_READINGLESS_ID = re.compile(r"^word:(?P<expression>.*):$")
+
+_STAGING_HINT = "route through data/staging review; see README"
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +32,17 @@ def _contains_kanji(value: str) -> bool:
     return any("\u3400" <= char <= "\u9fff" for char in value)
 
 
+def _is_readingless_kanji_id(record_id: str) -> bool:
+    """True for ``word:<kanji expression>:``, an ID whose reading slot is empty.
+
+    Caught separately from the empty-``reading`` check: a record whose reading
+    was filled in later still carries the malformed ID, and that ID is what
+    Anki's GUID derives from.
+    """
+    match = _READINGLESS_ID.match(record_id)
+    return bool(match) and _contains_kanji(match.group("expression"))
+
+
 def validate_record(record: VocabularyRecord, source: str = "") -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
 
@@ -38,7 +56,16 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
     if not record.expression:
         add("error", "missing expression")
     if _contains_kanji(record.expression) and not record.reading:
-        add("error", "expression contains kanji but reading is missing")
+        add("error", f"expression contains kanji but reading is missing; {_STAGING_HINT}")
+    elif _is_readingless_kanji_id(record.id):
+        # Reported once the reading is filled in and the ID still is not: while the
+        # reading is empty the message above states the same fault, and a staging
+        # file under review would carry two errors per row for one fix.
+        add(
+            "error",
+            "ID was minted without a reading (word:<expression>:) and cannot be "
+            f"corrected in place without orphaning review history; {_STAGING_HINT}",
+        )
     if not record.meanings:
         add("error", "at least one English meaning is required")
     if record.furigana and record.furigana.count("[") != record.furigana.count("]"):

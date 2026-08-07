@@ -5,6 +5,7 @@ import json
 import sys
 from collections import Counter
 from collections.abc import Sequence
+from datetime import date
 from pathlib import Path
 
 from japanese_anki.config import ProjectConfig
@@ -20,7 +21,9 @@ from japanese_anki.io import (
     parse_prefer_incoming,
     save_records_json,
 )
+from japanese_anki.models import VocabularyRecord
 from japanese_anki.preview import build_preview
+from japanese_anki.staging import write_staging
 from japanese_anki.validation import has_errors, validate_records
 
 
@@ -93,6 +96,45 @@ def _confirm_replace(count: int, assume_yes: bool) -> bool:
     return answer.strip().lower() in {"y", "yes"}
 
 
+_NEEDS_READING_NOTES = (
+    "Every record here has kanji but no reading. The reading is part of the record ID, "
+    "so importing one would mint word:<expression>: — an ID that cannot be corrected "
+    "later without orphaning its Anki review history. Fill in 'reading' for the rows "
+    "worth keeping, delete the rest, and promote the file once a human has confirmed "
+    "the readings."
+)
+
+
+def _stage_needs_reading(
+    config: ProjectConfig, source_path: Path, records: list[VocabularyRecord]
+) -> None:
+    """Divert reading-less kanji rows to a staging file instead of importing them."""
+    if not records:
+        return
+    target = config.staging_dir / f"shirabe-{source_path.stem}-needs-reading.yaml"
+    if target.exists():
+        print(
+            f"Held {len(records)} row(s) with kanji but no reading out of the import. "
+            f"{target} already exists and was left untouched — it may hold review edits "
+            "that are not in git. Resolve that file, then re-run this import."
+        )
+        return
+    write_staging(
+        target,
+        records,
+        {
+            "source_file": source_path.name,
+            "extracted_at": date.today().isoformat(),
+            "review_notes": _NEEDS_READING_NOTES,
+        },
+    )
+    print(
+        f"Held {len(records)} row(s) with kanji but no reading out of the import and "
+        f"wrote them to {target} for reading review — a record without a reading gets a "
+        "malformed, uncorrectable ID."
+    )
+
+
 def command_import_shirabe(args: argparse.Namespace) -> int:
     config = _load_config(args)
     prefer_incoming = parse_prefer_incoming(args.prefer_incoming)
@@ -110,6 +152,7 @@ def command_import_shirabe(args: argparse.Namespace) -> int:
     save_records_json(output_path, records)
     print(f"Imported {len(result.records)} source rows into {output_path}")
     _print_merge_summary(outcomes)
+    _stage_needs_reading(config, args.file, result.needs_reading)
     if result.warnings:
         print("Warnings:")
         for warning in result.warnings:
