@@ -514,9 +514,11 @@ Design: DESIGN_V2 "jpdb.io > API client".
     either a plain kana string or a `[text, reading]` pair. Parse it
     defensively. **Fixture:** commit
     `tests/fixtures/jpdb-parse-sample.json` hand-written to the
-    community shape, with a header comment key (`"_source":
-    "community-documented shape, not a captured response"`) so no
-    reader mistakes it for evidence. **An agent may proceed on the
+    community shape, wrapped so the marker cannot be mistaken for part
+    of the response: the file is `{"_source": "community-documented
+    shape, not a captured response", "response": {...}}`, tests read
+    only the `response` half, and dropping `_source` in M2.1F changes
+    nothing the client sees. **An agent may proceed on the
     community shape** — capturing a live response needs the owner's
     `JPDB_API_KEY`, which no agent has, and blocking the milestone on
     it is worse than a labelled fixture. Reconciliation is M2.1F.
@@ -524,7 +526,11 @@ Design: DESIGN_V2 "jpdb.io > API client".
     `text[reading]`; plain segments verbatim; a space before each
     bracketed group except at string start (Anki's furigana rule).
     話す → `話[はな]す`. Golden tests: leading-kanji, mid-kanji
-    (okurigana), all-kana, multi-kanji compound.
+    (okurigana), all-kana, multi-kanji compound. **The fixture must
+    carry all four cases and the golden tests must be parametrized
+    over tokens loaded from it** — otherwise M2.1F's acceptance gate
+    ("the golden tests stay green against the captured response")
+    tests nothing.
 - **JMDict POS mapping lives here** (single owner; M2.5 and M2.6
   import it): `pos_to_verb_group` / `pos_to_part_of_speech` tables —
   `v5*`→godan, `v1`→ichidan, `vs*`→suru, `vk`→kuru, `adj-i`/`adj-na`
@@ -554,6 +560,8 @@ this; do not claim it, and do not block on it.
 
 Depends on: M1.1, M1.5 (validation.py contention — land M1.5 first)
 Files: `src/japanese_anki/models.py`, `src/japanese_anki/validation.py`,
+`tests/test_ledger.py` (replace the `SimpleNamespace` post-M2.2 stand-ins
+with real records now the fields exist — a cleanup, not a break),
 `tests/test_models.py` (new or extend),
 `tests/test_status.py`, `tests/test_merge.py`,
 `tests/test_migrate_inline.py`, `README.md`.
@@ -587,6 +595,11 @@ Design: DESIGN_V2 "Schema changes".
   sentence in "Important limitations" — both state the pre-M2.2 answer.
 - PR note: first `save_records_json` after this rewrites every stored
   record with the new keys (expected one-time diff).
+- **A third README passage goes stale** beyond the two already named:
+  the `--prefer-incoming` accepted-field list in the merge section
+  enumerates `MERGEABLE_FIELDS`, which this change grows by three.
+  It is derived from `dataclasses.fields`, so describe it as derived
+  rather than re-enumerating it and going stale again.
 
 ### [ ] M2.3 Romaji converter
 
@@ -691,7 +704,11 @@ Design: DESIGN_V2 "jpdb.io > Dictionary enrichment" + enrich rules.
   `part_of_speech`/`verb_group` (M2.1 tables), `romaji` (M2.3),
   `conjugations` (M2.4). **Never write `reading`** — kana-only reading
   defaults happen at record creation (importers), not here.
-- Staging assist: with `--staging FILE`, annotate reading-less rows in
+- Staging assist: with `--staging FILE`, annotate **every held row** —
+  both M1.5 hold classes, `hold_reason` `"missing reading"` *and*
+  `"reading contains kanji"` (select on the presence of `hold_reason`,
+  or on `not reading or contains_kanji(reading)`; a needs-reading file
+  is not all reading-less post-M1.5) — in
   a needs-reading staging file with `suggested_reading` (from the
   unforced parse) for the human to confirm — delivers the design's
   "/parse proposes a reading" step. Write it back with
@@ -721,7 +738,8 @@ Design: DESIGN_V2 "Manual export files" (reviews.json).
   records `jpdb-known`: by vid in `raw_fields` first, else
   expression+reading. Print unmatched entries (count + first few).
 - **Review counts go into the record's `source.raw_fields`, not the
-  ledger.** `ledger.record_source_seen` identifies a reference by every
+  ledger** (supersedes design — DESIGN_V2's jpdb section is amended to
+  match in the same change).** `ledger.record_source_seen` identifies a reference by every
   key but `seen_at`, so a changing count is a *new* reference every
   time: a weekly run over 2,000 words would add 2,000 near-duplicate
   lines a week to a git-tracked file and make `status`'s provenance
@@ -737,7 +755,7 @@ Design: DESIGN_V2 "Manual export files" (reviews.json).
 
 ### [ ] M2.W Milestone 2 wrap
 
-Depends on: all M2 tasks
+Depends on: all M2 tasks except M2.1F (owner-only; see the lane map)
 Files: `README.md`.
 
 - README: jpdb setup (API key location, `JPDB_API_KEY`), sync + enrich
@@ -825,12 +843,16 @@ Design: DESIGN_V2 "PDFs and photos > Step 2".
   one sanctioned ID change):** a promoted record gets its ID re-minted
   from expression+reading at promote time whenever its stored id is
   malformed — `word:<expr>:` *and* `word:<kanji>:<kanji>`. Key the test
-  off `contains_kanji(reading)` on the *staged* record, not off the
-  id's text: the second shape looks well formed, and promoting it
-  unchanged writes into `vocabulary.json` precisely the id M1.5 exists
-  to prevent, which `validation.py` then errors on forever. These
-  records never entered `vocabulary.json` or Anki, so no history exists
-  to orphan.
+  off the **id itself**: re-mint whenever
+  `record.id != stable_record_id(record.expression, record.reading)`.
+  That subsumes both shapes with no per-shape enumeration, and it is the
+  only key that works — by promote time a human has replaced the kanji
+  reading with kana, so `contains_kanji(reading)` is `False` in exactly
+  the case the re-mint exists for. Promoting such a record unchanged
+  would write into `vocabulary.json` precisely the id M1.5 exists to
+  prevent, which `validation.py` then errors on forever. These records
+  never entered `vocabulary.json` or Anki, so no history exists to
+  orphan.
 - Promotion: survivors merge into `vocabulary.json` (M1.1 semantics),
   ledger `record_added`/`record_source_seen` (`source.type="pdf"` — or
   the staging file's recorded source type: promote must also accept

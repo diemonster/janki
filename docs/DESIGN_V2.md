@@ -156,7 +156,9 @@ ID-constitutive".
 - `reviews.json` (jpdb's native "Export vocabulary reviews") —
   `janki import-jpdb-reviews FILE.json` does not create records; it tags
   matching existing records `jpdb-known` and stores review counts in the
-  ledger. Matching rule: by `vid` where the record has one in `raw_fields`,
+  record's `source.raw_fields` (not the ledger: a changing count would be
+  a new source reference on every run — see IMPLEMENTATION_PLAN M2.7).
+  Matching rule: by `vid` where the record has one in `raw_fields`,
   else by expression+reading; unmatched entries are reported, not dropped.
   Decks then exclude known words with the **existing** deck-YAML filter:
   `exclude_tags: [jpdb-known]` (include/exclude id/tag filters already
@@ -578,7 +580,7 @@ janki enrich [--jpdb] [--ai] [--polish-meanings] [--batch-submit|--batch-fetch]
              [--force-fields F,..] [--yes] [IDS...]
 janki audio [--words] [--examples] [--provider P] [--force] [--prune]
             [--allow-default-accent] [IDS...]
-janki status [--unexported] [--missing-audio] [--duplicates] [--rebuild] [--format ids]
+janki status [--unexported] [--missing-audio] [--duplicates] [--staged] [--rebuild] [--format ids]
 janki refresh [--deck DECK]   # the weekly loop, in order (below)
 janki migrate-inline DECK.yaml   # one-time, Milestone 1
 ```
