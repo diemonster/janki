@@ -4,12 +4,13 @@ import csv
 import re
 import unicodedata
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import stable_record_id
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
+from japanese_anki.staging import annotate
 
 
 class ShirabeImportError(JankiError):
@@ -73,6 +74,9 @@ class ImportResult:
     records: list[VocabularyRecord]
     warnings: list[str]
     mapping: dict[str, str]
+    # Rows with kanji but no reading: never importable, because the reading is
+    # part of the ID. They go to a staging file for a human to fill in.
+    needs_reading: list[VocabularyRecord] = field(default_factory=list)
 
 
 def _normalize_header(value: str) -> str:
@@ -162,6 +166,18 @@ def _get(row: dict[str, str], mapping: dict[str, str], field: str) -> str:
 
 
 def import_file(path: Path) -> ImportResult:
+    """Convert a Shirabe-style CSV into records.
+
+    A row whose expression contains kanji but carries no reading is *not*
+    imported: its ID would be minted as ``word:<expression>:`` and the reading
+    is ID-constitutive, so it could never be corrected without orphaning Anki
+    review history. Those rows come back on ``needs_reading`` (as minted,
+    malformed ID included) for the caller to stage for human review.
+
+    Kana-only rows are different: their reading is defaulted to the expression
+    *before* the ID is minted, which is where it has always happened. Do not
+    move it — every existing kana-only record's ID depends on it.
+    """
     inspection = inspect_file(path)
     mapping = inspection.mapping
     if "expression" not in mapping and "reading" not in mapping:
@@ -173,6 +189,7 @@ def import_file(path: Path) -> ImportResult:
     reader, handle, _ = _open_reader(path)
     warnings: list[str] = []
     records: list[VocabularyRecord] = []
+    needs_reading: list[VocabularyRecord] = []
     seen: set[str] = set()
 
     try:
@@ -227,10 +244,18 @@ def import_file(path: Path) -> ImportResult:
             )
             if _contains_kanji(expression) and not reading:
                 warnings.append(
-                    f"{path.name}:{row_number}: {expression} contains kanji but has no reading"
+                    f"{path.name}:{row_number}: {expression} contains kanji but has no "
+                    "reading; held back for reading review"
                 )
+                needs_reading.append(annotate(record, hold_reason="missing reading"))
+                continue
             records.append(record)
     finally:
         handle.close()
 
-    return ImportResult(records=records, warnings=warnings, mapping=mapping)
+    return ImportResult(
+        records=records,
+        warnings=warnings,
+        mapping=mapping,
+        needs_reading=needs_reading,
+    )

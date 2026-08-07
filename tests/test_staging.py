@@ -1,0 +1,242 @@
+"""Staging files, and the import path that diverts reading-less kanji rows.
+
+A reading is part of the record ID, so a kanji row without one can never be
+imported and then repaired — it has to wait in staging for a human.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+import yaml
+
+from japanese_anki import cli
+from japanese_anki.io import DataError, load_records
+from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
+from japanese_anki.staging import (
+    StagingError,
+    annotate,
+    annotations,
+    read_staging,
+    write_staging,
+)
+
+
+def _record(**overrides: object) -> VocabularyRecord:
+    values: dict[str, object] = {
+        "id": "word:話す:はなす",
+        "expression": "話す",
+        "reading": "はなす",
+        "meanings": ["to speak", "to talk"],
+        "part_of_speech": "verb",
+        "examples": [ExampleSentence(japanese="毎日話す。", english="I speak every day.")],
+        "tags": ["shirabe"],
+        "source": SourceReference(
+            type="shirabe", imported_from="export.csv", row=2, raw_fields={"Word": "話す"}
+        ),
+    }
+    values.update(overrides)
+    return VocabularyRecord(**values)  # type: ignore[arg-type]
+
+
+# --- annotations ------------------------------------------------------------
+
+
+def test_annotations_live_in_raw_fields_as_strings() -> None:
+    staged = annotate(_record(), hold_reason="missing reading", already_known=True)
+
+    assert staged.source.raw_fields == {
+        "Word": "話す",
+        "hold_reason": "missing reading",
+        "already_known": "true",
+    }
+    assert annotations(staged) == {"hold_reason": "missing reading", "already_known": "true"}
+    # The original record is untouched — annotate copies.
+    assert _record().source.raw_fields == {"Word": "話す"}
+
+
+def test_annotate_with_none_clears_an_annotation() -> None:
+    staged = annotate(_record(), hold_reason="missing reading")
+
+    resolved = annotate(staged, hold_reason=None)
+
+    assert annotations(resolved) == {}
+    assert resolved.source.raw_fields == {"Word": "話す"}
+
+
+def test_annotate_rejects_names_outside_the_pinned_set() -> None:
+    with pytest.raises(StagingError) as excinfo:
+        annotate(_record(), reviewed_by="brandon")
+
+    assert "reviewed_by" in str(excinfo.value)
+
+
+# --- write_staging / read_staging -------------------------------------------
+
+
+def test_round_trip_preserves_records_and_metadata(tmp_path: Path) -> None:
+    staged = annotate(_record(), hold_reason="missing reading", suggested_reading="はなす")
+    meta = {"source_file": "export.csv", "extracted_at": "2026-08-06", "model": "claude-opus-5"}
+
+    write_staging(tmp_path / "candidates.yaml", [staged], meta)
+    records, read_meta = read_staging(tmp_path / "candidates.yaml")
+
+    assert read_meta == meta
+    assert len(records) == 1
+    # Round-trips through VocabularyRecord.from_dict with nothing lost.
+    assert records[0].to_dict() == staged.to_dict()
+    assert annotations(records[0]) == {
+        "hold_reason": "missing reading",
+        "suggested_reading": "はなす",
+    }
+
+
+def test_the_file_is_a_records_mapping_load_records_already_understands(tmp_path: Path) -> None:
+    path = tmp_path / "candidates.yaml"
+
+    write_staging(path, [_record()], {"source_file": "export.csv", "review_notes": "check these"})
+
+    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert list(payload) == ["source_file", "review_notes", "records"]
+    assert payload["records"][0]["id"] == "word:話す:はなす"
+    # Japanese stays readable rather than \u-escaped, and the loader in io.py
+    # reads the file as-is — no staging-aware loader needed.
+    assert "話す" in path.read_text(encoding="utf-8")
+    assert [record.id for record in load_records(path)] == ["word:話す:はなす"]
+
+
+def test_write_staging_refuses_to_overwrite_review_edits(tmp_path: Path) -> None:
+    path = tmp_path / "candidates.yaml"
+    write_staging(path, [_record()], {"source_file": "export.csv"})
+    edited = path.read_text(encoding="utf-8")
+
+    with pytest.raises(StagingError) as excinfo:
+        write_staging(path, [_record(id="word:食べる:たべる", expression="食べる")], {})
+
+    assert str(path) in str(excinfo.value)
+    assert path.read_text(encoding="utf-8") == edited
+
+
+def test_force_overwrites(tmp_path: Path) -> None:
+    path = tmp_path / "candidates.yaml"
+    write_staging(path, [_record()], {"source_file": "export.csv"})
+
+    write_staging(
+        path,
+        [_record(id="word:食べる:たべる", expression="食べる", reading="たべる")],
+        {"source_file": "other.csv"},
+        force=True,
+    )
+
+    records, meta = read_staging(path)
+    assert [record.id for record in records] == ["word:食べる:たべる"]
+    assert meta == {"source_file": "other.csv"}
+
+
+def test_metadata_cannot_shadow_the_records_key(tmp_path: Path) -> None:
+    with pytest.raises(StagingError):
+        write_staging(tmp_path / "candidates.yaml", [_record()], {"records": "nope"})
+
+
+def test_read_staging_reports_a_malformed_file(tmp_path: Path) -> None:
+    listed = tmp_path / "listed.yaml"
+    listed.write_text("- id: word:話す:はなす\n", encoding="utf-8")
+    empty = tmp_path / "no-records.yaml"
+    empty.write_text("source_file: export.csv\n", encoding="utf-8")
+    scalars = tmp_path / "scalars.yaml"
+    scalars.write_text("records:\n  - 話す\n", encoding="utf-8")
+
+    with pytest.raises(StagingError):
+        read_staging(listed)
+    with pytest.raises(StagingError):
+        read_staging(empty)
+    with pytest.raises(StagingError):
+        read_staging(scalars)
+    with pytest.raises(DataError):
+        read_staging(tmp_path / "missing.yaml")
+
+
+def test_an_empty_records_list_reads_back_as_no_records(tmp_path: Path) -> None:
+    path = tmp_path / "candidates.yaml"
+    write_staging(path, [], {"source_file": "export.csv"})
+
+    records, meta = read_staging(path)
+
+    assert records == []
+    assert meta == {"source_file": "export.csv"}
+
+
+# --- janki import-shirabe: the needs-reading diversion -----------------------
+
+NEEDS_READING_CSV = "Word,Reading,Definition\n話す,,to speak\n電話,でんわ,telephone\n"
+
+
+def _project(tmp_path: Path, csv_text: str = NEEDS_READING_CSV) -> tuple[Path, Path]:
+    (tmp_path / "janki.toml").write_text(
+        '[paths]\nnormalized_file = "vocabulary.json"\nstaging_dir = "staging"\n',
+        encoding="utf-8",
+    )
+    source = tmp_path / "export.csv"
+    source.write_text(csv_text, encoding="utf-8")
+    return tmp_path, source
+
+
+def _stored_ids(root: Path) -> list[str]:
+    payload = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    return [record["id"] for record in payload]
+
+
+def test_import_stages_reading_less_kanji_rows_and_says_why(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, source = _project(tmp_path)
+
+    assert cli.main(["--root", str(root), "import-shirabe", str(source)]) == 0
+
+    staged_path = root / "staging" / "shirabe-export-needs-reading.yaml"
+    out = capsys.readouterr().out
+    assert str(staged_path) in out
+    assert "kanji but no reading" in out
+    assert "話す contains kanji but has no reading" in out
+
+    # The malformed row never reaches vocabulary.json.
+    assert _stored_ids(root) == ["word:電話:でんわ"]
+
+    records, meta = read_staging(staged_path)
+    assert [record.id for record in records] == ["word:話す:"]
+    assert annotations(records[0]) == {"hold_reason": "missing reading"}
+    assert meta["source_file"] == "export.csv"
+    assert "extracted_at" in meta and "review_notes" in meta
+
+
+def test_import_never_overwrites_an_existing_needs_reading_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, source = _project(tmp_path)
+    staged_path = root / "staging" / "shirabe-export-needs-reading.yaml"
+    staged_path.parent.mkdir(parents=True)
+    reviewed = "records:\n  - id: word:話す:はなす\n    expression: 話す\n    reading: はなす\n"
+    staged_path.write_text(reviewed, encoding="utf-8")
+
+    assert cli.main(["--root", str(root), "import-shirabe", str(source)]) == 0
+
+    out = capsys.readouterr().out
+    # Hand edits survive, the count and path are reported, and the rest of the
+    # import still lands.
+    assert staged_path.read_text(encoding="utf-8") == reviewed
+    assert "Held 1 row(s)" in out
+    assert str(staged_path) in out
+    assert _stored_ids(root) == ["word:電話:でんわ"]
+
+
+def test_import_without_reading_less_rows_writes_no_staging_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, source = _project(tmp_path, "Word,Reading,Definition\n電話,でんわ,telephone\n")
+
+    assert cli.main(["--root", str(root), "import-shirabe", str(source)]) == 0
+
+    assert not (root / "staging").exists()
+    assert "needs-reading" not in capsys.readouterr().out
