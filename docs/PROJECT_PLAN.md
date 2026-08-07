@@ -44,8 +44,9 @@ Shirabe CSV / jpdb API / PDFs / manual YAML
 2. Normalization is mechanical and reproducible; where it cannot be (PDFs),
    AI output is staged for human review before entering the canonical store.
 3. Human curation lives in readable JSON or YAML. Imports must never
-   overwrite it — the existing-wins merge that enforces this lands in
-   Phase 2 (today's merge is still incoming-wins).
+   overwrite it — the existing-wins merge that enforces this landed in
+   Phase 2 (task M1.1). `--prefer-incoming FIELD` is the deliberate opt-out,
+   and it refuses the identity fields outright.
 4. Validation fails loudly rather than dropping data.
 5. Note IDs and Anki GUIDs are deterministic.
 6. Generated packages can always be deleted and rebuilt; generated AI/TTS
@@ -62,7 +63,7 @@ Shirabe CSV / jpdb API / PDFs / manual YAML
 - CSV inspection, alias-based Shirabe import, canonical schema, validation,
   recognition/production/reading templates, `.apkg` generation, static preview.
 
-### Phase 2: v2 foundations
+### Phase 2: v2 foundations (done)
 
 - Curation-safe merge (existing-wins) with per-record outcome reporting,
   including the test-suite and CLI-output rewrite it requires.

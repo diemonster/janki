@@ -316,6 +316,12 @@ pattern). Unprovable word audio is recorded with an empty fingerprint and
 therefore reported stale, which is the safe direction. The README `status`
 section is still M1.W's.*
 
+*Amended 2026-08-07 by the end-of-milestone review; the task itself is unchanged.
+`status` gained a `Staged for review:` line and a `--staged` detail flag (ids +
+`hold_reason`, pipeable like the others). Held rows are the one category of
+record that is not in the collection and needs a human, and nothing but the
+one-off line in the import output mentioned them.*
+
 Depends on: M1.3
 Files: `src/japanese_anki/cli.py`, new `src/japanese_anki/status.py`,
 `tests/test_status.py` (new).
@@ -362,6 +368,20 @@ promises to remove. (4) `io._is_empty` became public `io.is_empty`: migrate
 decides which inline fields to prefer with the merge's own emptiness rule rather
 than a copy of it.*
 
+*Amended 2026-08-07 by the end-of-milestone review; the task itself is unchanged.
+Scope note (1) now reads: a deck with a **non-empty `include_ids:`** gets no
+`exclude_ids` at all — `resolve_deck_records` applies `include_ids` first, so its
+membership is already closed and any exclusion written into it is provably dead
+config, accumulating one line per future migration in a file a human reads. Such
+a deck is still reported when its own `include_ids` names a migrated id. Two more
+corrections: the ledger reference migrate writes is the stored record's own
+`source.type` / `source.imported_from` — the shape `status --rebuild`
+reconstructs, not the deck path, which had one rebuild double every migrated
+record's sources in the git-tracked ledger; and appending an id to an existing
+`exclude_ids:` is now a text edit like any other addition, with the
+re-serialization fallback reported as a warning rather than silently deleting a
+curated file's comments.*
+
 Depends on: M1.1, M1.3
 Files: `src/japanese_anki/cli.py`, new `src/japanese_anki/migrate.py`
 (new module — do not add this to `io.py`),
@@ -393,6 +413,18 @@ write, ledger, printing), not just the last three steps. Scope note: M1.5's
 `_stage_needs_reading` took the source `Path` and hardcoded
 `shirabe-<stem>-needs-reading.yaml`; it now takes `staging_stem` and
 `source_ref`, since a jpdb deck sync has no file to take a stem from.*
+
+*Amended 2026-08-07 by the end-of-milestone review; the task itself is unchanged.
+The signature gained `held_unit="row(s)"` (the held-rows line was the one place a
+caller's `unit` did not reach). `run_import` is now also the **named owner of
+`Ledger.remove`**, which M1.3 built and nothing called: the `--replace` path drops
+the ledger entry of every record it discards and reports the count, so the one
+command that shrinks the collection no longer leaves entries behind that
+over-report it — and, once M5.6 makes `build --only-new` read `exports`, would
+silently keep a re-imported record out of a deck. And a `book.save()` that fails
+is now a warning printed *after* the full summary rather than an `error:` instead
+of one: vocabulary.json and the staging file are already written by then, so the
+bare error told the user the import had not happened.*
 
 Depends on: M1.1, M1.3
 Files: `src/japanese_anki/cli.py`, `tests/test_import_ledger.py` (new).
@@ -426,6 +458,9 @@ Files: `README.md`.
 Lane map: {M2.1, M2.3, M2.4 in parallel; M2.2 after M1.5} →
 {M2.5, M2.6, M2.7} (M2.6 after M2.5 — shared POS/table imports and
 `enrich.py` is new in M2.6; M2.5 and M2.7 both small on `cli.py`).
+M2.1F is **owner-only** (it needs a live `JPDB_API_KEY`) and blocks nothing:
+M2.1 ships against a labelled community-shape fixture and every task after it
+proceeds on that. Nothing else in this milestone needs a human in the loop.
 
 ### [ ] M2.1 jpdb API client (+ `jpdb ping`, POS table, /parse contract)
 
@@ -460,11 +495,14 @@ Design: DESIGN_V2 "jpdb.io > API client".
     UTF-16-surrogate string.
   - Token furigana shape (community-verified): a list of segments, each
     either a plain kana string or a `[text, reading]` pair. Parse it
-    defensively. **Capture step:** before finalizing, capture one real
-    `/parse` response (small script or curl with the user's key — a
-    documented manual step in the PR) and commit it as the test
-    fixture; if the live shape differs from the community one, update
-    client + this plan.
+    defensively. **Fixture:** commit
+    `tests/fixtures/jpdb-parse-sample.json` hand-written to the
+    community shape, with a header comment key (`"_source":
+    "community-documented shape, not a captured response"`) so no
+    reader mistakes it for evidence. **An agent may proceed on the
+    community shape** — capturing a live response needs the owner's
+    `JPDB_API_KEY`, which no agent has, and blocking the milestone on
+    it is worse than a labelled fixture. Reconciliation is M2.1F.
   - `furigana_to_anki(segments) -> str`: `[text, reading]` →
     `text[reading]`; plain segments verbatim; a space before each
     bracketed group except at string start (Anki's furigana rule).
@@ -476,11 +514,32 @@ Design: DESIGN_V2 "jpdb.io > API client".
   adjectives, nouns et al.
 - CLI: register `janki jpdb ping` (prints ok/failure from the client).
 
+### [ ] M2.1F Reconcile the /parse fixture with a live capture — OWNER ONLY
+
+Depends on: M2.1
+Files: `tests/fixtures/jpdb-parse-sample.json`,
+`src/japanese_anki/jpdb.py` (only if the live shape differs),
+`docs/IMPLEMENTATION_PLAN.md`.
+
+**Requires a human with the repo owner's `JPDB_API_KEY`.** No agent can do
+this; do not claim it, and do not block on it.
+
+- Capture one real `/parse` response (small script or curl, key from the
+  env var — document the exact command in the PR) and replace the
+  community-shape fixture with it, dropping the `_source` marker.
+- If the live shape differs from the community one, fix `jpdb.py`'s
+  parser and amend M2.1's `/parse` contract above in the same change.
+- Re-run `pytest`: M2.1's `furigana_to_anki` golden tests must stay
+  green against the captured response, or the golden expectations were
+  wrong and must be corrected with the reasoning stated.
+
 ### [ ] M2.2 Schema additions
 
 Depends on: M1.1, M1.5 (validation.py contention — land M1.5 first)
 Files: `src/japanese_anki/models.py`, `src/japanese_anki/validation.py`,
-`tests/test_models.py` (new or extend).
+`tests/test_models.py` (new or extend),
+`tests/test_status.py`, `tests/test_merge.py`,
+`tests/test_migrate_inline.py`, `README.md`.
 Design: DESIGN_V2 "Schema changes".
 
 - `VocabularyRecord`: `pitch_accent: list[str]` (default `[]`),
@@ -492,6 +551,23 @@ Design: DESIGN_V2 "Schema changes".
   is community-verified only).
 - **Do not touch `FIELD_NAMES` or the exporter** — Anki-visible fields
   ship together in M5.4.
+- **Three existing tests encode the pre-M2.2 world and must be rewritten
+  in the same change** (verified by applying the schema change to a
+  clean checkout: 3 failures, in files the old Files list did not name):
+  - `tests/test_status.py::test_pitch_accent_counts_wait_for_the_schema`
+    asserts `status.pitch_accent_supported() is False` and the literal
+    line `Missing pitch accent: n/a until the pitch-accent schema lands
+    (M2.2)`. It becomes a real count.
+  - `tests/test_merge.py::test_import_rejects_bad_prefer_incoming_before_writing`
+    parametrizes on `frequency_rank` as its canonical *unknown* field.
+    `io.MERGEABLE_FIELDS` is derived from `dataclasses.fields(
+    VocabularyRecord)`, so M2.2 makes that name valid and the rejection
+    returns 0. Pick a different sentinel (`not_a_field`).
+  - `tests/test_migrate_inline.py::test_the_records_move_into_the_normalized_file_under_the_same_ids`
+    compares stored example dicts key-for-key against the inline note;
+    `ExampleSentence.audio` adds an `audio: ""` key. Tolerate it.
+- README: update the `janki status` sample block and the pitch-accent
+  sentence in "Important limitations" — both state the pre-M2.2 answer.
 - PR note: first `save_records_json` after this rewrites every stored
   record with the new keys (expected one-time diff).
 
@@ -548,8 +624,20 @@ Design: DESIGN_V2 "jpdb.io > Deck sync" + "Manual export files".
   raw_fields keep vid/sid/deck name/card_state (stringified;
   `occurences` counts deliberately deferred — not stored). Auto-tags:
   `jpdb`, `jpdb:<deck-name-slug>`.
-- Merge + ledger + outcome printing via M1.8's shared helper.
-- Reading-less kanji entries route through the M1.5 staging rule.
+- Merge + ledger + outcome printing via M1.8's shared helper
+  (`cli.run_import`). **Its `source_ref` contract binds here:** pass the
+  same value the importer stored as each record's own
+  `source.imported_from`, and pass no extra detail — a source
+  reference's identity is every key but `seen_at`, so any other shape
+  has `janki status --rebuild` append a near-duplicate reference to
+  every record this importer touched. Use `held_unit=` so the held-rows
+  line does not say "row(s)" about API results.
+- **Both** M1.5 hold classes route through the staging rule, not just
+  the obvious one: entries whose reading is empty (`hold_reason:
+  "missing reading"`) *and* entries whose reading itself contains kanji
+  (`contains_kanji(reading)`, `hold_reason: "reading contains kanji"`).
+  The second mints `word:<kanji>:<kanji>` — well-formed-looking and
+  permanently invalid — so it cannot be left to the empty-reading check.
 
 ### [ ] M2.6 `janki enrich --jpdb`
 
@@ -568,7 +656,11 @@ Design: DESIGN_V2 "jpdb.io > Dictionary enrichment" + enrich rules.
   are skipped before any API call):
   1. `/parse` the expression **without** forced furigana → token
      reading + vid.
-  2. Stored reading empty (kana-only records only, post-M1.5) or equal
+  2. Stored reading empty (post-M1.5 **no imported record has an empty
+     reading** — importers default a kana-only row's reading to its
+     expression before the ID is minted, and divert kanji-without-
+     reading rows to staging — so this branch is reached only by a
+     hand-written record or a hand-written inline deck note) or equal
      to token reading → use this response.
   3. Otherwise fetch the reading set for the vid via
      `lookup_vocabulary` (+ `alt_sids`/readings). Stored reading not in
@@ -585,7 +677,13 @@ Design: DESIGN_V2 "jpdb.io > Dictionary enrichment" + enrich rules.
 - Staging assist: with `--staging FILE`, annotate reading-less rows in
   a needs-reading staging file with `suggested_reading` (from the
   unforced parse) for the human to confirm — delivers the design's
-  "/parse proposes a reading" step.
+  "/parse proposes a reading" step. Write it back with
+  `write_staging(..., force=True)`: the no-overwrite guard exists for
+  the *import* path, and the file being annotated always exists (it is
+  the one the import wrote), so without `force` this raises
+  `StagingError: Staging file already exists` every time. Do the
+  annotate-and-write only after the whole API pass has succeeded, so a
+  mid-pass failure leaves the reviewer's file untouched.
 - Show the shared field-diff before save; `--yes` skips. Ledger:
   `record_enriched(kind="jpdb", model="jpdb", fields=...)`.
 - Tests: fill-empty, `--force-fields` override, reading-mismatch
@@ -604,8 +702,17 @@ Design: DESIGN_V2 "Manual export files" (reviews.json).
 - Parse the reviews export (top-level `cards_vocabulary_jp_en` etc.;
   entries `{vid, spelling, reading, reviews:[...]}`). Tag matching
   records `jpdb-known`: by vid in `raw_fields` first, else
-  expression+reading. Review counts → ledger source entry. Print
-  unmatched entries (count + first few).
+  expression+reading. Print unmatched entries (count + first few).
+- **Review counts go into the record's `source.raw_fields`, not the
+  ledger.** `ledger.record_source_seen` identifies a reference by every
+  key but `seen_at`, so a changing count is a *new* reference every
+  time: a weekly run over 2,000 words would add 2,000 near-duplicate
+  lines a week to a git-tracked file and make `status`'s provenance
+  view unreadable. The ledger gets exactly one detail-free
+  `record_source_seen(id, "jpdb-reviews", <export filename>)` per
+  matched record, which is idempotent across every future run. If a
+  count ever must live in the ledger, changing `record_source_seen`'s
+  identity rule is a prerequisite task, not a call-site decision.
 - README: document deck YAML filtering (`include_ids`, `include_tags`,
   `exclude_ids`, `exclude_tags` — already implemented in
   `resolve_deck_records`, currently undocumented) with the
@@ -693,13 +800,20 @@ Design: DESIGN_V2 "PDFs and photos > Step 2".
   `lookup_vocabulary` readings incl. alt_sids), three outcomes: pass /
   warn-but-pass (valid non-primary reading) / hold back (in no entry).
   `--skip-reading-check` bypasses (offline).
-- Kanji candidates with empty readings are always held back — unless a
-  human filled `reading` (or confirmed `suggested_reading` by copying
-  it into `reading`). **Malformed-ID re-mint (the one sanctioned ID
-  change):** a promoted record whose stored id is `word:<expr>:` gets
-  its ID re-minted from expression+reading at promote time — these
-  records never entered `vocabulary.json` or Anki, so no history
-  exists to orphan.
+- Candidates whose reading is empty **or itself contains kanji** are
+  always held back — unless a human filled `reading` with kana (or
+  confirmed `suggested_reading` by copying it into `reading`). Both are
+  M1.5 hold classes (`hold_reason` `"missing reading"` and `"reading
+  contains kanji"`) and both reach here. **Malformed-ID re-mint (the
+  one sanctioned ID change):** a promoted record gets its ID re-minted
+  from expression+reading at promote time whenever its stored id is
+  malformed — `word:<expr>:` *and* `word:<kanji>:<kanji>`. Key the test
+  off `contains_kanji(reading)` on the *staged* record, not off the
+  id's text: the second shape looks well formed, and promoting it
+  unchanged writes into `vocabulary.json` precisely the id M1.5 exists
+  to prevent, which `validation.py` then errors on forever. These
+  records never entered `vocabulary.json` or Anki, so no history exists
+  to orphan.
 - Promotion: survivors merge into `vocabulary.json` (M1.1 semantics),
   ledger `record_added`/`record_source_seen` (`source.type="pdf"` — or
   the staging file's recorded source type: promote must also accept
