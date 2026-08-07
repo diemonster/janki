@@ -617,7 +617,7 @@ Design: DESIGN_V2 "Schema changes".
   It is derived from `dataclasses.fields`, so describe it as derived
   rather than re-enumerating it and going stale again.
 
-### [ ] M2.3 Romaji converter
+### [x] M2.3 Romaji converter
 
 Depends on: —
 Files: new `src/japanese_anki/romaji.py`, new `tests/test_romaji.py`.
