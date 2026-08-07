@@ -45,7 +45,14 @@ marked "supersedes design").
    extras group `ai` created by M3.1. HEIC conversion uses `sips` via
    `subprocess` on macOS; other platforms get a clear error naming
    `pillow-heif` as the workaround (accepted scope: single-user macOS
-   tool).
+   tool). **`ruamel.yaml` (added in M2.6)** is the one exception to
+   "PyYAML is the YAML library": it exists solely for
+   `staging.rewrite_staging`, which annotates a file a human is part-way
+   through reviewing. PyYAML cannot round-trip comments or keys outside
+   the record schema, so re-rendering that file deletes the reviewer's
+   own notes — the one kind of work in this repository that exists
+   nowhere else. Everything janki writes *from scratch* still goes
+   through PyYAML; do not widen this.
 
 ## Conventions (introduced in M1/M3.1, used by everything after)
 

@@ -861,3 +861,69 @@ def test_a_row_jpdb_could_not_help_with_is_reported_before_the_prompt(
     assert "one word" in captured.err
     # Declined, so the file is untouched.
     assert "suggested_reading" not in staging.read_text(encoding="utf-8")
+
+
+STAGING_WITH_YAML_11_ISMS = """\
+records:
+  - id: 'word:話す:'
+    expression: 話す
+    reading: ''
+    source:
+      type: shirabe
+      raw_fields:
+        hold_reason: missing reading
+        already_known: yes
+        checked_at: 12:30
+"""
+
+
+def test_annotating_does_not_rewrite_values_in_the_reviewers_own_spelling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The two YAML dialects disagree about these: 1.1 reads `yes` as a boolean
+    # and `12:30` as the sexagesimal integer 750, 1.2 reads both as strings.
+    # Diffing one dialect's reading against the other's calls them "changed"
+    # and writes janki's version over the reviewer's line.
+    root = project(tmp_path, [])
+    staging = root / "review.yaml"
+    staging.write_text(STAGING_WITH_YAML_11_ISMS, encoding="utf-8")
+    patch_api(monkeypatch, hanasu_api())
+
+    code = cli.main(
+        ["--root", str(root), "enrich", "--jpdb", "--staging", str(staging), "--yes"]
+    )
+
+    assert code == 0
+    text = staging.read_text(encoding="utf-8")
+    assert "suggested_reading: はなす" in text
+    assert "already_known: yes" in text
+    assert "checked_at: 12:30" in text
+    assert "'True'" not in text and "'750'" not in text
+
+
+def test_a_file_that_cannot_be_rewritten_fails_before_the_api_pass(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A duplicate key is an easy slip while hand-editing. PyYAML accepts it
+    # silently, so the read and the whole pass would succeed and the write
+    # would then fail — after the user had already confirmed it.
+    root = project(tmp_path, [])
+    staging = root / "review.yaml"
+    staging.write_text(
+        STAGING_WITH_YAML_11_ISMS.replace(
+            "    expression: 話す", "    expression: 話す\n    expression: 話す"
+        ),
+        encoding="utf-8",
+    )
+    api = hanasu_api()
+    patch_api(monkeypatch, api)
+
+    code = cli.main(
+        ["--root", str(root), "enrich", "--jpdb", "--staging", str(staging), "--yes"]
+    )
+
+    assert code == 1
+    assert "review.yaml" in capsys.readouterr().err
+    # Nothing was spent, and nothing was touched.
+    assert api.bodies == []
+    assert "suggested_reading" not in staging.read_text(encoding="utf-8")

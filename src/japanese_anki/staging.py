@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from ruamel.yaml import YAML
+from ruamel.yaml import YAML, YAMLError
 
 from japanese_anki.errors import JankiError
 from japanese_anki.io import atomic_write_text, load_structured
@@ -145,6 +145,50 @@ def write_staging(
     return path
 
 
+def _parser() -> YAML:
+    """The round-trip parser used to edit a file in place, configured once."""
+    parser = YAML()  # round-trip mode: comments, order and quoting survive
+    parser.preserve_quotes = True
+    parser.allow_unicode = True
+    parser.width = 100
+    return parser
+
+
+def _load_document(path: Path) -> Any:
+    """A staging file as an editable round-trip document.
+
+    Every ruamel failure becomes a :class:`StagingError` naming the path. Two
+    are worth expecting: ordinary syntax errors, and a **duplicate key**, which
+    PyYAML accepts silently (last value wins) and ruamel refuses. Refusing is
+    the right answer for the writing path even though the reading path is
+    lenient — dumping a document whose duplicate ruamel collapsed would delete
+    one of the reviewer's two lines, and this function will not touch a file it
+    cannot rewrite faithfully. :func:`check_rewritable` exists so a caller can
+    find that out before it spends an API pass.
+    """
+    try:
+        with Path(path).open(encoding="utf-8") as handle:
+            document = _parser().load(handle)
+    except YAMLError as exc:
+        raise StagingError(f"Could not read {path} for rewriting: {exc}") from exc
+    if not isinstance(document, MutableMapping) or _RECORDS_KEY not in document:
+        raise StagingError(
+            f"Expected a staging mapping with a '{_RECORDS_KEY}:' list in {path}"
+        )
+    return document
+
+
+def check_rewritable(path: Path) -> None:
+    """Raise :class:`StagingError` now if :func:`rewrite_staging` could not write.
+
+    For callers that do expensive work — an API pass — between reading a
+    staging file and writing it back. Failing at the end of that work would
+    have spent it for nothing and would greet the user with an error after
+    they had already confirmed the change.
+    """
+    _load_document(path)
+
+
 def _apply_changes(
     target: MutableMapping[str, Any],
     before: Mapping[str, Any],
@@ -189,6 +233,18 @@ def rewrite_staging(path: Path, records: Sequence[VocabularyRecord]) -> Path:
     in order, with the same length; rows are matched positionally. A caller that
     adds or removes rows is not annotating a review, it is writing a new file,
     and should say so with :func:`write_staging`.
+
+    **Both sides of the diff come from the same parser**, which is not a detail.
+    The document is edited through ruamel (YAML 1.2) while ``records`` came from
+    :func:`read_staging` (PyYAML, YAML 1.1), and the two dialects disagree about
+    real values a reviewer types: 1.1 reads ``yes`` as a boolean and ``12:30``
+    as the sexagesimal integer 750, 1.2 reads both as the strings they look
+    like. Diffing a ruamel-parsed baseline against PyYAML-derived records would
+    call every such value "changed" and write janki's reading of it over the
+    reviewer's line — the exact thing this function exists to prevent. So the
+    baseline is re-read with :func:`read_staging` too: the diff is then between
+    two same-dialect readings, and only a key janki genuinely changed is ever
+    written.
     """
     path = Path(path)
     if not path.exists():
@@ -196,35 +252,25 @@ def rewrite_staging(path: Path, records: Sequence[VocabularyRecord]) -> Path:
             f"No staging file to update at {path}; write_staging creates one."
         )
 
-    parser = YAML()  # round-trip mode: comments, order and quoting survive
-    parser.preserve_quotes = True
-    parser.allow_unicode = True
-    parser.width = 100
-    with path.open(encoding="utf-8") as handle:
-        document = parser.load(handle)
-
-    if not isinstance(document, MutableMapping) or _RECORDS_KEY not in document:
-        raise StagingError(
-            f"Expected a staging mapping with a '{_RECORDS_KEY}:' list in {path}"
-        )
+    original, _meta = read_staging(path)
+    document = _load_document(path)
     raw_records = document[_RECORDS_KEY] or []
-    if len(raw_records) != len(records):
+    if not (len(raw_records) == len(original) == len(records)):
         raise StagingError(
             f"{path} holds {len(raw_records)} row(s) but {len(records)} were given. "
             "rewrite_staging annotates the rows already in a file; use write_staging "
             "to write a different set."
         )
 
-    for raw, record in zip(raw_records, records, strict=True):
+    for raw, before, after in zip(raw_records, original, records, strict=True):
         if not isinstance(raw, MutableMapping):
             raise StagingError(
                 f"Record in {path} must be a mapping, got {type(raw).__name__}"
             )
-        before = VocabularyRecord.from_dict(dict(raw)).to_dict()
-        _apply_changes(raw, before, record.to_dict())
+        _apply_changes(raw, before.to_dict(), after.to_dict())
 
     buffer = io.StringIO()
-    parser.dump(document, buffer)
+    _parser().dump(document, buffer)
     atomic_write_text(path, buffer.getvalue())
     return path
 

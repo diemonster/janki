@@ -30,6 +30,7 @@ from japanese_anki.models import VocabularyRecord
 from japanese_anki.preview import build_preview
 from japanese_anki.staging import (
     StagingError,
+    check_rewritable,
     read_staging,
     rewrite_staging,
     write_staging,
@@ -643,6 +644,9 @@ def _enrich_staging(
     a comment or a key the reviewer added survives being annotated.
     """
     records, _meta = read_staging(path)
+    # Before the API pass, not after it: a file that cannot be rewritten
+    # faithfully should say so while the only thing spent is a file read.
+    check_rewritable(path)
     result = enrich.suggest_readings(client, records)
     if not result.held:
         print(f"No held rows in {path}; nothing to suggest readings for.")
