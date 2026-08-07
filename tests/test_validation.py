@@ -15,7 +15,7 @@ def test_validation_requires_reading_for_kanji() -> None:
     issues = validate_records([record])
     assert has_errors(issues)
     assert any("reading is missing" in issue.message for issue in issues)
-    assert any("data/staging" in issue.message for issue in issues)
+    assert any("staging review" in issue.message for issue in issues)
     # One fault, one error: the ID complaint would say the same thing here.
     assert not any("word:<expression>:" in issue.message for issue in issues)
 
@@ -34,7 +34,7 @@ def test_a_reading_less_id_is_an_error_even_once_the_reading_is_filled_in() -> N
 
     assert has_errors(validate_records([record]))
     assert any("word:<expression>:" in message for message in messages)
-    assert any("data/staging" in message for message in messages)
+    assert any("staging review" in message for message in messages)
     # The reading is present, so only the ID complaint fires.
     assert not any("reading is missing" in message for message in messages)
 
@@ -80,7 +80,7 @@ def test_a_reading_written_in_kanji_is_an_error() -> None:
 
     assert has_errors(validate_records([record]))
     assert any("reading is written in kanji" in message for message in messages)
-    assert any("data/staging" in message for message in messages)
+    assert any("staging review" in message for message in messages)
 
 
 def test_a_reading_written_in_supplementary_plane_kanji_is_an_error() -> None:
@@ -100,10 +100,13 @@ def test_the_staging_hint_says_what_to_do_without_sending_the_reader_elsewhere()
     # being actionable.
     record = VocabularyRecord(id="word:話す:", expression="話す", meanings=["to speak"])
 
-    message = next(message for message in _issue_messages(record) if "data/staging" in message)
+    message = next(message for message in _issue_messages(record) if "staging review" in message)
 
     assert "id:" in message
     assert "README" not in message
+    # No hardcoded path either: staging_dir is configurable, and a project
+    # with staging_dir = "review" has no data/staging directory to look for.
+    assert "data/staging" not in message
 
 
 def test_a_kana_only_record_is_not_flagged_for_its_id() -> None:

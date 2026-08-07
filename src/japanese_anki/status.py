@@ -42,7 +42,7 @@ from japanese_anki.ledger import (
     word_audio_content_fingerprint,
     word_audio_filename_fingerprint,
 )
-from japanese_anki.models import VocabularyRecord
+from japanese_anki.models import SourceReference, VocabularyRecord
 
 # Every media file janki generates is named ``janki-<filename fingerprint>``;
 # the prefix is what tells a rebuild (and M5.3's --prune) which files are ours.
@@ -83,6 +83,11 @@ class RecordUniverse:
     decks: list[DeckView]
     normalized_count: int
     warnings: list[str] = field(default_factory=list)
+    # The normalized file's own source per id, kept even where a deck note
+    # shadows the record: the deck-resolved copy is what a deck exports, but
+    # its default-manual source is not the record's provenance, and --rebuild
+    # writes provenance into a ledger designed to be committed.
+    normalized_sources: dict[str, SourceReference] = field(default_factory=dict)
 
     @property
     def inline_count(self) -> int:
@@ -106,10 +111,12 @@ def collect_records(config: ProjectConfig) -> RecordUniverse:
     by_id: dict[str, VocabularyRecord] = {}
 
     normalized_ids: set[str] = set()
+    normalized_sources: dict[str, SourceReference] = {}
     if config.normalized_file.exists():
         for record in load_records(config.normalized_file):
             by_id[record.id] = record
             normalized_ids.add(record.id)
+            normalized_sources[record.id] = record.source
 
     decks: list[DeckView] = []
     for deck_path in deck_files(config):
@@ -132,6 +139,7 @@ def collect_records(config: ProjectConfig) -> RecordUniverse:
         decks=decks,
         normalized_count=sum(1 for record in records if record.id in normalized_ids),
         warnings=warnings,
+        normalized_sources=normalized_sources,
     )
 
 
@@ -288,19 +296,31 @@ def format_missing_audio(report: StatusReport) -> list[str]:
 class DuplicateGroup:
     """Records that look like the same word under two ids."""
 
-    kind: str  # "expression" or "reading"
+    kind: str  # "expression", "reading" or "vid"
     key: str
     reason: str
     ids: list[str]
 
 
 def _jpdb_vid(record: VocabularyRecord) -> str:
-    """The jpdb vocabulary id an importer stashed in the source row, if any."""
-    return str(record.source.raw_fields.get("vid", "")).strip()
+    """The jpdb vocabulary id an importer stashed in the source row, if any.
+
+    Compared numerically where possible: a round-tripped file can hold the
+    same vid as ``1577980``, ``"1577980"`` or ``1577980.0``, and a typing
+    accident must not hide a duplicate.
+    """
+    raw = str(record.source.raw_fields.get("vid", "")).strip()
+    if not raw:
+        return ""
+    try:
+        number = float(raw)
+    except ValueError:
+        return raw
+    return str(int(number)) if number.is_integer() else raw
 
 
 def find_duplicates(records: Iterable[VocabularyRecord]) -> list[DuplicateGroup]:
-    """Both duplicate classes, not just the obvious one.
+    """Every duplicate class, not just the obvious one.
 
     (a) The same expression under two ids — a word that arrived twice with
     different readings, or once before its reading was known.
@@ -309,6 +329,11 @@ def find_duplicates(records: Iterable[VocabularyRecord]) -> list[DuplicateGroup]
     the kana of that reading (Shirabe's わかる beside jpdb's 分かる) or both
     carry the same jpdb ``vid``. This is the common real case, and the one a
     naive expression-only check never sees.
+
+    (c) The same non-empty jpdb ``vid`` under more than one id, regardless of
+    reading: a shared vid is definitionally the same dictionary word, so a
+    hand-corrected or empty reading must not hide the pair. A vid group whose
+    ids an earlier group already covers is not reported twice.
 
     Nothing here resolves anything: near-duplicates are reported so a human can
     pick a survivor, because merging would mean re-IDing a record and orphaning
@@ -374,6 +399,29 @@ def find_duplicates(records: Iterable[VocabularyRecord]) -> list[DuplicateGroup]
                 )
             )
 
+    by_vid: dict[str, list[VocabularyRecord]] = {}
+    for record in records:
+        vid = _jpdb_vid(record)
+        if vid:
+            by_vid.setdefault(vid, []).append(record)
+    covered = [set(group.ids) for group in groups]
+    for vid, group in sorted(by_vid.items()):
+        ids = sorted({record.id for record in group})
+        if len(ids) <= 1:
+            continue
+        if any(set(ids) <= ids_seen for ids_seen in covered):
+            # The pair is already on the report; a second group would make one
+            # duplicate look like two.
+            continue
+        groups.append(
+            DuplicateGroup(
+                kind="vid",
+                key=vid,
+                reason=f"same jpdb vid {vid} under more than one id",
+                ids=ids,
+            )
+        )
+
     return groups
 
 
@@ -402,18 +450,44 @@ class RebuildSummary:
     example_audio: int
     unprovable_audio: int
     unmatched_media: int
+    # Files sharing a fingerprint with the file a rebuilt entry claimed: a
+    # provider switch's leftover twin (janki-<fp>.mp3 beside janki-<fp>.wav).
+    ambiguous_media: int
     media_dir: Path
 
 
-def _media_by_fingerprint(media_dir: Path) -> dict[str, Path]:
-    """Every ``janki-<fingerprint>.*`` file under ``media_dir``, by fingerprint."""
-    found: dict[str, Path] = {}
+# When several files claim one fingerprint, the rebuilt entry binds the first
+# by this order: .wav is what janki's own generators write, so it is the best
+# guess, and the order being documented makes the choice reproducible.
+_EXTENSION_PREFERENCE: tuple[str, ...] = (".wav", ".mp3", ".ogg", ".m4a")
+
+
+def _media_rank(path: Path) -> tuple[int, str]:
+    suffix = path.suffix.lower()
+    known = suffix in _EXTENSION_PREFERENCE
+    return (_EXTENSION_PREFERENCE.index(suffix) if known else len(_EXTENSION_PREFERENCE), str(path))
+
+
+def _media_by_fingerprint(media_dir: Path) -> dict[str, list[Path]]:
+    """Every ``janki-<fingerprint>.*`` file under ``media_dir``, by fingerprint.
+
+    All claimants are kept, best candidate first — dropping a twin here would
+    erase it from the rebuild accounting entirely.
+    """
+    found: dict[str, list[Path]] = {}
     if not media_dir.exists():
         return found
     for path in sorted(media_dir.rglob(f"{MEDIA_PREFIX}*")):
         if path.is_file():
-            found.setdefault(path.stem[len(MEDIA_PREFIX) :], path)
+            found.setdefault(path.stem[len(MEDIA_PREFIX) :], []).append(path)
+    for paths in found.values():
+        paths.sort(key=_media_rank)
     return found
+
+
+def _first(paths: list[Path] | None) -> Path | None:
+    """The preferred claimant of a fingerprint, if any file claims it."""
+    return paths[0] if paths else None
 
 
 def _has_audio_entry(book: Ledger, record_id: str, filename: str) -> bool:
@@ -439,14 +513,23 @@ def _rebuilt_word_content_fp(record: Any) -> str:
     return word_audio_content_fingerprint(record)
 
 
-def rebuild(book: Ledger, records: Iterable[VocabularyRecord], media_dir: Path) -> RebuildSummary:
+def rebuild(
+    book: Ledger,
+    records: Iterable[VocabularyRecord],
+    media_dir: Path,
+    sources_by_id: dict[str, SourceReference] | None = None,
+) -> RebuildSummary:
     """Reconstruct the ledger entries that records and media files still prove.
 
-    Sources come from each record's own ``source``; audio comes from files whose
-    names match the filename fingerprints. Neither carries a date, so the dates
-    written here are today's — a reconstruction, not history. Export state is
-    not reconstructible at all: nothing outside the ledger records which build
-    included which note. The caller must say so.
+    Sources come from each record's own ``source`` — except where
+    ``sources_by_id`` (the normalized file's own sources, see
+    ``RecordUniverse.normalized_sources``) knows better: a deck note that
+    shadows a normalized record carries a default-manual source that is not
+    the record's provenance, and the ledger is committed to git. Audio comes
+    from files whose names match the filename fingerprints. Neither carries a
+    date, so the dates written here are today's — a reconstruction, not
+    history. Export state is not reconstructible at all: nothing outside the
+    ledger records which build included which note. The caller must say so.
 
     Existing entries are left alone: a real ``janki audio`` entry knows the
     provider and voice, and must not be replaced by a rebuilt one that does not.
@@ -456,12 +539,11 @@ def rebuild(book: Ledger, records: Iterable[VocabularyRecord], media_dir: Path) 
     sources = word_audio = example_audio = unprovable = 0
 
     for record in records:
-        if book.record_source_seen(
-            record.id, record.source.type or "manual", record.source.imported_from
-        ):
+        source = (sources_by_id or {}).get(record.id, record.source)
+        if book.record_source_seen(record.id, source.type or "manual", source.imported_from):
             sources += 1
 
-        word_file = media.get(word_audio_filename_fingerprint(record))
+        word_file = _first(media.get(word_audio_filename_fingerprint(record)))
         if word_file is not None:
             claimed.add(word_file.name)
             if not _has_audio_entry(book, record.id, word_file.name):
@@ -482,7 +564,7 @@ def rebuild(book: Ledger, records: Iterable[VocabularyRecord], media_dir: Path) 
         for example in record.examples:
             if not example.japanese:
                 continue
-            example_file = media.get(example_audio_filename_fingerprint(record, example))
+            example_file = _first(media.get(example_audio_filename_fingerprint(record, example)))
             if example_file is None:
                 continue
             claimed.add(example_file.name)
@@ -501,12 +583,22 @@ def rebuild(book: Ledger, records: Iterable[VocabularyRecord], media_dir: Path) 
             )
             example_audio += 1
 
+    unmatched = ambiguous = 0
+    for paths in media.values():
+        names = [path.name for path in paths]
+        if any(name in claimed for name in names):
+            # The fingerprint bound to a record; every unclaimed twin is a
+            # competing candidate the user must know exists.
+            ambiguous += sum(1 for name in names if name not in claimed)
+        else:
+            unmatched += len(names)
     return RebuildSummary(
         sources=sources,
         word_audio=word_audio,
         example_audio=example_audio,
         unprovable_audio=unprovable,
-        unmatched_media=sum(1 for path in media.values() if path.name not in claimed),
+        unmatched_media=unmatched,
+        ambiguous_media=ambiguous,
         media_dir=media_dir,
     )
 
@@ -523,6 +615,13 @@ def format_rebuild(summary: RebuildSummary, root: Path) -> list[str]:
             f"  {summary.unprovable_audio} word file(s) recorded without a content "
             "fingerprint (the filename cannot prove the accent) — they will report "
             "as stale until regenerated"
+        )
+    if summary.ambiguous_media:
+        lines.append(
+            f"  {summary.ambiguous_media} {MEDIA_PREFIX}* file(s) share a fingerprint "
+            "with a file a rebuilt entry claimed (extension preference: "
+            f"{', '.join(_EXTENSION_PREFERENCE)}) — check which file janki actually "
+            "generated and delete the other"
         )
     if summary.unmatched_media:
         lines.append(

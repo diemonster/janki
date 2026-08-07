@@ -251,7 +251,11 @@ existing message states the same fault, and a staging file under review would
 otherwise carry two errors per row for one fix, so the new check fires exactly
 where it adds information (a reading filled in without a re-mint); (3) the
 README section the validation messages point at belongs to M1.W, which still
-owes it.*
+owes it. Post-a91af32, diversion also covers rows whose reading slot is itself
+written in kanji — including the empty-Word fallback where a kanji Reading
+cell becomes the expression — staged with `hold_reason: "reading contains
+kanji"` beside the original `"missing reading"` class; M2.5/M3.4 must handle
+both `hold_reason` values.*
 
 Depends on: M1.1 (rewrites the same CLI function), M1.2, M1.6
 Files: new `src/japanese_anki/staging.py`,
@@ -323,11 +327,16 @@ Design: DESIGN_V2 "The ledger" (status + duplicate detection).
   "n/a until schema lands" before M2.2 (do **not** add the fields here).
 - Flags: `--unexported`, `--missing-audio`, `--duplicates`, `--rebuild`,
   `--format ids` (bare IDs, one per line).
-- `--duplicates`, both passes: (a) same expression, different ID;
+- `--duplicates`, three passes: (a) same expression, different ID;
   (b) same reading, different expression where one expression equals
   the other's reading (kana form) or both share a jpdb `vid` in
-  `source.raw_fields`. Output: grouped pairs + a reminder that
-  resolution is manual.
+  `source.raw_fields`; (c) the same non-empty jpdb `vid` under more
+  than one ID regardless of reading — a shared vid is the same
+  dictionary word even when a reading was hand-corrected or is empty,
+  which pass (b) cannot see. Vids compare numerically where possible
+  (`1577980` == `"1577980.0"`); a vid group whose IDs an earlier group
+  already covers is not reported twice. Output: grouped pairs + a
+  reminder that resolution is manual.
 - `--rebuild`: reconstruct `sources` from each record's `source`, and
   `audio` entries from files in `media_dir` matching the filename
   fingerprint formulas; print that export state is not reconstructible.
@@ -344,8 +353,12 @@ Design: DESIGN_V2 "Inline notes migration".
 
 - `janki migrate-inline data/decks/verbs.yaml`: move each inline note
   with an `id` into `vocabulary.json` (merge via M1.1 semantics with
-  the inline record's fields as `prefer_incoming` — inline is
-  authoritative here), register in the ledger, and rewrite the deck
+  the inline record's **non-empty `MERGEABLE_FIELDS`** as
+  `prefer_incoming` — inline is authoritative for content. Identity
+  fields, `tags`, and `source` are excluded by M1.1's
+  `validate_prefer_incoming` and need no override: the id is equal by
+  construction, and the tags-union / first-source-sticks rules are the
+  desired behavior), register in the ledger, and rewrite the deck
   YAML with the notes removed and an `include_ids:` list preserving
   exactly the previous deck membership.
 - IDs byte-identical before/after (assert in test). Building the deck
@@ -897,7 +910,7 @@ Design: DESIGN_V2 "CLI surface".
   for the deck stem; **warn with counts** when included records lack
   audio / examples / pitch accent ("12 of 15 new records have no
   audio — continue? [y/N]"; `--yes` skips; non-TTY proceeds). On
-  success, `record_export(stem, today)` per included record; plain
+  success, `record_export(record_id, stem, at=today)` per included record; plain
   `build` records exports too (idempotent).
 - `janki refresh [--deck DECK]`: enrich --jpdb → enrich --ai →
   audio --words --examples → build --only-new, in order, per-stage

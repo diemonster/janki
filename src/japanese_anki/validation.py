@@ -13,10 +13,12 @@ _READINGLESS_ID = re.compile(r"^word:(?P<expression>.*):$")
 
 # Self-contained on purpose: the remedy has to be readable from the error, not
 # from a document. Pointing a reviewer at the review they just did is how this
-# check stops being actionable.
+# check stops being actionable. No literal path either — the staging directory
+# is configurable ([paths] staging_dir), so a hardcoded one would name a
+# directory some projects do not have.
 _STAGING_HINT = (
-    "route through data/staging review — fill in the reading and delete the record's "
-    "'id:' line so the ID is re-minted from expression + reading"
+    "route through the staging review directory — fill in the reading and delete the "
+    "record's 'id:' line so the ID is re-minted from expression + reading"
 )
 
 

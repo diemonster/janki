@@ -14,7 +14,7 @@ except ImportError:  # pragma: no cover - exercised by the bootstrap environment
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.io import DataError, load_records, load_structured
-from japanese_anki.models import VocabularyRecord
+from japanese_anki.models import ModelError, VocabularyRecord
 from japanese_anki.validation import has_errors, validate_records
 
 
@@ -187,7 +187,11 @@ def resolve_deck_records(deck_path: Path) -> tuple[dict[str, Any], list[Vocabula
             raise DataError(f"Each note must be a mapping: {deck_path}")
         record_id = str(item.get("id", "")).strip()
         base = by_id.get(record_id) if record_id else None
-        merged = _merge_inline_record(base, item)
+        try:
+            merged = _merge_inline_record(base, item)
+        except ModelError as exc:
+            # The constructor knows the field; only this frame knows the deck.
+            raise DataError(f"Could not read a note in {deck_path}: {exc}") from exc
         by_id[merged.id] = merged
 
     records = list(by_id.values())

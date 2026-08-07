@@ -1,6 +1,9 @@
 from pathlib import Path
 
-from japanese_anki.importers.shirabe import import_file, inspect_file
+import pytest
+
+from japanese_anki.importers import shirabe
+from japanese_anki.importers.shirabe import ShirabeImportError, import_file, inspect_file
 from japanese_anki.staging import annotations
 
 FIXTURE = Path(__file__).parent / "fixtures" / "shirabe-sample.csv"
@@ -122,3 +125,74 @@ def test_a_row_with_only_a_kanji_reading_is_held_back(tmp_path: Path) -> None:
     assert any(
         "reading for 話す is written in kanji" in warning for warning in result.warnings
     )
+
+
+def test_a_field_longer_than_the_default_csv_limit_still_imports(tmp_path: Path) -> None:
+    # csv's default field cap is 128KB; a long pasted article in a Notes cell
+    # exceeds it and used to crash the import with a raw _csv.Error.
+    article = "こ" * 200_000
+    source = tmp_path / "long.csv"
+    source.write_text(
+        f"Word,Reading,Definition,Notes\nありがとう,ありがとう,thanks,{article}\n",
+        encoding="utf-8",
+    )
+
+    result = import_file(source)
+
+    assert [record.id for record in result.records] == ["word:ありがとう:ありがとう"]
+    assert result.records[0].usage_notes == article
+
+
+def test_a_field_over_the_generous_cap_is_a_clean_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Shrink the cap so the failure mode is testable without a gigabyte file.
+    monkeypatch.setattr(shirabe, "_CSV_FIELD_LIMIT", 100)
+    source = tmp_path / "big.csv"
+    source.write_text(
+        f"Word,Reading,Definition\nありがとう,ありがとう,{'x' * 200}\n", encoding="utf-8"
+    )
+
+    with pytest.raises(ShirabeImportError) as excinfo:
+        import_file(source)
+
+    message = str(excinfo.value)
+    assert "big.csv" in message
+    assert "could not parse the CSV" in message
+
+
+def _write_late_bad_byte(path: Path, rows_before_bad: int) -> None:
+    """A CSV whose first 8KB+ is valid UTF-8 with an invalid byte further on."""
+    filler = "".join(
+        f"かな{index},かな{index},filler row number {index}\n" for index in range(rows_before_bad)
+    )
+    payload = ("Word,Reading,Definition\n" + filler).encode("utf-8")
+    # Far past the sniffing sample *and* the text layer's read-ahead, so the
+    # bad byte is first decoded inside the row loop, not the wrapped open.
+    assert len(payload) > 65536
+    path.write_bytes(payload + b"\xff\xff,bad,row\n")
+
+
+def test_a_bad_byte_past_the_sniffing_sample_is_a_clean_import_error(tmp_path: Path) -> None:
+    # Only the first 8KB used to be decoded inside the wrapped sample read; a
+    # bad byte later surfaced from the row loop as a raw UnicodeDecodeError.
+    source = tmp_path / "corrupt.csv"
+    _write_late_bad_byte(source, rows_before_bad=2000)
+
+    with pytest.raises(ShirabeImportError) as excinfo:
+        import_file(source)
+
+    message = str(excinfo.value)
+    assert "corrupt.csv" in message
+
+
+def test_a_bad_byte_in_the_inspection_sample_is_a_clean_error(tmp_path: Path) -> None:
+    source = tmp_path / "corrupt.csv"
+    padding = "な" * 64_000  # row 2 pushes the bad row past sample and read-ahead
+    payload = f"Word,Reading,Definition\nかな,かな,{padding}\n".encode()
+    source.write_bytes(payload + b"\xff\xff,bad,row\n")
+
+    with pytest.raises(ShirabeImportError) as excinfo:
+        inspect_file(source, sample_size=5)
+
+    assert "corrupt.csv" in str(excinfo.value)

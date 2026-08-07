@@ -299,14 +299,17 @@ Design points:
   reconstructible — after ledger loss, the next `--only-new` build simply
   includes everything, which is safe (GUIDs make re-export idempotent).
 
-**Duplicate detection** (`janki status --duplicates`) looks for both real
-duplicate classes, not just the obvious one:
+**Duplicate detection** (`janki status --duplicates`) looks for every real
+duplicate class, not just the obvious one:
 
 - same expression, different ID (covers both different-reading and
   historical empty-reading records);
 - same reading, different expression where one expression is the kana form
   of the other, or both resolve to the same jpdb `vid` — this is the common
-  case in practice (Shirabe bookmark わかる vs jpdb-mined 分かる).
+  case in practice (Shirabe bookmark わかる vs jpdb-mined 分かる);
+- the same non-empty jpdb `vid` under more than one ID regardless of reading
+  (vids compared numerically) — a shared vid is the same dictionary word even
+  when a reading was hand-corrected or is empty.
 
 Resolution is manual and documented: pick the surviving ID; the loser's
 review history is the accepted cost, consistent with the no-re-ID rule.

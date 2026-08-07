@@ -80,7 +80,9 @@ def test_new_sections_override_defaults_and_paths_resolve_against_the_root(
     assert config.tts_provider == "azure"
     assert config.voicevox_url == "http://voice.local:1234"
     assert config.voicevox_speaker == 8
-    assert config.voicevox_speaker == 8
+    # Falsifiable now that _int refuses to coerce: a float or bool would raise
+    # above, and a future coercion regression would fail here.
+    assert type(config.voicevox_speaker) is int
     assert config.azure_voice == "ja-JP-KeitaNeural"
     assert config.azure_region == "japaneast"
     assert capsys.readouterr().err == ""
@@ -261,3 +263,98 @@ def test_an_unknown_key_containing_key_still_gets_its_typo_hint(
     stderr = capsys.readouterr().err
     assert "secrets are never read" not in stderr
     assert "valid keys" in stderr or "did you mean" in stderr
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("recognition", '"false"'),
+        ("production", '"no"'),
+        ("reading", '"0"'),
+        ("reading", "1"),
+    ],
+)
+def test_a_non_boolean_card_flag_is_refused_not_coerced(
+    tmp_path: Path, key: str, value: str
+) -> None:
+    """bool("false") is True: coercing would emit the cards the user disabled."""
+    _write_config(tmp_path, f"""
+        [cards]
+        {key} = {value}
+        """)
+
+    with pytest.raises(ConfigError) as excinfo:
+        ProjectConfig.load(tmp_path)
+
+    assert key in str(excinfo.value)
+
+
+def test_real_booleans_still_configure_the_card_flags(tmp_path: Path) -> None:
+    _write_config(tmp_path, """
+        [cards]
+        recognition = false
+        reading = true
+        """)
+
+    config = ProjectConfig.load(tmp_path)
+
+    assert config.default_cards == {
+        "recognition": False,
+        "production": True,
+        "reading": True,
+    }
+
+
+@pytest.mark.parametrize(
+    ("section", "key", "value"),
+    [
+        ("anki", "default_deck_name", "123"),
+        ("tts", "voicevox_url", "true"),
+        ("ai", "extract_model", "5"),
+    ],
+)
+def test_a_non_string_name_or_url_is_refused_not_coerced(
+    tmp_path: Path, section: str, key: str, value: str
+) -> None:
+    """str(true) is "True" — a deck name or URL nobody typed."""
+    _write_config(tmp_path, f"""
+        [{section}]
+        {key} = {value}
+        """)
+
+    with pytest.raises(ConfigError) as excinfo:
+        ProjectConfig.load(tmp_path)
+
+    assert key in str(excinfo.value)
+
+
+def test_a_fused_credential_spelling_still_gets_the_secrets_warning(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """'apikey' has no underscore for the whole-word match to split on."""
+    _write_config(tmp_path, """
+        [ai]
+        apikey = "sk-not-a-real-key"
+        """)
+
+    ProjectConfig.load(tmp_path)
+
+    stderr = capsys.readouterr().err
+    assert "secrets are never read" in stderr
+    assert "ANTHROPIC_API_KEY" in stderr
+
+
+def test_an_unreadable_config_file_is_a_clean_error(tmp_path: Path) -> None:
+    import os
+
+    if os.geteuid() == 0:
+        pytest.skip("root ignores file modes")
+    config_path = _write_config(tmp_path, "[project]\nname = 'x'\n") / "janki.toml"
+    config_path.chmod(0o000)
+    try:
+        with pytest.raises(ConfigError) as excinfo:
+            ProjectConfig.load(tmp_path)
+    finally:
+        config_path.chmod(0o644)
+
+    assert "janki.toml" in str(excinfo.value)

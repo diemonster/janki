@@ -15,6 +15,7 @@ from japanese_anki.exporters.anki import AnkiBuildError, build_deck, resolve_dec
 from japanese_anki.importers.shirabe import import_file, inspect_file
 from japanese_anki.io import (
     MERGE_LABELS,
+    PREFER_INCOMING_PROTECTED,
     DataError,
     MergeOutcome,
     load_records,
@@ -82,8 +83,16 @@ def _print_merge_summary(outcomes: dict[str, MergeOutcome]) -> None:
         return
     print("Conflicts (existing values kept; --prefer-incoming FIELD takes the import's):")
     for record_id, (name, existing_value, incoming_value) in conflicts:
+        # The header's remedy does not apply to identity fields: the flag
+        # refuses them, so pointing the user at it would send them into an
+        # error. Say on the line itself that this one is a hand fix.
+        note = (
+            " (identity — resolve by hand; --prefer-incoming refuses it)"
+            if name in PREFER_INCOMING_PROTECTED
+            else ""
+        )
         print(
-            f"  {record_id} {name}: existing {_format_merge_value(existing_value)} "
+            f"  {record_id} {name}{note}: existing {_format_merge_value(existing_value)} "
             f"| incoming {_format_merge_value(incoming_value)}"
         )
 
@@ -112,8 +121,9 @@ _NEEDS_READING_NOTES = (
     "'reading' with kana AND delete that row's 'id:' line: the ID here is the malformed "
     "one, and an empty ID is re-minted from expression + reading when the file is read. "
     "Delete the rows not worth keeping. Then run 'janki validate' on this file — it "
-    "lists every row still malformed — and promote it once a human has confirmed the "
-    "readings."
+    "lists every row still malformed. 'janki promote' does not exist yet (it ships in "
+    "Milestone 3): keep this file until it does, or move the confirmed records into "
+    "vocabulary.json by hand."
 )
 
 _HELD_SUMMARY = "row(s) whose reading janki cannot use (missing, or written in kanji)"
@@ -295,7 +305,9 @@ def command_status(args: argparse.Namespace) -> int:
         print(f"warning: {warning}", file=sys.stderr)
 
     if args.rebuild:
-        summary = status.rebuild(book, universe.records, config.media_dir)
+        summary = status.rebuild(
+            book, universe.records, config.media_dir, sources_by_id=universe.normalized_sources
+        )
         book.save()
         for line in status.format_rebuild(summary, config.root):
             print(line, file=prose)

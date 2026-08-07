@@ -340,3 +340,19 @@ def test_a_directory_at_the_staging_path_is_reported_as_one(
     assert "review edits" not in err
     assert not (root / "vocabulary.json").exists()
     assert "needs-reading" not in capsys.readouterr().out
+
+
+def test_the_staging_notes_do_not_promise_a_command_that_does_not_exist(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # 'janki promote' ships in Milestone 3. Until it does, telling the reviewer
+    # to promote the file dead-ends the whole review at an argparse error.
+    root, source = _project(tmp_path)
+    assert cli.main(["--root", str(root), "import-shirabe", str(source)]) == 0
+    capsys.readouterr()
+    staged_path = root / "staging" / "shirabe-export-needs-reading.yaml"
+
+    notes = yaml.safe_load(staged_path.read_text(encoding="utf-8"))["review_notes"]
+
+    assert "'janki promote' does not exist yet" in notes
+    assert "by hand" in notes

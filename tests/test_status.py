@@ -189,6 +189,88 @@ def test_a_deck_that_cannot_be_read_is_a_warning_not_a_dead_report(
     assert "Records: 1" in captured.out
 
 
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    [
+        ("examples", "毎日食べる。"),  # a string instead of a list
+        ("conjugations", "dict form"),  # a scalar instead of a mapping
+        ("source", "shirabe"),  # a scalar instead of a mapping
+    ],
+)
+def test_a_note_with_a_malformed_nested_field_is_skipped_not_a_dead_report(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    field_name: str,
+    value: str,
+) -> None:
+    # These used to escape resolve_deck_records as raw AttributeErrors, so the
+    # very command whose docstring says "run it to find out what is wrong"
+    # died with a traceback instead of warning and skipping the deck.
+    root = _project(
+        tmp_path,
+        [_raw("話す", "はなす")],
+        {
+            "broken": {
+                "deck": {"name": "Broken"},
+                "notes": [_raw("食べる", "たべる", **{field_name: value})],
+            }
+        },
+    )
+
+    assert _status(root) == 0
+
+    captured = capsys.readouterr()
+    assert "warning: skipping deck" in captured.err
+    assert "broken.yaml" in captured.err
+    assert field_name in captured.err
+    assert "Records: 1" in captured.out
+
+
+def test_a_malformed_note_still_leaves_the_id_pipeline_usable(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(
+        tmp_path,
+        [_raw("話す", "はなす")],
+        {
+            "broken": {
+                "deck": {"name": "Broken"},
+                "notes": [_raw("食べる", "たべる", examples="全部壊れた。")],
+            }
+        },
+    )
+
+    assert _status(root, "--format", "ids") == 0
+
+    captured = capsys.readouterr()
+    assert captured.out == "word:話す:はなす\n"
+    assert "warning: skipping deck" in captured.err
+
+
+def test_build_reports_a_malformed_note_as_a_clean_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Same root cause, different contract: build may fail, but with janki's
+    # one-line error naming the deck and the field, never a traceback.
+    root = _project(
+        tmp_path,
+        [],
+        {
+            "broken": {
+                "deck": {"name": "Broken"},
+                "notes": [_raw("食べる", "たべる", examples="毎日食べる。")],
+            }
+        },
+    )
+
+    assert cli.main(["--root", str(root), "build", str(root / "decks" / "broken.yaml")]) == 1
+
+    err = capsys.readouterr().err
+    assert err.startswith("error:")
+    assert "broken.yaml" in err
+    assert "examples" in err
+
+
 # --- detail flags -----------------------------------------------------------
 
 
@@ -311,6 +393,68 @@ def test_two_spellings_sharing_a_jpdb_vid_are_a_duplicate() -> None:
 
     assert [group.kind for group in groups] == ["reading"]
     assert "same jpdb vid 1577980" in groups[0].reason
+
+
+def test_a_shared_vid_with_diverging_readings_is_a_duplicate() -> None:
+    # DESIGN_V2 rule 2 forbids auto-correcting readings, so hand-corrected
+    # readings happen — and a shared vid is definitionally the same word.
+    vid = {"source": {"type": "jpdb", "raw_fields": {"vid": "42"}}}
+    groups = status_module.find_duplicates(
+        [_record("引っ越す", "ひっこす", **vid), _record("引越す", "ひきこす", **vid)]
+    )
+
+    assert [(group.kind, group.key) for group in groups] == [("vid", "42")]
+    assert "same jpdb vid 42" in groups[0].reason
+    assert groups[0].ids == sorted(["word:引っ越す:ひっこす", "word:引越す:ひきこす"])
+
+
+def test_a_shared_vid_with_an_empty_reading_is_a_duplicate() -> None:
+    # Empty readings never reach the reading pass at all — this is the legacy
+    # malformed-id class the vid pass exists to catch.
+    vid = {"source": {"type": "jpdb", "raw_fields": {"vid": "42"}}}
+    groups = status_module.find_duplicates(
+        [_record("分かる", "わかる", **vid), _record("わかる", "", **vid)]
+    )
+
+    assert [group.kind for group in groups] == ["vid"]
+    assert groups[0].ids == sorted(["word:分かる:わかる", "word:わかる:"])
+
+
+def test_vids_compare_numerically_across_typing_accidents() -> None:
+    # A round-tripped file can hold 1577980.0 where the import wrote 1577980.
+    first = _record(
+        "引っ越す", "ひっこす", source={"type": "jpdb", "raw_fields": {"vid": "1577980.0"}}
+    )
+    second = _record(
+        "引越す", "ひっこす", source={"type": "jpdb", "raw_fields": {"vid": "1577980"}}
+    )
+
+    groups = status_module.find_duplicates([first, second])
+
+    assert len(groups) == 1
+    assert "same jpdb vid 1577980" in groups[0].reason
+
+
+def test_a_pair_already_grouped_is_not_reported_again_by_the_vid_pass() -> None:
+    # One duplicate, one group: the vid pass must not make the same pair look
+    # like two findings.
+    vid = {"source": {"type": "jpdb", "raw_fields": {"vid": "9"}}}
+    groups = status_module.find_duplicates(
+        [_record("分かる", "わかる", **vid), _record("分かる", "わかる", id="word:分かる:", **vid)]
+    )
+
+    assert [group.kind for group in groups] == ["expression"]
+
+
+def test_a_kana_word_under_two_ids_is_one_expression_group() -> None:
+    # The same-expression skip in the reading pass: without it every kana-word
+    # duplicate is reported twice, once per pass.
+    groups = status_module.find_duplicates(
+        [_record("わかる", "わかる"), _record("わかる", "わかる", id="word:わかる:")]
+    )
+
+    assert [group.kind for group in groups] == ["expression"]
+    assert groups[0].ids == sorted(["word:わかる:わかる", "word:わかる:"])
 
 
 def test_homophones_are_not_duplicates() -> None:
@@ -480,6 +624,59 @@ def test_rebuilt_word_audio_claims_no_content_it_cannot_prove(tmp_path: Path) ->
 
     assert summary.unprovable_audio == 1
     assert book.records[record.id]["audio"][0]["content_fp"] == ""
+
+
+def test_rebuild_accounts_for_every_twin_that_claims_one_fingerprint(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A provider switch can leave janki-<fp>.mp3 beside janki-<fp>.wav. The
+    # rebuilt entry binds the documented preference (.wav — what janki
+    # generates); the loser must show up in the accounting, not vanish.
+    record = _record("話す", "はなす")
+    root = _project(tmp_path, [record.to_dict()])
+    wav = _media_file(root, word_audio_filename_fingerprint(record))
+    wav.with_suffix(".mp3").write_bytes(b"ID3")  # sorts before .wav by name
+    _media_file(root, "0123456789ab")  # belongs to no record
+
+    assert _status(root, "--rebuild") == 0
+
+    out = capsys.readouterr().out
+    assert "1 janki-* file(s) share a fingerprint" in out
+    assert "1 janki-* file(s) matched no record" in out
+
+    audio = ledger.load(root / "ledger.json").records[record.id]["audio"]
+    assert [item["file"] for item in audio] == [wav.name]
+
+
+def test_rebuild_records_the_normalized_records_own_provenance_for_shadowed_ids(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The deck-resolved copy wins for content, but its default-manual source is
+    # not the record's provenance — and the ledger is committed to git.
+    root = _project(
+        tmp_path,
+        [_raw("話す", "はなす")],  # source: shirabe, imported_from export.csv
+        {
+            "verbs": {
+                "deck": {"name": "Verbs"},
+                "notes": [
+                    {
+                        "id": "word:話す:はなす",
+                        "expression": "話す",
+                        "reading": "はなす",
+                        "meanings": ["to speak"],
+                        "usage_notes": "Inline copy.",
+                    }
+                ],
+            }
+        },
+    )
+
+    assert _status(root, "--rebuild") == 0
+
+    capsys.readouterr()
+    entry = ledger.load(root / "ledger.json").records["word:話す:はなす"]
+    assert entry["sources"] == [{"type": "shirabe", "ref": "export.csv", "seen_at": TODAY}]
 
 
 def test_status_without_rebuild_never_writes_the_ledger(tmp_path: Path) -> None:

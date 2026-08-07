@@ -3,7 +3,38 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import stable_record_id
+
+
+class ModelError(JankiError):
+    """A record's raw data holds a nested field of the wrong type.
+
+    Raised by the ``from_dict`` constructors instead of letting a stray
+    ``AttributeError`` escape from deep inside them: every loader (the
+    normalized file, deck inline notes, the ``--replace`` recovery count)
+    funnels through these constructors, and each of those callers promises a
+    clean error, a warning, or a skip — never a traceback. Defined here rather
+    than reusing ``io.DataError`` because ``io`` imports this module; it
+    subclasses ``JankiError``, so ``cli.main`` and the status warn-and-skip
+    guard already handle it.
+    """
+
+
+def _checked_mapping(value: Any, field_name: str, what: str) -> dict[str, Any]:
+    """``value`` as the mapping ``field_name`` requires, or a clean error.
+
+    Anything empty (``None``, ``""``, ``[]``) reads as an absent mapping, the
+    way these constructors always read it; only a non-empty value of the wrong
+    type is refused, which used to escape as an ``AttributeError`` traceback.
+    """
+    if not value:
+        return {}
+    if isinstance(value, dict):
+        return value
+    raise ModelError(
+        f"'{field_name}' must be {what}, got {type(value).__name__} ({value!r})"
+    )
 
 
 def _string_list(value: Any) -> list[str]:
@@ -26,7 +57,7 @@ class ExampleSentence:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> ExampleSentence:
-        data = data or {}
+        data = _checked_mapping(data, "examples", "a list of example mappings")
         return cls(
             japanese=str(data.get("japanese", "")).strip(),
             furigana=str(data.get("furigana", "")).strip(),
@@ -44,7 +75,7 @@ class SourceReference:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> SourceReference:
-        data = data or {}
+        data = _checked_mapping(data, "source", "a mapping")
         row_value = data.get("row")
         try:
             row = int(row_value) if row_value not in (None, "") else None
@@ -52,7 +83,9 @@ class SourceReference:
             row = None
         raw_fields = {
             str(key): str(value)
-            for key, value in (data.get("raw_fields") or {}).items()
+            for key, value in _checked_mapping(
+                data.get("raw_fields"), "source.raw_fields", "a mapping"
+            ).items()
         }
         return cls(
             type=str(data.get("type", "manual")).strip() or "manual",
@@ -89,9 +122,16 @@ class VocabularyRecord:
         examples_value = data.get("examples") or []
         if isinstance(examples_value, dict):
             examples_value = [examples_value]
+        if not isinstance(examples_value, list | tuple):
+            raise ModelError(
+                "'examples' must be a list of example mappings, got "
+                f"{type(examples_value).__name__} ({examples_value!r})"
+            )
         conjugations = {
             str(key).strip(): str(value).strip()
-            for key, value in (data.get("conjugations") or {}).items()
+            for key, value in _checked_mapping(
+                data.get("conjugations"), "conjugations", "a mapping of form names to text"
+            ).items()
             if str(key).strip() and str(value).strip()
         }
         return cls(

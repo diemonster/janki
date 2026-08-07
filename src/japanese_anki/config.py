@@ -71,6 +71,30 @@ def _int(data: dict[str, Any], section: str, key: str, default: int) -> int:
     return value
 
 
+def _bool(data: dict[str, Any], section: str, key: str, default: bool) -> bool:
+    """Read a boolean setting, refusing values that only look like one.
+
+    ``bool("false")`` is True: silently coercing a quoted flag would emit the
+    exact cards the user turned off. The dual of ``_int``.
+    """
+    value = _get(data, section, key, default)
+    if not isinstance(value, bool):
+        raise ConfigError(f"[{section}] {key} must be true or false, got {value!r}")
+    return value
+
+
+def _str(data: dict[str, Any], section: str, key: str, default: str) -> str:
+    """Read a string setting, refusing values that only look like one.
+
+    ``str(true)`` is ``"True"`` and ``str(123)`` is ``"123"`` — a plausible
+    deck name or URL nobody typed. Same rule as ``_int`` and ``_bool``.
+    """
+    value = _get(data, section, key, default)
+    if not isinstance(value, str):
+        raise ConfigError(f"[{section}] {key} must be a string, got {value!r}")
+    return value
+
+
 def _closest(candidate: str, options: tuple[str, ...] | list[str]) -> str | None:
     matches = difflib.get_close_matches(candidate, list(options), n=1, cutoff=0.6)
     return matches[0] if matches else None
@@ -90,6 +114,9 @@ def _warn_unknown_section(section: str) -> None:
 
 
 _SECRET_WORDS = frozenset({"key", "keys", "token", "tokens", "secret", "password"})
+# Credential names people spell without underscores; matched against the key
+# with its underscores removed, so 'api_key', 'apikey' and 'API_KEY' all land.
+_SECRET_FUSED = frozenset({"apikey", "authtoken", "passwd", "apitoken", "secretkey"})
 
 
 def _warn_unknown_key(section: str, key: str) -> None:
@@ -102,8 +129,12 @@ def _warn_unknown_key(section: str, key: str) -> None:
         if other != section and key in keys:
             _warn(f"unknown key '{key}' in [{section}]; did you mean '{key}' in [{other}]?")
             return
-    # Whole words only: 'monkey_dir' and 'deck_key' are not credentials.
-    if _SECRET_WORDS & set(key.lower().split("_")):
+    # Whole words only: 'monkey_dir' and 'deck_key' are not credentials. The
+    # fused list catches one-word spellings ('apikey') the word split misses.
+    if (
+        _SECRET_WORDS & set(key.lower().split("_"))
+        or key.lower().replace("_", "") in _SECRET_FUSED
+    ):
         _warn(
             f"'{key}' in [{section}] is ignored; secrets are never read from janki.toml. "
             "Set ANTHROPIC_API_KEY, JPDB_API_KEY, or AZURE_SPEECH_KEY in the environment."
@@ -184,7 +215,7 @@ class ProjectConfig:
 
         return cls(
             root=project_root,
-            name=str(_get(data, "project", "name", "Japanese Anki")),
+            name=_str(data, "project", "name", "Japanese Anki"),
             raw_dir=project_path(str(_get(data, "paths", "raw_dir", "data/inbox/shirabe"))),
             normalized_file=project_path(
                 str(_get(data, "paths", "normalized_file", "data/normalized/vocabulary.json"))
@@ -198,21 +229,19 @@ class ProjectConfig:
             staging_dir=project_path(str(_get(data, "paths", "staging_dir", "data/staging"))),
             media_dir=project_path(str(_get(data, "paths", "media_dir", "data/media"))),
             scan_inbox=project_path(str(_get(data, "paths", "scan_inbox", "data/inbox/scans"))),
-            default_deck_name=str(
-                _get(data, "anki", "default_deck_name", "Japanese Anki")
-            ),
+            default_deck_name=_str(data, "anki", "default_deck_name", "Japanese Anki"),
             default_deck_id=_int(data, "anki", "default_deck_id", 2059400110),
             model_id_base=_int(data, "anki", "model_id_base", 1607392310),
             default_cards={
-                "recognition": bool(_get(data, "cards", "recognition", True)),
-                "production": bool(_get(data, "cards", "production", True)),
-                "reading": bool(_get(data, "cards", "reading", False)),
+                "recognition": _bool(data, "cards", "recognition", True),
+                "production": _bool(data, "cards", "production", True),
+                "reading": _bool(data, "cards", "reading", False),
             },
-            extract_model=str(_get(data, "ai", "extract_model", "claude-opus-5")),
-            enrich_model=str(_get(data, "ai", "enrich_model", "claude-opus-5")),
-            tts_provider=str(_get(data, "tts", "provider", "voicevox")),
-            voicevox_url=str(_get(data, "tts", "voicevox_url", "http://localhost:50021")),
+            extract_model=_str(data, "ai", "extract_model", "claude-opus-5"),
+            enrich_model=_str(data, "ai", "enrich_model", "claude-opus-5"),
+            tts_provider=_str(data, "tts", "provider", "voicevox"),
+            voicevox_url=_str(data, "tts", "voicevox_url", "http://localhost:50021"),
             voicevox_speaker=_int(data, "tts", "voicevox_speaker", 46),
-            azure_voice=str(_get(data, "tts", "azure_voice", "ja-JP-NanamiNeural")),
-            azure_region=str(_get(data, "tts", "azure_region", "westus2")),
+            azure_voice=_str(data, "tts", "azure_voice", "ja-JP-NanamiNeural"),
+            azure_region=_str(data, "tts", "azure_region", "westus2"),
         )

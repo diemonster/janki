@@ -388,6 +388,35 @@ def test_re_running_the_same_pass_months_later_still_records_nothing(tmp_path: P
     assert entries[0]["at"] == "2026-08-01"  # the first run, as with sources
 
 
+def test_enrichment_identity_ignores_field_order_and_repeats(tmp_path: Path) -> None:
+    # The identity is (kind, model, fields) as a *set* of names: a caller that
+    # builds the list in dict order must not re-record the same pass forever.
+    book = ledger_module.load(tmp_path / "ledger.json")
+    book.record_enriched(
+        "word:話す:はなす",
+        kind="ai",
+        model="claude-opus-5",
+        fields=["usage_notes", "examples"],
+        at="2026-08-01",
+    )
+
+    assert (
+        book.record_enriched(
+            "word:話す:はなす",
+            kind="ai",
+            model="claude-opus-5",
+            fields=["examples", "usage_notes", "examples"],
+            at="2026-09-01",
+        )
+        is False
+    )
+
+    entries = book.records["word:話す:はなす"]["enriched"]
+    assert len(entries) == 1
+    assert entries[0]["fields"] == ["examples", "usage_notes"]
+    assert entries[0]["at"] == "2026-08-01"
+
+
 def test_a_pass_that_wrote_different_fields_is_a_different_pass(tmp_path: Path) -> None:
     book = ledger_module.load(tmp_path / "ledger.json")
     book.record_enriched("word:話す:はなす", kind="jpdb", fields=["pitch_accent"], at="2026-08-01")

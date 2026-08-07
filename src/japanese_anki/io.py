@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import copy
 import dataclasses
 import json
 import os
@@ -14,7 +15,7 @@ from typing import Any
 import yaml
 
 from japanese_anki.errors import JankiError
-from japanese_anki.models import VocabularyRecord
+from japanese_anki.models import ModelError, VocabularyRecord
 
 
 class DataError(JankiError):
@@ -107,7 +108,11 @@ def load_records(path: Path) -> list[VocabularyRecord]:
             raise DataError(
                 f"Each record in {path} must be a mapping, got {type(item).__name__}"
             )
-    return [VocabularyRecord.from_dict(item) for item in data]
+    try:
+        return [VocabularyRecord.from_dict(item) for item in data]
+    except ModelError as exc:
+        # The constructor knows the field; only this frame knows the file.
+        raise DataError(f"Could not read a record in {path}: {exc}") from exc
 
 
 def save_records_json(path: Path, records: list[VocabularyRecord]) -> None:
@@ -143,12 +148,14 @@ _EMPTY_CONTAINERS = (str, bytes, list, tuple, set, frozenset, dict)
 
 
 def _copy_value(value: Any) -> Any:
-    """Detach a container so merged records never alias the caller's input."""
-    if isinstance(value, list):
-        return list(value)
-    if isinstance(value, dict):
-        return dict(value)
-    return value
+    """Detach a value so merged records never alias the caller's input.
+
+    A shallow copy is not a detachment: an ``examples`` list holds
+    ``ExampleSentence`` instances and ``conjugations`` holds dict values, and
+    copying only the outer container leaves the caller able to mutate what the
+    merged record holds inside it.
+    """
+    return copy.deepcopy(value)
 
 
 def _is_empty(value: Any) -> bool:
@@ -238,13 +245,13 @@ def _merge_one(
             continue
         conflicts.append((name, old_value, new_value))
 
+    # Only a genuinely new tag is a write. When the union adds nothing, the
+    # hand-edited list is left exactly as it is — order included — so a merge
+    # the summary reports as "unchanged" really did leave the file unchanged.
     tags = sorted(set(old.tags) | set(new.tags))
-    if tags != old.tags:
+    if set(tags) != set(old.tags):
         changes["tags"] = tags
-        # Only a genuinely new tag counts as a write; re-sorting a hand-edited
-        # list is not a change the user needs to scan the summary for.
-        if set(tags) != set(old.tags):
-            filled.append("tags")
+        filled.append("tags")
 
     merged = replace(old, **changes) if changes else old
     if conflicts:
@@ -264,12 +271,13 @@ def _combine_outcomes(first: MergeOutcome, second: MergeOutcome) -> MergeOutcome
     conflicts = first.conflicts + [
         item for item in second.conflicts if item not in first.conflicts
     ]
-    if first.label == "added" and not conflicts and not filled:
-        # Stays a plain "added" only when the later row said nothing new;
-        # otherwise the summary count would contradict the detail it prints.
-        label = "added"
-    elif conflicts:
+    if conflicts:
         label = "conflicting"
+    elif first.label == "added":
+        # The store gained a record no pre-existing curation was touched for;
+        # a later row filling one of its holes does not turn that into
+        # "filled", which would report zero additions while the count grew.
+        label = "added"
     elif filled:
         label = "filled"
     else:
@@ -315,7 +323,10 @@ def merge_records(
     for new in incoming:
         old = by_id.get(new.id)
         if old is None:
-            by_id[new.id] = replace(new)
+            # A deep copy, not `replace(new)`: a shallow dataclass copy shares
+            # every container with the import, so a caller clearing its record
+            # after the merge would silently edit the stored one.
+            by_id[new.id] = copy.deepcopy(new)
             outcomes[new.id] = MergeOutcome(label="added")
             continue
         merged, outcome = _merge_one(old, new, prefer)

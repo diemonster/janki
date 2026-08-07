@@ -17,6 +17,37 @@ class ShirabeImportError(JankiError):
     pass
 
 
+# csv.field_size_limit defaults to 128KB, which a long pasted article in a
+# Notes cell exceeds. Raised generously (1 GiB fits a C long everywhere) so a
+# big field imports instead of crashing; a field bigger than this is a broken
+# file, reported through _rows.
+_CSV_FIELD_LIMIT = 2**30
+
+
+def _rows(reader: csv.DictReader, path: Path) -> Iterable[dict[str, str | None]]:
+    """Iterate CSV rows, turning parser explosions into janki's own error.
+
+    ``csv.Error`` (oversized field, embedded NUL) and a bad byte past the
+    sniffing sample both surface mid-iteration; without this they escape as
+    raw tracebacks naming neither the file nor the row.
+    """
+    iterator = iter(reader)
+    while True:
+        try:
+            row = next(iterator)
+        except StopIteration:
+            return
+        except csv.Error as exc:
+            raise ShirabeImportError(
+                f"{path.name}:{reader.line_num}: could not parse the CSV: {exc}"
+            ) from exc
+        except UnicodeDecodeError as exc:
+            raise ShirabeImportError(
+                f"{path.name}: not valid UTF-8 after line {reader.line_num}: {exc}"
+            ) from exc
+        yield row
+
+
 FIELD_ALIASES: dict[str, set[str]] = {
     "expression": {
         "word",
@@ -103,6 +134,7 @@ def detect_mapping(headers: Iterable[str]) -> dict[str, str]:
 
 
 def _open_reader(path: Path) -> tuple[csv.DictReader, object, str]:
+    csv.field_size_limit(_CSV_FIELD_LIMIT)
     handle = path.open("r", encoding="utf-8-sig", newline="")
     sample = handle.read(8192)
     handle.seek(0)
@@ -122,12 +154,17 @@ def inspect_file(path: Path, sample_size: int = 5) -> InspectionResult:
         raise ShirabeImportError(f"Could not read {path}: {exc}") from exc
 
     try:
-        headers = list(reader.fieldnames or [])
+        try:
+            headers = list(reader.fieldnames or [])
+        except csv.Error as exc:
+            raise ShirabeImportError(
+                f"{path.name}:1: could not parse the CSV header: {exc}"
+            ) from exc
         if not headers:
             raise ShirabeImportError(f"CSV has no header row: {path}")
         mapping = detect_mapping(headers)
         rows = []
-        for row in reader:
+        for row in _rows(reader, path):
             rows.append({str(key): str(value or "") for key, value in row.items()})
             if len(rows) >= sample_size:
                 break
@@ -194,7 +231,7 @@ def import_file(path: Path) -> ImportResult:
     seen: set[str] = set()
 
     try:
-        for row_number, source_row in enumerate(reader, start=2):
+        for row_number, source_row in enumerate(_rows(reader, path), start=2):
             row = {str(key): str(value or "") for key, value in source_row.items()}
             expression = _get(row, mapping, "expression")
             reading = _get(row, mapping, "reading")

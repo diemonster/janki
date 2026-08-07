@@ -14,7 +14,12 @@ from pathlib import Path
 import pytest
 
 from japanese_anki import cli
-from japanese_anki.io import DataError, merge_records, save_records_json
+from japanese_anki.io import (
+    DataError,
+    merge_records,
+    parse_prefer_incoming,
+    save_records_json,
+)
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
 
 FIXTURE = Path(__file__).parent / "fixtures" / "shirabe-sample.csv"
@@ -131,6 +136,41 @@ def test_merged_records_do_not_alias_the_import() -> None:
     incoming_examples.append(ExampleSentence(japanese="MUTATED", english="MUTATED"))
 
     assert [example.japanese for example in merged[0].examples] == ["例。"]
+
+
+def test_filling_examples_detaches_the_inner_sentences_too() -> None:
+    """Copying only the outer list leaves the ExampleSentence objects shared."""
+    incoming_examples = [ExampleSentence(japanese="例。", english="Example.")]
+    existing = [replace(_curated(), examples=[], usage_notes="")]
+    merged, _ = merge_records(existing, [_imported(examples=incoming_examples)])
+
+    incoming_examples[0].japanese = "MUTATED"
+
+    assert [example.japanese for example in merged[0].examples] == ["例。"]
+
+
+def test_an_added_record_does_not_alias_the_imports_containers() -> None:
+    """replace() is a shallow copy: every container would still be the import's."""
+    incoming = _imported(
+        examples=[ExampleSentence(japanese="例。", english="Example.")],
+        conjugations={"past": "話した"},
+    )
+    merged, outcomes = merge_records([], [incoming])
+    assert outcomes["word:話す:はなす"].label == "added"
+
+    incoming.tags.append("MUTATED")
+    incoming.meanings.append("MUTATED")
+    incoming.examples.append(ExampleSentence(japanese="MUTATED"))
+    incoming.examples[0].japanese = "MUTATED"
+    incoming.conjugations["past"] = "MUTATED"
+    incoming.source.raw_fields["Word"] = "MUTATED"
+
+    record = merged[0]
+    assert record.tags == ["shirabe"]
+    assert record.meanings == ["to speak", "to talk"]
+    assert [example.japanese for example in record.examples] == ["例。"]
+    assert record.conjugations == {"past": "話した"}
+    assert record.source.raw_fields == {}
 
 
 def test_a_duplicate_id_in_the_stored_file_is_refused_not_silently_dropped() -> None:
@@ -276,6 +316,65 @@ def test_an_id_carried_twice_keeps_both_rows_reports() -> None:
         ("usage_notes", "Curated note", "Imported note"),
     ]
     assert merged[0].part_of_speech == "verb"
+
+
+def test_an_id_added_then_filled_within_one_import_is_still_added() -> None:
+    # The store gained a record and no pre-existing curation was touched, so
+    # reporting "0 added, 1 filled" would contradict the record count.
+    first = VocabularyRecord(
+        id="word:犬:いぬ", expression="犬", reading="いぬ", usage_notes="A"
+    )
+    second = VocabularyRecord(id="word:犬:いぬ", expression="犬", reading="いぬ", romaji="inu")
+
+    merged, outcomes = merge_records([], [first, second])
+
+    outcome = outcomes["word:犬:いぬ"]
+    assert outcome.label == "added"
+    assert outcome.filled_fields == ["romaji"]
+    assert len(merged) == 1
+    assert merged[0].usage_notes == "A"
+    assert merged[0].romaji == "inu"
+
+
+def test_an_id_added_then_conflicting_within_one_import_reports_the_conflict() -> None:
+    # Guards the fold order: "added" must not mask a conflict the summary
+    # would then never mention.
+    first = VocabularyRecord(
+        id="word:犬:いぬ", expression="犬", reading="いぬ", usage_notes="A"
+    )
+    second = VocabularyRecord(
+        id="word:犬:いぬ", expression="犬", reading="いぬ", usage_notes="B"
+    )
+
+    _, outcomes = merge_records([], [first, second])
+
+    outcome = outcomes["word:犬:いぬ"]
+    assert outcome.label == "conflicting"
+    assert outcome.conflicts == [("usage_notes", "A", "B")]
+
+
+def test_a_merge_that_would_only_resort_tags_leaves_the_hand_edited_order() -> None:
+    # "Unchanged" has to mean the file did not change: normalizing the order of
+    # a hand-edited tag list is a write the summary would never admit to.
+    existing = replace(_curated(), tags=["zeta", "alpha"])
+
+    merged, outcomes = merge_records(
+        [existing], [_imported(tags=["alpha"], meanings=[], part_of_speech="")]
+    )
+
+    outcome = outcomes["word:話す:はなす"]
+    assert merged[0].tags == ["zeta", "alpha"]
+    assert outcome.label == "unchanged"
+    assert "tags" not in outcome.filled_fields
+
+
+def test_prefer_incoming_of_only_separators_is_refused() -> None:
+    # The flag was passed but names nothing; merging as if it were absent
+    # would hide the typo.
+    with pytest.raises(DataError) as excinfo:
+        parse_prefer_incoming(",")
+
+    assert "--prefer-incoming" in str(excinfo.value)
 
 
 def test_an_import_that_adds_nothing_is_unchanged() -> None:
@@ -430,3 +529,107 @@ def test_replace_into_a_fresh_output_file_never_prompts(
 
 def _never_called(prompt: str = "") -> str:
     raise AssertionError(f"input() should not have been called (prompt: {prompt!r})")
+
+
+def test_an_identity_conflict_is_marked_as_a_hand_fix_in_the_summary(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The header's remedy (--prefer-incoming) refuses identity fields, so a
+    # conflict line for one must say so instead of sending the user into an
+    # error message.
+    root = _project(
+        tmp_path,
+        [
+            VocabularyRecord(
+                id="word:ATM:エーティーエム",
+                expression="ＡＴＭ",  # full width: NFKC-equal to the import, byte-different
+                reading="エーティーエム",
+                meanings=["cash machine"],
+            )
+        ],
+    )
+    source = tmp_path / "atm.csv"
+    source.write_text(
+        "Word,Reading,Definition\nATM,エーティーエム,cash machine\n", encoding="utf-8"
+    )
+
+    assert cli.main(["--root", str(root), "import-shirabe", str(source)]) == 0
+
+    out = capsys.readouterr().out
+    assert (
+        "word:ATM:エーティーエム expression (identity — resolve by hand; "
+        "--prefer-incoming refuses it): existing ＡＴＭ | incoming ATM" in out
+    )
+    # Non-identity conflicts keep the plain shape the header's remedy fits.
+    assert _stored(root)["word:ATM:エーティーエム"]["expression"] == "ＡＴＭ"
+
+
+def test_eof_at_the_replace_prompt_reads_as_no(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Closed stdin or Ctrl-C at the prompt must abort, not traceback.
+    root = _project(tmp_path, [_curated()])
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+
+    def _closed(prompt: str) -> str:
+        raise EOFError
+
+    monkeypatch.setattr("builtins.input", _closed)
+
+    assert _import(root, "--replace") == 1
+
+    assert "Aborted: nothing was written." in capsys.readouterr().err
+    assert list(_stored(root)) == ["word:話す:はなす"]
+
+
+def test_replace_recovers_a_corrupt_output_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # --replace is the one command that can recover an unreadable file; an
+    # unparseable one must warn and confirm, not block.
+    root = _project(tmp_path)
+    (root / "vocabulary.json").write_text("{not json", encoding="utf-8")
+
+    assert _import(root, "--replace", "--yes") == 0
+
+    assert "warning: could not read the existing records" in capsys.readouterr().err
+    assert len(_stored(root)) == 4
+
+
+def test_replace_recovers_a_file_with_malformed_record_fields(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Valid JSON whose nested types are wrong (a hand-edit's string `examples`)
+    # used to escape as an AttributeError traceback from models.py — from the
+    # very command whose point is recovering the file.
+    root = _project(tmp_path)
+    (root / "vocabulary.json").write_text(
+        json.dumps([{"expression": "x", "reading": "x", "examples": "broken"}]),
+        encoding="utf-8",
+    )
+
+    assert _import(root, "--replace", "--yes") == 0
+
+    err = capsys.readouterr().err
+    assert "warning: could not read the existing records" in err
+    assert "examples" in err
+    assert len(_stored(root)) == 4
+
+
+def test_a_merge_import_over_a_malformed_file_is_a_clean_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Without --replace nothing can be recovered, but the failure must still be
+    # janki's one-line error naming the file and field, not a traceback.
+    root = _project(tmp_path)
+    (root / "vocabulary.json").write_text(
+        json.dumps([{"expression": "x", "reading": "x", "conjugations": "dict form"}]),
+        encoding="utf-8",
+    )
+
+    assert _import(root) == 1
+
+    err = capsys.readouterr().err
+    assert err.startswith("error:")
+    assert "vocabulary.json" in err
+    assert "conjugations" in err

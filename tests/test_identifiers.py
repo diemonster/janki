@@ -17,6 +17,12 @@ def test_stable_record_id_normalizes_width_and_space() -> None:
         "㐬",  # U+340C, Extension A
         "﨑",  # U+FA11, Compatibility Ideographs — common in surnames
         "々",  # U+3005, the iteration mark
+        "〇",  # U+3007, ideographic number zero: a numeral kanji (れい/まる)
+        "〻",  # U+303B, the vertical iteration mark, Script=Han like 々
+        "\U0002ebf0",  # Extension I's first ideograph (plane 2, above Ext F)
+        "\U0002ee5d",  # Extension I's last-but-two ideograph
+        "\U00030000",  # Extension G's first ideograph (plane 3)
+        "\U00031350",  # Extension H's first ideograph (plane 3)
     ],
 )
 def test_kanji_is_recognized_in_every_plane_it_lives_in(value: str) -> None:
