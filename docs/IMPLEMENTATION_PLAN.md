@@ -568,41 +568,56 @@ Design: DESIGN_V2 "jpdb.io > API client".
   adjectives, nouns et al.
 - CLI: register `janki jpdb ping` (prints ok/failure from the client).
 
-### [ ] M2.1F Reconcile the /parse fixture with a live capture — OWNER ONLY
+### [x] M2.1F Reconcile the /parse fixture with a live capture
 
 Depends on: M2.1
 Files: `tests/fixtures/jpdb-parse-sample.json`,
-`src/japanese_anki/jpdb.py` (only if the live shape differs),
-`docs/IMPLEMENTATION_PLAN.md`.
+`tests/test_jpdb_client.py`, `src/japanese_anki/jpdb.py` (docstring only —
+the parser needed no change), `docs/IMPLEMENTATION_PLAN.md`.
 
-**Requires a human with the repo owner's `JPDB_API_KEY`.** No agent can do
-this; do not claim it, and do not block on it.
+Done 2026-08-07 with a live capture. The key lives in `~/.zshrc`, which is
+sourced only for *interactive* shells, so an agent's non-interactive shell
+does not see it; capture with `zsh -ic` or move the export to `~/.zshenv`.
 
-- Capture one real `/parse` response and replace the community-shape
-  fixture with it, dropping the `_source` marker. The four words below
-  are exactly the four golden cases the fixture must carry
-  (leading-kanji, mid-kanji/okurigana, all-kana, multi-kanji compound),
-  and the field lists are `DEFAULT_TOKEN_FIELDS` /
-  `DEFAULT_VOCABULARY_FIELDS` — keep them in sync if those change:
+To re-capture (the request must stay this exact sentence — the five golden
+furigana cases live in it, and the field lists are `DEFAULT_TOKEN_FIELDS` /
+`DEFAULT_VOCABULARY_FIELDS`):
 
-  ```sh
-  curl -sS https://jpdb.io/api/v1/parse \
-    -H "Authorization: Bearer $JPDB_API_KEY" \
-    -H 'Content-Type: application/json' \
-    -d '{"text":["話す","お茶","たべる","日本語"],
-         "token_fields":["vocabulary_index","furigana"],
-         "vocabulary_fields":["vid","sid","spelling","reading",
-                              "pitch_accent","frequency_rank","part_of_speech"]}' \
-    | python -m json.tool > tests/fixtures/jpdb-parse-sample.json
-  ```
+```sh
+curl -sS https://jpdb.io/api/v1/parse \
+  -H "Authorization: Bearer $JPDB_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"text":["日本語を話す。お茶と食べ物をたべる。"],
+       "token_fields":["vocabulary_index","furigana"],
+       "vocabulary_fields":["vid","sid","spelling","reading",
+                            "pitch_accent","frequency_rank","part_of_speech"]}'
+```
 
-  Then run `make gates`. The key is read from the environment; it must
-  not be pasted into the repo.
-- If the live shape differs from the community one, fix `jpdb.py`'s
-  parser and amend M2.1's `/parse` contract above in the same change.
-- Re-run `pytest`: M2.1's `furigana_to_anki` golden tests must stay
-  green against the captured response, or the golden expectations were
-  wrong and must be corrected with the reasoning stated.
+Store it as the fixture's `response` value and run `make gates`. The key is
+read from the environment and must never be pasted into the repo.
+
+**What the capture changed.** `jpdb.py`'s parser was correct — it read the
+live response without modification, and `furigana_to_anki` emitted correct
+Anki notation for every token. Only hand-written *expectations* were wrong:
+
+- `たべる` (all kana) comes back as `null` furigana, not `["たべる"]`, so it
+  renders `""`. That is the right field value: the note templates fall back
+  to `{{Reading}}` when `{{Furigana}}` is empty.
+- `日本語` is segmented **per kanji** and read `にっぽんご`
+  (`日[にっ] 本[ぽん] 語[ご]`), not as the `日本` + `語` compound with
+  `にほんご`. A dictionary whose primary reading disagrees with the curator's
+  is precisely what M2.6's reading check exists to warn about — so the
+  fixture keeps jpdb's answer verbatim.
+
+**Two live shapes the community fixture never showed**, both already handled:
+
+- `pitch_accent` can carry more than one pattern (`食べ物` →
+  `["LHLLL","LHHLL"]`). `models.py` already types it `list[str]`, first
+  entry primary.
+- `/parse` returns vocabulary entries for **particles** too (`を`, `と`), and
+  `part_of_speech` arrives unordered with generic and specific tags together
+  (`話す` → `["vt","v5","v5s"]`). The POS tables map these correctly; M2.5
+  and M2.6 must not assume `part_of_speech[0]` is meaningful.
 
 ### [x] M2.2 Schema additions
 

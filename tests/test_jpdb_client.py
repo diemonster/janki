@@ -446,11 +446,18 @@ def test_parse_names_every_column_and_resolves_a_token_to_its_entry() -> None:
     entry = result.vocabulary_for(first)
     assert entry is not None
     assert entry["spelling"] == "日本語"
-    assert entry["reading"] == "にほんご"
-    assert entry["pitch_accent"] == ["LHHHH"]
-    assert entry["frequency_rank"] == 1500
+    # にっぽんご, not the にほんご a human would write. jpdb's entry for this vid
+    # picks the less common of JMDict's two readings, and the captured furigana
+    # agrees (日[にっ]本[ぽん]語[ご]). Kept verbatim rather than "corrected":
+    # a dictionary that disagrees with the curator is the exact case M2.6's
+    # reading check is built for — it warns and declines to write, and it can
+    # only do that if the client reports what jpdb actually said.
+    assert entry["reading"] == "にっぽんご"
+    assert entry["pitch_accent"] == ["LHHHHH"]
+    assert entry["frequency_rank"] == 4800
     assert entry["part_of_speech"] == ["n"]
-    assert entry["vid"] == entry["sid"] == 1000001
+    assert entry["vid"] == 1464530
+    assert entry["sid"] == 3361009543
 
 
 def test_parse_accepts_a_token_list_that_is_not_nested_per_text() -> None:
@@ -476,11 +483,20 @@ def test_a_token_jpdb_has_no_entry_for_resolves_to_none() -> None:
 
 # Anki's rule: `text[reading]`, with a space before every bracketed group that
 # is not at the very start of the string.
+# Two entries changed when the hand-written fixture was replaced by a live
+# capture (M2.1F). Both were wrong guesses about jpdb, not wrong formatting —
+# furigana_to_anki produced correct Anki notation from the real segments in
+# every case, which is what this table is here to pin down.
 GOLDEN_FURIGANA = {
     "話す": "話[はな]す",  # leading kanji + okurigana
     "お茶": "お 茶[ちゃ]",  # kanji after kana — the space is load-bearing
-    "たべる": "たべる",  # all kana: no markup at all
-    "日本語": "日本[にほん] 語[ご]",  # compound, two adjacent kanji groups
+    # All kana: jpdb sends `null` furigana, not a single kana segment, so there
+    # is nothing to annotate. Empty is the right field value — the note
+    # templates fall back to {{Reading}} when {{Furigana}} is empty, so a
+    # kana-only word still shows its reading on the card.
+    "たべる": "",
+    # Split per kanji, not as the 日本 + 語 compound a human would segment.
+    "日本語": "日[にっ] 本[ぽん] 語[ご]",
     "食べ物": "食[た]べ 物[もの]",  # kanji, okurigana, kanji
 }
 
