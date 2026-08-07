@@ -383,7 +383,16 @@ Design: DESIGN_V2 "Inline notes migration".
   same field values) — assert via the fake-genanki harness in
   `tests/test_anki_builder_contract.py`.
 
-### [ ] M1.8 Import ↔ ledger wiring + shared import summary
+### [x] M1.8 Import ↔ ledger wiring + shared import summary
+
+*Done 2026-08-07. The shared helper is `cli.run_import(config, records, *,
+source_type, source_ref, output_path, unit, staging_stem, needs_reading=(),
+warnings=(), prefer_incoming=(), replace=False, assume_yes=False) -> int`; it
+owns the whole sequence (`--replace` confirmation, staging, merge, records
+write, ledger, printing), not just the last three steps. Scope note: M1.5's
+`_stage_needs_reading` took the source `Path` and hardcoded
+`shirabe-<stem>-needs-reading.yaml`; it now takes `staging_stem` and
+`source_ref`, since a jpdb deck sync has no file to take a stem from.*
 
 Depends on: M1.1, M1.3
 Files: `src/japanese_anki/cli.py`, `tests/test_import_ledger.py` (new).

@@ -130,18 +130,30 @@ _HELD_SUMMARY = "row(s) whose reading janki cannot use (missing, or written in k
 
 
 def _stage_needs_reading(
-    config: ProjectConfig, source_path: Path, records: list[VocabularyRecord]
+    config: ProjectConfig,
+    staging_stem: str,
+    source_ref: str,
+    records: Sequence[VocabularyRecord],
 ) -> str:
     """Divert rows with an unusable reading to staging; return what to print.
 
     Called *before* the records are written. These rows exist nowhere but the
-    source CSV — they are deliberately excluded from the records — so a staging
-    failure has to abort the import, not report failure after vocabulary.json
-    has already been replaced.
+    source they came from — they are deliberately excluded from the records —
+    so a staging failure has to abort the import, not report failure after
+    vocabulary.json has already been replaced.
+
+    ``staging_stem`` names the file (``<stem>-needs-reading.yaml``) and
+    ``source_ref`` is recorded in it as the origin. Both are the importer's to
+    choose: a jpdb deck sync has no CSV file to take a stem from.
     """
     if not records:
         return ""
-    target = config.staging_dir / f"shirabe-{source_path.stem}-needs-reading.yaml"
+    if not staging_stem.strip():
+        raise StagingError(
+            f"Cannot stage {len(records)} {_HELD_SUMMARY}: the import did not say what "
+            "to name the staging file."
+        )
+    target = config.staging_dir / f"{staging_stem}-needs-reading.yaml"
     if target.is_dir():
         # Not the "may hold review edits" case: a directory holds no edits, and
         # calling it one would have the import claim to protect something that
@@ -158,9 +170,9 @@ def _stage_needs_reading(
         )
     write_staging(
         target,
-        records,
+        list(records),
         {
-            "source_file": source_path.name,
+            "source_file": source_ref,
             "extracted_at": date.today().isoformat(),
             "review_notes": _NEEDS_READING_NOTES,
         },
@@ -173,13 +185,40 @@ def _stage_needs_reading(
     )
 
 
-def command_import_shirabe(args: argparse.Namespace) -> int:
-    config = _load_config(args)
-    prefer_incoming = parse_prefer_incoming(args.prefer_incoming)
-    result = import_file(args.file.resolve())
-    output_path = (args.output or config.normalized_file).resolve()
+def run_import(
+    config: ProjectConfig,
+    records: Sequence[VocabularyRecord],
+    *,
+    source_type: str,
+    source_ref: str,
+    output_path: Path,
+    unit: str,
+    staging_stem: str,
+    needs_reading: Sequence[VocabularyRecord] = (),
+    warnings: Sequence[str] = (),
+    prefer_incoming: Sequence[str] = (),
+    replace: bool = False,
+    assume_yes: bool = False,
+) -> int:
+    """Land an import: stage, merge, write records, write the ledger, report.
 
-    if args.replace:
+    The one pipeline every importer shares. ``import-shirabe`` calls it today
+    and ``import-jpdb`` calls it from Milestone 2, so nothing here may assume a
+    CSV: what the source is called (``source_type``/``source_ref``), what one
+    incoming item is called in the summary (``unit``), and what a staging file
+    for it is named (``staging_stem``) are all the caller's to say.
+
+    Ordering is load-bearing, in both directions:
+
+    * Everything that can refuse the import — an unreadable ledger, a staging
+      file that cannot be written — happens *before* ``vocabulary.json`` is
+      replaced. Held rows exist nowhere else, so a late failure would report
+      that the import did not happen over records it has already rewritten.
+    * The records are written before the ledger. The ledger is metadata and
+      ``janki status --rebuild`` can reconstruct it; the records cannot be
+      reconstructed from anything.
+    """
+    if replace:
         # --replace only needs the count, so an unreadable file must not block
         # the one command that can recover from it.
         count: int | None = None
@@ -195,29 +234,75 @@ def command_import_shirabe(args: argparse.Namespace) -> int:
                 unreadable = True
         # Nothing to lose when the file is absent or empty; still confirm when
         # it exists but could not be read, since it may hold curated records.
-        if (unreadable or bool(count)) and not _confirm_replace(count, args.yes):
+        if (unreadable or bool(count)) and not _confirm_replace(count, assume_yes):
             print("Aborted: nothing was written.", file=sys.stderr)
             return 1
         existing: list[VocabularyRecord] = []
     else:
         existing = load_records(output_path) if output_path.exists() else []
 
-    # Stage before committing the records: the held rows have no other home, and
-    # a failure here must leave the import having done nothing rather than exit
-    # non-zero over an output file it has already replaced.
-    held_message = _stage_needs_reading(config, args.file, result.needs_reading)
+    # Read the ledger before anything is written, and only once: it is a
+    # whole-file rewrite, so a command loads it once and saves it once.
+    book = ledger.load(config.ledger_file)
 
-    records, outcomes = merge_records(existing, result.records, prefer_incoming)
-    save_records_json(output_path, records)
-    print(f"Imported {len(result.records)} source rows into {output_path}")
+    held_message = _stage_needs_reading(config, staging_stem, source_ref, needs_reading)
+
+    merged, outcomes = merge_records(existing, list(records), prefer_incoming)
+    save_records_json(output_path, merged)
+
+    # Held rows are deliberately absent here: they never reached the records, so
+    # the ledger must not claim janki has them.
+    added = sum(
+        book.record_added(record_id)
+        for record_id, outcome in outcomes.items()
+        if outcome.label == "added"
+    )
+    # Every incoming record, added or not. This is what makes "later sightings
+    # go to the ledger" true: the merge leaves the record's own `source` alone,
+    # so a re-import's provenance would otherwise be lost. Keep the reference to
+    # {type, ref} — `status --rebuild` writes exactly that shape, and a
+    # reference's identity is every key but the date, so extra detail here would
+    # have a rebuilt ledger grow a second near-duplicate per record.
+    seen = sum(
+        book.record_source_seen(record_id, source_type, source_ref)
+        for record_id in dict.fromkeys(record.id for record in records)
+    )
+    book.save()
+
+    print(f"Imported {len(records)} {unit} into {output_path}")
     _print_merge_summary(outcomes)
     if held_message:
         print(held_message)
-    if result.warnings:
+    print(f"Ledger: registered {added} new record(s) and {seen} new source sighting(s).")
+    if warnings:
         print("Warnings:")
-        for warning in result.warnings:
+        for warning in warnings:
             print(f"  - {warning}")
     return 0
+
+
+def command_import_shirabe(args: argparse.Namespace) -> int:
+    config = _load_config(args)
+    prefer_incoming = parse_prefer_incoming(args.prefer_incoming)
+    source_path = args.file.resolve()
+    result = import_file(source_path)
+    return run_import(
+        config,
+        result.records,
+        source_type="shirabe",
+        # The file's name, matching what the importer stored as the record's own
+        # `source.imported_from` — `status --rebuild` reconstructs the reference
+        # from that field, and a mismatch would double every entry.
+        source_ref=source_path.name,
+        output_path=(args.output or config.normalized_file).resolve(),
+        unit="source rows",
+        staging_stem=f"shirabe-{source_path.stem}",
+        needs_reading=result.needs_reading,
+        warnings=result.warnings,
+        prefer_incoming=prefer_incoming,
+        replace=args.replace,
+        assume_yes=args.yes,
+    )
 
 
 def _validate_path(path: Path) -> tuple[list, int]:
