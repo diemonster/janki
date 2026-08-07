@@ -198,7 +198,17 @@ Design: DESIGN_V2 "Configuration".
   `JPDB_API_KEY`, `AZURE_SPEECH_KEY`.
 - Tests: defaults when sections absent; overrides; unknown-key warning.
 
-### [ ] M1.3 Ledger module
+### [x] M1.3 Ledger module
+
+*Done 2026-08-06. Contract as written; four call-site details downstream
+tasks need: mutators change memory and return whether they changed
+anything — call `ledger.save()` once per command (a save per record would
+fsync the whole file per record). A source reference's identity is every
+key but `seen_at`, so a re-import of the same file appends nothing.
+Audio entries are keyed by `file`, so regenerating one (`--force`, new
+voice) replaces its entry instead of adding a second. `missing_audio` is
+word audio only (the design's "words missing audio"); example audio is
+optional and per-example, and `stale_audio` covers both kinds.*
 
 Depends on: M1.2, M1.6
 Files: new `src/japanese_anki/ledger.py`, new `tests/test_ledger.py`.
