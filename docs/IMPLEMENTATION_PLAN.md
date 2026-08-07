@@ -79,6 +79,18 @@ marked "supersedes design").
 - **Field-diff output** (shared helper, first built in M2.6, reused by
   M4.2/M4.3): per record, per field, one indented line of the form
   `<field>: <old> -> <new>` under a `<record id>` header.
+- **Mutation testing must set `PYTHONDONTWRITEBYTECODE=1`** and clear
+  `__pycache__` between mutants. CPython validates a `.pyc` against its
+  source's *mtime in whole seconds and byte size*, so the two edits a
+  mutation sweep makes back-to-back — revert mutant A, apply mutant B —
+  land in the same second at the same size (`==` → `!=`, `<` → `<=`,
+  swapped arguments) and Python silently reuses A's bytecode. Mutant B
+  never runs, its result is really A's, and a test gap gets reported as
+  covered. This fails *toward* false confidence, so it does not announce
+  itself. Run mutants as
+  `PYTHONDONTWRITEBYTECODE=1 <python> -m pytest`, and prove the harness
+  works before trusting a clean sweep: apply one mutant you are certain
+  is unguarded and confirm it survives.
 
 ---
 
