@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 
-from japanese_anki import ledger, migrate, status
+from japanese_anki import jpdb, ledger, migrate, status
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import AnkiBuildError, build_deck, resolve_deck_records
@@ -656,6 +656,19 @@ def command_migrate_inline(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_jpdb_ping(args: argparse.Namespace) -> int:
+    """Check that jpdb answers and that JPDB_API_KEY is accepted.
+
+    No config is loaded on purpose: this command needs a network and an
+    environment variable, not a project, so it works from anywhere — which is
+    exactly where someone debugging a key will run it.
+    """
+    client = jpdb.JpdbClient(jpdb.api_key_from_env())
+    client.ping()
+    print(f"jpdb: ok — the API answered and {jpdb.API_KEY_ENV} was accepted.")
+    return 0
+
+
 def command_preview(args: argparse.Namespace) -> int:
     config = _load_config(args)
     output = args.output or (config.dist_dir / f"{args.deck.stem}-preview.html")
@@ -770,6 +783,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     migrate_parser.add_argument("deck", type=_path)
     migrate_parser.set_defaults(handler=command_migrate_inline)
+
+    jpdb_parser = subparsers.add_parser("jpdb", help="Talk to the jpdb.io API")
+    # `required=True` so a bare `janki jpdb` prints usage instead of failing on
+    # a missing handler; the group exists to hold `import-jpdb`'s neighbours as
+    # later milestones add them.
+    jpdb_commands = jpdb_parser.add_subparsers(dest="jpdb_command", required=True)
+    jpdb_ping_parser = jpdb_commands.add_parser(
+        "ping", help=f"Check the jpdb API and the {jpdb.API_KEY_ENV} key"
+    )
+    jpdb_ping_parser.set_defaults(handler=command_jpdb_ping)
 
     preview_parser = subparsers.add_parser("preview", help="Build a static HTML preview")
     preview_parser.add_argument("deck", type=_path)
