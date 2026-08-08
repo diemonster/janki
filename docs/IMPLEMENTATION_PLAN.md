@@ -1072,7 +1072,7 @@ Files: new `src/japanese_anki/inputs.py`, `tests/test_inputs.py` (new).
   the recorded provenance path.
 - Pure besides `sips`; tests fake the subprocess.
 
-### [ ] M3.3 `janki extract`
+### [~] claimed task/m3.3 2026-08-07 — M3.3 `janki extract`
 
 Depends on: M3.1, M3.2, M1.5
 Files: new `src/japanese_anki/extract.py`, `src/japanese_anki/cli.py`,
