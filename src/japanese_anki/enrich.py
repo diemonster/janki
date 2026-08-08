@@ -274,9 +274,14 @@ def enrich_records(
 ) -> EnrichResult:
     """Fill empty fields on ``records`` (or just ``ids``) from jpdb.
 
-    Records with nothing to fill never reach the network: a second run over a
-    collection the first run finished costs one no API calls, which is what
-    makes re-running this cheap enough to be routine.
+    A record with nothing left to fill never reaches the network. Note what that
+    does *not* say: a field jpdb has no answer for stays empty, so the record
+    stays fillable and is looked up again on every run. A noun has no verb group
+    and no conjugation table, and nothing here records "asked, and there was
+    nothing" — so re-running over a collection of nouns costs roughly one call
+    per word, while re-running over one the dictionary could fully describe
+    costs nothing. Memoizing the negative answer would need somewhere to keep
+    it that is not the record.
     """
     result = EnrichResult(records=list(records))
     by_id = {record.id: index for index, record in enumerate(result.records)}
