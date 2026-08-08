@@ -971,7 +971,7 @@ Files: `README.md`.
 
 Lane map: {M3.1, M3.2 in parallel} → {M3.3} → {M3.4}.
 
-### [ ] M3.1 AI plumbing (single owner of the Anthropic client)
+### [~] claimed task/m3.1 2026-08-07 — M3.1 AI plumbing (single owner of the Anthropic client)
 
 Depends on: M1.2, M1.6
 Files: new `src/japanese_anki/claude_client.py`, `pyproject.toml`,
