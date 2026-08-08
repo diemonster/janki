@@ -1153,8 +1153,17 @@ ID change — a held row the collection has never seen — is unaffected, and
 both sides are pinned. "The collection" is `status.surviving_ids` — the
 normalized file **plus every deck's inline notes** — because a record
 living only in a deck YAML has the same stale id and the same exported
-GUID; and a deck that will not resolve means no id can be proved absent,
-so that run declines every re-mint and says why.*
+GUID; and it asks each deck what it
+**declares**, not what it builds: include/exclude filters answer "does
+this deck build it", which is a different question from "does this id
+exist", and a note a filter drops still holds hand-written content and a
+GUID Anki may already have. (`exporters.anki.deck_declared_ids` is new
+for that, and `--replace`'s ledger prune gets the same correction for
+free.) A deck that will not resolve means no id can be proved absent, so
+rows whose id **would change** are held back rather than promoted —
+writing the id they arrived with would put it in the store permanently,
+since a stored id is exempt from the re-mint that repairs it, and a held
+row waits in `data/staging/`, which is committed.*
 
 *Done 2026-08-07. Contract as written; two deviations from the Files list and
 seven decisions. **Deviation 1:** the reading-set lookup lives in `enrich.py` as

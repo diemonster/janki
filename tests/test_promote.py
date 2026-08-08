@@ -931,6 +931,66 @@ def test_an_unreadable_deck_declines_every_re_mint(
 
     captured = capsys.readouterr()
     assert "cannot be checked" in captured.err
-    stored = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
-    assert [item["id"] for item in stored] == ["word:辛い:辛い"], "the id was left alone"
+    # Held, not promoted. Writing word:辛い:辛い would have put an id nothing can
+    # repair into the store — a stored id is exempt from the re-mint that fixes
+    # it — so the row waits in the staging file, which is committed.
+    assert json.loads((root / "vocabulary.json").read_text(encoding="utf-8")) == []
+    assert staged.is_file()
+    held, _ = read_staging(staged)
+    assert [item.id for item in held] == ["word:辛い:辛い"]
     assert "Re-minted" not in captured.out
+
+
+def test_a_note_a_filter_drops_is_still_in_the_collection(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A deck's include/exclude filters answer "what does this deck build",
+    which is not "does this id exist". A note the deck declares and a filter
+    drops is still in the file, still carries what a human wrote into it, and
+    its GUID may already be in Anki."""
+    root = tmp_path
+    (root / "janki.toml").write_text(
+        "[paths]\n"
+        'normalized_file = "vocabulary.json"\n'
+        'ledger_file = "ledger.json"\n'
+        'deck_dir = "decks"\n'
+        'staging_dir = "staging"\n',
+        encoding="utf-8",
+    )
+    (root / "vocabulary.json").write_text("[]", encoding="utf-8")
+    (root / "decks").mkdir()
+    (root / "decks" / "verbs.yaml").write_text(
+        "name: Verbs\n"
+        "deck:\n"
+        "  exclude_ids:\n"
+        "    - word:辛い:からい\n"
+        "notes:\n"
+        "  - id: word:辛い:からい\n"
+        "    expression: 辛い\n"
+        "    reading: つらい\n"
+        "    meanings: [painful]\n"
+        "    furigana: 辛[つら]い\n",
+        encoding="utf-8",
+    )
+    staged = root / "staging" / "ai.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    write_staging(
+        staged,
+        [
+            VocabularyRecord(
+                id="word:辛い:からい",
+                expression="辛い",
+                reading="つらい",
+                meanings=["painful"],
+                usage_notes="written by a model",
+                source=SourceReference(type="shirabe", imported_from="export.csv"),
+            )
+        ],
+        {"source_file": "vocabulary.json", "model": "m", "review_notes": "n"},
+    )
+
+    assert cli.main(["--root", str(root), "promote", str(staged), "--skip-reading-check"]) == 0
+
+    stored = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    assert [item["id"] for item in stored] == ["word:辛い:からい"]
+    assert "Re-minted" not in capsys.readouterr().out

@@ -195,6 +195,34 @@ def _deck_string_set(deck_config: dict[str, Any], key: str, deck_path: Path) -> 
     return {str(item) for item in value}
 
 
+def deck_declared_ids(deck_path: Path) -> set[str]:
+    """Every record id a deck *declares*, before any include/exclude filter.
+
+    Different question from :func:`resolve_deck_records`, which answers "what
+    does this deck build". A caller asking "does this id exist anywhere in the
+    collection" — the re-mint gate, the ``--replace`` ledger prune — must not
+    lose an inline note a filter happens to drop: the note is still in the file,
+    still carries hand-written content, and its GUID may already be in Anki.
+    """
+    raw = load_structured(deck_path)
+    if not isinstance(raw, dict):
+        raise DataError(f"Deck file must contain a mapping: {deck_path}")
+    ids: set[str] = set()
+    deck_config = raw.get("deck") or {}
+    if isinstance(deck_config, dict) and (source_value := deck_config.get("source")):
+        source_path = (deck_path.parent / str(source_value)).resolve()
+        ids.update(record.id for record in load_records(source_path))
+    inline_notes = raw.get("notes") or []
+    if not isinstance(inline_notes, list):
+        raise DataError(f"The notes section must be a list: {deck_path}")
+    for item in inline_notes:
+        if not isinstance(item, dict):
+            raise DataError(f"Each note must be a mapping: {deck_path}")
+        if record_id := str(item.get("id", "")).strip():
+            ids.add(record_id)
+    return ids
+
+
 def resolve_deck_records(deck_path: Path) -> tuple[dict[str, Any], list[VocabularyRecord]]:
     raw = load_structured(deck_path)
     if not isinstance(raw, dict):

@@ -57,6 +57,13 @@ HOLD_READING_KANJI = "reading contains kanji"
 #: entry for the spelling lists it.
 HOLD_UNKNOWN_READING = "reading not in the dictionary"
 
+#: A row whose id would change, on a run that cannot see the whole collection.
+#: Promoting it under the id it arrived with would write an id nothing can ever
+#: repair — ``remint`` is the only thing that fixes a stored id, and a stored id
+#: is exempt from it — so the row waits in ``data/staging/`` instead, which is
+#: committed and recoverable, until the run can prove the id is free.
+HOLD_UNVERIFIABLE_ID = "cannot check this id against the whole collection"
+
 
 class PromoteError(JankiError):
     pass
@@ -116,6 +123,7 @@ def check_readings(
     client: jpdb.JpdbClient | None = None,
     skip_reading_check: bool = False,
     already_stored: Container[str] = frozenset(),
+    remint_blocked: bool = False,
 ) -> PromoteResult:
     """Decide, per record, whether it may become a real record.
 
@@ -132,6 +140,13 @@ def check_readings(
 
     ``already_stored`` is the ids the collection already holds; see
     :func:`remint` for why a re-mint must not touch one of them.
+    ``remint_blocked`` says that set could not be completed — an unreadable deck
+    — in which case a row whose id would change is **held back** rather than
+    promoted. Promoting it under the id it arrived with is not the cautious
+    option: that id lands in the store permanently, since ``remint`` is the only
+    thing that repairs a stored id and a stored id is exempt from it. Holding
+    keeps the row in ``data/staging/``, which is committed, and re-running once
+    the deck parses does the right thing.
     """
     result = PromoteResult()
     for record in records:
@@ -155,7 +170,15 @@ def check_readings(
                 result.keep.append(True)
                 continue
 
-        promoted = remint(_resolved(record), already_stored)
+        resolved = _resolved(record)
+        if remint_blocked and record.id != stable_record_id(
+            resolved.expression, resolved.reading
+        ):
+            result.held.append(_hold(record, HOLD_UNVERIFIABLE_ID))
+            result.keep.append(True)
+            continue
+
+        promoted = remint(resolved, already_stored)
         if promoted.id != record.id:
             result.reminted[record.id] = promoted.id
         result.promoted.append(promoted)

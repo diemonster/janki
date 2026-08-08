@@ -33,7 +33,7 @@ from typing import Any
 
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
-from japanese_anki.exporters.anki import resolve_deck_records
+from japanese_anki.exporters.anki import deck_declared_ids, resolve_deck_records
 from japanese_anki.identifiers import normalize_identity_part
 from japanese_anki.io import load_records
 from japanese_anki.ledger import (
@@ -159,16 +159,22 @@ def surviving_ids(
     A deck that will not resolve is named in the second element instead of being
     skipped. Its ids are unknown, so nothing can be *proved* absent, and a
     ledger entry holds ``added_at`` and ``exports`` that nothing reconstructs.
+
+    Ids are read **before** a deck's include/exclude filters, via
+    :func:`deck_declared_ids`. The filters answer "what does this deck build",
+    and that is not this question: a note the deck declares and a filter drops
+    is still in the file, still carries whatever a human wrote into it, and its
+    GUID may already be in Anki. Treating it as absent is how a curated note
+    gets a second copy under a new id, or loses its ledger entry.
     """
     ids = {record.id for record in records}
     unreadable: list[str] = []
     for deck_path in deck_files(config):
         try:
-            _, deck_records = resolve_deck_records(deck_path)
+            ids.update(deck_declared_ids(deck_path))
         except JankiError as exc:
             unreadable.append(f"{deck_path}: {exc}")
             continue
-        ids.update(record.id for record in deck_records)
     return ids, unreadable
 
 
