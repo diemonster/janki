@@ -329,21 +329,33 @@ def unusable_note(candidates: Sequence[Any]) -> str:
         "them by hand if they are real."
     ]
     for candidate in candidates:
-        page = getattr(candidate, "page", 0) or 0
-        parts = [f"page {page}" if page else "page unknown"]
-        for name in ("reading", "context"):
-            value = str(getattr(candidate, name, "") or "").strip()
-            if value:
-                parts.append(f"{name}: {value}")
-        meanings = [
-            text
-            for item in getattr(candidate, "meanings", []) or []
-            if (text := str(item).strip())
-        ]
-        if meanings:
-            parts.append("meanings: " + ", ".join(meanings))
-        lines.append("  - " + "; ".join(parts))
+        lines.append("  - " + "; ".join(_describe(candidate)))
     return "\n".join(lines)
+
+
+def _describe(candidate: Any) -> list[str]:
+    """Every field the model filled in, as ``name: value`` parts.
+
+    Read off the schema rather than a hand-written list of field names, so a
+    field added to :func:`candidate_schema` later cannot start being silently
+    dropped from these notes — which is the whole failure this note exists to
+    prevent, one level down. ``expression`` is skipped because it is empty by
+    definition here; empty fields are skipped because they say nothing.
+    """
+    parts: list[str] = []
+    # Off the class, not the instance: pydantic deprecated the instance form.
+    fields = getattr(type(candidate), "model_fields", None) or {}
+    for name in fields:
+        if name == "expression":
+            continue
+        value = getattr(candidate, name, None)
+        if isinstance(value, list | tuple):
+            text = ", ".join(str(item).strip() for item in value if str(item).strip())
+        else:
+            text = str(value if value is not None else "").strip()
+        if text and text != "0":
+            parts.append(f"{name}: {text}")
+    return parts or ["nothing but an empty row"]
 
 
 def _examples(japanese: str) -> list[Any]:

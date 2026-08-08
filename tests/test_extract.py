@@ -579,7 +579,17 @@ def test_a_candidate_with_no_expression_is_counted_not_hidden(
     monkeypatch.setattr(
         cli.extract.claude_client,
         "parse_call",
-        FakeCall(ok(candidate(), candidate(expression="  "))),
+        FakeCall(
+            ok(
+                candidate(),
+                candidate(
+                    expression="  ",
+                    example="毎日日本語を話します。",
+                    confidence="low",
+                    inclusion_reason="new in this chapter",
+                ),
+            )
+        ),
     )
 
     cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path))])
@@ -591,6 +601,13 @@ def test_a_candidate_with_no_expression_is_counted_not_hidden(
     note = meta["review_notes"]
     assert "could not be stored" in note
     # Everything the model did read about the row, so the page can be rechecked.
-    assert "page 12" in note
+    assert "page: 12" in note
     assert "はなす" in note
     assert "to speak" in note
+    # Every field the model filled in, not a hand-picked few: the example read
+    # verbatim off the page and the low-confidence flag both matter to whoever
+    # re-adds the word by hand.
+    assert "毎日日本語を話します。" in note
+    assert "verb" in note
+    assert "low" in note
+    assert "new in this chapter" in note
