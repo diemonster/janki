@@ -59,12 +59,16 @@ HOLD_UNKNOWN_READING = "reading not in the dictionary"
 #: is committed, until a run can prove the id is free.
 HOLD_UNVERIFIABLE_ID = "cannot check this id against the whole collection"
 
-#: The holds that mean "a human still has to supply the reading". Everything
-#: else in this vocabulary is a hold for some other reason, and janki's reading
-#: assistant must not spend a dictionary call on one.
-READING_HOLDS: frozenset[str] = frozenset(
-    {HOLD_MISSING_READING, HOLD_READING_KANJI, HOLD_UNKNOWN_READING}
-)
+#: The holds that are *not* about the reading — a deny-list, not an allow-list,
+#: and the direction matters. A staging file is hand-edited: a reviewer may type
+#: ``hold_reason: check the okurigana`` into one, and the importers write their
+#: reasons as bare literals that could drift from the constants above. Under an
+#: allow-list every one of those would silently mean "not a reading hold", and
+#: janki's reading assistant would report a file with held rows as having none —
+#: while ``status --staged``, which reads the raw value, still lists them. So an
+#: unrecognised reason means what a reason has always meant, and only the one
+#: hold that is genuinely about something else is named here.
+NON_READING_HOLDS: frozenset[str] = frozenset({HOLD_UNVERIFIABLE_ID})
 
 # Metadata keys that sit beside ``records:``; the record loader ignores them.
 # Enforced by :func:`write_staging` as a warning, not a refusal: `read_staging`

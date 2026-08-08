@@ -1163,3 +1163,69 @@ def test_a_deck_janki_calls_broken_is_broken_here_too(
     assert "deck section must be a mapping" in captured.err
     assert json.loads((root / "vocabulary.json").read_text(encoding="utf-8")) == []
     assert staged.is_file(), "the row waits rather than taking an unrepairable id"
+
+
+def test_a_proved_id_is_promoted_even_when_another_deck_will_not_parse(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`remint_blocked` means the id set is incomplete, not wrong. An id in it
+    was positively proved present, so holding that row would block a run over
+    something nothing was ever uncertain about — and record the reason as
+    "cannot check this id", which is false for it."""
+    root = tmp_path
+    (root / "janki.toml").write_text(
+        "[paths]\n"
+        'normalized_file = "vocabulary.json"\n'
+        'ledger_file = "ledger.json"\n'
+        'deck_dir = "decks"\n'
+        'staging_dir = "staging"\n',
+        encoding="utf-8",
+    )
+    curated = VocabularyRecord(
+        id="word:辛い:からい",
+        expression="辛い",
+        reading="つらい",
+        meanings=["painful"],
+        source=SourceReference(type="shirabe", imported_from="export.csv"),
+    )
+    (root / "vocabulary.json").write_text(
+        json.dumps([curated.to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+    (root / "decks").mkdir()
+    (root / "decks" / "broken.yaml").write_text("name: [unclosed\n", encoding="utf-8")
+    staged = root / "staging" / "ai.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    write_staging(
+        staged,
+        [replace(curated, usage_notes="written by a model")],
+        {"source_file": "vocabulary.json", "model": "m", "review_notes": "n"},
+    )
+
+    assert cli.main(["--root", str(root), "promote", str(staged), "--skip-reading-check"]) == 0
+
+    stored = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    assert [item["id"] for item in stored] == ["word:辛い:からい"]
+    assert stored[0]["usage_notes"] == "written by a model", "the run was not blocked"
+    assert "Re-minted" not in capsys.readouterr().out
+    assert not staged.exists(), "the row was promoted, not held"
+
+
+def test_a_hold_reason_janki_does_not_recognise_still_needs_a_reading(
+    tmp_path: Path,
+) -> None:
+    """Staging files are hand-edited. Under an allow-list a reviewer's own
+    wording would silently mean "not a reading hold", and the reading assistant
+    would report a file with held rows as having none — while `status --staged`
+    went on listing them."""
+    typed_by_hand = annotate(
+        VocabularyRecord(
+            id="word:話す:はなす",
+            expression="話す",
+            reading="はなす",
+            meanings=["to speak"],
+            source=SourceReference(type="shirabe", imported_from="export.csv"),
+        ),
+        hold_reason="check the okurigana",
+    )
+
+    assert enrich.needs_reading(typed_by_hand) is True
