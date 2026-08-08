@@ -1131,7 +1131,7 @@ Design: DESIGN_V2 "PDFs and photos > Step 1".
 - Tests: fake parse_call; staging shape; already-known annotation;
   refusal and max_tokens paths; --force behavior.
 
-### [ ] M3.4 `janki promote`
+### [~] claimed task/m3.4 2026-08-07 — M3.4 `janki promote`
 
 Depends on: M3.3, M2.1, M1.1, M1.3
 Files: new `src/japanese_anki/promote.py`, `src/japanese_anki/cli.py`,
