@@ -1525,7 +1525,23 @@ last kana has nowhere to show it. (5) `render_pitch_html` refuses a bare
 characters, so passing one would render a diagram per character or fail
 far from the mistake. Refusals throughout rather than best efforts —
 a wrong accent spoken onto a card built to teach that accent is the one
-outcome worse than no audio.*
+outcome worse than no audio.
+
+Amended same day, from review. **The merge gate did not gate.** Both my
+拗音 goldens were 病院, which is heiban — and under heiban the mark lands
+on the last unit however the kana are grouped, so the naive per-kana
+mapping passed every assertion in the file. A 拗音 gate has to have its
+drop *inside* the word: 授業 `HHLLLL` → `ジュ'ギョウ`, which the naive
+mapping renders `ジュギョ'ウ`. The same flaw ran through the っ/ん cases
+(both hold with them wrongly attaching) and the first-kana case (holds if
+the *last* kana is read). All four are discriminating now, verified by
+mutating the module and watching them fail. Also unified with two
+neighbours it had quietly forked from: `ledger._selected_pitch_pattern`
+now delegates to `pitch.select_pattern` — the word-audio content
+fingerprint is computed *over* that choice, so two definitions would mean
+audio generated under one is never stale under the other — and
+`validation` counts kana the same NFC way, having warned about patterns
+the converter accepts.*
 
 Depends on: M2.2
 Files: new `src/japanese_anki/pitch.py`, new `tests/test_pitch.py`.

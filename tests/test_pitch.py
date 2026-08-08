@@ -121,27 +121,56 @@ def test_atamadaka_and_odaka_are_not_the_same_string() -> None:
 
 
 def test_a_youon_word_counts_two_kana_as_one_mora() -> None:
-    # 病院 (びょういん) heiban: five kana, four morae. Per-kana the mark would
-    # land a mora late.
+    """授業 (じゅぎょう) atamadaka, ``HHLLLL`` → ``ジュ'ギョウ``.
+
+    **The merge gate.** It has to be a 拗音 word with a drop *inside* it: under
+    heiban the mark goes on the last unit however the kana are grouped, so a
+    heiban 拗音 word cannot tell the two mappings apart. Read per kana instead
+    of per mora, this comes out ``ジュギョ'ウ`` — the accent forced onto the
+    wrong mora and spoken with confidence, which is the exact failure this
+    module was written to prevent.
+    """
+    assert to_aquestalk("じゅぎょう", "HHLLLL") == "ジュ'ギョウ"
+
+
+def test_a_heiban_youon_word_too() -> None:
+    # 病院 (びょういん): five kana, four morae. Kept for the class, but see
+    # above — heiban is not where the grouping shows.
     assert to_aquestalk("びょういん", "LLHHHH") == "ビョウイン'"
 
 
 def test_the_moras_level_is_read_off_its_first_kana() -> None:
     """A 拗音's two kana carry one pitch. If a source ever writes the small kana
     with the *following* mora's level, the first kana is the one that cannot be
-    the small one — so it is the one read."""
-    assert to_aquestalk("びょういん", "LHHHHH") == "ビョウイン'"
+    the small one — so it is the one read.
+
+    ``HLLLLL`` is the case that discriminates: off the first kana the levels are
+    ``[H,L,L,L]`` and the mark lands after mora 1 (``ビョ'ウイン``); off the last
+    they are ``[L,L,L,L]``, no drop at all, and it lands on the final mora.
+    """
+    assert to_aquestalk("びょういん", "HLLLLL") == "ビョ'ウイン"
 
 
 def test_sokuon_is_a_mora() -> None:
-    # 学校 (がっこう) heiban: four morae including っ.
+    # 学校 (がっこう) heiban: four morae including っ. The AquesTalk string is
+    # the same either way here — heiban again — so the count is asserted where
+    # it shows, on the diagram.
     assert to_aquestalk("がっこう", "LHHHH") == "ガッコウ'"
+    assert render_pitch_html("がっこう", ["LHHHH"]).count('class="mora ') == 5
 
 
 def test_syllabic_n_is_a_mora() -> None:
-    # 先生 (せんせい) nakadaka, accent 3: the drop is after the third mora, and
-    # ん is the second — miscount it and the mark lands on ン.
+    # 先生 (せんせい) nakadaka, accent 3 → センセ'イ. Four morae plus the
+    # particle slot; merge ん into せ and the diagram loses one.
     assert to_aquestalk("せんせい", "LHHLL") == "センセ'イ"
+    assert render_pitch_html("せんせい", ["LHHLL"]).count('class="mora ') == 5
+
+
+def test_a_sokuon_before_a_drop_moves_the_mark() -> None:
+    """Where っ's mora-hood does change the spoken string: 発表 (はっぴょう),
+    nakadaka accent 3 → ハッピョ'ウ. Merge っ into は and the mark lands a mora
+    early, on ピョ."""
+    assert to_aquestalk("はっぴょう", "LHHHLL") == "ハッピョ'ウ"
 
 
 def test_a_long_vowel_mark_is_a_mora() -> None:
