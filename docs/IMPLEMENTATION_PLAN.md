@@ -1321,7 +1321,7 @@ Design: DESIGN_V2 "AI integration".
   through `janki promote` instead of a monolithic diff.
 - Ledger `record_enriched(kind="ai", model=<model>, fields=...)`.
 
-### [ ] M4.3 `--polish-meanings`
+### [~] claimed task/m4.3 2026-08-08 — M4.3 `--polish-meanings`
 
 Depends on: M4.2
 Files: `src/japanese_anki/enrich.py`, `src/japanese_anki/cli.py`,
