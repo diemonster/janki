@@ -1321,7 +1321,33 @@ Design: DESIGN_V2 "AI integration".
   through `janki promote` instead of a monolithic diff.
 - Ledger `record_enriched(kind="ai", model=<model>, fields=...)`.
 
-### [~] claimed task/m4.3 2026-08-08 — M4.3 `--polish-meanings`
+### [x] M4.3 `--polish-meanings`
+
+*Done 2026-08-08. Contract as written; six decisions and one file added
+to the list. **Added file:** `tests/test_enrich_polish.py` rather than
+extending `tests/test_enrich_ai.py` — the two passes share a module and
+almost nothing else, and this one's subject is what it refuses to do to
+a field that is already full. (1) It is a third **pass**, exclusive with
+`--jpdb` and `--ai`, not a modifier of `--ai`: it rewrites curated
+English, which is a different promise from filling a hole, and one y/n
+covering both would hide it. (2) `enrich.polish_meanings` is a
+**generator**. The confirmation is per record, and the confirmation is
+what decides whether the next call is worth making — declining the first
+proposal and walking away costs one call, not one per record in the
+collection. (3) `q` quits the loop and still writes what was already
+accepted: it was accepted. (4) An answer that reduces to nothing is
+refused rather than written — a card with a Japanese side and no English
+one is worse than a clumsy gloss — and an empty list is the documented
+way to say "already right", not an error. (5) The prompt carries the
+record's **examples**, because 「先生に聞く」 and 「音楽を聞く」 are the
+same verb with two glosses, and the sentences it was collected with are
+the only evidence janki has for which sense it means. (6) The ledger kind
+is `polish`, separate from `ai` although the same model does it: "this
+record's glosses were replaced by a model" is a different fact about a
+record than "its examples were written by one". The pass needs no jpdb
+key, so `command_enrich` no longer builds a client before dispatching to
+it. No gloss cap: the per-record confirm is the cap, and that is what it
+is for.*
 
 Depends on: M4.2
 Files: `src/japanese_anki/enrich.py`, `src/japanese_anki/cli.py`,

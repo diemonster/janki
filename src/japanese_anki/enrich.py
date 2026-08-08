@@ -31,7 +31,7 @@ you meant, and ``/parse`` picks for itself unless it is told. So the pass runs
 from __future__ import annotations
 
 import functools
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, is_dataclass, replace
 from dataclasses import fields as dc_fields
 from typing import Any
@@ -53,6 +53,7 @@ __all__ = [
     "EnrichResult",
     "SuggestionResult",
     "AI_FIELDS",
+    "POLISH_FIELDS",
     "STAGING_THRESHOLD",
     "UNVERIFIED_KEY",
     "ai_prompt",
@@ -65,6 +66,10 @@ __all__ = [
     "format_field_diff",
     "needs_reading",
     "parse_force_fields",
+    "polish_meanings",
+    "polish_prompt",
+    "polish_schema",
+    "polish_targets",
     "suggest_readings",
 ]
 
@@ -949,3 +954,184 @@ def enrich_ai(
                 example.japanese for example in outcome.record.examples if example.japanese
             )
     return result
+
+
+# --- polishing meanings ------------------------------------------------------
+#
+# The one pass that rewrites a field that is already full. Every other pass in
+# this module fills holes, which is safe because a hole has no curation in it to
+# lose; this one proposes replacing English somebody may have typed, so it is a
+# separate flag, it never runs as a side effect of anything else, and the CLI
+# confirms it one record at a time.
+
+
+#: The only field this pass writes. A tuple so it reads like its siblings and
+#: so the ledger's ``fields`` list is built the same way.
+POLISH_FIELDS: tuple[str, ...] = ("meanings",)
+
+
+@functools.cache
+def polish_schema() -> Any:
+    """The Pydantic model a polish response must match. Cached, like the others."""
+    from pydantic import BaseModel, Field
+
+    class PolishedMeanings(BaseModel):
+        meanings: list[str] = Field(
+            default_factory=list,
+            description=(
+                "The English glosses for this word, best first. Empty if the "
+                "existing ones are already right."
+            ),
+        )
+
+    return PolishedMeanings
+
+
+POLISH_INSTRUCTIONS = """\
+Improve the English glosses for the word you are given.
+
+A gloss list is what a learner reads on the back of a card, so it should be the
+few senses that word actually carries, ordered with the most common first, in
+the plainest English that is still accurate. Verbs read as "to ..." — "to
+speak", not "speaking" or "speech". Drop a gloss that is a restatement of the
+one above it, a part-of-speech label, or a dictionary's hedge.
+
+The record's own examples show which sense it was collected for. Keep that sense
+first, and do not add a sense the word has only in a register this record is not
+about.
+
+Return an empty list if the existing glosses are already right. That is a real
+answer and a common one; a rewrite that only moves words around costs a reviewer
+their attention for nothing."""
+
+
+def polish_targets(
+    records: Sequence[VocabularyRecord], ids: Sequence[str] | None = None
+) -> list[VocabularyRecord]:
+    """The records a polish pass would look at.
+
+    No content rule, unlike the other passes: ``meanings`` is never empty, so
+    there is no hole to test for and "which records need this" is a judgment
+    only the person running it can make. Without ``--ids`` that is every
+    record, and the caller says so out loud before spending anything.
+    """
+    if ids is None:
+        return list(records)
+    known = {record.id: record for record in records}
+    missing = [item for item in ids if item not in known]
+    if missing:
+        raise EnrichError(
+            f"No record with id {missing[0]!r}. Ids come from vocabulary.json; "
+            "'janki status' lists them."
+        )
+    return [known[item] for item in dict.fromkeys(ids)]
+
+
+def polish_prompt(record: VocabularyRecord) -> str:
+    """The user turn for one record: the word, its current glosses, its examples.
+
+    The examples are the point. 「先生に聞く」 and 「音楽を聞く」 are the same
+    verb with two glosses a learner needs kept apart, and the sentences the
+    record was collected with are the only evidence janki has for which one it
+    means.
+    """
+    lines = [f"Word: {record.expression}"]
+    if record.reading:
+        lines.append(f"Reading: {record.reading}")
+    lines.append("Current meanings: " + "; ".join(record.meanings or ["(none)"]))
+    for label, value in (
+        ("Part of speech", record.part_of_speech),
+        ("Verb group", record.verb_group),
+        ("Transitivity", record.transitivity),
+    ):
+        if value:
+            lines.append(f"{label}: {value}")
+    sentences = [item.japanese for item in record.examples if item.japanese]
+    if sentences:
+        lines.append(
+            "\nThe sentences this record was collected with — they say which "
+            "sense it means:\n" + "\n".join(f"- {item}" for item in sentences)
+        )
+    if record.usage_notes:
+        lines.append(f"\nUsage notes on file: {record.usage_notes}")
+    return "\n".join(lines)
+
+
+@dataclass(frozen=True, slots=True)
+class PolishOutcome:
+    """One record's turn through the pass: what was proposed, or why nothing was."""
+
+    record: VocabularyRecord
+    proposed: VocabularyRecord | None = None
+    changes: Mapping[str, tuple[Any, Any]] = field(default_factory=dict)
+    warning: str = ""
+
+
+def apply_polish_result(record: VocabularyRecord, parsed: Any) -> PolishOutcome:
+    """Turn a model's gloss list into a proposal, or into nothing.
+
+    Nothing is the common case and is not an error: the instructions ask for an
+    empty list when the existing glosses are already right, and a list that
+    comes back identical to the one on file is the same answer spelled longer.
+
+    A pass that emptied ``meanings`` would leave a card with a Japanese side and
+    no English one, so an answer that reduces to nothing is refused rather than
+    written — the record keeps what it has and the caller is told.
+    """
+    proposed = [
+        text
+        for item in getattr(parsed, "meanings", []) or []
+        if (text := str(item or "").strip())
+    ]
+    proposed = list(dict.fromkeys(proposed))
+    if not proposed:
+        return PolishOutcome(record=record)
+    if proposed == list(record.meanings):
+        return PolishOutcome(record=record)
+    return PolishOutcome(
+        record=record,
+        proposed=replace(record, meanings=proposed),
+        changes={"meanings": (list(record.meanings), proposed)},
+    )
+
+
+def polish_meanings(
+    records: Sequence[VocabularyRecord],
+    *,
+    model: str,
+    style_guide: str,
+    ids: Sequence[str] | None = None,
+    client: Any | None = None,
+) -> Iterator[PolishOutcome]:
+    """Propose better glosses, one record at a time, lazily.
+
+    A generator rather than a result object, because this pass is confirmed per
+    record and the confirmation is what decides whether the next call is worth
+    making. Driving it from the CLI's loop means declining the first proposal
+    and walking away costs one call, not one per record in the collection.
+    """
+    blocks = claude_client.system_blocks(style_guide, POLISH_INSTRUCTIONS)
+    for record in polish_targets(records, ids):
+        parsed, stop_reason, refusal = claude_client.parse_call(
+            model, blocks, polish_prompt(record), polish_schema(), client
+        )
+        if stop_reason == "refusal":
+            detail = f" ({refusal.category})" if refusal is not None else ""
+            yield PolishOutcome(
+                record=record,
+                warning=(
+                    f"{record.id}: {model} declined to gloss "
+                    f"{record.expression}{detail}; left alone."
+                ),
+            )
+            continue
+        if parsed is None:
+            yield PolishOutcome(
+                record=record,
+                warning=(
+                    f"{record.id}: {model} returned nothing usable for "
+                    f"{record.expression} (stop reason: {stop_reason}); left alone."
+                ),
+            )
+            continue
+        yield apply_polish_result(record, parsed)

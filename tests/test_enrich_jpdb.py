@@ -555,7 +555,7 @@ def test_enrich_takes_one_source_at_a_time(
     # unrelated sets of proposals into one y/n.
     assert cli.main(["enrich", "--ai", "--jpdb"]) == 1
 
-    assert "one source at a time" in capsys.readouterr().err
+    assert "one pass at a time" in capsys.readouterr().err
 
 
 def test_enrich_jpdb_writes_the_records_the_diff_and_the_ledger(

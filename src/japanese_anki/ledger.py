@@ -63,8 +63,12 @@ class LedgerError(JankiError):
 LEDGER_VERSION = 1
 
 # Who did the enriching. The kind is what keeps a jpdb pass and an AI pass from
-# being mistaken for each other; the model is which one of them ran.
-ENRICHMENT_KINDS: tuple[str, ...] = ("jpdb", "ai")
+# being mistaken for each other; the model is which one of them ran. ``polish``
+# is separate from ``ai`` although the same model does it: it is the one pass
+# that rewrites a field rather than filling it, and "this record's glosses were
+# replaced by a model" is a different fact about a record than "its examples
+# were written by one".
+ENRICHMENT_KINDS: tuple[str, ...] = ("jpdb", "ai", "polish")
 
 # What a piece of audio says: the word itself, or one example sentence.
 AUDIO_KINDS: tuple[str, ...] = ("word", "example")
