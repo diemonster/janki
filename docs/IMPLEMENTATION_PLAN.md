@@ -988,7 +988,7 @@ Files: new `src/japanese_anki/claude_client.py`, `pyproject.toml`,
   `ttl: "1h"` for batch use).
 - Tests: missing-dependency error path; fake client wiring.
 
-### [ ] M3.2 Input plumbing (formats, HEIC, inbox copy)
+### [~] claimed task/m3.2 2026-08-07 — M3.2 Input plumbing (formats, HEIC, inbox copy)
 
 Depends on: M1.6
 Files: new `src/japanese_anki/inputs.py`, `tests/test_inputs.py` (new).
