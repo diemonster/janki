@@ -971,7 +971,34 @@ Files: `README.md`.
 
 Lane map: {M3.1, M3.2 in parallel} → {M3.3} → {M3.4}.
 
-### [~] claimed task/m3.1 2026-08-07 — M3.1 AI plumbing (single owner of the Anthropic client)
+### [x] M3.1 AI plumbing (single owner of the Anthropic client)
+
+*Done 2026-08-07. Contract as written; six decisions. (1) `parse_call` returns
+the 2-tuple the contract specifies and **not** `stop_details`, so M3.3's refusal
+error cannot name the refusal category without widening the signature — worth
+knowing before M3.3 writes that message, and a deliberate choice to keep the
+contract as pinned rather than guess at what M4.2 will want too. (2) No new
+error class: the Conventions list every error home and `claude_client.py` is not
+one, so it raises `JankiError` directly, exactly as this task's text says. (3)
+`build_client` does **not** pre-check the API key. The SDK resolves credentials
+from more sources than `ANTHROPIC_API_KEY` alone, and a friendlier "key not set"
+error here would be a second copy of that resolution order, wrong the first time
+it gains a source. (4) A missing style guide is an error, not an empty block:
+every AI pass is meant to write to this project's conventions, and dropping them
+silently produces plausible output that ignores the rules the repository exists
+to enforce. (5) `system_blocks` puts the cache breakpoint on the **last** block,
+because caching is a prefix match — the style guide leads so the prefix is long
+enough to clear the API's per-model minimum, which is silent when missed. (6)
+`DEFAULT_MAX_TOKENS = 16000` is the non-streaming ceiling, and on current models
+it budgets **thinking plus response** — a limit sized snugly around the expected
+answer truncates mid-way, which is precisely the `max_tokens` stop reason this
+module makes callers look at. **The extras floor is `anthropic>=0.121`, not a
+bare `anthropic`:** the SDK binding (`messages.parse(output_format=...)` and a
+response carrying `parsed_output`) was verified against that installed version
+rather than taken from documentation, and an unverified floor would fail at the
+first AI call instead of at install time. Tests are independent of whether the
+extra is installed — both the missing-dependency path and the lazy-import
+guarantee are forced, so they hold either way.*
 
 Depends on: M1.2, M1.6
 Files: new `src/japanese_anki/claude_client.py`, `pyproject.toml`,

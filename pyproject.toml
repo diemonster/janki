@@ -22,6 +22,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# The Anthropic SDK is optional so that import, build, status and every other
+# non-AI command runs on a checkout that never installed it. claude_client.py
+# imports it lazily and names this extra when it is missing.
+# The floor is the version claude_client.py was verified against, not a guess:
+# it needs messages.parse(output_format=...) and a response carrying
+# parsed_output, and a floor nobody checked would fail at the first AI call
+# rather than at install time.
+ai = [
+  "anthropic>=0.121",
+]
 dev = [
   "pytest>=8,<9",
   "ruff>=0.6,<1",
