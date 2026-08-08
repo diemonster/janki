@@ -738,3 +738,44 @@ def test_promote_does_not_advertise_a_flag_it_does_not_have(
     assert "usage_notes" in out, "the conflict is reported"
     assert "--prefer-incoming" not in out
     assert "resolve these by hand" in out
+
+
+def test_an_identity_conflict_on_promote_still_says_it_is_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Promote re-mints ids from the NFKC-normalized expression and reading, so
+    a half-width row lands on a full-width record and they disagree about the
+    expression. That is not one more field to settle by hand — it is the two
+    copies disagreeing about which word this is, and the id comes from them."""
+    existing = VocabularyRecord(
+        id="word:ATM:エーティーエム",
+        expression="ＡＴＭ",
+        reading="エーティーエム",
+        meanings=["ATM"],
+        source=SourceReference(type="shirabe", imported_from="export.csv"),
+    )
+    root = project(tmp_path, [existing])
+    staged_row = VocabularyRecord(
+        id="word:ATM:エーティーエム",
+        expression="ATM",
+        reading="エーティーエム",
+        meanings=["ATM"],
+        source=SourceReference(type="extract", imported_from="page.png"),
+    )
+    staged = root / "staging" / "in.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    write_staging(staged, [staged_row], {"source_file": "x", "review_notes": "n"})
+
+    assert cli.main(["--root", str(root), "promote", str(staged), "--skip-reading-check"]) == 0
+
+    # Asserted on the conflict line, not on the whole capture: pytest names its
+    # tmp_path after the test, promote echoes that path, and a bare
+    # `"identity" in out` is therefore satisfied by this test's own name.
+    (line,) = [
+        item
+        for item in capsys.readouterr().out.splitlines()
+        if item.startswith("  word:ATM:")
+    ]
+    assert "expression" in line
+    assert "the two copies disagree about which word this is" in line
+    assert "--prefer-incoming" not in line

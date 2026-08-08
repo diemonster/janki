@@ -96,11 +96,19 @@ def _print_merge_summary(
     """Report what a merge did, and how to resolve what it would not.
 
     ``prefer_incoming_available`` because the remedy is not universal: only the
-    import commands take ``--prefer-incoming``. ``promote`` and
-    ``migrate-inline`` merge existing-wins with no flag to change it, so
-    printing that advice there hands the reader a command that exits with
-    "unrecognized arguments" — output that is worse than silence, because it
-    reads like the tool telling them what to do next.
+    import commands take ``--prefer-incoming``. Printing that advice elsewhere
+    hands the reader a command that exits with "unrecognized arguments" —
+    output worse than silence, because it reads like the tool telling them what
+    to do next. ``promote`` merges existing-wins; ``migrate-inline`` prefers the
+    inline note field by field (it is the authoritative copy there) and refuses
+    the identity disagreements it cannot merge. Neither has the flag, which is
+    the whole of the argument.
+
+    The *identity* marker is not part of that: a disagreement about
+    ``expression`` or ``reading`` is not one more field to settle by hand, it is
+    the two copies disagreeing about which word this is, and the record id is
+    derived from them. So it keeps a marker wherever it prints — one that names
+    the flag only where the flag exists.
     """
     counts = Counter(outcome.label for outcome in outcomes.values())
     print(
@@ -126,11 +134,12 @@ def _print_merge_summary(
         # The header's remedy does not apply to identity fields: the flag
         # refuses them, so pointing the user at it would send them into an
         # error. Say on the line itself that this one is a hand fix.
-        note = (
-            " (identity — resolve by hand; --prefer-incoming refuses it)"
-            if name in PREFER_INCOMING_PROTECTED and prefer_incoming_available
-            else ""
-        )
+        if name not in PREFER_INCOMING_PROTECTED:
+            note = ""
+        elif prefer_incoming_available:
+            note = " (identity — resolve by hand; --prefer-incoming refuses it)"
+        else:
+            note = " (identity — the two copies disagree about which word this is)"
         print(
             f"  {record_id} {name}{note}: existing {_format_merge_value(existing_value)} "
             f"| incoming {_format_merge_value(incoming_value)}"
