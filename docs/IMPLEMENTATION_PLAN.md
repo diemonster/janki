@@ -1389,7 +1389,23 @@ free, so forgetting the id is the only irreversible thing in the command.
 never mentioned, or no longer in the collection — and each is reported by
 name, because a batch runs for up to a day and the collection does not
 hold still. The fetch uses the **batch's** model, not the config's: a run
-submitted under one model was answered by that one.*
+submitted under one model was answered by that one.
+
+Amended after a second review found the all-missing guard could deadlock:
+a one-record batch whose single word was deleted while it was out has no
+way to tell "curation" from "the collection moved", and every later fetch
+raised while every later submit was refused. The guard now fires only on
+an **empty collection** — a `--root` pointed elsewhere, a normalized file
+gone — and vanished ids are reported as curation and cleared. Since that
+state is still reachable, **`--batch-forget`** is added (outside the
+task's surface, deliberately): the alternative remedy was hand-editing
+`data/ledger.json`, which AGENTS.md forbids for a file janki writes.
+`--force-fields` at fetch **overrides** the stored list rather than being
+refused with `--ids`/`--model`, and says so — the model and the ids
+describe what was asked and are settled, while this decides how an answer
+already in hand is applied, and a field may have filled in the meantime.
+`--batch-submit` and `--batch-forget` no longer build a jpdb client:
+neither asks jpdb anything, so neither may demand a key.*
 
 Depends on: M4.3 (same files), M1.3
 Files: `src/japanese_anki/enrich.py`, `src/japanese_anki/cli.py`,
