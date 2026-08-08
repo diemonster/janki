@@ -942,7 +942,7 @@ Design: DESIGN_V2 "Manual export files" (reviews.json).
   `resolve_deck_records`, currently undocumented) with the
   `exclude_tags: [jpdb-known]` recipe.
 
-### [ ] M2.W Milestone 2 wrap
+### [~] claimed task/m2.w 2026-08-07 — M2.W Milestone 2 wrap
 
 Depends on: all M2 tasks except M2.1F (owner-only; see the lane map)
 Files: `README.md`.
