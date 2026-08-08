@@ -528,6 +528,13 @@ def _render(value: Any) -> str:
     return text if len(text) <= 60 else f"{text[:57]}..."
 
 
+def _elements(value: Any) -> list[Any]:
+    """``value`` as a list of elements, or empty for anything without them."""
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return list(value)
+    return []
+
+
 def _hidden_difference(old: Any, new: Any) -> str:
     """Name what changed where the diff line could not show it.
 
@@ -539,30 +546,35 @@ def _hidden_difference(old: Any, new: Any) -> str:
     never displayed. Rather than widening the line for every field, the parts
     rendering hid say what they hid.
 
-    Checked **per element**, not per line: a list whose second example is a
-    visibly new sentence still hides an overwrite of the first one's English,
-    and gating on the whole line rendering alike would say nothing about it.
+    Elements are paired by **what they render as**, not by position. A model
+    answering with a different number of examples, or the same ones in another
+    order, is the ordinary case — and a positional pairing would let either of
+    those switch the check off exactly when the list is being rewritten
+    wholesale. An element that renders the same on both sides is the same
+    sentence as far as this line is concerned; if the values behind it differ,
+    that is the write nobody can see.
     """
     if old == new:
         return ""
-    pairs: list[tuple[Any, Any]] = []
-    if (
-        isinstance(old, Sequence)
-        and isinstance(new, Sequence)
-        and not isinstance(old, str)
-        and not isinstance(new, str)
-        and len(old) == len(new)
-    ):
-        pairs = list(zip(old, new, strict=True))
-    names = [
-        item.name
-        for left, right in pairs
-        if is_dataclass(left)
-        and type(left) is type(right)
-        and _render_item(left) == _render_item(right)
-        for item in dc_fields(left)
-        if getattr(left, item.name) != getattr(right, item.name)
-    ]
+    names: list[str] = []
+    after = _elements(new)
+    for left in _elements(old):
+        if not is_dataclass(left):
+            continue
+        same_text = [
+            right
+            for right in after
+            if type(right) is type(left) and _render_item(right) == _render_item(left)
+        ]
+        # Gone from the new side, or still there untouched: either way the line
+        # is not hiding anything about it.
+        if not same_text or any(right == left for right in same_text):
+            continue
+        names.extend(
+            item.name
+            for item in dc_fields(left)
+            if getattr(left, item.name) != getattr(same_text[0], item.name)
+        )
     if names:
         return f"({', '.join(dict.fromkeys(names))} differ)"
     if _render(old) == _render(new):

@@ -780,6 +780,44 @@ def test_one_visibly_new_sentence_does_not_hide_the_other_one_being_rewritten() 
     assert "english differ" in lines[1]
 
 
+def examples_diff(before: list[ExampleSentence], after: list[ExampleSentence]) -> str:
+    return enrich.format_field_diff({"word:話す:はなす": {"examples": (before, after)}})[1]
+
+
+def test_a_longer_answer_does_not_switch_the_check_off() -> None:
+    """A model returning a different number of examples is the ordinary case,
+    and it is exactly when the whole list is being rewritten."""
+    kept = "日本語を話します。"
+    line = examples_diff(
+        [ExampleSentence(japanese=kept, english="I speak Japanese.")],
+        [
+            ExampleSentence(japanese=kept, english="I talk in Japanese."),
+            ExampleSentence(japanese="先生と話しました。"),
+        ],
+    )
+
+    assert "english differ" in line
+
+
+def test_reordering_does_not_switch_the_check_off() -> None:
+    kept = "日本語を話します。"
+    line = examples_diff(
+        [ExampleSentence(japanese="友だちと話す。"), ExampleSentence(japanese=kept, romaji="x")],
+        [ExampleSentence(japanese=kept, romaji="y"), ExampleSentence(japanese="友だちと話す。")],
+    )
+
+    assert "romaji differ" in line
+
+
+def test_an_example_that_was_simply_dropped_is_not_called_a_hidden_change() -> None:
+    line = examples_diff(
+        [ExampleSentence(japanese="友だちと話す。"), ExampleSentence(japanese="先生と話す。")],
+        [ExampleSentence(japanese="友だちと話す。")],
+    )
+
+    assert "differ" not in line
+
+
 def test_a_field_that_really_did_not_change_is_not_annotated() -> None:
     sentence = ExampleSentence(japanese="話します。", english="I speak.")
     lines = enrich.format_field_diff(
