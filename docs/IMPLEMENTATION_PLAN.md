@@ -887,7 +887,7 @@ Design: DESIGN_V2 "jpdb.io > Dictionary enrichment" + enrich rules.
   disambiguation (forced-furigana request asserted), no-write on
   populated fields, staging `suggested_reading` annotation.
 
-### [ ] M2.7 `janki import-jpdb-reviews` + deck filter docs
+### [~] claimed task/m2.7 2026-08-07 — M2.7 `janki import-jpdb-reviews` + deck filter docs
 
 Depends on: M2.1, M1.3
 Files: `src/japanese_anki/cli.py` (do **not** fold into
