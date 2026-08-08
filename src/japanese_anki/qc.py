@@ -25,7 +25,7 @@ import re
 from dataclasses import dataclass, replace
 
 from japanese_anki import jpdb
-from japanese_anki.conjugation import conjugate
+from japanese_anki.conjugation import conjugate, polite_stem
 from japanese_anki.identifiers import normalize_identity_part
 from japanese_anki.models import ExampleSentence
 from japanese_anki.romaji import kana_to_romaji
@@ -80,6 +80,16 @@ def target_forms(expression: str, verb_group: str = "") -> tuple[str, ...]:
     forms.update(
         form for form in conjugate(expression, "", verb_group).values() if form
     )
+    # The polite forms too. The style guide asks for examples a beginner can
+    # read, and a beginner textbook teaches 〜ます before the plain form — so
+    # without these the check would reject almost every good sentence a model
+    # writes. Spelled out rather than matching the bare stem, which would let
+    # 食べ物 count as an example of 食べる.
+    if stem := polite_stem(expression, verb_group):
+        forms.update(
+            f"{stem}{tail}"
+            for tail in ("ます", "ました", "ません", "ませんでした", "まして", "ましょう")
+        )
     return tuple(sorted(forms, key=lambda form: (-len(form), form)))
 
 

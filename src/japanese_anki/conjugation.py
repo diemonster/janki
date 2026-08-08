@@ -378,3 +378,52 @@ def conjugate_i_adjective(expression: str, reading: str = "") -> dict[str, str]:
         "past_negative": f"{stem}くなかった",
         "te_form": f"{stem}くて",
     }
+
+
+# The い-row a godan verb's polite stem takes: 話す → 話し, 買う → 買い. Kept
+# beside the あ/え-row table above rather than in a caller, because "which kana
+# does this ending become" is this module's question wherever it is asked.
+_GODAN_MASU_STEM: dict[str, str] = {
+    "う": "い",
+    "つ": "ち",
+    "る": "り",
+    "む": "み",
+    "ぶ": "び",
+    "ぬ": "に",
+    "く": "き",
+    "ぐ": "ぎ",
+    "す": "し",
+}
+
+
+def polite_stem(expression: str, verb_group: str) -> str:
+    """The stem ``ます`` attaches to, or ``""`` when janki cannot say.
+
+    Not part of :data:`CONJUGATION_FORMS` and deliberately not stored on any
+    record: this exists so a *check* can recognise 話します as 話す, which
+    matters because the style guide asks for beginner examples and a beginner
+    textbook teaches polite forms first. Adding it to the stored table would
+    change every existing record's conjugations, which is a different decision
+    from being able to match a sentence.
+
+    ``""`` for anything janki has no class for, on the same principle as
+    :func:`conjugate`: an unknown inflection is not guessed at.
+    """
+    expression = normalize_identity_part(expression)
+    group = _VERB_GROUP_ALIASES.get(_normalize_group(verb_group))
+    if not expression or group is None:
+        return ""
+    if group == GODAN:
+        stem, ending = expression[:-1], expression[-1]
+        row = _GODAN_MASU_STEM.get(ending)
+        return f"{stem}{row}" if stem and row else ""
+    if group == ICHIDAN:
+        return expression[:-1] if expression.endswith("る") and len(expression) > 1 else ""
+    if group == SURU:
+        # 勉強する → 勉強し; a bare する → し.
+        return expression[:-2] + "し" if expression.endswith("する") else ""
+    if group == KURU:
+        for tail, stem in (("来る", "来"), ("くる", "き")):
+            if expression.endswith(tail):
+                return expression[: -len(tail)] + stem
+    return ""
