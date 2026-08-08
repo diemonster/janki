@@ -992,8 +992,18 @@ enough to clear the API's per-model minimum, which is silent when missed. (6)
 `DEFAULT_MAX_TOKENS = 16000` is the non-streaming ceiling, and on current models
 it budgets **thinking plus response** — a limit sized snugly around the expected
 answer truncates mid-way, which is precisely the `max_tokens` stop reason this
-module makes callers look at. **The extras floor is `anthropic>=0.121`, not a
-bare `anthropic`:** the SDK binding (`messages.parse(output_format=...)` and a
+module makes callers look at. **The module builds the request itself rather than
+calling the SDK's `messages.parse()` helper** — a correction made after review,
+and the reason the contract is satisfiable at all: `parse()` validates every
+text block against the schema with no stop-reason check anywhere in its path,
+so a truncated answer raises a pydantic `ValidationError` from inside the SDK.
+That fails twice — it is not a `JankiError`, so the CLI cannot format it, and
+the stop reason is unrecoverable from the exception, so a caller cannot tell
+"declined" from "ran out of room". `parse_call` therefore sends
+`output_config.format` (schema transformed by the SDK's own
+`transform_schema`, so the wire shape stays the SDK's business), reads
+`stop_reason` first, and validates only on `end_turn`. **The extras floor is
+`anthropic>=0.121`, not a bare `anthropic`:** the SDK binding (`messages.parse(output_format=...)` and a
 response carrying `parsed_output`) was verified against that installed version
 rather than taken from documentation, and an unverified floor would fail at the
 first AI call instead of at install time. Tests are independent of whether the

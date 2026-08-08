@@ -34,6 +34,7 @@ from japanese_anki.errors import JankiError
 
 __all__ = [
     "API_KEY_ENV",
+    "COMPLETE_STOP_REASONS",
     "DEFAULT_MAX_TOKENS",
     "STYLE_GUIDE_PATH",
     "build_client",
@@ -61,6 +62,15 @@ DEFAULT_MAX_TOKENS = 16000
 #: is why it is worth a cache breakpoint.
 STYLE_GUIDE_PATH = Path("docs") / "JAPANESE_STYLE_GUIDE.md"
 
+#: Stop reasons that mean the answer is whole and worth validating. Everything
+#: else — ``refusal``, ``max_tokens``, ``pause_turn`` — leaves partial or absent
+#: content, and is handed back to the caller instead.
+#:
+#: ``stop_sequence`` is deliberately absent: janki sends no stop sequences, so
+#: one occurring at all would mean the response was cut at a boundary nobody
+#: asked for, and a truncated answer is exactly what must not be parsed.
+COMPLETE_STOP_REASONS: frozenset[str] = frozenset({"end_turn"})
+
 
 def load_anthropic() -> Any:
     """The ``anthropic`` module, or a :class:`JankiError` saying how to get it.
@@ -76,6 +86,18 @@ def load_anthropic() -> Any:
             "by default. Install it with: pip install -e '.[ai]'"
         ) from exc
     return anthropic
+
+
+def _type_adapter(schema: Any) -> Any:
+    """A validator for ``schema``.
+
+    ``pydantic`` is imported here rather than at module scope for the same
+    reason ``anthropic`` is — it arrives with the ``ai`` extra, and every
+    non-AI command has to run without it.
+    """
+    import pydantic
+
+    return pydantic.TypeAdapter(schema)
 
 
 def build_client(api_key: str | None = None) -> Any:
@@ -152,28 +174,73 @@ def parse_call(
 ) -> tuple[Any, str | None]:
     """One structured-output call, returning ``(parsed, stop_reason)``.
 
-    ``schema`` is a Pydantic model describing the shape the response must take;
-    the SDK validates against it, so ``parsed`` is either an instance of that
-    model or ``None``. ``user_content`` is a string or the content-block list a
-    document or image call needs — this module does not care which, so
-    :mod:`inputs` can build blocks without this one growing a media vocabulary.
+    ``schema`` is a Pydantic model describing the shape the response must take.
+    ``user_content`` is a string or the content-block list a document or image
+    call needs — this module does not care which, so :mod:`inputs` can build
+    blocks without this one growing a media vocabulary.
 
     **Both halves of the return matter.** ``parsed`` is ``None`` whenever the
     model did not complete normally, and ``stop_reason`` says why:
     ``"refusal"`` means the request was declined, ``"max_tokens"`` means the
-    answer was cut off mid-way, and neither raises. Deciding between them is
-    the caller's job; surfacing them is this one's.
+    answer was cut off mid-way, and **neither raises**. Deciding between them
+    is the caller's job; surfacing them is this one's.
+
+    That last guarantee is why this builds the request itself instead of
+    calling the SDK's ``messages.parse()`` helper. ``parse()`` validates every
+    text block against the schema unconditionally — there is no stop-reason
+    check anywhere in its path — so a truncated answer raises a
+    ``pydantic`` ``ValidationError`` from inside the SDK. That is the wrong
+    outcome twice over: it is not a :class:`JankiError`, so the CLI cannot
+    format it, and the stop reason is not recoverable from the exception, so
+    the caller cannot tell "declined" from "ran out of room" — which is the one
+    thing this function exists to tell it. The schema transform is the SDK's
+    (``anthropic.transform_schema``), so the wire format stays the SDK's
+    business; only *when to validate* is ours.
 
     ``client`` is injectable so tests never touch the network (IMPLEMENTATION_PLAN
     rule 6) — the default builds a real one.
     """
+    anthropic = load_anthropic()
     api = client if client is not None else build_client()
-    messages = [{"role": "user", "content": user_content}]
-    response = api.messages.parse(
+    response = api.messages.create(
         model=model,
         max_tokens=max_tokens,
         system=list(system_blocks),
-        messages=messages,
-        output_format=schema,
+        messages=[{"role": "user", "content": user_content}],
+        output_config={
+            "format": {
+                "type": "json_schema",
+                "schema": anthropic.transform_schema(schema),
+            }
+        },
     )
-    return getattr(response, "parsed_output", None), getattr(response, "stop_reason", None)
+
+    stop_reason = getattr(response, "stop_reason", None)
+    if stop_reason not in COMPLETE_STOP_REASONS:
+        # Refused, truncated, or paused: whatever text came back is not a whole
+        # answer, so there is nothing worth validating and the caller decides.
+        return None, stop_reason
+
+    text = next(
+        (
+            block.text
+            for block in getattr(response, "content", [])
+            if getattr(block, "type", None) == "text"
+        ),
+        None,
+    )
+    if text is None:
+        raise JankiError(
+            f"{model} finished normally but returned no text to parse. "
+            "Nothing was written."
+        )
+    try:
+        return _type_adapter(schema).validate_json(text), stop_reason
+    except Exception as exc:
+        # Structured outputs are schema-valid on normal completion, so this is
+        # an anomaly rather than an expected branch — but it still has to reach
+        # the user as a janki error rather than a pydantic traceback.
+        raise JankiError(
+            f"{model} finished normally but its answer did not match the "
+            f"expected shape: {exc}"
+        ) from exc

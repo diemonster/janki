@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from pydantic import BaseModel
 
 from japanese_anki.claude_client import (
     DEFAULT_MAX_TOKENS,
@@ -27,24 +28,39 @@ from japanese_anki.claude_client import (
 from japanese_anki.errors import JankiError
 
 
+class Candidates(BaseModel):
+    """A real schema — the module validates against it, so a stub will not do."""
+
+    words: list[str]
+
+
 class FakeMessages:
     """Records the one call it is given and answers with a canned response."""
 
-    def __init__(self, parsed: Any = None, stop_reason: str | None = "end_turn") -> None:
-        self.parsed = parsed
+    def __init__(self, text: str | None = None, stop_reason: str | None = "end_turn") -> None:
+        self.text = text
         self.stop_reason = stop_reason
         self.calls: list[dict[str, Any]] = []
 
-    def parse(self, **kwargs: Any) -> Any:
+    def create(self, **kwargs: Any) -> Any:
         self.calls.append(kwargs)
-        return SimpleNamespace(parsed_output=self.parsed, stop_reason=self.stop_reason)
+        content = (
+            [] if self.text is None else [SimpleNamespace(type="text", text=self.text)]
+        )
+        return SimpleNamespace(content=content, stop_reason=self.stop_reason)
+
+    def parse(self, **kwargs: Any) -> Any:  # pragma: no cover - must never run
+        raise AssertionError(
+            "parse_call used messages.parse(), which validates without checking "
+            "stop_reason and therefore raises on a truncated answer"
+        )
 
 
-def fake_client(parsed: Any = None, stop_reason: str | None = "end_turn") -> Any:
-    return SimpleNamespace(messages=FakeMessages(parsed, stop_reason))
+def fake_client(text: str | None = None, stop_reason: str | None = "end_turn") -> Any:
+    return SimpleNamespace(messages=FakeMessages(text, stop_reason))
 
 
-SCHEMA = SimpleNamespace(__name__="Candidates")
+SCHEMA = Candidates
 
 
 # --- the optional dependency -------------------------------------------------
@@ -163,8 +179,12 @@ def test_the_real_style_guide_is_where_this_module_looks_for_it() -> None:
 # --- the call ----------------------------------------------------------------
 
 
+VALID = '{"words": ["\u8a71\u3059"]}'
+TRUNCATED = '{"words": ["\u8a71\u3059", "\u98df\u3079'
+
+
 def test_a_call_sends_the_model_system_blocks_and_schema() -> None:
-    client = fake_client(parsed=SimpleNamespace(words=[]))
+    client = fake_client(VALID)
     blocks = system_blocks("style guide")
 
     parse_call("claude-opus-5", blocks, "Extract the words.", SCHEMA, client)
@@ -172,15 +192,20 @@ def test_a_call_sends_the_model_system_blocks_and_schema() -> None:
     sent = client.messages.calls[0]
     assert sent["model"] == "claude-opus-5"
     assert sent["system"] == blocks
-    assert sent["output_format"] is SCHEMA
     assert sent["max_tokens"] == DEFAULT_MAX_TOKENS
     assert sent["messages"] == [{"role": "user", "content": "Extract the words."}]
+    # The schema goes as the strict JSON-schema form the API takes, transformed
+    # by the SDK — the wire shape stays the SDK's business.
+    schema = sent["output_config"]["format"]
+    assert schema["type"] == "json_schema"
+    assert schema["schema"]["additionalProperties"] is False
+    assert schema["schema"]["required"] == ["words"]
 
 
 def test_content_blocks_pass_through_untouched() -> None:
     # A document or image call hands over blocks; this module has no media
     # vocabulary and must not need one.
-    client = fake_client()
+    client = fake_client(VALID)
     content = [
         {"type": "document", "source": {"type": "base64", "data": "..."}},
         {"type": "text", "text": "Transcribe this."},
@@ -191,23 +216,24 @@ def test_content_blocks_pass_through_untouched() -> None:
     assert client.messages.calls[0]["messages"][0]["content"] == content
 
 
-def test_the_parsed_value_and_the_stop_reason_come_back_together() -> None:
-    parsed = SimpleNamespace(words=["話す"])
-    client = fake_client(parsed=parsed, stop_reason="end_turn")
+def test_a_complete_answer_is_validated_into_the_schema() -> None:
+    client = fake_client(VALID)
 
     result, stop_reason = parse_call(
         "claude-opus-5", system_blocks("guide"), "go", SCHEMA, client
     )
 
-    assert result is parsed
+    assert isinstance(result, Candidates)
+    assert result.words == ["\u8a71\u3059"]
     assert stop_reason == "end_turn"
 
 
-@pytest.mark.parametrize("stop_reason", ["refusal", "max_tokens"])
+@pytest.mark.parametrize("stop_reason", ["refusal", "max_tokens", "pause_turn"])
 def test_an_incomplete_response_is_returned_not_raised(stop_reason: str) -> None:
-    # Neither is an exception from the SDK, and neither carries usable output.
-    # Returning the pair is what stops a caller reading `parsed` without asking.
-    client = fake_client(parsed=None, stop_reason=stop_reason)
+    # The whole point of the module. A truncated answer is *invalid JSON*, so
+    # anything that validates before checking the stop reason raises here —
+    # which is neither a JankiError nor recoverable into a stop reason.
+    client = fake_client(TRUNCATED, stop_reason=stop_reason)
 
     result, reason = parse_call(
         "claude-opus-5", system_blocks("guide"), "go", SCHEMA, client
@@ -217,8 +243,38 @@ def test_an_incomplete_response_is_returned_not_raised(stop_reason: str) -> None
     assert reason == stop_reason
 
 
+def test_a_refusal_with_no_content_at_all_is_also_just_returned() -> None:
+    client = fake_client(None, stop_reason="refusal")
+
+    assert parse_call("claude-opus-5", system_blocks("g"), "go", SCHEMA, client) == (
+        None,
+        "refusal",
+    )
+
+
+def test_a_complete_answer_that_does_not_match_is_a_janki_error() -> None:
+    # Structured outputs are schema-valid on normal completion, so this is an
+    # anomaly — but it still has to reach the user as a formatted error rather
+    # than a pydantic traceback.
+    client = fake_client('{"words": "not a list"}')
+
+    with pytest.raises(JankiError) as excinfo:
+        parse_call("claude-opus-5", system_blocks("guide"), "go", SCHEMA, client)
+
+    assert "did not match" in str(excinfo.value)
+
+
+def test_a_complete_answer_with_no_text_block_is_a_janki_error() -> None:
+    client = fake_client(None, stop_reason="end_turn")
+
+    with pytest.raises(JankiError) as excinfo:
+        parse_call("claude-opus-5", system_blocks("guide"), "go", SCHEMA, client)
+
+    assert "no text" in str(excinfo.value)
+
+
 def test_a_caller_can_raise_the_token_ceiling() -> None:
-    client = fake_client()
+    client = fake_client(VALID)
 
     parse_call(
         "claude-opus-5", system_blocks("guide"), "go", SCHEMA, client, max_tokens=64000
@@ -234,8 +290,38 @@ def test_an_injected_client_is_the_one_used(monkeypatch: pytest.MonkeyPatch) -> 
         raise AssertionError("parse_call built a client despite being given one")
 
     monkeypatch.setattr("japanese_anki.claude_client.build_client", explode)
-    client = fake_client()
+    client = fake_client(VALID)
 
     parse_call("claude-opus-5", system_blocks("guide"), "go", SCHEMA, client)
 
     assert len(client.messages.calls) == 1
+
+
+def test_the_sdk_helper_really_does_raise_on_a_truncated_answer() -> None:
+    """Why this module does not call ``messages.parse()``.
+
+    Run against the real SDK rather than a fake, because the whole point is
+    that the fake cannot tell you this. If the SDK ever grows a stop-reason
+    guard, this fails and the hand-rolled request in ``parse_call`` can go.
+    """
+    pytest.importorskip("anthropic", reason="the ai extra is not installed")
+    from anthropic.lib._parse._response import parse_response
+    from anthropic.types.message import Message
+
+    truncated = Message.construct(
+        id="msg_1",
+        model="claude-opus-5",
+        role="assistant",
+        type="message",
+        stop_reason="max_tokens",
+        stop_sequence=None,
+        usage={"input_tokens": 10, "output_tokens": 16000},
+        content=[{"type": "text", "text": TRUNCATED}],
+    )
+
+    with pytest.raises(Exception) as excinfo:
+        parse_response(output_format=Candidates, response=truncated)
+
+    # Not a JankiError, so cli.main could not format it; and the stop reason is
+    # not recoverable from it, so a caller could not tell refused from truncated.
+    assert not isinstance(excinfo.value, JankiError)

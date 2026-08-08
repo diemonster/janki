@@ -31,6 +31,9 @@ dependencies = [
 # rather than at install time.
 ai = [
   "anthropic>=0.121",
+  # Imported directly by claude_client to validate a response against the
+  # schema, so it is declared rather than leaned on as an SDK transitive.
+  "pydantic>=2",
 ]
 dev = [
   "pytest>=8,<9",
