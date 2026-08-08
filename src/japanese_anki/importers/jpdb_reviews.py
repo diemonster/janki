@@ -92,11 +92,25 @@ class ReviewMatch:
     skipped_sections: list[str] = field(default_factory=list)
 
 
-def _entry_count(raw: Mapping[str, Any]) -> int:
-    reviews = raw.get("reviews")
+def _entry_count(raw: Mapping[str, Any], where: str) -> int:
+    """How many times this card has been reviewed.
+
+    An absent ``reviews`` key counts zero — a card jpdb made but never showed
+    you is still a word jpdb knows. A key that is *present* but not a list is a
+    different thing entirely: the export shape has drifted, and counting it zero
+    would write ``jpdb_reviews: "0"`` into the records as though that were the
+    truth.
+    """
+    if "reviews" not in raw:
+        return 0
+    reviews = raw["reviews"]
     if isinstance(reviews, Sequence) and not isinstance(reviews, str):
         return len(reviews)
-    return 0
+    raise JpdbReviewsError(
+        f"{where} has a 'reviews' value that is not a list of reviews, but a "
+        f"{type(reviews).__name__}. This command reads jpdb's 'Export vocabulary "
+        "reviews' file; counting it as zero would record a number nobody wrote."
+    )
 
 
 def read_reviews(path: Path) -> tuple[list[ReviewEntry], list[str]]:
@@ -108,7 +122,10 @@ def read_reviews(path: Path) -> tuple[list[ReviewEntry], list[str]]:
     """
     path = Path(path)
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        # utf-8-sig, like every other foreign input this project reads: a file
+        # round-tripped through a Windows editor carries a BOM, and json.loads
+        # rejects one as a syntax error on line 1.
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
     except OSError as exc:
         raise JpdbReviewsError(f"Could not read {path}: {exc}") from exc
     except json.JSONDecodeError as exc:
@@ -149,7 +166,9 @@ def read_reviews(path: Path) -> tuple[list[ReviewEntry], list[str]]:
                 )
             key_of = (vid, spelling, reading)
             existing = by_word.get(key_of)
-            count = _entry_count(raw) + (existing.reviews if existing else 0)
+            count = _entry_count(raw, f"Card {index} of '{name}' in {path}") + (
+                existing.reviews if existing else 0
+            )
             by_word[key_of] = ReviewEntry(
                 vid=vid, spelling=spelling, reading=reading, reviews=count
             )
@@ -195,6 +214,12 @@ def apply_reviews(
     by_vid, by_identity = _index(result.records)
     positions = {record.id: index for index, record in enumerate(result.records)}
 
+    # Resolve everything first, then write once per record. Two entries can
+    # land on one record — the same vid with the reading written differently in
+    # two card lists, or a vid-bearing entry and a vid-less one for the same
+    # word — and their counts have to *add*, the way two card types for one word
+    # do. Writing as we went would let the last entry's count win and would
+    # report the record as changed twice.
     for entry in entries:
         record_id = by_vid.get(entry.vid) if entry.vid else None
         if record_id is None:
@@ -202,13 +227,14 @@ def apply_reviews(
         if record_id is None:
             result.unmatched.append(entry)
             continue
-        result.matched[record_id] = entry.reviews
+        result.matched[record_id] = result.matched.get(record_id, 0) + entry.reviews
 
+    for record_id, reviews in result.matched.items():
         index = positions[record_id]
         record = result.records[index]
         tags = record.tags if KNOWN_TAG in record.tags else sorted({*record.tags, KNOWN_TAG})
         raw_fields = dict(record.source.raw_fields)
-        count = str(entry.reviews)
+        count = str(reviews)
         if tags == record.tags and raw_fields.get(REVIEW_COUNT_FIELD) == count:
             continue
         raw_fields[REVIEW_COUNT_FIELD] = count

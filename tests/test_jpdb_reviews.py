@@ -358,3 +358,53 @@ def test_the_documented_exclude_tags_recipe_actually_excludes(tmp_path: Path) ->
     _config, records = resolve_deck_records(deck)
 
     assert [item.expression for item in records] == ["食べる"]
+
+
+# --- foreign files and drifted shapes ---------------------------------------
+
+
+def test_an_export_with_a_utf8_bom_is_read_not_refused(tmp_path: Path) -> None:
+    # A file round-tripped through a Windows editor carries a BOM, and
+    # json.loads rejects one as a syntax error on line 1.
+    path = tmp_path / "reviews.json"
+    path.write_text(
+        json.dumps(export(review("話す", "はなす", 1562350, 3)), ensure_ascii=False),
+        encoding="utf-8-sig",
+    )
+
+    entries, _ = read_reviews(path)
+
+    assert [(entry.spelling, entry.reviews) for entry in entries] == [("話す", 3)]
+
+
+def test_a_reviews_value_that_is_not_a_list_is_an_error_not_a_zero(
+    tmp_path: Path,
+) -> None:
+    # Counting a drifted shape as zero would write jpdb_reviews: "0" into the
+    # records as though it were the truth.
+    path = write_export(
+        tmp_path / "reviews.json",
+        export({"vid": 1, "spelling": "話す", "reading": "はなす", "reviews": 12}),
+    )
+
+    with pytest.raises(JpdbReviewsError) as excinfo:
+        read_reviews(path)
+
+    assert "not a list of reviews" in str(excinfo.value)
+
+
+def test_two_entries_landing_on_one_record_add_up(tmp_path: Path) -> None:
+    # The same word can reach apply_reviews as two entries — one carrying a
+    # vid, one not — and their counts have to add, the way two card types for
+    # one word do.
+    entries = read_entries(
+        review("話す", "はなす", 1562350, 3), review("話す", "はなす", None, 4)
+    )
+    stored = record("話す", "はなす", vid="1562350")
+
+    result = apply_reviews([stored], entries)
+
+    assert result.matched == {"word:話す:はなす": 7}
+    assert result.records[0].source.raw_fields[REVIEW_COUNT_FIELD] == "7"
+    # And the record is reported changed once, not once per entry.
+    assert result.changed == ["word:話す:はなす"]
