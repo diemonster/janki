@@ -117,16 +117,21 @@ def _record_key(record_id: str) -> str:
 def _selected_pitch_pattern(record: Any) -> str:
     """The accent pattern word audio would be generated with, or ``""``.
 
-    ``pitch_accent`` and ``audio_accent`` arrive with the schema change in
-    M2.2; until then every record answers ``""`` and word audio is fingerprinted
-    on its reading alone. Once patterns exist, audio recorded without one is
-    correctly reported as stale.
+    Delegates to :func:`japanese_anki.pitch.select_pattern`, which is the one
+    definition — this fingerprint is computed *over* that choice, so a second
+    definition would mean audio generated under one rule is fingerprinted under
+    another and never reads as stale when the accent changes. Imported here
+    rather than at module scope because ``pitch`` imports ``models`` and this
+    module is imported by half the package; the local import keeps the graph
+    flat and costs one dict lookup per call.
+
+    ``None`` becomes ``""``: a record with no pattern is fingerprinted on its
+    reading alone, and once a pattern arrives the recorded audio is correctly
+    reported as stale.
     """
-    override = str(getattr(record, "audio_accent", "") or "").strip()
-    if override:
-        return override
-    patterns = getattr(record, "pitch_accent", None) or []
-    return str(patterns[0]).strip() if patterns else ""
+    from japanese_anki.pitch import select_pattern
+
+    return select_pattern(record) or ""
 
 
 def word_audio_filename_fingerprint(record: VocabularyRecord) -> str:

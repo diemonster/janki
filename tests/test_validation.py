@@ -1,3 +1,5 @@
+import unicodedata
+
 import pytest
 
 from japanese_anki.models import VocabularyRecord
@@ -144,7 +146,7 @@ def test_a_well_formed_accent_pattern_is_not_flagged() -> None:
     assert _issue_messages(_accented("LHHH")) == []
 
 
-@pytest.mark.parametrize("pattern", ["LHH-", "lhhh", "L H H H", "0110", "HLLLx"])
+@pytest.mark.parametrize("pattern", ["LHH-", "L H H H", "0110", "HLLLx"])
 def test_a_pattern_that_is_not_h_and_l_is_an_error(pattern: str) -> None:
     # Not a pattern at all: the converter reads it position by position, so
     # anything else is unusable rather than merely suspicious.
@@ -215,3 +217,21 @@ def test_a_kana_only_record_is_not_flagged_for_its_id() -> None:
     )
 
     assert _issue_messages(record) == []
+
+
+def test_a_lower_case_pattern_is_read_rather_than_refused() -> None:
+    """`pitch.to_aquestalk` reads h/l deliberately — same data, different
+    transcription habit. This check is an *error*, so disagreeing with it would
+    make `janki build` refuse a whole deck over a pattern that converts and
+    speaks correctly."""
+    assert _issue_messages(_accented("lhhh")) == []
+
+
+def test_a_decomposed_reading_is_counted_in_kana_not_codepoints() -> None:
+    """が typed as か + U+3099 is two codepoints and one kana. Counting
+    codepoints warns that audio will skip a record `to_aquestalk` handles fine,
+    and sends the reviewer to 'fix' a correct pattern into a real mismatch."""
+    decomposed = unicodedata.normalize("NFD", "がっこう")
+    assert len(decomposed) == 5, "four kana, five codepoints"
+
+    assert _issue_messages(_accented("LHHHH", reading=decomposed)) == []

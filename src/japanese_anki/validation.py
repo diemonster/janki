@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -13,7 +14,11 @@ _READINGLESS_ID = re.compile(r"^word:(?P<expression>.*):$")
 
 # A jpdb accent pattern: one H or L per kana of the reading, plus one for the
 # particle that would follow the word. Anything else is not a pattern at all.
-_PITCH_PATTERN = re.compile(r"^[HL]+$")
+# Case-insensitive to match `pitch._LEVELS`, which reads `h`/`l` deliberately.
+# The two disagreeing is not a style question: this one is an *error*, so
+# `has_errors` is true and `janki build` refuses the whole deck — over a pattern
+# `to_aquestalk` converts correctly and speaks correctly.
+_PITCH_PATTERN = re.compile(r"^[HL]+$", re.IGNORECASE)
 
 # Self-contained on purpose: the remedy has to be readable from the error, not
 # from a document. Pointing a reviewer at the review they just did is how this
@@ -24,6 +29,18 @@ _STAGING_HINT = (
     "route through the staging review directory — fill in the reading and delete the "
     "record's 'id:' line so the ID is re-minted from expression + reading"
 )
+
+
+def _kana(reading: str) -> str:
+    """``reading`` with combining marks composed, which is what a kana count is.
+
+    ``が`` typed as ``か`` + U+3099 is two codepoints and one kana.
+    :func:`japanese_anki.pitch.to_aquestalk` measures it this way, so measuring
+    it any other way here would warn about a pattern that converts perfectly
+    well — and send someone to "fix" a pattern into the mismatch the warning
+    exists to prevent.
+    """
+    return unicodedata.normalize("NFC", reading)
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,7 +133,7 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
                 f"{label} {pattern!r} is not an accent pattern: expected only "
                 "'H' and 'L', one per kana of the reading plus the following particle",
             )
-        elif record.reading and len(pattern) != len(record.reading) + 1:
+        elif record.reading and len(pattern) != len(_kana(record.reading)) + 1:
             # A warning, not an error: that the pattern covers the particle slot
             # is community-verified rather than documented, so a mismatch means
             # "look at this", not "this file is wrong". Audio generation (M5.1)
@@ -125,9 +142,10 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
             add(
                 "warning",
                 f"{label} {pattern!r} has {len(pattern)} position(s) for a "
-                f"{len(record.reading)}-kana reading; {len(record.reading) + 1} were "
-                "expected (one per kana plus the following particle) and audio "
-                "generation will skip this record rather than guess",
+                f"{len(_kana(record.reading))}-kana reading; "
+                f"{len(_kana(record.reading)) + 1} were expected (one per kana "
+                "plus the following particle) and audio generation will skip "
+                "this record rather than guess",
             )
     for index, example in enumerate(record.examples, start=1):
         if example.japanese and not example.english:

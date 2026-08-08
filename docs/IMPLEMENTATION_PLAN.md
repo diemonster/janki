@@ -645,9 +645,13 @@ Design: DESIGN_V2 "Schema changes".
   `audio_accent: str` (`""`), `frequency_rank: int | None` (`None`).
   `ExampleSentence`: `audio: str` (`""`). Extend `from_dict` coercion.
 - If M1.1's merge enumerates fields, add the new ones there.
-- Validation: `pitch_accent` entries match `^[HL]+$`; warn (not error)
-  when `len(pattern) != len(reading) + 1` (the particle-slot invariant
-  is community-verified only).
+- Validation: `pitch_accent` entries match `^[HL]+$`, **case-insensitively**
+  (amended in M5.1: `pitch._LEVELS` reads `h`/`l` deliberately, and this
+  check is an *error*, so a case-sensitive one made `janki build` refuse a
+  whole deck over a pattern the converter speaks correctly); warn (not
+  error) when `len(pattern) != len(reading) + 1` — counting **NFC** kana,
+  since a decomposed `が` is two codepoints and one kana (also M5.1) —
+  because the particle-slot invariant is community-verified only.
 - **Do not touch `FIELD_NAMES` or the exporter** — Anki-visible fields
   ship together in M5.4.
 - **Three existing tests encode the pre-M2.2 world and must be rewritten
@@ -1503,7 +1507,55 @@ Files: `README.md`, `prompts/ENRICH_VOCABULARY.md`.
 Lane map: {M5.1, M5.2, M5.5 in parallel} → {M5.3} → {M5.4} → {M5.6};
 M5.7 anytime after M5.3.
 
-### [~] claimed task/m5.1 2026-08-08 — M5.1 Pitch conversion + HTML renderer (merge gate: golden tests)
+### [x] M5.1 Pitch conversion + HTML renderer (merge gate: golden tests)
+
+*Done 2026-08-08. DESIGN_V2's conversion implemented exactly, golden set
+in place. Five decisions worth recording. (1) **Heiban and odaka produce
+the same AquesTalk string, and that is right, not a bug to fix later.**
+The notation carries one mark per phrase and the engine writes heiban on
+the final mora — where odaka's goes. The two differ only in the pitch of
+a particle, and janki speaks a word alone, so there is nothing for the
+distinction to land on. `render_pitch_html` *does* keep them apart, since
+a card shows the pattern rather than speaking it, and a test asserts both
+halves. (2) A mora's level is read off its **first** kana — the one that
+cannot be the small one — so a source that ever writes a 拗音's small kana
+with the following mora's level still converts correctly. (3) The reading
+is NFC-normalized before the length check: が typed as か+U+3099 is two
+codepoints and one kana, and counting codepoints would reject a pattern
+that fits. (4) The diagram draws the **particle slot** as an empty mora,
+because odaka's fall happens after the word and a diagram stopping at the
+last kana has nowhere to show it. (5) `render_pitch_html` refuses a bare
+`str` for `patterns`: a str is a `Sequence[str]` that iterates as
+characters, so passing one would render a diagram per character or fail
+far from the mistake. Refusals throughout rather than best efforts —
+a wrong accent spoken onto a card built to teach that accent is the one
+outcome worse than no audio.
+
+Amended same day, from review. **The merge gate did not gate.** Both my
+拗音 goldens were 病院, which is heiban — and under heiban the mark lands
+on the last unit however the kana are grouped, so the naive per-kana
+mapping passed every assertion in the file. A 拗音 gate has to have its
+drop *inside* the word: 授業 `HHLLLL` → `ジュ'ギョウ`. The same flaw ran
+through the っ/ん cases (both hold with them wrongly attaching) and the
+first-kana case (holds if the *last* kana is read).
+
+A second review found I had reported that verification more confidently
+than I ran it — I mutated the module once and read an aggregate count,
+and one of the four replacements (発表) still discriminated nothing,
+while the gate caught a *different* mutation than its docstring named.
+Each case is now mutated **individually** and the failing test named:
+per-kana-vs-per-mora pattern consumption and 拗音 grouping (the gate,
+via string and span count), っ mora-hood (`いっき` `HLLL` → `イ'ッキ`,
+which is stated as a pattern rather than a claim about any word's
+dictionary accent — asserting an accent class from memory in a golden
+file is how a wrong one gets copied forward), the NFC kana count, the
+lowercase pattern, and the ledger's delegation. Also unified with two
+neighbours it had quietly forked from: `ledger._selected_pitch_pattern`
+now delegates to `pitch.select_pattern` — the word-audio content
+fingerprint is computed *over* that choice, so two definitions would mean
+audio generated under one is never stale under the other — and
+`validation` counts kana the same NFC way, having warned about patterns
+the converter accepts.*
 
 Depends on: M2.2
 Files: new `src/japanese_anki/pitch.py`, new `tests/test_pitch.py`.
