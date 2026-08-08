@@ -916,3 +916,26 @@ def test_a_pass_flag_is_not_silently_ignored_by_the_other_pass(
     assert "--model" in capsys.readouterr().err
     assert cli.main(["--root", str(root), "enrich", "--jpdb", "--force"]) == 1
     assert "--force" in capsys.readouterr().err
+
+
+def test_a_failed_ledger_write_does_not_call_a_re_run_pointless(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A note is written only when the model has one worth writing, so a record
+    can land with examples and no note — and it is a target again next time.
+    Telling the user a re-run skips it is both wrong and expensive to believe."""
+    root = project(tmp_path, [record()])
+    patch_all(monkeypatch, FakeCall(ok("話します。", furigana="話[はな]します。")), FakeJpdb())
+    monkeypatch.setattr(
+        cli.ledger.Ledger,
+        "save",
+        lambda self: (_ for _ in ()).throw(cli.ledger.LedgerError("disk full")),
+    )
+
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--yes"]) == 1
+
+    err = capsys.readouterr().err
+    assert "'status --rebuild' cannot bring it back" in err
+    assert "not a free repair" in err
+    assert "either skips these records" not in err
+    assert stored(root)["word:話す:はなす"]["examples"]

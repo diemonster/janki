@@ -555,7 +555,7 @@ def test_enrich_takes_one_source_at_a_time(
     # unrelated sets of proposals into one y/n.
     assert cli.main(["enrich", "--ai", "--jpdb"]) == 1
 
-    assert "one source at a time" in capsys.readouterr().err
+    assert "one pass at a time" in capsys.readouterr().err
 
 
 def test_enrich_jpdb_writes_the_records_the_diff_and_the_ledger(
@@ -947,3 +947,27 @@ def test_a_field_jpdb_has_no_answer_for_is_looked_up_again_next_run() -> None:
     assert second.looked_up == 1
     assert second.changes == {}
     assert len(api.bodies) == calls + 1
+
+
+def test_a_failed_ledger_write_says_a_re_run_would_skip_these_records(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A record jpdb filled has nothing left it can fill, so a re-run reaches
+    nothing whether it skips the record (the dictionary had every field) or
+    looks it up again and proposes nothing (a noun, whose conjugations never
+    fill). The message covers both, and is not the polish one."""
+    root = project(tmp_path, [record()])
+    patch_api(monkeypatch, hanasu_api())
+    monkeypatch.setattr(
+        cli.ledger.Ledger,
+        "save",
+        lambda self: (_ for _ in ()).throw(cli.ledger.LedgerError("disk full")),
+    )
+
+    assert cli.main(["--root", str(root), "enrich", "--jpdb", "--yes"]) == 1
+
+    err = capsys.readouterr().err
+    assert "'status --rebuild' cannot bring it back" in err
+    assert "either skips these records or looks them up and proposes nothing" in err
+    assert "not a free repair" not in err
+    assert stored(root)["word:話す:はなす"]["furigana"] == "話[はな]す"

@@ -7,6 +7,7 @@ from collections import Counter
 from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 from japanese_anki import (
     claude_client,
@@ -289,6 +290,40 @@ def _report_ledger_failure(exc: ledger.LedgerError) -> None:
     print(
         "The records are written; the ledger is not. Run 'janki status --rebuild' "
         "once that file is writable to recover the entries it did not get.",
+        file=sys.stderr,
+    )
+
+
+def _report_enrichment_ledger_failure(
+    exc: ledger.LedgerError, *, rerun: str, aftermath: str
+) -> None:
+    """The honest report for an ``enriched`` entry that did not get written.
+
+    Deliberately not :func:`_report_ledger_failure`: its advice is
+    ``status --rebuild``, which reconstructs source references and audio from
+    what the records and media files *prove*. An ``enriched`` entry is provable
+    by nothing — a filled field does not say who filled it — so that advice
+    would promise a recovery that silently never happens, and report success
+    while doing it.
+
+    What a *re-run* does differs by pass, which is why the caller supplies that
+    sentence rather than this function guessing at one, and why there is no
+    two-way split worth generalising. ``--jpdb`` never reaches the ledger, since
+    what it could fill is filled — but whether it pays for a look-up first
+    depends on the word: a record the dictionary described completely is
+    skipped, and one it described partly is looked up again and proposes
+    nothing new. (A noun is the second kind: its ``conjugations`` never fill, so
+    it stays fillable forever.) ``--ai`` does reach the ledger — a record with
+    examples and no usage note is a target again. ``--polish-meanings`` looks at
+    every record every time. Whichever it is, saying it accurately is the whole
+    point of this message: nobody should chase a repair on a wrong description
+    of it.
+    """
+    print(f"warning: {exc}", file=sys.stderr)
+    print(
+        "The records are written; the ledger entry recording it is not. "
+        "'status --rebuild' cannot bring it back — an enrichment pass is not "
+        f"provable from the records. {rerun} {aftermath}",
         file=sys.stderr,
     )
 
@@ -755,20 +790,38 @@ def _enrich_staging(
 def command_enrich(args: argparse.Namespace) -> int:
     """Fill empty fields on existing records from a dictionary.
 
-    Two sources, one per run: ``--jpdb`` fills what a dictionary knows and
-    ``--ai`` writes what it does not. One is required, because "enrich" without
-    saying from what is a command whose meaning depends on which pass is newer.
+    Three passes, one per run: ``--jpdb`` fills what a dictionary knows,
+    ``--ai`` writes what it does not, and ``--polish-meanings`` rewrites English
+    that is already there. One is required, because "enrich" without saying how
+    is a command whose meaning depends on which pass is newest.
     """
-    if args.ai and args.jpdb:
-        raise JankiError(
-            "enrich takes one source at a time: --jpdb fills what a dictionary "
-            "knows, --ai writes what it does not. Run them separately so each "
-            "shows you its own diff."
+    passes = [
+        name
+        for name, chosen in (
+            ("--jpdb", args.jpdb),
+            ("--ai", args.ai),
+            ("--polish-meanings", args.polish_meanings),
         )
-    if not (args.ai or args.jpdb):
+        if chosen
+    ]
+    if len(passes) > 1:
         raise JankiError(
-            "enrich needs a source: --jpdb fills fields from the jpdb dictionary, "
-            "--ai writes examples and usage notes."
+            "enrich takes one pass at a time: --jpdb fills what a dictionary "
+            "knows, --ai writes what it does not, and --polish-meanings rewrites "
+            f"English that is already there. Got {', '.join(passes)}. Run them "
+            "separately so each shows you its own diff."
+        )
+    if not passes:
+        raise JankiError(
+            "enrich needs a pass: --jpdb fills fields from the jpdb dictionary, "
+            "--ai writes examples and usage notes, --polish-meanings proposes "
+            "better English glosses."
+        )
+    if args.polish_meanings and args.force_fields:
+        raise JankiError(
+            "enrich --polish-meanings writes 'meanings' and nothing else, so "
+            "there is no field list to widen. It always overwrites — that is "
+            "what it is for, and why it confirms one record at a time."
         )
     force_fields = enrich.parse_force_fields(args.force_fields, ai=args.ai)
     if args.staging is not None and (force_fields or args.ids):
@@ -776,26 +829,33 @@ def command_enrich(args: argparse.Namespace) -> int:
             "enrich --staging proposes readings for held rows and writes nothing "
             "else, so it takes neither --force-fields nor record ids."
         )
-    if args.staging is not None and args.ai:
+    if args.staging is not None and (args.ai or args.polish_meanings):
         raise JankiError(
             "enrich --staging annotates held rows with the reading jpdb proposes; "
-            "--ai writes examples and usage notes into records that already exist. "
-            "Run them separately."
+            f"{passes[0]} writes into records that already exist. Run them "
+            "separately."
         )
-    # A flag the running pass never reads is a typo, not a no-op: --model and
-    # --force belong to --ai, and silently running the dictionary pass under
-    # them answers a question the user did not ask.
-    for flag, value in (("--model", args.model), ("--force", args.force)):
-        if value and not args.ai:
-            raise JankiError(
-                f"enrich {flag} applies to the --ai pass only. The --jpdb pass "
-                "reads a dictionary, so it has no model to choose and writes no "
-                "staging file to overwrite."
-            )
+    # A flag the running pass never reads is a typo, not a no-op: silently
+    # running a pass that ignores it answers a question the user did not ask.
+    if args.model and not (args.ai or args.polish_meanings):
+        raise JankiError(
+            "enrich --model applies to the passes that call a model. The --jpdb "
+            "pass reads a dictionary, so it has no model to choose."
+        )
+    if args.force and not args.ai:
+        raise JankiError(
+            "enrich --force overwrites the staging file a large --ai run writes. "
+            f"{passes[0]} writes no staging file."
+        )
 
     config = _load_config(args)
-    # The jpdb client is what --jpdb enriches *from* and what --ai verifies
-    # example furigana *with*, so both paths want one.
+
+    # --polish-meanings rewrites English and asks jpdb nothing, so it must not
+    # require a key to run. The other paths do: --jpdb enriches *from* jpdb and
+    # --ai verifies example furigana *with* it.
+    if args.polish_meanings:
+        return _polish_meanings(config, args)
+
     client = jpdb.JpdbClient(jpdb.api_key_from_env())
 
     if args.staging is not None:
@@ -843,22 +903,17 @@ def command_enrich(args: argparse.Namespace) -> int:
     if ledger_error is None:
         print(f"Ledger: recorded a jpdb pass over {len(result.changes)} record(s).")
     else:
-        # Deliberately not `_report_ledger_failure`: its advice is
-        # `status --rebuild`, which reconstructs source references and audio
-        # from what the records prove. An `enriched` entry is provable by
-        # nothing — filled fields do not say who filled them — so that advice
-        # would promise a recovery that silently never happens. Nor does
-        # re-running recover it: the fields are full now, so the next pass
-        # skips these records before it reaches the ledger. Say that, rather
-        # than send someone after a fix that does not exist.
-        print(f"warning: {ledger_error}", file=sys.stderr)
-        print(
-            "The records are enriched; the ledger entry recording it is not, and "
-            "nothing can reconstruct it — neither 'status --rebuild' (an "
-            "enrichment pass is not provable from the records) nor a re-run (the "
-            "fields are filled now, so the next pass skips them). The records are "
-            "correct; 'status' will simply not know jpdb is what filled them.",
-            file=sys.stderr,
+        _report_enrichment_ledger_failure(
+            ledger_error,
+            rerun=(
+                "Nor does a re-run: what jpdb can fill is filled, so the next "
+                "pass either skips these records or looks them up and proposes "
+                "nothing — it never reaches the ledger either way."
+            ),
+            aftermath=(
+                "The records are correct; 'status' will simply not know jpdb is "
+                "what filled them."
+            ),
         )
         return 1
     return 0
@@ -965,8 +1020,139 @@ def _enrich_ai(
     if ledger_error is None:
         print(f"Ledger: recorded an AI pass over {len(result.changes)} record(s).")
     else:
-        _report_ledger_failure(ledger_error)
+        _report_enrichment_ledger_failure(
+            ledger_error,
+            rerun=(
+                "A re-run is not a free repair either: a record whose examples "
+                "landed without a usage note is still a target, so the next pass "
+                "would call the model for it again and record a pass only where "
+                "it writes something."
+            ),
+            aftermath=(
+                "The examples and notes are correct; 'status' will simply not "
+                f"know {model} wrote them."
+            ),
+        )
         return 1
+    return 0
+
+
+def _confirm_polish(assume_yes: bool) -> str:
+    """``"yes"``, ``"no"`` or ``"quit"`` for one proposed gloss list.
+
+    ``--yes`` and a non-tty both accept, the same rule every other confirm in
+    janki uses: fat-finger protection, not CI protection. Quitting is offered
+    because this pass calls the model per record as the loop runs, so walking
+    away after two proposals should cost two calls — and what was accepted
+    before that is still written, since it was accepted.
+    """
+    if assume_yes or not sys.stdin.isatty():
+        return "yes"
+    try:
+        answer = input("Replace these meanings? [y/N/q] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return "quit"
+    if answer in {"q", "quit"}:
+        return "quit"
+    return "yes" if answer in {"y", "yes"} else "no"
+
+
+def _polish_meanings(config: ProjectConfig, args: argparse.Namespace) -> int:
+    """Propose better English glosses, one record at a time.
+
+    The only pass that rewrites a field instead of filling one, which is why it
+    is its own flag and why the confirmation is per record rather than one y/n
+    over a whole diff: the thing being replaced may have been typed by hand out
+    of a textbook, and "these thirty are all fine except the fourth" is not an
+    answer a single prompt can take.
+    """
+    output_path = config.normalized_file.resolve()
+    records = load_records(output_path) if output_path.exists() else []
+    if not records:
+        print(f"No records to enrich in {output_path}.")
+        return 0
+
+    model = args.model or config.enrich_model
+    style_guide = claude_client.read_style_guide(config.root)
+    targets = enrich.polish_targets(records, args.ids or None)
+    print(
+        f"Polishing {len(targets)} record(s) with {model}, one call each. "
+        "Nothing is written until you say so."
+    )
+
+    book = ledger.load(config.ledger_file)
+    positions = {record.id: index for index, record in enumerate(records)}
+    updated = list(records)
+    accepted: dict[str, dict[str, tuple[Any, Any]]] = {}
+    declined = 0
+    unchanged = 0
+    stopped = False
+
+    # The prompt is not the only place a run gets interrupted, and it is not the
+    # likely one: the call is the slow step, so a Ctrl-C most often lands there.
+    # Both have to end the same way, or "what you accepted is written" is true
+    # only when the timing is lucky.
+    try:
+        for outcome in enrich.polish_meanings(
+            records, model=model, style_guide=style_guide, ids=args.ids or None
+        ):
+            if outcome.warning:
+                print(f"warning: {outcome.warning}", file=sys.stderr)
+                continue
+            if outcome.proposed is None:
+                unchanged += 1
+                continue
+            for line in enrich.format_field_diff(
+                {outcome.record.id: dict(outcome.changes)}
+            ):
+                print(line)
+            answer = _confirm_polish(args.yes)
+            if answer == "quit":
+                stopped = True
+                break
+            if answer == "no":
+                declined += 1
+                continue
+            updated[positions[outcome.record.id]] = outcome.proposed
+            accepted[outcome.record.id] = dict(outcome.changes)
+    except KeyboardInterrupt:
+        print()
+        stopped = True
+
+    if stopped:
+        print("Stopped; the records after this one were not looked at.")
+    if unchanged:
+        print(f"{unchanged} record(s) already had the glosses {model} would write.")
+    if declined:
+        print(f"{declined} proposal(s) declined.")
+    if not accepted:
+        print("Nothing written.")
+        return 0
+
+    save_records_json(output_path, updated)
+    for record_id in accepted:
+        book.record_enriched(
+            record_id, kind="polish", model=model, fields=enrich.POLISH_FIELDS
+        )
+    ledger_error = _save_ledger(book)
+
+    print(f"Rewrote the meanings of {len(accepted)} record(s) in {output_path}.")
+    if ledger_error is not None:
+        _report_enrichment_ledger_failure(
+            ledger_error,
+            rerun=(
+                "A re-run is not a free repair either: this pass looks at every "
+                "record every time, so it would call the model once per record "
+                "again and record a pass only where you accept a further change."
+            ),
+            aftermath=(
+                "The new glosses are on file; 'status' will simply not know "
+                f"{model} wrote them in place of what was there."
+            ),
+        )
+        return 1
+    print(f"Ledger: recorded a polish pass over {len(accepted)} record(s).")
     return 0
 
 
@@ -1490,7 +1676,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     enrich_parser = subparsers.add_parser(
         "enrich",
-        help="Fill empty fields on existing records from a dictionary",
+        help="Fill or improve fields on records janki already has",
     )
     enrich_parser.add_argument(
         "ids",
@@ -1507,6 +1693,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--ai",
         action="store_true",
         help="Write examples and usage notes with the Claude API.",
+    )
+    enrich_parser.add_argument(
+        "--polish-meanings",
+        action="store_true",
+        help=(
+            "Propose better English glosses for records that already have some, "
+            "confirmed one record at a time."
+        ),
     )
     enrich_parser.add_argument(
         "--force-fields",
@@ -1529,7 +1723,10 @@ def build_parser() -> argparse.ArgumentParser:
     enrich_parser.add_argument(
         "--model",
         metavar="ID",
-        help="Override the configured enrich model for this run (--ai only).",
+        help=(
+            "Override the configured model for this run "
+            "(--ai and --polish-meanings)."
+        ),
     )
     enrich_parser.add_argument(
         "--force",
