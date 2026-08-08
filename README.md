@@ -228,8 +228,8 @@ next import of the same export keeps mentioning it.
 Re-running the same import never overwrites a staging file that already exists.
 While the file still has errors it reports the path and the count and tells you
 to resolve it; once `janki validate` is happy with it, the message changes to
-say the review is finished and to move the records across, because re-running an
-import can never consume that file itself.
+say the review is finished and to run `janki promote` on it, because re-running
+an import can never consume that file itself.
 
 `data/staging/` is committed, like everything else under `data/`. Commit a
 review in progress and a hand-typed reading is recoverable; leave it

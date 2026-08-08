@@ -229,9 +229,8 @@ def _stage_needs_reading(
             # only honest instruction is the one that ends the loop.
             return (
                 held + "exists and was left untouched. Its review is finished — "
-                "'janki validate' reports no errors for it — so move its records "
-                "into your records file, run 'janki status --rebuild' so the ledger "
-                "learns about them, and delete it."
+                "'janki validate' reports no errors for it — so run 'janki promote' "
+                "on it: that lands its records, archives them, and removes the file."
             )
         return (
             held + "exists and was left untouched — it may hold review edits you have "

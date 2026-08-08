@@ -311,7 +311,9 @@ def test_a_resolved_staging_file_is_told_it_is_finished_not_to_resolve_itself(
 
     out = capsys.readouterr().out
     assert "Its review is finished" in out
-    assert "janki status --rebuild" in out
+    # The one exit that exists, and no competing manual recipe beside it.
+    assert "janki promote" in out
+    assert "status --rebuild" not in out
     assert "Resolve that file" not in out
 
 
