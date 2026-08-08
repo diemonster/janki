@@ -971,7 +971,50 @@ Files: `README.md`.
 
 Lane map: {M3.1, M3.2 in parallel} → {M3.3} → {M3.4}.
 
-### [~] claimed task/m3.1 2026-08-07 — M3.1 AI plumbing (single owner of the Anthropic client)
+### [x] M3.1 AI plumbing (single owner of the Anthropic client)
+
+*Done 2026-08-07. Contract as written; six decisions. (1) `parse_call` returns
+the 2-tuple the contract specifies and **not** `stop_details`, so M3.3's refusal
+error cannot name the refusal category without widening the signature — worth
+knowing before M3.3 writes that message, and a deliberate choice to keep the
+contract as pinned rather than guess at what M4.2 will want too. (2) No new
+error class: the Conventions list every error home and `claude_client.py` is not
+one, so it raises `JankiError` directly, exactly as this task's text says. (3)
+`build_client` does **not** pre-check the API key. The SDK resolves credentials
+from more sources than `ANTHROPIC_API_KEY` alone, and a friendlier "key not set"
+error here would be a second copy of that resolution order, wrong the first time
+it gains a source. (4) A missing style guide is an error, not an empty block:
+every AI pass is meant to write to this project's conventions, and dropping them
+silently produces plausible output that ignores the rules the repository exists
+to enforce. (5) `system_blocks` puts the cache breakpoint on the **last** block,
+because caching is a prefix match — the style guide leads so the prefix is long
+enough to clear the API's per-model minimum, which is silent when missed. (6)
+`DEFAULT_MAX_TOKENS = 16000` is the non-streaming ceiling, and on current models
+it budgets **thinking plus response** — a limit sized snugly around the expected
+answer truncates mid-way, which is precisely the `max_tokens` stop reason this
+module makes callers look at. **The module builds the request itself rather than
+calling the SDK's `messages.parse()` helper** — a correction made after review,
+and the reason the contract is satisfiable at all: `parse()` validates every
+text block against the schema with no stop-reason check anywhere in its path,
+so a truncated answer raises a pydantic `ValidationError` from inside the SDK.
+That fails twice — it is not a `JankiError`, so the CLI cannot format it, and
+the stop reason is unrecoverable from the exception, so a caller cannot tell
+"declined" from "ran out of room". `parse_call` therefore sends
+`output_config.format` (schema transformed by the SDK's own
+`transform_schema`, so the wire shape stays the SDK's business), reads
+`stop_reason` first, and validates only on `end_turn`. **The extras floor is
+`anthropic>=0.121`, not a bare `anthropic`:** the bindings it actually needs —
+the top-level `transform_schema` export and
+`messages.create(output_config={"format": ...})` — were verified against that
+installed version rather than taken from documentation, and an unverified floor
+would fail at the first AI call instead of at install time. **`dev` pulls in
+`ai`,** also from review: the runtime promise is that non-AI commands work
+without the extra, and the lazy imports keep that true and are tested by forcing
+the failure; the *suite* is a different thing and has to exercise the AI
+plumbing rather than skip it. Without that, `scripts/bootstrap.sh` — which
+installs `.[dev]` and then runs pytest under `set -e` — dies collecting
+`tests/test_claude_client.py` on every fresh clone, and skipping instead would
+report green for code nobody ran.*
 
 Depends on: M1.2, M1.6
 Files: new `src/japanese_anki/claude_client.py`, `pyproject.toml`,

@@ -22,9 +22,29 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# The Anthropic SDK is optional so that import, build, status and every other
+# non-AI command runs on a checkout that never installed it. claude_client.py
+# imports it lazily and names this extra when it is missing.
+# The floor is the version claude_client.py was verified against, not a guess:
+# it needs the top-level transform_schema export and
+# messages.create(output_config={"format": ...}), and a floor nobody checked
+# would fail at the first AI call rather than at install time.
+ai = [
+  "anthropic>=0.121",
+  # Imported directly by claude_client to validate a response against the
+  # schema, so it is declared rather than leaned on as an SDK transitive.
+  "pydantic>=2",
+]
+# dev pulls in ai on purpose. The *runtime* promise is that non-AI commands
+# work without the extra, and the lazy imports keep that true; the *test suite*
+# is a different thing, and it has to exercise the AI plumbing rather than skip
+# it. Without this, `./scripts/bootstrap.sh` on a fresh clone dies collecting
+# tests/test_claude_client.py, and a skip-instead would report green for code
+# nobody ran.
 dev = [
   "pytest>=8,<9",
   "ruff>=0.6,<1",
+  "japanese-anki[ai]",
 ]
 
 [project.scripts]
