@@ -284,3 +284,101 @@ def test_no_temporary_jpeg_is_left_behind(tmp_path: Path) -> None:
     out = Path(sips.calls[0][sips.calls[0].index("--out") + 1])
     assert not out.exists()
     assert not out.parent.exists()
+
+
+# --- the collision fingerprint is of the bytes, not the path ----------------
+
+
+def test_a_reused_path_holding_a_new_photo_is_stored_not_confused_for_the_old(
+    tmp_path: Path,
+) -> None:
+    # The bug this guards: a path is not an identity. ~/Downloads/IMG_0001.png
+    # holds a different photo after the next AirDrop, and a path-derived
+    # suffix pointed the new photo at the old one's copy — sending the wrong
+    # image and citing it as provenance for a file never stored at all.
+    inbox = tmp_path / "inbox"
+    reused = tmp_path / "downloads" / "IMG_0001.png"
+
+    write(tmp_path / "trip" / "IMG_0001.png", PNG)
+    [first] = prepare_inputs([tmp_path / "trip" / "IMG_0001.png"], inbox)
+
+    write(reused, PNG + b" photo B")
+    [second] = prepare_inputs([reused], inbox)
+
+    write(reused, PNG + b" photo C")
+    [third] = prepare_inputs([reused], inbox)
+
+    # Three distinct photos, three distinct copies, each holding its own bytes.
+    paths = {first.origin_path, second.origin_path, third.origin_path}
+    assert len(paths) == 3
+    assert third.origin_path.read_bytes() == PNG + b" photo C"
+    assert decoded(third) == PNG + b" photo C"
+    assert second.origin_path.read_bytes() == PNG + b" photo B"
+
+
+def test_the_same_bytes_from_a_third_path_reuse_the_existing_copy(
+    tmp_path: Path,
+) -> None:
+    # The other direction: a content-addressed name means identical bytes are
+    # stored once however many paths they arrive from.
+    inbox = tmp_path / "inbox"
+    write(tmp_path / "a" / "IMG_0001.png", PNG)
+    write(tmp_path / "b" / "IMG_0001.png", PNG + b" same")
+    write(tmp_path / "c" / "IMG_0001.png", PNG + b" same")
+
+    prepare_inputs([tmp_path / "a" / "IMG_0001.png"], inbox)
+    [second] = prepare_inputs([tmp_path / "b" / "IMG_0001.png"], inbox)
+    [third] = prepare_inputs([tmp_path / "c" / "IMG_0001.png"], inbox)
+
+    assert second.origin_path == third.origin_path
+    assert len(list(inbox.iterdir())) == 2
+
+
+# --- failures leave the inbox alone -----------------------------------------
+
+
+def test_an_unsupported_file_is_not_copied_into_the_inbox_first(
+    tmp_path: Path,
+) -> None:
+    # data/inbox is committed and nothing here removes files, so a copy made
+    # before the check would permanently pollute the provenance directory.
+    inbox = tmp_path / "inbox"
+    source = write(tmp_path / "desk" / "notes.txt", b"hello")
+
+    with pytest.raises(InputError):
+        prepare_inputs([source], inbox)
+
+    assert not inbox.exists() or list(inbox.iterdir()) == []
+
+
+def test_a_heic_on_another_platform_keeps_its_copy(tmp_path: Path) -> None:
+    # Unlike an unsupported suffix: HEIC *is* supported, so the copy is right
+    # to keep — only this machine cannot convert it.
+    inbox = tmp_path / "inbox"
+    source = write(tmp_path / "desk" / "a.heic", HEIC)
+
+    with pytest.raises(InputError):
+        prepare_inputs([source], inbox, run=FakeSips(), platform="linux")
+
+    assert (inbox / "a.heic").read_bytes() == HEIC
+
+
+def test_an_unreadable_file_is_a_janki_error_not_a_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # is_file() says a path exists, not that it can be read. A raw OSError
+    # would reach the user as a traceback — cli.main formats JankiError only.
+    source = write(tmp_path / "desk" / "locked.pdf", PDF)
+    real = Path.read_bytes
+
+    def deny(self: Path) -> bytes:
+        if self.name == "locked.pdf":
+            raise PermissionError(13, "Permission denied")
+        return real(self)
+
+    monkeypatch.setattr(Path, "read_bytes", deny)
+
+    with pytest.raises(InputError) as excinfo:
+        prepare_inputs([source], tmp_path / "inbox")
+
+    assert "locked.pdf" in str(excinfo.value)

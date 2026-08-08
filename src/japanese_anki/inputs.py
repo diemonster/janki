@@ -25,6 +25,7 @@ original the camera produced rather than a derived file beside it.
 from __future__ import annotations
 
 import base64
+import hashlib
 import shutil
 import subprocess
 import sys
@@ -109,15 +110,59 @@ def _encode(data: bytes) -> str:
     return base64.standard_b64encode(data).decode("ascii")
 
 
-def _copy_into_inbox(source: Path, scan_inbox: Path) -> Path:
+def _classify(source: Path) -> tuple[str, str, bool]:
+    """``(block kind, media type, needs conversion)`` for a path, or an error.
+
+    An unsupported suffix stops the whole batch rather than skipping the file:
+    extracting a subset would leave the user to notice it came up short.
+    """
+    suffix = source.suffix.lower()
+    if suffix in DOCUMENT_TYPES:
+        return "document", DOCUMENT_TYPES[suffix], False
+    if suffix in IMAGE_TYPES:
+        return "image", IMAGE_TYPES[suffix], False
+    if suffix in HEIC_SUFFIXES:
+        return "image", _CONVERTED_MEDIA_TYPE, True
+    known = ", ".join(sorted({*DOCUMENT_TYPES, *IMAGE_TYPES, *HEIC_SUFFIXES}))
+    raise InputError(
+        f"janki cannot read {source.name} ('{suffix or 'no suffix'}'). "
+        f"Supported: {known}."
+    )
+
+
+def _read(path: Path) -> bytes:
+    """The file's bytes, with any OS failure named as a janki error.
+
+    ``is_file()`` says a path exists and is a file; it does not say it can be
+    read. A no-permission file, or an iCloud placeholder that was never
+    downloaded, gets past that check and fails here — and a raw ``OSError``
+    would reach the user as a traceback, because ``cli.main`` formats
+    ``JankiError`` and nothing else.
+    """
+    try:
+        return path.read_bytes()
+    except OSError as exc:
+        raise InputError(f"Could not read {path}: {exc}") from exc
+
+
+def _copy_into_inbox(source: Path, scan_inbox: Path, data: bytes) -> Path:
     """Return the inbox copy of ``source``, making one if it is not there yet.
 
     A file already under ``scan_inbox`` is used where it lies — re-running an
     extraction over an inbox file must not copy it again. Otherwise the copy
     lands under its own name, and a name already taken by *different* content
-    earns a fingerprint suffix: two photos both called ``IMG_0001.HEIC`` are
-    two photos, and overwriting one with the other would destroy the evidence
-    behind every record extracted from it.
+    earns a suffix: two photos both called ``IMG_0001.HEIC`` are two photos,
+    and overwriting one with the other would destroy the evidence behind every
+    record extracted from it.
+
+    **The suffix is a fingerprint of the bytes, never of the source path.** A
+    path is not an identity: the same Downloads filename holds a different
+    photo after the next AirDrop, so a path-derived suffix would point a second
+    photo at the first one's copy — sending the wrong image to the API and
+    citing it as the provenance for records extracted from a file that was
+    never stored at all. Fingerprinting the content instead makes the target
+    name a property of what is being stored, so an existing target under that
+    name already holds exactly these bytes.
     """
     scan_inbox = Path(scan_inbox)
     if source.is_relative_to(scan_inbox):
@@ -126,13 +171,24 @@ def _copy_into_inbox(source: Path, scan_inbox: Path) -> Path:
     scan_inbox.mkdir(parents=True, exist_ok=True)
     target = scan_inbox / source.name
     if target.exists():
-        if target.read_bytes() == source.read_bytes():
+        if _read(target) == data:
             return target
-        stamp = short_fingerprint(str(source.resolve()), length=8)
+        # Content-addressed, via the project's one fingerprint helper: the hex
+        # digest goes through it rather than a second hashing scheme.
+        stamp = short_fingerprint(hashlib.sha256(data).hexdigest(), length=8)
         target = scan_inbox / f"{source.stem}-{stamp}{source.suffix}"
         if target.exists():
-            return target
-    shutil.copy2(source, target)
+            if _read(target) == data:
+                return target
+            raise InputError(
+                f"Cannot store {source}: {target} already holds different content "
+                "under the fingerprint of these bytes. Move that file aside — janki "
+                "will not overwrite anything in the inbox."
+            )
+    try:
+        shutil.copy2(source, target)
+    except OSError as exc:
+        raise InputError(f"Could not copy {source} into {scan_inbox}: {exc}") from exc
     return target
 
 
@@ -206,26 +262,16 @@ def prepare_inputs(
         if not source.is_file():
             raise InputError(f"Not a readable file: {source}")
 
-        suffix = source.suffix.lower()
-        stored = _copy_into_inbox(source, scan_inbox)
-
-        if suffix in DOCUMENT_TYPES:
-            kind, media_type = "document", DOCUMENT_TYPES[suffix]
-            data = stored.read_bytes()
-        elif suffix in IMAGE_TYPES:
-            kind, media_type = "image", IMAGE_TYPES[suffix]
-            data = stored.read_bytes()
-        elif suffix in HEIC_SUFFIXES:
-            kind, media_type = "image", _CONVERTED_MEDIA_TYPE
+        # Classified *before* anything is copied: `data/inbox/` is committed
+        # and nothing here removes files, so copying first would leave a file
+        # janki cannot read sitting permanently in the provenance directory
+        # after a run that failed. (A HEIC on a non-macOS machine is different
+        # — that is a supported format, and keeping its copy is right.)
+        kind, media_type, convert = _classify(source)
+        data = _read(source)
+        stored = _copy_into_inbox(source, scan_inbox, data)
+        if convert:
             data = _heic_to_jpeg(stored, run, where)
-        else:
-            known = ", ".join(
-                sorted({*DOCUMENT_TYPES, *IMAGE_TYPES, *HEIC_SUFFIXES})
-            )
-            raise InputError(
-                f"janki cannot read {source.name} ('{suffix or 'no suffix'}'). "
-                f"Supported: {known}."
-            )
 
         prepared.append(
             PreparedInput(
