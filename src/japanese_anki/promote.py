@@ -28,7 +28,7 @@ no history to orphan.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Container, Iterable, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -78,14 +78,30 @@ class PromoteResult:
     reminted: dict[str, str] = field(default_factory=dict)
 
 
-def remint(record: VocabularyRecord) -> VocabularyRecord:
+def remint(
+    record: VocabularyRecord, already_stored: Container[str] = frozenset()
+) -> VocabularyRecord:
     """The record under the id its expression and reading actually mint.
 
     Keyed off the id rather than the shape of the reading, because by promote
     time a reviewer has replaced a kanji reading with kana — so
     ``contains_kanji(reading)`` is ``False`` in exactly the case the re-mint
     exists for, and only the id still remembers.
+
+    ``already_stored`` is the precondition this function has always claimed and
+    never checked: it re-mints because *these records have never been in
+    ``vocabulary.json`` or Anki*, so there is no review history to orphan. A
+    staged row whose id **is** already in the collection breaks that
+    precondition, and re-minting it there does real damage — the merge sees an
+    id it has never met, adds a second record, and the curated original keeps
+    its Anki history and never receives the change. That state is reachable:
+    an id minted from a wrong reading stays put when the reading is corrected,
+    because the id is uncorrectable by design, and M4.2's staging route then
+    sends such a record back through promote. So an id the collection already
+    holds is left exactly as it is.
     """
+    if record.id in already_stored:
+        return record
     minted = stable_record_id(record.expression, record.reading)
     return record if record.id == minted else replace(record, id=minted)
 
@@ -99,6 +115,7 @@ def check_readings(
     *,
     client: jpdb.JpdbClient | None = None,
     skip_reading_check: bool = False,
+    already_stored: Container[str] = frozenset(),
 ) -> PromoteResult:
     """Decide, per record, whether it may become a real record.
 
@@ -112,6 +129,9 @@ def check_readings(
     ``skip_reading_check`` drops the third check only. The reading still has to
     *be* kana — that rule is about whether an id can exist at all, not about
     whether a dictionary agrees, and no flag turns it off.
+
+    ``already_stored`` is the ids the collection already holds; see
+    :func:`remint` for why a re-mint must not touch one of them.
     """
     result = PromoteResult()
     for record in records:
@@ -135,7 +155,7 @@ def check_readings(
                 result.keep.append(True)
                 continue
 
-        promoted = remint(_resolved(record))
+        promoted = remint(_resolved(record), already_stored)
         if promoted.id != record.id:
             result.reminted[record.id] = promoted.id
         result.promoted.append(promoted)

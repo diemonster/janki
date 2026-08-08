@@ -1137,6 +1137,21 @@ Design: DESIGN_V2 "PDFs and photos > Step 1".
 
 ### [x] M3.4 `janki promote`
 
+*Amended 2026-08-08, from an M4.W review. `remint` documented a
+precondition it never checked — "these records have never been in
+`vocabulary.json` or Anki" — and M4.2's staging route made breaking it
+routine. A record whose id was minted from a wrong reading keeps that id
+when the reading is corrected, because the id is uncorrectable by design;
+`enrich --ai` then stages it, and promote re-minted it into an id the
+merge had never seen, **added a second record**, and left the curated
+original with its Anki history and without the change. The message even
+said "these records were never in Anki" about a record that had been
+exported. `remint` and `check_readings` now take the ids the collection
+already holds and leave those alone, and `command_promote` reads the
+collection before any id is decided rather than after. The one sanctioned
+ID change — a held row the collection has never seen — is unaffected, and
+both sides are pinned.*
+
 *Done 2026-08-07. Contract as written; two deviations from the Files list and
 seven decisions. **Deviation 1:** the reading-set lookup lives in `enrich.py` as
 a new public `dictionary_readings`, not reimplemented here — walking `alt_sids`

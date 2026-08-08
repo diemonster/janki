@@ -779,3 +779,65 @@ def test_an_identity_conflict_on_promote_still_says_it_is_one(
     assert "expression" in line
     assert "the two copies disagree about which word this is" in line
     assert "--prefer-incoming" not in line
+
+
+def test_promote_never_re_mints_an_id_the_collection_already_holds(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A record whose id was minted from a wrong reading keeps that id when the
+    reading is corrected — the id is uncorrectable by design. M4.2's staging
+    route then sends such a record back through promote, and re-minting there
+    added a second record beside the curated one: the original kept its Anki
+    history and never received the change, while the copy carried it."""
+    curated = VocabularyRecord(
+        id="word:辛い:からい",
+        expression="辛い",
+        reading="つらい",
+        meanings=["painful"],
+        source=SourceReference(type="shirabe", imported_from="export.csv"),
+    )
+    root = project(tmp_path, [curated])
+    staged = root / "staging" / "ai.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    write_staging(
+        staged,
+        [replace(curated, usage_notes="written by a model")],
+        {"source_file": "vocabulary.json", "model": "m", "review_notes": "n"},
+    )
+
+    assert cli.main(["--root", str(root), "promote", str(staged), "--skip-reading-check"]) == 0
+
+    stored = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    assert [item["id"] for item in stored] == ["word:辛い:からい"], "no second copy"
+    assert stored[0]["usage_notes"] == "written by a model", "the change landed on it"
+    assert "Re-minted" not in capsys.readouterr().out
+
+
+def test_a_genuinely_new_row_is_still_re_minted(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The other side: a held row the collection has never seen still gets its
+    id minted from the reading the reviewer supplied. That is the one sanctioned
+    ID change, and gating on presence must not take it away."""
+    root = project(tmp_path, [])
+    staged = root / "staging" / "held.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    write_staging(
+        staged,
+        [
+            VocabularyRecord(
+                id="word:辛い:辛い",
+                expression="辛い",
+                reading="からい",
+                meanings=["spicy"],
+                source=SourceReference(type="shirabe", imported_from="export.csv"),
+            )
+        ],
+        {"source_file": "export.csv", "review_notes": "n"},
+    )
+
+    assert cli.main(["--root", str(root), "promote", str(staged), "--skip-reading-check"]) == 0
+
+    stored = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    assert [item["id"] for item in stored] == ["word:辛い:からい"]
+    assert "Re-minted" in capsys.readouterr().out

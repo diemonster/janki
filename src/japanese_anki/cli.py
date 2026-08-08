@@ -1820,8 +1820,16 @@ def command_promote(args: argparse.Namespace) -> int:
     client = None
     if not args.skip_reading_check:
         client = jpdb.JpdbClient(jpdb.api_key_from_env())
+    # Read before the ids are decided, not after: a staged id the collection
+    # already holds must keep it, or the re-mint adds a second record beside
+    # the curated one and leaves the original untouched.
+    output_path = config.normalized_file.resolve()
+    existing = load_records(output_path) if output_path.exists() else []
     result = promote.check_readings(
-        records, client=client, skip_reading_check=args.skip_reading_check
+        records,
+        client=client,
+        skip_reading_check=args.skip_reading_check,
+        already_stored={item.id for item in existing},
     )
 
     for warning in result.warnings:
@@ -1838,8 +1846,7 @@ def command_promote(args: argparse.Namespace) -> int:
         )
         return 0
 
-    output_path = config.normalized_file.resolve()
-    existing = load_records(output_path) if output_path.exists() else []
+    # `existing` and `output_path` were read above, before any id was decided.
     # Read the ledger before anything is written, and only once.
     book = ledger.load(config.ledger_file)
 
