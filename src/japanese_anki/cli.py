@@ -40,6 +40,7 @@ from japanese_anki.models import VocabularyRecord
 from japanese_anki.preview import build_preview
 from japanese_anki.promote import PromoteError
 from japanese_anki.staging import (
+    STAGING_SUFFIXES,
     StagingError,
     check_rewritable,
     prune_staging,
@@ -925,6 +926,24 @@ def command_extract(args: argparse.Namespace) -> int:
     return 0
 
 
+def _inside_archive(path: Path, archive_dir: Path) -> bool:
+    """Is ``path`` the promoted archive, or inside it?
+
+    Identity where the filesystem can answer it, because a lexical comparison
+    is wrong on a case-insensitive filesystem: ``staging/Done/lesson.yaml``
+    opens the real archive while comparing unequal to ``staging/done/...``, and
+    promoting it doubles a committed file that is the only copy of a finished
+    review. The lexical test stays as the fallback for a path that does not
+    exist yet.
+    """
+    try:
+        if archive_dir.exists() and path.parent.samefile(archive_dir):
+            return True
+    except OSError:
+        pass
+    return path.is_relative_to(archive_dir)
+
+
 def command_promote(args: argparse.Namespace) -> int:
     """Move a reviewed staging file's records into the normalized collection.
 
@@ -941,7 +960,7 @@ def command_promote(args: argparse.Namespace) -> int:
     config = _load_config(args)
     path = args.file.resolve()
     done = (config.staging_dir / "done" / path.name).resolve()
-    if path == done or path.is_relative_to(done.parent):
+    if _inside_archive(path, done.parent):
         raise PromoteError(
             f"{path} is inside the promoted archive. Those records are already in "
             "the collection; promoting the archive would only duplicate it."
@@ -958,6 +977,18 @@ def command_promote(args: argparse.Namespace) -> int:
     # the archive were written leaves the promoted rows still in the staging
     # file, and the re-run then appends them to the archive a second time.
     check_rewritable(path)
+    # The archive is written under the same name, and write_staging refuses a
+    # suffix read_staging could not parse back. read_staging accepts .json and
+    # JSON is valid YAML, so a hand-made .json staging file gets all the way to
+    # the archive write before failing — after the records and the ledger have
+    # landed, leaving a review that can never be finished however often it is
+    # retried.
+    if path.suffix.lower() not in STAGING_SUFFIXES:
+        raise PromoteError(
+            f"{path} is not a staging file janki can rewrite: the promoted archive "
+            f"is written under the same name, and that needs "
+            f"{' or '.join(STAGING_SUFFIXES)}. Rename it and re-run."
+        )
     archived: list[VocabularyRecord] = []
     if done.exists():
         previous, _previous_meta = read_staging(done)

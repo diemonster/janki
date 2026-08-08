@@ -650,3 +650,62 @@ def test_the_archive_keeps_a_hand_written_review_note(
     )
     assert "chapter 3, checked with the teacher" in archived["review_notes"]
     assert "Promoted 1 record(s)" in archived["review_notes"]
+
+
+def test_the_archive_guard_is_not_fooled_by_case(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # macOS filesystems are case-insensitive, so staging/Done/lesson.yaml opens
+    # the real archive while comparing unequal to staging/done/... — and
+    # promoting it doubles a committed file that is the only copy of a
+    # finished review.
+    root = project(tmp_path, [])
+    patch_jpdb(monkeypatch, hanasu_jpdb())
+    cli.main(["--root", str(root), "promote", str(staging_file(root, ONE_GOOD))])
+    done = root / "staging" / "done" / "lesson.pdf.yaml"
+    before = done.read_text(encoding="utf-8")
+    mixed_case = root / "staging" / "Done" / "lesson.pdf.yaml"
+    if not mixed_case.exists():
+        pytest.skip("case-sensitive filesystem: the lexical guard already covers it")
+
+    code = cli.main(["--root", str(root), "promote", str(mixed_case)])
+
+    assert code == 1
+    assert done.read_text(encoding="utf-8") == before
+
+
+def test_a_staging_file_the_archive_could_not_be_written_as_is_refused_early(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # read_staging accepts .json and JSON is valid YAML, so this got all the
+    # way to the archive write before failing — after the records and ledger
+    # landed, leaving a review that could never be finished however often it
+    # was retried.
+    root = project(tmp_path, [])
+    path = root / "staging" / "lesson.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "records": [
+                    {
+                        "id": "word:話す:はなす",
+                        "expression": "話す",
+                        "reading": "はなす",
+                        "source": {"type": "extract", "imported_from": "lesson.pdf"},
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    patch_jpdb(monkeypatch, hanasu_jpdb())
+
+    code = cli.main(["--root", str(root), "promote", str(path)])
+
+    assert code == 1
+    assert not (root / "vocabulary.json").exists() or stored(root) == {}
+    assert not (root / "ledger.json").exists()
+    assert not (root / "staging" / "done").exists()
+    assert "Rename it" in capsys.readouterr().err
