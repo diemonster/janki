@@ -1436,7 +1436,31 @@ Design: DESIGN_V2 "Batch mode".
   processing → print status, exit 0. Errored/expired per-record results
   are reported and leave those records untouched.
 
-### [~] claimed task/m4.w 2026-08-08 — M4.W Milestone 4 wrap
+### [x] M4.W Milestone 4 wrap
+
+*Done 2026-08-08. README gained "Writing what a dictionary cannot" — the
+two passes that write rather than look up, batch mode, a rates table and
+the model config. The cost advice is deliberately not a per-record
+number: janki's request is small and fixed, so the output dominates,
+models think before answering and thinking bills as output, so the honest
+instruction is to measure one record rather than trust a table (this one
+included). Said plainly too: prompt caching is asked for on the system
+prefix and the style guide as shipped is probably under the per-model
+minimum, and the API is silent about missing it.
+`prompts/ENRICH_VOCABULARY.md` became a migration table plus the one
+honest gap — **`transitivity` has no successor pass.** It is set at
+import and nothing backfills it, so claiming the prompt's rules all
+survived would have been false.
+
+Three things the reviews turned up that were code, not prose. (1)
+`_print_merge_summary` advertised `--prefer-incoming` on `promote` and
+`migrate-inline`, which do not take it — following the program's own
+advice gave "unrecognized arguments". (2) The identity marker on a
+conflict line had to survive that fix: `expression`/`reading` clashes are
+not one more field to settle by hand. (3) A test asserting `"identity" in
+capsys...out` passed with the feature deleted, because pytest names
+`tmp_path` after the test and promote echoes the path — a whole class of
+false green, now recorded in memory.*
 
 Depends on: all M4 tasks
 Files: `README.md`, `prompts/ENRICH_VOCABULARY.md`.

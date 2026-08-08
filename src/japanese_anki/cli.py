@@ -90,7 +90,26 @@ def _format_merge_value(value: object) -> str:
     return text if len(text) <= 60 else f"{text[:57]}..."
 
 
-def _print_merge_summary(outcomes: dict[str, MergeOutcome]) -> None:
+def _print_merge_summary(
+    outcomes: dict[str, MergeOutcome], *, prefer_incoming_available: bool = True
+) -> None:
+    """Report what a merge did, and how to resolve what it would not.
+
+    ``prefer_incoming_available`` because the remedy is not universal: only the
+    import commands take ``--prefer-incoming``. Printing that advice elsewhere
+    hands the reader a command that exits with "unrecognized arguments" —
+    output worse than silence, because it reads like the tool telling them what
+    to do next. ``promote`` merges existing-wins; ``migrate-inline`` prefers the
+    inline note field by field (it is the authoritative copy there) and refuses
+    the identity disagreements it cannot merge. Neither has the flag, which is
+    the whole of the argument.
+
+    The *identity* marker is not part of that: a disagreement about
+    ``expression`` or ``reading`` is not one more field to settle by hand, it is
+    the two copies disagreeing about which word this is, and the record id is
+    derived from them. So it keeps a marker wherever it prints — one that names
+    the flag only where the flag exists.
+    """
     counts = Counter(outcome.label for outcome in outcomes.values())
     print(
         "Merge result: "
@@ -103,16 +122,24 @@ def _print_merge_summary(outcomes: dict[str, MergeOutcome]) -> None:
     ]
     if not conflicts:
         return
-    print("Conflicts (existing values kept; --prefer-incoming FIELD takes the import's):")
+    if prefer_incoming_available:
+        header = (
+            "Conflicts (existing values kept; --prefer-incoming FIELD takes the "
+            "import's):"
+        )
+    else:
+        header = "Conflicts (existing values kept; resolve these by hand):"
+    print(header)
     for record_id, (name, existing_value, incoming_value) in conflicts:
         # The header's remedy does not apply to identity fields: the flag
         # refuses them, so pointing the user at it would send them into an
         # error. Say on the line itself that this one is a hand fix.
-        note = (
-            " (identity — resolve by hand; --prefer-incoming refuses it)"
-            if name in PREFER_INCOMING_PROTECTED
-            else ""
-        )
+        if name not in PREFER_INCOMING_PROTECTED:
+            note = ""
+        elif prefer_incoming_available:
+            note = " (identity — resolve by hand; --prefer-incoming refuses it)"
+        else:
+            note = " (identity — the two copies disagree about which word this is)"
         print(
             f"  {record_id} {name}{note}: existing {_format_merge_value(existing_value)} "
             f"| incoming {_format_merge_value(incoming_value)}"
@@ -1524,8 +1551,10 @@ def _confirm_polish(assume_yes: bool) -> str:
     ``--yes`` and a non-tty both accept, the same rule every other confirm in
     janki uses: fat-finger protection, not CI protection. Quitting is offered
     because this pass calls the model per record as the loop runs, so walking
-    away after two proposals should cost two calls — and what was accepted
-    before that is still written, since it was accepted.
+    away stops the spending there — and what was accepted before that is still
+    written, since it was accepted. Note that the cost is one call per record
+    *reached*, which is not the same as per record shown: one whose glosses are
+    already right is paid for and passed over without a prompt.
     """
     if assume_yes or not sys.stdin.isatty():
         return "yes"
@@ -1847,7 +1876,7 @@ def command_promote(args: argparse.Namespace) -> int:
         path.unlink()
 
     print(f"Promoted {len(result.promoted)} record(s) from {path} into {output_path}")
-    _print_merge_summary(outcomes)
+    _print_merge_summary(outcomes, prefer_incoming_available=False)
     if result.reminted:
         print("Re-minted malformed IDs (these records were never in Anki):")
         for old, new in sorted(result.reminted.items()):
@@ -2017,7 +2046,7 @@ def command_migrate_inline(args: argparse.Namespace) -> int:
         f"Migrated {len(result.migrated)} inline note(s) from {args.deck} into "
         f"{result.normalized_file}"
     )
-    _print_merge_summary(result.outcomes)
+    _print_merge_summary(result.outcomes, prefer_incoming_available=False)
     for line in migrate.format_details(result, config.root):
         print(line)
     print(
