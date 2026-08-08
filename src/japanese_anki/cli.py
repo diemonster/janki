@@ -8,10 +8,11 @@ from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 
-from japanese_anki import jpdb, ledger, migrate, status
+from japanese_anki import enrich, jpdb, ledger, migrate, status
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import AnkiBuildError, build_deck, resolve_deck_records
+from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.importers import jpdb_import
 from japanese_anki.importers.shirabe import import_file, inspect_file
 from japanese_anki.io import (
@@ -27,7 +28,13 @@ from japanese_anki.io import (
 )
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.preview import build_preview
-from japanese_anki.staging import StagingError, read_staging, write_staging
+from japanese_anki.staging import (
+    StagingError,
+    check_rewritable,
+    read_staging,
+    rewrite_staging,
+    write_staging,
+)
 from japanese_anki.validation import has_errors, validate_records
 
 
@@ -545,7 +552,6 @@ def command_import_jpdb(args: argparse.Namespace) -> int:
         print("No jpdb decks on this account; nothing to import.", file=sys.stderr)
         return 0
 
-    exit_code = 0
     for index, deck in enumerate(decks):
         name = str(deck.get("name", "")).strip()
         if len(decks) > 1:
@@ -573,17 +579,191 @@ def command_import_jpdb(args: argparse.Namespace) -> int:
             replace=args.replace and index == 0,
             assume_yes=args.yes,
         )
-        exit_code = exit_code or code
-    return exit_code
+        if code != 0:
+            # A pass that did not land stops the run rather than being carried
+            # as an exit code past the decks after it. Both ways it fails say
+            # so: a declined --replace has already printed "nothing was
+            # written", and importing the *rest* of the account on top of that
+            # refusal would leave a collection missing exactly one deck, with
+            # the summary of every other deck reading like a complete import.
+            remaining = [
+                str(other.get("name", "")).strip() for other in decks[index + 1 :]
+            ]
+            if remaining:
+                print(
+                    f"Stopped at '{name}': {len(remaining)} deck(s) not imported "
+                    f"({', '.join(remaining)}).",
+                    file=sys.stderr,
+                )
+            return code
+    return 0
 
 
 def _slug_for_file(name: str) -> str:
-    """A deck name reduced to something safe as part of a filename.
+    """A deck name reduced to something safe, readable and unique in a filename.
 
     Deck names carry colons, slashes and spaces; a staging file named after one
-    verbatim would land in the wrong directory or refuse to be created.
+    verbatim would land in the wrong directory or refuse to be created. The
+    flattening that fixes that is lossy — ``Lesson 1``, ``lesson-1`` and
+    ``Lesson: 1`` all reduce to ``lesson-1`` — so a fingerprint of the full name
+    is appended. Without it, two such decks share one needs-reading file: the
+    first deck writes it, the second is told the file already exists and to
+    resolve it and re-run, and re-running has the first deck claim it again.
+    The advice can never converge and those held rows are never stageable.
+
+    The fingerprint is of the deck name alone, so it is stable across runs — the
+    same deck finds the same file next month — and it is deliberately *not* the
+    tag: ``jpdb:<slug>`` is what a re-import matches on and what a human types
+    into a deck filter, so it stays readable and its collisions stay harmless.
     """
-    return jpdb_import.deck_tag(name).removeprefix("jpdb:") or "deck"
+    slug = jpdb_import.deck_tag(name).removeprefix("jpdb:")
+    return f"{slug}-{short_fingerprint(name, length=8)}" if slug else "deck"
+
+
+def _confirm_enrich(count: int, assume_yes: bool) -> bool:
+    if assume_yes or not sys.stdin.isatty():
+        # Same rule as --replace: fat-finger protection, not CI protection.
+        return True
+    try:
+        answer = input(f"Write these changes to {count} record(s)? [y/N] ")
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return False
+    return answer.strip().lower() in {"y", "yes"}
+
+
+def _enrich_staging(
+    client: jpdb.JpdbClient, path: Path, assume_yes: bool
+) -> int:
+    """Annotate a needs-reading staging file with the readings jpdb proposes.
+
+    The whole API pass happens before the file is touched. A staging file holds
+    hand-typed readings that exist nowhere else, so a run that dies halfway must
+    leave the reviewer exactly what they had — and the write itself goes through
+    ``rewrite_staging``, which edits the document rather than re-rendering it, so
+    a comment or a key the reviewer added survives being annotated.
+    """
+    records, _meta = read_staging(path)
+    # Before the API pass, not after it: a file that cannot be rewritten
+    # faithfully should say so while the only thing spent is a file read.
+    check_rewritable(path)
+    result = enrich.suggest_readings(client, records)
+    if not result.held:
+        print(f"No held rows in {path}; nothing to suggest readings for.")
+        return 0
+
+    # Before the gate, not after it: a row jpdb could not help with is part of
+    # what the user is being asked to approve, and answering "no" must not be
+    # the reason they never saw it.
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    for record_id, reading in result.suggested.items():
+        print(f"  {record_id}: {reading}")
+    if result.suggested:
+        if not _confirm_enrich(len(result.suggested), assume_yes):
+            print("Aborted: the staging file was not touched.", file=sys.stderr)
+            return 1
+        rewrite_staging(path, result.records)
+
+    print(
+        f"Suggested a reading for {len(result.suggested)} of {result.held} "
+        f"held row(s) in {path}."
+    )
+    print(
+        "  Each is a proposal in 'suggested_reading'; the row stays held until a "
+        "human types the reading into 'reading' and deletes the row's 'id:' line."
+    )
+    return 0
+
+
+def command_enrich(args: argparse.Namespace) -> int:
+    """Fill empty fields on existing records from a dictionary.
+
+    ``--jpdb`` is the only source implemented; ``--ai`` arrives in M4.2. One is
+    required, because "enrich" without saying from what is a command whose
+    behavior would change under the user when the second source lands.
+    """
+    if args.ai:
+        raise JankiError(
+            "enrich --ai is not implemented until M4.2. Use --jpdb for dictionary "
+            "enrichment (furigana, pitch accent, frequency rank, part of speech)."
+        )
+    if not args.jpdb:
+        raise JankiError(
+            "enrich needs a source: --jpdb fills fields from the jpdb dictionary. "
+            "(--ai arrives in M4.2.)"
+        )
+    force_fields = enrich.parse_force_fields(args.force_fields)
+    if args.staging is not None and (force_fields or args.ids):
+        raise JankiError(
+            "enrich --staging proposes readings for held rows and writes nothing "
+            "else, so it takes neither --force-fields nor record ids."
+        )
+
+    config = _load_config(args)
+    client = jpdb.JpdbClient(jpdb.api_key_from_env())
+
+    if args.staging is not None:
+        return _enrich_staging(client, args.staging.resolve(), args.yes)
+
+    output_path = config.normalized_file.resolve()
+    records = load_records(output_path) if output_path.exists() else []
+    if not records:
+        print(f"No records to enrich in {output_path}.")
+        return 0
+
+    # Read the ledger before anything is written, and only once.
+    book = ledger.load(config.ledger_file)
+    result = enrich.enrich_records(
+        client, records, force_fields=force_fields, ids=args.ids or None
+    )
+
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    if not result.changes:
+        print(
+            f"Nothing to fill: looked up {result.looked_up} record(s), skipped "
+            f"{result.skipped} with no empty fields."
+        )
+        return 0
+
+    for line in enrich.format_field_diff(result.changes):
+        print(line)
+    if not _confirm_enrich(len(result.changes), args.yes):
+        print("Aborted: nothing was written.", file=sys.stderr)
+        return 1
+
+    save_records_json(output_path, result.records)
+    for record_id, changed in result.changes.items():
+        book.record_enriched(record_id, kind="jpdb", model="jpdb", fields=changed)
+    ledger_error = _save_ledger(book)
+
+    print(
+        f"Enriched {len(result.changes)} record(s) in {output_path} "
+        f"(looked up {result.looked_up}, skipped {result.skipped} with no empty fields)."
+    )
+    if ledger_error is None:
+        print(f"Ledger: recorded a jpdb pass over {len(result.changes)} record(s).")
+    else:
+        # Deliberately not `_report_ledger_failure`: its advice is
+        # `status --rebuild`, which reconstructs source references and audio
+        # from what the records prove. An `enriched` entry is provable by
+        # nothing — filled fields do not say who filled them — so that advice
+        # would promise a recovery that silently never happens. Nor does
+        # re-running recover it: the fields are full now, so the next pass
+        # skips these records before it reaches the ledger. Say that, rather
+        # than send someone after a fix that does not exist.
+        print(f"warning: {ledger_error}", file=sys.stderr)
+        print(
+            "The records are enriched; the ledger entry recording it is not, and "
+            "nothing can reconstruct it — neither 'status --rebuild' (an "
+            "enrichment pass is not provable from the records) nor a re-run (the "
+            "fields are filled now, so the next pass skips them). The records are "
+            "correct; 'status' will simply not know jpdb is what filled them.",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
 
 
 def _validate_path(path: Path) -> tuple[list, int]:
@@ -865,6 +1045,50 @@ def build_parser() -> argparse.ArgumentParser:
         help="Answer the --replace confirmation prompt with yes.",
     )
     jpdb_import_parser.set_defaults(handler=command_import_jpdb)
+
+    enrich_parser = subparsers.add_parser(
+        "enrich",
+        help="Fill empty fields on existing records from a dictionary",
+    )
+    enrich_parser.add_argument(
+        "ids",
+        nargs="*",
+        metavar="ID",
+        help="Record ids to enrich. Omit to consider every record.",
+    )
+    enrich_parser.add_argument(
+        "--jpdb",
+        action="store_true",
+        help="Fill fields from the jpdb dictionary.",
+    )
+    enrich_parser.add_argument(
+        "--ai",
+        action="store_true",
+        help="Fill fields with the Claude API (not implemented until M4.2).",
+    )
+    enrich_parser.add_argument(
+        "--force-fields",
+        metavar="FIELD[,FIELD]",
+        help=(
+            "Fields the pass may overwrite. By default it only fills empty ones. "
+            f"Valid: {', '.join(enrich.ENRICHABLE_FIELDS)}."
+        ),
+    )
+    enrich_parser.add_argument(
+        "--staging",
+        type=_path,
+        metavar="FILE",
+        help=(
+            "Annotate a needs-reading staging file with the reading jpdb proposes "
+            "for each held row, for a human to confirm."
+        ),
+    )
+    enrich_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Write the shown changes without confirming.",
+    )
+    enrich_parser.set_defaults(handler=command_enrich)
 
     validate_parser = subparsers.add_parser("validate", help="Validate records or decks")
     validate_parser.add_argument("path", type=_path, nargs="?")

@@ -637,8 +637,13 @@ def test_held_entries_go_to_a_staging_file_named_after_the_deck(
 
     assert cli.main(["--root", str(root), "import-jpdb", "--all-decks"]) == 0
 
-    staged = root / "staging" / "jpdb-textbook-vol-1-lesson-1-needs-reading.yaml"
-    assert staged.exists()
+    staged_files = list((root / "staging").glob("*.yaml"))
+    assert len(staged_files) == 1
+    staged = staged_files[0]
+    # Readable-deck-name prefix, then a fingerprint of the full name so two
+    # decks whose names flatten to the same slug cannot share one file.
+    assert staged.name.startswith("jpdb-textbook-vol-1-lesson-1-")
+    assert staged.name.endswith("-needs-reading.yaml")
     held = yaml.safe_load(staged.read_text(encoding="utf-8"))
     assert [record["id"] for record in held["records"]] == ["word:話す:"]
     out = capsys.readouterr().out
@@ -690,3 +695,175 @@ def test_a_named_deck_that_does_not_exist_fails_before_anything_is_written(
 
     assert "No jpdb deck named 'Lesson 9'" in capsys.readouterr().err
     assert not (root / "vocabulary.json").exists()
+
+
+# --- --replace across several decks -----------------------------------------
+
+
+def _replace_project(tmp_path: Path) -> Path:
+    """A project holding one record --replace would discard."""
+    root = _project(tmp_path)
+    (root / "vocabulary.json").write_text(
+        json.dumps(
+            [{"id": "word:古い:ふるい", "expression": "古い", "reading": "ふるい"}],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    return root
+
+
+def test_replace_discards_the_existing_records_on_a_single_deck(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _replace_project(tmp_path)
+    _patch_api(monkeypatch, RoutingTransport(_fixture(DECKS_FIXTURE), _fixture(LOOKUP_FIXTURE)))
+
+    code = cli.main(
+        [
+            "--root",
+            str(root),
+            "import-jpdb",
+            "--deck",
+            "Textbook Vol. 1: Lesson 1",
+            "--replace",
+            "--yes",
+        ]
+    )
+
+    assert code == 0
+    assert "word:古い:ふるい" not in _stored(root)
+
+
+def test_replace_applies_to_the_first_deck_only_so_deck_two_keeps_deck_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The rule that makes --replace mean "replace the collection with these
+    # decks": honoured on every pass, deck two would erase deck one.
+    root = _replace_project(tmp_path)
+    decks = _fixture(DECKS_FIXTURE)
+    lookup = _fixture(LOOKUP_FIXTURE)
+    lookup["request_list"] += [[1358340, 1564309720], [1002430, 3202573393]]
+    lookup["response"]["vocabulary_info"] += [
+        ["食べ物", "たべもの", 2600, ["LHLLL"], [["food"]], [["n"]], ["n"], None],
+        ["お茶", "おちゃ", 1600, ["LHHH"], [["tea"]], [["n"]], ["n"], None],
+    ]
+    _patch_api(monkeypatch, RoutingTransport(decks, lookup))
+
+    code = cli.main(
+        ["--root", str(root), "import-jpdb", "--all-decks", "--replace", "--yes"]
+    )
+
+    assert code == 0
+    stored = _stored(root)
+    assert "word:古い:ふるい" not in stored
+    assert "word:話す:はなす" in stored
+    assert "word:お茶:おちゃ" in stored
+
+
+def test_declining_the_replace_prompt_imports_no_deck_at_all(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # "No" means no. Continuing to deck two would leave a collection missing
+    # exactly the deck the user was asked about, under a summary that reads
+    # like a complete import.
+    root = _replace_project(tmp_path)
+    _patch_api(monkeypatch, RoutingTransport(_fixture(DECKS_FIXTURE), _fixture(LOOKUP_FIXTURE)))
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt: "n")
+
+    code = cli.main(
+        ["--root", str(root), "import-jpdb", "--all-decks", "--replace"]
+    )
+
+    assert code == 1
+    assert _stored(root) == {
+        "word:古い:ふるい": _stored(root)["word:古い:ふるい"]
+    }
+    err = capsys.readouterr().err
+    assert "2 deck(s) not imported" in err
+
+
+def test_two_decks_whose_names_differ_only_in_case_are_not_guessed_between(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Names are matched case-insensitively, so this collision is invisible to
+    # the matcher; picking either would import the wrong deck's words.
+    root = _project(tmp_path)
+    decks = _fixture(DECKS_FIXTURE)
+    decks["list_user_decks"]["decks"].append([4, "textbook vol. 1: lesson 1", 0])
+    decks["deck_vocabulary"]["4"] = {"vocabulary": []}
+    _patch_api(monkeypatch, RoutingTransport(decks, _fixture(LOOKUP_FIXTURE)))
+
+    code = cli.main(
+        ["--root", str(root), "import-jpdb", "--deck", "Textbook Vol. 1: Lesson 1"]
+    )
+
+    assert code == 1
+    err = capsys.readouterr().err
+    assert "matches more than one jpdb deck" in err
+    assert not (root / "vocabulary.json").exists()
+
+
+def test_two_decks_whose_names_flatten_alike_get_separate_staging_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 'Lesson 1' and 'Lesson: 1' both slug to lesson-1. Sharing one staging
+    # file makes the second deck's held rows permanently unstageable: it is
+    # told the file exists and to re-run, and re-running hands it to the first
+    # deck again.
+    root = _project(tmp_path)
+    decks = {
+        "list_user_decks": {"decks": [[1, "Lesson 1", 1], [2, "Lesson: 1", 1]]},
+        "deck_vocabulary": {
+            "1": {"vocabulary": [[1562350, 4280520068]]},
+            "2": {"vocabulary": [[1358340, 1564309720]]},
+        },
+    }
+    lookup = {
+        "request_list": [[1562350, 4280520068], [1358340, 1564309720]],
+        "response": {
+            "vocabulary_info": [
+                ["話す", "", 200, ["LHLL"], [["to speak"]], [["vt"]], ["v5s"], None],
+                ["食べ物", "", 2600, ["LHLLL"], [["food"]], [["n"]], ["n"], None],
+            ]
+        },
+    }
+    _patch_api(monkeypatch, RoutingTransport(decks, lookup))
+
+    assert cli.main(["--root", str(root), "import-jpdb", "--all-decks"]) == 0
+
+    staged = sorted((root / "staging").glob("*.yaml"))
+    assert len(staged) == 2
+    held = [
+        yaml.safe_load(path.read_text(encoding="utf-8"))["records"][0]["expression"]
+        for path in staged
+    ]
+    assert sorted(held) == ["話す", "食べ物"]
+
+
+def test_the_staging_filename_is_stable_across_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The fingerprint is of the deck name alone, so the same deck finds the
+    # same file next month rather than littering staging with near-duplicates.
+    root = _project(tmp_path)
+    decks = {
+        "list_user_decks": {"decks": [[1, "Lesson 1", 1]]},
+        "deck_vocabulary": {"1": {"vocabulary": [[1562350, 4280520068]]}},
+    }
+    lookup = {
+        "request_list": [[1562350, 4280520068]],
+        "response": {
+            "vocabulary_info": [
+                ["話す", "", 200, ["LHLL"], [["to speak"]], [["vt"]], ["v5s"], None]
+            ]
+        },
+    }
+    _patch_api(monkeypatch, RoutingTransport(decks, lookup))
+
+    cli.main(["--root", str(root), "import-jpdb", "--all-decks"])
+    first = [path.name for path in (root / "staging").glob("*.yaml")]
+    cli.main(["--root", str(root), "import-jpdb", "--all-decks"])
+
+    assert [path.name for path in (root / "staging").glob("*.yaml")] == first

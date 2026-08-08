@@ -670,6 +670,40 @@ def furigana_to_anki(segments: Any) -> str:
     return out
 
 
+def furigana_to_reading(segments: Any) -> str:
+    """The kana a token's furigana spells out — the reading of the *surface* form.
+
+    The companion to :func:`furigana_to_anki`, and the reason both exist: a
+    token's furigana describes the text as written, while the dictionary entry
+    it resolves to describes the lemma. Parse 行った and jpdb answers with the
+    entry for 行く — ``entry["reading"]`` is ``いく``, which does not read 行った,
+    but the token's furigana ``[["行", "い"], "った"]`` gives ``いった``, which
+    does.
+
+    Every segment contributes: its reading where it has one, its own text where
+    it is plain kana. ``None`` (jpdb's answer for an all-kana token) gives
+    ``""`` — the caller knows the text it asked about and this function does
+    not, so "nothing stated" is the honest answer rather than a guess.
+
+    Nothing here is segmentation janki invented: the split and every reading in
+    it are the dictionary's, which is what keeps this on the right side of
+    AGENTS.md's rule against guessing furigana for mixed kanji/kana words.
+    """
+    if segments is None:
+        return ""
+    if isinstance(segments, str):
+        segments = [segments]
+    if not isinstance(segments, Sequence):
+        raise JpdbError(
+            f"jpdb furigana: expected a list of segments, got {type(segments).__name__}"
+        )
+    out = ""
+    for segment in segments:
+        text, reading = _furigana_segment(segment)
+        out += reading or text
+    return out
+
+
 def _furigana_segment(segment: Any) -> tuple[str, str]:
     """One furigana segment as ``(text, reading)``; reading ``""`` means plain."""
     if isinstance(segment, str):
@@ -817,3 +851,38 @@ def pos_to_transitivity(codes: Any) -> str:
         if transitivity:
             return transitivity
     return ""
+
+
+# The remaining wire-value normalizers live here for the same reason the POS
+# tables do: `import-jpdb` and `enrich --jpdb` read the same fields off the same
+# endpoints, and a second definition of what `pitch_accent` or `frequency_rank`
+# means is a second thing to keep in step.
+
+
+def accent_patterns(value: Any) -> list[str]:
+    """jpdb's ``pitch_accent`` as a list of patterns.
+
+    One entry per pattern, first primary. A word with several accepted accents
+    really does come back with several (confirmed by the M2.1F capture), so a
+    lone string is the shape to widen, not the shape to expect.
+    """
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    if not isinstance(value, Sequence):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def frequency_rank(value: Any) -> int | None:
+    """jpdb's ``frequency_rank`` as an int, or ``None``.
+
+    ``None`` is "never looked up" and 0 would be a real rank, so an unparseable
+    value must not become a number. ``bool`` is rejected explicitly because it
+    is an ``int`` in Python and ``True`` would silently rank a word first.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None

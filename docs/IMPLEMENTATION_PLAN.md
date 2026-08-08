@@ -45,7 +45,14 @@ marked "supersedes design").
    extras group `ai` created by M3.1. HEIC conversion uses `sips` via
    `subprocess` on macOS; other platforms get a clear error naming
    `pillow-heif` as the workaround (accepted scope: single-user macOS
-   tool).
+   tool). **`ruamel.yaml` (added in M2.6)** is the one exception to
+   "PyYAML is the YAML library": it exists solely for
+   `staging.rewrite_staging`, which annotates a file a human is part-way
+   through reviewing. PyYAML cannot round-trip comments or keys outside
+   the record schema, so re-rendering that file deletes the reviewer's
+   own notes — the one kind of work in this repository that exists
+   nowhere else. Everything janki writes *from scratch* still goes
+   through PyYAML; do not widen this.
 
 ## Conventions (introduced in M1/M3.1, used by everything after)
 
@@ -729,7 +736,15 @@ name keeps its characters and only separators collapse; `:` collapses too, since
 `::` is Anki's tag-hierarchy separator. The same slug names the deck's staging
 file. (6) `frequency_rank` parses to `None`, never 0, on anything unparseable —
 0 is a real rank and "never looked up" must stay distinguishable. As planned,
-`occurences` counts are not stored. README is untouched: jpdb setup is M2.W's.*
+`occurences` counts are not stored. README is untouched: jpdb setup is M2.W's.
+**One contract item was not met:** "check the userscript's actual output header
+before hardcoding" did not happen — the JPDB-Export userscript was unreachable
+from the environment this ran in. Both `reading` and `furigana reading` map, the
+guess is flagged as such in `csv_base.py` and in the test that pins it, and a
+header that turns out to be neither fails loudly (the column goes unmapped and
+the row is held for reading review rather than imported wrong). Verifying it
+against a real export belongs to M2.W or a follow-up, and is owner-only for the
+same reason M2.1F is.*
 
 Depends on: M2.1, M2.2, M2.3, M2.4, M1.5, M1.8
 Files: new `src/japanese_anki/importers/jpdb_import.py`,
@@ -769,7 +784,54 @@ Design: DESIGN_V2 "jpdb.io > Deck sync" + "Manual export files".
   The second mints `word:<kanji>:<kanji>` — well-formed-looking and
   permanently invalid — so it cannot be left to the empty-reading check.
 
-### [~] claimed task/m2.6 2026-08-07 — M2.6 `janki enrich --jpdb`
+### [x] M2.6 `janki enrich --jpdb`
+
+*Done 2026-08-07. Contract as written; one deviation and six decisions.
+**Deviation:** the two remaining jpdb wire-value normalizers (`pitch_accent`,
+`frequency_rank`) moved out of M2.5's importer into `jpdb.py` beside the POS
+tables, so this task touched `jpdb.py` and `importers/jpdb_import.py` beyond its
+Files list. Enrichment reads the same fields off the same endpoints as the
+import does, and a second definition of what `frequency_rank: 0` means is the
+third POS table this plan already refused once. (1) `--staging FILE` is a
+distinct *target*, not an add-on to a normal pass: it takes neither
+`--force-fields` nor record ids, and writes no records and no ledger entries —
+a held row is not a record yet, and the ledger describes records. (2) A parse
+that resolves to more than one dictionary entry is a **warning and no write**,
+not a first-token guess: an entry whose spelling *is* the expression wins, and
+failing that a single resolving token, but 食べ物屋 splitting into 食べ物 + 屋
+has no entry whose pitch accent describes the record. (3) `meanings` is
+deliberately not enrichable. jpdb's glosses are a dictionary's; a record that
+reached janki from a textbook carries what that textbook taught, and filling
+that hole is M4.2's call with a pass that can read the record's examples.
+(4) An empty proposal never blanks a field — including under `--force-fields`,
+where the field being non-empty is exactly the case, so "jpdb had nothing" must
+not read as "blank it". (5) The conjugation table is written even when the
+record's reading is empty: it inflects the *expression*, and the reading only
+ever guards against the two disagreeing. Romaji is not, having nothing to
+transliterate. (6) The reading set for the mismatch check is gathered across
+the entry's `alt_sids`, because a homograph's other reading lives on its other
+sense, not on the one `/parse` happened to pick. (7) A suggestion, and any
+dictionary fact, comes from the token's **furigana** rather than the entry's
+`reading` wherever the two can differ: jpdb resolves an inflected surface form
+to its lemma, so 行った answers with 行く's entry, and `suggested_reading: いく`
+is a reading a reviewer could type into a permanent `word:行った:いく`. A record
+with no reading at all cannot prove the entry is even the same word, so it is
+warned and skipped rather than filled from the lemma. README is untouched: the
+enrich walkthrough is M2.W's, with the rest of the jpdb setup.
+
+**Two later additions, both from review** (see the commits after this task):
+`--staging` writes through a new `staging.rewrite_staging`, which edits the
+document instead of re-rendering it from records — a staging file under review
+is the one place in this repository holding work that exists nowhere else, and
+`write_staging`'s load-then-dump round trip silently deleted a reviewer's YAML
+comments and any key outside the record schema. That is what `ruamel.yaml` was
+added for, scoped to that one function; everything janki writes from scratch
+still goes through PyYAML. And `cli._slug_for_file` now appends a fingerprint of
+the deck name, because `Lesson 1`, `lesson-1` and `Lesson: 1` all flatten to one
+slug and so shared one needs-reading file — the second deck's rows were told to
+resolve a file the first deck reclaims on every re-run, advice that never
+converges. The tag stays collision-prone on purpose: it is what a human types
+into a deck filter.*
 
 Depends on: M2.1, M2.2, M2.3, M2.4, M1.3, M2.5 (shared import/POS
 plumbing settled first)

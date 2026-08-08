@@ -20,13 +20,15 @@ passes ``force=True``. In-place annotation of a file under review (M2.6's
 
 from __future__ import annotations
 
+import io
 import sys
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import yaml
+from ruamel.yaml import YAML, YAMLError
 
 from japanese_anki.errors import JankiError
 from japanese_anki.io import atomic_write_text, load_structured
@@ -140,6 +142,136 @@ def write_staging(
         width=100,
     )
     atomic_write_text(path, text)
+    return path
+
+
+def _parser() -> YAML:
+    """The round-trip parser used to edit a file in place, configured once."""
+    parser = YAML()  # round-trip mode: comments, order and quoting survive
+    parser.preserve_quotes = True
+    parser.allow_unicode = True
+    parser.width = 100
+    return parser
+
+
+def _load_document(path: Path) -> Any:
+    """A staging file as an editable round-trip document.
+
+    Every ruamel failure becomes a :class:`StagingError` naming the path. Two
+    are worth expecting: ordinary syntax errors, and a **duplicate key**, which
+    PyYAML accepts silently (last value wins) and ruamel refuses. Refusing is
+    the right answer for the writing path even though the reading path is
+    lenient — dumping a document whose duplicate ruamel collapsed would delete
+    one of the reviewer's two lines, and this function will not touch a file it
+    cannot rewrite faithfully. :func:`check_rewritable` exists so a caller can
+    find that out before it spends an API pass.
+    """
+    try:
+        with Path(path).open(encoding="utf-8") as handle:
+            document = _parser().load(handle)
+    except YAMLError as exc:
+        raise StagingError(f"Could not read {path} for rewriting: {exc}") from exc
+    if not isinstance(document, MutableMapping) or _RECORDS_KEY not in document:
+        raise StagingError(
+            f"Expected a staging mapping with a '{_RECORDS_KEY}:' list in {path}"
+        )
+    return document
+
+
+def check_rewritable(path: Path) -> None:
+    """Raise :class:`StagingError` now if :func:`rewrite_staging` could not write.
+
+    For callers that do expensive work — an API pass — between reading a
+    staging file and writing it back. Failing at the end of that work would
+    have spent it for nothing and would greet the user with an error after
+    they had already confirmed the change.
+    """
+    _load_document(path)
+
+
+def _apply_changes(
+    target: MutableMapping[str, Any],
+    before: Mapping[str, Any],
+    after: Mapping[str, Any],
+) -> None:
+    """Write only what actually changed into ``target``, recursing into mappings.
+
+    Keys whose value is unchanged are never touched — not rewritten, and not
+    *added* when the file left them out. That is what keeps a hand-written
+    staging row from acquiring twenty empty schema fields the moment janki
+    annotates it, and what leaves every key janki does not know about exactly
+    where the reviewer put it.
+    """
+    for key, new_value in after.items():
+        old_value = before.get(key)
+        if old_value == new_value:
+            continue
+        current = target.get(key)
+        if (
+            isinstance(new_value, Mapping)
+            and isinstance(old_value, Mapping)
+            and isinstance(current, MutableMapping)
+        ):
+            _apply_changes(current, old_value, new_value)
+            continue
+        target[key] = new_value
+
+
+def rewrite_staging(path: Path, records: Sequence[VocabularyRecord]) -> Path:
+    """Update an existing staging file in place, preserving what janki does not own.
+
+    :func:`write_staging` renders a file from records, which is right when it is
+    creating one and destructive when it is not: a staging file under review is
+    the one place in this repository holding work that exists nowhere else, and
+    a load-then-dump round trip through the record schema silently deletes a
+    reviewer's YAML comments and any key the schema has no field for. This
+    reads the document, writes back only the values that actually changed, and
+    leaves the rest of the file — comments, key order, quoting, unknown keys —
+    byte-for-byte as it was.
+
+    ``records`` must be the list :func:`read_staging` returned for this file,
+    in order, with the same length; rows are matched positionally. A caller that
+    adds or removes rows is not annotating a review, it is writing a new file,
+    and should say so with :func:`write_staging`.
+
+    **Both sides of the diff come from the same parser**, which is not a detail.
+    The document is edited through ruamel (YAML 1.2) while ``records`` came from
+    :func:`read_staging` (PyYAML, YAML 1.1), and the two dialects disagree about
+    real values a reviewer types: 1.1 reads ``yes`` as a boolean and ``12:30``
+    as the sexagesimal integer 750, 1.2 reads both as the strings they look
+    like. Diffing a ruamel-parsed baseline against PyYAML-derived records would
+    call every such value "changed" and write janki's reading of it over the
+    reviewer's line — the exact thing this function exists to prevent. So the
+    baseline is re-read with :func:`read_staging` too: the diff is then between
+    two same-dialect readings, and only a key janki genuinely changed is ever
+    written.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise StagingError(
+            f"No staging file to update at {path}; write_staging creates one."
+        )
+
+    original, _meta = read_staging(path)
+    document = _load_document(path)
+    raw_records = document[_RECORDS_KEY] or []
+    if not (len(raw_records) == len(original) == len(records)):
+        raise StagingError(
+            f"{path} holds {len(raw_records)} row(s) but {len(records)} were given. "
+            "rewrite_staging annotates the rows already in a file; use write_staging "
+            "to write a different set."
+        )
+
+    for raw, before, after in zip(raw_records, original, records, strict=True):
+        if not isinstance(raw, MutableMapping):
+            raise StagingError(
+                f"Record in {path} must be a mapping, got {type(raw).__name__}"
+            )
+        _apply_changes(raw, before.to_dict(), after.to_dict())
+
+    buffer = io.StringIO()
+    _parser().dump(document, buffer)
+    atomic_write_text(path, buffer.getvalue())
     return path
 
 
