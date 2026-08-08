@@ -1015,8 +1015,10 @@ def _enrich_ai(
         _report_enrichment_ledger_failure(
             ledger_error,
             rerun=(
-                "Nor does a re-run: the fields are filled now, so the next pass "
-                "skips these records before it reaches the ledger."
+                "A re-run is not a free repair either: a record whose examples "
+                "landed without a usage note is still a target, so the next pass "
+                "would call the model for it again and record a pass only where "
+                "it writes something."
             ),
             aftermath=(
                 "The examples and notes are correct; 'status' will simply not "
