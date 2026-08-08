@@ -2046,6 +2046,12 @@ def command_migrate_inline(args: argparse.Namespace) -> int:
         f"Migrated {len(result.migrated)} inline note(s) from {args.deck} into "
         f"{result.normalized_file}"
     )
+    # Defensive rather than reachable: migrate-inline prefers the inline note
+    # for every non-empty mergeable field, so the only conflict left is an
+    # identity one — and `_check_merged_faithfully` refuses those before this
+    # line, because two copies that disagree about what a record *is* cannot be
+    # merged by a rule. Should that ever change, this command still has no
+    # --prefer-incoming to offer.
     _print_merge_summary(result.outcomes, prefer_incoming_available=False)
     for line in migrate.format_details(result, config.root):
         print(line)

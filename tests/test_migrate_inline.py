@@ -841,3 +841,56 @@ def test_an_unreadable_deck_is_a_warning_not_a_silent_promise(
     assert _migrate(root) == 0
 
     assert "broken.yaml" in capsys.readouterr().err
+
+
+def test_migrate_inline_refuses_an_identity_clash_before_any_merge_summary(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The reason `_print_merge_summary`'s no-flag branch is unreachable here.
+
+    migrate-inline prefers the inline note for every non-empty mergeable field,
+    so the only conflict it *could* report is an identity one — and
+    `_check_merged_faithfully` refuses those outright, because two copies that
+    disagree about what a record is cannot be merged by a rule. So the command
+    errors instead of printing a conflict summary, which is why no test drives
+    that branch through this command: it has no path to it.
+    """
+    root = tmp_path
+    (root / "janki.toml").write_text(
+        "[paths]\n"
+        'normalized_file = "vocabulary.json"\n'
+        'ledger_file = "ledger.json"\n'
+        'deck_dir = "decks"\n'
+        'staging_dir = "staging"\n',
+        encoding="utf-8",
+    )
+    existing = {
+        "id": "word:ATM:エーティーエム",
+        "expression": "ＡＴＭ",
+        "reading": "エーティーエム",
+        "meanings": ["ATM"],
+        "source": {"type": "shirabe", "imported_from": "export.csv"},
+    }
+    (root / "vocabulary.json").write_text(
+        json.dumps([existing], ensure_ascii=False), encoding="utf-8"
+    )
+    (root / "decks").mkdir()
+    (root / "decks" / "d.yaml").write_text(
+        "name: D\n"
+        "notes:\n"
+        "  - id: word:ATM:エーティーエム\n"
+        "    expression: ATM\n"
+        "    reading: エーティーエム\n"
+        "    meanings: [ATM]\n",
+        encoding="utf-8",
+    )
+
+    code = cli.main(
+        ["--root", str(root), "migrate-inline", str(root / "decks" / "d.yaml")]
+    )
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert "would not survive the migration unchanged" in captured.err
+    assert "Conflicts" not in captured.out
+    assert "--prefer-incoming" not in captured.out
