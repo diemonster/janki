@@ -472,13 +472,17 @@ janki build data/decks/verbs.yaml
 
 `janki enrich --jpdb` fills what jpdb knows. Two more passes write what it does
 not — an example sentence a beginner can read, a note on how the word is
-actually used, better English glosses. Both need the AI extra and an API key,
-the same ones `janki extract` uses:
+actually used, better English glosses. Both need the AI extra and an Anthropic
+key, the same ones `janki extract` uses:
 
 ```bash
 python -m pip install -e '.[ai]'
 export ANTHROPIC_API_KEY='...'
 ```
+
+`--ai` needs `JPDB_API_KEY` as well, because it checks every sentence it writes
+against jpdb's parse of it — so it will not start without one. `--polish-meanings`
+writes English and asks jpdb nothing, so it needs only the Anthropic key.
 
 One pass per run. `--jpdb`, `--ai` and `--polish-meanings` each show you their
 own diff, and merging two unrelated sets of proposals into one y/n is not
@@ -493,9 +497,15 @@ janki enrich --ai
 # Just these records
 janki enrich --ai word:話す:はなす
 
-# Rewrite examples that are already there
-janki enrich --ai --force-fields examples
+# Rewrite the examples on records you name
+janki enrich --ai --force-fields examples word:話す:はなす
 ```
+
+`--force-fields` widens what a pass may *write*, not which records it visits.
+Without ids the pass still only looks at records missing an example or a usage
+note, so `--force-fields examples` on its own finds nothing to do on a
+collection where every record already has both. Name the records you want
+rewritten.
 
 Everything it writes is checked before you see it. A sentence that does not
 contain the word is **rejected** — it may be a perfectly good sentence, but it
@@ -504,13 +514,21 @@ its 〜ます forms, so 話しました counts as 話す. A sentence whose furig
 does not confirm is **kept and flagged** instead of dropped: the Japanese may be
 right where the segmentation is wrong, and that is a judgment for you rather
 than for janki. The flag is a fingerprint of the sentence in the record's
-`raw_fields`, under `furigana_unverified`, and audio generation reads it later.
+`raw_fields`, under `furigana_unverified`, and audio generation will read it before it speaks a
+sentence (Milestone 5).
 Romaji is always regenerated from the furigana, whatever the model sent.
 
-Past fifty records the proposals go to `data/staging/ai-enrichment.yaml` and
-through `janki promote` instead of a terminal diff, because nobody reads five
-hundred proposed sentences in a terminal and means it. Those records already
-exist, so promoting merges the new fields into them.
+At fifty records or more the proposals go to `data/staging/ai-enrichment.yaml`
+and through `janki promote` instead of a terminal diff, because nobody reads
+five hundred proposed sentences in a terminal and means it. Those records
+already exist, so promoting fills their empty fields.
+
+One thing to know before combining that with `--force-fields`: promote is
+existing-wins and has no flag to change it, so a forced replacement of a field
+that is already full is reported as a conflict and *not* written. Below fifty
+records the same command writes it directly. If you are replacing content
+rather than filling holes, do it in batches small enough to take the diff
+route.
 
 ### Better English glosses
 
@@ -525,8 +543,9 @@ about **one record at a time** — `y`, `n`, or `q` to stop. "These thirty are
 fine except the fourth" is not an answer a single y/n can take. What you accept
 before quitting is still written.
 
-It calls the model as the loop runs, so declining the first proposal and walking
-away costs one call rather than one per record in your collection. An answer
+It calls the model as the loop runs, so quitting at the first proposal costs one
+call rather than one per record in your collection. Declining with `n` moves on
+to the next record, which is a call — it is `q` that stops the spending. An answer
 that comes back empty means the glosses on file are already right, which is a
 common and legitimate result. An answer that reduces to nothing is refused
 rather than written: a card with a Japanese side and no English one is worse
