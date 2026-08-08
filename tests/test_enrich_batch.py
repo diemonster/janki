@@ -88,9 +88,18 @@ class Succeeded:
 
 
 class Failed:
+    """A non-succeeded row, nested the way the SDK nests it.
+
+    ``MessageBatchErroredResult.error`` is an ``ErrorResponse`` whose own
+    ``type`` is the literal ``"error"``; the reason worth printing lives one
+    level further in. A flatter fake would let janki read the outer level and
+    still pass.
+    """
+
     def __init__(self, kind: str, message: str = "") -> None:
         self.type = kind
-        self.error = type("E", (), {"type": kind, "message": message})()
+        inner = type("ErrorObject", (), {"type": "overloaded_error", "message": message})()
+        self.error = type("ErrorResponse", (), {"type": "error", "error": inner})()
 
 
 class Batch:
@@ -644,3 +653,103 @@ def test_a_pending_batch_round_trips_through_the_file(tmp_path: Path) -> None:
     assert reloaded.pending_batch() == ("b1", book.pending_batches["b1"])
     assert reloaded.clear_batch("b1") is True
     assert reloaded.pending_batch() is None
+
+
+# --- what the review found ---------------------------------------------------
+
+
+def test_the_reason_a_request_errored_survives_the_sdks_nesting() -> None:
+    """The outer level's type is the literal "error" for every failure. Reading
+    it tells nobody deciding whether to resubmit anything at all."""
+
+    class Client:
+        class messages:  # noqa: N801
+            class batches:  # noqa: N801
+                @staticmethod
+                def results(batch_id: str) -> list[Entry]:
+                    return [Entry("r1", Failed("errored", "Overloaded"))]
+
+    (row,) = list(claude_client.batch_results("b1", dict, "m", Client()))
+
+    assert row.outcome == "errored"
+    assert row.detail == "Overloaded"
+
+
+def test_a_collection_that_moved_leaves_the_batch_pending(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """One record vanishing is curation; every one of them vanishing is a
+    --root pointed somewhere else, and clearing the id would strand the
+    answers on Anthropic's side."""
+    records = many(2)
+    batches = FakeBatches(results=[ok(item) for item in records])
+    root = submitted(tmp_path, records, monkeypatch, batches)
+    (root / "vocabulary.json").write_text("[]", encoding="utf-8")
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 1
+
+    assert list(book_of(root)["pending_batches"]) == ["msgbatch_01"]
+    assert "fetch again" in capsys.readouterr().err
+
+
+def test_force_fields_survives_the_gap_between_submit_and_fetch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Submitting with --force-fields and fetching plainly would report
+    "nothing to fill" and throw away an answer that was paid for."""
+    curated = record(examples=[ExampleSentence(japanese="人と話す。")], usage_notes="note")
+    batches = FakeBatches(results=[ok(curated)])
+    root = project(tmp_path, [curated])
+    patch_all(monkeypatch, batches)
+    cli.main(
+        [
+            "--root", str(root), "enrich", "--ai", "--batch-submit",
+            "--force-fields", "examples", curated.id,
+        ]
+    )
+    assert book_of(root)["pending_batches"]["msgbatch_01"]["force_fields"] == ["examples"]
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 0
+
+    landed = stored(root)["word:話す:はなす"]["examples"]
+    assert [item["japanese"] for item in landed] == ["毎日話す。"]
+
+
+def test_fetch_refuses_the_flags_that_were_decided_at_submit(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = project(tmp_path, many(1))
+
+    assert cli.main(
+        ["--root", str(root), "enrich", "--ai", "--batch-fetch", "word:話す0:はなす"]
+    ) == 1
+    assert "recorded in the ledger" in capsys.readouterr().err
+    assert cli.main(
+        ["--root", str(root), "enrich", "--ai", "--batch-fetch", "--model", "m2"]
+    ) == 1
+    assert "recorded in the ledger" in capsys.readouterr().err
+
+
+def test_a_failed_ledger_write_says_what_actually_landed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A large batch's answers sit in a staging file, so "those fields are
+    filled, fetching again is a no-op" would send the reader at a re-fetch that
+    refuses rather than repeats."""
+    records = many(enrich.STAGING_THRESHOLD)
+    batches = FakeBatches(results=[ok(item) for item in records])
+    root = submitted(tmp_path, records, monkeypatch, batches)
+    monkeypatch.setattr(
+        cli.ledger.Ledger,
+        "save",
+        lambda self: (_ for _ in ()).throw(cli.ledger.LedgerError("disk full")),
+    )
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 1
+
+    err = capsys.readouterr().err
+    assert cli.STAGING_FILE_NAME in err
+    assert "those fields are filled" not in err

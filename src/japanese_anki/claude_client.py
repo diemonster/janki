@@ -408,9 +408,16 @@ def batch_results(
         outcome = getattr(entry, "result", None)
         kind = str(getattr(outcome, "type", "") or "")
         if kind != "succeeded":
+            # The SDK wraps the reason one level deeper than it looks: an
+            # errored result carries an ``ErrorResponse`` whose own ``type`` is
+            # the literal "error", and the thing worth printing — "Overloaded",
+            # an invalid-request explanation — is inside its ``error``. Reading
+            # the outer level yields the word "error" for every failure, which
+            # tells nobody deciding whether to resubmit anything at all.
             error = getattr(outcome, "error", None)
+            inner = getattr(error, "error", None) or error
             detail = str(
-                getattr(error, "message", None) or getattr(error, "type", None) or ""
+                getattr(inner, "message", None) or getattr(inner, "type", None) or ""
             )
             yield BatchEntry(custom_id, kind or "unknown", detail, None)
             continue

@@ -469,6 +469,7 @@ class Ledger:
         kind: str,
         model: str,
         pending_ids: Iterable[str],
+        force_fields: Iterable[str] = (),
         at: str | None = None,
     ) -> None:
         """Remember a submitted batch and the records it covers.
@@ -494,6 +495,10 @@ class Ledger:
             "model": model,
             "submitted_at": _iso_date(at),
             "pending_ids": ids,
+            # Stored because the fetch has to apply what the submit asked for.
+            # Without it, submitting with --force-fields and fetching plainly
+            # would report "nothing to fill" and throw away a paid answer.
+            "force_fields": list(dict.fromkeys(str(item) for item in force_fields)),
         }
 
     def pending_batch(self) -> tuple[str, dict[str, Any]] | None:

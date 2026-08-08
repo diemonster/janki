@@ -731,6 +731,11 @@ def command_import_jpdb_reviews(args: argparse.Namespace) -> int:
     return 0
 
 
+#: Where a large AI pass puts its proposals — live or batched, one file, so a
+#: run of either kind refuses rather than overwrite the other's review.
+STAGING_FILE_NAME = "ai-enrichment.yaml"
+
+
 def _confirm_enrich(count: int, assume_yes: bool) -> bool:
     if assume_yes or not sys.stdin.isatty():
         # Same rule as --replace: fat-finger protection, not CI protection.
@@ -831,6 +836,13 @@ def command_enrich(args: argparse.Namespace) -> int:
             "They are the two ends of the same job, hours apart; run them "
             "separately."
         )
+    if args.batch_fetch and (args.ids or args.model):
+        raise JankiError(
+            "enrich --batch-fetch collects a batch that was already submitted, "
+            "so it takes neither record ids nor a model: which records it covers "
+            "and which model answered them were both decided at submit time and "
+            "are recorded in the ledger."
+        )
     if batch_flags and not args.ai:
         raise JankiError(
             f"enrich {batch_flags[0]} batches the --ai pass, so it needs --ai. "
@@ -882,10 +894,10 @@ def command_enrich(args: argparse.Namespace) -> int:
         return _enrich_staging(client, args.staging.resolve(), args.yes)
 
     if args.batch_submit:
-        return _batch_submit(config, args)
+        return _batch_submit(config, args, force_fields)
 
     if args.batch_fetch:
-        return _batch_fetch(config, args, force_fields)
+        return _batch_fetch(config, args)
 
     if args.ai:
         return _enrich_ai(config, args, force_fields)
@@ -969,7 +981,7 @@ def _enrich_ai(
         return 0
 
     staging = len(targets) >= enrich.STAGING_THRESHOLD
-    staging_target = config.staging_dir / "ai-enrichment.yaml"
+    staging_target = config.staging_dir / STAGING_FILE_NAME
     if staging and staging_target.exists() and not args.force:
         # Before the pass, not after it: a run this size is one API call per
         # record, and finding the file at write time throws all of them away.
@@ -1095,7 +1107,9 @@ def _write_ai_result(
     return 0
 
 
-def _batch_submit(config: ProjectConfig, args: argparse.Namespace) -> int:
+def _batch_submit(
+    config: ProjectConfig, args: argparse.Namespace, force_fields: Sequence[str]
+) -> int:
     """Send the AI pass as one batch and remember it in the ledger.
 
     Half price, answered within a day rather than within seconds. The id is
@@ -1129,7 +1143,13 @@ def _batch_submit(config: ProjectConfig, args: argparse.Namespace) -> int:
         return 0
 
     batch_id = claude_client.submit_batch(requests)
-    book.record_batch(batch_id, kind="ai", model=model, pending_ids=pending_ids)
+    book.record_batch(
+        batch_id,
+        kind="ai",
+        model=model,
+        pending_ids=pending_ids,
+        force_fields=force_fields,
+    )
     ledger_error = _save_ledger(book)
     if ledger_error is not None:
         print(f"warning: {ledger_error}", file=sys.stderr)
@@ -1149,9 +1169,7 @@ def _batch_submit(config: ProjectConfig, args: argparse.Namespace) -> int:
     return 0
 
 
-def _batch_fetch(
-    config: ProjectConfig, args: argparse.Namespace, force_fields: Sequence[str]
-) -> int:
+def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
     """Collect a finished batch, or say how far along it is.
 
     One poll, never a wait loop: the point of batching is that nobody is sitting
@@ -1167,7 +1185,13 @@ def _batch_fetch(
         return 0
     batch_id, entry = pending
     pending_ids = [str(item) for item in entry.get("pending_ids", [])]
+    # Both from the entry, not from this invocation: the batch was submitted
+    # under one model and one set of overwritable fields, and it was answered
+    # under those. Reading them off a config that has moved since, or off flags
+    # this command refuses to take, would apply the answer to a different
+    # question than the one that was asked.
     model = str(entry.get("model") or config.enrich_model)
+    force_fields = [str(item) for item in entry.get("force_fields", [])]
 
     status_now = claude_client.batch_status(batch_id)
     if status_now != claude_client.BATCH_ENDED:
@@ -1203,8 +1227,17 @@ def _batch_fetch(
             file=sys.stderr,
         )
 
+    if pending_ids and len(outcome.missing) == len(pending_ids):
+        raise JankiError(
+            f"Batch {batch_id} came back, but none of the {len(pending_ids)} "
+            f"record(s) it covers are in {output_path} any more. That is a "
+            "collection that moved rather than a batch that failed, so the "
+            "batch is left pending: point --root at the right project, or "
+            "restore the file, and fetch again. Fetching costs nothing."
+        )
+
     staging = len(pending_ids) >= enrich.STAGING_THRESHOLD
-    staging_target = config.staging_dir / "ai-enrichment.yaml"
+    staging_target = config.staging_dir / STAGING_FILE_NAME
     if staging and staging_target.exists() and not args.force:
         raise StagingError(
             f"{staging_target} already exists and would be overwritten by batch "
@@ -1219,7 +1252,7 @@ def _batch_fetch(
         )
         book.clear_batch(batch_id)
         if (ledger_error := _save_ledger(book)) is not None:
-            _report_batch_ledger_failure(ledger_error, batch_id)
+            _report_batch_ledger_failure(ledger_error, batch_id, landed="nothing")
             return 1
         return 0
 
@@ -1247,18 +1280,44 @@ def _batch_fetch(
 
     book.clear_batch(batch_id)
     if (ledger_error := _save_ledger(book)) is not None:
-        _report_batch_ledger_failure(ledger_error, batch_id)
+        _report_batch_ledger_failure(
+            ledger_error, batch_id, landed="staging" if staging else "records"
+        )
         return 1
     return 0
 
 
-def _report_batch_ledger_failure(exc: ledger.LedgerError, batch_id: str) -> None:
+def _report_batch_ledger_failure(
+    exc: ledger.LedgerError, batch_id: str, *, landed: str
+) -> None:
+    """Say the batch is still pending, and what fetching it again will do.
+
+    ``landed`` is where the answers went, because that decides what a re-fetch
+    actually costs the reader. All three cases end with the batch still
+    pending — which is the safe end, since results wait on Anthropic's side for
+    weeks — but telling someone a re-fetch is a no-op when it will raise on an
+    existing staging file sends them after a repair that fails.
+    """
+    advice = {
+        "records": (
+            "The records are written. Fetching again once the ledger is "
+            "writable applies nothing new — those fields are filled — and "
+            "clears the entry."
+        ),
+        "staging": (
+            f"The answers are in {STAGING_FILE_NAME}, not in the records yet. "
+            "Promote that file first: fetching again while it exists refuses "
+            "rather than overwrite a review in progress."
+        ),
+        "nothing": (
+            "Nothing was written — no answer had anything to fill — so "
+            "fetching again once the ledger is writable simply clears the entry."
+        ),
+    }[landed]
     print(f"warning: {exc}", file=sys.stderr)
     print(
-        f"The records are written, but batch {batch_id} is still recorded as "
-        "pending, so --batch-submit will refuse until it is cleared. Fetching "
-        "again once the ledger is writable applies nothing new (the fields are "
-        "filled) and clears it.",
+        f"Batch {batch_id} is still recorded as pending, so --batch-submit will "
+        f"refuse until it is cleared. {advice}",
         file=sys.stderr,
     )
 
