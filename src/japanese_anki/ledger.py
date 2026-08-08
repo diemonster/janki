@@ -454,6 +454,71 @@ class Ledger:
         """Drop a record's entry entirely. Returns whether there was one."""
         return self.records.pop(_record_key(record_id), None) is not None
 
+    # -- pending batches ---------------------------------------------------
+    #
+    # A batch runs for up to a day, in someone else's datacentre, with the
+    # results waiting there until asked for. The ledger is what remembers a
+    # submission across that gap: without the id, work that was paid for is
+    # unreachable, and without the ids of the records it covers, a fetch cannot
+    # tell which words a result belongs to.
+
+    def record_batch(
+        self,
+        batch_id: str,
+        *,
+        kind: str,
+        model: str,
+        pending_ids: Iterable[str],
+        force_fields: Iterable[str] = (),
+        at: str | None = None,
+    ) -> None:
+        """Remember a submitted batch and the records it covers.
+
+        Unlike ``record_enriched`` this deliberately *replaces* rather than
+        accumulates for a given id: a batch is one thing that is either in
+        flight or collected, and two entries for one id would mean the ledger
+        disagreed with itself about which records are waiting on it.
+        """
+        if kind not in ENRICHMENT_KINDS:
+            raise LedgerError(
+                f"Unknown enrichment kind {kind!r}; expected one of "
+                f"{', '.join(ENRICHMENT_KINDS)}"
+            )
+        ids = list(dict.fromkeys(str(item) for item in pending_ids))
+        if not ids:
+            raise LedgerError(
+                "A pending batch with no record ids could never be applied to "
+                "anything; nothing was recorded."
+            )
+        self.pending_batches[str(batch_id)] = {
+            "kind": kind,
+            "model": model,
+            "submitted_at": _iso_date(at),
+            "pending_ids": ids,
+            # Stored because the fetch has to apply what the submit asked for.
+            # Without it, submitting with --force-fields and fetching plainly
+            # would report "nothing to fill" and throw away a paid answer.
+            "force_fields": list(dict.fromkeys(str(item) for item in force_fields)),
+        }
+
+    def pending_batch(self) -> tuple[str, dict[str, Any]] | None:
+        """The batch in flight, as ``(batch_id, entry)``, or ``None``.
+
+        One at a time on purpose (DESIGN_V2, "Batch mode"): submitting a second
+        while the first is out would leave two sets of pending ids overlapping,
+        and a fetch unable to say which answer is the current one for a word.
+        The first entry is returned rather than an arbitrary one so the answer
+        is stable across runs.
+        """
+        for batch_id in self.pending_batches:
+            entry = self.pending_batches[batch_id]
+            return str(batch_id), dict(entry) if isinstance(entry, dict) else {}
+        return None
+
+    def clear_batch(self, batch_id: str) -> bool:
+        """Forget a collected batch. Returns whether there was one to forget."""
+        return self.pending_batches.pop(str(batch_id), None) is not None
+
     # -- queries -----------------------------------------------------------
 
     def _audio_entries(self, record_id: str) -> list[dict[str, Any]]:

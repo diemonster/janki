@@ -1357,7 +1357,39 @@ Files: `src/japanese_anki/enrich.py`, `src/japanese_anki/cli.py`,
   can't reach them): propose improved gloss lists; always print
   old → new per record; per-record confirm (or `--yes`); write + ledger.
 
-### [ ] M4.4 Batch submit/fetch
+### [x] M4.4 Batch submit/fetch
+
+*Done 2026-08-08. Contract as written, plus one file the list omitted and
+seven decisions. **Added file:** `src/japanese_anki/claude_client.py` —
+the batch endpoints had to go there, because that module's whole stated
+contract is being the only one that knows what an Anthropic request looks
+like, and it names M4.4 in its own docstring. `parse_call` and
+`batch_request` now build their request from one `_request_body`, so the
+promise "the same request at half price" is structural rather than
+remembered. (1) **`custom_id` is a fingerprint of the record id**, not
+the id: the API wants a short ASCII identifier and `word:話す:はなす` is
+the wrong alphabet and an unbounded length. The fetch side recomputes the
+map from the ledger's pending list rather than storing a second copy, and
+a fingerprint collision is **refused before submitting** — it takes a
+birthday collision across 48 bits, but "unlikely" is not the standard for
+silently writing one word's example onto another. (2) `absorb_ai_call` is
+extracted and public so the batch path runs M4.2's QC *code*, not a
+second copy of it. (3) **No variety pressure in a batch** — every request
+is built before any answer exists. A real difference in output, and why
+the live path stays the default. (4) A one-hour cache TTL: five minutes
+does not survive the span a batch's requests are read over. (5) A large
+fetch lands in `staging/ai-enrichment.yaml` exactly as a large live run
+does, via a shared `_write_ai_result` — batch is what janki reaches for at
+a thousand records, which is not a number of sentences anyone reviews in a
+terminal. (6) **Anything short of a written record keeps the batch
+pending**: a declined diff, a failed ledger write, an existing staging
+file. Results live on Anthropic's side for weeks and fetching again is
+free, so forgetting the id is the only irreversible thing in the command.
+(7) Three ways a record comes back with nothing — errored/expired/canceled,
+never mentioned, or no longer in the collection — and each is reported by
+name, because a batch runs for up to a day and the collection does not
+hold still. The fetch uses the **batch's** model, not the config's: a run
+submitted under one model was answered by that one.*
 
 Depends on: M4.3 (same files), M1.3
 Files: `src/japanese_anki/enrich.py`, `src/japanese_anki/cli.py`,
