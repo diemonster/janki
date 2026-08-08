@@ -461,3 +461,15 @@ def test_latin_text_in_a_sentence_keeps_its_spaces() -> None:
     )
 
     assert "Hello World" in rebuilt.romaji
+
+
+def test_a_full_width_space_outside_a_ruby_group_is_content() -> None:
+    # Only the ASCII space Anki's notation requires before a group is dropped.
+    # A full-width space someone typed between two runs is content, and
+    # kana_to_romaji renders it as a separator.
+    rebuilt = regenerate_example_romaji(
+        ExampleSentence(japanese="話す　よ", furigana="話[はな]す　よ")
+    )
+
+    assert furigana_reading("話[はな]す　よ") == "はなす　よ"
+    assert rebuilt.romaji == "hanasu yo"

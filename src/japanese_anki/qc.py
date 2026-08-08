@@ -329,23 +329,21 @@ def regenerate_example_romaji(example: ExampleSentence) -> ExampleSentence:
     when it holds no kanji and refuses to guess when it does: transliterating
     kanji is exactly the invention this function exists to remove.
 
-    **The result is unspaced, and that is deliberate.** :mod:`romaji` preserves
-    whitespace so a caller that knows its word boundaries can convert segment
-    by segment — but this field's spaces are not word boundaries. Anki's
-    notation requires one before *every* mid-string ruby group, and jpdb
-    segments per kanji, so the verified furigana for 日本語 is
-    ``日[にっ] 本[ぽん] 語[ご]`` and treating those spaces as boundaries yields
-    ``ni pon goo`` — one word split into three, with the っ deleted because a
-    sokuon at the end of a run has nothing to geminate. Required-notation
-    spaces and word spaces are indistinguishable in the field, so the only
-    honest reading is the one with none.
+    **Notation spacing is dropped; content spacing survives.** The space Anki
+    requires immediately before a ruby group is notation and goes, so the
+    verified furigana for 日本語 — which jpdb segments per kanji as
+    ``日[にっ] 本[ぽん] 語[ご]`` — romanizes as ``nippongoo`` rather than
+    ``ni pon goo``, which would split one word into three and delete the っ
+    (a sokuon at the end of a run has nothing to geminate). Every other space
+    is content and reaches the romaji: quoted Latin keeps its words apart, and
+    so does a space someone typed between two Japanese runs.
 
-    Real word boundaries need the parse's tokens, which this function is not
-    given; a caller that has one (M4.2) can do better, and :mod:`romaji` is
-    built to accept it. Two limits are inherited rather than introduced: no
-    spacing, and は/へ romanized as ``ha``/``he`` even as particles, because
-    telling a particle from a syllable needs segmentation that module
-    deliberately does not have.
+    What this does *not* do is insert word boundaries that were not already
+    there. Real ones need the parse's tokens, which this function is not given;
+    a caller that has one (M4.2) can do better, and :mod:`romaji` is built to
+    accept it. The other inherited limit is :mod:`romaji`'s own: は and へ
+    romanize as ``ha`` and ``he`` even as particles, because telling a particle
+    from a syllable needs segmentation that module deliberately does not have.
     """
     reading = (
         furigana_reading(example.furigana) if example.furigana else example.japanese
