@@ -1503,7 +1503,7 @@ Files: `README.md`, `prompts/ENRICH_VOCABULARY.md`.
 Lane map: {M5.1, M5.2, M5.5 in parallel} → {M5.3} → {M5.4} → {M5.6};
 M5.7 anytime after M5.3.
 
-### [ ] M5.1 Pitch conversion + HTML renderer (merge gate: golden tests)
+### [~] claimed task/m5.1 2026-08-08 — M5.1 Pitch conversion + HTML renderer (merge gate: golden tests)
 
 Depends on: M2.2
 Files: new `src/japanese_anki/pitch.py`, new `tests/test_pitch.py`.
