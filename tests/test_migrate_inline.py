@@ -881,7 +881,12 @@ def test_migrate_inline_refuses_an_identity_clash_before_any_merge_summary(
         "  - id: word:ATM:エーティーエム\n"
         "    expression: ATM\n"
         "    reading: エーティーエム\n"
-        "    meanings: [ATM]\n",
+        "    meanings: [ATM]\n"
+        # Same provenance as the normalized copy on purpose: without it the
+        # note defaults to a `manual` source, `source` joins the overruled
+        # fields, and the refusal this test names would fire on that instead —
+        # green even if the identity protection were removed.
+        "    source: {type: shirabe, imported_from: export.csv}\n",
         encoding="utf-8",
     )
 
@@ -891,6 +896,6 @@ def test_migrate_inline_refuses_an_identity_clash_before_any_merge_summary(
 
     captured = capsys.readouterr()
     assert code == 1
-    assert "would not survive the migration unchanged" in captured.err
+    assert "keeps its expression rather than the note's" in captured.err
     assert "Conflicts" not in captured.out
     assert "--prefer-incoming" not in captured.out

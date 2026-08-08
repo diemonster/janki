@@ -703,17 +703,26 @@ built. The only writer of `audio` is `--rebuild`, over files you placed under
 build` does not yet mark records exported, so `--unexported` currently lists
 everything.
 
-`enriched` *is* written: every pass records what it wrote and which model or
-dictionary wrote it — `janki enrich --jpdb`, `--ai` and `--polish-meanings`
-each leave their own entry, and they accumulate rather than replace, because a
-dictionary pass and a writing pass describe different work.
+`enriched` *is* written, by the passes that write records directly:
+`janki enrich --jpdb`, `--ai` and `--polish-meanings` each leave their own
+entry, and they accumulate rather than replace, because a dictionary pass and a
+writing pass describe different work.
+
+With one gap worth knowing: a large `--ai` run — fifty records or more, or a
+`--batch-fetch` of that size — writes proposals to `data/staging/` instead, and
+`janki promote` records those as added records and source sightings but not as
+an enrichment. So the model that wrote them survives in the staging file's
+`model:` metadata and not in the ledger. If you care which model wrote a batch
+of examples, keep the promoted staging file (`janki promote` archives it under
+`data/staging/done/`).
 
 ## Inline deck notes
 
 A deck YAML may carry `notes:` of its own. That was how the starter deck began,
-and it is a dead end: every enrichment pass reads and writes
-`data/normalized/vocabulary.json` only, so a record living inside a deck file
-can never gain examples, usage notes, pitch accent or audio.
+and it is a dead end: enrichment reads records from `data/normalized/`, and
+writes them back there or to `data/staging/` for review — never to a deck file.
+So a record living inside a deck YAML can never gain examples, usage notes,
+pitch accent or audio.
 
 `janki migrate-inline DECK.yaml` moves those notes into the normalized file
 under the same IDs — GUIDs, and the review history behind them, are preserved —
