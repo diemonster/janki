@@ -611,3 +611,28 @@ def test_a_candidate_with_no_expression_is_counted_not_hidden(
     assert "verb" in note
     assert "low" in note
     assert "new in this chapter" in note
+
+
+def test_a_held_back_row_whose_values_are_zero_is_still_recorded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A row for 〇/ゼロ: the gloss and the source cell are both "0". Filtering
+    # the *rendered text* to suppress the page sentinel swallowed them, which
+    # is the drop this note exists to prevent.
+    root = project(tmp_path)
+    monkeypatch.setattr(
+        cli.extract.claude_client,
+        "parse_call",
+        FakeCall(
+            ok(candidate(expression="", reading="ゼロ", meanings=["0"], context="0", page=0))
+        ),
+    )
+
+    cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path))])
+
+    _records, meta = read_staging(root / "staging" / "lesson.pdf.yaml")
+    note = meta["review_notes"]
+    assert "meanings: 0" in note
+    assert "context: 0" in note
+    # The unknown-page sentinel is still suppressed rather than reported as 0.
+    assert "page:" not in note

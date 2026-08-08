@@ -349,11 +349,17 @@ def _describe(candidate: Any) -> list[str]:
         if name == "expression":
             continue
         value = getattr(candidate, name, None)
+        # `page` uses 0 for "unknown", so suppress the sentinel by *field*, not
+        # by rendered text: a filter on the string "0" would also swallow a
+        # meaning of "0" or a context cell reading "0", which is the silent
+        # drop this note exists to prevent.
+        if name == "page" and not value:
+            continue
         if isinstance(value, list | tuple):
             text = ", ".join(str(item).strip() for item in value if str(item).strip())
         else:
             text = str(value if value is not None else "").strip()
-        if text and text != "0":
+        if text:
             parts.append(f"{name}: {text}")
     return parts or ["nothing but an empty row"]
 
