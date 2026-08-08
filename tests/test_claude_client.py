@@ -42,9 +42,15 @@ class Candidates(BaseModel):
 class FakeMessages:
     """Records the one call it is given and answers with a canned response."""
 
-    def __init__(self, text: str | None = None, stop_reason: str | None = "end_turn") -> None:
+    def __init__(
+        self,
+        text: str | None = None,
+        stop_reason: str | None = "end_turn",
+        details: Any = None,
+    ) -> None:
         self.text = text
         self.stop_reason = stop_reason
+        self.details = details
         self.calls: list[dict[str, Any]] = []
 
     def create(self, **kwargs: Any) -> Any:
@@ -52,7 +58,9 @@ class FakeMessages:
         content = (
             [] if self.text is None else [SimpleNamespace(type="text", text=self.text)]
         )
-        return SimpleNamespace(content=content, stop_reason=self.stop_reason)
+        return SimpleNamespace(
+            content=content, stop_reason=self.stop_reason, stop_details=self.details
+        )
 
     def parse(self, **kwargs: Any) -> Any:  # pragma: no cover - must never run
         raise AssertionError(
@@ -61,8 +69,10 @@ class FakeMessages:
         )
 
 
-def fake_client(text: str | None = None, stop_reason: str | None = "end_turn") -> Any:
-    return SimpleNamespace(messages=FakeMessages(text, stop_reason))
+def fake_client(
+    text: str | None = None, stop_reason: str | None = "end_turn", details: Any = None
+) -> Any:
+    return SimpleNamespace(messages=FakeMessages(text, stop_reason, details))
 
 
 SCHEMA = Candidates
@@ -224,7 +234,7 @@ def test_content_blocks_pass_through_untouched() -> None:
 def test_a_complete_answer_is_validated_into_the_schema() -> None:
     client = fake_client(VALID)
 
-    result, stop_reason = parse_call(
+    result, stop_reason, _refusal = parse_call(
         "claude-opus-5", system_blocks("guide"), "go", SCHEMA, client
     )
 
@@ -240,7 +250,7 @@ def test_an_incomplete_response_is_returned_not_raised(stop_reason: str) -> None
     # which is neither a JankiError nor recoverable into a stop reason.
     client = fake_client(TRUNCATED, stop_reason=stop_reason)
 
-    result, reason = parse_call(
+    result, reason, _refusal = parse_call(
         "claude-opus-5", system_blocks("guide"), "go", SCHEMA, client
     )
 
@@ -254,6 +264,7 @@ def test_a_refusal_with_no_content_at_all_is_also_just_returned() -> None:
     assert parse_call("claude-opus-5", system_blocks("g"), "go", SCHEMA, client) == (
         None,
         "refusal",
+        None,
     )
 
 
@@ -330,3 +341,35 @@ def test_the_sdk_helper_really_does_raise_on_a_truncated_answer() -> None:
     # Not a JankiError, so cli.main could not format it; and the stop reason is
     # not recoverable from it, so a caller could not tell refused from truncated.
     assert not isinstance(excinfo.value, JankiError)
+
+
+def test_a_refusal_carries_the_category_a_caller_can_report() -> None:
+    # M3.3's contract is "fail with the category in the message", so a bare
+    # stop reason is not enough — the caller has to be able to say why.
+    client = fake_client(
+        None,
+        stop_reason="refusal",
+        details=SimpleNamespace(
+            type="refusal", category="cyber", explanation="declined by policy"
+        ),
+    )
+
+    result, stop_reason, refusal = parse_call(
+        "claude-opus-5", system_blocks("guide"), "go", SCHEMA, client
+    )
+
+    assert result is None
+    assert stop_reason == "refusal"
+    assert refusal is not None
+    assert refusal.category == "cyber"
+    assert refusal.explanation == "declined by policy"
+
+
+def test_a_normal_completion_carries_no_refusal() -> None:
+    # The API fills stop_details for a refusal and nothing else, so this reads
+    # as None without a special case.
+    client = fake_client(VALID)
+
+    assert parse_call(
+        "claude-opus-5", system_blocks("guide"), "go", SCHEMA, client
+    ).refusal is None

@@ -1072,7 +1072,41 @@ Files: new `src/japanese_anki/inputs.py`, `tests/test_inputs.py` (new).
   the recorded provenance path.
 - Pure besides `sips`; tests fake the subprocess.
 
-### [~] claimed task/m3.3 2026-08-07 — M3.3 `janki extract`
+### [x] M3.3 `janki extract`
+
+*Done 2026-08-07. Contract as written except one item, below; six decisions.
+**Deviation — `max_tokens` does not retry per-page.** The contract offers
+"retry per-page (PDFs) or fail with guidance"; per-page retry means splitting a
+PDF, which needs a PDF library this project does not depend on and this task was
+not authorised to add. So a truncated answer fails with guidance naming the
+concrete remedy (extract fewer pages, split the document, raise the budget), and
+never writes a partial file. Adding `pypdf` and doing the split is a follow-up
+worth its own decision, not a call to make inside this task. **Also required
+widening M3.1's `parse_call`,** which M3.1's own note flagged for exactly this
+moment: the contract says "fail with the category in the message", and a
+2-tuple could not carry it. It now returns a `CallResult` NamedTuple —
+`(parsed, stop_reason, refusal)` — with the SDK's refusal object translated into
+janki's own `Refusal`, so `claude_client` stays the only module that knows what
+an Anthropic response looks like. (1) The known-word list rides in the **user
+turn**, not the system blocks: it changes every time the collection grows, and
+anything above the cache breakpoint that changes invalidates the cached style
+guide for every run. (2) Only prose mode is told what janki already has — a
+table is transcribed row by row, and telling the model to skip rows would put
+holes in a faithful transcription. (3) Already-known candidates are kept, marked
+and sorted last rather than dropped: a silent discard is a silent discard even
+for a duplicate, and the reviewer may still want this page's example sentence.
+(4) `known_ids` matches on the stored id **and** the id expression+reading would
+mint today, since a hand-written record may carry one that has drifted. (5)
+Files are processed one at a time and written as they succeed, so a later
+failure keeps the earlier files — the work already paid for is kept and the
+error names what is left. (6) `candidate_schema()` is cached: a fresh class per
+call would make an instance built by one call fail validation in another, and
+would present an identical schema to the API as new on every request. (7) The
+staging file is named for the whole source **name**, suffix included
+(`worksheet.pdf.yaml`) — which is what DESIGN_V2 said, and what stops a scan and
+a photo of one page from colliding. Every target is resolved before the first
+API call, so a batch that would write two inputs to one file is refused rather
+than paid for and then half-discarded. Both from review.*
 
 Depends on: M3.1, M3.2, M1.5
 Files: new `src/japanese_anki/extract.py`, `src/japanese_anki/cli.py`,

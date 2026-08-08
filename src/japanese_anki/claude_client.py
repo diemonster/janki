@@ -7,17 +7,17 @@ place where the model is chosen, the API key is resolved, the style guide is
 cached, and the **stop reason is handed back to the caller** — the last of
 which is the point of the whole module.
 
-``parse_call`` returns ``(parsed, stop_reason)`` and never just the parsed
-value. A structured-output response is schema-valid *on normal completion*;
-it is not schema-valid when the model refused or ran out of tokens, and both
-of those arrive as an ordinary successful response rather than an exception.
-Returning the pair makes that impossible to forget: a caller has to name the
-stop reason to get at the data, so "check ``stop_reason`` before trusting the
-output" is enforced by the signature instead of by everyone remembering. What
-to *do* about each reason is the caller's — M3.3 turns ``refusal`` into an
-``ExtractError`` and ``max_tokens`` into a per-page re-run — because a
-truncated vocabulary table and a truncated meaning polish deserve different
-answers.
+``parse_call`` returns a :class:`CallResult` — ``(parsed, stop_reason,
+refusal)`` — and never just the parsed value. A structured-output response is
+schema-valid *on normal completion*; it is not schema-valid when the model
+refused or ran out of tokens, and both of those arrive as an ordinary
+successful response rather than an exception. Returning a tuple makes that
+impossible to forget: a caller has to name the stop reason to reach the data,
+so "check ``stop_reason`` before trusting the output" is enforced by the
+signature instead of by everyone remembering. What to *do* about each reason
+is the caller's — M3.3 turns ``refusal`` into an ``ExtractError`` naming the
+category and refuses truncated output outright — because a truncated
+vocabulary table and a truncated meaning polish deserve different answers.
 
 The ``anthropic`` package is an optional dependency (``pip install -e '.[ai]'``)
 and is imported lazily, so ``janki build`` works on a machine that has never
@@ -27,16 +27,19 @@ installed it.
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from japanese_anki.errors import JankiError
 
 __all__ = [
     "API_KEY_ENV",
     "COMPLETE_STOP_REASONS",
+    "CallResult",
     "DEFAULT_MAX_TOKENS",
     "STYLE_GUIDE_PATH",
+    "Refusal",
     "build_client",
     "load_anthropic",
     "parse_call",
@@ -72,6 +75,35 @@ STYLE_GUIDE_PATH = Path("docs") / "JAPANESE_STYLE_GUIDE.md"
 COMPLETE_STOP_REASONS: frozenset[str] = frozenset({"end_turn"})
 
 
+@dataclass(frozen=True, slots=True)
+class Refusal:
+    """Why a request was declined, in janki's own vocabulary.
+
+    The SDK's refusal object is translated here rather than handed onward, so
+    that this module stays the only one that knows what an Anthropic response
+    looks like. ``category`` is an open set — new ones appear without warning —
+    so a caller should put it in a message rather than branch on it.
+    """
+
+    category: str
+    explanation: str
+
+
+class CallResult(NamedTuple):
+    """What one call produced: the parsed value, why it stopped, and any refusal.
+
+    A tuple so that unpacking still forces a caller to name ``stop_reason`` to
+    reach ``parsed``, which is the discipline this module exists to impose.
+    ``refusal`` is populated only when ``stop_reason == "refusal"`` — the API
+    fills its details for nothing else — and is what lets a caller say *why* a
+    request was declined instead of only that it was.
+    """
+
+    parsed: Any
+    stop_reason: str | None
+    refusal: Refusal | None
+
+
 def load_anthropic() -> Any:
     """The ``anthropic`` module, or a :class:`JankiError` saying how to get it.
 
@@ -86,6 +118,22 @@ def load_anthropic() -> Any:
             "by default. Install it with: pip install -e '.[ai]'"
         ) from exc
     return anthropic
+
+
+def _refusal_of(response: Any) -> Refusal | None:
+    """The refusal details, if the API attached any.
+
+    Populated only alongside ``stop_reason == "refusal"``; every other stop
+    reason leaves it null, so this reads as ``None`` for them without a
+    special case.
+    """
+    details = getattr(response, "stop_details", None)
+    if details is None:
+        return None
+    return Refusal(
+        category=str(getattr(details, "category", "") or ""),
+        explanation=str(getattr(details, "explanation", "") or ""),
+    )
 
 
 def _type_adapter(schema: Any) -> Any:
@@ -171,19 +219,20 @@ def parse_call(
     client: Any | None = None,
     *,
     max_tokens: int = DEFAULT_MAX_TOKENS,
-) -> tuple[Any, str | None]:
-    """One structured-output call, returning ``(parsed, stop_reason)``.
+) -> CallResult:
+    """One structured-output call, returning a :class:`CallResult`.
 
     ``schema`` is a Pydantic model describing the shape the response must take.
     ``user_content`` is a string or the content-block list a document or image
     call needs — this module does not care which, so :mod:`inputs` can build
     blocks without this one growing a media vocabulary.
 
-    **Both halves of the return matter.** ``parsed`` is ``None`` whenever the
-    model did not complete normally, and ``stop_reason`` says why:
-    ``"refusal"`` means the request was declined, ``"max_tokens"`` means the
-    answer was cut off mid-way, and **neither raises**. Deciding between them
-    is the caller's job; surfacing them is this one's.
+    **Every field of the return matters.** ``parsed`` is ``None`` whenever the
+    model did not complete normally, ``stop_reason`` says why — ``"refusal"``
+    means declined, ``"max_tokens"`` means cut off mid-way — and **neither
+    raises**. ``refusal`` carries the category and explanation the API attaches
+    to a decline, so a caller can say *why* rather than only *that*. Deciding
+    what to do is the caller's job; surfacing it is this one's.
 
     That last guarantee is why this builds the request itself instead of
     calling the SDK's ``messages.parse()`` helper. ``parse()`` validates every
@@ -219,7 +268,7 @@ def parse_call(
     if stop_reason not in COMPLETE_STOP_REASONS:
         # Refused, truncated, or paused: whatever text came back is not a whole
         # answer, so there is nothing worth validating and the caller decides.
-        return None, stop_reason
+        return CallResult(None, stop_reason, _refusal_of(response))
 
     text = next(
         (
@@ -235,7 +284,7 @@ def parse_call(
             "Nothing was written."
         )
     try:
-        return _type_adapter(schema).validate_json(text), stop_reason
+        return CallResult(_type_adapter(schema).validate_json(text), stop_reason, None)
     except Exception as exc:
         # Structured outputs are schema-valid on normal completion, so this is
         # an anomaly rather than an expected branch — but it still has to reach
