@@ -26,17 +26,20 @@ from dataclasses import dataclass, replace
 
 from japanese_anki import jpdb
 from japanese_anki.conjugation import conjugate
+from japanese_anki.identifiers import normalize_identity_part
 from japanese_anki.models import ExampleSentence
 from japanese_anki.romaji import kana_to_romaji
 
 __all__ = [
     "FuriganaVerdict",
     "example_contains_target",
+    "furigana_base",
     "furigana_pairs",
     "furigana_reading",
     "parse_pairs",
     "regenerate_example_romaji",
     "target_forms",
+    "token_text",
     "verify_example_furigana",
 ]
 
@@ -44,7 +47,14 @@ __all__ = [
 # ``[``, up to a space, and the reading inside the brackets. The space is what
 # separates a ruby group from kana in front of it, which is why it terminates
 # the text run.
-_GROUP = re.compile(r"([^\s\[\]]+)\[([^\[\]]+)\]")
+#
+# **The ASCII space, and only that.** Anki's own furigana filter separates on
+# it alone, so a full-width space — ordinary in Japanese text, and what a model
+# may well write — does not end the run there either. Treating it as a
+# separator here would verify ``お　茶[ちゃ]`` while Anki renders ちゃ over both
+# characters: the same wrong-ruby, truncated-audio failure a missing space
+# causes, arriving through a different character.
+_GROUP = re.compile(r"([^ \[\]]+)\[([^\[\]]+)\]")
 
 
 def target_forms(expression: str, verb_group: str = "") -> tuple[str, ...]:
@@ -80,7 +90,13 @@ def example_contains_target(
     sentence, but it is not an example of *this* word, and a card whose sentence
     does not contain its own headword teaches the wrong association.
     """
-    sentence = example.japanese
+    # Normalized on both sides: `conjugate` returns NFKC forms, while an
+    # example's text is only stripped, so a sentence carrying a decomposed
+    # dakuten (食べた as た + U+3099 — the combining characters this project's
+    # inputs are documented to contain) would never match a composed form. A
+    # failed check rejects the example outright, so that miss is a silent drop
+    # of a good sentence.
+    sentence = normalize_identity_part(example.japanese)
     if not sentence.strip():
         return False
     return any(form in sentence for form in target_forms(expression, verb_group))
@@ -99,7 +115,15 @@ def parse_pairs(parse: jpdb.ParseResult) -> tuple[tuple[str, str], ...]:
             if isinstance(segment, str):
                 continue
             if len(segment) == 2 and all(isinstance(part, str) for part in segment):
-                pairs.append((segment[0], segment[1]))
+                text, reading = segment
+                # The same collapse `jpdb.furigana_to_anki` applies when it
+                # writes these fields: a segment that reads as itself carries
+                # no ruby, so it is not a group. Without this, furigana janki
+                # rendered from a parse could fail verification against that
+                # very parse.
+                if not reading or reading == text:
+                    continue
+                pairs.append((text, reading))
     return tuple(pairs)
 
 
@@ -111,6 +135,42 @@ def _segments(value: object) -> list[object]:
     if isinstance(value, list | tuple):
         return list(value)
     return []
+
+
+def furigana_base(furigana: str) -> str:
+    """The sentence a furigana field spells, with every reading removed.
+
+    ``話[はな]すを 食[た]べる`` bases to ``話すを食べる``. This is what the
+    furigana claims the sentence *is*, and comparing it with the example's own
+    text is what stops a model rewriting the sentence inside the furigana
+    field.
+    """
+    out: list[str] = []
+    position = 0
+    for match in _GROUP.finditer(furigana):
+        out.append(furigana[position : match.start()])
+        out.append(match.group(1))
+        position = match.end()
+    out.append(furigana[position:])
+    return "".join(out).replace(" ", "").replace("\u3000", "")
+
+
+def token_text(parse: jpdb.ParseResult, token: dict) -> str:
+    """The written text of one token, furigana or not.
+
+    jpdb sends ``furigana: null`` for an all-kana token — を, と, たべる in the
+    committed capture are all null — so a rendering built from furigana alone
+    silently drops whole words. The text comes off the dictionary entry the
+    token resolves to instead.
+    """
+    segments = _segments(token.get("furigana"))
+    if segments:
+        return "".join(
+            segment if isinstance(segment, str) else str(segment[0])
+            for segment in segments
+        )
+    entry = parse.vocabulary_for(token)
+    return str(entry.get("spelling") or "") if entry else ""
 
 
 def furigana_reading(furigana: str) -> str:
@@ -167,14 +227,25 @@ def verify_example_furigana(
     """
     expected_pairs = parse_pairs(parse)
     found_pairs = furigana_pairs(example.furigana)
-    expected = jpdb.furigana_to_anki(
-        [segment for token in parse.tokens for segment in _segments(token.get("furigana"))]
-    )
-
-    if expected_pairs == found_pairs:
-        return FuriganaVerdict(True, expected, example.furigana)
+    expected = _render(parse)
 
     differences: list[str] = []
+
+    # What the furigana says the sentence is, against what the example says it
+    # is. Without this only the bracketed groups are checked, so
+    # `本[ほん]が 読[よ]む` verifies against the sentence 本を読む — the model
+    # rewrote a particle inside the furigana field, and the field that drives
+    # sentence audio passes the check built to catch model invention.
+    base = furigana_base(example.furigana)
+    sentence = example.japanese.replace(" ", "").replace("\u3000", "")
+    if base and sentence and base != sentence:
+        differences.append(
+            f"the furigana spells {base}, but the sentence is {sentence}"
+        )
+
+    if expected_pairs == found_pairs and not differences:
+        return FuriganaVerdict(True, expected, example.furigana)
+
     for index in range(max(len(expected_pairs), len(found_pairs))):
         theirs = expected_pairs[index] if index < len(expected_pairs) else None
         ours = found_pairs[index] if index < len(found_pairs) else None
@@ -193,6 +264,25 @@ def verify_example_furigana(
     return FuriganaVerdict(False, expected, example.furigana, tuple(differences))
 
 
+def _render(parse: jpdb.ParseResult) -> str:
+    """jpdb's own reading of the sentence, in Anki notation, for a human.
+
+    Every token contributes, including the all-kana ones jpdb sends with null
+    furigana: a warning that showed only the ruby groups would read as though
+    the dictionary had dropped half the sentence.
+    """
+    segments: list[object] = []
+    for token in parse.tokens:
+        found = _segments(token.get("furigana"))
+        if found:
+            segments.extend(found)
+            continue
+        text = token_text(parse, token)
+        if text:
+            segments.append(text)
+    return jpdb.furigana_to_anki(segments)
+
+
 def regenerate_example_romaji(example: ExampleSentence) -> ExampleSentence:
     """The example with its romaji rebuilt from its furigana.
 
@@ -205,6 +295,32 @@ def regenerate_example_romaji(example: ExampleSentence) -> ExampleSentence:
     A sentence with no furigana is romanized from its own text, which is right
     when it holds no kanji and refuses to guess when it does: transliterating
     kanji is exactly the invention this function exists to remove.
+
+    **The furigana's spaces are kept as word boundaries.** :mod:`romaji` says so
+    explicitly — it preserves whitespace precisely so a caller that knows its
+    boundaries can convert segment by segment — and the curated romaji already
+    in this repository is spaced (``Mainichi, tsuma to Nihongo de
+    hanashimasu.``). Flattening to one run would produce
+    ``mainichitsumato…``, which is harder to read in the one field that exists
+    for someone who cannot yet read the kana.
+
+    It inherits :mod:`romaji`'s documented limit: は and へ romanize as ``ha``
+    and ``he`` even where they are particles, because telling a particle from a
+    syllable needs segmentation that module deliberately does not have.
     """
-    reading = furigana_reading(example.furigana) if example.furigana else example.japanese
+    reading = (
+        _spaced_reading(example.furigana) if example.furigana else example.japanese
+    )
     return replace(example, romaji=kana_to_romaji(reading) if reading else "")
+
+
+def _spaced_reading(furigana: str) -> str:
+    """The kana a furigana field spells, keeping its spaces as boundaries."""
+    out: list[str] = []
+    position = 0
+    for match in _GROUP.finditer(furigana):
+        out.append(furigana[position : match.start()])
+        out.append(match.group(2))
+        position = match.end()
+    out.append(furigana[position:])
+    return "".join(out)

@@ -7,6 +7,7 @@ committed capture and from canned token lists, never fetched.
 from __future__ import annotations
 
 import json
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -118,7 +119,7 @@ def test_an_i_adjective_conjugates_through_its_part_of_speech() -> None:
 
 def test_furigana_matching_the_parse_verifies() -> None:
     parse = parse_of([["話", "はな"], "す"])
-    verdict = verify_example_furigana(example(furigana="話[はな]す"), parse)
+    verdict = verify_example_furigana(example(japanese="話す", furigana="話[はな]す"), parse)
 
     assert verdict.verified
     assert bool(verdict) is True
@@ -128,7 +129,7 @@ def test_furigana_matching_the_parse_verifies() -> None:
 def test_a_wrong_reading_is_flagged_with_both_sides() -> None:
     parse = parse_of([["話", "はな"], "す"])
 
-    verdict = verify_example_furigana(example(furigana="話[か]す"), parse)
+    verdict = verify_example_furigana(example(japanese="話す", furigana="話[か]す"), parse)
 
     assert not verdict
     assert verdict.differences == ("jpdb reads 話 as はな, not か",)
@@ -141,7 +142,9 @@ def test_a_different_segmentation_is_flagged() -> None:
     # to drive sentence audio.
     parse = parse_of([["日", "にっ"], ["本", "ぽん"], ["語", "ご"]])
 
-    verdict = verify_example_furigana(example(furigana="日本語[にほんご]"), parse)
+    verdict = verify_example_furigana(
+        example(japanese="日本語", furigana="日本語[にほんご]"), parse
+    )
 
     assert not verdict
     assert "jpdb splits 日 where this splits 日本語" in verdict.differences[0]
@@ -150,14 +153,14 @@ def test_a_different_segmentation_is_flagged() -> None:
 def test_missing_furigana_is_flagged_not_passed() -> None:
     parse = parse_of([["話", "はな"], "す"])
 
-    verdict = verify_example_furigana(example(furigana=""), parse)
+    verdict = verify_example_furigana(example(japanese="話す", furigana=""), parse)
 
     assert not verdict
     assert "nothing here" in verdict.differences[0]
 
 
 def test_furigana_the_parse_does_not_have_is_flagged() -> None:
-    verdict = verify_example_furigana(example(furigana="猫[ねこ]"), parse_of("ねこ"))
+    verdict = verify_example_furigana(example(japanese="猫", furigana="猫[ねこ]"), parse_of("ねこ"))
 
     assert not verdict
     assert "is not in jpdb's reading" in verdict.differences[0]
@@ -176,7 +179,10 @@ def test_punctuation_does_not_cause_a_false_mismatch() -> None:
     # would report a mismatch for one. The verdict is on the readings.
     parse = parse_of([["話", "はな"], "す"])
 
-    assert verify_example_furigana(example(furigana="話[はな]す。"), parse).verified
+    verdict = verify_example_furigana(
+        example(japanese="話す。", furigana="話[はな]す。"), parse
+    )
+    assert verdict.verified
 
 
 def test_a_missing_space_fails_because_it_moves_the_reading() -> None:
@@ -185,7 +191,7 @@ def test_a_missing_space_fails_because_it_moves_the_reading() -> None:
     # with the お simply gone.
     parse = parse_of(["お", ["茶", "ちゃ"]])
 
-    verdict = verify_example_furigana(example(furigana="お茶[ちゃ]"), parse)
+    verdict = verify_example_furigana(example(japanese="お茶", furigana="お茶[ちゃ]"), parse)
 
     assert not verdict
     assert verdict.expected == "お 茶[ちゃ]"
@@ -207,7 +213,11 @@ def test_the_real_capture_verifies_against_its_own_furigana() -> None:
         ]
     )
 
-    verdict = verify_example_furigana(example(furigana=rendered), parse)
+    from japanese_anki.qc import furigana_base
+
+    verdict = verify_example_furigana(
+        example(japanese=furigana_base(rendered), furigana=rendered), parse
+    )
 
     assert verdict.verified
     assert "日[にっ] 本[ぽん] 語[ご]" in rendered
@@ -242,7 +252,8 @@ def test_romaji_is_rebuilt_from_the_furigana() -> None:
         example(furigana="毎日[まいにち] 日本語[にほんご]を 話[はな]します。")
     )
 
-    assert rebuilt.romaji == "mainichinihongoohanashimasu."
+    # Spaced, as romaji.py says it preserves and as the curated records are.
+    assert rebuilt.romaji == "mainichi nihongoo hanashimasu."
 
 
 def test_model_supplied_romaji_is_discarded_not_checked() -> None:
@@ -301,3 +312,76 @@ def test_furigana_reading_drops_the_notation_spaces(notation: str, reading: str)
 def test_the_verdict_is_falsy_when_it_failed() -> None:
     assert not FuriganaVerdict(False, "a", "b")
     assert FuriganaVerdict(True, "a", "a")
+
+
+# --- the furigana has to describe *this* sentence -----------------------------
+
+
+def test_a_furigana_field_that_rewrites_the_sentence_is_flagged() -> None:
+    # The bug this closes: only the bracketed groups were compared, so a model
+    # could change a particle inside the furigana field — the field that drives
+    # sentence audio — and pass the check built to catch model invention.
+    parse = parse_of([["本", "ほん"]], "を", [["読", "よ"], "む"])
+    rewritten = ExampleSentence(japanese="本を読む。", furigana="本[ほん]が 読[よ]む。")
+
+    verdict = verify_example_furigana(rewritten, parse)
+
+    assert not verdict
+    assert "the furigana spells 本が読む。, but the sentence is 本を読む。" in (
+        verdict.differences[0]
+    )
+
+
+def test_okurigana_changed_inside_the_furigana_is_flagged() -> None:
+    parse = parse_of([["話", "はな"], "します"])
+    altered = ExampleSentence(japanese="話します。", furigana="話[はな]しました。")
+
+    assert not verify_example_furigana(altered, parse)
+
+
+def test_a_full_width_space_does_not_pass_as_a_separator() -> None:
+    # Anki's furigana filter separates on the ASCII space alone, so お　茶[ちゃ]
+    # renders ちゃ over both characters — the same wrong-ruby failure a missing
+    # space causes, through a different character.
+    parse = parse_of(["お", ["茶", "ちゃ"]])
+    wide = ExampleSentence(japanese="お茶", furigana="お　茶[ちゃ]")
+
+    assert not verify_example_furigana(wide, parse)
+
+
+def test_kana_tokens_appear_in_the_rendering_shown_to_a_human() -> None:
+    # jpdb sends null furigana for an all-kana token, so a rendering built from
+    # furigana alone reads as though the dictionary dropped half the sentence.
+    parse = jpdb.ParseResult(
+        tokens=[
+            {"vocabulary_index": 0, "furigana": [["話", "はな"], "す"]},
+            {"vocabulary_index": 1, "furigana": None},
+        ],
+        vocabulary=[{"spelling": "話す"}, {"spelling": "を"}],
+    )
+
+    verdict = verify_example_furigana(
+        ExampleSentence(japanese="話す", furigana="話[はな]す"), parse
+    )
+
+    assert "を" in verdict.expected
+
+
+def test_a_segment_that_reads_as_itself_is_not_a_ruby_group() -> None:
+    # The same collapse furigana_to_anki applies when janki writes these
+    # fields; without it, furigana janki rendered from a parse could fail
+    # verification against that very parse.
+    parse = parse_of([["は", "は"], ["話", "はな"], ["す", ""]])
+
+    assert parse_pairs(parse) == (("話", "はな"),)
+
+
+def test_a_decomposed_dakuten_still_matches_its_composed_form() -> None:
+    # conjugate returns NFKC forms while an example's text is only stripped, and
+    # a failed contains-target check rejects the example outright — so the miss
+    # would be a silent drop of a good sentence.
+    decomposed = unicodedata.normalize("NFD", "食べた")
+    assert decomposed != "食べた"  # the dakuten really is a separate character
+    assert example_contains_target(
+        ExampleSentence(japanese=f"昨日{decomposed}。"), "食べる", "ichidan"
+    )
