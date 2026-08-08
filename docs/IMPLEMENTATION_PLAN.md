@@ -1234,7 +1234,26 @@ Files: `README.md`.
 Lane map: {M4.1 (early — only needs M2)} → {M4.2} → {M4.3} → {M4.4}.
 M4.2/M4.3/M4.4 all touch `enrich.py` + `cli.py`: strictly serial.
 
-### [~] claimed task/m4.1 2026-08-07 — M4.1 Example QC functions
+### [x] M4.1 Example QC functions
+
+*Done 2026-08-07. Contract as written; four decisions. (1) The furigana verdict
+is on the **(kanji run, reading) pairs in order**, not on the rendered string:
+jpdb does not tokenize punctuation, so comparing renderings would fail every
+sentence that ends in a full stop. (2) A **missing space still fails**, and
+should — I first wrote the opposite and the test caught it. `お茶[ちゃ]` puts
+ちゃ over both characters instead of over 茶, so Anki renders the wrong ruby
+*and* `furigana_reading` yields `ちゃ` with the お gone, which is the reading
+sentence audio would speak. The space is notation, but it is notation that
+decides which characters a reading belongs to. (3) `example_contains_target`
+searches the plain sentence, never the furigana, which carries bracketed
+readings that would match text no reader sees. A word janki has no verb class
+for contributes only its dictionary form — the right answer rather than a guess.
+(4) `regenerate_example_romaji` returns a new example rather than mutating, and
+inherits `kana_to_romaji`'s refusal: kanji with no furigana yields `""`, never a
+part-transliterated string. One test runs against the committed live `/parse`
+capture rather than a hand-written fixture, because jpdb segments 日本語 per
+kanji and reads it にっぽんご — an expectation written by hand would have quietly
+"corrected" both.*
 
 Depends on: M2.1, M2.3, M2.4
 Files: new `src/japanese_anki/qc.py`, `tests/test_qc.py` (new).
