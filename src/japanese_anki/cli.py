@@ -8,7 +8,16 @@ from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 
-from japanese_anki import claude_client, enrich, extract, jpdb, ledger, migrate, status
+from japanese_anki import (
+    claude_client,
+    enrich,
+    extract,
+    jpdb,
+    ledger,
+    migrate,
+    promote,
+    status,
+)
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import AnkiBuildError, build_deck, resolve_deck_records
@@ -32,6 +41,7 @@ from japanese_anki.preview import build_preview
 from japanese_anki.staging import (
     StagingError,
     check_rewritable,
+    prune_staging,
     read_staging,
     rewrite_staging,
     write_staging,
@@ -914,6 +924,98 @@ def command_extract(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_promote(args: argparse.Namespace) -> int:
+    """Move a reviewed staging file's records into the normalized collection.
+
+    Ordering is load-bearing in the same way ``run_import``'s is, for the same
+    reason: everything that can refuse — an unreadable ledger, a staging file
+    that cannot be pruned — happens before ``vocabulary.json`` is rewritten, and
+    the records are written before the ledger, because the ledger is metadata
+    ``status --rebuild`` can reconstruct and the records are not.
+
+    The staging file is only ever pruned of rows that actually landed, so a
+    promote that fails part-way leaves the review intact and re-running it is
+    safe.
+    """
+    config = _load_config(args)
+    path = args.file.resolve()
+    records, meta = read_staging(path)
+    if not records:
+        print(f"{path} holds no records; nothing to promote.")
+        return 0
+
+    client = None
+    if not args.skip_reading_check:
+        client = jpdb.JpdbClient(jpdb.api_key_from_env())
+    result = promote.check_readings(
+        records, client=client, skip_reading_check=args.skip_reading_check
+    )
+
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+
+    if not result.promoted:
+        print(
+            f"Nothing promoted: all {len(result.held)} row(s) are still held "
+            f"back. {path} is unchanged."
+        )
+        return 0
+
+    output_path = config.normalized_file.resolve()
+    existing = load_records(output_path) if output_path.exists() else []
+    # Read the ledger before anything is written, and only once.
+    book = ledger.load(config.ledger_file)
+
+    merged, outcomes = merge_records(existing, result.promoted, ())
+    save_records_json(output_path, merged)
+
+    added = sum(
+        book.record_added(record_id)
+        for record_id, outcome in outcomes.items()
+        if outcome.label == "added"
+    )
+    seen = sum(
+        book.record_source_seen(record_id, source_type, source_ref)
+        for record_id, source_type, source_ref in promote.source_references(
+            result.promoted
+        )
+    )
+    ledger_error = _save_ledger(book)
+
+    # The archive is appended to, not replaced: promoting a file in two passes
+    # must not lose the first pass's rows.
+    done = config.staging_dir / "done" / path.name
+    done.parent.mkdir(parents=True, exist_ok=True)
+    archived = list(result.promoted)
+    if done.exists():
+        previous, _ = read_staging(done)
+        archived = previous + archived
+    write_staging(done, archived, promote.archive_meta(meta, len(archived)), force=True)
+
+    removed = prune_staging(path, result.keep)
+    if not result.held:
+        # An emptied review is finished work; leaving it would have the next
+        # import report a file that can never be resolved.
+        path.unlink()
+
+    print(f"Promoted {len(result.promoted)} record(s) from {path} into {output_path}")
+    _print_merge_summary(outcomes)
+    if result.reminted:
+        print("Re-minted malformed IDs (these records were never in Anki):")
+        for old, new in sorted(result.reminted.items()):
+            print(f"  {old} -> {new}")
+    if result.held:
+        print(f"  {len(result.held)} row(s) still held back; {path} keeps them.")
+    else:
+        print(f"  {path} is finished and was deleted ({removed} row(s) promoted).")
+    print(f"  Archived to {done}")
+    print(_ledger_line(added, seen, written=ledger_error is None))
+    if ledger_error is not None:
+        _report_ledger_failure(ledger_error)
+        return 1
+    return 0
+
+
 def _validate_path(path: Path) -> tuple[list, int]:
     raw = load_structured(path)
     if isinstance(raw, dict) and "deck" in raw:
@@ -1278,6 +1380,23 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     extract_parser.set_defaults(handler=command_extract)
+
+    promote_parser = subparsers.add_parser(
+        "promote",
+        help="Move a reviewed staging file's records into the collection",
+    )
+    promote_parser.add_argument(
+        "file", type=_path, metavar="FILE", help="The staging file to promote."
+    )
+    promote_parser.add_argument(
+        "--skip-reading-check",
+        action="store_true",
+        help=(
+            "Do not ask jpdb whether each reading exists. Readings still have "
+            "to be kana — that rule is about whether an ID can exist at all."
+        ),
+    )
+    promote_parser.set_defaults(handler=command_promote)
 
     validate_parser = subparsers.add_parser("validate", help="Validate records or decks")
     validate_parser.add_argument("path", type=_path, nargs="?")

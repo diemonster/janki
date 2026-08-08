@@ -275,6 +275,50 @@ def rewrite_staging(path: Path, records: Sequence[VocabularyRecord]) -> Path:
     return path
 
 
+def prune_staging(path: Path, keep: Sequence[bool]) -> int:
+    """Drop rows from a staging file, keeping the surviving ones verbatim.
+
+    ``keep`` is one flag per row, in file order. Rows flagged ``False`` are
+    removed; the surviving rows keep their own keys, quoting and inline
+    comments, and the file keeps its metadata and header comments — for the
+    same reason :func:`rewrite_staging` exists: this file holds a review, and
+    re-rendering it from records deletes the notes the reviewer wrote in it.
+
+    **One kind of comment does not survive:** a comment written on its own line
+    *between* two rows. YAML attaches it to the row above, so removing that row
+    takes it along even when the comment was about the row below. Editing the
+    comment structure to compensate means reaching into the parser's internals
+    for a case it does not model, which is a worse trade than the loss — and
+    the loss is strictly smaller than re-rendering the file, which would take
+    every comment in it. Notes written *inside* a row survive, which is where
+    a per-row note belongs anyway.
+
+    Returns how many rows were removed. Removing every row leaves an empty
+    ``records:`` list rather than deleting the file — whether an emptied review
+    is finished or wants keeping is the caller's call, not this function's.
+    """
+    path = Path(path)
+    document = _load_document(path)
+    raw_records = document[_RECORDS_KEY] or []
+    if len(raw_records) != len(keep):
+        raise StagingError(
+            f"{path} holds {len(raw_records)} row(s) but {len(keep)} flag(s) were "
+            "given; prune_staging needs one flag per row, in file order."
+        )
+    survivors = [raw for raw, wanted in zip(raw_records, keep, strict=True) if wanted]
+    removed = len(raw_records) - len(survivors)
+    if not removed:
+        return 0
+    # Assigned by slice so ruamel keeps the sequence object — and with it the
+    # comments attached to the rows that stay.
+    raw_records[:] = survivors
+    document[_RECORDS_KEY] = raw_records
+    buffer = io.StringIO()
+    _parser().dump(document, buffer)
+    atomic_write_text(path, buffer.getvalue())
+    return removed
+
+
 def read_staging(path: Path) -> tuple[list[VocabularyRecord], dict[str, Any]]:
     """Read a staging file, returning ``(records, meta)``.
 
