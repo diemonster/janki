@@ -389,8 +389,9 @@ def format_staged(report: StatusReport) -> list[str]:
             for record_id in item.ids:
                 reason = item.reasons.get(record_id) or ""
                 lines.append(f"  {record_id}{f' — {reason}' if reason else ''}")
-        lines.append("Resolve them in place, move them into the records file, then run")
-        lines.append("'janki status --rebuild' so the ledger learns about them.")
+        lines.append("Resolve them in place, then run 'janki promote' on each file:")
+        lines.append("it re-mints the malformed IDs above, checks every reading, and")
+        lines.append("registers what lands. Moving them across by hand skips all three.")
     else:
         lines.append("Staged for review: none.")
     for item in report.staged:

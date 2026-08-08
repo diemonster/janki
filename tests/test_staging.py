@@ -311,7 +311,9 @@ def test_a_resolved_staging_file_is_told_it_is_finished_not_to_resolve_itself(
 
     out = capsys.readouterr().out
     assert "Its review is finished" in out
-    assert "janki status --rebuild" in out
+    # The one exit that exists, and no competing manual recipe beside it.
+    assert "janki promote" in out
+    assert "status --rebuild" not in out
     assert "Resolve that file" not in out
 
 
@@ -480,11 +482,10 @@ def test_a_directory_at_the_staging_path_is_reported_as_one(
 def test_the_staging_notes_give_an_exit_that_exists_today(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # 'janki promote' ships in Milestone 3. Until it does, telling the reviewer
-    # to promote the file dead-ends the whole review at an argparse error — and
-    # telling them to *keep* the file until then contradicts the import's own
-    # "resolve that file" message, leaving two live instructions that cannot
-    # both be satisfied. The notes name the three steps that work today.
+    # Every instruction in the notes has to be one the reviewer can actually
+    # run today. Before M3.4 that meant naming the three manual steps; now that
+    # 'janki promote' exists it means naming that, and *not* leaving the manual
+    # recipe behind as a second, diverging set of instructions.
     root, source = _project(tmp_path)
     assert cli.main(["--root", str(root), "import-shirabe", str(source)]) == 0
     capsys.readouterr()
@@ -492,9 +493,10 @@ def test_the_staging_notes_give_an_exit_that_exists_today(
 
     notes = yaml.safe_load(staged_path.read_text(encoding="utf-8"))["review_notes"]
 
-    assert "move its records into vocabulary.json" in notes
-    assert "janki status --rebuild" in notes
-    assert "delete this file" in notes
+    assert "janki validate" in notes
+    assert "janki promote" in notes
     assert "keep this file" not in notes
-    # Promote is named as the thing that will automate them, not as a wait.
-    assert "ships in Milestone 3" in notes
+    # No forward-reference to a command that now exists, and no leftover manual
+    # recipe competing with it.
+    assert "Milestone" not in notes
+    assert "status --rebuild" not in notes

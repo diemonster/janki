@@ -244,7 +244,10 @@ def test_the_staged_detail_flag_names_the_ids_and_why_they_are_held(
 
     out = capsys.readouterr().out
     assert "word:食べ物: — missing reading" in out
-    assert "janki status --rebuild" in out
+    # The exit that re-mints these malformed IDs and checks the readings — not
+    # a hand-copy recipe that skips both.
+    assert "janki promote" in out
+    assert "status --rebuild" not in out
 
 
 def test_staged_ids_pipe_like_every_other_detail_flag(

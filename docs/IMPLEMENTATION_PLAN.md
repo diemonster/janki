@@ -1201,7 +1201,25 @@ Design: DESIGN_V2 "PDFs and photos > Step 2".
   re-mint, enrichment-update staging file, empty-file cleanup,
   idempotent re-promote of a half-done file.
 
-### [~] claimed task/m3.w 2026-08-07 — M3.W Milestone 3 wrap
+### [x] M3.W Milestone 3 wrap
+
+*Done 2026-08-07. README as scoped, plus two stale forward-references the
+writing exposed and this task had to fix rather than document around: the
+staging-file `review_notes` written by every import still told the reviewer that
+`janki promote` "ships in Milestone 3" and gave them the three manual steps to
+run instead — instructions now competing with a command that exists — and the
+README said the same. Both now name `promote`, and the test that pinned the old
+wording pins the new rule instead: every instruction in those notes has to be one
+the reviewer can run today. One thing the walkthrough documents that is easy to
+get wrong: deleting a held row's `id:` line is still worth doing even though
+`promote` re-mints a malformed ID anyway, because `validate` refuses that ID
+whatever the reading now says — so the deletion is what keeps `validate` usable
+as the green light before promoting, and the re-mint is the safety net for
+forgetting. **Command verification is partial, as in M2.W:** the review→promote
+half was run end to end following the notes' own instructions (import, fill the
+reading, drop the id, validate, promote), but `extract` needs a live
+`ANTHROPIC_API_KEY` and is covered by tests against fakes rather than a live
+run.*
 
 Depends on: all M3 tasks
 Files: `README.md`.
