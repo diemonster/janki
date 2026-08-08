@@ -1,8 +1,13 @@
 """The single owner of the Anthropic client.
 
-No network (IMPLEMENTATION_PLAN rule 6) and no dependency on the ``ai`` extra
-being installed: the SDK is faked through ``sys.modules`` where a test needs
-one, and the missing-dependency path is forced rather than assumed.
+No network (IMPLEMENTATION_PLAN rule 6): every call goes through an injected
+fake client.
+
+These tests **do** need the ``ai`` extra, which is why ``dev`` pulls it in.
+The lazy-import promise they check is a *runtime* one — non-AI commands run
+without the SDK — and it is verified by forcing the ImportError rather than by
+the suite happening to run without the package. Skipping instead would report
+green for the AI plumbing on every machine that had not installed it.
 """
 
 from __future__ import annotations

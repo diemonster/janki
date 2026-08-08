@@ -1003,12 +1003,18 @@ the stop reason is unrecoverable from the exception, so a caller cannot tell
 `output_config.format` (schema transformed by the SDK's own
 `transform_schema`, so the wire shape stays the SDK's business), reads
 `stop_reason` first, and validates only on `end_turn`. **The extras floor is
-`anthropic>=0.121`, not a bare `anthropic`:** the SDK binding (`messages.parse(output_format=...)` and a
-response carrying `parsed_output`) was verified against that installed version
-rather than taken from documentation, and an unverified floor would fail at the
-first AI call instead of at install time. Tests are independent of whether the
-extra is installed — both the missing-dependency path and the lazy-import
-guarantee are forced, so they hold either way.*
+`anthropic>=0.121`, not a bare `anthropic`:** the bindings it actually needs —
+the top-level `transform_schema` export and
+`messages.create(output_config={"format": ...})` — were verified against that
+installed version rather than taken from documentation, and an unverified floor
+would fail at the first AI call instead of at install time. **`dev` pulls in
+`ai`,** also from review: the runtime promise is that non-AI commands work
+without the extra, and the lazy imports keep that true and are tested by forcing
+the failure; the *suite* is a different thing and has to exercise the AI
+plumbing rather than skip it. Without that, `scripts/bootstrap.sh` — which
+installs `.[dev]` and then runs pytest under `set -e` — dies collecting
+`tests/test_claude_client.py` on every fresh clone, and skipping instead would
+report green for code nobody ran.*
 
 Depends on: M1.2, M1.6
 Files: new `src/japanese_anki/claude_client.py`, `pyproject.toml`,
