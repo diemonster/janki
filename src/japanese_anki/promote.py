@@ -36,33 +36,30 @@ from japanese_anki import enrich, jpdb
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import contains_kanji, stable_record_id
 from japanese_anki.models import VocabularyRecord
-from japanese_anki.staging import annotate
+from japanese_anki.staging import (
+    HOLD_MISSING_READING,
+    HOLD_READING_KANJI,
+    HOLD_UNKNOWN_READING,
+    HOLD_UNVERIFIABLE_ID,
+    annotate,
+)
 
 __all__ = [
     "HOLD_MISSING_READING",
     "HOLD_READING_KANJI",
     "HOLD_UNKNOWN_READING",
+    "HOLD_UNVERIFIABLE_ID",
     "PromoteError",
     "PromoteResult",
     "check_readings",
     "remint",
 ]
 
-#: The two M1.5 hold classes, spelled exactly as the importers write them so a
-#: row held there and a row held here are the same kind of thing.
-HOLD_MISSING_READING = "missing reading"
-HOLD_READING_KANJI = "reading contains kanji"
-
-#: This module's own hold class: the reading is usable kana, but no dictionary
-#: entry for the spelling lists it.
-HOLD_UNKNOWN_READING = "reading not in the dictionary"
-
-#: A row whose id would change, on a run that cannot see the whole collection.
-#: Promoting it under the id it arrived with would write an id nothing can ever
-#: repair — ``remint`` is the only thing that fixes a stored id, and a stored id
-#: is exempt from it — so the row waits in ``data/staging/`` instead, which is
-#: committed and recoverable, until the run can prove the id is free.
-HOLD_UNVERIFIABLE_ID = "cannot check this id against the whole collection"
+# The hold vocabulary lives in `staging`, which owns the annotation key these
+# are written under and is the one module both this and `enrich` can import —
+# `enrich.needs_reading` has to tell a reading hold from an id hold, and this
+# module already imports `enrich`. Re-exported here, because this is where they
+# are written and where readers have always looked for them.
 
 
 class PromoteError(JankiError):
@@ -171,8 +168,15 @@ def check_readings(
                 continue
 
         resolved = _resolved(record)
-        if remint_blocked and record.id != stable_record_id(
-            resolved.expression, resolved.reading
+        # `remint_blocked` means the set is *incomplete*, not wrong: an id in it
+        # was positively proved present, and `remint` would leave that row alone
+        # whatever the unreadable deck turns out to hold. Holding it would block
+        # a run for a row nothing was ever uncertain about, under a reason that
+        # is false for it.
+        if (
+            remint_blocked
+            and record.id not in already_stored
+            and record.id != stable_record_id(resolved.expression, resolved.reading)
         ):
             result.held.append(_hold(record, HOLD_UNVERIFIABLE_ID))
             result.keep.append(True)

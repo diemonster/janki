@@ -15,17 +15,18 @@ from typing import Any
 import pytest
 import yaml
 
-from japanese_anki import cli, promote
+from japanese_anki import cli, enrich, promote
 from japanese_anki.jpdb import JpdbClient
 from japanese_anki.models import SourceReference, VocabularyRecord
 from japanese_anki.promote import (
     HOLD_MISSING_READING,
     HOLD_READING_KANJI,
     HOLD_UNKNOWN_READING,
+    HOLD_UNVERIFIABLE_ID,
     check_readings,
     remint,
 )
-from japanese_anki.staging import read_staging, write_staging
+from japanese_anki.staging import annotate, read_staging, write_staging
 
 # One vocabulary row, in the order /parse answers its default fields in.
 HANASU = [1562350, 4280520068, "話す", "はなす", ["LHLL"], 200, ["vt", "v5s"]]
@@ -994,3 +995,171 @@ def test_a_note_a_filter_drops_is_still_in_the_collection(
     stored = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
     assert [item["id"] for item in stored] == ["word:辛い:からい"]
     assert "Re-minted" not in capsys.readouterr().out
+
+
+def test_a_note_with_no_id_of_its_own_is_still_in_the_collection(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The deck already builds it under the id minted from its expression and
+    reading, and that id is what its GUID came from. Skipping it here would
+    re-mint a staged row onto a second id beside the curated note."""
+    root = tmp_path
+    (root / "janki.toml").write_text(
+        "[paths]\n"
+        'normalized_file = "vocabulary.json"\n'
+        'ledger_file = "ledger.json"\n'
+        'deck_dir = "decks"\n'
+        'staging_dir = "staging"\n',
+        encoding="utf-8",
+    )
+    (root / "vocabulary.json").write_text("[]", encoding="utf-8")
+    (root / "decks").mkdir()
+    (root / "decks" / "verbs.yaml").write_text(
+        "name: Verbs\n"
+        "notes:\n"
+        "  - expression: 辛い\n"
+        "    reading: からい\n"
+        "    meanings: [spicy]\n",
+        encoding="utf-8",
+    )
+    staged = root / "staging" / "ai.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    write_staging(
+        staged,
+        [
+            VocabularyRecord(
+                id="word:辛い:からい",
+                expression="辛い",
+                reading="つらい",
+                meanings=["painful"],
+                source=SourceReference(type="shirabe", imported_from="export.csv"),
+            )
+        ],
+        {"source_file": "vocabulary.json", "review_notes": "n"},
+    )
+
+    assert cli.main(["--root", str(root), "promote", str(staged), "--skip-reading-check"]) == 0
+
+    stored = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    assert [item["id"] for item in stored] == ["word:辛い:からい"]
+    assert "Re-minted" not in capsys.readouterr().out
+
+
+def test_a_source_backed_decks_filtered_out_ids_still_count(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A deck with `source:` and `include_ids` contributes every id its source
+    declares, not the ones it happens to build.
+
+    Green before the change as well as after: the `source:` branch was already
+    unfiltered. It had no test at all, and it is where the shipped deck layout's
+    behavior changed, so it gets one now."""
+    root = tmp_path
+    (root / "janki.toml").write_text(
+        "[paths]\n"
+        'normalized_file = "vocabulary.json"\n'
+        'ledger_file = "ledger.json"\n'
+        'deck_dir = "decks"\n'
+        'staging_dir = "staging"\n',
+        encoding="utf-8",
+    )
+    stale = VocabularyRecord(
+        id="word:辛い:からい",
+        expression="辛い",
+        reading="つらい",
+        meanings=["painful"],
+        source=SourceReference(type="shirabe", imported_from="export.csv"),
+    )
+    other = VocabularyRecord(
+        id="word:話す:はなす",
+        expression="話す",
+        reading="はなす",
+        meanings=["to speak"],
+        source=SourceReference(type="shirabe", imported_from="export.csv"),
+    )
+    (root / "records.json").write_text(
+        json.dumps([stale.to_dict(), other.to_dict()], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (root / "vocabulary.json").write_text("[]", encoding="utf-8")
+    (root / "decks").mkdir()
+    (root / "decks" / "verbs.yaml").write_text(
+        "name: Verbs\n"
+        "deck:\n"
+        '  source: "../records.json"\n'
+        "  include_ids:\n"
+        "    - word:話す:はなす\n",
+        encoding="utf-8",
+    )
+    staged = root / "staging" / "ai.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    write_staging(
+        staged, [stale], {"source_file": "vocabulary.json", "review_notes": "n"}
+    )
+
+    assert cli.main(["--root", str(root), "promote", str(staged), "--skip-reading-check"]) == 0
+
+    stored = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    assert [item["id"] for item in stored] == ["word:辛い:からい"]
+    assert "Re-minted" not in capsys.readouterr().out
+
+
+def test_an_id_hold_is_not_a_reading_hold(tmp_path: Path) -> None:
+    """The reading assistant proposes a reading for held rows. This hold is
+    about the id — proposing a reading would spend a call on a settled question
+    and, for a homograph the reviewer chose, suggest the one they rejected."""
+    held = annotate(
+        VocabularyRecord(
+            id="word:辛い:からい",
+            expression="辛い",
+            reading="からい",
+            meanings=["spicy"],
+            source=SourceReference(type="shirabe", imported_from="export.csv"),
+        ),
+        hold_reason=HOLD_UNVERIFIABLE_ID,
+    )
+
+    assert enrich.needs_reading(held) is False
+    assert enrich.needs_reading(replace(held, reading="")) is True
+
+
+def test_a_deck_janki_calls_broken_is_broken_here_too(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A deck this reader accepts while build, validate and status refuse it is
+    the worst of both: its source file is never opened, its ids vanish from the
+    set, and the caller acts on a set it believes is complete."""
+    root = tmp_path
+    (root / "janki.toml").write_text(
+        "[paths]\n"
+        'normalized_file = "vocabulary.json"\n'
+        'ledger_file = "ledger.json"\n'
+        'deck_dir = "decks"\n'
+        'staging_dir = "staging"\n',
+        encoding="utf-8",
+    )
+    (root / "vocabulary.json").write_text("[]", encoding="utf-8")
+    (root / "decks").mkdir()
+    (root / "decks" / "verbs.yaml").write_text("name: Verbs\ndeck: Verbs\n", encoding="utf-8")
+    staged = root / "staging" / "held.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    write_staging(
+        staged,
+        [
+            VocabularyRecord(
+                id="word:辛い:辛い",
+                expression="辛い",
+                reading="からい",
+                meanings=["spicy"],
+                source=SourceReference(type="shirabe", imported_from="export.csv"),
+            )
+        ],
+        {"source_file": "export.csv", "review_notes": "n"},
+    )
+
+    assert cli.main(["--root", str(root), "promote", str(staged), "--skip-reading-check"]) == 0
+
+    captured = capsys.readouterr()
+    assert "deck section must be a mapping" in captured.err
+    assert json.loads((root / "vocabulary.json").read_text(encoding="utf-8")) == []
+    assert staged.is_file(), "the row waits rather than taking an unrepairable id"

@@ -44,7 +44,7 @@ from japanese_anki.io import is_empty
 from japanese_anki.ledger import Ledger
 from japanese_anki.models import ExampleSentence, VocabularyRecord
 from japanese_anki.romaji import kana_to_romaji
-from japanese_anki.staging import annotate, annotations
+from japanese_anki.staging import READING_HOLDS, annotate, annotations
 
 __all__ = [
     "ENRICHABLE_FIELDS",
@@ -182,8 +182,16 @@ def needs_reading(record: VocabularyRecord) -> bool:
     reviewer half-filled with kanji is still held whatever the annotation says.
     Post-M1.5 a needs-reading file is *not* all reading-less: the second hold
     class mints ``word:<kanji>:<kanji>``, which has a reading.
+
+    The *value* is tested, not the key's presence, because one hold class is not
+    about the reading at all: ``HOLD_UNVERIFIABLE_ID`` marks a row whose
+    reading is fine and whose id could not be checked. Proposing a reading for
+    it would spend a call on a settled question and, for a homograph the
+    reviewer deliberately chose, suggest the reading they rejected — which typed
+    in would mint a different, permanent id.
     """
-    if "hold_reason" in annotations(record):
+    reason = annotations(record).get("hold_reason")
+    if reason is not None and reason in READING_HOLDS:
         return True
     return not record.reading or contains_kanji(record.reading)
 

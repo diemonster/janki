@@ -42,6 +42,30 @@ class StagingError(JankiError):
 # Review annotations, stored stringified in ``source.raw_fields``.
 ANNOTATION_KEYS: tuple[str, ...] = ("hold_reason", "already_known", "suggested_reading")
 
+# The values ``hold_reason`` takes. They live here rather than in the module
+# that writes them because a second module has to *read* them: janki's reading
+# assistant offers a reading for a held row, and one of these holds is not about
+# the reading at all. Whoever tests the value needs the vocabulary, and only one
+# module can own it without a cycle.
+HOLD_MISSING_READING = "missing reading"
+HOLD_READING_KANJI = "reading contains kanji"
+HOLD_UNKNOWN_READING = "reading not in the dictionary"
+
+#: A row whose id would change, on a run that cannot see the whole collection.
+#: The odd one out: the reading is fine and it is the *id* that could not be
+#: checked. Promoting it under the id it arrived with would write an id nothing
+#: can repair — ``promote.remint`` is the only thing that fixes a stored id, and
+#: a stored id is exempt from it — so the row waits in ``data/staging/``, which
+#: is committed, until a run can prove the id is free.
+HOLD_UNVERIFIABLE_ID = "cannot check this id against the whole collection"
+
+#: The holds that mean "a human still has to supply the reading". Everything
+#: else in this vocabulary is a hold for some other reason, and janki's reading
+#: assistant must not spend a dictionary call on one.
+READING_HOLDS: frozenset[str] = frozenset(
+    {HOLD_MISSING_READING, HOLD_READING_KANJI, HOLD_UNKNOWN_READING}
+)
+
 # Metadata keys that sit beside ``records:``; the record loader ignores them.
 # Enforced by :func:`write_staging` as a warning, not a refusal: `read_staging`
 # hands back every non-``records`` key it finds, so a note a reviewer added by
