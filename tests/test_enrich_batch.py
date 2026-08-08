@@ -1010,3 +1010,36 @@ def test_nothing_is_called_dropped_on_the_path_that_drops_nothing(
     cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"])
 
     assert "were dropped" not in capsys.readouterr().err
+
+
+def test_a_moved_collection_is_diagnosed_before_a_malformed_row_can_be(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Streaming the results first would schema-validate every succeeded row on
+    the way to a verdict that needs none of them — and one bad row would send
+    the user after a schema problem when the collection is what moved."""
+
+    class Malformed:
+        stop_reason = "end_turn"
+        content = [type("B", (), {"type": "text", "text": "{not json"})()]
+
+    records = many(2)
+    batches = FakeBatches(
+        results=[
+            Entry(key(records[0].id), Succeeded(Malformed())),
+            ok(records[1]),
+        ]
+    )
+    root = submitted(tmp_path, records, monkeypatch, batches)
+    stranger = record(id="word:聞く:きく", expression="聞く")
+    (root / "vocabulary.json").write_text(
+        json.dumps([stranger.to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 1
+
+    err = capsys.readouterr().err
+    assert "any more" in err
+    assert "did not match the expected shape" not in err
+    assert list(book_of(root)["pending_batches"]) == ["msgbatch_01"]

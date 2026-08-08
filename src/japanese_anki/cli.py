@@ -1242,9 +1242,9 @@ def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
         #
         # One of a pair. Its sibling below catches the same problem in the
         # other shape: a file that has records, none of them this batch's. That
-        # one has to wait until the results are in hand; this one is worth
-        # catching here, before an API call is spent on a run that cannot land.
-        # `--batch-forget` is the way out of both.
+        # one waits for the batch's *status*, so that a run which has nothing to
+        # collect yet still says so rather than erroring; this one is checked
+        # first, before even that call. `--batch-forget` is the way out of both.
         raise JankiError(
             f"Batch {pending[0]} is pending, but there are no records in "
             f"{output_path} to apply it to. Point --root at the right project, "
@@ -1275,6 +1275,32 @@ def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
         )
         return 0
 
+    # Whether this batch can land at all, asked of the collection and asked
+    # before a single result is read. Two things follow from the placement. It
+    # cannot be defeated by what the API said about individual rows — a record
+    # that is both gone and errored never appears among the missing, so
+    # counting those would let one overloaded request stand the guard down. And
+    # streaming the results first would schema-validate every succeeded row on
+    # the way to a verdict that needed none of them, so a malformed row in a
+    # batch whose records are all gone would report a schema problem instead of
+    # the moved collection that is actually wrong.
+    present = {record.id for record in records}
+    if pending_ids and not any(record_id in present for record_id in pending_ids):
+        # A --replace import, a promote that re-minted ids after a reading fix,
+        # a restore from another revision. Clearing here would drop the id of a
+        # batch whose answers are alive on Anthropic's side for weeks, and exit
+        # 0 doing it. Nothing is lost by refusing: the entry survives, and
+        # fetching again after the file is restored collects whatever the batch
+        # returned and reports each row by name.
+        raise JankiError(
+            f"Batch {batch_id} came back, but none of the {len(pending_ids)} "
+            f"record(s) it covers are in {output_path} any more, so nothing can "
+            "be applied. The batch is left pending: point --root at the right "
+            "project, or restore the file, and fetch again — fetching costs "
+            "nothing. If those records are gone for good, "
+            "'janki enrich --ai --batch-forget' drops the entry."
+        )
+
     if args.force_fields:
         # Unlike the model and the ids, this one is not settled at submit time:
         # it decides how an answer already in hand is applied, and the records
@@ -1300,29 +1326,6 @@ def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
         jpdb_client=jpdb.JpdbClient(jpdb.api_key_from_env()),
     )
     result = outcome.result
-
-    # Asked of the collection rather than of `outcome.missing`, and asked
-    # before anything is reported. A row that both errored *and* whose record
-    # is gone lands in `failed`, never in `missing` — so counting `missing`
-    # would let one overloaded request defeat the guard on a batch none of
-    # whose records are here. What matters is whether any covered id still
-    # names something, which the records answer directly.
-    present = {record.id for record in records}
-    if pending_ids and not any(record_id in present for record_id in pending_ids):
-        # A --replace import, a promote that re-minted ids after a reading fix,
-        # a restore from another revision. Clearing here would drop the id of a
-        # batch whose answers are alive on Anthropic's side for weeks, and exit
-        # 0 doing it. Raised before the "answers were dropped" warning below,
-        # because nothing is dropped on this path: the entry survives and
-        # re-fetching after restoring the file recovers every answer.
-        raise JankiError(
-            f"Batch {batch_id} came back, but none of the {len(pending_ids)} "
-            f"record(s) it covers are in {output_path} any more, so nothing can "
-            "be applied. The batch is left pending: point --root at the right "
-            "project, or restore the file, and fetch again — fetching costs "
-            "nothing. If those records are gone for good, "
-            "'janki enrich --ai --batch-forget' drops the entry."
-        )
 
     for warning in result.warnings:
         print(f"warning: {warning}", file=sys.stderr)
