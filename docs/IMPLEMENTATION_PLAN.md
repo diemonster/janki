@@ -1357,7 +1357,7 @@ Files: `src/japanese_anki/enrich.py`, `src/japanese_anki/cli.py`,
   can't reach them): propose improved gloss lists; always print
   old → new per record; per-record confirm (or `--yes`); write + ledger.
 
-### [ ] M4.4 Batch submit/fetch
+### [~] claimed task/m4.4 2026-08-08 — M4.4 Batch submit/fetch
 
 Depends on: M4.3 (same files), M1.3
 Files: `src/japanese_anki/enrich.py`, `src/japanese_anki/cli.py`,
