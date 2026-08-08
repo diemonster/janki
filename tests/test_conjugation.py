@@ -23,6 +23,7 @@ from japanese_anki.conjugation import (
     CONJUGATION_FORMS,
     conjugate,
     conjugate_i_adjective,
+    polite_stem,
 )
 from japanese_anki.jpdb import GODAN, ICHIDAN, KURU, SURU
 
@@ -513,9 +514,35 @@ def test_a_table_only_ever_holds_known_keys_in_the_known_order(
 # --------------------------------------------------------------------------
 
 
+def test_the_honorific_verbs_take_an_i_row_polite_stem() -> None:
+    """いらっしゃる is godan by class and い-row by inflection. The regular rule
+    invents いらっしゃります and misses the form Genki teaches first — and a
+    Shirabe export carries the kanji headword, so both spellings are listed."""
+    assert polite_stem("いらっしゃる", "godan") == "いらっしゃい"
+    assert polite_stem("くださる", "godan") == "ください"
+    assert polite_stem("下さる", "godan") == "下さい"
+    assert polite_stem("おっしゃる", "godan") == "おっしゃい"
+    assert polite_stem("仰る", "godan") == "仰い"
+    assert polite_stem("なさる", "godan") == "なさい"
+    assert polite_stem("為さる", "godan") == "為さい"
+    assert polite_stem("ござる", "godan") == "ござい"
+    assert polite_stem("御座る", "godan") == "御座い"
+    # 〜てくださる inflects on the honorific ending, so the suffix match covers it.
+    assert polite_stem("読んでくださる", "godan") == "読んでください"
+    # ください is already the stem, not a る verb to take one from.
+    assert polite_stem("ください", "godan") == ""
+
+
+def test_the_polite_stem_refuses_what_conjugate_refuses() -> None:
+    """得る is うる, whose polite form is 得ます — never 得ります. The regular
+    godan rule builds the second, so the same guard has to sit on both paths."""
+    assert polite_stem("得る", "godan") == ""
+
+
 def test_every_hand_written_exception_is_pinned_by_a_case_above() -> None:
     from japanese_anki.conjugation import (
         _GODAN_TE_OVERRIDES,
+        _HONORIFIC_MASU_STEMS,
         _IRREGULAR,
         _IRREGULAR_ADJECTIVE_SUFFIXES,
         _KURU_FORMS,
@@ -531,6 +558,17 @@ def test_every_hand_written_exception_is_pinned_by_a_case_above() -> None:
     tested_kuru = {"来る", "くる"}
     tested_adjective = {"いい"}
     tested_na_adjectives = {"きれい", "綺麗", "奇麗", "きらい", "嫌い"}
+    tested_honorifics = {
+        "いらっしゃる",
+        "おっしゃる",
+        "仰る",
+        "くださる",
+        "下さる",
+        "なさる",
+        "為さる",
+        "ござる",
+        "御座る",
+    }
 
     assert set(_GODAN_TE_OVERRIDES) == tested_te_overrides
     assert set(_UNSAFE_SUFFIXES) == tested_unsafe
@@ -539,3 +577,4 @@ def test_every_hand_written_exception_is_pinned_by_a_case_above() -> None:
     assert set(_KURU_FORMS) == tested_kuru
     assert set(_IRREGULAR_ADJECTIVE_SUFFIXES) == tested_adjective
     assert set(_NA_ADJECTIVE_SUFFIXES_ENDING_IN_I) == tested_na_adjectives
+    assert set(_HONORIFIC_MASU_STEMS) == tested_honorifics

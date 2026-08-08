@@ -17,7 +17,6 @@ import yaml
 
 from japanese_anki import cli, enrich, qc
 from japanese_anki.claude_client import CallResult, Refusal
-from japanese_anki.conjugation import polite_stem
 from japanese_anki.enrich import (
     UNVERIFIED_KEY,
     ai_prompt,
@@ -720,14 +719,21 @@ def test_the_flag_does_not_ride_along_when_the_examples_did_not_land() -> None:
 
 
 def test_the_diff_shows_the_sentence_the_user_is_saying_yes_to() -> None:
-    sentence = ExampleSentence(japanese="日本語を話します。", english="I speak Japanese.")
+    # Long enough that a dataclass repr would be truncated before the sentence
+    # ended: the reviewer has to read the Japanese, not the field names.
+    sentence = ExampleSentence(
+        japanese="毎朝、友だちと日本語で話します。",
+        furigana="毎朝[まいあさ]、友[とも]だちと日本語[にほんご]で話[はな]します。",
+        english="Every morning I speak Japanese with my friend.",
+    )
     lines = enrich.format_field_diff(
         {"word:話す:はなす": {"examples": ([], [sentence]), "usage_notes": ("", "Polite.")}}
     )
 
     assert lines[0] == "word:話す:はなす"
-    assert any("日本語を話します。" in line for line in lines[1:])
+    assert any("毎朝、友だちと日本語で話します。" in line for line in lines[1:])
     assert any("Polite." in line for line in lines[1:])
+    assert not any("ExampleSentence(" in line for line in lines)
 
 
 def test_a_changed_field_the_helper_does_not_know_still_shows() -> None:
@@ -799,19 +805,6 @@ def test_an_example_that_was_not_kept_is_not_reported_as_flagged(
     assert UNVERIFIED_KEY not in landed["source"]["raw_fields"]
     output = capsys.readouterr()
     assert "flagged" not in (output.out + output.err)
-
-
-def test_the_honorific_verbs_take_an_i_row_polite_stem() -> None:
-    """いらっしゃる is godan by class and い-row by inflection. The regular rule
-    invents いらっしゃります and misses the form Genki actually teaches."""
-    assert polite_stem("いらっしゃる", "godan") == "いらっしゃい"
-    assert polite_stem("ください", "godan") == ""  # already a stem, not a る verb
-    assert polite_stem("くださる", "godan") == "ください"
-    assert polite_stem("おっしゃる", "godan") == "おっしゃい"
-    assert polite_stem("なさる", "godan") == "なさい"
-    assert polite_stem("ござる", "godan") == "ござい"
-    # 〜てくださる inflects on the honorific ending, so the suffix match covers it.
-    assert polite_stem("読んでくださる", "godan") == "読んでください"
 
 
 def test_an_honorific_polite_example_is_accepted() -> None:

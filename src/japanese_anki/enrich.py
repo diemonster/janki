@@ -518,7 +518,7 @@ def _render(value: Any) -> str:
     elif isinstance(value, Mapping):
         text = ", ".join(f"{key}={item}" for key, item in value.items())
     elif isinstance(value, Sequence):
-        text = "; ".join(str(item) for item in value)
+        text = "; ".join(_render_item(item) for item in value)
     else:
         text = str(value)
     text = " ".join(text.split())

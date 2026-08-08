@@ -401,12 +401,19 @@ _GODAN_MASU_STEM: dict[str, str] = {
 # one, and these are words a beginner textbook teaches early and politely.
 # Matched as a suffix so 〜てくださる is covered too, since the honorific ending
 # is what inflects there.
+# Both spellings of each: a Shirabe export carries JMDict headwords, and three
+# of these have kanji ones. A record spelled 下さる would otherwise take the
+# regular branch and build 下さり, which is the form this table exists to prevent.
 _HONORIFIC_MASU_STEMS: tuple[str, ...] = (
     "いらっしゃる",
     "おっしゃる",
+    "仰る",
     "くださる",
+    "下さる",
     "なさる",
+    "為さる",
     "ござる",
+    "御座る",
 )
 
 
