@@ -14,7 +14,11 @@ _READINGLESS_ID = re.compile(r"^word:(?P<expression>.*):$")
 
 # A jpdb accent pattern: one H or L per kana of the reading, plus one for the
 # particle that would follow the word. Anything else is not a pattern at all.
-_PITCH_PATTERN = re.compile(r"^[HL]+$")
+# Case-insensitive to match `pitch._LEVELS`, which reads `h`/`l` deliberately.
+# The two disagreeing is not a style question: this one is an *error*, so
+# `has_errors` is true and `janki build` refuses the whole deck — over a pattern
+# `to_aquestalk` converts correctly and speaks correctly.
+_PITCH_PATTERN = re.compile(r"^[HL]+$", re.IGNORECASE)
 
 # Self-contained on purpose: the remedy has to be readable from the error, not
 # from a document. Pointing a reviewer at the review they just did is how this

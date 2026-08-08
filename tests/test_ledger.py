@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from japanese_anki import ledger as ledger_module
+from japanese_anki import pitch
 from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.ledger import (
     LedgerError,
@@ -820,3 +821,24 @@ def test_an_empty_example_does_not_count_as_enrichment(tmp_path: Path) -> None:
     record = _record(examples=[ExampleSentence()], usage_notes="Everyday verb.")
 
     assert book.missing_enrichment([record]) == [record.id]
+
+
+def test_the_word_audio_fingerprint_uses_pitch_select_pattern() -> None:
+    """One definition of "which pattern does audio use". The fingerprint is
+    computed *over* that choice, so a second definition would mean audio
+    generated under one rule is fingerprinted under the other and never reads as
+    stale when the accent changes.
+
+    A leading blank entry discriminates: taking `pitch_accent[0]` literally
+    gives the reading alone, while `select_pattern` skips to the first real
+    pattern."""
+    record = VocabularyRecord(
+        id="word:橋:はし",
+        expression="橋",
+        reading="はし",
+        meanings=["bridge"],
+        pitch_accent=["", "LHL"],
+    )
+
+    assert ledger_module.word_audio_content_fingerprint(record) == short_fingerprint("はしLHL")
+    assert pitch.select_pattern(record) == "LHL"

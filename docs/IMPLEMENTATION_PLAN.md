@@ -1531,11 +1531,21 @@ Amended same day, from review. **The merge gate did not gate.** Both my
 拗音 goldens were 病院, which is heiban — and under heiban the mark lands
 on the last unit however the kana are grouped, so the naive per-kana
 mapping passed every assertion in the file. A 拗音 gate has to have its
-drop *inside* the word: 授業 `HHLLLL` → `ジュ'ギョウ`, which the naive
-mapping renders `ジュギョ'ウ`. The same flaw ran through the っ/ん cases
-(both hold with them wrongly attaching) and the first-kana case (holds if
-the *last* kana is read). All four are discriminating now, verified by
-mutating the module and watching them fail. Also unified with two
+drop *inside* the word: 授業 `HHLLLL` → `ジュ'ギョウ`. The same flaw ran
+through the っ/ん cases (both hold with them wrongly attaching) and the
+first-kana case (holds if the *last* kana is read).
+
+A second review found I had reported that verification more confidently
+than I ran it — I mutated the module once and read an aggregate count,
+and one of the four replacements (発表) still discriminated nothing,
+while the gate caught a *different* mutation than its docstring named.
+Each case is now mutated **individually** and the failing test named:
+per-kana-vs-per-mora pattern consumption and 拗音 grouping (the gate,
+via string and span count), っ mora-hood (`いっき` `HLLL` → `イ'ッキ`,
+which is stated as a pattern rather than a claim about any word's
+dictionary accent — asserting an accent class from memory in a golden
+file is how a wrong one gets copied forward), the NFC kana count, the
+lowercase pattern, and the ledger's delegation. Also unified with two
 neighbours it had quietly forked from: `ledger._selected_pitch_pattern`
 now delegates to `pitch.select_pattern` — the word-audio content
 fingerprint is computed *over* that choice, so two definitions would mean

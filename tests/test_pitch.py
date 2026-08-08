@@ -123,14 +123,25 @@ def test_atamadaka_and_odaka_are_not_the_same_string() -> None:
 def test_a_youon_word_counts_two_kana_as_one_mora() -> None:
     """授業 (じゅぎょう) atamadaka, ``HHLLLL`` → ``ジュ'ギョウ``.
 
-    **The merge gate.** It has to be a 拗音 word with a drop *inside* it: under
-    heiban the mark goes on the last unit however the kana are grouped, so a
-    heiban 拗音 word cannot tell the two mappings apart. Read per kana instead
-    of per mora, this comes out ``ジュギョ'ウ`` — the accent forced onto the
-    wrong mora and spoken with confidence, which is the exact failure this
-    module was written to prevent.
+    **The merge gate**, and it has to be a 拗音 word with the drop *inside* it:
+    under heiban the mark goes on the last unit however the kana are grouped, so
+    a heiban 拗音 word tells the mappings apart not at all.
+
+    Precisely which mutations this catches, since claiming the wrong one is how
+    a gate stops gating — both verified by making the change and watching this
+    fail:
+
+    * **consuming one pattern character per mora instead of per kana**
+      (``index += 1`` in ``_levels``) reads the levels off the wrong offsets and
+      yields ``ジュギョ'ウ``, which the string assertion catches;
+    * **treating every kana as its own mora** (an empty ``_ATTACHING``) does
+      *not* change the string — the mark is appended after the accented mora's
+      last kana, which is where a per-kana scan puts it too — so the span count
+      is what catches that one.
     """
     assert to_aquestalk("じゅぎょう", "HHLLLL") == "ジュ'ギョウ"
+    # Three morae from five kana, drawn as three spans plus the particle slot.
+    assert render_pitch_html("じゅぎょう", ["HHLLLL"]).count('class="mora ') == 4
 
 
 def test_a_heiban_youon_word_too() -> None:
@@ -166,11 +177,16 @@ def test_syllabic_n_is_a_mora() -> None:
     assert render_pitch_html("せんせい", ["LHHLL"]).count('class="mora ') == 5
 
 
-def test_a_sokuon_before_a_drop_moves_the_mark() -> None:
-    """Where っ's mora-hood does change the spoken string: 発表 (はっぴょう),
-    nakadaka accent 3 → ハッピョ'ウ. Merge っ into は and the mark lands a mora
-    early, on ピョ."""
-    assert to_aquestalk("はっぴょう", "LHHHLL") == "ハッピョ'ウ"
+def test_a_drop_before_a_sokuon_moves_the_mark() -> None:
+    """Where っ's mora-hood changes the *spoken* string: the drop has to fall
+    before it, not after. ``いっき`` with ``HLLL`` is ``イ'ッキ``; merge っ into
+    the kana before it and the mark moves to ``イッ'キ``.
+
+    The pattern is the input here, not a claim about any word's dictionary
+    accent — what this pins is the grouping, and asserting an accent class from
+    memory in a golden file is how a wrong one gets copied forward.
+    """
+    assert to_aquestalk("いっき", "HLLL") == "イ'ッキ"
 
 
 def test_a_long_vowel_mark_is_a_mora() -> None:
