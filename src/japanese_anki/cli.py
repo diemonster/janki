@@ -837,13 +837,22 @@ def command_enrich(args: argparse.Namespace) -> int:
             "--batch-submit sends a batch, --batch-fetch collects it hours later, "
             "and --batch-forget drops one that can no longer be collected."
         )
-    if args.batch_fetch and (args.ids or args.model):
+    if (args.batch_fetch or args.batch_forget) and (args.ids or args.model):
         raise JankiError(
-            "enrich --batch-fetch collects a batch that was already submitted, "
-            "so it takes neither record ids nor a model: which records it covers "
-            "and which model answered them were both decided at submit time and "
-            "are recorded in the ledger. (--force-fields it does take: that "
-            "decides how an answer already in hand is applied.)"
+            "enrich --batch-fetch and --batch-forget act on a batch that was "
+            "already submitted, so neither takes record ids or a model: which "
+            "records it covers and which model answered them were both decided "
+            "at submit time and are recorded in the ledger. --batch-forget in "
+            "particular drops the whole entry, so naming one id and dropping "
+            "the rest is not something it could mean. (--batch-fetch does take "
+            "--force-fields: that decides how an answer already in hand is "
+            "applied.)"
+        )
+    if args.batch_forget and (args.force_fields or args.force):
+        raise JankiError(
+            "enrich --batch-forget drops the pending entry and writes no "
+            "records, so it has no field list to widen and no staging file to "
+            "overwrite."
         )
     if batch_flags and not args.ai:
         raise JankiError(
@@ -1196,7 +1205,15 @@ def _batch_forget(config: ProjectConfig) -> int:
     batch_id, entry = pending
     book.clear_batch(batch_id)
     if (ledger_error := _save_ledger(book)) is not None:
-        print(f"error: {ledger_error}", file=sys.stderr)
+        print(f"warning: {ledger_error}", file=sys.stderr)
+        print(
+            f"Batch {batch_id} is still recorded as pending on disk — only the "
+            "in-memory copy was cleared — so --batch-submit will keep refusing. "
+            "Run --batch-forget again once that file is writable; that is the "
+            "whole remedy, and it is why this command exists rather than an "
+            "edit to data/ledger.json.",
+            file=sys.stderr,
+        )
         return 1
     print(
         f"Forgot batch {batch_id} ({len(entry.get('pending_ids', []))} record(s), "
@@ -1245,17 +1262,6 @@ def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
     # question than the one that was asked.
     model = str(entry.get("model") or config.enrich_model)
     force_fields = [str(item) for item in entry.get("force_fields", [])]
-    if args.force_fields:
-        # Unlike the model and the ids, this one is not settled at submit time:
-        # it decides how an answer already in hand is applied, and the records
-        # may have gained fields while the batch was out. Overriding is allowed
-        # for that reason, and announced because it is not what was submitted.
-        override = enrich.parse_force_fields(args.force_fields, ai=True)
-        print(
-            f"Applying with --force-fields {', '.join(override)} instead of the "
-            f"{', '.join(force_fields) or 'none'} this batch was submitted with."
-        )
-        force_fields = list(override)
 
     status_now = claude_client.batch_status(batch_id)
     if status_now != claude_client.BATCH_ENDED:
@@ -1266,6 +1272,20 @@ def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
             "collect yet."
         )
         return 0
+
+    if args.force_fields:
+        # Unlike the model and the ids, this one is not settled at submit time:
+        # it decides how an answer already in hand is applied, and the records
+        # may have gained fields while the batch was out. Overriding is allowed
+        # for that reason, announced because it is not what was submitted, and
+        # announced *here* — after the status check — because a run that has
+        # nothing to collect yet applies nothing and should claim nothing.
+        override = enrich.parse_force_fields(args.force_fields, ai=True)
+        print(
+            f"Applying with --force-fields {', '.join(override)} instead of the "
+            f"{', '.join(force_fields) or 'none'} this batch was submitted with."
+        )
+        force_fields = list(override)
 
     # The batch's own model, not the config's: a run submitted under one model
     # and fetched after the config changed was still answered by the first.
@@ -1289,6 +1309,20 @@ def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
             "longer in the collection, so their answers were dropped: "
             f"{', '.join(outcome.missing)}",
             file=sys.stderr,
+        )
+
+    if pending_ids and len(outcome.missing) == len(pending_ids):
+        # Non-empty collection, none of it this batch's: a --replace import, a
+        # promote that re-minted ids after a reading fix, a restore from
+        # another revision. Clearing here would drop the id of a batch whose
+        # answers are alive on Anthropic's side for weeks, and exit 0 doing it.
+        raise JankiError(
+            f"Batch {batch_id} came back, but none of the {len(pending_ids)} "
+            f"record(s) it covers are in {output_path} any more, so nothing can "
+            "be applied. The batch is left pending: point --root at the right "
+            "project, or restore the file, and fetch again — fetching costs "
+            "nothing. If those records are gone for good, "
+            "'janki enrich --ai --batch-forget' drops the entry."
         )
 
     staging = len(pending_ids) >= enrich.STAGING_THRESHOLD

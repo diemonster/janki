@@ -685,13 +685,17 @@ def test_the_reason_a_request_errored_survives_the_sdks_nesting() -> None:
 def test_a_collection_that_moved_leaves_the_batch_pending(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """One record vanishing is curation; every one of them vanishing is a
-    --root pointed somewhere else, and clearing the id would strand the
-    answers on Anthropic's side."""
+    """A non-empty file holding none of the batch's records — a --replace
+    import, a promote that re-minted ids after a reading fix, a restore from
+    another revision. Clearing here would drop the id of a batch whose answers
+    are alive on Anthropic's side, and exit 0 doing it."""
     records = many(2)
     batches = FakeBatches(results=[ok(item) for item in records])
     root = submitted(tmp_path, records, monkeypatch, batches)
-    (root / "vocabulary.json").write_text("[]", encoding="utf-8")
+    stranger = record(id="word:聞く:きく", expression="聞く")
+    (root / "vocabulary.json").write_text(
+        json.dumps([stranger.to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
     capsys.readouterr()
 
     assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 1
@@ -765,12 +769,13 @@ def test_a_failed_ledger_write_says_what_actually_landed(
 # --- what the second review found --------------------------------------------
 
 
-def test_a_one_record_batch_whose_word_was_deleted_does_not_deadlock(
+def test_a_one_record_batch_whose_word_was_deleted_has_a_way_out(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """For a one-record batch, "one record vanished" and "all of them vanished"
-    are the same event. Treating it as an error would leave an entry no fetch
-    can apply and no submit can get past."""
+    are the same event, and janki cannot tell them apart — so it refuses rather
+    than guess, and --batch-forget is what unsticks it. Without that command
+    this would be a deadlock; with it, it is a question with an answer."""
     records = many(1)
     batches = FakeBatches(results=[ok(item) for item in records])
     root = submitted(tmp_path, records, monkeypatch, batches)
@@ -780,10 +785,13 @@ def test_a_one_record_batch_whose_word_was_deleted_does_not_deadlock(
     )
     capsys.readouterr()
 
-    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 0
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 1
+    assert "--batch-forget" in capsys.readouterr().err
 
-    assert "no longer in the collection" in capsys.readouterr().err
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-forget"]) == 0
     assert book_of(root)["pending_batches"] == {}
+    capsys.readouterr()
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-submit"]) == 0
 
 
 def test_an_empty_collection_is_a_wrong_root_and_keeps_the_batch(
@@ -891,3 +899,65 @@ def test_an_expired_row_carries_no_reason_because_the_api_sends_none() -> None:
 
     assert row.outcome == "expired"
     assert row.detail == ""
+
+
+def test_the_force_fields_override_is_not_announced_before_it_can_apply(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A batch still running applies nothing, so it must claim nothing — and
+    the stored list is untouched, so a later plain fetch really does revert."""
+    records = many(1)
+    batches = FakeBatches(status="in_progress", results=[ok(item) for item in records])
+    root = submitted(tmp_path, records, monkeypatch, batches)
+    capsys.readouterr()
+
+    code = cli.main(
+        [
+            "--root", str(root), "enrich", "--ai", "--batch-fetch",
+            "--force-fields", "examples", "--yes",
+        ]
+    )
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "in_progress" in out
+    assert "Applying with --force-fields" not in out
+
+
+def test_forget_refuses_the_flags_it_would_otherwise_swallow(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """"Forget this one record's slot" reads like something smaller than what
+    the command does, which is drop the whole entry."""
+    root = project(tmp_path, many(1))
+
+    assert cli.main(
+        ["--root", str(root), "enrich", "--ai", "--batch-forget", "word:話す0:はなす"]
+    ) == 1
+    assert "not something it could mean" in capsys.readouterr().err
+    assert cli.main(
+        ["--root", str(root), "enrich", "--ai", "--batch-forget", "--force-fields", "examples"]
+    ) == 1
+    assert "no field list to widen" in capsys.readouterr().err
+
+
+def test_a_forget_that_could_not_be_saved_says_what_to_do_next(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """This is the command that exists so nobody hand-edits data/ledger.json.
+    Failing without a next step invites exactly that edit."""
+    root = submitted(tmp_path, many(1), monkeypatch, FakeBatches())
+    monkeypatch.setattr(
+        cli.ledger.Ledger,
+        "save",
+        lambda self: (_ for _ in ()).throw(cli.ledger.LedgerError("read-only")),
+    )
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-forget"]) == 1
+
+    err = capsys.readouterr().err
+    assert "msgbatch_01" in err
+    assert "still recorded as pending on disk" in err
+    assert "--batch-forget again" in err
+    assert list(book_of(root)["pending_batches"]) == ["msgbatch_01"]
