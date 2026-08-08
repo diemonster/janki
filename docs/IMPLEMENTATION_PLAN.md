@@ -1503,7 +1503,29 @@ Files: `README.md`, `prompts/ENRICH_VOCABULARY.md`.
 Lane map: {M5.1, M5.2, M5.5 in parallel} → {M5.3} → {M5.4} → {M5.6};
 M5.7 anytime after M5.3.
 
-### [~] claimed task/m5.1 2026-08-08 — M5.1 Pitch conversion + HTML renderer (merge gate: golden tests)
+### [x] M5.1 Pitch conversion + HTML renderer (merge gate: golden tests)
+
+*Done 2026-08-08. DESIGN_V2's conversion implemented exactly, golden set
+in place. Five decisions worth recording. (1) **Heiban and odaka produce
+the same AquesTalk string, and that is right, not a bug to fix later.**
+The notation carries one mark per phrase and the engine writes heiban on
+the final mora — where odaka's goes. The two differ only in the pitch of
+a particle, and janki speaks a word alone, so there is nothing for the
+distinction to land on. `render_pitch_html` *does* keep them apart, since
+a card shows the pattern rather than speaking it, and a test asserts both
+halves. (2) A mora's level is read off its **first** kana — the one that
+cannot be the small one — so a source that ever writes a 拗音's small kana
+with the following mora's level still converts correctly. (3) The reading
+is NFC-normalized before the length check: が typed as か+U+3099 is two
+codepoints and one kana, and counting codepoints would reject a pattern
+that fits. (4) The diagram draws the **particle slot** as an empty mora,
+because odaka's fall happens after the word and a diagram stopping at the
+last kana has nowhere to show it. (5) `render_pitch_html` refuses a bare
+`str` for `patterns`: a str is a `Sequence[str]` that iterates as
+characters, so passing one would render a diagram per character or fail
+far from the mistake. Refusals throughout rather than best efforts —
+a wrong accent spoken onto a card built to teach that accent is the one
+outcome worse than no audio.*
 
 Depends on: M2.2
 Files: new `src/japanese_anki/pitch.py`, new `tests/test_pitch.py`.
