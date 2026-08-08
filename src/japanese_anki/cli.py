@@ -817,6 +817,26 @@ def command_enrich(args: argparse.Namespace) -> int:
             "--ai writes examples and usage notes, --polish-meanings proposes "
             "better English glosses."
         )
+    batch_flags = [
+        name
+        for name, chosen in (
+            ("--batch-submit", args.batch_submit),
+            ("--batch-fetch", args.batch_fetch),
+        )
+        if chosen
+    ]
+    if len(batch_flags) > 1:
+        raise JankiError(
+            "enrich --batch-submit sends a batch and --batch-fetch collects one. "
+            "They are the two ends of the same job, hours apart; run them "
+            "separately."
+        )
+    if batch_flags and not args.ai:
+        raise JankiError(
+            f"enrich {batch_flags[0]} batches the --ai pass, so it needs --ai. "
+            "The dictionary pass is not billed per token and the polish pass is "
+            "confirmed one record at a time, so neither has anything to batch."
+        )
     if args.polish_meanings and args.force_fields:
         raise JankiError(
             "enrich --polish-meanings writes 'meanings' and nothing else, so "
@@ -860,6 +880,12 @@ def command_enrich(args: argparse.Namespace) -> int:
 
     if args.staging is not None:
         return _enrich_staging(client, args.staging.resolve(), args.yes)
+
+    if args.batch_submit:
+        return _batch_submit(config, args)
+
+    if args.batch_fetch:
+        return _batch_fetch(config, args, force_fields)
 
     if args.ai:
         return _enrich_ai(config, args, force_fields)
@@ -971,13 +997,45 @@ def _enrich_ai(
         )
         return 0
 
-    if staging:
-        target = staging_target
-        target.parent.mkdir(parents=True, exist_ok=True)
-        written = [result.records[index] for index, record in enumerate(records)
-                   if record.id in result.changes]
+    return _write_ai_result(
+        result,
+        records,
+        book,
+        output_path=output_path,
+        staging_target=staging_target if staging else None,
+        model=model,
+        force=args.force,
+        assume_yes=args.yes,
+    )
+
+
+def _write_ai_result(
+    result: enrich.AiResult,
+    records: Sequence[VocabularyRecord],
+    book: ledger.Ledger,
+    *,
+    output_path: Path,
+    staging_target: Path | None,
+    model: str,
+    force: bool,
+    assume_yes: bool,
+) -> int:
+    """Land an AI pass's proposals: staging file for a large one, diff for a small.
+
+    Shared with ``--batch-fetch`` (M4.4), which produces the same kind of result
+    hours later and has the same reason to route a large one through
+    ``janki promote``: a batch is what janki reaches for at a thousand records,
+    which is not a number of sentences anyone reviews in a terminal.
+    """
+    if staging_target is not None:
+        staging_target.parent.mkdir(parents=True, exist_ok=True)
+        written = [
+            result.records[index]
+            for index, record in enumerate(records)
+            if record.id in result.changes
+        ]
         write_staging(
-            target,
+            staging_target,
             written,
             {
                 "source_file": str(output_path.name),
@@ -991,18 +1049,18 @@ def _enrich_ai(
                     "audio is generated for them."
                 ),
             },
-            force=args.force,
+            force=force,
         )
         print(
             f"{len(result.changes)} record(s) is too many to review as one diff, "
-            f"so they went to {target}."
+            f"so they went to {staging_target}."
         )
-        print("  Review it, then: janki promote " + str(target))
+        print("  Review it, then: janki promote " + str(staging_target))
         return 0
 
     for line in enrich.format_field_diff(result.changes):
         print(line)
-    if not _confirm_enrich(len(result.changes), args.yes):
+    if not _confirm_enrich(len(result.changes), assume_yes):
         print("Aborted: nothing was written.", file=sys.stderr)
         return 1
 
@@ -1035,6 +1093,174 @@ def _enrich_ai(
         )
         return 1
     return 0
+
+
+def _batch_submit(config: ProjectConfig, args: argparse.Namespace) -> int:
+    """Send the AI pass as one batch and remember it in the ledger.
+
+    Half price, answered within a day rather than within seconds. The id is
+    written down before anything else can go wrong with the run, because a
+    submitted batch nobody kept the id of is work that was paid for and cannot
+    be collected.
+    """
+    output_path = config.normalized_file.resolve()
+    records = load_records(output_path) if output_path.exists() else []
+    if not records:
+        print(f"No records to enrich in {output_path}.")
+        return 0
+
+    book = ledger.load(config.ledger_file)
+    if (pending := book.pending_batch()) is not None:
+        batch_id, entry = pending
+        raise JankiError(
+            f"Batch {batch_id} is still out, covering {len(entry.get('pending_ids', []))} "
+            f"record(s) since {entry.get('submitted_at', 'an unknown date')}. Fetch it "
+            "first: janki enrich --ai --batch-fetch. Two batches at once would leave "
+            "two answers for the same word and no way to say which is current."
+        )
+
+    model = args.model or config.enrich_model
+    style_guide = claude_client.read_style_guide(config.root)
+    requests, pending_ids = enrich.batch_requests(
+        records, model=model, style_guide=style_guide, ids=args.ids or None
+    )
+    if not requests:
+        print("Nothing to submit: every record already has examples and usage notes.")
+        return 0
+
+    batch_id = claude_client.submit_batch(requests)
+    book.record_batch(batch_id, kind="ai", model=model, pending_ids=pending_ids)
+    ledger_error = _save_ledger(book)
+    if ledger_error is not None:
+        print(f"warning: {ledger_error}", file=sys.stderr)
+        print(
+            f"Batch {batch_id} was submitted and is being processed, but the "
+            "ledger entry that would let janki fetch it was not written. Write "
+            "that id down now — with it, 'janki enrich --ai --batch-fetch' works "
+            "once the ledger is writable and you have re-recorded it; without it, "
+            "the results are only reachable from the Anthropic console.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"Submitted {len(requests)} record(s) as batch {batch_id}.")
+    print("  Most batches finish within an hour; the limit is 24.")
+    print("  Collect it with: janki enrich --ai --batch-fetch")
+    return 0
+
+
+def _batch_fetch(
+    config: ProjectConfig, args: argparse.Namespace, force_fields: Sequence[str]
+) -> int:
+    """Collect a finished batch, or say how far along it is.
+
+    One poll, never a wait loop: the point of batching is that nobody is sitting
+    here. A batch still running prints its status and exits 0, which is a
+    successful answer to "is it ready" — the question this command asks.
+    """
+    output_path = config.normalized_file.resolve()
+    records = load_records(output_path) if output_path.exists() else []
+    book = ledger.load(config.ledger_file)
+    pending = book.pending_batch()
+    if pending is None:
+        print("No batch is pending. Submit one with: janki enrich --ai --batch-submit")
+        return 0
+    batch_id, entry = pending
+    pending_ids = [str(item) for item in entry.get("pending_ids", [])]
+    model = str(entry.get("model") or config.enrich_model)
+
+    status_now = claude_client.batch_status(batch_id)
+    if status_now != claude_client.BATCH_ENDED:
+        print(
+            f"Batch {batch_id} is {status_now or 'in an unreported state'} "
+            f"({len(pending_ids)} record(s), submitted "
+            f"{entry.get('submitted_at', 'on an unknown date')}). Nothing to "
+            "collect yet."
+        )
+        return 0
+
+    # The batch's own model, not the config's: a run submitted under one model
+    # and fetched after the config changed was still answered by the first.
+    outcome = enrich.apply_batch_results(
+        records,
+        claude_client.batch_results(batch_id, enrich.ai_schema(), model),
+        pending_ids,
+        model=model,
+        force_fields=force_fields,
+        jpdb_client=jpdb.JpdbClient(jpdb.api_key_from_env()),
+    )
+    result = outcome.result
+
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    for record_id, reason in outcome.failed.items():
+        print(f"warning: {record_id}: {reason}; left untouched.", file=sys.stderr)
+    if outcome.missing:
+        print(
+            f"warning: {len(outcome.missing)} record(s) the batch covered are no "
+            "longer in the collection, so their answers were dropped: "
+            f"{', '.join(outcome.missing)}",
+            file=sys.stderr,
+        )
+
+    staging = len(pending_ids) >= enrich.STAGING_THRESHOLD
+    staging_target = config.staging_dir / "ai-enrichment.yaml"
+    if staging and staging_target.exists() and not args.force:
+        raise StagingError(
+            f"{staging_target} already exists and would be overwritten by batch "
+            f"{batch_id}. Promote or move it first, then fetch again — the batch "
+            "is still recorded as pending, so nothing was lost."
+        )
+
+    if not result.changes:
+        print(
+            f"Batch {batch_id} is collected: looked at {result.looked_up} "
+            "record(s), and none of the answers had anything to fill."
+        )
+        book.clear_batch(batch_id)
+        if (ledger_error := _save_ledger(book)) is not None:
+            _report_batch_ledger_failure(ledger_error, batch_id)
+            return 1
+        return 0
+
+    code = _write_ai_result(
+        result,
+        records,
+        book,
+        output_path=output_path,
+        staging_target=staging_target if staging else None,
+        model=model,
+        force=args.force,
+        assume_yes=args.yes,
+    )
+    if code != 0:
+        # Declined, or the ledger write failed. Either way the batch stays
+        # pending: its results live on Anthropic's side for weeks, and fetching
+        # again is free, so forgetting the id here would be the only
+        # irreversible part of the run.
+        print(
+            f"Batch {batch_id} is still recorded as pending; fetching it again "
+            "costs nothing.",
+            file=sys.stderr,
+        )
+        return code
+
+    book.clear_batch(batch_id)
+    if (ledger_error := _save_ledger(book)) is not None:
+        _report_batch_ledger_failure(ledger_error, batch_id)
+        return 1
+    return 0
+
+
+def _report_batch_ledger_failure(exc: ledger.LedgerError, batch_id: str) -> None:
+    print(f"warning: {exc}", file=sys.stderr)
+    print(
+        f"The records are written, but batch {batch_id} is still recorded as "
+        "pending, so --batch-submit will refuse until it is cleared. Fetching "
+        "again once the ledger is writable applies nothing new (the fields are "
+        "filled) and clears it.",
+        file=sys.stderr,
+    )
 
 
 def _confirm_polish(assume_yes: bool) -> str:
@@ -1693,6 +1919,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--ai",
         action="store_true",
         help="Write examples and usage notes with the Claude API.",
+    )
+    enrich_parser.add_argument(
+        "--batch-submit",
+        action="store_true",
+        help=(
+            "Send the --ai pass as one Message Batch: half price, answered "
+            "within a day. Collect it later with --batch-fetch."
+        ),
+    )
+    enrich_parser.add_argument(
+        "--batch-fetch",
+        action="store_true",
+        help=(
+            "Collect the pending batch if it has finished, or report how far "
+            "along it is."
+        ),
     )
     enrich_parser.add_argument(
         "--polish-meanings",

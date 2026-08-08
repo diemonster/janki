@@ -31,7 +31,7 @@ you meant, and ``/parse`` picks for itself unless it is told. So the pass runs
 from __future__ import annotations
 
 import functools
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, is_dataclass, replace
 from dataclasses import fields as dc_fields
 from typing import Any
@@ -59,7 +59,12 @@ __all__ = [
     "ai_prompt",
     "ai_schema",
     "ai_targets",
+    "absorb_ai_call",
     "apply_ai_result",
+    "apply_batch_results",
+    "batch_custom_id",
+    "batch_key_map",
+    "batch_requests",
     "dictionary_readings",
     "enrich_ai",
     "enrich_records",
@@ -907,53 +912,84 @@ def enrich_ai(
 
     for record in targets:
         result.looked_up += 1
-        parsed, stop_reason, refusal = claude_client.parse_call(
+        call = claude_client.parse_call(
             model, blocks, ai_prompt(record, recent[-VARIETY_EXAMPLES:]), ai_schema(), client
         )
-        if stop_reason == "refusal":
-            detail = f" ({refusal.category})" if refusal is not None else ""
-            result.warnings.append(
-                f"{record.id}: {model} declined to write about "
-                f"{record.expression}{detail}; nothing written."
-            )
-            continue
-        if parsed is None:
-            result.warnings.append(
-                f"{record.id}: {model} returned nothing usable for "
-                f"{record.expression} (stop reason: {stop_reason}); nothing written."
-            )
-            continue
-
-        sentences = [
-            text
-            for item in getattr(parsed, "examples", []) or []
-            if (text := str(getattr(item, "japanese", "") or "").strip())
-        ]
-        outcome = apply_ai_result(
+        absorb_ai_call(
+            result,
             record,
-            parsed,
+            call,
+            model=model,
+            positions=positions,
+            recent=recent,
             force_fields=force_fields,
-            parses=_verify_parses(jpdb_client, sentences),
+            jpdb_client=jpdb_client,
         )
-        if outcome.rejected:
-            result.rejected[record.id] = outcome.rejected
-            result.warnings.append(
-                f"{record.id}: {len(outcome.rejected)} example(s) did not contain "
-                f"{record.expression} and were rejected."
-            )
-        if outcome.unverified:
-            result.unverified[record.id] = outcome.unverified
-            result.warnings.append(
-                f"{record.id}: {len(outcome.unverified)} example(s) have furigana "
-                "jpdb did not confirm; kept and flagged for review."
-            )
-        if outcome.changes:
-            result.records[positions[record.id]] = outcome.record
-            result.changes[record.id] = outcome.changes
-            recent.extend(
-                example.japanese for example in outcome.record.examples if example.japanese
-            )
     return result
+
+
+def absorb_ai_call(
+    result: AiResult,
+    record: VocabularyRecord,
+    call: claude_client.CallResult,
+    *,
+    model: str,
+    positions: Mapping[str, int],
+    recent: list[str],
+    force_fields: Sequence[str] = (),
+    jpdb_client: jpdb.JpdbClient | None = None,
+) -> None:
+    """Put one model answer through the checks and fold it into ``result``.
+
+    Public and separate from :func:`enrich_ai` so the batch path (M4.4) runs
+    *this* code rather than a second copy of it. A batched answer is the same
+    answer, arriving later and cheaper, and the day the two paths' QC diverges
+    is the day one of them starts writing sentences the other would have caught.
+    """
+    parsed, stop_reason, refusal = call
+    if stop_reason == "refusal":
+        detail = f" ({refusal.category})" if refusal is not None else ""
+        result.warnings.append(
+            f"{record.id}: {model} declined to write about "
+            f"{record.expression}{detail}; nothing written."
+        )
+        return
+    if parsed is None:
+        result.warnings.append(
+            f"{record.id}: {model} returned nothing usable for "
+            f"{record.expression} (stop reason: {stop_reason}); nothing written."
+        )
+        return
+
+    sentences = [
+        text
+        for item in getattr(parsed, "examples", []) or []
+        if (text := str(getattr(item, "japanese", "") or "").strip())
+    ]
+    outcome = apply_ai_result(
+        record,
+        parsed,
+        force_fields=force_fields,
+        parses=_verify_parses(jpdb_client, sentences),
+    )
+    if outcome.rejected:
+        result.rejected[record.id] = outcome.rejected
+        result.warnings.append(
+            f"{record.id}: {len(outcome.rejected)} example(s) did not contain "
+            f"{record.expression} and were rejected."
+        )
+    if outcome.unverified:
+        result.unverified[record.id] = outcome.unverified
+        result.warnings.append(
+            f"{record.id}: {len(outcome.unverified)} example(s) have furigana "
+            "jpdb did not confirm; kept and flagged for review."
+        )
+    if outcome.changes:
+        result.records[positions[record.id]] = outcome.record
+        result.changes[record.id] = outcome.changes
+        recent.extend(
+            example.japanese for example in outcome.record.examples if example.japanese
+        )
 
 
 # --- polishing meanings ------------------------------------------------------
@@ -1135,3 +1171,148 @@ def polish_meanings(
             )
             continue
         yield apply_polish_result(record, parsed)
+
+
+# --- the AI pass, batched ----------------------------------------------------
+#
+# The Message Batches API is the same request at half price, answered within a
+# day instead of within seconds. That trade is worth it for backfilling a
+# thousand-word mining deck and pointless for the weekly ten, so it is two
+# explicit subcommands rather than a heuristic: submit, walk away, fetch later.
+#
+# What it cannot have is the variety pressure the live pass uses, because every
+# request is built before any answer exists. That is a real difference in output
+# and it is why the live path stays the default: a batch gets a style guide and
+# the word, and nothing about what it has already written.
+
+
+#: What a batch's ``custom_id`` is derived from. The API wants a short ASCII
+#: identifier and a record id is neither — ``word:話す:はなす`` is the wrong
+#: alphabet and an unbounded length — so results come back keyed by a
+#: fingerprint of the id, which the fetching side recomputes from the ledger's
+#: pending list rather than storing a second copy of.
+def batch_custom_id(record_id: str) -> str:
+    return f"r{short_fingerprint(record_id)}"
+
+
+def batch_key_map(record_ids: Sequence[str]) -> dict[str, str]:
+    """``custom_id -> record id`` for a set of records.
+
+    A collision here would attach one word's examples to another word, so it is
+    refused rather than resolved. It takes a birthday collision across 48 bits
+    to happen at all, but "unlikely" is not the standard for silently writing a
+    sentence about 話す onto 聞く.
+    """
+    keys: dict[str, str] = {}
+    for record_id in record_ids:
+        key = batch_custom_id(record_id)
+        if key in keys and keys[key] != record_id:
+            raise EnrichError(
+                f"Two records share the batch key {key!r}: {keys[key]!r} and "
+                f"{record_id!r}. Submitting would risk writing one word's "
+                "examples onto the other, so nothing was sent."
+            )
+        keys[key] = record_id
+    return keys
+
+
+def batch_requests(
+    records: Sequence[VocabularyRecord],
+    *,
+    model: str,
+    style_guide: str,
+    ids: Sequence[str] | None = None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """The batch entries for every record that needs enriching, and their ids.
+
+    A one-hour cache TTL rather than the default five minutes: the style guide
+    leads every request, and a batch's requests are read over a span that a
+    five-minute window would not survive.
+    """
+    targets = ai_targets(records, ids)
+    blocks = claude_client.system_blocks(style_guide, AI_INSTRUCTIONS, cache_ttl="1h")
+    record_ids = [record.id for record in targets]
+    batch_key_map(record_ids)
+    requests = [
+        claude_client.batch_request(
+            batch_custom_id(record.id), model, blocks, ai_prompt(record), ai_schema()
+        )
+        for record in targets
+    ]
+    return requests, record_ids
+
+
+@dataclass(slots=True)
+class BatchApplyResult:
+    """What a fetched batch wrote, plus every record it could not account for."""
+
+    result: AiResult = field(default_factory=AiResult)
+    failed: dict[str, str] = field(default_factory=dict)
+    missing: list[str] = field(default_factory=list)
+
+
+def apply_batch_results(
+    records: Sequence[VocabularyRecord],
+    entries: Iterable[claude_client.BatchEntry],
+    pending_ids: Sequence[str],
+    *,
+    model: str,
+    force_fields: Sequence[str] = (),
+    jpdb_client: jpdb.JpdbClient | None = None,
+) -> BatchApplyResult:
+    """Fold a finished batch into the records, through the live path's checks.
+
+    Every answer goes through :func:`absorb_ai_call`, which is the same function
+    the synchronous pass uses — the saving is in how the request was sent, not
+    in what is done with the reply.
+
+    Three ways a record can come back with nothing, and none of them is silent:
+    the batch reported it errored, expired or was canceled; the batch never
+    mentioned it at all; or its id no longer names a record, because the
+    collection moved while the batch was out. Each is reported and leaves the
+    record exactly as it is.
+    """
+    outcome = BatchApplyResult(result=AiResult(records=list(records)))
+    positions = {record.id: index for index, record in enumerate(outcome.result.records)}
+    keys = batch_key_map(pending_ids)
+    recent: list[str] = []
+    seen: set[str] = set()
+
+    for entry in entries:
+        record_id = keys.get(entry.custom_id)
+        if record_id is None:
+            outcome.result.warnings.append(
+                f"The batch returned a result keyed {entry.custom_id!r}, which "
+                "belongs to no record this batch was submitted for; it was "
+                "ignored rather than guessed at."
+            )
+            continue
+        seen.add(record_id)
+        if entry.result is None:
+            detail = f": {entry.detail}" if entry.detail else ""
+            outcome.failed[record_id] = f"{entry.outcome}{detail}"
+            continue
+        index = positions.get(record_id)
+        if index is None:
+            outcome.missing.append(record_id)
+            continue
+        outcome.result.looked_up += 1
+        absorb_ai_call(
+            outcome.result,
+            outcome.result.records[index],
+            entry.result,
+            model=model,
+            positions=positions,
+            recent=recent,
+            force_fields=force_fields,
+            jpdb_client=jpdb_client,
+        )
+
+    for record_id in pending_ids:
+        if record_id in seen:
+            continue
+        if record_id in positions:
+            outcome.failed[record_id] = "the batch returned no result for it"
+        else:
+            outcome.missing.append(record_id)
+    return outcome

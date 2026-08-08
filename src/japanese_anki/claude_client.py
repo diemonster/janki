@@ -26,7 +26,7 @@ installed it.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -35,15 +35,21 @@ from japanese_anki.errors import JankiError
 
 __all__ = [
     "API_KEY_ENV",
+    "BATCH_ENDED",
     "COMPLETE_STOP_REASONS",
+    "BatchEntry",
     "CallResult",
     "DEFAULT_MAX_TOKENS",
     "STYLE_GUIDE_PATH",
     "Refusal",
+    "batch_request",
+    "batch_results",
+    "batch_status",
     "build_client",
     "load_anthropic",
     "parse_call",
     "read_style_guide",
+    "submit_batch",
     "system_blocks",
 ]
 
@@ -73,6 +79,10 @@ STYLE_GUIDE_PATH = Path("docs") / "JAPANESE_STYLE_GUIDE.md"
 #: one occurring at all would mean the response was cut at a boundary nobody
 #: asked for, and a truncated answer is exactly what must not be parsed.
 COMPLETE_STOP_REASONS: frozenset[str] = frozenset({"end_turn"})
+
+#: The batch ``processing_status`` that means results can be read. Anything else
+#: — ``in_progress``, ``canceling`` — means come back later.
+BATCH_ENDED = "ended"
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,6 +221,68 @@ def system_blocks(
     return blocks
 
 
+def _request_body(
+    model: str,
+    system_blocks: Sequence[dict[str, Any]],
+    user_content: str | Iterable[dict[str, Any]],
+    schema: Any,
+    max_tokens: int,
+) -> dict[str, Any]:
+    """The Messages request both call shapes send.
+
+    Shared so a live call and a batched one cannot drift: the whole promise of
+    ``--batch-submit`` is that it is the same request at half price, and a batch
+    that quietly sent a different ``max_tokens`` or lost the output format would
+    return answers the synchronous path would never have produced.
+    """
+    anthropic = load_anthropic()
+    return {
+        "model": model,
+        "max_tokens": max_tokens,
+        "system": list(system_blocks),
+        "messages": [{"role": "user", "content": user_content}],
+        "output_config": {
+            "format": {
+                "type": "json_schema",
+                "schema": anthropic.transform_schema(schema),
+            }
+        },
+    }
+
+
+def _result_of(response: Any, schema: Any, model: str) -> CallResult:
+    """A completed response as a :class:`CallResult`, stop reason checked first."""
+    stop_reason = getattr(response, "stop_reason", None)
+    if stop_reason not in COMPLETE_STOP_REASONS:
+        # Refused, truncated, or paused: whatever text came back is not a whole
+        # answer, so there is nothing worth validating and the caller decides.
+        return CallResult(None, stop_reason, _refusal_of(response))
+
+    text = next(
+        (
+            block.text
+            for block in getattr(response, "content", [])
+            if getattr(block, "type", None) == "text"
+        ),
+        None,
+    )
+    if text is None:
+        raise JankiError(
+            f"{model} finished normally but returned no text to parse. "
+            "Nothing was written."
+        )
+    try:
+        return CallResult(_type_adapter(schema).validate_json(text), stop_reason, None)
+    except Exception as exc:
+        # Structured outputs are schema-valid on normal completion, so this is
+        # an anomaly rather than an expected branch — but it still has to reach
+        # the user as a janki error rather than a pydantic traceback.
+        raise JankiError(
+            f"{model} finished normally but its answer did not match the "
+            f"expected shape: {exc}"
+        ) from exc
+
+
 def parse_call(
     model: str,
     system_blocks: Sequence[dict[str, Any]],
@@ -249,47 +321,102 @@ def parse_call(
     ``client`` is injectable so tests never touch the network (IMPLEMENTATION_PLAN
     rule 6) — the default builds a real one.
     """
-    anthropic = load_anthropic()
     api = client if client is not None else build_client()
     response = api.messages.create(
-        model=model,
-        max_tokens=max_tokens,
-        system=list(system_blocks),
-        messages=[{"role": "user", "content": user_content}],
-        output_config={
-            "format": {
-                "type": "json_schema",
-                "schema": anthropic.transform_schema(schema),
-            }
-        },
+        **_request_body(model, system_blocks, user_content, schema, max_tokens)
     )
+    return _result_of(response, schema, model)
 
-    stop_reason = getattr(response, "stop_reason", None)
-    if stop_reason not in COMPLETE_STOP_REASONS:
-        # Refused, truncated, or paused: whatever text came back is not a whole
-        # answer, so there is nothing worth validating and the caller decides.
-        return CallResult(None, stop_reason, _refusal_of(response))
 
-    text = next(
-        (
-            block.text
-            for block in getattr(response, "content", [])
-            if getattr(block, "type", None) == "text"
-        ),
-        None,
-    )
-    if text is None:
+class BatchEntry(NamedTuple):
+    """One batched request's fate.
+
+    ``outcome`` is the API's own word — ``succeeded``, ``errored``, ``canceled``
+    or ``expired`` — kept rather than flattened, because only the first of them
+    carries a :class:`CallResult` and the other three mean genuinely different
+    things to a caller deciding whether to resubmit. ``result`` is that
+    ``CallResult`` and is ``None`` for the rest; ``detail`` carries whatever the
+    API said about a failure.
+    """
+
+    custom_id: str
+    outcome: str
+    detail: str
+    result: CallResult | None
+
+
+def batch_request(
+    custom_id: str,
+    model: str,
+    system_blocks: Sequence[dict[str, Any]],
+    user_content: str | Iterable[dict[str, Any]],
+    schema: Any,
+    *,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+) -> dict[str, Any]:
+    """One entry for :func:`submit_batch`, holding the same request as a live call.
+
+    ``custom_id`` is what the results come back keyed by, and the API constrains
+    it to a short ASCII identifier — a record id is neither — so the caller
+    supplies a mapping rather than the id itself.
+    """
+    return {
+        "custom_id": custom_id,
+        "params": _request_body(model, system_blocks, user_content, schema, max_tokens),
+    }
+
+
+def submit_batch(requests: Sequence[dict[str, Any]], client: Any | None = None) -> str:
+    """Send a batch and return its id.
+
+    The id is the only thing worth keeping: it is what a later ``--batch-fetch``
+    asks about, and losing it means paying for work nobody can collect. So an
+    answer without one is an error here rather than an empty string stored in
+    the ledger.
+    """
+    api = client if client is not None else build_client()
+    batch = api.messages.batches.create(requests=list(requests))
+    batch_id = str(getattr(batch, "id", "") or "")
+    if not batch_id:
         raise JankiError(
-            f"{model} finished normally but returned no text to parse. "
-            "Nothing was written."
+            "The batch was accepted but came back without an id, so nothing can "
+            "fetch its results later. Check the Anthropic console for a batch "
+            "submitted just now before submitting again."
         )
-    try:
-        return CallResult(_type_adapter(schema).validate_json(text), stop_reason, None)
-    except Exception as exc:
-        # Structured outputs are schema-valid on normal completion, so this is
-        # an anomaly rather than an expected branch — but it still has to reach
-        # the user as a janki error rather than a pydantic traceback.
-        raise JankiError(
-            f"{model} finished normally but its answer did not match the "
-            f"expected shape: {exc}"
-        ) from exc
+    return batch_id
+
+
+def batch_status(batch_id: str, client: Any | None = None) -> str:
+    """The batch's ``processing_status``; compare against :data:`BATCH_ENDED`."""
+    api = client if client is not None else build_client()
+    batch = api.messages.batches.retrieve(batch_id)
+    return str(getattr(batch, "processing_status", "") or "")
+
+
+def batch_results(
+    batch_id: str, schema: Any, model: str, client: Any | None = None
+) -> Iterator[BatchEntry]:
+    """Stream a finished batch's results, each validated the way a live call is.
+
+    Streamed rather than collected: a batch is the shape janki reaches for when
+    there are a thousand records, and holding a thousand parsed answers in
+    memory to hand back a list would be a strange way to save on tokens.
+    """
+    api = client if client is not None else build_client()
+    for entry in api.messages.batches.results(batch_id):
+        custom_id = str(getattr(entry, "custom_id", "") or "")
+        outcome = getattr(entry, "result", None)
+        kind = str(getattr(outcome, "type", "") or "")
+        if kind != "succeeded":
+            error = getattr(outcome, "error", None)
+            detail = str(
+                getattr(error, "message", None) or getattr(error, "type", None) or ""
+            )
+            yield BatchEntry(custom_id, kind or "unknown", detail, None)
+            continue
+        yield BatchEntry(
+            custom_id,
+            kind,
+            "",
+            _result_of(getattr(outcome, "message", None), schema, model),
+        )
