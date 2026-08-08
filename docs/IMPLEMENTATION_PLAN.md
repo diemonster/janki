@@ -1150,7 +1150,11 @@ exported. `remint` and `check_readings` now take the ids the collection
 already holds and leave those alone, and `command_promote` reads the
 collection before any id is decided rather than after. The one sanctioned
 ID change — a held row the collection has never seen — is unaffected, and
-both sides are pinned.*
+both sides are pinned. "The collection" is `status.surviving_ids` — the
+normalized file **plus every deck's inline notes** — because a record
+living only in a deck YAML has the same stale id and the same exported
+GUID; and a deck that will not resolve means no id can be proved absent,
+so that run declines every re-mint and says why.*
 
 *Done 2026-08-07. Contract as written; two deviations from the Files list and
 seven decisions. **Deviation 1:** the reading-set lookup lives in `enrich.py` as

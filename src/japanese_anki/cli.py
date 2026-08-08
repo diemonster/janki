@@ -1767,6 +1767,20 @@ def _inside_archive(path: Path, archive_dir: Path) -> bool:
     return path.is_relative_to(archive_dir)
 
 
+class _AllIds:
+    """A set that contains everything, for "we cannot prove any id absent".
+
+    Handed to ``promote.check_readings`` when a deck will not resolve: its ids
+    are unknown, so every staged id might already be in the collection, and the
+    safe answer to "may this be re-minted" is no. A sentinel rather than a flag
+    because the gate's question is exactly membership, and answering it "yes,
+    always" is the whole of the behavior.
+    """
+
+    def __contains__(self, item: object) -> bool:
+        return True
+
+
 def command_promote(args: argparse.Namespace) -> int:
     """Move a reviewed staging file's records into the normalized collection.
 
@@ -1823,13 +1837,28 @@ def command_promote(args: argparse.Namespace) -> int:
     # Read before the ids are decided, not after: a staged id the collection
     # already holds must keep it, or the re-mint adds a second record beside
     # the curated one and leaves the original untouched.
+    #
+    # "The collection" here means what it means everywhere else in janki — the
+    # normalized file *plus every deck's inline notes* (`status.surviving_ids`).
+    # A record living only in a deck YAML has the same stale-id problem and the
+    # same exported GUID, and a narrower set would re-mint it just as happily.
+    # A deck that will not resolve leaves ids unknown, so nothing can be proved
+    # absent: say so and decline every re-mint rather than make one on a set we
+    # know is incomplete.
     output_path = config.normalized_file.resolve()
     existing = load_records(output_path) if output_path.exists() else []
+    stored_ids, unreadable = status.surviving_ids(config, existing)
+    for problem in unreadable:
+        print(
+            f"warning: {problem}; ids in that deck cannot be checked, so no "
+            "malformed id will be re-minted on this run.",
+            file=sys.stderr,
+        )
     result = promote.check_readings(
         records,
         client=client,
         skip_reading_check=args.skip_reading_check,
-        already_stored={item.id for item in existing},
+        already_stored=_AllIds() if unreadable else stored_ids,
     )
 
     for warning in result.warnings:
