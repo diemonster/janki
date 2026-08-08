@@ -308,6 +308,50 @@ what it exports. Running it again on a deck with no inline notes does nothing.
 Inline notes that *override* a normalized record (a matching `id` plus the few
 fields you want to change) remain supported and are not affected.
 
+## Choosing what a deck contains
+
+A deck that reads `source:` gets every record in that file. Four optional keys
+narrow it, all lists, all matched exactly:
+
+```yaml
+deck:
+  name: Genki 1 — verbs
+  source: ../normalized/vocabulary.json
+  include_ids: [word:話す:はなす]   # only these records
+  include_tags: [genki-1]          # only records carrying at least one
+  exclude_ids: [word:食べる:たべる] # never these records
+  exclude_tags: [jpdb-known]       # never records carrying any
+```
+
+They apply in that order, so an `include_` key chooses the pool and an
+`exclude_` key removes from it: a record that is both included by tag and
+excluded by id is excluded. Omitting all four means "every record in the
+source". Tag matching is exact — `genki-1` does not match `genki-10`.
+
+`janki migrate-inline` writes `include_ids:` and `exclude_ids:` for you; the
+tag keys are yours to maintain.
+
+### Skipping words you already study in jpdb
+
+The reason `exclude_tags` exists. Export your reviews from jpdb
+(Settings → "Export vocabulary reviews"), then:
+
+```bash
+janki import-jpdb-reviews ~/Downloads/reviews.json
+```
+
+This creates no records. It finds the records janki already holds that appear
+in the export — by jpdb `vid` where a record has one, otherwise by expression
+plus reading — tags them `jpdb-known`, and stores the review count in
+`source.raw_fields.jpdb_reviews`. Entries matching no record are listed rather
+than dropped: those are words jpdb knows and janki does not, and
+`janki import-jpdb` is what adds them.
+
+Then any deck with `exclude_tags: [jpdb-known]` stops emitting them, so your
+Anki decks cover what jpdb is not already drilling. Re-run it whenever you like
+— words that are still known and still at the same count are left untouched,
+and the ledger records the export once rather than once per run.
+
 ## Data model
 
 Canonical records look like this:

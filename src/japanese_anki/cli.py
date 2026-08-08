@@ -13,7 +13,7 @@ from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import AnkiBuildError, build_deck, resolve_deck_records
 from japanese_anki.identifiers import short_fingerprint
-from japanese_anki.importers import jpdb_import
+from japanese_anki.importers import jpdb_import, jpdb_reviews
 from japanese_anki.importers.shirabe import import_file, inspect_file
 from japanese_anki.io import (
     MERGE_LABELS,
@@ -620,6 +620,70 @@ def _slug_for_file(name: str) -> str:
     return f"{slug}-{short_fingerprint(name, length=8)}" if slug else "deck"
 
 
+def command_import_jpdb_reviews(args: argparse.Namespace) -> int:
+    """Mark the records jpdb is already drilling, so a deck can leave them out.
+
+    Creates nothing: an entry matching no record is reported, because a word in
+    jpdb that janki does not have is a fact worth seeing and not an error. What
+    it writes is the ``jpdb-known`` tag and a review count in ``raw_fields`` —
+    the count deliberately not in the ledger, whose references are identified by
+    every key but ``seen_at``, so a weekly run would append a near-duplicate
+    line per record forever.
+    """
+    config = _load_config(args)
+    source_path = args.file.resolve()
+    output_path = config.normalized_file.resolve()
+    records = load_records(output_path) if output_path.exists() else []
+    if not records:
+        print(f"No records to match against in {output_path}.")
+        return 0
+
+    entries, skipped = jpdb_reviews.read_reviews(source_path)
+    # Read the ledger before anything is written, and only once.
+    book = ledger.load(config.ledger_file)
+    result = jpdb_reviews.apply_reviews(records, entries)
+
+    for section in skipped:
+        print(
+            f"warning: skipped '{section}' in {source_path.name}: not a vocabulary "
+            "card list, so its entries are not words janki could match",
+            file=sys.stderr,
+        )
+
+    if result.changed:
+        save_records_json(output_path, result.records)
+    # Every matched record, changed or not: the sighting says this export saw
+    # the word, which is true whether or not its count moved since last time.
+    seen = sum(
+        book.record_source_seen(record_id, "jpdb-reviews", source_path.name)
+        for record_id in result.matched
+    )
+    ledger_error = _save_ledger(book) if result.matched else None
+
+    print(
+        f"Matched {len(result.matched)} of {len(entries)} jpdb entr"
+        f"{'y' if len(entries) == 1 else 'ies'} against {output_path}."
+    )
+    print(
+        f"  Tagged '{jpdb_reviews.KNOWN_TAG}' and updated review counts on "
+        f"{len(result.changed)} record(s); the rest already said the same thing."
+    )
+    if result.unmatched:
+        shown = ", ".join(entry.label for entry in result.unmatched[:5])
+        more = "" if len(result.unmatched) <= 5 else f", and {len(result.unmatched) - 5} more"
+        print(
+            f"  {len(result.unmatched)} entr"
+            f"{'y' if len(result.unmatched) == 1 else 'ies'} matched no record: "
+            f"{shown}{more}. These are words jpdb knows and janki does not; "
+            "'janki import-jpdb' is what adds them."
+        )
+    print(_ledger_line(0, seen, written=ledger_error is None))
+    if ledger_error is not None:
+        _report_ledger_failure(ledger_error)
+        return 1
+    return 0
+
+
 def _confirm_enrich(count: int, assume_yes: bool) -> bool:
     if assume_yes or not sys.stdin.isatty():
         # Same rule as --replace: fat-finger protection, not CI protection.
@@ -1045,6 +1109,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Answer the --replace confirmation prompt with yes.",
     )
     jpdb_import_parser.set_defaults(handler=command_import_jpdb)
+
+    reviews_parser = subparsers.add_parser(
+        "import-jpdb-reviews",
+        help="Tag records jpdb already drills, from its review export",
+    )
+    reviews_parser.add_argument(
+        "file",
+        type=_path,
+        help="jpdb's 'Export vocabulary reviews' JSON file.",
+    )
+    reviews_parser.set_defaults(handler=command_import_jpdb_reviews)
 
     enrich_parser = subparsers.add_parser(
         "enrich",
