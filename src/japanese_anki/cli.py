@@ -142,10 +142,10 @@ _NEEDS_READING_NOTES = (
     "'reading' with kana AND delete that row's 'id:' line: the ID here is the malformed "
     "one, and an empty ID is re-minted from expression + reading when the file is read. "
     "Delete the rows not worth keeping. Then run 'janki validate' on this file — it "
-    "lists every row still malformed. Once it is clean, this file is finished: move its "
-    "records into vocabulary.json, run 'janki status --rebuild' so the ledger learns "
-    "about them, and delete this file. ('janki promote' ships in Milestone 3 and will "
-    "do those three steps for you; there is no need to wait for it.)"
+    "lists every row still malformed. Once it is clean, run 'janki promote' on it: that "
+    "merges the surviving records into vocabulary.json, registers them in the ledger, "
+    "archives them under data/staging/done/, and deletes this file once nothing is left "
+    "held back. Rows it still cannot accept stay here with the reason written in."
 )
 
 _HELD_SUMMARY = "{unit} whose reading janki cannot use (missing, or written in kanji)"

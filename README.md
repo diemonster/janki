@@ -130,6 +130,11 @@ janki status --unexported --missing-audio --duplicates
 # Move a deck's inline notes into the normalized records file
 janki migrate-inline data/decks/verbs.yaml
 
+# Read vocabulary off a PDF or photo, then promote what survives review
+# (see "From a photo or a PDF to cards" below)
+janki extract ~/Downloads/lesson-3.pdf
+janki promote data/staging/lesson-3.pdf.yaml
+
 # jpdb (see "Working with jpdb" below)
 janki jpdb ping
 janki import-jpdb --deck "Textbook Vol. 1: Lesson 1"
@@ -206,15 +211,19 @@ To resolve them, edit that staging file:
 3. Delete the rows not worth keeping.
 4. Run `janki validate data/staging/<file>.yaml`. It lists every row still
    malformed and exits non-zero until the file is clean.
-5. Move the surviving records into `data/normalized/vocabulary.json`, run
-   `janki status --rebuild` so the ledger learns about them, and delete the
-   staging file. Without the rebuild the records exist but the ledger has never
-   heard of them, so `janki status` under-reports the collection and a later
-   import of the same word registers nothing.
+5. Run `janki promote data/staging/<file>.yaml`. It merges the surviving
+   records into `data/normalized/vocabulary.json`, registers them in the ledger,
+   archives them under `data/staging/done/`, and deletes the staging file once
+   nothing is left held back.
 
-`janki promote` will do step 5 for you; it ships in Milestone 3. There is no
-reason to wait for it — a resolved staging file is finished work, and leaving it
-in place only means the next import of the same export keeps mentioning it.
+Step 2 is worth doing even though `promote` re-mints a malformed ID anyway: it
+is what makes `janki validate` usable as the green light before you promote,
+since validate refuses an ID minted without a reading no matter what the reading
+now says. The re-mint is the safety net for when you forget, not a reason to
+skip it.
+
+A resolved staging file is finished work — leaving it in place only means the
+next import of the same export keeps mentioning it.
 
 Re-running the same import never overwrites a staging file that already exists.
 While the file still has errors it reports the path and the count and tells you
@@ -350,6 +359,114 @@ an inflected entry gets its own reading rather than its dictionary form's.
 
 Your file is edited, not rewritten — comments you left in it, and any key janki
 does not know about, are still there afterwards.
+
+## From a photo or a PDF to cards
+
+A handout, a textbook page, a photo of a whiteboard: `janki extract` reads the
+vocabulary off it and `janki promote` decides what becomes real. Nothing in
+between touches your records.
+
+### Install the AI extra
+
+Extraction needs the Anthropic SDK, which is not installed by default so that
+every other command works without it:
+
+```bash
+python -m pip install -e '.[ai]'
+export ANTHROPIC_API_KEY='...'
+```
+
+### 1. Extract
+
+```bash
+janki extract ~/Downloads/lesson-3.pdf ~/Desktop/IMG_0421.HEIC
+```
+
+Each file is copied into `data/inbox/scans/` first, and that copy — never the
+path you typed — is what every extracted record cites. A desktop path will not
+exist in six months; the evidence behind a card has to.
+
+PDFs, JPEG, PNG and HEIC are accepted (HEIC converts through macOS's `sips`).
+Each input produces one staging file named for it, `data/staging/lesson-3.pdf.yaml`,
+holding one candidate per word with the page it was read from, the line it was
+read from, and the model's own confidence.
+
+`--mode table` transcribes a vocabulary list row by row; `--mode prose` mines
+running text for words worth a card and says why. Omit it and the model judges
+each page, which is right when one document holds both. `--model ID` overrides
+the configured model for one run, and `--force` overwrites a staging file you
+have already started reviewing.
+
+Two things it will not do. It never writes to `vocabulary.json` — extraction
+proposes, you accept. And it never accepts a truncated answer: if the model runs
+out of room part-way through a page, the run fails rather than writing a file
+that looks complete and quietly lost half a table.
+
+### 2. Review
+
+Open the staging file. It is ordinary YAML, and it is yours to edit:
+
+```yaml
+source_file: lesson-3.pdf
+model: claude-opus-5
+records:
+  - id: 'word:話す:はなす'
+    expression: 話す
+    reading: はなす
+    meanings: [to speak]
+    source:
+      type: extract
+      imported_from: lesson-3.pdf
+      raw_fields:
+        page: '12'
+        confidence: high
+        context: 話す　はなす　to speak
+```
+
+Fix what is wrong, delete what is not worth a card, and fill in any reading the
+model left empty — it is told to leave one blank rather than guess, because a
+reading it invents becomes a permanent record ID. Words janki already has are
+kept, marked `already_known`, and sorted to the bottom so your attention goes to
+the new ones. Candidates it could not turn into records at all are listed in
+`review_notes` with everything it did read about them.
+
+`janki validate data/staging/lesson-3.pdf.yaml` lists every row still missing
+something.
+
+### 3. Promote
+
+```bash
+janki promote data/staging/lesson-3.pdf.yaml
+```
+
+This is the only command that writes extracted words into your collection, and
+it checks the reading of every one against jpdb before it does. Three outcomes:
+the reading is what jpdb reaches for (promoted), it is one jpdb lists for another
+sense (promoted, with a warning — a homograph is real and you chose it), or no
+entry lists it at all (held back, because a reading nobody recognises is more
+likely a slip than a discovery). A word jpdb cannot resolve at all is promoted
+unchecked — silence is not disagreement. Use `--skip-reading-check` to promote
+offline; readings still have to be kana, because that rule is about whether an
+ID can exist at all.
+
+Rows that pass merge into `vocabulary.json` with the usual
+[merge semantics](#how-an-import-merges), get their ledger entries, and are
+archived to `data/staging/done/`. Rows that do not stay in the staging file with
+the reason written into them, so the file always shows exactly what still needs
+you. When nothing is left held back, the file is deleted.
+
+Promote is also where the one sanctioned ID change happens: a row held back for
+a missing reading carries a malformed ID, and once you supply the reading that
+ID no longer describes the record. It is re-minted from expression + reading at
+promote time. These records have never been in Anki, so there is no review
+history to orphan — which is exactly why this is the only place an ID may
+change.
+
+Then build as usual:
+
+```bash
+janki build data/decks/verbs.yaml
+```
 
 ## The ledger and `janki status`
 
