@@ -939,6 +939,10 @@ def test_forget_refuses_the_flags_it_would_otherwise_swallow(
         ["--root", str(root), "enrich", "--ai", "--batch-forget", "--force-fields", "examples"]
     ) == 1
     assert "no field list to widen" in capsys.readouterr().err
+    # Matched on the --force half of the message: "no field list to widen"
+    # appears in the --force-fields refusal too, so it would pass either way.
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-forget", "--force"]) == 1
+    assert "no staging file to overwrite" in capsys.readouterr().err
 
 
 def test_a_forget_that_could_not_be_saved_says_what_to_do_next(
@@ -961,3 +965,48 @@ def test_a_forget_that_could_not_be_saved_says_what_to_do_next(
     assert "still recorded as pending on disk" in err
     assert "--batch-forget again" in err
     assert list(book_of(root)["pending_batches"]) == ["msgbatch_01"]
+
+
+def test_one_errored_row_does_not_defeat_the_moved_collection_guard(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A record that is both gone and errored is reported as failed, never as
+    missing — so counting the missing would let one overloaded request clear
+    the id of a batch none of whose records are here."""
+    records = many(2)
+    batches = FakeBatches(
+        results=[
+            Entry(key(records[0].id), Failed("errored", "Overloaded")),
+            ok(records[1]),
+        ]
+    )
+    root = submitted(tmp_path, records, monkeypatch, batches)
+    stranger = record(id="word:聞く:きく", expression="聞く")
+    (root / "vocabulary.json").write_text(
+        json.dumps([stranger.to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 1
+
+    assert list(book_of(root)["pending_batches"]) == ["msgbatch_01"]
+
+
+def test_nothing_is_called_dropped_on_the_path_that_drops_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The entry survives and re-fetching recovers every answer, so telling the
+    user their results were dropped one line before telling them to go get them
+    is the wrong thing to say."""
+    records = many(2)
+    batches = FakeBatches(results=[ok(item) for item in records])
+    root = submitted(tmp_path, records, monkeypatch, batches)
+    stranger = record(id="word:聞く:きく", expression="聞く")
+    (root / "vocabulary.json").write_text(
+        json.dumps([stranger.to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+    capsys.readouterr()
+
+    cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"])
+
+    assert "were dropped" not in capsys.readouterr().err

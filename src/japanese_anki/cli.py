@@ -1238,11 +1238,13 @@ def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
     if pending is not None and not records:
         # An empty collection is a --root pointed at the wrong project or a
         # normalized file that went missing, not a batch that failed — so the
-        # batch stays pending rather than being cleared against nothing. Note
-        # what this does *not* cover: records that exist but no longer include
-        # the ids the batch was for. That is ordinary curation, it is reported
-        # per id below, and treating it as an error would deadlock a one-record
-        # batch whose single word was deleted while it was out.
+        # batch stays pending rather than being cleared against nothing.
+        #
+        # One of a pair. Its sibling below catches the same problem in the
+        # other shape: a file that has records, none of them this batch's. That
+        # one has to wait until the results are in hand; this one is worth
+        # catching here, before an API call is spent on a run that cannot land.
+        # `--batch-forget` is the way out of both.
         raise JankiError(
             f"Batch {pending[0]} is pending, but there are no records in "
             f"{output_path} to apply it to. Point --root at the right project, "
@@ -1299,6 +1301,29 @@ def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
     )
     result = outcome.result
 
+    # Asked of the collection rather than of `outcome.missing`, and asked
+    # before anything is reported. A row that both errored *and* whose record
+    # is gone lands in `failed`, never in `missing` — so counting `missing`
+    # would let one overloaded request defeat the guard on a batch none of
+    # whose records are here. What matters is whether any covered id still
+    # names something, which the records answer directly.
+    present = {record.id for record in records}
+    if pending_ids and not any(record_id in present for record_id in pending_ids):
+        # A --replace import, a promote that re-minted ids after a reading fix,
+        # a restore from another revision. Clearing here would drop the id of a
+        # batch whose answers are alive on Anthropic's side for weeks, and exit
+        # 0 doing it. Raised before the "answers were dropped" warning below,
+        # because nothing is dropped on this path: the entry survives and
+        # re-fetching after restoring the file recovers every answer.
+        raise JankiError(
+            f"Batch {batch_id} came back, but none of the {len(pending_ids)} "
+            f"record(s) it covers are in {output_path} any more, so nothing can "
+            "be applied. The batch is left pending: point --root at the right "
+            "project, or restore the file, and fetch again — fetching costs "
+            "nothing. If those records are gone for good, "
+            "'janki enrich --ai --batch-forget' drops the entry."
+        )
+
     for warning in result.warnings:
         print(f"warning: {warning}", file=sys.stderr)
     for record_id, reason in outcome.failed.items():
@@ -1309,20 +1334,6 @@ def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
             "longer in the collection, so their answers were dropped: "
             f"{', '.join(outcome.missing)}",
             file=sys.stderr,
-        )
-
-    if pending_ids and len(outcome.missing) == len(pending_ids):
-        # Non-empty collection, none of it this batch's: a --replace import, a
-        # promote that re-minted ids after a reading fix, a restore from
-        # another revision. Clearing here would drop the id of a batch whose
-        # answers are alive on Anthropic's side for weeks, and exit 0 doing it.
-        raise JankiError(
-            f"Batch {batch_id} came back, but none of the {len(pending_ids)} "
-            f"record(s) it covers are in {output_path} any more, so nothing can "
-            "be applied. The batch is left pending: point --root at the right "
-            "project, or restore the file, and fetch again — fetching costs "
-            "nothing. If those records are gone for good, "
-            "'janki enrich --ai --batch-forget' drops the entry."
         )
 
     staging = len(pending_ids) >= enrich.STAGING_THRESHOLD
