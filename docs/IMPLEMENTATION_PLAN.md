@@ -1201,7 +1201,7 @@ Design: DESIGN_V2 "PDFs and photos > Step 2".
   re-mint, enrichment-update staging file, empty-file cleanup,
   idempotent re-promote of a half-done file.
 
-### [ ] M3.W Milestone 3 wrap
+### [~] claimed task/m3.w 2026-08-07 — M3.W Milestone 3 wrap
 
 Depends on: all M3 tasks
 Files: `README.md`.
