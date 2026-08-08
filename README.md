@@ -710,9 +710,11 @@ writing pass describe different work.
 
 With one gap worth knowing: a large `--ai` run — fifty records or more, or a
 `--batch-fetch` of that size — writes proposals to `data/staging/` instead, and
-`janki promote` records those as source sightings and nothing more — every row
-merges into a record that already exists, so there is no addition to record
-either. So the model that wrote them survives in the staging file's
+`janki promote` then adds nothing to the ledger at all. Every row merges into a
+record that already exists, so there is no addition to record, and the source
+sighting it would write is the one that record's import already wrote, so the
+ledger drops it as a duplicate. The command says as much:
+`registered 0 new record(s) and 0 new source sighting(s)`. So the model that wrote them survives in the staging file's
 `model:` metadata and not in the ledger. If you care which model wrote a batch
 of examples, keep the promoted staging file (`janki promote` archives it under
 `data/staging/done/`).
