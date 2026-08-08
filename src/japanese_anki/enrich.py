@@ -529,17 +529,21 @@ def _render(value: Any) -> str:
 
 
 def _hidden_difference(old: Any, new: Any) -> str:
-    """Name what changed when the two sides of a diff line render alike.
+    """Name what changed where the diff line could not show it.
 
-    ``_render`` is lossy on purpose — one line per field, sixty characters,
-    an :class:`ExampleSentence` shown as its Japanese. Usually that is the
-    readable summary. Sometimes it is a write nobody can see: replacing a
-    curated example's English with a model's leaves the Japanese identical, so
-    the line reads ``X -> X`` and a y confirms an overwrite that was never
-    displayed. Rather than widening the line for every field, the cases where
-    rendering hid the change say what it hid.
+    ``_render`` is lossy on purpose — one line per field, sixty characters, an
+    :class:`ExampleSentence` shown as its Japanese. Usually that is the readable
+    summary. Sometimes it is a write nobody can see: replacing a curated
+    example's English with a model's leaves the Japanese identical, so that
+    element reads the same on both sides and a y confirms an overwrite that was
+    never displayed. Rather than widening the line for every field, the parts
+    rendering hid say what they hid.
+
+    Checked **per element**, not per line: a list whose second example is a
+    visibly new sentence still hides an overwrite of the first one's English,
+    and gating on the whole line rendering alike would say nothing about it.
     """
-    if old == new or _render(old) != _render(new):
+    if old == new:
         return ""
     pairs: list[tuple[Any, Any]] = []
     if (
@@ -553,13 +557,20 @@ def _hidden_difference(old: Any, new: Any) -> str:
     names = [
         item.name
         for left, right in pairs
-        if is_dataclass(left) and type(left) is type(right)
+        if is_dataclass(left)
+        and type(left) is type(right)
+        and _render_item(left) == _render_item(right)
         for item in dc_fields(left)
         if getattr(left, item.name) != getattr(right, item.name)
     ]
     if names:
         return f"({', '.join(dict.fromkeys(names))} differ)"
-    return "(differs where this line cannot show it)"
+    if _render(old) == _render(new):
+        # Nothing structured to point at — a truncated string, a list that
+        # changed length inside the sixty characters — but the two sides are
+        # not the same value, and the line says they look it.
+        return "(differs where this line cannot show it)"
+    return ""
 
 
 def format_field_diff(

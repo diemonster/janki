@@ -755,6 +755,31 @@ def test_a_change_the_line_cannot_show_says_so() -> None:
     assert "english differ" in lines[1]
 
 
+def test_one_visibly_new_sentence_does_not_hide_the_other_one_being_rewritten() -> None:
+    """A list can change visibly in one element and invisibly in another. Only
+    the invisible part needs saying, and it still needs saying."""
+    kept = "日本語を話します。"
+    lines = enrich.format_field_diff(
+        {
+            "word:話す:はなす": {
+                "examples": (
+                    [
+                        ExampleSentence(japanese=kept, english="I speak Japanese."),
+                        ExampleSentence(japanese="友だちと話しました。"),
+                    ],
+                    [
+                        ExampleSentence(japanese=kept, english="I talk in Japanese."),
+                        ExampleSentence(japanese="先生と話しました。"),
+                    ],
+                )
+            }
+        }
+    )
+
+    assert "先生と話しました。" in lines[1]
+    assert "english differ" in lines[1]
+
+
 def test_a_field_that_really_did_not_change_is_not_annotated() -> None:
     sentence = ExampleSentence(japanese="話します。", english="I speak.")
     lines = enrich.format_field_diff(
