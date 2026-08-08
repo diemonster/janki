@@ -307,15 +307,17 @@ def _report_enrichment_ledger_failure(
     while doing it.
 
     What a *re-run* does differs by pass, which is why the caller supplies that
-    sentence rather than this function guessing at one. There is no useful
-    two-way split to generalise: ``--jpdb`` never reaches the ledger, by either
-    of two routes — a record it filled completely is skipped before the look-up,
-    and one it could only fill partly (every noun, which has no verb group and
-    no conjugations) is looked up again and proposes nothing the record does not
-    already have; ``--ai`` leaves records with examples and no usage note, and
-    those are targets again, so it does; ``--polish-meanings`` looks at every
-    record every time. Whichever it is, saying it accurately is the whole point of this
-    message — nobody should chase a repair on a wrong description of it.
+    sentence rather than this function guessing at one, and why there is no
+    two-way split worth generalising. ``--jpdb`` never reaches the ledger, since
+    what it could fill is filled — but whether it pays for a look-up first
+    depends on the word: a record the dictionary described completely is
+    skipped, and one it described partly is looked up again and proposes
+    nothing new. (A noun is the second kind: its ``conjugations`` never fill, so
+    it stays fillable forever.) ``--ai`` does reach the ledger — a record with
+    examples and no usage note is a target again. ``--polish-meanings`` looks at
+    every record every time. Whichever it is, saying it accurately is the whole
+    point of this message: nobody should chase a repair on a wrong description
+    of it.
     """
     print(f"warning: {exc}", file=sys.stderr)
     print(
@@ -904,8 +906,9 @@ def command_enrich(args: argparse.Namespace) -> int:
         _report_enrichment_ledger_failure(
             ledger_error,
             rerun=(
-                "Nor does a re-run: the fields are filled now, so the next pass "
-                "skips these records before it reaches the ledger."
+                "Nor does a re-run: what jpdb can fill is filled, so the next "
+                "pass either skips these records or looks them up and proposes "
+                "nothing — it never reaches the ledger either way."
             ),
             aftermath=(
                 "The records are correct; 'status' will simply not know jpdb is "

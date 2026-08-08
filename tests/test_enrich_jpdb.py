@@ -952,9 +952,10 @@ def test_a_field_jpdb_has_no_answer_for_is_looked_up_again_next_run() -> None:
 def test_a_failed_ledger_write_says_a_re_run_would_skip_these_records(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A dictionary look-up re-proposes the same values, which `_apply` drops as
-    no change — so for this pass a re-run really is unreachable ledger-wise, and
-    the message says the fill-pass sentence rather than the polish one."""
+    """A record jpdb filled has nothing left it can fill, so a re-run reaches
+    nothing whether it skips the record (the dictionary had every field) or
+    looks it up again and proposes nothing (a noun, whose conjugations never
+    fill). The message covers both, and is not the polish one."""
     root = project(tmp_path, [record()])
     patch_api(monkeypatch, hanasu_api())
     monkeypatch.setattr(
@@ -967,6 +968,6 @@ def test_a_failed_ledger_write_says_a_re_run_would_skip_these_records(
 
     err = capsys.readouterr().err
     assert "'status --rebuild' cannot bring it back" in err
-    assert "skips these records" in err
+    assert "either skips these records or looks them up and proposes nothing" in err
     assert "not a free repair" not in err
     assert stored(root)["word:話す:はなす"]["furigana"] == "話[はな]す"

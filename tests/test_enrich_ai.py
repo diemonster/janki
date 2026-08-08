@@ -937,5 +937,5 @@ def test_a_failed_ledger_write_does_not_call_a_re_run_pointless(
     err = capsys.readouterr().err
     assert "'status --rebuild' cannot bring it back" in err
     assert "not a free repair" in err
-    assert "skips these records" not in err
+    assert "either skips these records" not in err
     assert stored(root)["word:話す:はなす"]["examples"]
