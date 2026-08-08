@@ -84,7 +84,11 @@ marked "supersedes design").
 - **Unverified-furigana convention** (writer M4.2, reader M5.3): a
   record-level key `source.raw_fields["furigana_unverified"]` holding a
   comma-joined list of *content fingerprints of the flagged examples'
-  `japanese` text*. No per-example schema field.
+  `japanese` text*. No per-example schema field. A merge keeps the
+  existing record's `source`, so this key is carried across one by
+  `io.CONTENT_ANNOTATIONS` — and only when the merge actually wrote
+  `examples`, since a flag about examples that were not kept is a lie in
+  the other direction.
 - **Field-diff output** (shared helper, first built in M2.6, reused by
   M4.2/M4.3): per record, per field, one indented line of the form
   `<field>: <old> -> <new>` under a `<record id>` header.

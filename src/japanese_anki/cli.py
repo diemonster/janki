@@ -755,9 +755,9 @@ def _enrich_staging(
 def command_enrich(args: argparse.Namespace) -> int:
     """Fill empty fields on existing records from a dictionary.
 
-    ``--jpdb`` is the only source implemented; ``--ai`` arrives in M4.2. One is
-    required, because "enrich" without saying from what is a command whose
-    behavior would change under the user when the second source lands.
+    Two sources, one per run: ``--jpdb`` fills what a dictionary knows and
+    ``--ai`` writes what it does not. One is required, because "enrich" without
+    saying from what is a command whose meaning depends on which pass is newer.
     """
     if args.ai and args.jpdb:
         raise JankiError(
@@ -776,6 +776,22 @@ def command_enrich(args: argparse.Namespace) -> int:
             "enrich --staging proposes readings for held rows and writes nothing "
             "else, so it takes neither --force-fields nor record ids."
         )
+    if args.staging is not None and args.ai:
+        raise JankiError(
+            "enrich --staging annotates held rows with the reading jpdb proposes; "
+            "--ai writes examples and usage notes into records that already exist. "
+            "Run them separately."
+        )
+    # A flag the running pass never reads is a typo, not a no-op: --model and
+    # --force belong to --ai, and silently running the dictionary pass under
+    # them answers a question the user did not ask.
+    for flag, value in (("--model", args.model), ("--force", args.force)):
+        if value and not args.ai:
+            raise JankiError(
+                f"enrich {flag} applies to the --ai pass only. The --jpdb pass "
+                "reads a dictionary, so it has no model to choose and writes no "
+                "staging file to overwrite."
+            )
 
     config = _load_config(args)
     # The jpdb client is what --jpdb enriches *from* and what --ai verifies
@@ -872,6 +888,15 @@ def _enrich_ai(
         return 0
 
     staging = len(targets) >= enrich.STAGING_THRESHOLD
+    staging_target = config.staging_dir / "ai-enrichment.yaml"
+    if staging and staging_target.exists() and not args.force:
+        # Before the pass, not after it: a run this size is one API call per
+        # record, and finding the file at write time throws all of them away.
+        # The same reasoning as `check_rewritable` on the --staging path.
+        raise StagingError(
+            f"{staging_target} already exists and would be overwritten by these "
+            f"{len(targets)} record(s). Promote or move it first, or pass --force."
+        )
     book = ledger.load(config.ledger_file)
     result = enrich.enrich_ai(
         records,
@@ -892,7 +917,7 @@ def _enrich_ai(
         return 0
 
     if staging:
-        target = config.staging_dir / "ai-enrichment.yaml"
+        target = staging_target
         target.parent.mkdir(parents=True, exist_ok=True)
         written = [result.records[index] for index, record in enumerate(records)
                    if record.id in result.changes]
@@ -1481,7 +1506,7 @@ def build_parser() -> argparse.ArgumentParser:
     enrich_parser.add_argument(
         "--ai",
         action="store_true",
-        help="Fill fields with the Claude API (not implemented until M4.2).",
+        help="Write examples and usage notes with the Claude API.",
     )
     enrich_parser.add_argument(
         "--force-fields",

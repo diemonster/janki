@@ -395,6 +395,20 @@ _GODAN_MASU_STEM: dict[str, str] = {
     "す": "し",
 }
 
+# The five honorific godan verbs whose polite stem is い-row, not り-row:
+# いらっしゃいます, くださいます — never いらっしゃります. They are godan by
+# class, so the table above would build the wrong form *and* miss the right
+# one, and these are words a beginner textbook teaches early and politely.
+# Matched as a suffix so 〜てくださる is covered too, since the honorific ending
+# is what inflects there.
+_HONORIFIC_MASU_STEMS: tuple[str, ...] = (
+    "いらっしゃる",
+    "おっしゃる",
+    "くださる",
+    "なさる",
+    "ござる",
+)
+
 
 def polite_stem(expression: str, verb_group: str) -> str:
     """The stem ``ます`` attaches to, or ``""`` when janki cannot say.
@@ -414,6 +428,11 @@ def polite_stem(expression: str, verb_group: str) -> str:
     if not expression or group is None:
         return ""
     if group == GODAN:
+        if any(expression.endswith(suffix) for suffix in _UNSAFE_GODAN_SUFFIXES):
+            return ""
+        for suffix in _HONORIFIC_MASU_STEMS:
+            if expression.endswith(suffix):
+                return f"{expression[: -len(suffix)]}{suffix[:-1]}い"
         stem, ending = expression[:-1], expression[-1]
         row = _GODAN_MASU_STEM.get(ending)
         return f"{stem}{row}" if stem and row else ""

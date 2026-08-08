@@ -95,6 +95,10 @@ ENRICHABLE_FIELDS: tuple[str, ...] = (
 #: record needing one does not need the other.
 AI_FIELDS: tuple[str, ...] = ("examples", "usage_notes")
 
+# The order :func:`format_field_diff` prints known fields in: jpdb's pass, then
+# the AI pass. Anything outside it still prints, after these.
+_DIFF_FIELD_ORDER: tuple[str, ...] = ENRICHABLE_FIELDS + AI_FIELDS
+
 
 def parse_force_fields(value: str | None, *, ai: bool = False) -> tuple[str, ...]:
     """Parse a ``--force-fields FIELD[,FIELD]`` option value.
@@ -496,6 +500,15 @@ def suggest_readings(
     return result
 
 
+def _render_item(item: Any) -> str:
+    """One element of a list field. An :class:`ExampleSentence` renders as its
+    Japanese: a dataclass repr on a diff line is furigana, romaji and audio
+    paths crowding out the one part a reviewer actually judges."""
+    if isinstance(item, ExampleSentence):
+        return item.japanese
+    return str(item)
+
+
 def _render(value: Any) -> str:
     """One field value on a diff line: readable, and never wrapped."""
     if value is None:
@@ -522,12 +535,18 @@ def format_field_diff(
     A record ID header, then ``  <field>: <old> -> <new>`` beneath it. Shared
     with M4.2/M4.3 so every command that proposes a write to an existing record
     shows the same thing (IMPLEMENTATION_PLAN, Conventions).
+
+    Known fields print in pass order — jpdb's, then the AI pass's — and anything
+    else prints after them rather than not at all. A diff that quietly omits a
+    changed field is the display version of discarding a row: the user answers
+    y to a write they were never shown.
     """
     lines: list[str] = []
     for record_id in sorted(changes):
         lines.append(record_id)
         fields = changes[record_id]
-        for name in ENRICHABLE_FIELDS:
+        rest = sorted(name for name in fields if name not in _DIFF_FIELD_ORDER)
+        for name in (*_DIFF_FIELD_ORDER, *rest):
             if name in fields:
                 old, new = fields[name]
                 lines.append(f"  {name}: {_render(old)} -> {_render(new)}")
@@ -689,7 +708,9 @@ def apply_ai_result(
     * an example whose furigana disagrees with jpdb's parse is **kept and
       flagged**, because the sentence may be right where the segmentation is
       not, and a human deciding that is better than janki throwing away good
-      Japanese;
+      Japanese — but only if the examples land at all: when the fill rules keep
+      the record's existing examples, ``unverified`` comes back empty, because
+      there is no stored example for the flag to be about;
     * romaji is regenerated from the furigana, always, whatever arrived.
 
     ``parses`` maps a sentence to its jpdb ``ParseResult``. An absent one is
@@ -715,6 +736,7 @@ def apply_ai_result(
             outcome.unverified.append(example.japanese)
         kept.append(qc.regenerate_example_romaji(example))
 
+    unverified = list(outcome.unverified)
     proposals: dict[str, Any] = {
         "examples": kept,
         "usage_notes": str(getattr(parsed, "usage_notes", "") or "").strip(),
@@ -725,8 +747,16 @@ def apply_ai_result(
         if name in force_fields or is_empty(getattr(record, name))
     ]
     updated, changes = _apply(record, proposals, writable)
-    if outcome.unverified and "examples" in changes:
-        updated = _flag_unverified(updated, outcome.unverified)
+    if "examples" in changes:
+        if unverified:
+            updated = _flag_unverified(updated, unverified)
+    else:
+        # The examples were not written — the field was not writable, or the
+        # answer matched what is already there. Nothing was flagged, so nothing
+        # may be reported as flagged: a reviewer told to check a key would find
+        # no key. The rejections still stand; those were the model's sentences
+        # either way.
+        outcome.unverified = []
     outcome.record = updated
     outcome.changes = changes
     return outcome

@@ -8,14 +8,16 @@ than stubbed at the decision.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
 
-from japanese_anki import cli, enrich
+from japanese_anki import cli, enrich, qc
 from japanese_anki.claude_client import CallResult, Refusal
+from japanese_anki.conjugation import polite_stem
 from japanese_anki.enrich import (
     UNVERIFIED_KEY,
     ai_prompt,
@@ -25,6 +27,7 @@ from japanese_anki.enrich import (
     parse_force_fields,
 )
 from japanese_anki.identifiers import short_fingerprint
+from japanese_anki.io import merge_records
 from japanese_anki.jpdb import JpdbClient
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
 from japanese_anki.staging import read_staging
@@ -652,3 +655,180 @@ def test_the_polite_stem_alone_is_not_enough_to_count() -> None:
     outcome = apply_ai_result(taberu, answer(generated("食べ物が好きです。")))
 
     assert outcome.rejected == ["食べ物が好きです。"]
+
+
+# --- what the review found ---------------------------------------------------
+
+
+def test_the_unverified_flag_survives_the_staging_route_into_the_records(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The large-run route is the *only* one big runs may take, so the flag has
+    to reach vocabulary.json through it. It rides in ``source.raw_fields``, and
+    a merge keeps the existing record's source — which is right for provenance
+    and wrong for a flag describing the examples arriving with it."""
+    many = [
+        record(id=f"word:話す{index}:はなす", expression=f"話す{index}")
+        for index in range(enrich.STAGING_THRESHOLD)
+    ]
+    root = project(tmp_path, many)
+    # FakeJpdb answers no parse, so every generated example is unverified.
+    patch_all(
+        monkeypatch,
+        FakeCall(
+            *[
+                CallResult(
+                    answer(generated(f"話す{index}。", furigana=f"話[はな]す{index}。")),
+                    "end_turn",
+                    None,
+                )
+                for index in range(enrich.STAGING_THRESHOLD)
+            ]
+        ),
+        FakeJpdb(),
+    )
+    target = root / "staging" / "ai-enrichment.yaml"
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--yes"]) == 0
+    staged, _ = read_staging(target)
+    assert all(UNVERIFIED_KEY in item.source.raw_fields for item in staged)
+
+    assert (
+        cli.main(["--root", str(root), "promote", str(target), "--skip-reading-check"])
+        == 0
+    )
+
+    landed = stored(root)["word:話す0:はなす"]
+    assert landed["examples"], "the examples merged in"
+    assert UNVERIFIED_KEY in landed["source"]["raw_fields"], (
+        "M5.3 reads this key to decide whether to speak a sentence nobody checked"
+    )
+
+
+def test_the_flag_does_not_ride_along_when_the_examples_did_not_land() -> None:
+    """A flag describes the examples it arrived with. If the merge kept the
+    existing curated examples, saying they are unverified would be a lie."""
+    curated = record(examples=[ExampleSentence(japanese="人と話す。")])
+    incoming = replace(
+        record(examples=[ExampleSentence(japanese="話しました。")]),
+        source=replace(curated.source, raw_fields={UNVERIFIED_KEY: "abc123"}),
+    )
+
+    merged, _ = merge_records([curated], [incoming], ())
+
+    assert merged[0].examples == curated.examples
+    assert UNVERIFIED_KEY not in merged[0].source.raw_fields
+
+
+def test_the_diff_shows_the_sentence_the_user_is_saying_yes_to() -> None:
+    sentence = ExampleSentence(japanese="日本語を話します。", english="I speak Japanese.")
+    lines = enrich.format_field_diff(
+        {"word:話す:はなす": {"examples": ([], [sentence]), "usage_notes": ("", "Polite.")}}
+    )
+
+    assert lines[0] == "word:話す:はなす"
+    assert any("日本語を話します。" in line for line in lines[1:])
+    assert any("Polite." in line for line in lines[1:])
+
+
+def test_a_changed_field_the_helper_does_not_know_still_shows() -> None:
+    """A field diff that silently omits a change is the display version of
+    discarding a row: the user confirms a write they were never shown."""
+    lines = enrich.format_field_diff({"word:話す:はなす": {"transitivity": ("", "vi")}})
+
+    assert any("transitivity" in line for line in lines[1:])
+
+
+def test_ai_and_staging_are_not_the_same_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = project(tmp_path, [record()])
+    staging_file = root / "held.yaml"
+    staging_file.write_text("records: []\n", encoding="utf-8")
+
+    assert cli.main(
+        ["--root", str(root), "enrich", "--ai", "--staging", str(staging_file)]
+    ) == 1
+    assert "--ai" in capsys.readouterr().err
+
+
+def test_an_existing_staging_file_is_refused_before_the_pass_is_paid_for(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    many = [
+        record(id=f"word:話す{index}:はなす", expression=f"話す{index}")
+        for index in range(enrich.STAGING_THRESHOLD)
+    ]
+    root = project(tmp_path, many)
+    (root / "staging").mkdir()
+    (root / "staging" / "ai-enrichment.yaml").write_text("records: []\n", encoding="utf-8")
+    call = FakeCall()
+    patch_all(monkeypatch, call, FakeJpdb())
+
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--yes"]) == 1
+
+    assert call.calls == [], "the file exists; nothing should have been generated"
+
+
+def test_an_example_that_was_not_kept_is_not_reported_as_flagged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A record with curated examples and no usage note is a target for the
+    note. The example that comes back with it is discarded, so claiming it was
+    flagged points a reviewer at a key that is not there."""
+    curated = record(examples=[ExampleSentence(japanese="人と話す。")])
+    root = project(tmp_path, [curated])
+    patch_all(
+        monkeypatch,
+        FakeCall(
+            CallResult(
+                answer(
+                    generated("話します。", furigana="話[はな]します。"),
+                    usage_notes="Polite.",
+                ),
+                "end_turn",
+                None,
+            )
+        ),
+        FakeJpdb(),
+    )
+
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--yes"]) == 0
+
+    landed = stored(root)["word:話す:はなす"]
+    assert landed["usage_notes"] == "Polite."
+    assert UNVERIFIED_KEY not in landed["source"]["raw_fields"]
+    output = capsys.readouterr()
+    assert "flagged" not in (output.out + output.err)
+
+
+def test_the_honorific_verbs_take_an_i_row_polite_stem() -> None:
+    """いらっしゃる is godan by class and い-row by inflection. The regular rule
+    invents いらっしゃります and misses the form Genki actually teaches."""
+    assert polite_stem("いらっしゃる", "godan") == "いらっしゃい"
+    assert polite_stem("ください", "godan") == ""  # already a stem, not a る verb
+    assert polite_stem("くださる", "godan") == "ください"
+    assert polite_stem("おっしゃる", "godan") == "おっしゃい"
+    assert polite_stem("なさる", "godan") == "なさい"
+    assert polite_stem("ござる", "godan") == "ござい"
+    # 〜てくださる inflects on the honorific ending, so the suffix match covers it.
+    assert polite_stem("読んでくださる", "godan") == "読んでください"
+
+
+def test_an_honorific_polite_example_is_accepted() -> None:
+    example = ExampleSentence(japanese="先生は教室にいらっしゃいます。")
+
+    assert qc.example_contains_target(example, "いらっしゃる", "godan")
+
+
+def test_a_pass_flag_is_not_silently_ignored_by_the_other_pass(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("JPDB_API_KEY", "k")
+    root = project(tmp_path, [record()])
+
+    assert cli.main(
+        ["--root", str(root), "enrich", "--jpdb", "--model", "claude-opus-5"]
+    ) == 1
+    assert "--model" in capsys.readouterr().err
+    assert cli.main(["--root", str(root), "enrich", "--jpdb", "--force"]) == 1
+    assert "--force" in capsys.readouterr().err
