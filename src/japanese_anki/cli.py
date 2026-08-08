@@ -1285,9 +1285,9 @@ def _batch_fetch(
 
     # Whether this batch can land at all, asked of the collection and asked
     # before a single result is read. Two things follow from the placement. It
-    # cannot be defeated by what the API said about individual rows — a record
-    # that is both gone and errored never appears among the missing, so
-    # counting those would let one overloaded request stand the guard down. And
+    # cannot be defeated by what the API said about individual rows — the
+    # classification of a row depends on its outcome as well as on presence, so
+    # counting the missing would let the mix of outcomes decide the guard. And
     # streaming the results first would schema-validate every succeeded row on
     # the way to a verdict that needed none of them, so a malformed row in a
     # batch whose records are all gone would report a schema problem instead of
@@ -1442,15 +1442,20 @@ def _keep_for_invalid(
     Holding it is what makes a second fetch possible, so the entry is narrowed
     to exactly these ids — a later fetch retries them and leaves every other row
     alone, however that row was settled. Recording the failures rather than the
-    successes is what keeps that true when the successes went to a staging file
-    whose fate nobody has decided yet.
+    successes is what keeps that true when the successes went to a staging file.
+
+    Which is the thing the message has to be straight about. A staging file *is*
+    the answers, the same way `janki extract`'s is: this batch has delivered
+    them and will not offer them again, so deleting that file loses them. Saying
+    "promote or discard" would offer the second as a free alternative to the
+    first, when it is the one irreversible choice on the table.
     """
     book.record_batch_retry(batch_id, invalid)
     if staged:
         written = (
-            f"{wrote} record(s) went to {STAGING_FILE_NAME}; promote or discard "
-            "that file before fetching again, or the next fetch refuses rather "
-            "than overwrite a review in progress. "
+            f"{wrote} record(s) went to {STAGING_FILE_NAME}. Promote it to land "
+            "them — that file is where those answers live now, and this batch "
+            "will not offer them again, so deleting it loses them. "
         )
     elif wrote:
         written = f"{wrote} record(s) were written. "
@@ -1458,11 +1463,11 @@ def _keep_for_invalid(
         written = ""
     print(
         f"{written}{len(invalid)} answer(s) in batch {batch_id} did not parse, "
-        f"so it is still recorded as pending — narrowed to those {len(invalid)}. "
-        "Their answers are intact on Anthropic's side and fetching again costs "
-        "nothing, which is worth doing if the schema they failed was the thing "
-        "at fault. If they are not worth chasing, "
-        "'janki enrich --ai --batch-forget' drops the entry.",
+        f"so it is still recorded as pending, narrowed to those {len(invalid)}. "
+        "They are intact on Anthropic's side and fetching again costs nothing, "
+        "which is worth doing if the schema they failed was the thing at fault. "
+        "If they are not worth chasing, 'janki enrich --ai --batch-forget' "
+        "drops the entry.",
         file=sys.stderr,
     )
     if (ledger_error := _save_ledger(book)) is not None:

@@ -1316,20 +1316,24 @@ def apply_batch_results(
         if candidates and record_id not in candidates:
             outcome.settled.append(record_id)
             continue
-        # Presence first, outcome second. A record the human deleted while the
-        # batch was out is gone whatever the API said about its row — and an
-        # unreadable answer for a record that no longer exists would otherwise
-        # hold the batch id forever, for a word nobody wants.
+        if entry.result is None:
+            if entry.outcome != "invalid":
+                # Terminal, and the API's reason is the only signal that the API
+                # rather than curation is why this word went unenriched. Worth
+                # printing whether or not the record is still here.
+                detail = f": {entry.detail}" if entry.detail else ""
+                outcome.failed[record_id] = f"{entry.outcome}{detail}"
+            elif record_id in positions:
+                outcome.invalid[record_id] = entry.detail or "the answer did not parse"
+            else:
+                # Unreadable *and* deleted. Only this combination goes through
+                # the presence test, because only this one would otherwise hold
+                # the batch id forever waiting on a word nobody wants.
+                outcome.missing.append(record_id)
+            continue
         index = positions.get(record_id)
         if index is None:
             outcome.missing.append(record_id)
-            continue
-        if entry.result is None:
-            detail = f": {entry.detail}" if entry.detail else ""
-            if entry.outcome == "invalid":
-                outcome.invalid[record_id] = entry.detail or "the answer did not parse"
-            else:
-                outcome.failed[record_id] = f"{entry.outcome}{detail}"
             continue
         outcome.result.looked_up += 1
         absorb_ai_call(

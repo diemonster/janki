@@ -970,9 +970,10 @@ def test_a_forget_that_could_not_be_saved_says_what_to_do_next(
 def test_one_errored_row_does_not_defeat_the_moved_collection_guard(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A record that is both gone and errored is reported as failed, never as
-    missing — so counting the missing would let one overloaded request clear
-    the id of a batch none of whose records are here."""
+    """Counting the missing would let the mix of outcomes decide the guard, so
+    it asks the records instead. (The classification itself is pinned directly
+    by test_a_terminal_row_keeps_its_reason_even_when_its_record_is_gone; this
+    one is about the guard, which short-circuits before any row is read.)"""
     records = many(2)
     batches = FakeBatches(
         results=[
@@ -1266,11 +1267,12 @@ def test_a_second_fetch_does_not_rewrite_what_the_first_one_landed(
     assert "settled by an earlier fetch" in capsys.readouterr().out
 
 
-def test_a_held_staging_batch_says_to_promote_before_fetching_again(
+def test_a_held_staging_batch_says_the_file_is_where_the_answers_live(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """"Fetching again costs nothing" is false when the next fetch refuses over
-    an unpromoted staging file."""
+    """A staging file *is* the answers, the same way extract's is. This batch
+    will not offer them again, so "promote or discard" would present the one
+    irreversible choice as a free alternative to the other."""
 
     class Malformed:
         stop_reason = "end_turn"
@@ -1288,7 +1290,9 @@ def test_a_held_staging_batch_says_to_promote_before_fetching_again(
 
     err = capsys.readouterr().err
     assert cli.STAGING_FILE_NAME in err
-    assert "promote or discard that file before fetching again" in err
+    assert "Promote it to land them" in err
+    assert "deleting it loses them" in err
+    assert "discard" not in err
     assert "record(s) were written." not in err
 
 
@@ -1402,4 +1406,68 @@ def test_retrying_one_row_of_a_large_batch_is_a_diff_not_a_staging_file(
 
     assert not (root / "staging" / "ai-enrichment.yaml").exists()
     assert stored(root)[records[-1].id]["examples"], "the retried row landed in the records"
+    assert book_of(root)["pending_batches"] == {}
+
+
+def test_a_terminal_row_keeps_its_reason_even_when_its_record_is_gone() -> None:
+    """The API's word is the only signal that the API, rather than curation, is
+    why a word went unenriched — so an errored row stays errored whether or not
+    somebody deleted the record in the meantime. Only an *unreadable* answer
+    goes through the presence test, because only that one could hold the id."""
+    present = record(id="word:聞く:きく", expression="聞く")
+    entries = [
+        claude_client.BatchEntry(key("word:話す:はなす"), "errored", "Overloaded", None),
+        claude_client.BatchEntry(key("word:見る:みる"), "invalid", "bad json", None),
+    ]
+
+    outcome = enrich.apply_batch_results(
+        [present], entries, ["word:話す:はなす", "word:見る:みる"], model="m"
+    )
+
+    assert "Overloaded" in outcome.failed["word:話す:はなす"]
+    assert "word:話す:はなす" not in outcome.missing
+    # Unreadable and deleted: moot, and it must not hold the batch.
+    assert outcome.missing == ["word:見る:みる"]
+    assert not outcome.invalid
+
+
+def test_an_unreadable_answer_for_a_record_still_here_is_held_not_dropped() -> None:
+    """The other side of the presence branch. Green before the change too — it
+    is here so that collapsing the two cases back together turns one of the
+    pair red."""
+    here = record(id="word:見る:みる", expression="見る")
+    entries = [claude_client.BatchEntry(key(here.id), "invalid", "bad json", None)]
+
+    outcome = enrich.apply_batch_results([here], entries, [here.id], model="m")
+
+    assert outcome.invalid == {here.id: "bad json"}
+    assert not outcome.missing
+
+
+def test_a_sub_threshold_retry_does_not_refuse_over_a_staging_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The retry is one row, so it takes the diff route and never looks at the
+    staging file. Green before the change: what this commit fixed is the held
+    message, which promised a refusal this pins as not happening."""
+
+    class Malformed:
+        stop_reason = "end_turn"
+        content = [type("B", (), {"type": "text", "text": "{not json"})()]
+
+    records = many(enrich.STAGING_THRESHOLD)
+    batches = FakeBatches(
+        results=[ok(item) for item in records[:-1]]
+        + [Entry(key(records[-1].id), Succeeded(Malformed()))]
+    )
+    root = submitted(tmp_path, records, monkeypatch, batches)
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 1
+    assert (root / "staging" / "ai-enrichment.yaml").is_file()
+    batches.results_rows = [ok(item) for item in records]
+    capsys.readouterr()
+
+    # The staging file is still sitting there unpromoted, and this exits 0.
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 0
+
+    assert stored(root)[records[-1].id]["examples"]
     assert book_of(root)["pending_batches"] == {}
