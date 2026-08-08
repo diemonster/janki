@@ -308,8 +308,8 @@ def _report_enrichment_ledger_failure(
 
     What a *re-run* does differs by pass, which is why the caller supplies that
     sentence rather than this function guessing at one. There is no useful
-    two-way split to generalise: ``--jpdb`` re-looks-up and re-proposes the same
-    values, which the fill rules drop as no change, so it never reaches the
+    two-way split to generalise: ``--jpdb`` finds nothing left to fill on a
+    record it filled, so it skips it before the look-up and never reaches the
     ledger; ``--ai`` leaves records with examples and no usage note, which are
     targets again, so it does; ``--polish-meanings`` looks at every record every
     time. Whichever it is, saying it accurately is the whole point of this
