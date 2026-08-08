@@ -333,10 +333,18 @@ class BatchEntry(NamedTuple):
 
     ``outcome`` is the API's own word — ``succeeded``, ``errored``, ``canceled``
     or ``expired`` — kept rather than flattened, because only the first of them
-    carries a :class:`CallResult` and the other three mean genuinely different
-    things to a caller deciding whether to resubmit. ``result`` is that
-    ``CallResult`` and is ``None`` for the rest; ``detail`` carries whatever the
-    API said about a failure.
+    carries a :class:`CallResult` and the others mean genuinely different things
+    to a caller deciding whether to resubmit. ``result`` is that ``CallResult``
+    and is ``None`` for the rest; ``detail`` carries whatever the API said about
+    a failure.
+
+    One value is **janki's own**, not the API's: ``invalid`` means the row
+    succeeded and its text did not validate. It is separate from ``errored`` on
+    purpose, and the separation is the point — an errored row has no answer
+    anywhere and never will, while an invalid one's answer is complete and paid
+    for and sitting on Anthropic's side, with janki's schema the only thing
+    rejecting it. A caller may discard the first and must not discard the
+    second.
     """
 
     custom_id: str
@@ -421,9 +429,16 @@ def batch_results(
             )
             yield BatchEntry(custom_id, kind or "unknown", detail, None)
             continue
-        yield BatchEntry(
-            custom_id,
-            kind,
-            "",
-            _result_of(getattr(outcome, "message", None), schema, model),
-        )
+        try:
+            parsed = _result_of(getattr(outcome, "message", None), schema, model)
+        except JankiError as exc:
+            # One row that completed normally and came back unparseable must not
+            # take the batch down. A batch's results are immutable: raising here
+            # would fail at the same row on every re-fetch, so a thousand good
+            # answers beside one bad one would be uncollectible except by
+            # forgetting the batch and throwing them all away. `parse_call`
+            # keeps raising — a live call is one row, and there is nothing else
+            # in it to save.
+            yield BatchEntry(custom_id, "invalid", str(exc), None)
+            continue
+        yield BatchEntry(custom_id, kind, "", parsed)

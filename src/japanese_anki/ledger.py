@@ -515,6 +515,25 @@ class Ledger:
             return str(batch_id), dict(entry) if isinstance(entry, dict) else {}
         return None
 
+    def record_batch_retry(self, batch_id: str, retry_ids: Iterable[str]) -> None:
+        """Narrow a held batch to the records still worth another look.
+
+        A batch is held for exactly one reason — some answers did not parse —
+        so a second fetch has exactly one job, and this is the list of it.
+
+        Deliberately the *failures* rather than the successes. Recording what
+        landed sounds equivalent and is not: a large fetch lands in a staging
+        file rather than in records, a ledger write can fail after the records
+        are already on disk, and a fetch that wrote nothing records nothing —
+        in each case "what landed" is unknown or not yet settled, while "what
+        did not parse" is exact at the moment the batch is held. Replaced
+        rather than unioned, because the set only ever shrinks.
+        """
+        entry = self.pending_batches.get(str(batch_id))
+        if not isinstance(entry, dict):
+            return
+        entry["retry_ids"] = list(dict.fromkeys(str(item) for item in retry_ids))
+
     def clear_batch(self, batch_id: str) -> bool:
         """Forget a collected batch. Returns whether there was one to forget."""
         return self.pending_batches.pop(str(batch_id), None) is not None

@@ -1385,11 +1385,41 @@ terminal. (6) **Anything short of a written record keeps the batch
 pending**: a declined diff, a failed ledger write, an existing staging
 file. Results live on Anthropic's side for weeks and fetching again is
 free, so forgetting the id is the only irreversible thing in the command.
-(7) Three ways a record comes back with nothing — errored/expired/canceled,
-never mentioned, or no longer in the collection — and each is reported by
-name, because a batch runs for up to a day and the collection does not
-hold still. The fetch uses the **batch's** model, not the config's: a run
-submitted under one model was answered by that one.*
+(7) **Four** ways a record comes back with nothing — errored/expired/canceled,
+never mentioned, no longer in the collection, or an answer that did not
+validate — each reported by name, because a batch runs for up to a day and
+the collection does not hold still. The fourth is different in kind and is
+the only one that holds the batch id: the answer is complete and paid for
+and lives on Anthropic's side for weeks, with janki's schema the only thing
+rejecting it, so clearing over it would be the one irreversible act in the
+command for the one failure that was not the API's. The rule the whole
+fetch is arranged around: **clear the id once every record still in the
+collection has been accounted for and nothing that remains is
+recoverable.** A record deleted while the batch was out is deliberate,
+so its answer is moot and does not hold the id; an unreadable answer for
+a record that is still here does. The all-missing guard is a separate
+judgment on top of that — *every* record gone reads as an accident
+rather than curation, so it refuses instead of clearing. The fetch uses the **batch's** model, not the config's: a run
+submitted under one model was answered by that one.
+
+Amended after a second review found the all-missing guard could deadlock:
+a one-record batch whose single word was deleted while it was out has no
+way to tell "curation" from "the collection moved", and every later fetch
+raised while every later submit was refused. The fix was **`--batch-forget`** (outside the task's
+surface, deliberately) rather than a weaker guard — the alternative
+remedy was hand-editing `data/ledger.json`, which AGENTS.md forbids for a
+file janki writes. Both guards stand: an **empty collection** is a
+`--root` pointed elsewhere, and a **non-empty one holding none of the
+batch's ids** is a `--replace` import or a promote that re-minted them.
+Either refuses rather than clearing the id of a batch whose answers are
+alive on Anthropic's side for weeks. (I removed the second guard first,
+which was backwards: the escape hatch is what makes keeping it safe.)
+`--force-fields` at fetch **overrides** the stored list rather than being
+refused with `--ids`/`--model`, and says so — the model and the ids
+describe what was asked and are settled, while this decides how an answer
+already in hand is applied, and a field may have filled in the meantime.
+`--batch-submit` and `--batch-forget` no longer build a jpdb client:
+neither asks jpdb anything, so neither may demand a key.*
 
 Depends on: M4.3 (same files), M1.3
 Files: `src/japanese_anki/enrich.py`, `src/japanese_anki/cli.py`,

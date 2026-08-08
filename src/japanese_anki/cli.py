@@ -4,7 +4,7 @@ import argparse
 import json
 import sys
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -827,21 +827,32 @@ def command_enrich(args: argparse.Namespace) -> int:
         for name, chosen in (
             ("--batch-submit", args.batch_submit),
             ("--batch-fetch", args.batch_fetch),
+            ("--batch-forget", args.batch_forget),
         )
         if chosen
     ]
     if len(batch_flags) > 1:
         raise JankiError(
-            "enrich --batch-submit sends a batch and --batch-fetch collects one. "
-            "They are the two ends of the same job, hours apart; run them "
-            "separately."
+            f"enrich takes one batch action at a time; got {', '.join(batch_flags)}. "
+            "--batch-submit sends a batch, --batch-fetch collects it hours later, "
+            "and --batch-forget drops one that can no longer be collected."
         )
-    if args.batch_fetch and (args.ids or args.model):
+    if (args.batch_fetch or args.batch_forget) and (args.ids or args.model):
         raise JankiError(
-            "enrich --batch-fetch collects a batch that was already submitted, "
-            "so it takes neither record ids nor a model: which records it covers "
-            "and which model answered them were both decided at submit time and "
-            "are recorded in the ledger."
+            "enrich --batch-fetch and --batch-forget act on a batch that was "
+            "already submitted, so neither takes record ids or a model: which "
+            "records it covers and which model answered them were both decided "
+            "at submit time and are recorded in the ledger. --batch-forget in "
+            "particular drops the whole entry, so naming one id and dropping "
+            "the rest is not something it could mean. (--batch-fetch does take "
+            "--force-fields: that decides how an answer already in hand is "
+            "applied.)"
+        )
+    if args.batch_forget and (args.force_fields or args.force):
+        raise JankiError(
+            "enrich --batch-forget drops the pending entry and writes no "
+            "records, so it has no field list to widen and no staging file to "
+            "overwrite."
         )
     if batch_flags and not args.ai:
         raise JankiError(
@@ -888,16 +899,21 @@ def command_enrich(args: argparse.Namespace) -> int:
     if args.polish_meanings:
         return _polish_meanings(config, args)
 
+    # Neither of these asks jpdb anything — one writes a ledger entry, the
+    # other builds requests — so neither may demand a key to run.
+    if args.batch_forget:
+        return _batch_forget(config)
+
+    if args.batch_submit:
+        return _batch_submit(config, args, force_fields)
+
     client = jpdb.JpdbClient(jpdb.api_key_from_env())
 
     if args.staging is not None:
         return _enrich_staging(client, args.staging.resolve(), args.yes)
 
-    if args.batch_submit:
-        return _batch_submit(config, args, force_fields)
-
     if args.batch_fetch:
-        return _batch_fetch(config, args)
+        return _batch_fetch(config, args, force_fields)
 
     if args.ai:
         return _enrich_ai(config, args, force_fields)
@@ -1169,7 +1185,48 @@ def _batch_submit(
     return 0
 
 
-def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
+def _batch_forget(config: ProjectConfig) -> int:
+    """Drop the pending batch entry without collecting it.
+
+    The only supported way out of a batch that can never be applied — the
+    project it was submitted against is gone, or its records were re-minted
+    while it was out. Without this the remedy would be editing
+    ``data/ledger.json`` by hand, which AGENTS.md forbids and which is a bad
+    habit to teach for a file janki writes.
+
+    Nothing is destroyed: the results stay on Anthropic's side for weeks, and
+    the id is printed on the way out so a console lookup is still possible.
+    """
+    book = ledger.load(config.ledger_file)
+    pending = book.pending_batch()
+    if pending is None:
+        print("No batch is pending; nothing to forget.")
+        return 0
+    batch_id, entry = pending
+    book.clear_batch(batch_id)
+    if (ledger_error := _save_ledger(book)) is not None:
+        print(f"warning: {ledger_error}", file=sys.stderr)
+        print(
+            f"Batch {batch_id} is still recorded as pending on disk — only the "
+            "in-memory copy was cleared — so --batch-submit will keep refusing. "
+            "Run --batch-forget again once that file is writable; that is the "
+            "whole remedy, and it is why this command exists rather than an "
+            "edit to data/ledger.json.",
+            file=sys.stderr,
+        )
+        return 1
+    print(
+        f"Forgot batch {batch_id} ({len(entry.get('pending_ids', []))} record(s), "
+        f"submitted {entry.get('submitted_at', 'on an unknown date')}). Its "
+        "results are still on Anthropic's side and reachable from the console "
+        "under that id; janki will not look for them again."
+    )
+    return 0
+
+
+def _batch_fetch(
+    config: ProjectConfig, args: argparse.Namespace, force_fields: Sequence[str]
+) -> int:
     """Collect a finished batch, or say how far along it is.
 
     One poll, never a wait loop: the point of batching is that nobody is sitting
@@ -1180,6 +1237,23 @@ def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
     records = load_records(output_path) if output_path.exists() else []
     book = ledger.load(config.ledger_file)
     pending = book.pending_batch()
+    if pending is not None and not records:
+        # An empty collection is a --root pointed at the wrong project or a
+        # normalized file that went missing, not a batch that failed — so the
+        # batch stays pending rather than being cleared against nothing.
+        #
+        # One of a pair. Its sibling below catches the same problem in the
+        # other shape: a file that has records, none of them this batch's. That
+        # one waits for the batch's *status*, so that a run which has nothing to
+        # collect yet still says so rather than erroring; this one is checked
+        # first, before even that call. `--batch-forget` is the way out of both.
+        raise JankiError(
+            f"Batch {pending[0]} is pending, but there are no records in "
+            f"{output_path} to apply it to. Point --root at the right project, "
+            "or restore the file, and fetch again — fetching costs nothing. If "
+            "the collection is gone for good, 'janki enrich --ai --batch-forget' "
+            "drops the entry."
+        )
     if pending is None:
         print("No batch is pending. Submit one with: janki enrich --ai --batch-submit")
         return 0
@@ -1191,7 +1265,13 @@ def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
     # this command refuses to take, would apply the answer to a different
     # question than the one that was asked.
     model = str(entry.get("model") or config.enrich_model)
-    force_fields = [str(item) for item in entry.get("force_fields", [])]
+    submitted_fields = [str(item) for item in entry.get("force_fields", [])]
+    # A held batch's second fetch has one job: the rows whose answers did not
+    # parse. Everything else is settled, whatever route it took — records,
+    # staging file, or nothing at all — which is why this is the list of
+    # failures rather than of successes.
+    retry = [str(item) for item in entry.get("retry_ids", [])]
+    candidates = retry or pending_ids
 
     status_now = claude_client.batch_status(batch_id)
     if status_now != claude_client.BATCH_ENDED:
@@ -1203,6 +1283,49 @@ def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
         )
         return 0
 
+    # Whether this batch can land at all, asked of the collection and asked
+    # before a single result is read. Two things follow from the placement. It
+    # cannot be defeated by what the API said about individual rows — the
+    # classification of a row depends on its outcome as well as on presence, so
+    # counting the missing would let the mix of outcomes decide the guard. And
+    # streaming the results first would schema-validate every succeeded row on
+    # the way to a verdict that needed none of them, so a malformed row in a
+    # batch whose records are all gone would report a schema problem instead of
+    # the moved collection that is actually wrong.
+    present = {record.id for record in records}
+    if pending_ids and not any(record_id in present for record_id in pending_ids):
+        # A --replace import, a promote that re-minted ids after a reading fix,
+        # a restore from another revision. Clearing here would drop the id of a
+        # batch whose answers are alive on Anthropic's side for weeks, and exit
+        # 0 doing it. Nothing is lost by refusing: the entry survives, and
+        # fetching again after the file is restored collects whatever the batch
+        # returned and reports each row by name.
+        raise JankiError(
+            f"Batch {batch_id} came back, but none of the {len(pending_ids)} "
+            f"record(s) it covers are in {output_path} any more, so nothing can "
+            "be applied. The batch is left pending: point --root at the right "
+            "project, or restore the file, and fetch again — fetching costs "
+            "nothing. If those records are gone for good, "
+            "'janki enrich --ai --batch-forget' drops the entry."
+        )
+
+    # Unlike the model and the ids, this one is not settled at submit time: it
+    # decides how an answer already in hand is applied, and the records may have
+    # gained fields while the batch was out. Overriding is allowed for that
+    # reason, announced because it is not what was submitted, and announced
+    # *down here* — past the status poll and the guard — because a run that
+    # collects nothing applies nothing and should claim nothing. The names
+    # themselves were validated by `command_enrich` before any of this, so a
+    # misspelt field is caught whatever state the batch turns out to be in.
+    if force_fields:
+        print(
+            f"Applying with --force-fields {', '.join(force_fields)} instead of "
+            f"the {', '.join(submitted_fields) or 'none'} this batch was "
+            "submitted with."
+        )
+    else:
+        force_fields = submitted_fields
+
     # The batch's own model, not the config's: a run submitted under one model
     # and fetched after the config changed was still answered by the first.
     outcome = enrich.apply_batch_results(
@@ -1211,6 +1334,7 @@ def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
         pending_ids,
         model=model,
         force_fields=force_fields,
+        only=retry,
         jpdb_client=jpdb.JpdbClient(jpdb.api_key_from_env()),
     )
     result = outcome.result
@@ -1218,7 +1342,20 @@ def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
     for warning in result.warnings:
         print(f"warning: {warning}", file=sys.stderr)
     for record_id, reason in outcome.failed.items():
-        print(f"warning: {record_id}: {reason}; left untouched.", file=sys.stderr)
+        # The reason carries its own ending: whether the record is still there
+        # to leave untouched is something only the apply pass knows.
+        print(f"warning: {record_id}: {reason}.", file=sys.stderr)
+    if outcome.settled:
+        print(
+            f"{len(outcome.settled)} record(s) were settled by an earlier fetch "
+            "of this batch and were left as they are."
+        )
+    for record_id, reason in outcome.invalid.items():
+        print(
+            f"warning: {record_id}: the answer did not parse ({reason}); left "
+            "untouched.",
+            file=sys.stderr,
+        )
     if outcome.missing:
         print(
             f"warning: {len(outcome.missing)} record(s) the batch covered are no "
@@ -1227,16 +1364,7 @@ def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
 
-    if pending_ids and len(outcome.missing) == len(pending_ids):
-        raise JankiError(
-            f"Batch {batch_id} came back, but none of the {len(pending_ids)} "
-            f"record(s) it covers are in {output_path} any more. That is a "
-            "collection that moved rather than a batch that failed, so the "
-            "batch is left pending: point --root at the right project, or "
-            "restore the file, and fetch again. Fetching costs nothing."
-        )
-
-    staging = len(pending_ids) >= enrich.STAGING_THRESHOLD
+    staging = len(candidates) >= enrich.STAGING_THRESHOLD
     staging_target = config.staging_dir / STAGING_FILE_NAME
     if staging and staging_target.exists() and not args.force:
         raise StagingError(
@@ -1246,6 +1374,8 @@ def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
         )
 
     if not result.changes:
+        if outcome.invalid:
+            return _keep_for_invalid(book, batch_id, outcome.invalid)
         print(
             f"Batch {batch_id} is collected: looked at {result.looked_up} "
             "record(s), and none of the answers had anything to fill."
@@ -1278,6 +1408,15 @@ def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
         )
         return code
 
+    if outcome.invalid:
+        # The good rows are written; the unparseable ones are not, and their
+        # answers are still there to be had. Clearing now would be the one
+        # irreversible thing this command can do, for the one failure class
+        # that was janki's and not the API's.
+        return _keep_for_invalid(
+            book, batch_id, outcome.invalid, wrote=len(result.changes), staged=staging
+        )
+
     book.clear_batch(batch_id)
     if (ledger_error := _save_ledger(book)) is not None:
         _report_batch_ledger_failure(
@@ -1285,6 +1424,63 @@ def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
         )
         return 1
     return 0
+
+
+def _keep_for_invalid(
+    book: ledger.Ledger,
+    batch_id: str,
+    invalid: Mapping[str, str],
+    *,
+    wrote: int = 0,
+    staged: bool = False,
+) -> int:
+    """Hold the batch id because some answers came back unreadable.
+
+    The one row class a later fetch can still do something about: the answers
+    exist, complete and paid for, and it is janki's schema that turned them
+    away. Dropping the id over that would make an 800-record batch unreachable
+    because one field was added to a Pydantic model.
+
+    Holding it is what makes a second fetch possible, so the entry is narrowed
+    to exactly these ids — a later fetch retries them and leaves every other row
+    alone, however that row was settled. Recording the failures rather than the
+    successes is what keeps that true when the successes went to a staging file.
+
+    Which is the thing the message has to be straight about. A staging file *is*
+    the answers, the same way `janki extract`'s is: this batch has delivered
+    them and will not offer them again, so deleting that file loses them. Saying
+    "promote or discard" would offer the second as a free alternative to the
+    first, when it is the one irreversible choice on the table.
+    """
+    book.record_batch_retry(batch_id, invalid)
+    if staged:
+        written = (
+            f"{wrote} record(s) went to {STAGING_FILE_NAME}. Promote it to land "
+            "them — that file is where those answers live now, and this batch "
+            "will not offer them again, so deleting it loses them. "
+        )
+    elif wrote:
+        written = f"{wrote} record(s) were written. "
+    else:
+        written = ""
+    print(
+        f"{written}{len(invalid)} answer(s) in batch {batch_id} did not parse, "
+        f"so it is still recorded as pending, narrowed to those {len(invalid)}. "
+        "They are intact on Anthropic's side and fetching again costs nothing, "
+        "which is worth doing if the schema they failed was the thing at fault. "
+        "If they are not worth chasing, 'janki enrich --ai --batch-forget' "
+        "drops the entry.",
+        file=sys.stderr,
+    )
+    if (ledger_error := _save_ledger(book)) is not None:
+        print(f"warning: {ledger_error}", file=sys.stderr)
+        print(
+            "The ledger could not record which rows are left to retry, so a "
+            "later fetch of this batch would consider all of them again. Fix "
+            "that file before fetching again.",
+            file=sys.stderr,
+        )
+    return 1
 
 
 def _report_batch_ledger_failure(
@@ -1993,6 +2189,14 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Collect the pending batch if it has finished, or report how far "
             "along it is."
+        ),
+    )
+    enrich_parser.add_argument(
+        "--batch-forget",
+        action="store_true",
+        help=(
+            "Drop the pending batch without collecting it, for one that can no "
+            "longer be applied. Its results stay reachable from the console."
         ),
     )
     enrich_parser.add_argument(
