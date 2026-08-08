@@ -43,6 +43,8 @@ __all__ = [
     "staging_path",
     "staging_targets",
     "system_prompt",
+    "unusable",
+    "unusable_note",
 ]
 
 #: ``--mode`` values. Omitting the flag lets the model judge each page for
@@ -291,6 +293,57 @@ def build_records(
         else:
             fresh.append(record)
     return fresh + seen
+
+
+def unusable(candidates: Iterable[Any]) -> list[Any]:
+    """Candidates that cannot become records: nothing to mint an id from.
+
+    A record's id is minted from its expression, so a candidate without one has
+    no identity and cannot be stored — even when the model read a reading, a
+    gloss, and a page number off the row. That happens for real: a table row
+    whose kanji cell is smudged still yields its kana column and its English.
+    """
+    return [
+        candidate
+        for candidate in candidates
+        if not str(getattr(candidate, "expression", "") or "").strip()
+    ]
+
+
+def unusable_note(candidates: Sequence[Any]) -> str:
+    """A review note naming what was held back, and where to look for it.
+
+    This goes into the staging file rather than only onto the terminal. The
+    staging file is the committed artifact a reviewer reads later, possibly on
+    another clone; a count that exists only in scrollback is the same silent
+    discard with an extra step. Everything the model *did* read about the row —
+    its page, the verbatim line, the reading it managed — is recorded so the
+    page can be re-checked rather than merely known to be incomplete.
+    """
+    if not candidates:
+        return ""
+    lines = [
+        f"{len(candidates)} candidate(s) could not be stored: the model read no "
+        "expression for them, and a record's ID is minted from its expression. "
+        "Nothing was lost from the source — check these against the page and add "
+        "them by hand if they are real."
+    ]
+    for candidate in candidates:
+        page = getattr(candidate, "page", 0) or 0
+        parts = [f"page {page}" if page else "page unknown"]
+        for name in ("reading", "context"):
+            value = str(getattr(candidate, name, "") or "").strip()
+            if value:
+                parts.append(f"{name}: {value}")
+        meanings = [
+            text
+            for item in getattr(candidate, "meanings", []) or []
+            if (text := str(item).strip())
+        ]
+        if meanings:
+            parts.append("meanings: " + ", ".join(meanings))
+        lines.append("  - " + "; ".join(parts))
+    return "\n".join(lines)
 
 
 def _examples(japanese: str) -> list[Any]:

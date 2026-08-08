@@ -585,3 +585,12 @@ def test_a_candidate_with_no_expression_is_counted_not_hidden(
     cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path))])
 
     assert "1 unusable" in capsys.readouterr().out
+    # And durably, in the file a reviewer actually reads — a count that lives
+    # only in scrollback is the same silent discard with an extra step.
+    _records, meta = read_staging(root / "staging" / "lesson.pdf.yaml")
+    note = meta["review_notes"]
+    assert "could not be stored" in note
+    # Everything the model did read about the row, so the page can be rechecked.
+    assert "page 12" in note
+    assert "はなす" in note
+    assert "to speak" in note

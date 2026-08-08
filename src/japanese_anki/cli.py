@@ -880,28 +880,25 @@ def command_extract(args: argparse.Namespace) -> int:
         )
         records = extract.build_records(candidates, item, known)
         target.parent.mkdir(parents=True, exist_ok=True)
-        write_staging(
-            target,
-            records,
-            {
-                # The basename, like every other writer of this key. An
-                # absolute path is stale on any other clone, and this file is
-                # committed.
-                "source_file": item.origin_path.name,
-                "extracted_at": date.today().isoformat(),
-                "model": model,
-            },
-            force=args.force,
-        )
+        meta = {
+            # The basename, like every other writer of this key. An absolute
+            # path is stale on any other clone, and this file is committed.
+            "source_file": item.origin_path.name,
+            "extracted_at": date.today().isoformat(),
+            "model": model,
+        }
+        # Held back into the file, not just onto the terminal: the staging file
+        # is what a reviewer reads later, and a count that lives only in
+        # scrollback is the same silent discard with an extra step.
+        held = extract.unusable(candidates)
+        if held:
+            meta["review_notes"] = extract.unusable_note(held)
+        write_staging(target, records, meta, force=args.force)
         written += 1
         already = sum(
             1 for record in records if "already_known" in record.source.raw_fields
         )
-        # A candidate with no expression cannot become a record — there is
-        # nothing to mint an id from — but it is still something the model
-        # proposed, so the count is reported rather than left invisible.
-        unusable = len(candidates) - len(records)
-        note = f", {unusable} unusable" if unusable else ""
+        note = f", {len(held)} unusable" if held else ""
         print(
             f"{item.origin_path.name}: {len(records)} candidate(s) "
             f"({already} already known{note}) -> {target}"
