@@ -433,3 +433,35 @@ def test_a_failed_copy_leaves_nothing_behind_under_the_real_name(
 
     monkeypatch.undo()
     assert not (inbox / "lesson.pdf").exists()
+
+
+def test_a_cleanup_that_also_fails_still_reports_a_janki_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The failures that break a write mid-way — a disconnected volume, a dying
+    # disk — are the same ones that can break the unlink. Letting that
+    # propagate would swap the formatted error for a traceback and leave the
+    # partial file unnamed.
+    inbox = tmp_path / "inbox"
+    source = write(tmp_path / "desk" / "lesson.pdf", PDF)
+    real_write = Path.write_bytes
+
+    def fail_write(self: Path, data: bytes) -> int:
+        real_write(self, data[: len(data) // 2])
+        raise OSError(5, "Input/output error")
+
+    def fail_unlink(self: Path, missing_ok: bool = False) -> None:
+        raise OSError(19, "No such device")
+
+    monkeypatch.setattr(Path, "write_bytes", fail_write)
+    monkeypatch.setattr(Path, "unlink", fail_unlink)
+
+    with pytest.raises(InputError) as excinfo:
+        prepare_inputs([source], inbox)
+
+    monkeypatch.undo()
+    message = str(excinfo.value)
+    assert "Input/output error" in message
+    # The survivor is named, since nothing prunes the inbox.
+    assert "partial file may remain" in message
+    assert str(inbox / "lesson.pdf") in message

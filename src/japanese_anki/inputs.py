@@ -203,9 +203,24 @@ def _copy_into_inbox(source: Path, scan_inbox: Path, data: bytes) -> Path:
     except OSError as exc:
         # A partial write must not survive under the authentic name — it would
         # pose as the real file forever while the genuine bytes hid behind a
-        # fingerprint suffix, and nothing prunes the inbox.
-        target.unlink(missing_ok=True)
-        raise InputError(f"Could not copy {source} into {scan_inbox}: {exc}") from exc
+        # fingerprint suffix, and nothing prunes the inbox. The cleanup is
+        # best-effort because the failures that break a write mid-way — a
+        # disconnected volume, a dying disk — are exactly the ones that can
+        # break the unlink too, and letting *that* propagate would replace this
+        # error with a traceback the CLI cannot format.
+        removed = True
+        try:
+            target.unlink(missing_ok=True)
+        except OSError:
+            removed = False
+        leftover = (
+            ""
+            if removed
+            else f" A partial file may remain at {target} — remove it before retrying."
+        )
+        raise InputError(
+            f"Could not copy {source} into {scan_inbox}: {exc}.{leftover}"
+        ) from exc
     return target
 
 
