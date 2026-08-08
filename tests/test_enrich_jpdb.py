@@ -548,12 +548,14 @@ def test_enrich_without_a_source_says_so_rather_than_guessing() -> None:
     assert cli.main(["enrich"]) == 1
 
 
-def test_enrich_ai_names_the_milestone_it_arrives_in(
+def test_enrich_takes_one_source_at_a_time(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    assert cli.main(["enrich", "--ai"]) == 1
+    # Each pass shows its own diff; running both at once would merge two
+    # unrelated sets of proposals into one y/n.
+    assert cli.main(["enrich", "--ai", "--jpdb"]) == 1
 
-    assert "M4.2" in capsys.readouterr().err
+    assert "one source at a time" in capsys.readouterr().err
 
 
 def test_enrich_jpdb_writes_the_records_the_diff_and_the_ledger(

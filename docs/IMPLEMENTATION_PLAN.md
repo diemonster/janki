@@ -84,7 +84,11 @@ marked "supersedes design").
 - **Unverified-furigana convention** (writer M4.2, reader M5.3): a
   record-level key `source.raw_fields["furigana_unverified"]` holding a
   comma-joined list of *content fingerprints of the flagged examples'
-  `japanese` text*. No per-example schema field.
+  `japanese` text*. No per-example schema field. A merge keeps the
+  existing record's `source`, so this key is carried across one by
+  `io.CONTENT_ANNOTATIONS` — and only when the merge actually wrote
+  `examples`, since a flag about examples that were not kept is a lie in
+  the other direction.
 - **Field-diff output** (shared helper, first built in M2.6, reused by
   M4.2/M4.3): per record, per field, one indented line of the form
   `<field>: <old> -> <new>` under a `<record id>` header.
@@ -1268,7 +1272,34 @@ Design: DESIGN_V2 "AI integration > Mechanical QC".
   model-supplied romaji is always discarded).
 - Unit tests with canned parse fixtures; no network.
 
-### [~] claimed task/m4.2 2026-08-07 — M4.2 `janki enrich --ai`
+### [x] M4.2 `janki enrich --ai`
+
+*Done 2026-08-07. Contract as written; one deviation and six decisions.
+**Deviation — `conjugation.polite_stem` is new,** outside this task's file list,
+and it had to be: the QC target-word check compares against
+`CONJUGATION_FORMS`, which has no polite form, so every 〜ます sentence was
+rejected — and the style guide asks for beginner examples, which a beginner
+textbook teaches in polite form first. The feature would have discarded almost
+every good sentence. The stem lives in `conjugation.py` because "which kana does
+this ending become" is that module's question wherever it is asked, and it is
+deliberately **not** added to `CONJUGATION_FORMS`: being able to *match* a
+sentence is a different decision from changing every stored record's
+conjugation table. `qc.target_forms` spells out the polite forms rather than
+matching the bare stem, which would let 食べ物 count as an example of 食べる.
+(1) `--jpdb` and `--ai` are mutually exclusive per run — each shows its own
+diff, and merging two unrelated sets of proposals into one y/n is not review.
+(2) `--force-fields` is now pass-aware: naming a `--jpdb` field while running
+`--ai` is a typo worth catching, and the error says which pass owns it.
+(3) An example whose furigana jpdb did not confirm is **kept and flagged**, not
+dropped — the sentence may be right where the segmentation is wrong, and a human
+deciding that beats janki discarding good Japanese. (4) A missing parse flags the
+example the same way a mismatch does, because "nobody checked" is exactly what
+unverified means. (5) The flag appends to any fingerprints already there rather
+than replacing them, since a record can accumulate flagged examples across runs.
+(6) One call per record, so a refusal or a truncation costs that record and not
+the run; a truncated answer is never accepted, on the extractor's reasoning — a
+half-written example is a sentence that stops mid-word, and accepting one puts
+it on a card.*
 
 Depends on: M3.1, M4.1, M2.6, M3.4 (the ≥50-record path needs promote)
 Files: `src/japanese_anki/enrich.py`, `src/japanese_anki/cli.py`,

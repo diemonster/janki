@@ -755,32 +755,54 @@ def _enrich_staging(
 def command_enrich(args: argparse.Namespace) -> int:
     """Fill empty fields on existing records from a dictionary.
 
-    ``--jpdb`` is the only source implemented; ``--ai`` arrives in M4.2. One is
-    required, because "enrich" without saying from what is a command whose
-    behavior would change under the user when the second source lands.
+    Two sources, one per run: ``--jpdb`` fills what a dictionary knows and
+    ``--ai`` writes what it does not. One is required, because "enrich" without
+    saying from what is a command whose meaning depends on which pass is newer.
     """
-    if args.ai:
+    if args.ai and args.jpdb:
         raise JankiError(
-            "enrich --ai is not implemented until M4.2. Use --jpdb for dictionary "
-            "enrichment (furigana, pitch accent, frequency rank, part of speech)."
+            "enrich takes one source at a time: --jpdb fills what a dictionary "
+            "knows, --ai writes what it does not. Run them separately so each "
+            "shows you its own diff."
         )
-    if not args.jpdb:
+    if not (args.ai or args.jpdb):
         raise JankiError(
-            "enrich needs a source: --jpdb fills fields from the jpdb dictionary. "
-            "(--ai arrives in M4.2.)"
+            "enrich needs a source: --jpdb fills fields from the jpdb dictionary, "
+            "--ai writes examples and usage notes."
         )
-    force_fields = enrich.parse_force_fields(args.force_fields)
+    force_fields = enrich.parse_force_fields(args.force_fields, ai=args.ai)
     if args.staging is not None and (force_fields or args.ids):
         raise JankiError(
             "enrich --staging proposes readings for held rows and writes nothing "
             "else, so it takes neither --force-fields nor record ids."
         )
+    if args.staging is not None and args.ai:
+        raise JankiError(
+            "enrich --staging annotates held rows with the reading jpdb proposes; "
+            "--ai writes examples and usage notes into records that already exist. "
+            "Run them separately."
+        )
+    # A flag the running pass never reads is a typo, not a no-op: --model and
+    # --force belong to --ai, and silently running the dictionary pass under
+    # them answers a question the user did not ask.
+    for flag, value in (("--model", args.model), ("--force", args.force)):
+        if value and not args.ai:
+            raise JankiError(
+                f"enrich {flag} applies to the --ai pass only. The --jpdb pass "
+                "reads a dictionary, so it has no model to choose and writes no "
+                "staging file to overwrite."
+            )
 
     config = _load_config(args)
+    # The jpdb client is what --jpdb enriches *from* and what --ai verifies
+    # example furigana *with*, so both paths want one.
     client = jpdb.JpdbClient(jpdb.api_key_from_env())
 
     if args.staging is not None:
         return _enrich_staging(client, args.staging.resolve(), args.yes)
+
+    if args.ai:
+        return _enrich_ai(config, args, force_fields)
 
     output_path = config.normalized_file.resolve()
     records = load_records(output_path) if output_path.exists() else []
@@ -838,6 +860,112 @@ def command_enrich(args: argparse.Namespace) -> int:
             "correct; 'status' will simply not know jpdb is what filled them.",
             file=sys.stderr,
         )
+        return 1
+    return 0
+
+
+def _enrich_ai(
+    config: ProjectConfig, args: argparse.Namespace, force_fields: Sequence[str]
+) -> int:
+    """Write examples and usage notes, by diff for a few records or by staging file.
+
+    Past a certain size a y/n diff stops being review — nobody reads five
+    hundred proposed sentences in a terminal and means it — so a large run
+    writes a staging file and goes through ``janki promote`` instead, which is
+    the same route a photographed handout takes and for the same reason.
+    """
+    output_path = config.normalized_file.resolve()
+    records = load_records(output_path) if output_path.exists() else []
+    if not records:
+        print(f"No records to enrich in {output_path}.")
+        return 0
+
+    model = args.model or config.enrich_model
+    style_guide = claude_client.read_style_guide(config.root)
+    targets = enrich.ai_targets(records, args.ids or None)
+    if not targets:
+        print("Nothing to write: every record already has examples and usage notes.")
+        return 0
+
+    staging = len(targets) >= enrich.STAGING_THRESHOLD
+    staging_target = config.staging_dir / "ai-enrichment.yaml"
+    if staging and staging_target.exists() and not args.force:
+        # Before the pass, not after it: a run this size is one API call per
+        # record, and finding the file at write time throws all of them away.
+        # The same reasoning as `check_rewritable` on the --staging path.
+        raise StagingError(
+            f"{staging_target} already exists and would be overwritten by these "
+            f"{len(targets)} record(s). Promote or move it first, or pass --force."
+        )
+    book = ledger.load(config.ledger_file)
+    result = enrich.enrich_ai(
+        records,
+        model=model,
+        style_guide=style_guide,
+        force_fields=force_fields,
+        ids=args.ids or None,
+        jpdb_client=jpdb.JpdbClient(jpdb.api_key_from_env()),
+    )
+
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    if not result.changes:
+        print(
+            f"Nothing written: looked at {result.looked_up} record(s), and none "
+            "of the answers had anything to fill."
+        )
+        return 0
+
+    if staging:
+        target = staging_target
+        target.parent.mkdir(parents=True, exist_ok=True)
+        written = [result.records[index] for index, record in enumerate(records)
+                   if record.id in result.changes]
+        write_staging(
+            target,
+            written,
+            {
+                "source_file": str(output_path.name),
+                "extracted_at": date.today().isoformat(),
+                "model": model,
+                "review_notes": (
+                    f"{len(result.changes)} record(s) enriched by {model}. These "
+                    "records already exist; promoting merges the new fields into "
+                    "them. Sentences whose furigana jpdb did not confirm are "
+                    f"flagged with '{enrich.UNVERIFIED_KEY}' — check those before "
+                    "audio is generated for them."
+                ),
+            },
+            force=args.force,
+        )
+        print(
+            f"{len(result.changes)} record(s) is too many to review as one diff, "
+            f"so they went to {target}."
+        )
+        print("  Review it, then: janki promote " + str(target))
+        return 0
+
+    for line in enrich.format_field_diff(result.changes):
+        print(line)
+    if not _confirm_enrich(len(result.changes), args.yes):
+        print("Aborted: nothing was written.", file=sys.stderr)
+        return 1
+
+    save_records_json(output_path, result.records)
+    for record_id, changed in result.changes.items():
+        book.record_enriched(record_id, kind="ai", model=model, fields=changed)
+    ledger_error = _save_ledger(book)
+
+    print(f"Enriched {len(result.changes)} record(s) in {output_path}.")
+    if result.unverified:
+        print(
+            f"  {len(result.unverified)} record(s) carry an example whose furigana "
+            "jpdb did not confirm; they are flagged in the record."
+        )
+    if ledger_error is None:
+        print(f"Ledger: recorded an AI pass over {len(result.changes)} record(s).")
+    else:
+        _report_ledger_failure(ledger_error)
         return 1
     return 0
 
@@ -1378,14 +1506,15 @@ def build_parser() -> argparse.ArgumentParser:
     enrich_parser.add_argument(
         "--ai",
         action="store_true",
-        help="Fill fields with the Claude API (not implemented until M4.2).",
+        help="Write examples and usage notes with the Claude API.",
     )
     enrich_parser.add_argument(
         "--force-fields",
         metavar="FIELD[,FIELD]",
         help=(
             "Fields the pass may overwrite. By default it only fills empty ones. "
-            f"Valid: {', '.join(enrich.ENRICHABLE_FIELDS)}."
+            f"With --jpdb: {', '.join(enrich.ENRICHABLE_FIELDS)}. "
+            f"With --ai: {', '.join(enrich.AI_FIELDS)}."
         ),
     )
     enrich_parser.add_argument(
@@ -1395,6 +1524,19 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Annotate a needs-reading staging file with the reading jpdb proposes "
             "for each held row, for a human to confirm."
+        ),
+    )
+    enrich_parser.add_argument(
+        "--model",
+        metavar="ID",
+        help="Override the configured enrich model for this run (--ai only).",
+    )
+    enrich_parser.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "Overwrite the staging file a large --ai run writes. Without it, a "
+            "file already under review is left alone."
         ),
     )
     enrich_parser.add_argument(

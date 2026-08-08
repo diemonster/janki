@@ -7,7 +7,7 @@ import json
 import os
 import stat
 import tempfile
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -144,6 +144,17 @@ MERGEABLE_FIELDS: tuple[str, ...] = tuple(
     name for name in _RECORD_FIELDS if name not in PREFER_INCOMING_PROTECTED
 )
 
+# ``source.raw_fields`` keys that annotate a *content* field rather than the
+# record's origin, mapped to the field they describe. ``source`` otherwise
+# belongs to whoever saw the record first, which is right for provenance and
+# wrong for these: ``furigana_unverified`` says "nobody checked the segmentation
+# of these examples", so if the examples travel and the key does not, the store
+# ends up holding unchecked sentences with nothing saying so — and M5.3 reads
+# exactly that key before it generates audio. Carried only when the merge
+# actually wrote the field, because a flag describing examples that were not
+# kept is a lie in the other direction.
+CONTENT_ANNOTATIONS: dict[str, str] = {"furigana_unverified": "examples"}
+
 _EMPTY_CONTAINERS = (str, bytes, list, tuple, set, frozenset, dict)
 
 
@@ -240,6 +251,30 @@ def parse_prefer_incoming(value: str | None) -> tuple[str, ...]:
         raise DataError(f"--prefer-incoming: {exc}") from exc
 
 
+def _carried_annotations(
+    old: VocabularyRecord, new: VocabularyRecord, filled: Sequence[str]
+) -> dict[str, str]:
+    """The ``CONTENT_ANNOTATIONS`` the incoming record's fields brought with them.
+
+    Values are unioned rather than replaced: both keys in this table hold a
+    comma-joined list of example fingerprints, and a record can collect flagged
+    examples across several passes.
+    """
+    carried: dict[str, str] = {}
+    for key, field_name in CONTENT_ANNOTATIONS.items():
+        if field_name not in filled:
+            continue
+        items = [
+            item
+            for side in (old.source.raw_fields, new.source.raw_fields)
+            for item in side.get(key, "").split(",")
+            if item.strip()
+        ]
+        if items:
+            carried[key] = ",".join(dict.fromkeys(items))
+    return carried
+
+
 def _merge_one(
     old: VocabularyRecord, new: VocabularyRecord, prefer_incoming: frozenset[str]
 ) -> tuple[VocabularyRecord, MergeOutcome]:
@@ -269,6 +304,14 @@ def _merge_one(
         filled.append("tags")
 
     merged = replace(old, **changes) if changes else old
+    annotations = _carried_annotations(old, new, filled)
+    if annotations:
+        merged = replace(
+            merged,
+            source=replace(
+                merged.source, raw_fields={**merged.source.raw_fields, **annotations}
+            ),
+        )
     if conflicts:
         label = "conflicting"
     elif filled:

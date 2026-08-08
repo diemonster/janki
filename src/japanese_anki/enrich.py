@@ -30,16 +30,19 @@ you meant, and ``/parse`` picks for itself unless it is told. So the pass runs
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, is_dataclass, replace
+from dataclasses import fields as dc_fields
 from typing import Any
 
-from japanese_anki import jpdb
+from japanese_anki import claude_client, jpdb, qc
 from japanese_anki.conjugation import conjugate
 from japanese_anki.errors import JankiError
-from japanese_anki.identifiers import contains_kanji
+from japanese_anki.identifiers import contains_kanji, short_fingerprint
 from japanese_anki.io import is_empty
-from japanese_anki.models import VocabularyRecord
+from japanese_anki.ledger import Ledger
+from japanese_anki.models import ExampleSentence, VocabularyRecord
 from japanese_anki.romaji import kana_to_romaji
 from japanese_anki.staging import annotate, annotations
 
@@ -49,7 +52,15 @@ __all__ = [
     "EnrichError",
     "EnrichResult",
     "SuggestionResult",
+    "AI_FIELDS",
+    "STAGING_THRESHOLD",
+    "UNVERIFIED_KEY",
+    "ai_prompt",
+    "ai_schema",
+    "ai_targets",
+    "apply_ai_result",
     "dictionary_readings",
+    "enrich_ai",
     "enrich_records",
     "format_field_diff",
     "needs_reading",
@@ -80,11 +91,24 @@ ENRICHABLE_FIELDS: tuple[str, ...] = (
 )
 
 
-def parse_force_fields(value: str | None) -> tuple[str, ...]:
+#: Fields the AI pass may write. Disjoint from :data:`ENRICHABLE_FIELDS` on
+#: purpose — a dictionary pass and a writing pass fill different holes, and a
+#: record needing one does not need the other.
+AI_FIELDS: tuple[str, ...] = ("examples", "usage_notes")
+
+# The order :func:`format_field_diff` prints known fields in: jpdb's pass, then
+# the AI pass. Anything outside it still prints, after these.
+_DIFF_FIELD_ORDER: tuple[str, ...] = ENRICHABLE_FIELDS + AI_FIELDS
+
+
+def parse_force_fields(value: str | None, *, ai: bool = False) -> tuple[str, ...]:
     """Parse a ``--force-fields FIELD[,FIELD]`` option value.
 
-    Shared with M4.2's AI pass: which fields an enrichment may overwrite is one
-    question, however the values were obtained.
+    Shared between the two passes, because "which fields may this overwrite" is
+    one question however the values were obtained — but the *answer* differs:
+    the jpdb pass writes dictionary facts and the AI pass writes prose, and
+    naming a field the running pass cannot write is a typo worth catching
+    rather than a no-op to shrug at.
     """
     if not value:
         return ()
@@ -102,10 +126,17 @@ def parse_force_fields(value: str | None) -> tuple[str, ...]:
                 "history. A reading janki has wrong is fixed by hand, through "
                 "data/staging review."
             )
-        if name not in ENRICHABLE_FIELDS:
+        allowed = AI_FIELDS if ai else ENRICHABLE_FIELDS
+        if name not in allowed:
+            other = ENRICHABLE_FIELDS if ai else AI_FIELDS
+            hint = (
+                f" ('{name}' is a --{'jpdb' if ai else 'ai'} field.)"
+                if name in other
+                else ""
+            )
             raise EnrichError(
-                f"--force-fields: unknown field '{name}'. "
-                f"Valid fields: {', '.join(ENRICHABLE_FIELDS)}"
+                f"--force-fields: unknown field '{name}' for this pass. "
+                f"Valid fields: {', '.join(allowed)}.{hint}"
             )
     return tuple(dict.fromkeys(names))
 
@@ -470,6 +501,15 @@ def suggest_readings(
     return result
 
 
+def _render_item(item: Any) -> str:
+    """One element of a list field. An :class:`ExampleSentence` renders as its
+    Japanese: a dataclass repr on a diff line is furigana, romaji and audio
+    paths crowding out the one part a reviewer actually judges."""
+    if isinstance(item, ExampleSentence):
+        return item.japanese
+    return str(item)
+
+
 def _render(value: Any) -> str:
     """One field value on a diff line: readable, and never wrapped."""
     if value is None:
@@ -479,13 +519,70 @@ def _render(value: Any) -> str:
     elif isinstance(value, Mapping):
         text = ", ".join(f"{key}={item}" for key, item in value.items())
     elif isinstance(value, Sequence):
-        text = "; ".join(str(item) for item in value)
+        text = "; ".join(_render_item(item) for item in value)
     else:
         text = str(value)
     text = " ".join(text.split())
     if not text:
         return "(empty)"
     return text if len(text) <= 60 else f"{text[:57]}..."
+
+
+def _elements(value: Any) -> list[Any]:
+    """``value`` as a list of elements, or empty for anything without them."""
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return list(value)
+    return []
+
+
+def _hidden_difference(old: Any, new: Any) -> str:
+    """Name what changed where the diff line could not show it.
+
+    ``_render`` is lossy on purpose — one line per field, sixty characters, an
+    :class:`ExampleSentence` shown as its Japanese. Usually that is the readable
+    summary. Sometimes it is a write nobody can see: replacing a curated
+    example's English with a model's leaves the Japanese identical, so that
+    element reads the same on both sides and a y confirms an overwrite that was
+    never displayed. Rather than widening the line for every field, the parts
+    rendering hid say what they hid.
+
+    Elements are paired by **what they render as**, not by position. A model
+    answering with a different number of examples, or the same ones in another
+    order, is the ordinary case — and a positional pairing would let either of
+    those switch the check off exactly when the list is being rewritten
+    wholesale. An element that renders the same on both sides is the same
+    sentence as far as this line is concerned; if the values behind it differ,
+    that is the write nobody can see.
+    """
+    if old == new:
+        return ""
+    names: list[str] = []
+    after = _elements(new)
+    for left in _elements(old):
+        if not is_dataclass(left):
+            continue
+        same_text = [
+            right
+            for right in after
+            if type(right) is type(left) and _render_item(right) == _render_item(left)
+        ]
+        # Gone from the new side, or still there untouched: either way the line
+        # is not hiding anything about it.
+        if not same_text or any(right == left for right in same_text):
+            continue
+        names.extend(
+            item.name
+            for item in dc_fields(left)
+            if getattr(left, item.name) != getattr(same_text[0], item.name)
+        )
+    if names:
+        return f"({', '.join(dict.fromkeys(names))} differ)"
+    if _render(old) == _render(new):
+        # Nothing structured to point at — a truncated string, a list that
+        # changed length inside the sixty characters — but the two sides are
+        # not the same value, and the line says they look it.
+        return "(differs where this line cannot show it)"
+    return ""
 
 
 def format_field_diff(
@@ -496,13 +593,359 @@ def format_field_diff(
     A record ID header, then ``  <field>: <old> -> <new>`` beneath it. Shared
     with M4.2/M4.3 so every command that proposes a write to an existing record
     shows the same thing (IMPLEMENTATION_PLAN, Conventions).
+
+    Known fields print in pass order — jpdb's, then the AI pass's — and anything
+    else prints after them rather than not at all. A diff that quietly omits a
+    changed field is the display version of discarding a row: the user answers
+    y to a write they were never shown.
     """
     lines: list[str] = []
     for record_id in sorted(changes):
         lines.append(record_id)
         fields = changes[record_id]
-        for name in ENRICHABLE_FIELDS:
+        rest = sorted(name for name in fields if name not in _DIFF_FIELD_ORDER)
+        for name in (*_DIFF_FIELD_ORDER, *rest):
             if name in fields:
                 old, new = fields[name]
-                lines.append(f"  {name}: {_render(old)} -> {_render(new)}")
+                line = f"  {name}: {_render(old)} -> {_render(new)}"
+                if hidden := _hidden_difference(old, new):
+                    line = f"{line} {hidden}"
+                lines.append(line)
     return lines
+
+
+# --- the AI pass -------------------------------------------------------------
+#
+# jpdb fills what a dictionary knows. This fills what it does not: an example
+# sentence a beginner can read, and a note about how the word is actually used.
+# Both are written rather than looked up, so everything here is arranged around
+# not believing the result until a machine check or a human says so.
+
+
+#: Where a flagged example is recorded (IMPLEMENTATION_PLAN, Conventions):
+#: a comma-joined list of content fingerprints of the flagged examples'
+#: ``japanese`` text, on the record rather than per example.
+UNVERIFIED_KEY = "furigana_unverified"
+
+#: How many other records' examples ride along as variety pressure. Enough to
+#: show the model what it has already written this run, few enough that the
+#: prompt stays mostly the record in front of it.
+VARIETY_EXAMPLES = 3
+
+#: Past this many target records, a monolithic diff stops being review — so the
+#: results go to a staging file and through `janki promote` instead
+#: (DESIGN_V2: "a 500-record y/n diff is not review; a staging file is").
+STAGING_THRESHOLD = 50
+
+
+@functools.cache
+def ai_schema() -> Any:
+    """The Pydantic model an AI enrichment response must match.
+
+    Built on demand and cached, for the same reasons :func:`extract` builds its
+    own that way: ``pydantic`` arrives with the ``ai`` extra, and a fresh class
+    per call would present an identical schema to the API as new every request.
+    """
+    from pydantic import BaseModel, Field
+
+    class GeneratedExample(BaseModel):
+        japanese: str = Field(description="The sentence, in Japanese.")
+        furigana: str = Field(
+            default="",
+            description=(
+                "The same sentence in Anki furigana notation — 話[はな]す — with "
+                "a space before every bracketed group that follows kana."
+            ),
+        )
+        romaji: str = Field(
+            default="", description="Ignored; janki regenerates this from the furigana."
+        )
+        english: str = Field(default="", description="A natural English translation.")
+
+    class Enrichment(BaseModel):
+        examples: list[GeneratedExample] = Field(default_factory=list)
+        usage_notes: str = Field(
+            default="",
+            description=(
+                "How the word is actually used: register, common collocations, "
+                "what a learner is likely to get wrong. Empty if there is "
+                "nothing worth saying."
+            ),
+        )
+
+    return Enrichment
+
+
+def ai_targets(
+    records: Sequence[VocabularyRecord], ids: Sequence[str] | None = None
+) -> list[VocabularyRecord]:
+    """The records an AI pass would work on.
+
+    Content-defined by default, via the ledger's own rule: a record with no
+    example sentence or no usage notes needs this pass, whatever any previous
+    pass recorded about it. Naming ids explicitly overrides that — re-running
+    over a record that already has an example is a legitimate thing to ask for,
+    and `--force-fields` is what decides whether the answer may replace it.
+    """
+    if ids is not None:
+        wanted = list(dict.fromkeys(ids))
+        by_id = {record.id: record for record in records}
+        if missing := [item for item in wanted if item not in by_id]:
+            raise EnrichError(
+                f"No record with id {', '.join(repr(item) for item in missing)} in the "
+                "normalized file."
+            )
+        return [by_id[item] for item in wanted]
+    needed = set(Ledger.missing_enrichment(records))
+    return [record for record in records if record.id in needed]
+
+
+def ai_prompt(record: VocabularyRecord, recent: Sequence[str] = ()) -> str:
+    """The user turn for one record: what janki knows, and what it has seen.
+
+    The dictionary facts go in so the model writes about *this* word rather
+    than a homograph — 一日 with its reading attached is a different request
+    from 一日 alone. The recent examples go in as variety pressure: asked for
+    an example of twenty verbs in a row, a model will write twenty variations
+    of 毎日〜ます unless it can see that it already did.
+    """
+    lines = [f"Word: {record.expression}"]
+    if record.reading:
+        lines.append(f"Reading: {record.reading}")
+    if record.meanings:
+        lines.append("Meanings: " + "; ".join(record.meanings))
+    for label, value in (
+        ("Part of speech", record.part_of_speech),
+        ("Verb group", record.verb_group),
+        ("Transitivity", record.transitivity),
+    ):
+        if value:
+            lines.append(f"{label}: {value}")
+    if recent:
+        lines.append(
+            "\nSentences already written in this run — write something "
+            "structurally different:\n" + "\n".join(f"- {item}" for item in recent)
+        )
+    return "\n".join(lines)
+
+
+AI_INSTRUCTIONS = """\
+Write one example sentence for the word, and a usage note if there is something
+worth saying.
+
+The sentence must contain the word itself, conjugated if that reads more
+naturally, and must be simple enough for a beginner working through Genki-style
+grammar. Give its furigana in Anki notation, with a space before every bracketed
+group that follows kana. Do not fill in romaji — janki generates that from the
+furigana and discards whatever you send.
+
+Say nothing you are not sure of. An empty usage note is a fine answer; an
+invented nuance is not."""
+
+
+@dataclass(slots=True)
+class AiOutcome:
+    """What the AI pass decided for one record."""
+
+    record: VocabularyRecord
+    changes: dict[str, tuple[Any, Any]] = field(default_factory=dict)
+    rejected: list[str] = field(default_factory=list)
+    unverified: list[str] = field(default_factory=list)
+
+
+def apply_ai_result(
+    record: VocabularyRecord,
+    parsed: Any,
+    *,
+    force_fields: Sequence[str] = (),
+    parses: Mapping[str, Any] | None = None,
+) -> AiOutcome:
+    """Put a model's answer through the mechanical checks, then the fill rules.
+
+    Three checks, in the order that matters (M4.1):
+
+    * an example that does not contain the word is **rejected** — it may be a
+      fine sentence, but it is not an example of this word;
+    * an example whose furigana disagrees with jpdb's parse is **kept and
+      flagged**, because the sentence may be right where the segmentation is
+      not, and a human deciding that is better than janki throwing away good
+      Japanese — but only if the examples land at all: when the fill rules keep
+      the record's existing examples, ``unverified`` comes back empty, because
+      there is no stored example for the flag to be about;
+    * romaji is regenerated from the furigana, always, whatever arrived.
+
+    ``parses`` maps a sentence to its jpdb ``ParseResult``. An absent one is
+    not a pass: it means nobody checked, and the example is flagged the same
+    way a mismatch is, because "unverified" is exactly what it is.
+    """
+    outcome = AiOutcome(record=record)
+    kept: list[ExampleSentence] = []
+
+    for item in getattr(parsed, "examples", []) or []:
+        example = ExampleSentence(
+            japanese=str(getattr(item, "japanese", "") or "").strip(),
+            furigana=str(getattr(item, "furigana", "") or "").strip(),
+            english=str(getattr(item, "english", "") or "").strip(),
+        )
+        if not example.japanese:
+            continue
+        if not qc.example_contains_target(example, record.expression, record.verb_group):
+            outcome.rejected.append(example.japanese)
+            continue
+        parse = (parses or {}).get(example.japanese)
+        if parse is None or not qc.verify_example_furigana(example, parse):
+            outcome.unverified.append(example.japanese)
+        kept.append(qc.regenerate_example_romaji(example))
+
+    unverified = list(outcome.unverified)
+    proposals: dict[str, Any] = {
+        "examples": kept,
+        "usage_notes": str(getattr(parsed, "usage_notes", "") or "").strip(),
+    }
+    writable = [
+        name
+        for name in AI_FIELDS
+        if name in force_fields or is_empty(getattr(record, name))
+    ]
+    updated, changes = _apply(record, proposals, writable)
+    if "examples" in changes:
+        if unverified:
+            updated = _flag_unverified(updated, unverified)
+    else:
+        # The examples were not written — the field was not writable, or the
+        # answer matched what is already there. Nothing was flagged, so nothing
+        # may be reported as flagged: a reviewer told to check a key would find
+        # no key. The rejections still stand; those were the model's sentences
+        # either way.
+        outcome.unverified = []
+    outcome.record = updated
+    outcome.changes = changes
+    return outcome
+
+
+def _flag_unverified(record: VocabularyRecord, sentences: Sequence[str]) -> VocabularyRecord:
+    """Record which examples nobody verified, by content fingerprint.
+
+    A fingerprint of the sentence rather than its index, because an index stops
+    meaning anything the moment a human deletes an example — and this key is
+    read much later, by M5.3, deciding whether to speak a sentence whose
+    segmentation may be wrong.
+    """
+    fingerprints = [short_fingerprint(sentence) for sentence in sentences]
+    raw_fields = dict(record.source.raw_fields)
+    existing = [
+        item for item in raw_fields.get(UNVERIFIED_KEY, "").split(",") if item.strip()
+    ]
+    raw_fields[UNVERIFIED_KEY] = ",".join(dict.fromkeys(existing + fingerprints))
+    return replace(record, source=replace(record.source, raw_fields=raw_fields))
+
+
+@dataclass(slots=True)
+class AiResult:
+    """What an AI pass would write, and everything it refused along the way."""
+
+    records: list[VocabularyRecord] = field(default_factory=list)
+    changes: dict[str, dict[str, tuple[Any, Any]]] = field(default_factory=dict)
+    rejected: dict[str, list[str]] = field(default_factory=dict)
+    unverified: dict[str, list[str]] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
+    looked_up: int = 0
+
+    @property
+    def changed_fields(self) -> list[str]:
+        return sorted({name for fields in self.changes.values() for name in fields})
+
+
+def _verify_parses(
+    jpdb_client: jpdb.JpdbClient | None, sentences: Sequence[str]
+) -> dict[str, Any]:
+    """jpdb's parse of each sentence, for the furigana check.
+
+    A client that is not there yields nothing, and nothing means unverified
+    rather than fine — see :func:`apply_ai_result`. A parse that fails for one
+    sentence does the same rather than taking the whole record down: the
+    example is still usable, it is just not vouched for.
+    """
+    parses: dict[str, Any] = {}
+    if jpdb_client is None:
+        return parses
+    for sentence in sentences:
+        try:
+            parses[sentence] = jpdb_client.parse(sentence)
+        except JankiError:
+            continue
+    return parses
+
+
+def enrich_ai(
+    records: Sequence[VocabularyRecord],
+    *,
+    model: str,
+    style_guide: str,
+    force_fields: Sequence[str] = (),
+    ids: Sequence[str] | None = None,
+    client: Any | None = None,
+    jpdb_client: jpdb.JpdbClient | None = None,
+) -> AiResult:
+    """Write examples and usage notes for the records that lack them.
+
+    One call per record, so a refusal or a truncation costs that record and not
+    the run. Both are refused rather than salvaged, on the same reasoning the
+    extractor uses: a half-written example is not a shorter example, it is a
+    sentence that stops mid-word, and accepting one would put it on a card.
+    """
+    result = AiResult(records=list(records))
+    positions = {record.id: index for index, record in enumerate(result.records)}
+    targets = ai_targets(result.records, ids)
+    blocks = claude_client.system_blocks(style_guide, AI_INSTRUCTIONS)
+    recent: list[str] = []
+
+    for record in targets:
+        result.looked_up += 1
+        parsed, stop_reason, refusal = claude_client.parse_call(
+            model, blocks, ai_prompt(record, recent[-VARIETY_EXAMPLES:]), ai_schema(), client
+        )
+        if stop_reason == "refusal":
+            detail = f" ({refusal.category})" if refusal is not None else ""
+            result.warnings.append(
+                f"{record.id}: {model} declined to write about "
+                f"{record.expression}{detail}; nothing written."
+            )
+            continue
+        if parsed is None:
+            result.warnings.append(
+                f"{record.id}: {model} returned nothing usable for "
+                f"{record.expression} (stop reason: {stop_reason}); nothing written."
+            )
+            continue
+
+        sentences = [
+            text
+            for item in getattr(parsed, "examples", []) or []
+            if (text := str(getattr(item, "japanese", "") or "").strip())
+        ]
+        outcome = apply_ai_result(
+            record,
+            parsed,
+            force_fields=force_fields,
+            parses=_verify_parses(jpdb_client, sentences),
+        )
+        if outcome.rejected:
+            result.rejected[record.id] = outcome.rejected
+            result.warnings.append(
+                f"{record.id}: {len(outcome.rejected)} example(s) did not contain "
+                f"{record.expression} and were rejected."
+            )
+        if outcome.unverified:
+            result.unverified[record.id] = outcome.unverified
+            result.warnings.append(
+                f"{record.id}: {len(outcome.unverified)} example(s) have furigana "
+                "jpdb did not confirm; kept and flagged for review."
+            )
+        if outcome.changes:
+            result.records[positions[record.id]] = outcome.record
+            result.changes[record.id] = outcome.changes
+            recent.extend(
+                example.japanese for example in outcome.record.examples if example.japanese
+            )
+    return result
