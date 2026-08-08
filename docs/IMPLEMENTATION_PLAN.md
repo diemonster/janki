@@ -988,7 +988,34 @@ Files: new `src/japanese_anki/claude_client.py`, `pyproject.toml`,
   `ttl: "1h"` for batch use).
 - Tests: missing-dependency error path; fake client wiring.
 
-### [~] claimed task/m3.2 2026-08-07 — M3.2 Input plumbing (formats, HEIC, inbox copy)
+### [x] M3.2 Input plumbing (formats, HEIC, inbox copy)
+
+*Done 2026-08-07. Contract as written; seven decisions. (1) For a HEIC,
+`origin_path` is the **original**, not the JPEG that was actually sent: the
+camera's file is the evidence and the JPEG is a rendering of it. The conversion
+goes to a temporary directory and is thrown away, so `data/inbox/` keeps what
+the camera produced rather than a derived file sitting beside it looking like a
+second source. (2) "Already under `data/inbox/`" is implemented as "already
+under `scan_inbox`", because the signature supplies only `scan_inbox` — and
+that is the test that makes a re-run idempotent. A photo dropped directly in
+`data/inbox/` is therefore copied into `scans/`, which is a copy and not a
+modification, so AGENTS.md's never-modify-the-inbox rule still holds. (3) A name
+already taken by *different* content earns a fingerprint suffix rather than an
+overwrite: every phone writes `IMG_0001`, and overwriting one with the other
+destroys the evidence behind every record extracted from it. Identical bytes
+reuse the existing copy. (4) Duplicates in one call are kept. Passing the same
+photo twice costs tokens, but dropping the second is the silent discard this
+project refuses everywhere else. (5) An unreadable path or unsupported suffix
+stops the whole batch — extracting a subset would leave the user to notice it
+came up short. (6) `content_block()` lives on `PreparedInput`, slightly beyond
+the tuple the contract names: `claude_client` is the single owner of *the
+client*, and giving it a media vocabulary would make two places to change when
+a format is added. (7) `InputError` exists (the contract says "raise
+`JankiError`", which it is) because M3.3 has to tell an unreadable input from a
+refused extraction, and because every other module with its own failure domain
+— staging, csv_base, the jpdb importers — carries one. Note this differs from
+M3.1, whose contract named `JankiError` directly and which has one failure
+domain; the divergence is deliberate rather than drift.*
 
 Depends on: M1.6
 Files: new `src/japanese_anki/inputs.py`, `tests/test_inputs.py` (new).
