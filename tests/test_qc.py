@@ -252,8 +252,7 @@ def test_romaji_is_rebuilt_from_the_furigana() -> None:
         example(furigana="毎日[まいにち] 日本語[にほんご]を 話[はな]します。")
     )
 
-    # Spaced, as romaji.py says it preserves and as the curated records are.
-    assert rebuilt.romaji == "mainichi nihongoo hanashimasu."
+    assert rebuilt.romaji == "mainichinihongoohanashimasu."
 
 
 def test_model_supplied_romaji_is_discarded_not_checked() -> None:
@@ -385,3 +384,54 @@ def test_a_decomposed_dakuten_still_matches_its_composed_form() -> None:
     assert example_contains_target(
         ExampleSentence(japanese=f"昨日{decomposed}。"), "食べる", "ichidan"
     )
+
+
+def test_per_kanji_furigana_keeps_its_sokuon() -> None:
+    # The field's spaces are required notation, not word boundaries: jpdb
+    # segments 日本語 per kanji, so treating them as boundaries splits one word
+    # into three and deletes the っ, which has nothing to geminate at the end of
+    # a run.
+    rebuilt = regenerate_example_romaji(
+        ExampleSentence(
+            japanese="日本語を話す。",
+            furigana="日[にっ] 本[ぽん] 語[ご]を 話[はな]す。",
+        )
+    )
+
+    assert rebuilt.romaji == "nippongoohanasu."
+
+
+def test_a_decomposed_sentence_does_not_reject_correct_furigana() -> None:
+    # Both sides render identically, so this failure would also have been
+    # undiagnosable from the message.
+    parse = parse_of([["食", "た"], "べた"])
+    decomposed = ExampleSentence(
+        japanese=unicodedata.normalize("NFD", "食べた。"), furigana="食[た]べた。"
+    )
+
+    assert verify_example_furigana(decomposed, parse).verified
+
+
+def test_a_decomposed_headword_with_no_verb_class_still_matches() -> None:
+    # conjugate normalizes internally, so the derived forms were already fine —
+    # but a word with no verb class contributes only the headword, which is
+    # most vocabulary.
+    assert example_contains_target(
+        ExampleSentence(japanese="かばんを買う。"), unicodedata.normalize("NFD", "かばん")
+    )
+
+
+def test_a_token_that_resolves_to_nothing_is_marked_not_dropped() -> None:
+    parse = jpdb.ParseResult(
+        tokens=[
+            {"vocabulary_index": 0, "furigana": [["話", "はな"], "す"]},
+            {"vocabulary_index": None, "furigana": None},
+        ],
+        vocabulary=[{"spelling": "話す"}],
+    )
+
+    verdict = verify_example_furigana(
+        ExampleSentence(japanese="話す", furigana="話[か]す"), parse
+    )
+
+    assert "〈?〉" in verdict.expected

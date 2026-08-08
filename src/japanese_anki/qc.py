@@ -69,7 +69,11 @@ def target_forms(expression: str, verb_group: str = "") -> tuple[str, ...]:
     Longest first, so a caller reporting *which* form matched names 話さなかった
     rather than the 話 inside it.
     """
-    expression = expression.strip()
+    # Normalized like the sentence it will be searched in. `conjugate`
+    # normalizes internally, so the derived forms were already composed — but a
+    # word with no verb class contributes only this one, which is most
+    # vocabulary, and a decomposed headword would match nothing.
+    expression = normalize_identity_part(expression)
     if not expression:
         return ()
     forms = {expression}
@@ -161,7 +165,10 @@ def token_text(parse: jpdb.ParseResult, token: dict) -> str:
     jpdb sends ``furigana: null`` for an all-kana token — を, と, たべる in the
     committed capture are all null — so a rendering built from furigana alone
     silently drops whole words. The text comes off the dictionary entry the
-    token resolves to instead.
+    token resolves to instead, which is the entry's *dictionary* form: a
+    conjugated kana token shows as たべる where the sentence said たべた. That
+    is accurate about what jpdb matched, and this text is only ever shown to a
+    human beside the sentence itself.
     """
     segments = _segments(token.get("furigana"))
     if segments:
@@ -236,8 +243,14 @@ def verify_example_furigana(
     # `本[ほん]が 読[よ]む` verifies against the sentence 本を読む — the model
     # rewrote a particle inside the furigana field, and the field that drives
     # sentence audio passes the check built to catch model invention.
-    base = furigana_base(example.furigana)
-    sentence = example.japanese.replace(" ", "").replace("\u3000", "")
+    # Normalized on both sides, like the containment check: the furigana janki
+    # renders is composed while an example's text is only stripped, so a
+    # decomposed dakuten would reject correct furigana — with a message showing
+    # two strings that render identically, which is undiagnosable.
+    base = normalize_identity_part(furigana_base(example.furigana))
+    sentence = normalize_identity_part(
+        example.japanese.replace(" ", "").replace("\u3000", "")
+    )
     if base and sentence and base != sentence:
         differences.append(
             f"the furigana spells {base}, but the sentence is {sentence}"
@@ -277,9 +290,10 @@ def _render(parse: jpdb.ParseResult) -> str:
         if found:
             segments.extend(found)
             continue
-        text = token_text(parse, token)
-        if text:
-            segments.append(text)
+        # A token that resolves to nothing still gets a mark: dropping it is
+        # the "the dictionary lost half the sentence" impression this rendering
+        # exists to prevent, arriving silently.
+        segments.append(token_text(parse, token) or "〈?〉")
     return jpdb.furigana_to_anki(segments)
 
 
@@ -296,31 +310,25 @@ def regenerate_example_romaji(example: ExampleSentence) -> ExampleSentence:
     when it holds no kanji and refuses to guess when it does: transliterating
     kanji is exactly the invention this function exists to remove.
 
-    **The furigana's spaces are kept as word boundaries.** :mod:`romaji` says so
-    explicitly — it preserves whitespace precisely so a caller that knows its
-    boundaries can convert segment by segment — and the curated romaji already
-    in this repository is spaced (``Mainichi, tsuma to Nihongo de
-    hanashimasu.``). Flattening to one run would produce
-    ``mainichitsumato…``, which is harder to read in the one field that exists
-    for someone who cannot yet read the kana.
+    **The result is unspaced, and that is deliberate.** :mod:`romaji` preserves
+    whitespace so a caller that knows its word boundaries can convert segment
+    by segment — but this field's spaces are not word boundaries. Anki's
+    notation requires one before *every* mid-string ruby group, and jpdb
+    segments per kanji, so the verified furigana for 日本語 is
+    ``日[にっ] 本[ぽん] 語[ご]`` and treating those spaces as boundaries yields
+    ``ni pon goo`` — one word split into three, with the っ deleted because a
+    sokuon at the end of a run has nothing to geminate. Required-notation
+    spaces and word spaces are indistinguishable in the field, so the only
+    honest reading is the one with none.
 
-    It inherits :mod:`romaji`'s documented limit: は and へ romanize as ``ha``
-    and ``he`` even where they are particles, because telling a particle from a
-    syllable needs segmentation that module deliberately does not have.
+    Real word boundaries need the parse's tokens, which this function is not
+    given; a caller that has one (M4.2) can do better, and :mod:`romaji` is
+    built to accept it. Two limits are inherited rather than introduced: no
+    spacing, and は/へ romanized as ``ha``/``he`` even as particles, because
+    telling a particle from a syllable needs segmentation that module
+    deliberately does not have.
     """
     reading = (
-        _spaced_reading(example.furigana) if example.furigana else example.japanese
+        furigana_reading(example.furigana) if example.furigana else example.japanese
     )
     return replace(example, romaji=kana_to_romaji(reading) if reading else "")
-
-
-def _spaced_reading(furigana: str) -> str:
-    """The kana a furigana field spells, keeping its spaces as boundaries."""
-    out: list[str] = []
-    position = 0
-    for match in _GROUP.finditer(furigana):
-        out.append(furigana[position : match.start()])
-        out.append(match.group(2))
-        position = match.end()
-    out.append(furigana[position:])
-    return "".join(out)
