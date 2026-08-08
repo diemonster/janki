@@ -294,6 +294,28 @@ def _report_ledger_failure(exc: ledger.LedgerError) -> None:
     )
 
 
+def _report_enrichment_ledger_failure(exc: ledger.LedgerError, aftermath: str) -> None:
+    """The honest report for an ``enriched`` entry that did not get written.
+
+    Deliberately not :func:`_report_ledger_failure`: its advice is
+    ``status --rebuild``, which reconstructs source references and audio from
+    what the records and media files *prove*. An ``enriched`` entry is provable
+    by nothing — a filled field does not say who filled it — so that advice
+    would promise a recovery that silently never happens, and report success
+    while doing it. Nor does re-running recover it: the work is on file now, so
+    the next pass finds nothing to change and never reaches the ledger. Say
+    that, rather than send someone after a fix that does not exist.
+    """
+    print(f"warning: {exc}", file=sys.stderr)
+    print(
+        "The records are written; the ledger entry recording it is not, and "
+        "nothing can reconstruct it — neither 'status --rebuild' (an enrichment "
+        "pass is not provable from the records) nor a re-run (the work is done "
+        f"now, so the next pass finds nothing to do). {aftermath}",
+        file=sys.stderr,
+    )
+
+
 def _prune_discarded(
     config: ProjectConfig,
     book: ledger.Ledger,
@@ -869,22 +891,10 @@ def command_enrich(args: argparse.Namespace) -> int:
     if ledger_error is None:
         print(f"Ledger: recorded a jpdb pass over {len(result.changes)} record(s).")
     else:
-        # Deliberately not `_report_ledger_failure`: its advice is
-        # `status --rebuild`, which reconstructs source references and audio
-        # from what the records prove. An `enriched` entry is provable by
-        # nothing — filled fields do not say who filled them — so that advice
-        # would promise a recovery that silently never happens. Nor does
-        # re-running recover it: the fields are full now, so the next pass
-        # skips these records before it reaches the ledger. Say that, rather
-        # than send someone after a fix that does not exist.
-        print(f"warning: {ledger_error}", file=sys.stderr)
-        print(
-            "The records are enriched; the ledger entry recording it is not, and "
-            "nothing can reconstruct it — neither 'status --rebuild' (an "
-            "enrichment pass is not provable from the records) nor a re-run (the "
-            "fields are filled now, so the next pass skips them). The records are "
-            "correct; 'status' will simply not know jpdb is what filled them.",
-            file=sys.stderr,
+        _report_enrichment_ledger_failure(
+            ledger_error,
+            "The records are correct; 'status' will simply not know jpdb is "
+            "what filled them.",
         )
         return 1
     return 0
@@ -991,7 +1001,11 @@ def _enrich_ai(
     if ledger_error is None:
         print(f"Ledger: recorded an AI pass over {len(result.changes)} record(s).")
     else:
-        _report_ledger_failure(ledger_error)
+        _report_enrichment_ledger_failure(
+            ledger_error,
+            f"The examples and notes are correct; 'status' will simply not know "
+            f"{model} wrote them.",
+        )
         return 1
     return 0
 
@@ -1048,26 +1062,36 @@ def _polish_meanings(config: ProjectConfig, args: argparse.Namespace) -> int:
     unchanged = 0
     stopped = False
 
-    for outcome in enrich.polish_meanings(
-        records, model=model, style_guide=style_guide, ids=args.ids or None
-    ):
-        if outcome.warning:
-            print(f"warning: {outcome.warning}", file=sys.stderr)
-            continue
-        if outcome.proposed is None:
-            unchanged += 1
-            continue
-        for line in enrich.format_field_diff({outcome.record.id: dict(outcome.changes)}):
-            print(line)
-        answer = _confirm_polish(args.yes)
-        if answer == "quit":
-            stopped = True
-            break
-        if answer == "no":
-            declined += 1
-            continue
-        updated[positions[outcome.record.id]] = outcome.proposed
-        accepted[outcome.record.id] = dict(outcome.changes)
+    # The prompt is not the only place a run gets interrupted, and it is not the
+    # likely one: the call is the slow step, so a Ctrl-C most often lands there.
+    # Both have to end the same way, or "what you accepted is written" is true
+    # only when the timing is lucky.
+    try:
+        for outcome in enrich.polish_meanings(
+            records, model=model, style_guide=style_guide, ids=args.ids or None
+        ):
+            if outcome.warning:
+                print(f"warning: {outcome.warning}", file=sys.stderr)
+                continue
+            if outcome.proposed is None:
+                unchanged += 1
+                continue
+            for line in enrich.format_field_diff(
+                {outcome.record.id: dict(outcome.changes)}
+            ):
+                print(line)
+            answer = _confirm_polish(args.yes)
+            if answer == "quit":
+                stopped = True
+                break
+            if answer == "no":
+                declined += 1
+                continue
+            updated[positions[outcome.record.id]] = outcome.proposed
+            accepted[outcome.record.id] = dict(outcome.changes)
+    except KeyboardInterrupt:
+        print()
+        stopped = True
 
     if stopped:
         print("Stopped; the records after this one were not looked at.")
@@ -1088,7 +1112,11 @@ def _polish_meanings(config: ProjectConfig, args: argparse.Namespace) -> int:
 
     print(f"Rewrote the meanings of {len(accepted)} record(s) in {output_path}.")
     if ledger_error is not None:
-        _report_ledger_failure(ledger_error)
+        _report_enrichment_ledger_failure(
+            ledger_error,
+            f"The new glosses are on file; 'status' will simply not know "
+            f"{model} wrote them in place of what was there.",
+        )
         return 1
     print(f"Ledger: recorded a polish pass over {len(accepted)} record(s).")
     return 0
@@ -1661,7 +1689,10 @@ def build_parser() -> argparse.ArgumentParser:
     enrich_parser.add_argument(
         "--model",
         metavar="ID",
-        help="Override the configured enrich model for this run (--ai only).",
+        help=(
+            "Override the configured model for this run "
+            "(--ai and --polish-meanings)."
+        ),
     )
     enrich_parser.add_argument(
         "--force",

@@ -456,3 +456,62 @@ def test_force_is_still_refused_because_it_writes_no_staging_file(
 
     assert code == 1
     assert "--force" in capsys.readouterr().err
+
+
+# --- what the review found ---------------------------------------------------
+
+
+def test_ctrl_c_during_a_call_still_writes_what_was_already_accepted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The call is the slow step, so it is where a Ctrl-C most often lands.
+    Interrupting there must end the same way interrupting at the prompt does."""
+    root = project(
+        tmp_path,
+        [record(), record(id="word:話す:はなす", expression="話す", meanings=["to talk"])],
+    )
+
+    class Interrupts(FakeCall):
+        def __call__(self, *args: Any, **kw: Any) -> CallResult:
+            if self.calls:
+                raise KeyboardInterrupt
+            return super().__call__(*args, **kw)
+
+    patch_all(monkeypatch, Interrupts(ok("to ask")))
+    answers(monkeypatch, "y")
+
+    assert cli.main(["--root", str(root), "enrich", "--polish-meanings"]) == 0
+
+    assert stored(root)["word:聞く:きく"]["meanings"] == ["to ask"]
+    assert "Stopped" in capsys.readouterr().out
+
+
+def test_a_failed_ledger_write_does_not_promise_a_recovery_that_never_happens(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """'status --rebuild' reconstructs what the records prove, and a filled
+    field does not say who filled it. Sending someone after that fix would
+    report success while the entry stayed gone."""
+    root = project(tmp_path, [record()])
+    patch_all(monkeypatch, FakeCall(ok("to ask")))
+    monkeypatch.setattr(
+        cli.ledger.Ledger,
+        "save",
+        lambda self: (_ for _ in ()).throw(cli.ledger.LedgerError("disk full")),
+    )
+
+    assert cli.main(["--root", str(root), "enrich", "--polish-meanings", "--yes"]) == 1
+
+    err = capsys.readouterr().err
+    assert "nothing can reconstruct it" in err
+    assert "to recover the entries" not in err
+    # The records themselves are still written; only the note about them is not.
+    assert stored(root)["word:聞く:きく"]["meanings"] == ["to ask"]
+
+
+def test_the_model_flag_says_which_passes_honor_it() -> None:
+    parser = cli.build_parser()
+    enrich_parser = parser._subparsers._group_actions[0].choices["enrich"]  # noqa: SLF001
+    (action,) = [item for item in enrich_parser._actions if item.dest == "model"]  # noqa: SLF001
+
+    assert "--polish-meanings" in action.help
