@@ -1342,7 +1342,9 @@ def _batch_fetch(
     for warning in result.warnings:
         print(f"warning: {warning}", file=sys.stderr)
     for record_id, reason in outcome.failed.items():
-        print(f"warning: {record_id}: {reason}; left untouched.", file=sys.stderr)
+        # The reason carries its own ending: whether the record is still there
+        # to leave untouched is something only the apply pass knows.
+        print(f"warning: {record_id}: {reason}.", file=sys.stderr)
     if outcome.settled:
         print(
             f"{len(outcome.settled)} record(s) were settled by an earlier fetch "

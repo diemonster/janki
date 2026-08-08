@@ -1424,8 +1424,13 @@ def test_a_terminal_row_keeps_its_reason_even_when_its_record_is_gone() -> None:
         [present], entries, ["word:話す:はなす", "word:見る:みる"], model="m"
     )
 
-    assert "Overloaded" in outcome.failed["word:話す:はなす"]
+    reason = outcome.failed["word:話す:はなす"]
+    assert "Overloaded" in reason
+    # Not in `missing` — there is no answer for a later fetch to get, so it must
+    # not hold the batch — but the collection having moved under it is reported
+    # by nothing else, so the reason says both.
     assert "word:話す:はなす" not in outcome.missing
+    assert "no longer in the collection" in reason
     # Unreadable and deleted: moot, and it must not hold the batch.
     assert outcome.missing == ["word:見る:みる"]
     assert not outcome.invalid
@@ -1471,3 +1476,14 @@ def test_a_sub_threshold_retry_does_not_refuse_over_a_staging_file(
 
     assert stored(root)[records[-1].id]["examples"]
     assert book_of(root)["pending_batches"] == {}
+
+
+def test_a_terminal_row_for_a_record_still_present_says_left_untouched() -> None:
+    here = record(id="word:話す:はなす")
+    entries = [claude_client.BatchEntry(key(here.id), "errored", "Overloaded", None)]
+
+    outcome = enrich.apply_batch_results([here], entries, [here.id], model="m")
+
+    reason = outcome.failed[here.id]
+    assert reason.endswith("left untouched")
+    assert "no longer in the collection" not in reason

@@ -1320,9 +1320,19 @@ def apply_batch_results(
             if entry.outcome != "invalid":
                 # Terminal, and the API's reason is the only signal that the API
                 # rather than curation is why this word went unenriched. Worth
-                # printing whether or not the record is still here.
+                # printing whether or not the record is still here — and if it
+                # is not, that is worth printing too. The two facts are not in
+                # conflict, so the row carries both rather than choosing: it
+                # stays out of ``missing`` (nothing there for a later fetch to
+                # get) while still saying the collection moved under it, which
+                # is otherwise reported by nothing at all.
                 detail = f": {entry.detail}" if entry.detail else ""
-                outcome.failed[record_id] = f"{entry.outcome}{detail}"
+                where = (
+                    "; left untouched"
+                    if record_id in positions
+                    else "; and the record is no longer in the collection"
+                )
+                outcome.failed[record_id] = f"{entry.outcome}{detail}{where}"
             elif record_id in positions:
                 outcome.invalid[record_id] = entry.detail or "the answer did not parse"
             else:
