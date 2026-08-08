@@ -1820,8 +1820,34 @@ def command_promote(args: argparse.Namespace) -> int:
     client = None
     if not args.skip_reading_check:
         client = jpdb.JpdbClient(jpdb.api_key_from_env())
+    # Read before the ids are decided, not after: a staged id the collection
+    # already holds must keep it, or the re-mint adds a second record beside
+    # the curated one and leaves the original untouched.
+    #
+    # "The collection" here means what it means everywhere else in janki — the
+    # normalized file *plus every deck's inline notes* (`status.surviving_ids`).
+    # A record living only in a deck YAML has the same stale-id problem and the
+    # same exported GUID, and a narrower set would re-mint it just as happily.
+    # A deck that will not resolve leaves ids unknown, so nothing can be proved
+    # absent. Rows whose id would change are then held back rather than
+    # promoted: writing the id they arrived with would put it in the store
+    # permanently, since a stored id is exempt from the re-mint that repairs it.
+    # Held rows stay in data/staging/, which is committed.
+    output_path = config.normalized_file.resolve()
+    existing = load_records(output_path) if output_path.exists() else []
+    stored_ids, unreadable = status.surviving_ids(config, existing)
+    for problem in unreadable:
+        print(
+            f"warning: {problem}; ids in that deck cannot be checked, so any "
+            "row needing a new id stays in the staging file until it parses.",
+            file=sys.stderr,
+        )
     result = promote.check_readings(
-        records, client=client, skip_reading_check=args.skip_reading_check
+        records,
+        client=client,
+        skip_reading_check=args.skip_reading_check,
+        already_stored=stored_ids,
+        remint_blocked=bool(unreadable),
     )
 
     for warning in result.warnings:
@@ -1838,8 +1864,7 @@ def command_promote(args: argparse.Namespace) -> int:
         )
         return 0
 
-    output_path = config.normalized_file.resolve()
-    existing = load_records(output_path) if output_path.exists() else []
+    # `existing` and `output_path` were read above, before any id was decided.
     # Read the ledger before anything is written, and only once.
     book = ledger.load(config.ledger_file)
 
@@ -2046,6 +2071,12 @@ def command_migrate_inline(args: argparse.Namespace) -> int:
         f"Migrated {len(result.migrated)} inline note(s) from {args.deck} into "
         f"{result.normalized_file}"
     )
+    # Defensive rather than reachable: migrate-inline prefers the inline note
+    # for every non-empty mergeable field, so the only conflict left is an
+    # identity one — and `_check_merged_faithfully` refuses those before this
+    # line, because two copies that disagree about what a record *is* cannot be
+    # merged by a rule. Should that ever change, this command still has no
+    # --prefer-incoming to offer.
     _print_merge_summary(result.outcomes, prefer_incoming_available=False)
     for line in migrate.format_details(result, config.root):
         print(line)

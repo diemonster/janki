@@ -28,7 +28,7 @@ no history to orphan.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Container, Iterable, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -36,26 +36,30 @@ from japanese_anki import enrich, jpdb
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import contains_kanji, stable_record_id
 from japanese_anki.models import VocabularyRecord
-from japanese_anki.staging import annotate
+from japanese_anki.staging import (
+    HOLD_MISSING_READING,
+    HOLD_READING_KANJI,
+    HOLD_UNKNOWN_READING,
+    HOLD_UNVERIFIABLE_ID,
+    annotate,
+)
 
 __all__ = [
     "HOLD_MISSING_READING",
     "HOLD_READING_KANJI",
     "HOLD_UNKNOWN_READING",
+    "HOLD_UNVERIFIABLE_ID",
     "PromoteError",
     "PromoteResult",
     "check_readings",
     "remint",
 ]
 
-#: The two M1.5 hold classes, spelled exactly as the importers write them so a
-#: row held there and a row held here are the same kind of thing.
-HOLD_MISSING_READING = "missing reading"
-HOLD_READING_KANJI = "reading contains kanji"
-
-#: This module's own hold class: the reading is usable kana, but no dictionary
-#: entry for the spelling lists it.
-HOLD_UNKNOWN_READING = "reading not in the dictionary"
+# The hold vocabulary lives in `staging`, which owns the annotation key these
+# are written under and is the one module both this and `enrich` can import —
+# `enrich.needs_reading` has to tell a reading hold from an id hold, and this
+# module already imports `enrich`. Re-exported here, because this is where they
+# are written and where readers have always looked for them.
 
 
 class PromoteError(JankiError):
@@ -78,14 +82,30 @@ class PromoteResult:
     reminted: dict[str, str] = field(default_factory=dict)
 
 
-def remint(record: VocabularyRecord) -> VocabularyRecord:
+def remint(
+    record: VocabularyRecord, already_stored: Container[str] = frozenset()
+) -> VocabularyRecord:
     """The record under the id its expression and reading actually mint.
 
     Keyed off the id rather than the shape of the reading, because by promote
     time a reviewer has replaced a kanji reading with kana — so
     ``contains_kanji(reading)`` is ``False`` in exactly the case the re-mint
     exists for, and only the id still remembers.
+
+    ``already_stored`` is the precondition this function has always claimed and
+    never checked: it re-mints because *these records have never been in
+    ``vocabulary.json`` or Anki*, so there is no review history to orphan. A
+    staged row whose id **is** already in the collection breaks that
+    precondition, and re-minting it there does real damage — the merge sees an
+    id it has never met, adds a second record, and the curated original keeps
+    its Anki history and never receives the change. That state is reachable:
+    an id minted from a wrong reading stays put when the reading is corrected,
+    because the id is uncorrectable by design, and M4.2's staging route then
+    sends such a record back through promote. So an id the collection already
+    holds is left exactly as it is.
     """
+    if record.id in already_stored:
+        return record
     minted = stable_record_id(record.expression, record.reading)
     return record if record.id == minted else replace(record, id=minted)
 
@@ -99,6 +119,8 @@ def check_readings(
     *,
     client: jpdb.JpdbClient | None = None,
     skip_reading_check: bool = False,
+    already_stored: Container[str] = frozenset(),
+    remint_blocked: bool = False,
 ) -> PromoteResult:
     """Decide, per record, whether it may become a real record.
 
@@ -112,6 +134,16 @@ def check_readings(
     ``skip_reading_check`` drops the third check only. The reading still has to
     *be* kana — that rule is about whether an id can exist at all, not about
     whether a dictionary agrees, and no flag turns it off.
+
+    ``already_stored`` is the ids the collection already holds; see
+    :func:`remint` for why a re-mint must not touch one of them.
+    ``remint_blocked`` says that set could not be completed — an unreadable deck
+    — in which case a row whose id would change is **held back** rather than
+    promoted. Promoting it under the id it arrived with is not the cautious
+    option: that id lands in the store permanently, since ``remint`` is the only
+    thing that repairs a stored id and a stored id is exempt from it. Holding
+    keeps the row in ``data/staging/``, which is committed, and re-running once
+    the deck parses does the right thing.
     """
     result = PromoteResult()
     for record in records:
@@ -135,7 +167,22 @@ def check_readings(
                 result.keep.append(True)
                 continue
 
-        promoted = remint(_resolved(record))
+        resolved = _resolved(record)
+        # `remint_blocked` means the set is *incomplete*, not wrong: an id in it
+        # was positively proved present, and `remint` would leave that row alone
+        # whatever the unreadable deck turns out to hold. Holding it would block
+        # a run for a row nothing was ever uncertain about, under a reason that
+        # is false for it.
+        if (
+            remint_blocked
+            and record.id not in already_stored
+            and record.id != stable_record_id(resolved.expression, resolved.reading)
+        ):
+            result.held.append(_hold(record, HOLD_UNVERIFIABLE_ID))
+            result.keep.append(True)
+            continue
+
+        promoted = remint(resolved, already_stored)
         if promoted.id != record.id:
             result.reminted[record.id] = promoted.id
         result.promoted.append(promoted)

@@ -42,6 +42,34 @@ class StagingError(JankiError):
 # Review annotations, stored stringified in ``source.raw_fields``.
 ANNOTATION_KEYS: tuple[str, ...] = ("hold_reason", "already_known", "suggested_reading")
 
+# The values ``hold_reason`` takes. They live here rather than in the module
+# that writes them because a second module has to *read* them: janki's reading
+# assistant offers a reading for a held row, and one of these holds is not about
+# the reading at all. Whoever tests the value needs the vocabulary, and only one
+# module can own it without a cycle.
+HOLD_MISSING_READING = "missing reading"
+HOLD_READING_KANJI = "reading contains kanji"
+HOLD_UNKNOWN_READING = "reading not in the dictionary"
+
+#: A row whose id would change, on a run that cannot see the whole collection.
+#: The odd one out: the reading is fine and it is the *id* that could not be
+#: checked. Promoting it under the id it arrived with would write an id nothing
+#: can repair — ``promote.remint`` is the only thing that fixes a stored id, and
+#: a stored id is exempt from it — so the row waits in ``data/staging/``, which
+#: is committed, until a run can prove the id is free.
+HOLD_UNVERIFIABLE_ID = "cannot check this id against the whole collection"
+
+#: The holds that are *not* about the reading — a deny-list, not an allow-list,
+#: and the direction matters. A staging file is hand-edited: a reviewer may type
+#: ``hold_reason: check the okurigana`` into one, and the importers write their
+#: reasons as bare literals that could drift from the constants above. Under an
+#: allow-list every one of those would silently mean "not a reading hold", and
+#: janki's reading assistant would report a file with held rows as having none —
+#: while ``status --staged``, which reads the raw value, still lists them. So an
+#: unrecognised reason means what a reason has always meant, and only the one
+#: hold that is genuinely about something else is named here.
+NON_READING_HOLDS: frozenset[str] = frozenset({HOLD_UNVERIFIABLE_ID})
+
 # Metadata keys that sit beside ``records:``; the record loader ignores them.
 # Enforced by :func:`write_staging` as a warning, not a refusal: `read_staging`
 # hands back every non-``records`` key it finds, so a note a reviewer added by

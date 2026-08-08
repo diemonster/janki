@@ -697,18 +697,37 @@ moved into `vocabulary.json` by hand, and running it when nothing is missing is
 a no-op: every writer records a source reference in the same shape `--rebuild`
 reconstructs, so it never grows the file.
 
-Parts of the ledger are still unwritten while the rest of the pipeline is
-built. Nothing writes `enriched` at all, and the only writer of `audio` is
-`--rebuild` over files you placed under `data/media` yourself (`janki enrich`
-and `janki audio` arrive in Milestones 2, 4 and 5). `janki build` does not yet
-mark records exported either, so `--unexported` currently lists everything.
+Two parts of the ledger are still unwritten while the rest of the pipeline is
+built. The only writer of `audio` is `--rebuild`, over files you placed under
+`data/media` yourself, until `janki audio` arrives in Milestone 5. And `janki
+build` does not yet mark records exported, so `--unexported` currently lists
+everything.
+
+`enriched` *is* written, by the passes that write records directly:
+`janki enrich --jpdb`, `--ai` and `--polish-meanings` each leave their own
+entry, and they accumulate rather than replace, because a dictionary pass and a
+writing pass describe different work.
+
+With one gap worth knowing: a large `--ai` run — fifty records or more, or a
+`--batch-fetch` of that size — writes proposals to `data/staging/` instead, and
+`janki promote` then usually adds nothing to the ledger at all: every row merges
+into a record that already exists, so there is no addition to record, and the
+sighting it would write is the one that record's import already wrote, so the
+ledger drops it as a duplicate — `registered 0 new record(s) and 0 new source
+sighting(s)`. The exception is a record the ledger has never heard of, typed
+into `vocabulary.json` by hand without a `status --rebuild`; that one does gain
+an entry and a sighting here. So the model that wrote them survives in the staging file's
+`model:` metadata and not in the ledger. If you care which model wrote a batch
+of examples, keep the promoted staging file (`janki promote` archives it under
+`data/staging/done/`).
 
 ## Inline deck notes
 
 A deck YAML may carry `notes:` of its own. That was how the starter deck began,
-and it is a dead end: enrichment and audio only ever write to
-`data/normalized/vocabulary.json`, so a record living inside a deck file can
-never gain examples, pitch accent or audio.
+and it is a dead end: enrichment reads records from `data/normalized/`, and
+writes them back there or to `data/staging/` for review — never to a deck file.
+So a record living inside a deck YAML can never gain examples, usage notes,
+pitch accent or audio.
 
 `janki migrate-inline DECK.yaml` moves those notes into the normalized file
 under the same IDs — GUIDs, and the review history behind them, are preserved —
@@ -842,8 +861,8 @@ requests include:
 - The Shirabe deep link currently uses `shirabelookup://search?w=...`. That URL
   scheme is unverified against a real installed app — test it on your iPhone
   before relying on it.
-- Records now carry pitch accent and a frequency rank, but nothing fills them
-  in yet — `janki enrich --jpdb` does that later in Milestone 2, from jpdb's
-  dictionary data. Generated audio arrives in Milestone 5. Neither is ever
-  guessed: an empty field means the dictionary did not say, and `janki status`
-  counts it as missing rather than inventing a value. See `docs/DESIGN_V2.md`.
+- Pitch accent and frequency rank are filled by `janki enrich --jpdb` from
+  jpdb's dictionary data. Generated audio arrives in Milestone 5. Neither is
+  ever guessed: an empty field means the dictionary did not say, and `janki
+  status` counts it as missing rather than inventing a value. See
+  `docs/DESIGN_V2.md`.
