@@ -308,11 +308,13 @@ def _report_enrichment_ledger_failure(
 
     What a *re-run* does differs by pass, which is why the caller supplies that
     sentence rather than this function guessing at one. There is no useful
-    two-way split to generalise: ``--jpdb`` finds nothing left to fill on a
-    record it filled, so it skips it before the look-up and never reaches the
-    ledger; ``--ai`` leaves records with examples and no usage note, which are
-    targets again, so it does; ``--polish-meanings`` looks at every record every
-    time. Whichever it is, saying it accurately is the whole point of this
+    two-way split to generalise: ``--jpdb`` never reaches the ledger, by either
+    of two routes — a record it filled completely is skipped before the look-up,
+    and one it could only fill partly (every noun, which has no verb group and
+    no conjugations) is looked up again and proposes nothing the record does not
+    already have; ``--ai`` leaves records with examples and no usage note, and
+    those are targets again, so it does; ``--polish-meanings`` looks at every
+    record every time. Whichever it is, saying it accurately is the whole point of this
     message — nobody should chase a repair on a wrong description of it.
     """
     print(f"warning: {exc}", file=sys.stderr)
