@@ -1101,7 +1101,12 @@ Files are processed one at a time and written as they succeed, so a later
 failure keeps the earlier files — the work already paid for is kept and the
 error names what is left. (6) `candidate_schema()` is cached: a fresh class per
 call would make an instance built by one call fail validation in another, and
-would present an identical schema to the API as new on every request.*
+would present an identical schema to the API as new on every request. (7) The
+staging file is named for the whole source **name**, suffix included
+(`worksheet.pdf.yaml`) — which is what DESIGN_V2 said, and what stops a scan and
+a photo of one page from colliding. Every target is resolved before the first
+API call, so a batch that would write two inputs to one file is refused rather
+than paid for and then half-discarded. Both from review.*
 
 Depends on: M3.1, M3.2, M1.5
 Files: new `src/japanese_anki/extract.py`, `src/japanese_anki/cli.py`,

@@ -206,7 +206,7 @@ def test_a_truncated_answer_is_never_accepted(
     message = str(excinfo.value)
     assert "cut off" in message
     # Actionable, not just a complaint.
-    assert "fewer pages" in message
+    assert "split a long document" in message
 
 
 def test_any_other_incomplete_stop_is_also_refused(
@@ -338,8 +338,8 @@ def test_extract_writes_one_staging_file_per_input(
     code = cli.main(["--root", str(root), "extract", str(one), str(two)])
 
     assert code == 0
-    assert (root / "staging" / "lesson.yaml").is_file()
-    assert (root / "staging" / "lesson2.yaml").is_file()
+    assert (root / "staging" / "lesson.pdf.yaml").is_file()
+    assert (root / "staging" / "lesson2.pdf.yaml").is_file()
     assert "Wrote 2 staging file(s)" in capsys.readouterr().out
 
 
@@ -351,14 +351,16 @@ def test_the_staging_file_is_the_pinned_shape(
 
     cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path))])
 
-    written = yaml.safe_load((root / "staging" / "lesson.yaml").read_text(encoding="utf-8"))
+    written = yaml.safe_load((root / "staging" / "lesson.pdf.yaml").read_text(encoding="utf-8"))
     assert written["model"] == "claude-opus-5"
     assert "extracted_at" in written and "source_file" in written
     # Reads back through the staging loader, which is what `janki validate`
     # and the promote step will use.
-    records, meta = read_staging(root / "staging" / "lesson.yaml")
+    records, meta = read_staging(root / "staging" / "lesson.pdf.yaml")
     assert [record.expression for record in records] == ["話す"]
-    assert meta["source_file"].endswith("lesson.pdf")
+    # The basename, not an absolute path: this file is committed, and an
+    # absolute path is stale on any other clone.
+    assert meta["source_file"] == "lesson.pdf"
 
 
 def test_the_input_is_copied_into_the_inbox_and_cited(
@@ -371,7 +373,7 @@ def test_the_input_is_copied_into_the_inbox_and_cited(
     cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path))])
 
     assert (root / "inbox" / "lesson.pdf").read_bytes() == PDF
-    records, _ = read_staging(root / "staging" / "lesson.yaml")
+    records, _ = read_staging(root / "staging" / "lesson.pdf.yaml")
     assert records[0].source.raw_fields["extracted_from"] == "lesson.pdf"
 
 
@@ -381,7 +383,7 @@ def test_an_existing_staging_file_is_not_overwritten_without_force(
     # Staging files hold review edits that exist nowhere else.
     root = project(tmp_path)
     (root / "staging").mkdir()
-    (root / "staging" / "lesson.yaml").write_text(
+    (root / "staging" / "lesson.pdf.yaml").write_text(
         "records: []\nreview_notes: mid-review\n", encoding="utf-8"
     )
     monkeypatch.setattr(cli.extract.claude_client, "parse_call", FakeCall(ok(candidate())))
@@ -389,14 +391,14 @@ def test_an_existing_staging_file_is_not_overwritten_without_force(
     code = cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path))])
 
     assert code == 1
-    assert "mid-review" in (root / "staging" / "lesson.yaml").read_text(encoding="utf-8")
+    assert "mid-review" in (root / "staging" / "lesson.pdf.yaml").read_text(encoding="utf-8")
     assert "already exists" in capsys.readouterr().err
 
 
 def test_force_overwrites_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     root = project(tmp_path)
     (root / "staging").mkdir()
-    (root / "staging" / "lesson.yaml").write_text("records: []\n", encoding="utf-8")
+    (root / "staging" / "lesson.pdf.yaml").write_text("records: []\n", encoding="utf-8")
     monkeypatch.setattr(cli.extract.claude_client, "parse_call", FakeCall(ok(candidate())))
 
     code = cli.main(
@@ -404,7 +406,7 @@ def test_force_overwrites_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     )
 
     assert code == 0
-    records, _ = read_staging(root / "staging" / "lesson.yaml")
+    records, _ = read_staging(root / "staging" / "lesson.pdf.yaml")
     assert [record.expression for record in records] == ["話す"]
 
 
@@ -473,7 +475,7 @@ def test_an_already_known_candidate_is_annotated_end_to_end(
 
     cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path))])
 
-    records, _ = read_staging(root / "staging" / "lesson.yaml")
+    records, _ = read_staging(root / "staging" / "lesson.pdf.yaml")
     assert records[0].source.raw_fields["already_known"] == "true"
     assert "1 already known" in capsys.readouterr().out
 
@@ -491,7 +493,7 @@ def test_a_refusal_writes_no_staging_file_at_all(
     code = cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path))])
 
     assert code == 1
-    assert not (root / "staging" / "lesson.yaml").exists()
+    assert not (root / "staging" / "lesson.pdf.yaml").exists()
     assert "bio" in capsys.readouterr().err
 
 
@@ -510,8 +512,8 @@ def test_a_later_failure_keeps_the_earlier_files(
     code = cli.main(["--root", str(root), "extract", str(one), str(two)])
 
     assert code == 1
-    assert (root / "staging" / "lesson.yaml").is_file()
-    assert not (root / "staging" / "lesson2.yaml").exists()
+    assert (root / "staging" / "lesson.pdf.yaml").is_file()
+    assert not (root / "staging" / "lesson2.pdf.yaml").exists()
 
 
 def test_nothing_reaches_the_normalized_records(
@@ -526,3 +528,60 @@ def test_nothing_reaches_the_normalized_records(
     cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path))])
 
     assert (root / "vocabulary.json").read_text(encoding="utf-8") == before
+
+
+# --- one file per input, or none ---------------------------------------------
+
+
+def test_the_same_file_twice_is_refused_rather_than_written_twice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # prepare_inputs keeps duplicates rather than discarding them silently;
+    # naming the problem is how that stays true.
+    root = project(tmp_path)
+    source = source_pdf(tmp_path)
+    call = FakeCall(ok(candidate()), ok(candidate()))
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
+
+    code = cli.main(["--root", str(root), "extract", str(source), str(source)])
+
+    assert code == 1
+    assert call.calls == []
+
+
+def test_a_scan_and_a_photo_of_the_same_page_keep_separate_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # worksheet.pdf and worksheet.png are a natural pairing and two different
+    # sources. Keyed on the stem, the second silently overwrote the first under
+    # --force and failed with a wrong diagnosis without it.
+    root = project(tmp_path)
+    scan = source_pdf(tmp_path, "worksheet.pdf")
+    photo = tmp_path / "desk" / "worksheet.png"
+    photo.write_bytes(b"\x89PNG\r\n\x1a\n fake")
+    monkeypatch.setattr(
+        cli.extract.claude_client, "parse_call", FakeCall(ok(candidate()), ok(candidate()))
+    )
+
+    assert cli.main(["--root", str(root), "extract", str(scan), str(photo)]) == 0
+
+    assert (root / "staging" / "worksheet.pdf.yaml").is_file()
+    assert (root / "staging" / "worksheet.png.yaml").is_file()
+
+
+def test_a_candidate_with_no_expression_is_counted_not_hidden(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # It cannot become a record — there is nothing to mint an id from — but a
+    # reviewer checking the file against the page must be able to tell a lost
+    # row from a page that had one fewer word.
+    root = project(tmp_path)
+    monkeypatch.setattr(
+        cli.extract.claude_client,
+        "parse_call",
+        FakeCall(ok(candidate(), candidate(expression="  "))),
+    )
+
+    cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path))])
+
+    assert "1 unusable" in capsys.readouterr().out

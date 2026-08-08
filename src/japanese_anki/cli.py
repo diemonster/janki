@@ -865,8 +865,12 @@ def command_extract(args: argparse.Namespace) -> int:
         else ()
     )
 
+    # Every target resolved before the first API call: a batch that would write
+    # two inputs to one file is refused now rather than after paying for both.
+    targets = extract.staging_targets(config.staging_dir, prepared)
+
     written = 0
-    for item in prepared:
+    for item, target in zip(prepared, targets, strict=True):
         candidates = extract.extract_candidates(
             item,
             model=model,
@@ -875,13 +879,15 @@ def command_extract(args: argparse.Namespace) -> int:
             known=skip_list,
         )
         records = extract.build_records(candidates, item, known)
-        target = extract.staging_path(config.staging_dir, item.origin_path.name)
         target.parent.mkdir(parents=True, exist_ok=True)
         write_staging(
             target,
             records,
             {
-                "source_file": str(item.origin_path),
+                # The basename, like every other writer of this key. An
+                # absolute path is stale on any other clone, and this file is
+                # committed.
+                "source_file": item.origin_path.name,
                 "extracted_at": date.today().isoformat(),
                 "model": model,
             },
@@ -891,9 +897,14 @@ def command_extract(args: argparse.Namespace) -> int:
         already = sum(
             1 for record in records if "already_known" in record.source.raw_fields
         )
+        # A candidate with no expression cannot become a record — there is
+        # nothing to mint an id from — but it is still something the model
+        # proposed, so the count is reported rather than left invisible.
+        unusable = len(candidates) - len(records)
+        note = f", {unusable} unusable" if unusable else ""
         print(
             f"{item.origin_path.name}: {len(records)} candidate(s) "
-            f"({already} already known) -> {target}"
+            f"({already} already known{note}) -> {target}"
         )
 
     if not written:

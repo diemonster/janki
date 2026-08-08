@@ -40,6 +40,8 @@ __all__ = [
     "candidate_schema",
     "extract_candidates",
     "prompt_for",
+    "staging_path",
+    "staging_targets",
     "system_prompt",
 ]
 
@@ -213,8 +215,8 @@ def extract_candidates(
         raise ExtractError(
             f"{model} ran out of room part-way through {prepared.origin_path.name}, "
             "so the answer is cut off and janki will not write a half-read file. "
-            "Extract fewer pages at a time — split the document and re-run — or "
-            "raise the token budget."
+            "Give it less to read at once: split a long document and run the parts "
+            "separately, or crop a dense photo to the section you want."
         )
     if parsed is None:
         raise ExtractError(
@@ -314,5 +316,41 @@ def known_ids(records: Iterable[VocabularyRecord]) -> set[str]:
 
 
 def staging_path(staging_dir: Path, source_name: str) -> Path:
-    """Where one file's candidates land: ``<staging_dir>/<source stem>.yaml``."""
-    return Path(staging_dir) / f"{Path(source_name).stem}.yaml"
+    """Where one file's candidates land: ``<staging_dir>/<source name>.yaml``.
+
+    The whole name, suffix included (``worksheet.pdf.yaml``), not the stem.
+    ``worksheet.pdf`` and ``worksheet.jpg`` — a scan and a photo of the same
+    page, a natural pairing — are two different sources with two different sets
+    of candidates, and keying on the stem would have the second silently
+    overwrite the first. DESIGN_V2 says ``<source-name>.yaml``; this is that.
+    """
+    return Path(staging_dir) / f"{Path(source_name).name}.yaml"
+
+
+def staging_targets(
+    staging_dir: Path, prepared: Sequence[PreparedInput]
+) -> list[Path]:
+    """Every input's staging file, refusing a batch where two would collide.
+
+    Checked up front, before a single API call, because the alternatives are
+    both bad: with ``--force`` the second write silently destroys the first
+    file's candidates, and without it the second fails with a diagnosis about
+    "review edits you have not committed" that is wrong — the file it is
+    refusing to touch was written seconds ago by this same run — after the
+    extraction has already been paid for.
+
+    The same file listed twice lands here too. :func:`inputs.prepare_inputs`
+    keeps duplicates rather than discarding them silently; naming the problem
+    is how that stays true without one input overwriting the other.
+    """
+    targets = [staging_path(staging_dir, item.origin_path.name) for item in prepared]
+    seen: dict[Path, str] = {}
+    for target, item in zip(targets, prepared, strict=True):
+        if target in seen:
+            raise ExtractError(
+                f"{seen[target]} and {item.origin_path.name} would both be written "
+                f"to {target}. Extract them separately, or rename one — janki will "
+                "not overwrite one file's candidates with another's."
+            )
+        seen[target] = item.origin_path.name
+    return targets
