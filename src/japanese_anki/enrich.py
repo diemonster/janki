@@ -45,9 +45,11 @@ from japanese_anki.staging import annotate, annotations
 
 __all__ = [
     "ENRICHABLE_FIELDS",
+    "DictionaryReadings",
     "EnrichError",
     "EnrichResult",
     "SuggestionResult",
+    "dictionary_readings",
     "enrich_records",
     "format_field_diff",
     "needs_reading",
@@ -206,6 +208,45 @@ def _readings_for(client: jpdb.JpdbClient, entry: Mapping[str, Any]) -> set[str]
             if reading := str(row.get("reading") or "").strip():
                 readings.add(reading)
     return readings
+
+
+@dataclass(frozen=True, slots=True)
+class DictionaryReadings:
+    """What jpdb says a spelling can be read as.
+
+    ``primary`` is the reading of the entry ``/parse`` resolved to — the one
+    jpdb reaches for unprompted. ``all_readings`` includes it plus every other
+    sense's, which is how a valid-but-not-primary reading is told apart from
+    one the dictionary has never heard of.
+    """
+
+    primary: str
+    all_readings: frozenset[str]
+
+
+def dictionary_readings(
+    client: jpdb.JpdbClient, expression: str
+) -> DictionaryReadings | None:
+    """Every reading jpdb lists for ``expression``, or ``None`` if it cannot say.
+
+    Shared with M3.4's promote-time reading check rather than reimplemented
+    there: walking ``alt_sids`` to find a homograph's other reading is exactly
+    the kind of thing that goes subtly wrong in a second copy, and both callers
+    are asking the same question.
+
+    ``None`` means jpdb did not resolve the spelling to a single entry — not
+    that the reading is wrong. A caller has to tell those apart, because
+    "the dictionary disagrees" and "the dictionary has no opinion" deserve
+    different answers.
+    """
+    found = _parse(client, expression)
+    if found is None:
+        return None
+    entry = found[1]
+    return DictionaryReadings(
+        primary=str(entry.get("reading") or "").strip(),
+        all_readings=frozenset(_readings_for(client, entry)),
+    )
 
 
 def _proposals(

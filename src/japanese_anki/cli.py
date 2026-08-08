@@ -8,7 +8,16 @@ from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 
-from japanese_anki import claude_client, enrich, extract, jpdb, ledger, migrate, status
+from japanese_anki import (
+    claude_client,
+    enrich,
+    extract,
+    jpdb,
+    ledger,
+    migrate,
+    promote,
+    status,
+)
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import AnkiBuildError, build_deck, resolve_deck_records
@@ -29,9 +38,12 @@ from japanese_anki.io import (
 )
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.preview import build_preview
+from japanese_anki.promote import PromoteError
 from japanese_anki.staging import (
+    STAGING_SUFFIXES,
     StagingError,
     check_rewritable,
+    prune_staging,
     read_staging,
     rewrite_staging,
     write_staging,
@@ -914,6 +926,150 @@ def command_extract(args: argparse.Namespace) -> int:
     return 0
 
 
+def _inside_archive(path: Path, archive_dir: Path) -> bool:
+    """Is ``path`` the promoted archive, or inside it?
+
+    Identity where the filesystem can answer it, because a lexical comparison
+    is wrong on a case-insensitive filesystem: ``staging/Done/lesson.yaml``
+    opens the real archive while comparing unequal to ``staging/done/...``, and
+    promoting it doubles a committed file that is the only copy of a finished
+    review. The lexical test stays as the fallback for a path that does not
+    exist yet.
+    """
+    try:
+        if archive_dir.exists() and path.parent.samefile(archive_dir):
+            return True
+    except OSError:
+        pass
+    return path.is_relative_to(archive_dir)
+
+
+def command_promote(args: argparse.Namespace) -> int:
+    """Move a reviewed staging file's records into the normalized collection.
+
+    Ordering is load-bearing in the same way ``run_import``'s is, for the same
+    reason: everything that can refuse — an unreadable ledger, a staging file
+    that cannot be pruned — happens before ``vocabulary.json`` is rewritten, and
+    the records are written before the ledger, because the ledger is metadata
+    ``status --rebuild`` can reconstruct and the records are not.
+
+    The staging file is only ever pruned of rows that actually landed, so a
+    promote that fails part-way leaves the review intact and re-running it is
+    safe.
+    """
+    config = _load_config(args)
+    path = args.file.resolve()
+    done = (config.staging_dir / "done" / path.name).resolve()
+    if _inside_archive(path, done.parent):
+        raise PromoteError(
+            f"{path} is inside the promoted archive. Those records are already in "
+            "the collection; promoting the archive would only duplicate it."
+        )
+
+    records, meta = read_staging(path)
+    if not records:
+        print(f"{path} holds no records; nothing to promote.")
+        return 0
+
+    # Everything that can refuse, before anything is written. read_staging goes
+    # through PyYAML, which accepts a duplicate key silently; the rewrite goes
+    # through ruamel, which does not. Finding that out *after* the records and
+    # the archive were written leaves the promoted rows still in the staging
+    # file, and the re-run then appends them to the archive a second time.
+    check_rewritable(path)
+    # The archive is written under the same name, and write_staging refuses a
+    # suffix read_staging could not parse back. read_staging accepts .json and
+    # JSON is valid YAML, so a hand-made .json staging file gets all the way to
+    # the archive write before failing — after the records and the ledger have
+    # landed, leaving a review that can never be finished however often it is
+    # retried.
+    if path.suffix.lower() not in STAGING_SUFFIXES:
+        raise PromoteError(
+            f"{path} is not a staging file janki can rewrite: the promoted archive "
+            f"is written under the same name, and that needs "
+            f"{' or '.join(STAGING_SUFFIXES)}. Rename it and re-run."
+        )
+    archived: list[VocabularyRecord] = []
+    if done.exists():
+        previous, _previous_meta = read_staging(done)
+        archived = list(previous)
+
+    client = None
+    if not args.skip_reading_check:
+        client = jpdb.JpdbClient(jpdb.api_key_from_env())
+    result = promote.check_readings(
+        records, client=client, skip_reading_check=args.skip_reading_check
+    )
+
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+
+    if not result.promoted:
+        # The reasons still go in: a row held for a reading no dictionary lists
+        # is something only promote can determine, and `status --staged` reads
+        # it off the file rather than from this run's scrollback.
+        rewrite_staging(path, result.held)
+        print(
+            f"Nothing promoted: all {len(result.held)} row(s) are still held back, "
+            f"and {path} now records why."
+        )
+        return 0
+
+    output_path = config.normalized_file.resolve()
+    existing = load_records(output_path) if output_path.exists() else []
+    # Read the ledger before anything is written, and only once.
+    book = ledger.load(config.ledger_file)
+
+    merged, outcomes = merge_records(existing, result.promoted, ())
+    save_records_json(output_path, merged)
+
+    added = sum(
+        book.record_added(record_id)
+        for record_id, outcome in outcomes.items()
+        if outcome.label == "added"
+    )
+    seen = sum(
+        book.record_source_seen(record_id, source_type, source_ref)
+        for record_id, source_type, source_ref in promote.source_references(
+            result.promoted
+        )
+    )
+    ledger_error = _save_ledger(book)
+
+    # The archive is appended to, not replaced: promoting a file in two passes
+    # must not lose the first pass's rows.
+    done.parent.mkdir(parents=True, exist_ok=True)
+    archived = archived + list(result.promoted)
+    write_staging(done, archived, promote.archive_meta(meta, len(archived)), force=True)
+
+    removed = prune_staging(path, result.keep)
+    if result.held:
+        # Rewritten in place with the reason each surviving row is still held,
+        # so a partly-promoted file always says what still needs attention.
+        rewrite_staging(path, result.held)
+    if not result.held:
+        # An emptied review is finished work; leaving it would have the next
+        # import report a file that can never be resolved.
+        path.unlink()
+
+    print(f"Promoted {len(result.promoted)} record(s) from {path} into {output_path}")
+    _print_merge_summary(outcomes)
+    if result.reminted:
+        print("Re-minted malformed IDs (these records were never in Anki):")
+        for old, new in sorted(result.reminted.items()):
+            print(f"  {old} -> {new}")
+    if result.held:
+        print(f"  {len(result.held)} row(s) still held back; {path} keeps them.")
+    else:
+        print(f"  {path} is finished and was deleted ({removed} row(s) promoted).")
+    print(f"  Archived to {done}")
+    print(_ledger_line(added, seen, written=ledger_error is None))
+    if ledger_error is not None:
+        _report_ledger_failure(ledger_error)
+        return 1
+    return 0
+
+
 def _validate_path(path: Path) -> tuple[list, int]:
     raw = load_structured(path)
     if isinstance(raw, dict) and "deck" in raw:
@@ -1278,6 +1434,23 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     extract_parser.set_defaults(handler=command_extract)
+
+    promote_parser = subparsers.add_parser(
+        "promote",
+        help="Move a reviewed staging file's records into the collection",
+    )
+    promote_parser.add_argument(
+        "file", type=_path, metavar="FILE", help="The staging file to promote."
+    )
+    promote_parser.add_argument(
+        "--skip-reading-check",
+        action="store_true",
+        help=(
+            "Do not ask jpdb whether each reading exists. Readings still have "
+            "to be kana — that rule is about whether an ID can exist at all."
+        ),
+    )
+    promote_parser.set_defaults(handler=command_promote)
 
     validate_parser = subparsers.add_parser("validate", help="Validate records or decks")
     validate_parser.add_argument("path", type=_path, nargs="?")

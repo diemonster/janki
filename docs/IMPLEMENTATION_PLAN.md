@@ -1131,7 +1131,36 @@ Design: DESIGN_V2 "PDFs and photos > Step 1".
 - Tests: fake parse_call; staging shape; already-known annotation;
   refusal and max_tokens paths; --force behavior.
 
-### [~] claimed task/m3.4 2026-08-07 — M3.4 `janki promote`
+### [x] M3.4 `janki promote`
+
+*Done 2026-08-07. Contract as written; two deviations from the Files list and
+seven decisions. **Deviation 1:** the reading-set lookup lives in `enrich.py` as
+a new public `dictionary_readings`, not reimplemented here — walking `alt_sids`
+to find a homograph's other reading is exactly what goes subtly wrong in a
+second copy, and M2.6 and this task ask the identical question. **Deviation 2:**
+`staging.prune_staging` is new, so removing promoted rows keeps the surviving
+rows' own keys and inline notes plus the file's header comments, instead of
+re-rendering the review from records. One loss is documented rather than fought:
+a comment on its own line *between* rows is attached by YAML to the row above,
+so it goes when that row is promoted. Reaching into the parser's internals for a
+case it does not model is the worse trade, and the residual loss is strictly
+smaller than a full re-render. (1) A spelling jpdb cannot resolve to one entry
+is promoted **unchecked with a warning**, not held: silence is not disagreement,
+and holding those back would punish exactly the uncommon words a textbook is
+most worth extracting from. (2) `--skip-reading-check` drops only the dictionary
+check. The kana rule is never skippable — it is about whether an ID can exist at
+all, not about whether a dictionary agrees. (3) The structural holds are
+re-tested from the reading itself rather than trusted from `hold_reason`: a
+staging file is hand-edited, and the question at this gate is what the reading
+*is now*. (4) The ledger's source type and ref are read off each record instead
+of fixed to `"pdf"`, which is what makes an enrichment-shaped file work and what
+keeps `status --rebuild` from appending a near-duplicate reference to everything
+promoted. (5) The `done/` archive is appended to, not replaced, so promoting a
+file in two passes does not lose the first pass's rows. (6) The staging file is
+pruned only of rows that actually landed, so a promote that fails part-way
+leaves the review intact and re-running is safe. (7) An emptied review is
+deleted: leaving it would have the next import report a file that can never be
+resolved.*
 
 Depends on: M3.3, M2.1, M1.1, M1.3
 Files: new `src/japanese_anki/promote.py`, `src/japanese_anki/cli.py`,
