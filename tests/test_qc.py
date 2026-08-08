@@ -435,3 +435,29 @@ def test_a_token_that_resolves_to_nothing_is_marked_not_dropped() -> None:
     )
 
     assert "〈?〉" in verdict.expected
+
+
+def test_a_decomposed_reading_does_not_reject_correct_furigana() -> None:
+    # The message would have read "jpdb reads 語 as ご, not ご" — two strings
+    # that render identically, so the rejection could not be diagnosed.
+    parse = parse_of([["語", "ご"], ["学", "がく"]])
+    decomposed = ExampleSentence(
+        japanese="語学",
+        furigana=f"語[{unicodedata.normalize('NFD', 'ご')}] 学[がく]",
+    )
+
+    assert verify_example_furigana(decomposed, parse).verified
+
+
+def test_latin_text_in_a_sentence_keeps_its_spaces() -> None:
+    # Only the space Anki's notation requires before a ruby group is notation;
+    # a space between two ASCII words is content, and kana_to_romaji passes
+    # Latin through verbatim.
+    rebuilt = regenerate_example_romaji(
+        ExampleSentence(
+            japanese="「Hello World」と言った。",
+            furigana="「Hello World」と 言[い]った。",
+        )
+    )
+
+    assert "Hello World" in rebuilt.romaji

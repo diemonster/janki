@@ -107,8 +107,17 @@ def example_contains_target(
 
 
 def furigana_pairs(furigana: str) -> tuple[tuple[str, str], ...]:
-    """The ``(text, reading)`` groups in Anki furigana notation, in order."""
-    return tuple((match.group(1), match.group(2)) for match in _GROUP.finditer(furigana))
+    """The ``(text, reading)`` groups in Anki furigana notation, in order.
+
+    Normalized, like everything else these are compared against: a reading
+    written with a decomposed dakuten would otherwise fail against jpdb's
+    composed one and report ``jpdb reads 語 as ご, not ご`` — two strings that
+    render identically, so the rejection cannot be diagnosed at all.
+    """
+    return tuple(
+        (normalize_identity_part(match.group(1)), normalize_identity_part(match.group(2)))
+        for match in _GROUP.finditer(furigana)
+    )
 
 
 def parse_pairs(parse: jpdb.ParseResult) -> tuple[tuple[str, str], ...]:
@@ -125,6 +134,8 @@ def parse_pairs(parse: jpdb.ParseResult) -> tuple[tuple[str, str], ...]:
                 # no ruby, so it is not a group. Without this, furigana janki
                 # rendered from a parse could fail verification against that
                 # very parse.
+                text = normalize_identity_part(text)
+                reading = normalize_identity_part(reading)
                 if not reading or reading == text:
                     continue
                 pairs.append((text, reading))
@@ -184,17 +195,25 @@ def furigana_reading(furigana: str) -> str:
     """The kana a whole sentence's Anki furigana spells out.
 
     Bracketed groups contribute their reading, everything else contributes
-    itself — so ``話[はな]すを 食[た]べる`` reads ``はなすをたべる``. The spaces
-    Anki needs before a ruby group are notation, not sound, and are dropped.
+    itself — so ``話[はな]すを 食[た]べる`` reads ``はなすをたべる``.
+
+    Only the single ASCII space Anki's notation requires *immediately before a
+    ruby group* is dropped. Every other space is content: a sentence quoting
+    ``「Hello World」`` would otherwise come back as ``HelloWorld``, since
+    :func:`romaji.kana_to_romaji` passes Latin text through verbatim. A space
+    between two ASCII words is provably not notation.
     """
     out: list[str] = []
     position = 0
     for match in _GROUP.finditer(furigana):
-        out.append(furigana[position : match.start()])
+        chunk = furigana[position : match.start()]
+        if chunk.endswith(" "):
+            chunk = chunk[:-1]
+        out.append(chunk)
         out.append(match.group(2))
         position = match.end()
     out.append(furigana[position:])
-    return "".join(out).replace(" ", "").replace("　", "")
+    return "".join(out)
 
 
 @dataclass(frozen=True, slots=True)
