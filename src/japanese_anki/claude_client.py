@@ -421,9 +421,16 @@ def batch_results(
             )
             yield BatchEntry(custom_id, kind or "unknown", detail, None)
             continue
-        yield BatchEntry(
-            custom_id,
-            kind,
-            "",
-            _result_of(getattr(outcome, "message", None), schema, model),
-        )
+        try:
+            parsed = _result_of(getattr(outcome, "message", None), schema, model)
+        except JankiError as exc:
+            # One row that completed normally and came back unparseable must not
+            # take the batch down. A batch's results are immutable: raising here
+            # would fail at the same row on every re-fetch, so a thousand good
+            # answers beside one bad one would be uncollectible except by
+            # forgetting the batch and throwing them all away. `parse_call`
+            # keeps raising — a live call is one row, and there is nothing else
+            # in it to save.
+            yield BatchEntry(custom_id, "invalid", str(exc), None)
+            continue
+        yield BatchEntry(custom_id, kind, "", parsed)

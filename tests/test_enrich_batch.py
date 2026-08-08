@@ -1043,3 +1043,77 @@ def test_a_moved_collection_is_diagnosed_before_a_malformed_row_can_be(
     assert "any more" in err
     assert "did not match the expected shape" not in err
     assert list(book_of(root)["pending_batches"]) == ["msgbatch_01"]
+
+
+def test_one_unparseable_row_costs_that_row_and_not_the_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A batch's results are immutable, so raising on a bad row would fail at
+    the same row on every re-fetch — and the only way out would be forgetting
+    the batch, throwing away every good answer beside it."""
+
+    class Malformed:
+        stop_reason = "end_turn"
+        content = [type("B", (), {"type": "text", "text": "{not json"})()]
+
+    records = many(2)
+    batches = FakeBatches(
+        results=[
+            Entry(key(records[0].id), Succeeded(Malformed())),
+            ok(records[1]),
+        ]
+    )
+    root = submitted(tmp_path, records, monkeypatch, batches)
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 0
+
+    kept = stored(root)
+    assert kept["word:話す1:はなす"]["examples"], "the good answer landed"
+    assert kept["word:話す0:はなす"]["examples"] == []
+    err = capsys.readouterr().err
+    assert "word:話す0:はなす" in err
+    assert "did not match the expected shape" in err
+    assert book_of(root)["pending_batches"] == {}
+
+
+def test_a_moved_collection_claims_no_override_it_never_applied(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    records = many(2)
+    batches = FakeBatches(results=[ok(item) for item in records])
+    root = submitted(tmp_path, records, monkeypatch, batches)
+    stranger = record(id="word:聞く:きく", expression="聞く")
+    (root / "vocabulary.json").write_text(
+        json.dumps([stranger.to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+    capsys.readouterr()
+
+    code = cli.main(
+        [
+            "--root", str(root), "enrich", "--ai", "--batch-fetch",
+            "--force-fields", "examples", "--yes",
+        ]
+    )
+
+    assert code == 1
+    output = capsys.readouterr()
+    assert "any more" in output.err
+    assert "Applying with --force-fields" not in output.out
+
+
+def test_a_misspelt_field_is_caught_whatever_state_the_batch_is_in(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Validated by command_enrich before any state is read, so it does not
+    matter whether the batch is pending, running, or unfetchable."""
+    root = project(tmp_path, many(1))
+
+    assert cli.main(
+        [
+            "--root", str(root), "enrich", "--ai", "--batch-fetch",
+            "--force-fields", "exmaples",
+        ]
+    ) == 1
+
+    assert "unknown field 'exmaples'" in capsys.readouterr().err

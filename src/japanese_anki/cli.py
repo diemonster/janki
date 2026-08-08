@@ -913,7 +913,7 @@ def command_enrich(args: argparse.Namespace) -> int:
         return _enrich_staging(client, args.staging.resolve(), args.yes)
 
     if args.batch_fetch:
-        return _batch_fetch(config, args)
+        return _batch_fetch(config, args, force_fields)
 
     if args.ai:
         return _enrich_ai(config, args, force_fields)
@@ -1224,7 +1224,9 @@ def _batch_forget(config: ProjectConfig) -> int:
     return 0
 
 
-def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
+def _batch_fetch(
+    config: ProjectConfig, args: argparse.Namespace, force_fields: Sequence[str]
+) -> int:
     """Collect a finished batch, or say how far along it is.
 
     One poll, never a wait loop: the point of batching is that nobody is sitting
@@ -1263,7 +1265,7 @@ def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
     # this command refuses to take, would apply the answer to a different
     # question than the one that was asked.
     model = str(entry.get("model") or config.enrich_model)
-    force_fields = [str(item) for item in entry.get("force_fields", [])]
+    submitted_fields = [str(item) for item in entry.get("force_fields", [])]
 
     status_now = claude_client.batch_status(batch_id)
     if status_now != claude_client.BATCH_ENDED:
@@ -1301,19 +1303,22 @@ def _batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
             "'janki enrich --ai --batch-forget' drops the entry."
         )
 
-    if args.force_fields:
-        # Unlike the model and the ids, this one is not settled at submit time:
-        # it decides how an answer already in hand is applied, and the records
-        # may have gained fields while the batch was out. Overriding is allowed
-        # for that reason, announced because it is not what was submitted, and
-        # announced *here* — after the status check — because a run that has
-        # nothing to collect yet applies nothing and should claim nothing.
-        override = enrich.parse_force_fields(args.force_fields, ai=True)
+    # Unlike the model and the ids, this one is not settled at submit time: it
+    # decides how an answer already in hand is applied, and the records may have
+    # gained fields while the batch was out. Overriding is allowed for that
+    # reason, announced because it is not what was submitted, and announced
+    # *down here* — past the status poll and the guard — because a run that
+    # collects nothing applies nothing and should claim nothing. The names
+    # themselves were validated by `command_enrich` before any of this, so a
+    # misspelt field is caught whatever state the batch turns out to be in.
+    if force_fields:
         print(
-            f"Applying with --force-fields {', '.join(override)} instead of the "
-            f"{', '.join(force_fields) or 'none'} this batch was submitted with."
+            f"Applying with --force-fields {', '.join(force_fields)} instead of "
+            f"the {', '.join(submitted_fields) or 'none'} this batch was "
+            "submitted with."
         )
-        force_fields = list(override)
+    else:
+        force_fields = submitted_fields
 
     # The batch's own model, not the config's: a run submitted under one model
     # and fetched after the config changed was still answered by the first.
