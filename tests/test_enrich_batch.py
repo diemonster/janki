@@ -1244,8 +1244,9 @@ def test_a_second_fetch_does_not_rewrite_what_the_first_one_landed(
         ]
     )
     assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 1
-    assert book_of(root)["pending_batches"]["msgbatch_01"]["applied_ids"] == [
-        "word:話す0:はなす"
+    # Narrowed to the row that failed, not to the one that landed.
+    assert book_of(root)["pending_batches"]["msgbatch_01"]["retry_ids"] == [
+        "word:話す1:はなす"
     ]
 
     # The human fixes the furigana on what landed.
@@ -1262,7 +1263,7 @@ def test_a_second_fetch_does_not_rewrite_what_the_first_one_landed(
 
     kept = stored(root)["word:話す0:はなす"]["examples"][0]
     assert kept["furigana"].endswith("(checked)"), "the hand correction survived"
-    assert "written by an earlier fetch" in capsys.readouterr().out
+    assert "settled by an earlier fetch" in capsys.readouterr().out
 
 
 def test_a_held_staging_batch_says_to_promote_before_fetching_again(
@@ -1287,5 +1288,118 @@ def test_a_held_staging_batch_says_to_promote_before_fetching_again(
 
     err = capsys.readouterr().err
     assert cli.STAGING_FILE_NAME in err
-    assert "promote that file before fetching again" in err
+    assert "promote or discard that file before fetching again" in err
     assert "record(s) were written." not in err
+
+
+def test_a_staged_batch_is_not_re_applied_over_what_was_promoted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The case that made recording successes the wrong direction: the answers
+    went to a staging file, a human corrected one and promoted it, and a second
+    fetch under the submitted --force-fields would put the model's original
+    text back over the correction."""
+
+    class Malformed:
+        stop_reason = "end_turn"
+        content = [type("B", (), {"type": "text", "text": "{not json"})()]
+
+    records = many(enrich.STAGING_THRESHOLD)
+    batches = FakeBatches(
+        results=[ok(item) for item in records[:-1]]
+        + [Entry(key(records[-1].id), Succeeded(Malformed()))]
+    )
+    root = project(tmp_path, records)
+    patch_all(monkeypatch, batches)
+    cli.main(
+        [
+            "--root", str(root), "enrich", "--ai", "--batch-submit",
+            "--force-fields", "examples",
+        ]
+    )
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 1
+    target = root / "staging" / "ai-enrichment.yaml"
+    assert target.is_file()
+    # The reviewer fixes a segmentation and promotes.
+    staged = target.read_text(encoding="utf-8").replace("毎日話す0。", "毎日話す0。 (checked)")
+    target.write_text(staged, encoding="utf-8")
+    assert cli.main(["--root", str(root), "promote", str(target), "--skip-reading-check"]) == 0
+    capsys.readouterr()
+
+    cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"])
+
+    # The damage lands a promote later, so follow the second fetch all the way
+    # through the route the first one took.
+    again = root / "staging" / "ai-enrichment.yaml"
+    if again.is_file():
+        restaged, _ = read_staging(again)
+        assert "word:話す0:はなす" not in {item.id for item in restaged}, (
+            "the settled record was proposed for rewriting again"
+        )
+        cli.main(["--root", str(root), "promote", str(again), "--skip-reading-check"])
+
+    landed = stored(root)["word:話す0:はなす"]["examples"]
+    assert any("(checked)" in item["japanese"] for item in landed), (
+        "the promoted correction survived the second fetch"
+    )
+
+
+def test_an_unreadable_answer_for_a_deleted_record_does_not_hold_the_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The plan's rule says a record deleted while the batch was out is
+    deliberate and its answer moot. Deciding "unreadable" before "still here"
+    would hold the id forever for a word nobody wants."""
+
+    class Malformed:
+        stop_reason = "end_turn"
+        content = [type("B", (), {"type": "text", "text": "{not json"})()]
+
+    records = many(2)
+    batches = FakeBatches(
+        results=[
+            ok(records[0]),
+            Entry(key(records[1].id), Succeeded(Malformed())),
+        ]
+    )
+    root = submitted(tmp_path, records, monkeypatch, batches)
+    (root / "vocabulary.json").write_text(
+        json.dumps([records[0].to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 0
+
+    err = capsys.readouterr().err
+    assert "no longer in the collection" in err
+    assert "did not parse" not in err
+    assert book_of(root)["pending_batches"] == {}
+
+
+def test_retrying_one_row_of_a_large_batch_is_a_diff_not_a_staging_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The staging threshold is about what this run asks a human to review, and
+    a retry of one row is one row however large the batch was."""
+
+    class Malformed:
+        stop_reason = "end_turn"
+        content = [type("B", (), {"type": "text", "text": "{not json"})()]
+
+    records = many(enrich.STAGING_THRESHOLD)
+    first = FakeBatches(
+        results=[ok(item) for item in records[:-1]]
+        + [Entry(key(records[-1].id), Succeeded(Malformed()))]
+    )
+    root = submitted(tmp_path, records, monkeypatch, first)
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 1
+    (root / "staging" / "ai-enrichment.yaml").unlink()
+    # The schema is fixed; the row parses this time.
+    first.results_rows = [ok(item) for item in records]
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 0
+
+    assert not (root / "staging" / "ai-enrichment.yaml").exists()
+    assert stored(root)[records[-1].id]["examples"], "the retried row landed in the records"
+    assert book_of(root)["pending_batches"] == {}

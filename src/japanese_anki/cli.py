@@ -1266,10 +1266,12 @@ def _batch_fetch(
     # question than the one that was asked.
     model = str(entry.get("model") or config.enrich_model)
     submitted_fields = [str(item) for item in entry.get("force_fields", [])]
-    # What an earlier fetch of this same batch already wrote. Only a held batch
-    # gets a second fetch, and the gap between them is when a human corrects a
-    # sentence the first one produced.
-    applied = [str(item) for item in entry.get("applied_ids", [])]
+    # A held batch's second fetch has one job: the rows whose answers did not
+    # parse. Everything else is settled, whatever route it took — records,
+    # staging file, or nothing at all — which is why this is the list of
+    # failures rather than of successes.
+    retry = [str(item) for item in entry.get("retry_ids", [])]
+    candidates = retry or pending_ids
 
     status_now = claude_client.batch_status(batch_id)
     if status_now != claude_client.BATCH_ENDED:
@@ -1332,7 +1334,7 @@ def _batch_fetch(
         pending_ids,
         model=model,
         force_fields=force_fields,
-        applied=applied,
+        only=retry,
         jpdb_client=jpdb.JpdbClient(jpdb.api_key_from_env()),
     )
     result = outcome.result
@@ -1341,10 +1343,10 @@ def _batch_fetch(
         print(f"warning: {warning}", file=sys.stderr)
     for record_id, reason in outcome.failed.items():
         print(f"warning: {record_id}: {reason}; left untouched.", file=sys.stderr)
-    if outcome.already_applied:
+    if outcome.settled:
         print(
-            f"{len(outcome.already_applied)} record(s) were written by an "
-            "earlier fetch of this batch and were left as they are."
+            f"{len(outcome.settled)} record(s) were settled by an earlier fetch "
+            "of this batch and were left as they are."
         )
     for record_id, reason in outcome.invalid.items():
         print(
@@ -1360,7 +1362,7 @@ def _batch_fetch(
             file=sys.stderr,
         )
 
-    staging = len(pending_ids) >= enrich.STAGING_THRESHOLD
+    staging = len(candidates) >= enrich.STAGING_THRESHOLD
     staging_target = config.staging_dir / STAGING_FILE_NAME
     if staging and staging_target.exists() and not args.force:
         raise StagingError(
@@ -1371,9 +1373,7 @@ def _batch_fetch(
 
     if not result.changes:
         if outcome.invalid:
-            return _keep_for_invalid(
-                book, batch_id, outcome.invalid, wrote=(), landed="nothing"
-            )
+            return _keep_for_invalid(book, batch_id, outcome.invalid)
         print(
             f"Batch {batch_id} is collected: looked at {result.looked_up} "
             "record(s), and none of the answers had anything to fill."
@@ -1412,11 +1412,7 @@ def _batch_fetch(
         # irreversible thing this command can do, for the one failure class
         # that was janki's and not the API's.
         return _keep_for_invalid(
-            book,
-            batch_id,
-            outcome.invalid,
-            wrote=tuple(result.changes),
-            landed="staging" if staging else "records",
+            book, batch_id, outcome.invalid, wrote=len(result.changes), staged=staging
         )
 
     book.clear_batch(batch_id)
@@ -1433,8 +1429,8 @@ def _keep_for_invalid(
     batch_id: str,
     invalid: Mapping[str, str],
     *,
-    wrote: Sequence[str],
-    landed: str,
+    wrote: int = 0,
+    staged: bool = False,
 ) -> int:
     """Hold the batch id because some answers came back unreadable.
 
@@ -1443,39 +1439,38 @@ def _keep_for_invalid(
     away. Dropping the id over that would make an 800-record batch unreachable
     because one field was added to a Pydantic model.
 
-    Holding it is what makes a second fetch possible, so the ids that landed
-    this time are written into the entry — the next fetch skips them rather
-    than rewriting a sentence a human has since corrected. ``landed`` says what
-    a re-fetch will meet, on the same reasoning as
-    :func:`_report_batch_ledger_failure`: telling someone to fetch again when
-    the next fetch will refuse over an unpromoted staging file sends them after
-    a repair that fails.
+    Holding it is what makes a second fetch possible, so the entry is narrowed
+    to exactly these ids — a later fetch retries them and leaves every other row
+    alone, however that row was settled. Recording the failures rather than the
+    successes is what keeps that true when the successes went to a staging file
+    whose fate nobody has decided yet.
     """
-    if wrote and landed == "records":
-        book.record_batch_applied(batch_id, wrote)
-    written = {
-        "records": f"{len(wrote)} record(s) were written. ",
-        "staging": (
-            f"{len(wrote)} record(s) went to {STAGING_FILE_NAME}; promote that "
-            "file before fetching again, or the next fetch refuses rather than "
-            "overwrite a review in progress. "
-        ),
-        "nothing": "",
-    }[landed]
+    book.record_batch_retry(batch_id, invalid)
+    if staged:
+        written = (
+            f"{wrote} record(s) went to {STAGING_FILE_NAME}; promote or discard "
+            "that file before fetching again, or the next fetch refuses rather "
+            "than overwrite a review in progress. "
+        )
+    elif wrote:
+        written = f"{wrote} record(s) were written. "
+    else:
+        written = ""
     print(
         f"{written}{len(invalid)} answer(s) in batch {batch_id} did not parse, "
-        "so it is still recorded as pending — those answers are intact on "
-        "Anthropic's side and fetching again costs nothing, which is worth "
-        "doing if the schema they failed was the thing at fault. If they are "
-        "not worth chasing, 'janki enrich --ai --batch-forget' drops the entry.",
+        f"so it is still recorded as pending — narrowed to those {len(invalid)}. "
+        "Their answers are intact on Anthropic's side and fetching again costs "
+        "nothing, which is worth doing if the schema they failed was the thing "
+        "at fault. If they are not worth chasing, "
+        "'janki enrich --ai --batch-forget' drops the entry.",
         file=sys.stderr,
     )
     if (ledger_error := _save_ledger(book)) is not None:
         print(f"warning: {ledger_error}", file=sys.stderr)
         print(
-            "The ledger could not record which records already landed, so a "
-            "later fetch of this batch would write them again. Fix that file "
-            "before fetching again.",
+            "The ledger could not record which rows are left to retry, so a "
+            "later fetch of this batch would consider all of them again. Fix "
+            "that file before fetching again.",
             file=sys.stderr,
         )
     return 1

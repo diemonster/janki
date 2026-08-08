@@ -1251,8 +1251,8 @@ class BatchApplyResult:
     #: Rows janki could not parse. Separate from ``failed`` because the answer
     #: still exists — see :func:`apply_batch_results`.
     invalid: dict[str, str] = field(default_factory=dict)
-    #: Records an earlier fetch of this batch already wrote, skipped this time.
-    already_applied: list[str] = field(default_factory=list)
+    #: Rows an earlier fetch of this batch already settled, skipped this time.
+    settled: list[str] = field(default_factory=list)
     missing: list[str] = field(default_factory=list)
 
 
@@ -1263,7 +1263,7 @@ def apply_batch_results(
     *,
     model: str,
     force_fields: Sequence[str] = (),
-    applied: Sequence[str] = (),
+    only: Sequence[str] = (),
     jpdb_client: jpdb.JpdbClient | None = None,
 ) -> BatchApplyResult:
     """Fold a finished batch into the records, through the live path's checks.
@@ -1282,12 +1282,13 @@ def apply_batch_results(
       the batch was out — deliberate curation, on this side;
     * the row succeeded and its answer did **not validate** (``invalid``).
 
-    ``applied`` names records an earlier fetch of this same batch already
-    wrote. They are skipped rather than re-applied: a held batch is the only
-    one that can be fetched twice, and the gap between the two fetches is
-    exactly when a human corrects a sentence the first one wrote. Re-applying
-    under the submitted ``force_fields`` would replace that correction with the
-    model's original text.
+    ``only``, when given, narrows the rows this pass will consider — a held
+    batch's second fetch passes the ids whose answers did not parse, and every
+    other row is settled by definition, whatever route it took. That matters
+    because a held batch is the only one that can be fetched twice, and the gap
+    between the two is exactly when a human corrects a sentence the first one
+    wrote; re-applying the whole result set under the submitted ``force_fields``
+    would replace that correction with the model's original text.
 
     Only the last of the four is recoverable, which is why it gets its own list
     rather than joining ``failed``. That answer is complete and paid for and lives on
@@ -1298,7 +1299,7 @@ def apply_batch_results(
     outcome = BatchApplyResult(result=AiResult(records=list(records)))
     positions = {record.id: index for index, record in enumerate(outcome.result.records)}
     keys = batch_key_map(pending_ids)
-    done = {str(item) for item in applied}
+    candidates = {str(item) for item in only}
     recent: list[str] = []
     seen: set[str] = set()
 
@@ -1312,8 +1313,16 @@ def apply_batch_results(
             )
             continue
         seen.add(record_id)
-        if record_id in done:
-            outcome.already_applied.append(record_id)
+        if candidates and record_id not in candidates:
+            outcome.settled.append(record_id)
+            continue
+        # Presence first, outcome second. A record the human deleted while the
+        # batch was out is gone whatever the API said about its row — and an
+        # unreadable answer for a record that no longer exists would otherwise
+        # hold the batch id forever, for a word nobody wants.
+        index = positions.get(record_id)
+        if index is None:
+            outcome.missing.append(record_id)
             continue
         if entry.result is None:
             detail = f": {entry.detail}" if entry.detail else ""
@@ -1321,10 +1330,6 @@ def apply_batch_results(
                 outcome.invalid[record_id] = entry.detail or "the answer did not parse"
             else:
                 outcome.failed[record_id] = f"{entry.outcome}{detail}"
-            continue
-        index = positions.get(record_id)
-        if index is None:
-            outcome.missing.append(record_id)
             continue
         outcome.result.looked_up += 1
         absorb_ai_call(
@@ -1339,7 +1344,7 @@ def apply_batch_results(
         )
 
     for record_id in pending_ids:
-        if record_id in seen or record_id in done:
+        if record_id in seen or (candidates and record_id not in candidates):
             continue
         if record_id in positions:
             outcome.failed[record_id] = "the batch returned no result for it"
