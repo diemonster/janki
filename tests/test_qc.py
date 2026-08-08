@@ -473,3 +473,15 @@ def test_a_full_width_space_outside_a_ruby_group_is_content() -> None:
 
     assert furigana_reading("話[はな]す　よ") == "はなす　よ"
     assert rebuilt.romaji == "hanasu yo"
+
+
+def test_the_docstrings_romaji_examples_are_what_the_code_returns() -> None:
+    # These values are the design record for this function, and both were
+    # wrong once: nippongoo was carried over from a sentence where を supplied
+    # the extra o.
+    assert regenerate_example_romaji(
+        ExampleSentence(japanese="日本語", furigana="日[にっ] 本[ぽん] 語[ご]")
+    ).romaji == "nippongo"
+    # A typed space immediately before a ruby group is indistinguishable from
+    # notation and goes with it.
+    assert furigana_reading("本を 食[た]べる") == "本をたべる"

@@ -329,14 +329,19 @@ def regenerate_example_romaji(example: ExampleSentence) -> ExampleSentence:
     when it holds no kanji and refuses to guess when it does: transliterating
     kanji is exactly the invention this function exists to remove.
 
-    **Notation spacing is dropped; content spacing survives.** The space Anki
-    requires immediately before a ruby group is notation and goes, so the
-    verified furigana for 日本語 — which jpdb segments per kanji as
-    ``日[にっ] 本[ぽん] 語[ご]`` — romanizes as ``nippongoo`` rather than
-    ``ni pon goo``, which would split one word into three and delete the っ
-    (a sokuon at the end of a run has nothing to geminate). Every other space
-    is content and reaches the romaji: quoted Latin keeps its words apart, and
-    so does a space someone typed between two Japanese runs.
+    **The ASCII space before a ruby group is dropped; everything else stays.**
+    That space is Anki's notation, and jpdb segments per kanji, so the verified
+    furigana for 日本語 — ``日[にっ] 本[ぽん] 語[ご]`` — romanizes as
+    ``nippongo``. Keeping those spaces would give ``ni pon go``: one word split
+    into three, with the っ deleted because a sokuon at the end of a run has
+    nothing to geminate.
+
+    The rule is positional, not intentional, so a space someone *typed* right
+    before a ruby group goes too — ``本を 食[た]べる`` reads ``本をたべる``,
+    with the typed space gone. In that position a word space and a notation
+    space are indistinguishable in the field. Everywhere else content spacing
+    survives into the romaji: quoted Latin keeps its words apart, and so does a
+    full-width space between two runs.
 
     What this does *not* do is insert word boundaries that were not already
     there. Real ones need the parse's tokens, which this function is not given;
