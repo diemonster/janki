@@ -736,6 +736,34 @@ def test_the_diff_shows_the_sentence_the_user_is_saying_yes_to() -> None:
     assert not any("ExampleSentence(" in line for line in lines)
 
 
+def test_a_change_the_line_cannot_show_says_so() -> None:
+    """Same sentence, different English: the rendered line is identical on both
+    sides, so without this the user confirms an overwrite of curated text they
+    were never shown."""
+    japanese = "日本語を話します。"
+    lines = enrich.format_field_diff(
+        {
+            "word:話す:はなす": {
+                "examples": (
+                    [ExampleSentence(japanese=japanese, english="I speak Japanese.")],
+                    [ExampleSentence(japanese=japanese, english="I will speak Japanese.")],
+                )
+            }
+        }
+    )
+
+    assert "english differ" in lines[1]
+
+
+def test_a_field_that_really_did_not_change_is_not_annotated() -> None:
+    sentence = ExampleSentence(japanese="話します。", english="I speak.")
+    lines = enrich.format_field_diff(
+        {"word:話す:はなす": {"examples": ([], [sentence]), "usage_notes": ("", "Polite.")}}
+    )
+
+    assert not any("differ" in line for line in lines)
+
+
 def test_a_changed_field_the_helper_does_not_know_still_shows() -> None:
     """A field diff that silently omits a change is the display version of
     discarding a row: the user confirms a write they were never shown."""

@@ -32,7 +32,8 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, is_dataclass, replace
+from dataclasses import fields as dc_fields
 from typing import Any
 
 from japanese_anki import claude_client, jpdb, qc
@@ -527,6 +528,40 @@ def _render(value: Any) -> str:
     return text if len(text) <= 60 else f"{text[:57]}..."
 
 
+def _hidden_difference(old: Any, new: Any) -> str:
+    """Name what changed when the two sides of a diff line render alike.
+
+    ``_render`` is lossy on purpose — one line per field, sixty characters,
+    an :class:`ExampleSentence` shown as its Japanese. Usually that is the
+    readable summary. Sometimes it is a write nobody can see: replacing a
+    curated example's English with a model's leaves the Japanese identical, so
+    the line reads ``X -> X`` and a y confirms an overwrite that was never
+    displayed. Rather than widening the line for every field, the cases where
+    rendering hid the change say what it hid.
+    """
+    if old == new or _render(old) != _render(new):
+        return ""
+    pairs: list[tuple[Any, Any]] = []
+    if (
+        isinstance(old, Sequence)
+        and isinstance(new, Sequence)
+        and not isinstance(old, str)
+        and not isinstance(new, str)
+        and len(old) == len(new)
+    ):
+        pairs = list(zip(old, new, strict=True))
+    names = [
+        item.name
+        for left, right in pairs
+        if is_dataclass(left) and type(left) is type(right)
+        for item in dc_fields(left)
+        if getattr(left, item.name) != getattr(right, item.name)
+    ]
+    if names:
+        return f"({', '.join(dict.fromkeys(names))} differ)"
+    return "(differs where this line cannot show it)"
+
+
 def format_field_diff(
     changes: Mapping[str, Mapping[str, tuple[Any, Any]]],
 ) -> list[str]:
@@ -549,7 +584,10 @@ def format_field_diff(
         for name in (*_DIFF_FIELD_ORDER, *rest):
             if name in fields:
                 old, new = fields[name]
-                lines.append(f"  {name}: {_render(old)} -> {_render(new)}")
+                line = f"  {name}: {_render(old)} -> {_render(new)}"
+                if hidden := _hidden_difference(old, new):
+                    line = f"{line} {hidden}"
+                lines.append(line)
     return lines
 
 

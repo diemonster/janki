@@ -523,6 +523,7 @@ def test_the_honorific_verbs_take_an_i_row_polite_stem() -> None:
     assert polite_stem("下さる", "godan") == "下さい"
     assert polite_stem("おっしゃる", "godan") == "おっしゃい"
     assert polite_stem("仰る", "godan") == "仰い"
+    assert polite_stem("仰有る", "godan") == "仰有い"
     assert polite_stem("なさる", "godan") == "なさい"
     assert polite_stem("為さる", "godan") == "為さい"
     assert polite_stem("ござる", "godan") == "ござい"
@@ -562,6 +563,7 @@ def test_every_hand_written_exception_is_pinned_by_a_case_above() -> None:
         "いらっしゃる",
         "おっしゃる",
         "仰る",
+        "仰有る",
         "くださる",
         "下さる",
         "なさる",
