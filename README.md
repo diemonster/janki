@@ -129,6 +129,12 @@ janki status --unexported --missing-audio --duplicates
 
 # Move a deck's inline notes into the normalized records file
 janki migrate-inline data/decks/verbs.yaml
+
+# jpdb (see "Working with jpdb" below)
+janki jpdb ping
+janki import-jpdb --deck "Textbook Vol. 1: Lesson 1"
+janki enrich --jpdb
+janki import-jpdb-reviews ~/Downloads/reviews.json
 ```
 
 ## How an import merges
@@ -219,6 +225,126 @@ import can never consume that file itself.
 `data/staging/` is committed, like everything else under `data/`. Commit a
 review in progress and a hand-typed reading is recoverable; leave it
 uncommitted and it exists only in your working tree.
+
+## Working with jpdb
+
+[jpdb.io](https://jpdb.io) is used two ways, and they are independent. It is a
+**source** of records (`import-jpdb`), and it is a **dictionary** for records
+that came from somewhere else (`enrich --jpdb`). A third command,
+`import-jpdb-reviews`, neither imports nor enriches — it marks what you already
+study there, and is documented under
+[Choosing what a deck contains](#choosing-what-a-deck-contains).
+
+### Setup
+
+Copy your API key from the jpdb.io settings page and put it in the environment.
+It is read from `JPDB_API_KEY` and nothing else — janki does not read `.env`
+files, and no key is ever written to the repository:
+
+```bash
+export JPDB_API_KEY='...'
+janki jpdb ping
+```
+
+`jpdb ping` needs no project, so it works from anywhere. That makes it the thing
+to run when a later command reports a rejected key.
+
+### Importing decks
+
+```bash
+# One deck, by name (repeat --deck for several)
+janki import-jpdb --deck "Textbook Vol. 1: Lesson 1"
+
+# Every deck on the account
+janki import-jpdb --all-decks
+
+# The JPDB-Export userscript's CSV instead of the API
+janki import-jpdb export.csv
+```
+
+Deck names are matched ignoring case and surrounding space, and nothing further:
+a name that matches nothing lists the decks you do have, and one that matches two
+decks is an error rather than a guess.
+
+Each deck is imported as its own pass, so the summary, the merge result and the
+ledger entries are per deck. A word in two decks is one record with a ledger
+sighting for each, which is how you can still tell where it came from.
+
+A deck import tags each record `jpdb` and `jpdb:<deck-name>`, the name flattened
+for Anki — spaces and punctuation become hyphens, so `Textbook Vol. 1: Lesson 1`
+tags `jpdb:textbook-vol-1-lesson-1` and 語彙・基礎 tags `jpdb:語彙-基礎`. A deck
+YAML can then select one jpdb deck with `include_tags`. A CSV import gets the
+plain `jpdb` tag only, since the file does not say which deck the words are
+from.
+
+An import fills empty fields and never overwrites your edits, exactly as
+[described above](#how-an-import-merges) — `--prefer-incoming`, `--replace` and
+`--yes` all work the same way here. With several decks, `--replace` applies to
+the first pass only; applied to every pass, the second deck would discard the
+first.
+
+jpdb states a spelling, reading, meanings, pitch accent, frequency rank and part
+of speech. Romaji and the conjugation table are computed from that by the same
+rules everything else uses. Anything jpdb has no answer for is left empty for a
+human rather than guessed — `janki status` counts those.
+
+Entries whose reading janki cannot use are held back for review just like CSV
+rows, into `data/staging/jpdb-<deck>-<fingerprint>-needs-reading.yaml`. See
+[Rows held back for reading review](#rows-held-back-for-reading-review); the
+fingerprint is there so two decks whose names differ only in punctuation cannot
+land in one file.
+
+### Enriching records from the dictionary
+
+For records that came from Shirabe, a textbook or a photograph, jpdb can fill
+what they are missing:
+
+```bash
+# Every record with an empty field
+janki enrich --jpdb
+
+# Just these records
+janki enrich --jpdb word:話す:はなす word:食べる:たべる
+
+# Let it overwrite named fields instead of only filling empty ones
+janki enrich --jpdb --force-fields pitch_accent,frequency_rank
+```
+
+It fills `furigana`, `romaji`, `part_of_speech`, `verb_group`, `conjugations`,
+`pitch_accent` and `frequency_rank`. It shows you every proposed change as a
+diff and asks before writing; `--yes` skips the question. A record with nothing
+to fill never reaches the network, so re-running after a finished pass costs
+nothing.
+
+Two things it will not do. It **never writes `reading`** — that is half of the
+record ID, so a dictionary changing it would orphan the Anki review history
+behind the record. And where your reading and jpdb's disagree, it warns and
+writes nothing rather than picking: both may be right, since 一日 is both
+いちにち and ついたち. When your reading *is* one jpdb lists, it asks jpdb again
+with that reading pinned, so a homograph is filled from the right entry rather
+than whichever one jpdb reached for first.
+
+`meanings` is deliberately left alone. A record that came from a textbook
+carries the meaning that textbook taught, and a dictionary is not better placed
+to decide that.
+
+### Getting a reading suggestion for held rows
+
+A staging file full of rows with no usable reading is the slowest part of a
+review, so jpdb can propose one for each:
+
+```bash
+janki enrich --jpdb --staging data/staging/shirabe-export-needs-reading.yaml
+```
+
+Each held row gains `suggested_reading` in its `raw_fields`. It is a proposal
+and nothing more: the row stays held until you type the reading into `reading`
+yourself and delete the row's `id:` line, because the ID it would mint is not
+correctable afterwards. The suggestion is the reading of the form as written, so
+an inflected entry gets its own reading rather than its dictionary form's.
+
+Your file is edited, not rewritten — comments you left in it, and any key janki
+does not know about, are still there afterwards.
 
 ## The ledger and `janki status`
 

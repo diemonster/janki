@@ -942,7 +942,22 @@ Design: DESIGN_V2 "Manual export files" (reviews.json).
   `resolve_deck_records`, currently undocumented) with the
   `exclude_tags: [jpdb-known]` recipe.
 
-### [~] claimed task/m2.w 2026-08-07 — M2.W Milestone 2 wrap
+### [x] M2.W Milestone 2 wrap
+
+*Done 2026-08-07. README only, as scoped. A "Working with jpdb" section covering
+setup (`JPDB_API_KEY` and `jpdb ping`), deck and CSV imports, and the
+`enrich --jpdb` walkthrough including the `--staging` reading assist. The
+deck-filter and `import-jpdb-reviews` documentation stayed M2.7's and is
+cross-linked rather than restated, per this task's note. Two things the writing
+turned up and fixed rather than documenting as-is: a CSV import gets the plain
+`jpdb` tag only (no deck to name), which the first draft blurred, and the deck
+tag is the *flattened* name, which is worth an example since a reader will type
+it into `include_tags`. **Command verification is partial and deliberately so:**
+every command that does not need the network was run — `jpdb ping` from `/` with
+no project and no key, `import-jpdb export.csv` end to end, and every documented
+error path — but the API-backed flows need a live `JPDB_API_KEY`, which is
+owner-only for the same reason M2.1F is. Those are covered by tests against fake
+transports, not by a live run, and this note is where that gap is recorded.*
 
 Depends on: all M2 tasks except M2.1F (owner-only; see the lane map)
 Files: `README.md`.
