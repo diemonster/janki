@@ -8,6 +8,7 @@ than stubbed at the decision.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -24,7 +25,7 @@ from japanese_anki.promote import (
     check_readings,
     remint,
 )
-from japanese_anki.staging import read_staging
+from japanese_anki.staging import read_staging, write_staging
 
 # One vocabulary row, in the order /parse answers its default fields in.
 HANASU = [1562350, 4280520068, "話す", "はなす", ["LHLL"], 200, ["vt", "v5s"]]
@@ -709,3 +710,31 @@ def test_a_staging_file_the_archive_could_not_be_written_as_is_refused_early(
     assert not (root / "ledger.json").exists()
     assert not (root / "staging" / "done").exists()
     assert "Rename it" in capsys.readouterr().err
+
+
+def test_promote_does_not_advertise_a_flag_it_does_not_have(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Promote merges existing-wins with no way to change it, so pointing at
+    --prefer-incoming hands the reader a command that exits with "unrecognized
+    arguments" — output worse than silence, because it reads as instruction."""
+    existing = VocabularyRecord(
+        id="word:話す:はなす",
+        expression="話す",
+        reading="はなす",
+        meanings=["to speak"],
+        usage_notes="hand written",
+        source=SourceReference(type="shirabe", imported_from="export.csv"),
+    )
+    root = project(tmp_path, [existing])
+    incoming = replace(existing, usage_notes="the model's note")
+    staged = root / "staging" / "in.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    write_staging(staged, [incoming], {"source_file": "x", "review_notes": "n"})
+
+    assert cli.main(["--root", str(root), "promote", str(staged), "--skip-reading-check"]) == 0
+
+    out = capsys.readouterr().out
+    assert "usage_notes" in out, "the conflict is reported"
+    assert "--prefer-incoming" not in out
+    assert "resolve these by hand" in out

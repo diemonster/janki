@@ -481,8 +481,9 @@ export ANTHROPIC_API_KEY='...'
 ```
 
 `--ai` needs `JPDB_API_KEY` as well, because it checks every sentence it writes
-against jpdb's parse of it — so it will not start without one. `--polish-meanings`
-writes English and asks jpdb nothing, so it needs only the Anthropic key.
+against jpdb's parse of it — so the live pass and `--batch-fetch` will not start
+without one. `--batch-submit` does not need it: no sentence exists to check yet.
+Neither does `--polish-meanings`, which writes English and asks jpdb nothing.
 
 One pass per run. `--jpdb`, `--ai` and `--polish-meanings` each show you their
 own diff, and merging two unrelated sets of proposals into one y/n is not
@@ -501,11 +502,16 @@ janki enrich --ai word:話す:はなす
 janki enrich --ai --force-fields examples word:話す:はなす
 ```
 
-`--force-fields` widens what a pass may *write*, not which records it visits.
-Without ids the pass still only looks at records missing an example or a usage
-note, so `--force-fields examples` on its own finds nothing to do on a
-collection where every record already has both. Name the records you want
-rewritten.
+For this pass `--force-fields` widens what may be *written*, not which records
+are visited: without ids it still only looks at records missing an example or a
+usage note, so `--force-fields examples` on its own finds nothing to do on a
+collection where every record has both. Name the records you want rewritten.
+
+`--jpdb` is the other way round, which is worth knowing before running it over
+a whole collection: there a forced field makes every record a candidate again,
+including ones that were being skipped for having nothing left to fill. So
+`janki enrich --jpdb --force-fields pitch_accent` with no ids is one dictionary
+call per record and overwrites every curated value it names. Name ids there too.
 
 Everything it writes is checked before you see it. A sentence that does not
 contain the word is **rejected** — it may be a perfectly good sentence, but it
@@ -543,9 +549,13 @@ about **one record at a time** — `y`, `n`, or `q` to stop. "These thirty are
 fine except the fourth" is not an answer a single y/n can take. What you accept
 before quitting is still written.
 
-It calls the model as the loop runs, so quitting at the first proposal costs one
-call rather than one per record in your collection. Declining with `n` moves on
-to the next record, which is a call — it is `q` that stops the spending. An answer
+It calls the model as the loop runs, so `q` stops the spending the moment you
+answer it: you pay for the records it *reached*, not for every record in your
+collection. Two things make "reached" more than "shown to you", though.
+Declining with `n` moves on to the next record, which is another call. And a
+record whose glosses are already right produces no proposal at all, so it is
+paid for and passed over without a prompt — nine of those before the first
+question means ten calls, not one. An answer
 that comes back empty means the glosses on file are already right, which is a
 common and legitimate result. An answer that reduces to nothing is refused
 rather than written: a card with a Japanese side and no English one is worse
