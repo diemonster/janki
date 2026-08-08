@@ -8,13 +8,14 @@ from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 
-from japanese_anki import enrich, jpdb, ledger, migrate, status
+from japanese_anki import claude_client, enrich, extract, jpdb, ledger, migrate, status
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import AnkiBuildError, build_deck, resolve_deck_records
 from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.importers import jpdb_import, jpdb_reviews
 from japanese_anki.importers.shirabe import import_file, inspect_file
+from japanese_anki.inputs import prepare_inputs
 from japanese_anki.io import (
     MERGE_LABELS,
     PREFER_INCOMING_PROTECTED,
@@ -830,6 +831,81 @@ def command_enrich(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_extract(args: argparse.Namespace) -> int:
+    """Read vocabulary off PDFs and photos into staging files for review.
+
+    One staging file per input, and nothing anywhere near ``vocabulary.json``:
+    this is the one command that guesses, so everything it produces is a
+    proposal a human still has to accept. Inputs are copied into the inbox
+    first (M3.2), so a candidate can always be checked against the page it came
+    from.
+
+    Files are processed one at a time and written as they succeed. A later file
+    failing therefore leaves the earlier ones' staging files in place — which is
+    the useful direction: the work already paid for is kept, and the error names
+    what is left to do.
+    """
+    config = _load_config(args)
+    style_guide = claude_client.read_style_guide(config.root)
+    model = args.model or config.extract_model
+    prepared = prepare_inputs([path for path in args.files], config.scan_inbox)
+
+    existing = (
+        load_records(config.normalized_file)
+        if config.normalized_file.exists()
+        else []
+    )
+    known = extract.known_ids(existing)
+    # Only prose mode is told what janki already has: a table is transcribed
+    # row by row, and telling the model to skip rows would put holes in a
+    # faithful transcription.
+    skip_list = (
+        sorted({record.expression for record in existing})
+        if args.mode == "prose"
+        else ()
+    )
+
+    written = 0
+    for item in prepared:
+        candidates = extract.extract_candidates(
+            item,
+            model=model,
+            style_guide=style_guide,
+            mode=args.mode,
+            known=skip_list,
+        )
+        records = extract.build_records(candidates, item, known)
+        target = extract.staging_path(config.staging_dir, item.origin_path.name)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        write_staging(
+            target,
+            records,
+            {
+                "source_file": str(item.origin_path),
+                "extracted_at": date.today().isoformat(),
+                "model": model,
+            },
+            force=args.force,
+        )
+        written += 1
+        already = sum(
+            1 for record in records if "already_known" in record.source.raw_fields
+        )
+        print(
+            f"{item.origin_path.name}: {len(records)} candidate(s) "
+            f"({already} already known) -> {target}"
+        )
+
+    if not written:
+        print("Nothing to extract.")
+        return 0
+    print(
+        f"Wrote {written} staging file(s). Review them, then 'janki validate "
+        "<file>' — nothing reaches vocabulary.json until you promote it."
+    )
+    return 0
+
+
 def _validate_path(path: Path) -> tuple[list, int]:
     raw = load_structured(path)
     if isinstance(raw, dict) and "deck" in raw:
@@ -1164,6 +1240,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="Write the shown changes without confirming.",
     )
     enrich_parser.set_defaults(handler=command_enrich)
+
+    extract_parser = subparsers.add_parser(
+        "extract",
+        help="Read vocabulary off PDFs and photos into staging files",
+    )
+    extract_parser.add_argument(
+        "files", nargs="+", type=_path, metavar="FILE", help="PDFs or photos to read."
+    )
+    extract_parser.add_argument(
+        "--mode",
+        choices=extract.MODES,
+        help=(
+            "Force how the source is read. Omit to let the model judge each "
+            "page, which is right when one document holds both."
+        ),
+    )
+    extract_parser.add_argument(
+        "--model",
+        metavar="ID",
+        help="Override the configured extract model for this run.",
+    )
+    extract_parser.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "Overwrite an existing staging file. Without it, a file already "
+            "under review is left alone."
+        ),
+    )
+    extract_parser.set_defaults(handler=command_extract)
 
     validate_parser = subparsers.add_parser("validate", help="Validate records or decks")
     validate_parser.add_argument("path", type=_path, nargs="?")
