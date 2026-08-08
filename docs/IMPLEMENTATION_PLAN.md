@@ -887,7 +887,34 @@ Design: DESIGN_V2 "jpdb.io > Dictionary enrichment" + enrich rules.
   disambiguation (forced-furigana request asserted), no-write on
   populated fields, staging `suggested_reading` annotation.
 
-### [~] claimed task/m2.7 2026-08-07 — M2.7 `janki import-jpdb-reviews` + deck filter docs
+### [x] M2.7 `janki import-jpdb-reviews` + deck filter docs
+
+*Done 2026-08-07. Contract as written; one deviation and five decisions.
+**Deviation:** the parsing and matching live in a new
+`importers/jpdb_reviews.py`, not in `cli.py` as the Files list says. That entry's
+stated reason — "do not fold into `jpdb_import.py` — M2.5 may be in flight" — was
+about merge contention, and M2.5 has landed; meanwhile AGENTS.md requires parsing
+to be separate from the CLI. A third module satisfies both, and `cli.py` keeps
+only the command. DESIGN_V2 needed no amendment: its jpdb section already says
+raw_fields rather than the ledger. (1) Every `cards_vocabulary_*` list is read,
+not just `jp_en`, with counts **summed per word** — `jp_en` and `en_jp` are the
+same word drilled in two directions, so reporting them separately would double
+every count. A prefix match takes any vocabulary list jpdb adds later without a
+code change; a non-vocabulary section (`cards_kanji_*`) is reported as skipped
+rather than silently ignored. (2) Presence in the export earns the tag, whatever
+the count — the filter means "words I already study in jpdb", and jpdb having
+made a card is what answers that. The count is stored beside it so a finer rule
+is possible later without re-importing. (3) Matching is vid first, then
+expression + reading; **first match wins** where two records share either, because
+two records with one vid is a duplicate `janki status --duplicates` exists to
+report and tagging both would spread it. (4) A re-run whose counts have not moved
+rewrites nothing — `vocabulary.json` is left byte-identical and the ledger
+sighting is already idempotent, so the weekly loop is cheap and produces no git
+noise. (5) Only the review count is stored, not a last-reviewed date: the plan
+asked for counts, and a date is a second thing to keep in step for a filter
+nothing yet reads. README documents all four deck filters and the
+`exclude_tags: [jpdb-known]` recipe; both were run end to end before committing,
+including building a deck that excluded a tagged word.*
 
 Depends on: M2.1, M1.3
 Files: `src/japanese_anki/cli.py` (do **not** fold into
