@@ -1251,6 +1251,8 @@ class BatchApplyResult:
     #: Rows janki could not parse. Separate from ``failed`` because the answer
     #: still exists — see :func:`apply_batch_results`.
     invalid: dict[str, str] = field(default_factory=dict)
+    #: Records an earlier fetch of this batch already wrote, skipped this time.
+    already_applied: list[str] = field(default_factory=list)
     missing: list[str] = field(default_factory=list)
 
 
@@ -1261,6 +1263,7 @@ def apply_batch_results(
     *,
     model: str,
     force_fields: Sequence[str] = (),
+    applied: Sequence[str] = (),
     jpdb_client: jpdb.JpdbClient | None = None,
 ) -> BatchApplyResult:
     """Fold a finished batch into the records, through the live path's checks.
@@ -1279,8 +1282,15 @@ def apply_batch_results(
       the batch was out — deliberate curation, on this side;
     * the row succeeded and its answer did **not validate** (``invalid``).
 
-    Only the last is recoverable, which is why it gets its own list rather than
-    joining ``failed``. That answer is complete and paid for and lives on
+    ``applied`` names records an earlier fetch of this same batch already
+    wrote. They are skipped rather than re-applied: a held batch is the only
+    one that can be fetched twice, and the gap between the two fetches is
+    exactly when a human corrects a sentence the first one wrote. Re-applying
+    under the submitted ``force_fields`` would replace that correction with the
+    model's original text.
+
+    Only the last of the four is recoverable, which is why it gets its own list
+    rather than joining ``failed``. That answer is complete and paid for and lives on
     Anthropic's side for weeks; janki's schema is the only thing rejecting it,
     and a schema can be fixed. A caller that treats it as dead — by clearing
     the batch id — makes it unreachable for a reason that was never the API's.
@@ -1288,6 +1298,7 @@ def apply_batch_results(
     outcome = BatchApplyResult(result=AiResult(records=list(records)))
     positions = {record.id: index for index, record in enumerate(outcome.result.records)}
     keys = batch_key_map(pending_ids)
+    done = {str(item) for item in applied}
     recent: list[str] = []
     seen: set[str] = set()
 
@@ -1301,6 +1312,9 @@ def apply_batch_results(
             )
             continue
         seen.add(record_id)
+        if record_id in done:
+            outcome.already_applied.append(record_id)
+            continue
         if entry.result is None:
             detail = f": {entry.detail}" if entry.detail else ""
             if entry.outcome == "invalid":
@@ -1325,7 +1339,7 @@ def apply_batch_results(
         )
 
     for record_id in pending_ids:
-        if record_id in seen:
+        if record_id in seen or record_id in done:
             continue
         if record_id in positions:
             outcome.failed[record_id] = "the batch returned no result for it"

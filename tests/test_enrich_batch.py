@@ -1153,9 +1153,11 @@ def test_a_batch_janki_could_not_read_at_all_is_not_forgotten(
 
     assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 1
 
-    err = capsys.readouterr().err
-    assert "3 answer(s) in batch msgbatch_01 did not parse" in err
-    assert "none of the answers had anything to fill" not in err
+    captured = capsys.readouterr()
+    assert "3 answer(s) in batch msgbatch_01 did not parse" in captured.err
+    # Printed to stdout, so it has to be denied there — the "collected" line is
+    # what this guard exists to suppress.
+    assert "none of the answers had anything to fill" not in captured.out
     assert list(book_of(root)["pending_batches"]) == ["msgbatch_01"]
     # And the way out, for when they are not worth chasing.
     assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-forget"]) == 0
@@ -1184,3 +1186,106 @@ def test_a_terminal_row_does_not_hold_the_batch_the_way_an_unreadable_one_does(
     assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 0
 
     assert book_of(root)["pending_batches"] == {}
+
+
+# F3: restored — the only thing pinning where the announcement sits.
+def test_a_moved_collection_claims_no_override_it_never_applied(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The announcement sits below the moved-collection guard on purpose: a run
+    that collects nothing applies nothing and should claim nothing."""
+    records = many(2)
+    batches = FakeBatches(results=[ok(item) for item in records])
+    root = submitted(tmp_path, records, monkeypatch, batches)
+    stranger = record(id="word:聞く:きく", expression="聞く")
+    (root / "vocabulary.json").write_text(
+        json.dumps([stranger.to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+    capsys.readouterr()
+
+    code = cli.main(
+        [
+            "--root", str(root), "enrich", "--ai", "--batch-fetch",
+            "--force-fields", "examples", "--yes",
+        ]
+    )
+
+    assert code == 1
+    output = capsys.readouterr()
+    assert "any more" in output.err
+    assert "Applying with --force-fields" not in output.out
+
+
+def test_a_second_fetch_does_not_rewrite_what_the_first_one_landed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Holding the batch is what makes a second fetch reachable, and the gap
+    between the two is exactly when a human corrects a sentence the first one
+    wrote. Under the submitted --force-fields, re-applying would replace that
+    correction with the model's original text."""
+
+    class Malformed:
+        stop_reason = "end_turn"
+        content = [type("B", (), {"type": "text", "text": "{not json"})()]
+
+    records = many(2)
+    batches = FakeBatches(
+        results=[
+            ok(records[0]),
+            Entry(key(records[1].id), Succeeded(Malformed())),
+        ]
+    )
+    root = project(tmp_path, records)
+    patch_all(monkeypatch, batches)
+    cli.main(
+        [
+            "--root", str(root), "enrich", "--ai", "--batch-submit",
+            "--force-fields", "examples",
+        ]
+    )
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 1
+    assert book_of(root)["pending_batches"]["msgbatch_01"]["applied_ids"] == [
+        "word:話す0:はなす"
+    ]
+
+    # The human fixes the furigana on what landed.
+    landed = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    for item in landed:
+        if item["id"] == "word:話す0:はなす":
+            item["examples"][0]["furigana"] = "毎日[まいにち] 話[はな]す0。 (checked)"
+    (root / "vocabulary.json").write_text(
+        json.dumps(landed, ensure_ascii=False), encoding="utf-8"
+    )
+    capsys.readouterr()
+
+    cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"])
+
+    kept = stored(root)["word:話す0:はなす"]["examples"][0]
+    assert kept["furigana"].endswith("(checked)"), "the hand correction survived"
+    assert "written by an earlier fetch" in capsys.readouterr().out
+
+
+def test_a_held_staging_batch_says_to_promote_before_fetching_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """"Fetching again costs nothing" is false when the next fetch refuses over
+    an unpromoted staging file."""
+
+    class Malformed:
+        stop_reason = "end_turn"
+        content = [type("B", (), {"type": "text", "text": "{not json"})()]
+
+    records = many(enrich.STAGING_THRESHOLD)
+    batches = FakeBatches(
+        results=[ok(item) for item in records[:-1]]
+        + [Entry(key(records[-1].id), Succeeded(Malformed()))]
+    )
+    root = submitted(tmp_path, records, monkeypatch, batches)
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 1
+
+    err = capsys.readouterr().err
+    assert cli.STAGING_FILE_NAME in err
+    assert "promote that file before fetching again" in err
+    assert "record(s) were written." not in err

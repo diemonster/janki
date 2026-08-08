@@ -1266,6 +1266,10 @@ def _batch_fetch(
     # question than the one that was asked.
     model = str(entry.get("model") or config.enrich_model)
     submitted_fields = [str(item) for item in entry.get("force_fields", [])]
+    # What an earlier fetch of this same batch already wrote. Only a held batch
+    # gets a second fetch, and the gap between them is when a human corrects a
+    # sentence the first one produced.
+    applied = [str(item) for item in entry.get("applied_ids", [])]
 
     status_now = claude_client.batch_status(batch_id)
     if status_now != claude_client.BATCH_ENDED:
@@ -1328,6 +1332,7 @@ def _batch_fetch(
         pending_ids,
         model=model,
         force_fields=force_fields,
+        applied=applied,
         jpdb_client=jpdb.JpdbClient(jpdb.api_key_from_env()),
     )
     result = outcome.result
@@ -1336,6 +1341,11 @@ def _batch_fetch(
         print(f"warning: {warning}", file=sys.stderr)
     for record_id, reason in outcome.failed.items():
         print(f"warning: {record_id}: {reason}; left untouched.", file=sys.stderr)
+    if outcome.already_applied:
+        print(
+            f"{len(outcome.already_applied)} record(s) were written by an "
+            "earlier fetch of this batch and were left as they are."
+        )
     for record_id, reason in outcome.invalid.items():
         print(
             f"warning: {record_id}: the answer did not parse ({reason}); left "
@@ -1361,7 +1371,9 @@ def _batch_fetch(
 
     if not result.changes:
         if outcome.invalid:
-            return _keep_for_invalid(batch_id, outcome.invalid, wrote=0)
+            return _keep_for_invalid(
+                book, batch_id, outcome.invalid, wrote=(), landed="nothing"
+            )
         print(
             f"Batch {batch_id} is collected: looked at {result.looked_up} "
             "record(s), and none of the answers had anything to fill."
@@ -1399,7 +1411,13 @@ def _batch_fetch(
         # answers are still there to be had. Clearing now would be the one
         # irreversible thing this command can do, for the one failure class
         # that was janki's and not the API's.
-        return _keep_for_invalid(batch_id, outcome.invalid, wrote=len(result.changes))
+        return _keep_for_invalid(
+            book,
+            batch_id,
+            outcome.invalid,
+            wrote=tuple(result.changes),
+            landed="staging" if staging else "records",
+        )
 
     book.clear_batch(batch_id)
     if (ledger_error := _save_ledger(book)) is not None:
@@ -1410,15 +1428,40 @@ def _batch_fetch(
     return 0
 
 
-def _keep_for_invalid(batch_id: str, invalid: Mapping[str, str], *, wrote: int) -> int:
+def _keep_for_invalid(
+    book: ledger.Ledger,
+    batch_id: str,
+    invalid: Mapping[str, str],
+    *,
+    wrote: Sequence[str],
+    landed: str,
+) -> int:
     """Hold the batch id because some answers came back unreadable.
 
     The one row class a later fetch can still do something about: the answers
     exist, complete and paid for, and it is janki's schema that turned them
     away. Dropping the id over that would make an 800-record batch unreachable
     because one field was added to a Pydantic model.
+
+    Holding it is what makes a second fetch possible, so the ids that landed
+    this time are written into the entry — the next fetch skips them rather
+    than rewriting a sentence a human has since corrected. ``landed`` says what
+    a re-fetch will meet, on the same reasoning as
+    :func:`_report_batch_ledger_failure`: telling someone to fetch again when
+    the next fetch will refuse over an unpromoted staging file sends them after
+    a repair that fails.
     """
-    written = f"{wrote} record(s) were written. " if wrote else ""
+    if wrote and landed == "records":
+        book.record_batch_applied(batch_id, wrote)
+    written = {
+        "records": f"{len(wrote)} record(s) were written. ",
+        "staging": (
+            f"{len(wrote)} record(s) went to {STAGING_FILE_NAME}; promote that "
+            "file before fetching again, or the next fetch refuses rather than "
+            "overwrite a review in progress. "
+        ),
+        "nothing": "",
+    }[landed]
     print(
         f"{written}{len(invalid)} answer(s) in batch {batch_id} did not parse, "
         "so it is still recorded as pending — those answers are intact on "
@@ -1427,6 +1470,14 @@ def _keep_for_invalid(batch_id: str, invalid: Mapping[str, str], *, wrote: int) 
         "not worth chasing, 'janki enrich --ai --batch-forget' drops the entry.",
         file=sys.stderr,
     )
+    if (ledger_error := _save_ledger(book)) is not None:
+        print(f"warning: {ledger_error}", file=sys.stderr)
+        print(
+            "The ledger could not record which records already landed, so a "
+            "later fetch of this batch would write them again. Fix that file "
+            "before fetching again.",
+            file=sys.stderr,
+        )
     return 1
 
 

@@ -515,6 +515,23 @@ class Ledger:
             return str(batch_id), dict(entry) if isinstance(entry, dict) else {}
         return None
 
+    def record_batch_applied(self, batch_id: str, applied_ids: Iterable[str]) -> None:
+        """Note which of a held batch's records have already been written.
+
+        A batch is held when some of its answers did not parse, which makes a
+        second fetch reachable for the first time — and a second fetch would
+        otherwise re-apply the whole result set, overwriting a record a human
+        corrected in between with the model's original text. Unioned rather
+        than replaced, because a batch can be fetched more than twice.
+        """
+        entry = self.pending_batches.get(str(batch_id))
+        if not isinstance(entry, dict):
+            return
+        already = [str(item) for item in entry.get("applied_ids", [])]
+        entry["applied_ids"] = list(
+            dict.fromkeys(already + [str(item) for item in applied_ids])
+        )
+
     def clear_batch(self, batch_id: str) -> bool:
         """Forget a collected batch. Returns whether there was one to forget."""
         return self.pending_batches.pop(str(batch_id), None) is not None

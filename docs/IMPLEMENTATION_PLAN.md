@@ -1393,8 +1393,13 @@ the only one that holds the batch id: the answer is complete and paid for
 and lives on Anthropic's side for weeks, with janki's schema the only thing
 rejecting it, so clearing over it would be the one irreversible act in the
 command for the one failure that was not the API's. The rule the whole
-fetch is arranged around: **clear the id only when no later fetch could
-still get anything for any covered record.** The fetch uses the **batch's** model, not the config's: a run
+fetch is arranged around: **clear the id once every record still in the
+collection has been accounted for and nothing that remains is
+recoverable.** A record deleted while the batch was out is deliberate,
+so its answer is moot and does not hold the id; an unreadable answer for
+a record that is still here does. The all-missing guard is a separate
+judgment on top of that — *every* record gone reads as an accident
+rather than curation, so it refuses instead of clearing. The fetch uses the **batch's** model, not the config's: a run
 submitted under one model was answered by that one.
 
 Amended after a second review found the all-missing guard could deadlock:
