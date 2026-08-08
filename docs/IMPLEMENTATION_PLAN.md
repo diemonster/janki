@@ -1234,7 +1234,7 @@ Files: `README.md`.
 Lane map: {M4.1 (early — only needs M2)} → {M4.2} → {M4.3} → {M4.4}.
 M4.2/M4.3/M4.4 all touch `enrich.py` + `cli.py`: strictly serial.
 
-### [ ] M4.1 Example QC functions
+### [~] claimed task/m4.1 2026-08-07 — M4.1 Example QC functions
 
 Depends on: M2.1, M2.3, M2.4
 Files: new `src/japanese_anki/qc.py`, `tests/test_qc.py` (new).
