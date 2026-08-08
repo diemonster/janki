@@ -307,10 +307,13 @@ def _report_enrichment_ledger_failure(
     while doing it.
 
     What a *re-run* does differs by pass, which is why the caller supplies that
-    sentence. A fill pass skips the records it already filled and so recovers
-    nothing; the polish pass looks at every record every time, so a re-run is
-    neither pointless nor free. Both are worth saying accurately: the point of
-    this message is that nobody chases a repair on a wrong description of it.
+    sentence rather than this function guessing at one. There is no useful
+    two-way split to generalise: ``--jpdb`` re-looks-up and re-proposes the same
+    values, which the fill rules drop as no change, so it never reaches the
+    ledger; ``--ai`` leaves records with examples and no usage note, which are
+    targets again, so it does; ``--polish-meanings`` looks at every record every
+    time. Whichever it is, saying it accurately is the whole point of this
+    message — nobody should chase a repair on a wrong description of it.
     """
     print(f"warning: {exc}", file=sys.stderr)
     print(
