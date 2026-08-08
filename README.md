@@ -312,9 +312,14 @@ janki enrich --jpdb --force-fields pitch_accent,frequency_rank
 
 It fills `furigana`, `romaji`, `part_of_speech`, `verb_group`, `conjugations`,
 `pitch_accent` and `frequency_rank`. It shows you every proposed change as a
-diff and asks before writing; `--yes` skips the question. A record with nothing
-to fill never reaches the network, so re-running after a finished pass costs
-nothing.
+diff and asks before writing; `--yes` skips the question.
+
+A record whose enrichable fields are all filled is skipped without an API call.
+A record with a field jpdb had no answer for is *not*, and is looked up again on
+every run — a noun has no verb group and no conjugation table, so those stay
+empty however many times you ask. Re-running is cheap on a collection of verbs
+and roughly one call per word on a collection of nouns, which is worth knowing
+before pointing it at a few thousand records.
 
 Two things it will not do. It **never writes `reading`** — that is half of the
 record ID, so a dictionary changing it would orphan the Anki review history

@@ -927,3 +927,21 @@ def test_a_file_that_cannot_be_rewritten_fails_before_the_api_pass(
     # Nothing was spent, and nothing was touched.
     assert api.bodies == []
     assert "suggested_reading" not in staging.read_text(encoding="utf-8")
+
+
+def test_a_field_jpdb_has_no_answer_for_is_looked_up_again_next_run() -> None:
+    # Not a bug, but the README makes a cost claim about it: a noun has no verb
+    # group and no conjugation table, so those stay empty and the record stays
+    # fillable. Nothing records "asked, and there was nothing".
+    api = FakeApi(
+        {"本": parse_response(([["本", "ほん"]], vocab(1, 2, "本", "ほん", ["LH"], 500, ["n"])))}
+    )
+    noun = VocabularyRecord(id="word:本:ほん", expression="本", reading="ほん")
+
+    first = enrich_records(client_for(api), [noun])
+    calls = len(api.bodies)
+    second = enrich_records(client_for(api), first.records)
+
+    assert second.looked_up == 1
+    assert second.changes == {}
+    assert len(api.bodies) == calls + 1
