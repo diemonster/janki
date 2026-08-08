@@ -25,6 +25,7 @@ original the camera produced rather than a derived file beside it.
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import shutil
 import subprocess
@@ -185,9 +186,25 @@ def _copy_into_inbox(source: Path, scan_inbox: Path, data: bytes) -> Path:
                 "under the fingerprint of these bytes. Move that file aside — janki "
                 "will not overwrite anything in the inbox."
             )
+    # Written from the bytes already in hand rather than re-read from the
+    # source. `shutil.copy2` would open the file a second time, and the paths
+    # this module is pointed at are exactly the volatile ones — a half-finished
+    # AirDrop, an iCloud sync, a re-export into Downloads. If the file changed
+    # in between, the API would be sent one image while the inbox stored
+    # another, and every record would cite provenance that is not what it was
+    # extracted from: the same wrong-image bug the content fingerprint above
+    # exists to prevent, arriving by a different door.
     try:
-        shutil.copy2(source, target)
+        target.write_bytes(data)
+        # Timestamps and mode, the part of copy2 worth keeping. Best-effort:
+        # failing to carry an mtime across is not worth losing the copy over.
+        with contextlib.suppress(OSError):
+            shutil.copystat(source, target)
     except OSError as exc:
+        # A partial write must not survive under the authentic name — it would
+        # pose as the real file forever while the genuine bytes hid behind a
+        # fingerprint suffix, and nothing prunes the inbox.
+        target.unlink(missing_ok=True)
         raise InputError(f"Could not copy {source} into {scan_inbox}: {exc}") from exc
     return target
 

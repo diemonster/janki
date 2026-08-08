@@ -382,3 +382,54 @@ def test_an_unreadable_file_is_a_janki_error_not_a_traceback(
         prepare_inputs([source], tmp_path / "inbox")
 
     assert "locked.pdf" in str(excinfo.value)
+
+
+def test_what_is_sent_is_what_is_stored_even_if_the_source_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The paths this module is pointed at are the volatile ones: a
+    # half-finished AirDrop, an iCloud sync, a re-export into Downloads. Two
+    # independent reads of the same path could send one image and store
+    # another, citing provenance that is not what was extracted from.
+    inbox = tmp_path / "inbox"
+    source = write(tmp_path / "downloads" / "IMG_0001.png", PNG)
+    real = Path.read_bytes
+    seen: list[str] = []
+
+    def changing(self: Path) -> bytes:
+        data = real(self)
+        if self == source and not seen:
+            seen.append("read")
+            # Replaced the instant *after* janki reads it, which is the window
+            # a second independent read would fall into.
+            write(source, PNG + b" replaced mid-run")
+        return data
+
+    monkeypatch.setattr(Path, "read_bytes", changing)
+
+    [item] = prepare_inputs([source], inbox)
+
+    monkeypatch.undo()
+    assert decoded(item) == item.origin_path.read_bytes()
+
+
+def test_a_failed_copy_leaves_nothing_behind_under_the_real_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A partial write surviving under the authentic name would pose as the real
+    # file forever, with the genuine bytes hidden behind a fingerprint suffix.
+    inbox = tmp_path / "inbox"
+    source = write(tmp_path / "desk" / "lesson.pdf", PDF)
+    real = Path.write_bytes
+
+    def fail(self: Path, data: bytes) -> int:
+        real(self, data[: len(data) // 2])
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(Path, "write_bytes", fail)
+
+    with pytest.raises(InputError):
+        prepare_inputs([source], inbox)
+
+    monkeypatch.undo()
+    assert not (inbox / "lesson.pdf").exists()
