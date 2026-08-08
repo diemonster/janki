@@ -135,12 +135,30 @@ def check_readings(
                 result.keep.append(True)
                 continue
 
-        promoted = remint(record)
+        promoted = remint(_resolved(record))
         if promoted.id != record.id:
             result.reminted[record.id] = promoted.id
         result.promoted.append(promoted)
         result.keep.append(False)
     return result
+
+
+def _resolved(record: VocabularyRecord) -> VocabularyRecord:
+    """The record with its review annotations cleared.
+
+    A row reaches this gate still carrying whatever the importer or the reading
+    assistant wrote on it — ``hold_reason``, ``suggested_reading`` — because a
+    reviewer fixes a hold by typing the reading in, not by tidying up the
+    annotations, and this module re-tests rather than trusting them. But those
+    annotations describe a row *under review*, and this one is about to stop
+    being one. Left in place they would be copied into ``vocabulary.json``,
+    where a merge keeps the first record's ``source`` forever and every reader
+    that treats ``hold_reason`` as "still held" — ``status --staged``,
+    ``enrich.needs_reading`` — would go on believing it.
+    """
+    return annotate(
+        record, hold_reason=None, suggested_reading=None, already_known=None
+    )
 
 
 def _structural_hold(record: VocabularyRecord) -> str | None:
@@ -205,7 +223,15 @@ def source_references(records: Iterable[VocabularyRecord]) -> list[tuple[str, st
 
 
 def archive_meta(meta: dict[str, Any], promoted: int) -> dict[str, Any]:
-    """The metadata the ``done/`` archive keeps from a promoted staging file."""
-    kept = {key: value for key, value in meta.items() if key != "review_notes"}
-    kept["review_notes"] = f"Promoted {promoted} record(s) from this file."
+    """The metadata the ``done/`` archive keeps from a promoted staging file.
+
+    A reviewer's own ``review_notes`` is kept and the promoted count appended
+    to it, never substituted for it: ``read_staging`` carries that key through
+    a round trip precisely so a hand-written note survives, and on a fully
+    promoted file the archive is the only copy left once the source is deleted.
+    """
+    kept = dict(meta)
+    note = f"Promoted {promoted} record(s) from this file."
+    existing = str(kept.get("review_notes") or "").strip()
+    kept["review_notes"] = f"{existing}\n\n{note}" if existing else note
     return kept

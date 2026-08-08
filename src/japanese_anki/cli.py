@@ -38,6 +38,7 @@ from japanese_anki.io import (
 )
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.preview import build_preview
+from japanese_anki.promote import PromoteError
 from japanese_anki.staging import (
     StagingError,
     check_rewritable,
@@ -939,10 +940,28 @@ def command_promote(args: argparse.Namespace) -> int:
     """
     config = _load_config(args)
     path = args.file.resolve()
+    done = (config.staging_dir / "done" / path.name).resolve()
+    if path == done or path.is_relative_to(done.parent):
+        raise PromoteError(
+            f"{path} is inside the promoted archive. Those records are already in "
+            "the collection; promoting the archive would only duplicate it."
+        )
+
     records, meta = read_staging(path)
     if not records:
         print(f"{path} holds no records; nothing to promote.")
         return 0
+
+    # Everything that can refuse, before anything is written. read_staging goes
+    # through PyYAML, which accepts a duplicate key silently; the rewrite goes
+    # through ruamel, which does not. Finding that out *after* the records and
+    # the archive were written leaves the promoted rows still in the staging
+    # file, and the re-run then appends them to the archive a second time.
+    check_rewritable(path)
+    archived: list[VocabularyRecord] = []
+    if done.exists():
+        previous, _previous_meta = read_staging(done)
+        archived = list(previous)
 
     client = None
     if not args.skip_reading_check:
@@ -955,9 +974,13 @@ def command_promote(args: argparse.Namespace) -> int:
         print(f"warning: {warning}", file=sys.stderr)
 
     if not result.promoted:
+        # The reasons still go in: a row held for a reading no dictionary lists
+        # is something only promote can determine, and `status --staged` reads
+        # it off the file rather than from this run's scrollback.
+        rewrite_staging(path, result.held)
         print(
-            f"Nothing promoted: all {len(result.held)} row(s) are still held "
-            f"back. {path} is unchanged."
+            f"Nothing promoted: all {len(result.held)} row(s) are still held back, "
+            f"and {path} now records why."
         )
         return 0
 
@@ -984,15 +1007,15 @@ def command_promote(args: argparse.Namespace) -> int:
 
     # The archive is appended to, not replaced: promoting a file in two passes
     # must not lose the first pass's rows.
-    done = config.staging_dir / "done" / path.name
     done.parent.mkdir(parents=True, exist_ok=True)
-    archived = list(result.promoted)
-    if done.exists():
-        previous, _ = read_staging(done)
-        archived = previous + archived
+    archived = archived + list(result.promoted)
     write_staging(done, archived, promote.archive_meta(meta, len(archived)), force=True)
 
     removed = prune_staging(path, result.keep)
+    if result.held:
+        # Rewritten in place with the reason each surviving row is still held,
+        # so a partly-promoted file always says what still needs attention.
+        rewrite_staging(path, result.held)
     if not result.held:
         # An emptied review is finished work; leaving it would have the next
         # import report a file that can never be resolved.

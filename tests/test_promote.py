@@ -455,7 +455,7 @@ records:
     assert "word:話す:話す -> word:話す:はなす" in capsys.readouterr().out
 
 
-def test_a_file_where_nothing_passes_is_left_untouched(
+def test_a_file_where_nothing_passes_still_records_why(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     root = project(tmp_path, [])
@@ -470,14 +470,14 @@ records:
     source: {type: extract, imported_from: lesson.pdf}
 """,
     )
-    before = path.read_text(encoding="utf-8")
     patch_jpdb(monkeypatch, hanasu_jpdb())
 
     code = cli.main(["--root", str(root), "promote", str(path)])
 
     assert code == 0
-    assert path.read_text(encoding="utf-8") == before
     assert not (root / "vocabulary.json").exists() or stored(root) == {}
+    survivors, _ = read_staging(path)
+    assert held_reason(survivors[0]) == HOLD_MISSING_READING
     assert "Nothing promoted" in capsys.readouterr().out
 
 
@@ -528,4 +528,125 @@ def test_the_archive_records_where_the_rows_came_from(
         (root / "staging" / "done" / "lesson.pdf.yaml").read_text(encoding="utf-8")
     )
     assert archived["source_file"] == "lesson.pdf"
+    assert "Promoted 1 record(s)" in archived["review_notes"]
+
+
+# --- what the file says after a partial promote ------------------------------
+
+
+def test_a_held_row_is_rewritten_with_the_reason_promote_computed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # HOLD_UNKNOWN_READING is a verdict only promote can reach — it needs the
+    # jpdb cross-check. `status --staged` reads the reason off the file, not
+    # from this run's scrollback, so it has to be written down.
+    root = project(tmp_path, [])
+    path = staging_file(
+        root,
+        ONE_GOOD
+        + """\
+  - id: 'word:話す:はなし'
+    expression: 話す
+    reading: はなし
+    source: {type: extract, imported_from: lesson.pdf}
+""",
+    )
+    patch_jpdb(monkeypatch, hanasu_jpdb())
+
+    cli.main(["--root", str(root), "promote", str(path)])
+
+    survivors, _ = read_staging(path)
+    assert [item.reading for item in survivors] == ["はなし"]
+    assert held_reason(survivors[0]) == HOLD_UNKNOWN_READING
+
+
+def test_a_promoted_record_carries_no_review_annotations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The reviewer fixes a hold by typing the reading in, not by tidying the
+    # annotations. Left in place they would land in vocabulary.json, where a
+    # merge keeps the first record's source forever and every reader that
+    # treats hold_reason as "still held" would go on believing it.
+    root = project(tmp_path, [])
+    path = staging_file(
+        root,
+        """\
+source_file: lesson.pdf
+records:
+  - id: 'word:食べ物:'
+    expression: 食べ物
+    reading: たべもの
+    source:
+      type: extract
+      imported_from: lesson.pdf
+      raw_fields:
+        hold_reason: missing reading
+        suggested_reading: たべもの
+""",
+    )
+    patch_jpdb(monkeypatch, FakeJpdb())
+
+    cli.main(["--root", str(root), "promote", str(path)])
+
+    fields = stored(root)["word:食べ物:たべもの"]["source"]["raw_fields"]
+    assert "hold_reason" not in fields
+    assert "suggested_reading" not in fields
+
+
+def test_a_file_that_cannot_be_rewritten_is_refused_before_anything_is_written(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A duplicate key is an easy slip while hand-editing. PyYAML accepts it
+    # silently, so the whole promote would land and only the final rewrite
+    # would fail — leaving the promoted rows in the file, so the re-run
+    # appends them to the archive a second time.
+    root = project(tmp_path, [])
+    duplicated = ONE_GOOD.replace(
+        "    reading: はなす", "    reading: はなす\n    reading: はなす"
+    )
+    path = staging_file(root, duplicated)
+    patch_jpdb(monkeypatch, hanasu_jpdb())
+
+    code = cli.main(["--root", str(root), "promote", str(path)])
+
+    assert code == 1
+    assert not (root / "vocabulary.json").exists() or stored(root) == {}
+    assert not (root / "staging" / "done").exists()
+    assert not (root / "ledger.json").exists()
+
+
+def test_promoting_the_archive_itself_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A tab-completion slip. The archive is valid staging YAML, so it would
+    # promote cleanly, double itself in place, and then die on a length
+    # mismatch that names no cause.
+    root = project(tmp_path, [])
+    patch_jpdb(monkeypatch, hanasu_jpdb())
+    cli.main(["--root", str(root), "promote", str(staging_file(root, ONE_GOOD))])
+    done = root / "staging" / "done" / "lesson.pdf.yaml"
+    before = done.read_text(encoding="utf-8")
+
+    code = cli.main(["--root", str(root), "promote", str(done)])
+
+    assert code == 1
+    assert done.read_text(encoding="utf-8") == before
+    assert "already in the collection" in capsys.readouterr().err
+
+
+def test_the_archive_keeps_a_hand_written_review_note(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # On a fully promoted file the source is deleted, so the archive is the
+    # only copy left of a note the reviewer wrote by hand.
+    root = project(tmp_path, [])
+    path = staging_file(root, "review_notes: chapter 3, checked with the teacher\n" + ONE_GOOD)
+    patch_jpdb(monkeypatch, hanasu_jpdb())
+
+    cli.main(["--root", str(root), "promote", str(path)])
+
+    archived = yaml.safe_load(
+        (root / "staging" / "done" / "lesson.pdf.yaml").read_text(encoding="utf-8")
+    )
+    assert "chapter 3, checked with the teacher" in archived["review_notes"]
     assert "Promoted 1 record(s)" in archived["review_notes"]
