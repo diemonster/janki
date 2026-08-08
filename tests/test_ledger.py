@@ -842,3 +842,21 @@ def test_the_word_audio_fingerprint_uses_pitch_select_pattern() -> None:
 
     assert ledger_module.word_audio_content_fingerprint(record) == short_fingerprint("はしLHL")
     assert pitch.select_pattern(record) == "LHL"
+
+
+def test_a_case_only_edit_does_not_make_word_audio_look_stale() -> None:
+    """The fingerprint covers what was spoken, and 'LHLL' and 'lhll' are the
+    same utterance — to_aquestalk renders them byte for byte alike."""
+    upper = VocabularyRecord(
+        id="word:卵:たまご",
+        expression="卵",
+        reading="たまご",
+        meanings=["egg"],
+        pitch_accent=["LHLL"],
+    )
+
+    assert ledger_module.word_audio_content_fingerprint(
+        upper
+    ) == ledger_module.word_audio_content_fingerprint(
+        replace(upper, pitch_accent=["lhll"])
+    )

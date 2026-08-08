@@ -645,9 +645,13 @@ Design: DESIGN_V2 "Schema changes".
   `audio_accent: str` (`""`), `frequency_rank: int | None` (`None`).
   `ExampleSentence`: `audio: str` (`""`). Extend `from_dict` coercion.
 - If M1.1's merge enumerates fields, add the new ones there.
-- Validation: `pitch_accent` entries match `^[HL]+$`; warn (not error)
-  when `len(pattern) != len(reading) + 1` (the particle-slot invariant
-  is community-verified only).
+- Validation: `pitch_accent` entries match `^[HL]+$`, **case-insensitively**
+  (amended in M5.1: `pitch._LEVELS` reads `h`/`l` deliberately, and this
+  check is an *error*, so a case-sensitive one made `janki build` refuse a
+  whole deck over a pattern the converter speaks correctly); warn (not
+  error) when `len(pattern) != len(reading) + 1` — counting **NFC** kana,
+  since a decomposed `が` is two codepoints and one kana (also M5.1) —
+  because the particle-slot invariant is community-verified only.
 - **Do not touch `FIELD_NAMES` or the exporter** — Anki-visible fields
   ship together in M5.4.
 - **Three existing tests encode the pre-M2.2 world and must be rewritten

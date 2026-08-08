@@ -341,3 +341,12 @@ def test_one_pattern_passed_as_a_string_is_refused() -> None:
 def test_a_pattern_that_does_not_fit_is_refused_here_too() -> None:
     with pytest.raises(PitchError):
         render_pitch_html("たまご", ["LH"])
+
+
+def test_the_chosen_pattern_is_upper_cased() -> None:
+    """Not cosmetic: the ledger's word-audio content fingerprint is
+    fp(reading + this) and is defined as covering what was *spoken*. Retyping
+    LHLL as lhll would report good audio as stale, over two strings that render
+    identically."""
+    assert select_pattern(record(pitch_accent=["lhl"])) == "LHL"
+    assert select_pattern(record(pitch_accent=["LHH"], audio_accent="lhl")) == "LHL"

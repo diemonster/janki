@@ -186,12 +186,20 @@ def select_pattern(record: VocabularyRecord) -> str | None:
     decides what to do about that, and DESIGN_V2 says skip and flag rather than
     let an engine guess, since the homographs a guess gets wrong are exactly the
     ones a pitch card exists for.
+
+    **Upper-cased**, which is not cosmetic. The ledger's word-audio *content*
+    fingerprint is ``fp(reading + this)``, and it is defined as covering what
+    was spoken — so retyping ``LHLL`` as ``lhll`` would report perfectly good
+    audio as stale, over two strings :func:`to_aquestalk` renders identically.
+    Canonicalising here rather than at the loaders covers ``audio_accent`` and
+    records built in memory too, and every already-upper pattern hashes
+    unchanged, so no committed ledger entry moves.
     """
     if record.audio_accent.strip():
-        return record.audio_accent.strip()
+        return record.audio_accent.strip().upper()
     for pattern in record.pitch_accent:
         if pattern.strip():
-            return pattern.strip()
+            return pattern.strip().upper()
     return None
 
 
