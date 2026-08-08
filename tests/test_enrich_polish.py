@@ -503,8 +503,12 @@ def test_a_failed_ledger_write_does_not_promise_a_recovery_that_never_happens(
     assert cli.main(["--root", str(root), "enrich", "--polish-meanings", "--yes"]) == 1
 
     err = capsys.readouterr().err
-    assert "nothing can reconstruct it" in err
+    assert "'status --rebuild' cannot bring it back" in err
     assert "to recover the entries" not in err
+    # This pass looks at every record every time, so the fill passes' "a re-run
+    # finds nothing to do" is false here — and it would cost a call per record.
+    assert "not a free repair" in err
+    assert "skips these records" not in err
     # The records themselves are still written; only the note about them is not.
     assert stored(root)["word:聞く:きく"]["meanings"] == ["to ask"]
 

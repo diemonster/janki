@@ -294,7 +294,9 @@ def _report_ledger_failure(exc: ledger.LedgerError) -> None:
     )
 
 
-def _report_enrichment_ledger_failure(exc: ledger.LedgerError, aftermath: str) -> None:
+def _report_enrichment_ledger_failure(
+    exc: ledger.LedgerError, *, rerun: str, aftermath: str
+) -> None:
     """The honest report for an ``enriched`` entry that did not get written.
 
     Deliberately not :func:`_report_ledger_failure`: its advice is
@@ -302,16 +304,19 @@ def _report_enrichment_ledger_failure(exc: ledger.LedgerError, aftermath: str) -
     what the records and media files *prove*. An ``enriched`` entry is provable
     by nothing — a filled field does not say who filled it — so that advice
     would promise a recovery that silently never happens, and report success
-    while doing it. Nor does re-running recover it: the work is on file now, so
-    the next pass finds nothing to change and never reaches the ledger. Say
-    that, rather than send someone after a fix that does not exist.
+    while doing it.
+
+    What a *re-run* does differs by pass, which is why the caller supplies that
+    sentence. A fill pass skips the records it already filled and so recovers
+    nothing; the polish pass looks at every record every time, so a re-run is
+    neither pointless nor free. Both are worth saying accurately: the point of
+    this message is that nobody chases a repair on a wrong description of it.
     """
     print(f"warning: {exc}", file=sys.stderr)
     print(
-        "The records are written; the ledger entry recording it is not, and "
-        "nothing can reconstruct it — neither 'status --rebuild' (an enrichment "
-        "pass is not provable from the records) nor a re-run (the work is done "
-        f"now, so the next pass finds nothing to do). {aftermath}",
+        "The records are written; the ledger entry recording it is not. "
+        "'status --rebuild' cannot bring it back — an enrichment pass is not "
+        f"provable from the records. {rerun} {aftermath}",
         file=sys.stderr,
     )
 
@@ -893,8 +898,14 @@ def command_enrich(args: argparse.Namespace) -> int:
     else:
         _report_enrichment_ledger_failure(
             ledger_error,
-            "The records are correct; 'status' will simply not know jpdb is "
-            "what filled them.",
+            rerun=(
+                "Nor does a re-run: the fields are filled now, so the next pass "
+                "skips these records before it reaches the ledger."
+            ),
+            aftermath=(
+                "The records are correct; 'status' will simply not know jpdb is "
+                "what filled them."
+            ),
         )
         return 1
     return 0
@@ -1003,8 +1014,14 @@ def _enrich_ai(
     else:
         _report_enrichment_ledger_failure(
             ledger_error,
-            f"The examples and notes are correct; 'status' will simply not know "
-            f"{model} wrote them.",
+            rerun=(
+                "Nor does a re-run: the fields are filled now, so the next pass "
+                "skips these records before it reaches the ledger."
+            ),
+            aftermath=(
+                "The examples and notes are correct; 'status' will simply not "
+                f"know {model} wrote them."
+            ),
         )
         return 1
     return 0
@@ -1114,8 +1131,15 @@ def _polish_meanings(config: ProjectConfig, args: argparse.Namespace) -> int:
     if ledger_error is not None:
         _report_enrichment_ledger_failure(
             ledger_error,
-            f"The new glosses are on file; 'status' will simply not know "
-            f"{model} wrote them in place of what was there.",
+            rerun=(
+                "A re-run is not a free repair either: this pass looks at every "
+                "record every time, so it would call the model once per record "
+                "again and record a pass only where you accept a further change."
+            ),
+            aftermath=(
+                "The new glosses are on file; 'status' will simply not know "
+                f"{model} wrote them in place of what was there."
+            ),
         )
         return 1
     print(f"Ledger: recorded a polish pass over {len(accepted)} record(s).")
