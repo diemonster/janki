@@ -1268,7 +1268,7 @@ Design: DESIGN_V2 "AI integration > Mechanical QC".
   model-supplied romaji is always discarded).
 - Unit tests with canned parse fixtures; no network.
 
-### [ ] M4.2 `janki enrich --ai`
+### [~] claimed task/m4.2 2026-08-07 — M4.2 `janki enrich --ai`
 
 Depends on: M3.1, M4.1, M2.6, M3.4 (the ≥50-record path needs promote)
 Files: `src/japanese_anki/enrich.py`, `src/japanese_anki/cli.py`,
