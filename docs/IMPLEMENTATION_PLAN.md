@@ -1436,7 +1436,7 @@ Design: DESIGN_V2 "Batch mode".
   processing → print status, exit 0. Errored/expired per-record results
   are reported and leave those records untouched.
 
-### [ ] M4.W Milestone 4 wrap
+### [~] claimed task/m4.w 2026-08-08 — M4.W Milestone 4 wrap
 
 Depends on: all M4 tasks
 Files: `README.md`, `prompts/ENRICH_VOCABULARY.md`.
