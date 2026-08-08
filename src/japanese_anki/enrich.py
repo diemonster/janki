@@ -1248,6 +1248,9 @@ class BatchApplyResult:
 
     result: AiResult = field(default_factory=AiResult)
     failed: dict[str, str] = field(default_factory=dict)
+    #: Rows janki could not parse. Separate from ``failed`` because the answer
+    #: still exists — see :func:`apply_batch_results`.
+    invalid: dict[str, str] = field(default_factory=dict)
     missing: list[str] = field(default_factory=list)
 
 
@@ -1266,11 +1269,21 @@ def apply_batch_results(
     the synchronous pass uses — the saving is in how the request was sent, not
     in what is done with the reply.
 
-    Three ways a record can come back with nothing, and none of them is silent:
-    the batch reported it errored, expired or was canceled; the batch never
-    mentioned it at all; or its id no longer names a record, because the
-    collection moved while the batch was out. Each is reported and leaves the
-    record exactly as it is.
+    Four ways a record can come back with nothing, none of them silent, and one
+    of them different in kind from the rest:
+
+    * the batch reported it **errored, expired or was canceled** — terminal, a
+      re-fetch returns the same row;
+    * the batch **never mentioned it**, which will not change either;
+    * its id **no longer names a record**, because the collection moved while
+      the batch was out — deliberate curation, on this side;
+    * the row succeeded and its answer did **not validate** (``invalid``).
+
+    Only the last is recoverable, which is why it gets its own list rather than
+    joining ``failed``. That answer is complete and paid for and lives on
+    Anthropic's side for weeks; janki's schema is the only thing rejecting it,
+    and a schema can be fixed. A caller that treats it as dead — by clearing
+    the batch id — makes it unreachable for a reason that was never the API's.
     """
     outcome = BatchApplyResult(result=AiResult(records=list(records)))
     positions = {record.id: index for index, record in enumerate(outcome.result.records)}
@@ -1290,7 +1303,10 @@ def apply_batch_results(
         seen.add(record_id)
         if entry.result is None:
             detail = f": {entry.detail}" if entry.detail else ""
-            outcome.failed[record_id] = f"{entry.outcome}{detail}"
+            if entry.outcome == "invalid":
+                outcome.invalid[record_id] = entry.detail or "the answer did not parse"
+            else:
+                outcome.failed[record_id] = f"{entry.outcome}{detail}"
             continue
         index = positions.get(record_id)
         if index is None:

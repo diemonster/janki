@@ -4,7 +4,7 @@ import argparse
 import json
 import sys
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -1336,6 +1336,12 @@ def _batch_fetch(
         print(f"warning: {warning}", file=sys.stderr)
     for record_id, reason in outcome.failed.items():
         print(f"warning: {record_id}: {reason}; left untouched.", file=sys.stderr)
+    for record_id, reason in outcome.invalid.items():
+        print(
+            f"warning: {record_id}: the answer did not parse ({reason}); left "
+            "untouched.",
+            file=sys.stderr,
+        )
     if outcome.missing:
         print(
             f"warning: {len(outcome.missing)} record(s) the batch covered are no "
@@ -1354,6 +1360,8 @@ def _batch_fetch(
         )
 
     if not result.changes:
+        if outcome.invalid:
+            return _keep_for_invalid(batch_id, outcome.invalid, wrote=0)
         print(
             f"Batch {batch_id} is collected: looked at {result.looked_up} "
             "record(s), and none of the answers had anything to fill."
@@ -1386,6 +1394,13 @@ def _batch_fetch(
         )
         return code
 
+    if outcome.invalid:
+        # The good rows are written; the unparseable ones are not, and their
+        # answers are still there to be had. Clearing now would be the one
+        # irreversible thing this command can do, for the one failure class
+        # that was janki's and not the API's.
+        return _keep_for_invalid(batch_id, outcome.invalid, wrote=len(result.changes))
+
     book.clear_batch(batch_id)
     if (ledger_error := _save_ledger(book)) is not None:
         _report_batch_ledger_failure(
@@ -1393,6 +1408,26 @@ def _batch_fetch(
         )
         return 1
     return 0
+
+
+def _keep_for_invalid(batch_id: str, invalid: Mapping[str, str], *, wrote: int) -> int:
+    """Hold the batch id because some answers came back unreadable.
+
+    The one row class a later fetch can still do something about: the answers
+    exist, complete and paid for, and it is janki's schema that turned them
+    away. Dropping the id over that would make an 800-record batch unreachable
+    because one field was added to a Pydantic model.
+    """
+    written = f"{wrote} record(s) were written. " if wrote else ""
+    print(
+        f"{written}{len(invalid)} answer(s) in batch {batch_id} did not parse, "
+        "so it is still recorded as pending — those answers are intact on "
+        "Anthropic's side and fetching again costs nothing, which is worth "
+        "doing if the schema they failed was the thing at fault. If they are "
+        "not worth chasing, 'janki enrich --ai --batch-forget' drops the entry.",
+        file=sys.stderr,
+    )
+    return 1
 
 
 def _report_batch_ledger_failure(

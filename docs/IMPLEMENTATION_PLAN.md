@@ -1385,10 +1385,16 @@ terminal. (6) **Anything short of a written record keeps the batch
 pending**: a declined diff, a failed ledger write, an existing staging
 file. Results live on Anthropic's side for weeks and fetching again is
 free, so forgetting the id is the only irreversible thing in the command.
-(7) Three ways a record comes back with nothing — errored/expired/canceled,
-never mentioned, or no longer in the collection — and each is reported by
-name, because a batch runs for up to a day and the collection does not
-hold still. The fetch uses the **batch's** model, not the config's: a run
+(7) **Four** ways a record comes back with nothing — errored/expired/canceled,
+never mentioned, no longer in the collection, or an answer that did not
+validate — each reported by name, because a batch runs for up to a day and
+the collection does not hold still. The fourth is different in kind and is
+the only one that holds the batch id: the answer is complete and paid for
+and lives on Anthropic's side for weeks, with janki's schema the only thing
+rejecting it, so clearing over it would be the one irreversible act in the
+command for the one failure that was not the API's. The rule the whole
+fetch is arranged around: **clear the id only when no later fetch could
+still get anything for any covered record.** The fetch uses the **batch's** model, not the config's: a run
 submitted under one model was answered by that one.
 
 Amended after a second review found the all-missing guard could deadlock:

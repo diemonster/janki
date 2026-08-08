@@ -1066,7 +1066,7 @@ def test_one_unparseable_row_costs_that_row_and_not_the_batch(
     root = submitted(tmp_path, records, monkeypatch, batches)
     capsys.readouterr()
 
-    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 0
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 1
 
     kept = stored(root)
     assert kept["word:話す1:はなす"]["examples"], "the good answer landed"
@@ -1074,39 +1074,52 @@ def test_one_unparseable_row_costs_that_row_and_not_the_batch(
     err = capsys.readouterr().err
     assert "word:話す0:はなす" in err
     assert "did not match the expected shape" in err
-    assert book_of(root)["pending_batches"] == {}
+    # The unreadable answer is intact on Anthropic's side and janki's schema is
+    # what turned it away, so the id that reaches it is kept.
+    assert list(book_of(root)["pending_batches"]) == ["msgbatch_01"]
 
 
-def test_a_moved_collection_claims_no_override_it_never_applied(
+def test_the_override_announcement_names_both_lists(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    records = many(2)
-    batches = FakeBatches(results=[ok(item) for item in records])
-    root = submitted(tmp_path, records, monkeypatch, batches)
-    stranger = record(id="word:聞く:きく", expression="聞く")
-    (root / "vocabulary.json").write_text(
-        json.dumps([stranger.to_dict()], ensure_ascii=False), encoding="utf-8"
+    """Both halves come from parsed values now — the override from the flag
+    command_enrich parsed, the submitted list from the ledger — so the line has
+    to name what was asked for as well as what is being done instead.
+
+    A regression guard rather than a red-before test: the output is what it
+    always was, and what changed underneath is which variable each half reads.
+    Crossing the two is the mistake this catches."""
+    curated = record(usage_notes="note", examples=[ExampleSentence(japanese="人と話す。")])
+    batches = FakeBatches(results=[ok(curated)])
+    root = project(tmp_path, [curated])
+    patch_all(monkeypatch, batches)
+    cli.main(
+        [
+            "--root", str(root), "enrich", "--ai", "--batch-submit",
+            "--force-fields", "usage_notes", curated.id,
+        ]
     )
     capsys.readouterr()
 
-    code = cli.main(
+    cli.main(
         [
             "--root", str(root), "enrich", "--ai", "--batch-fetch",
             "--force-fields", "examples", "--yes",
         ]
     )
 
-    assert code == 1
-    output = capsys.readouterr()
-    assert "any more" in output.err
-    assert "Applying with --force-fields" not in output.out
+    out = capsys.readouterr().out
+    assert "Applying with --force-fields examples" in out
+    assert "instead of the usage_notes this batch was submitted with" in out
 
 
-def test_a_misspelt_field_is_caught_whatever_state_the_batch_is_in(
+def test_field_names_are_validated_in_one_place_and_it_is_not_the_fetch(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Validated by command_enrich before any state is read, so it does not
-    matter whether the batch is pending, running, or unfetchable."""
+    """Pre-existing behavior, pinned because it became load-bearing: the fetch
+    used to re-parse the flag and no longer does, so command_enrich's parse is
+    now the only one. A misspelt field must still be caught before any batch
+    state is read."""
     root = project(tmp_path, many(1))
 
     assert cli.main(
@@ -1117,3 +1130,57 @@ def test_a_misspelt_field_is_caught_whatever_state_the_batch_is_in(
     ) == 1
 
     assert "unknown field 'exmaples'" in capsys.readouterr().err
+
+
+def test_a_batch_janki_could_not_read_at_all_is_not_forgotten(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The shape that makes the rule matter: a schema gains a field while a
+    large batch is out, so every answer fails validation. They are complete and
+    paid for; dropping the only id that reaches them would be janki discarding
+    work over its own decision."""
+
+    class Malformed:
+        stop_reason = "end_turn"
+        content = [type("B", (), {"type": "text", "text": "{not json"})()]
+
+    records = many(3)
+    batches = FakeBatches(
+        results=[Entry(key(item.id), Succeeded(Malformed())) for item in records]
+    )
+    root = submitted(tmp_path, records, monkeypatch, batches)
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 1
+
+    err = capsys.readouterr().err
+    assert "3 answer(s) in batch msgbatch_01 did not parse" in err
+    assert "none of the answers had anything to fill" not in err
+    assert list(book_of(root)["pending_batches"]) == ["msgbatch_01"]
+    # And the way out, for when they are not worth chasing.
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-forget"]) == 0
+    assert book_of(root)["pending_batches"] == {}
+
+
+def test_a_terminal_row_does_not_hold_the_batch_the_way_an_unreadable_one_does(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An errored row has no answer anywhere and a re-fetch returns the same
+    row, so it is terminal and the id may go.
+
+    Green before the change as well as after — it guards the *other* side of a
+    distinction this commit introduces, so that a later edit cannot collapse
+    invalid back into failed without one of the pair going red."""
+    records = many(2)
+    batches = FakeBatches(
+        results=[
+            Entry(key(records[0].id), Failed("errored", "Overloaded")),
+            ok(records[1]),
+        ]
+    )
+    root = submitted(tmp_path, records, monkeypatch, batches)
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 0
+
+    assert book_of(root)["pending_batches"] == {}

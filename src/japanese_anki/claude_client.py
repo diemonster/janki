@@ -333,10 +333,18 @@ class BatchEntry(NamedTuple):
 
     ``outcome`` is the API's own word — ``succeeded``, ``errored``, ``canceled``
     or ``expired`` — kept rather than flattened, because only the first of them
-    carries a :class:`CallResult` and the other three mean genuinely different
-    things to a caller deciding whether to resubmit. ``result`` is that
-    ``CallResult`` and is ``None`` for the rest; ``detail`` carries whatever the
-    API said about a failure.
+    carries a :class:`CallResult` and the others mean genuinely different things
+    to a caller deciding whether to resubmit. ``result`` is that ``CallResult``
+    and is ``None`` for the rest; ``detail`` carries whatever the API said about
+    a failure.
+
+    One value is **janki's own**, not the API's: ``invalid`` means the row
+    succeeded and its text did not validate. It is separate from ``errored`` on
+    purpose, and the separation is the point — an errored row has no answer
+    anywhere and never will, while an invalid one's answer is complete and paid
+    for and sitting on Anthropic's side, with janki's schema the only thing
+    rejecting it. A caller may discard the first and must not discard the
+    second.
     """
 
     custom_id: str
