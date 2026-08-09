@@ -2012,7 +2012,7 @@ is in the collection:
 Whatever it picks, the detector must read `deck.model_id` rather than the
 derived value, or it will misreport any deck that pins one.
 
-### [ ] M5.W Milestone 5 wrap
+### [x] M5.W Milestone 5 wrap
 
 Depends on: all M5 tasks
 Files: `README.md`.
@@ -2020,3 +2020,24 @@ Files: `README.md`.
 - README: audio setup (VOICEVOX install/launch, credit line for shared
   decks), `janki refresh` as the headline weekly workflow, retire the
   "no synthesized audio" limitation paragraph.
+
+*Done 2026-08-09.* The README gained a top-level **Audio** section
+covering both engines, how to get VOICEVOX running, how to audition
+voices, and the per-character terms of use that matter only if a deck is
+shared. Three claims were retired as false rather than merely stale:
+
+- "`janki audio` arrives in Milestone 5" and "`janki build` does not yet
+  mark records exported, so `--unexported` currently lists everything".
+- **"Changing a voice does not make existing audio stale... so re-run
+  with `--force`."** This was the most dangerous of the three, because
+  it was accurate when written and became *wrong* rather than
+  incomplete: the ledger now records engine, voice, rate and style
+  settings per clip, so a change re-voices exactly what it affects and
+  `--force` is a bigger hammer than the situation calls for. A reader
+  following it would have re-rendered a whole collection — through a
+  paid API, for the OpenAI half.
+
+Milestone 5 shipped one thing it did not plan (`tts/openai_tts.py`) and
+did not ship one thing it did (`tts/azure.py`); both are recorded under
+M5.7. The `janki status` notetype detector specified in M5.5 moved to
+M5.8, which is now the only open item in Milestone 5's neighbourhood.

@@ -141,6 +141,8 @@ counts. A deck name works as well as a path — `verbs` is looked up under
 
 ### The whole pipeline
 
+This is the command to run after adding words. It is the weekly workflow:
+
 ```bash
 janki refresh                  # build every deck
 janki refresh --deck verbs     # build only this deck
@@ -764,11 +766,13 @@ moved into `vocabulary.json` by hand, and running it when nothing is missing is
 a no-op: every writer records a source reference in the same shape `--rebuild`
 reconstructs, so it never grows the file.
 
-Two parts of the ledger are still unwritten while the rest of the pipeline is
-built. The only writer of `audio` is `--rebuild`, over files you placed under
-`data/media` yourself, until `janki audio` arrives in Milestone 5. And `janki
-build` does not yet mark records exported, so `--unexported` currently lists
-everything.
+`audio` is written by `janki audio`, one entry per clip, recording the engine,
+the voice, the rate and any style settings that decided how it sounds — so
+changing any of them makes exactly those clips stale. `exports` is written by
+every build, so `--unexported` answers what a deck has never shipped, which is
+what makes `build --only-new` correct. An export entry also records what the
+record was *missing* when it shipped, so a word that went out silent and has a
+clip now can be reported rather than silently left behind.
 
 `enriched` *is* written, by the passes that write records directly:
 `janki enrich --jpdb`, `--ai` and `--polish-meanings` each leave their own
@@ -929,17 +933,70 @@ requests include:
   scheme is unverified against a real installed app — test it on your iPhone
   before relying on it.
 - Pitch accent and frequency rank are filled by `janki enrich --jpdb` from
-  jpdb's dictionary data. Generated audio arrives in Milestone 5. Neither is
-  ever guessed: an empty field means the dictionary did not say, and `janki
-  status` counts it as missing rather than inventing a value. See
-  `docs/DESIGN_V2.md`.
+  jpdb's dictionary data. Neither is ever guessed: an empty field means the
+  dictionary did not say, and `janki status` counts it as missing rather than
+  inventing a value. See `docs/DESIGN_V2.md`.
+- Word audio needs a pitch accent, so a record without one is skipped and
+  reported rather than voiced with the engine's guess — the guess is wrong on
+  exactly the homographs a pitch card exists for. `--allow-default-accent` opts
+  into it deliberately and marks those clips in the ledger.
+- janki does not read your Anki collection, so it cannot tell you that an import
+  silently failed to upgrade the notetype. Tick **Merge Notetypes** — see
+  [Importing into Anki Desktop](#importing-into-anki-desktop).
 
-### Choosing a voice, and slowing it down
+## Audio
+
+Two engines, because the two recordings do different jobs.
+
+**Words are spoken by VOICEVOX with their pitch accent forced.** That is the
+whole reason it is here: 橋 and 箸 are the pair a card exists to tell apart, and
+an engine left to guess renders them identically — measured, not assumed.
+Nothing else in this project can force an accent, so nothing else voices a word.
+
+**Sentences are read naturally**, by VOICEVOX or by OpenAI. Nothing is forced
+there — janki has no accent data for a whole sentence and does not pretend to —
+so the choice is about which reads Japanese better, and you should listen rather
+than take a recommendation.
+
+### Getting VOICEVOX running
+
+It is a local engine: no account, no key, no per-character cost, and it works
+offline. Either install the [VOICEVOX app](https://voicevox.hiroshiba.jp/) and
+leave it open, or run the engine on its own:
+
+```bash
+docker run --rm -p 50021:50021 --name janki-voicevox \
+  voicevox/voicevox_engine:cpu-latest
+```
+
+janki talks to `http://localhost:50021` by default; set `tts.voicevox_url` if
+yours listens elsewhere. `janki audio` checks the engine is answering *before*
+it synthesizes anything, because a run that voices forty clips and then fails on
+the forty-first has written forty files and half a ledger.
+
+If you run it in a container, note that it loads a model per speaker on demand
+and keeps them: a 2 GiB colima VM gets through about nine speakers before the
+container is OOM-killed. That only bites when auditioning many voices at once —
+`scripts/voice-samples.py` cycles the container itself to work around it.
+
+### Generating the audio
+
+```bash
+janki audio --words --examples
+```
+
+Both kinds are off unless asked for. It skips — and reports — anything it is not
+sure of: a record with no accent pattern is not voiced with a guess, and an
+example whose furigana nobody confirmed is not spoken at all. `--prune` removes
+clips no record references any more, taking their ledger entries with them.
+
+### Choosing a voice
 
 ```toml
 [tts]
-voicevox_speaker = 13    # 玄野武宏 = 11, 青山龍星 = 13, 小夜/SAYO = 46 (the default)
-voicevox_speed = 0.85    # 0.5–2.0; below 1 slows delivery
+voicevox_speaker = 13               # speaks the words, accent forced
+voicevox_speed = 0.7                # below 1 slows delivery; the engine's own
+                                    # time-stretch, so the pitch does not drop
 ```
 
 VOICEVOX ships 40-odd speakers, most with several styles. To hear them rather
@@ -950,11 +1007,16 @@ python3 scripts/voice-samples.py            # every speaker, plus a page to comp
 python3 scripts/voice-samples.py --male     # just the male voices
 ```
 
-A sentence may take a different voice from the words — or a different engine:
+That writes clips and an `index.html` to `~/Desktop/janki-voice-samples`
+(`--out` to put them elsewhere). Each one runs through janki's own forced-accent
+path, so the sample word carries its real accent rather than the engine's guess
+— what you hear is what a card will sound like. Use `--word/--reading/--pattern`
+to audition with a word you care about.
+
+Sentences can take a different voice, or a different engine:
 
 ```toml
 [tts]
-voicevox_speaker = 13               # speaks the words, accent forced
 voicevox_sentence_speaker = 52      # another VOICEVOX voice for sentences
 ```
 
@@ -965,45 +1027,44 @@ openai_voice = "onyx"               # alloy, ash, ballad, cedar, coral, echo,
                                     # fable, marin, nova, onyx, sage, shimmer,
                                     # verse. (Cove and the other ChatGPT app
                                     # voices are a different set — not this API's.)
+openai_model = "gpt-4o-mini-tts"    # or a pinned snapshot like
+                                    # gpt-4o-mini-tts-2025-12-15
 ```
 
-OpenAI needs `OPENAI_API_KEY` in the environment and bills per character.
-`gpt-4o-mini-tts` has no rate parameter, so pace is asked for in prose via
-`openai_instructions`; the default asks for a noticeably slower delivery.
+OpenAI needs `OPENAI_API_KEY` in the environment — never in `janki.toml` — and
+bills per character. That model has no rate parameter, so pace is asked for in
+prose through `openai_instructions`; the shipped default asks for a noticeably
+slower delivery. Leave `sentence_provider` unset and one voice does everything.
 
-**Words always stay on VOICEVOX.** It is the only engine here that can force a
-pitch accent, and a word clip that guesses renders 橋 and 箸 identically — the
-pair the card exists to distinguish. The OpenAI provider refuses a word rather
-than returning a plausible one.
+Only the four models on `/v1/audio/speech` work: `tts-1`, `tts-1-hd`,
+`gpt-4o-mini-tts` and its dated snapshots. The conversational models
+(`gpt-audio`, `gpt-realtime`) generate speech natively, which sounds like it
+should be better — but they *respond* to text rather than reading it. Asked to
+read 「日本語を話しますか。」 they answer it. See M5.7 in
+`docs/IMPLEMENTATION_PLAN.md` for the measurements.
 
-Leave both unset and one voice does everything. It is worth setting because the
-two recordings do different jobs — a word is a thing to identify, a sentence is
-a thing to follow — and in one voice the sentence sounds like a longer word.
-Changing it re-voices only the sentences; `janki audio --examples` is enough.
+### Changing a voice re-voices only what that voice said
 
-That writes clips and an `index.html` to `~/Desktop/janki-voice-samples`
-(`--out` to put them elsewhere). Each one runs through janki's own forced-accent
-path, so the sample word carries its real accent rather than the engine's guess
-— what you hear is what a card will sound like. Use `--word/--reading/--pattern`
-to audition with a word you care about.
-
-`voicevox_speed` is the engine's own time-stretch, so it slows the delivery
-without dragging the pitch down with it — which matters here more than usual,
-since the accent contour is the thing the word audio exists to teach.
-
-**Changing either one does not make existing audio stale.** The ledger's content
-fingerprint covers what was *said* — the reading and its accent — not who said
-it or how fast. So re-run with `--force`:
+The ledger records which engine, which voice, which rate and which style
+settings made every clip, so changing any of them makes exactly those clips
+stale and leaves the rest alone:
 
 ```bash
-janki audio --words --examples --force
+janki audio --examples       # after changing the sentence voice; words untouched
 ```
 
-Filenames are content-addressed and unchanged by a re-voice, so the clips are
-rewritten in place and Anki's media sync picks up the new audio for the same
-`[sound:]` references.
+No `--force` needed. That flag remains for rewriting audio the settings did not
+change. Filenames are content-addressed and unchanged by a re-voice, so clips
+are rewritten in place and Anki's media sync picks up the new audio behind the
+same `[sound:]` references.
 
-One practical note if you run the engine in Docker: it loads a model per speaker
-on demand and keeps them, so sampling many voices in one session can exhaust a
-small VM. A 2 GiB colima gets through about nine before the container is
-OOM-killed; restart it between batches, or give the VM more memory.
+This also means a re-voice interrupted part way — an OOM, a dropped connection —
+is finished simply by running the command again.
+
+### If you share a deck
+
+VOICEVOX voices are free to use, **but each character carries its own terms**,
+and most ask to be credited. That is a question for a deck you publish, not for
+one you study alone. Check the terms for the speaker you chose at
+[voicevox.hiroshiba.jp](https://voicevox.hiroshiba.jp/) and credit it in the
+deck description. OpenAI audio has no such attribution requirement.

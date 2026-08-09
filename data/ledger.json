@@ -19,6 +19,10 @@
           "file": "janki-2ebf18566d10.mp3",
           "of": "example",
           "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
           "speed": 1.0,
           "voice": "onyx"
         }
@@ -71,6 +75,10 @@
           "file": "janki-54f40032c3f7.mp3",
           "of": "example",
           "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
           "speed": 1.0,
           "voice": "onyx"
         }
@@ -115,6 +123,10 @@
           "file": "janki-2823397bff63.mp3",
           "of": "example",
           "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
           "speed": 1.0,
           "voice": "onyx"
         }
