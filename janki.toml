@@ -10,6 +10,7 @@ dist_dir = "dist"
 ledger_file = "data/ledger.json"
 staging_dir = "data/staging"
 media_dir = "data/media"
+kanji_file = "data/kanji.json"
 scan_inbox = "data/inbox/scans"
 
 [anki]

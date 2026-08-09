@@ -106,22 +106,35 @@ def test_an_untagged_word_is_never_chosen_over_a_tagged_one() -> None:
     assert [e.written for e in info.readings[0].examples] == ["前年"]
 
 
-def test_only_words_that_use_that_reading_are_offered() -> None:
-    """音 and 訓 are different rows on the card because they are different
-    facts: 前線 shows ゼン and 名前 shows まえ, and swapping them teaches the
-    wrong reading."""
+def test_common_examples_put_a_beginner_reading_before_a_rare_one() -> None:
     send = fake_transport(
-        info={"on_readings": ["ゼン"], "kun_readings": ["まえ"]},
+        info={"on_readings": [], "kun_readings": ["く.らう", "た.べる"]},
         words=[
-            word("前線", "ぜんせん", "front line", ["news1", "nf08"]),
-            word("名前", "なまえ", "name", ["ichi1", "nf02"]),
+            word("食らう", "くらう", "to receive", ["nf40"]),
+            word("食べる", "たべる", "to eat", ["nf05"]),
         ],
     )
 
-    info = fetch_kanji("前", transport=send)
+    info = fetch_kanji("食", transport=send)
+
+    assert [reading.reading for reading in info.readings] == ["た(べる)", "く(らう)"]
+
+
+def test_only_words_that_use_that_reading_are_offered() -> None:
+    """A full-reading substring can still come from somewhere else. The いく
+    in 低空飛行 spans てい + くう while 行 is コウ; it cannot prove 行's い.く."""
+    send = fake_transport(
+        info={"on_readings": ["コウ"], "kun_readings": ["い.く"]},
+        words=[
+            word("低空飛行", "ていくうひこう", "low-altitude flight", ["nf20"]),
+            word("行く", "いく", "to go", ["ichi1", "nf02"]),
+        ],
+    )
+
+    info = fetch_kanji("行", transport=send)
 
     by_kind = {r.kind: [e.written for e in r.examples] for r in info.readings}
-    assert by_kind == {"on": ["前線"], "kun": ["名前"]}
+    assert by_kind == {"on": ["低空飛行"], "kun": ["行く"]}
 
 
 def test_a_katakana_on_reading_matches_a_hiragana_word() -> None:
@@ -197,6 +210,25 @@ def test_a_reading_listed_twice_is_shown_once() -> None:
     assert [e.written for e in info.readings[0].examples] == ["名前"]
 
 
+def test_boundary_notation_does_not_duplicate_a_spoken_reading() -> None:
+    send = fake_transport(
+        info={"on_readings": [], "kun_readings": ["-い.き", "-いき"]},
+        words=[word("行き", "いき", "going", ["ichi1"])],
+    )
+
+    info = fetch_kanji("行", transport=send)
+
+    assert [r.reading for r in info.readings] == ["〜い(き)"]
+
+
+def test_a_suffix_only_reading_keeps_its_position_marker() -> None:
+    send = fake_transport(
+        info={"on_readings": [], "kun_readings": ["-づか.い"]}, words=[]
+    )
+
+    assert fetch_kanji("使", transport=send).readings[0].reading == "〜づか(い)"
+
+
 # --- the strokes ------------------------------------------------------------
 
 
@@ -234,9 +266,10 @@ def _info(**kwargs) -> KanjiInfo:
 def test_each_stroke_cell_adds_exactly_one_stroke() -> None:
     rendered = render_kanji_html([_info(strokes=("a", "b", "c"))])
 
-    cells = rendered.split("<svg")[1:]
-    assert [cell.count("<path") for cell in cells] == [1, 2, 3]
-    assert all(cell.count('class="new"') == 1 for cell in cells)
+    assert rendered.count("<path") == 3, "path data is defined once, not quadratically"
+    for path in ("a", "b", "c"):
+        assert rendered.count(f'd="{path}"') == 1
+    assert rendered.count('class="new"') == 3, "each visible cell adds one stroke"
 
 
 def test_a_character_with_no_strokes_draws_no_grid() -> None:
@@ -349,6 +382,39 @@ def test_every_reading_gets_a_row_before_any_gets_a_second() -> None:
     # The container div is class="kanji-examples", which contains the row
     # class as a substring — count the rows themselves.
     assert rendered.count('<div class="kanji-example">') == 4, "and the cap holds"
+
+
+def test_a_reading_without_a_common_example_is_still_shown() -> None:
+    from japanese_anki.kanji import Reading
+
+    rendered = render_kanji_html([
+        KanjiInfo(character="飲", readings=(Reading(kind="on", reading="オン"),))
+    ])
+
+    assert '<span class="kanji-reading">オン</span>' in rendered
+    assert rendered.count('<div class="kanji-example">') == 1
+
+
+def test_curated_examples_fill_the_render_budget_past_the_fetch_cap() -> None:
+    from japanese_anki.kanji import Example, Reading
+
+    examples = tuple(
+        Example(written=written, pronounced=pronounced, gloss=gloss)
+        for written, pronounced, gloss in (
+            ("午前", "ごぜん", "morning"),
+            ("前線", "ぜんせん", "front line"),
+            ("前年", "ぜんねん", "preceding year"),
+        )
+    )
+    rendered = render_kanji_html([
+        KanjiInfo(
+            character="前",
+            readings=(Reading(kind="on", reading="ゼン", examples=examples),),
+        )
+    ])
+
+    assert all(word in rendered for word in ("午前", "前線", "前年"))
+    assert rendered.count('<div class="kanji-example">') == 3
 
 
 # --- the character has to be provably the one being read --------------------

@@ -16,7 +16,8 @@ The repository is the source of truth. Anki packages are reproducible outputs.
 - A word ledger (`data/ledger.json`) and a `janki status` report over it.
 - Deterministic Anki note GUIDs.
 - Configurable recognition, production, and reading cards.
-- Mobile-friendly card templates with furigana, hidden romaji, and a Shirabe link.
+- Mobile-friendly card templates with furigana, hidden romaji, and Shirabe and
+  jpdb lookup links.
 - A static HTML preview command.
 - Tests, fixtures, project instructions, and workflow documentation.
 
@@ -102,7 +103,8 @@ and scheduling survives. Verified in Anki Desktop 25.09; see
 [docs/NOTETYPE_UPGRADE.md](docs/NOTETYPE_UPGRADE.md).
 
 You need this whenever a janki release adds a field — the pitch diagram,
-frequency rank, and example audio arrived that way. It is harmless otherwise.
+frequency rank, example audio, the kanji reference block, and the casual
+example sentence all arrived that way. It is harmless otherwise.
 
 **A field append forces one full AnkiWeb sync.** Adding a field is a schema
 change (verified against the `anki` library, 2026-08-08: it bumps the
@@ -1031,6 +1033,9 @@ requests include:
 - The Shirabe deep link currently uses `shirabelookup://search?w=...`. That URL
   scheme is unverified against a real installed app — test it on your iPhone
   before relying on it.
+- The desktop fallback currently searches
+  `https://jpdb.io/search?q=...&lang=english`. That URL is likewise unverified
+  against the live site and may change independently of janki.
 - Pitch accent and frequency rank are filled by `janki enrich --jpdb` from
   jpdb's dictionary data. Neither is ever guessed: an empty field means the
   dictionary did not say, and `janki status` counts it as missing rather than
@@ -1039,8 +1044,9 @@ requests include:
   reported rather than voiced with the engine's guess — the guess is wrong on
   exactly the homographs a pitch card exists for. `--allow-default-accent` opts
   into it deliberately and marks those clips in the ledger.
-- janki does not read your Anki collection, so it cannot tell you that an import
-  silently failed to upgrade the notetype. Tick **Merge Notetypes** — see
+- `janki status` reads your Anki collection to report an import that silently
+  failed to upgrade the notetype, but only after the fact — nothing can stop the
+  bad import while it is happening. Tick **Merge Notetypes** — see
   [Importing into Anki Desktop](#importing-into-anki-desktop).
 
 ## Audio

@@ -211,27 +211,33 @@ def _match_key(reading: str) -> str:
 def _dedupe_key(reading: str) -> str:
     """What makes two KANJIDIC readings the same reading.
 
-    Only the position marker. ``まえ`` and ``-まえ`` are one reading written
-    twice, so a row each prints the same example twice — but ``つか.う`` and
-    ``つか.い`` are genuinely different, and collapsing them labelled 使う as
-    つか.い, which is simply the wrong reading for that word.
+    Position and okurigana-boundary markers are notation rather than sounds.
+    Thus ``-い.き`` and ``-いき`` are one reading written twice, while
+    ``つか.う`` and ``つか.い`` remain distinct because their full readings
+    differ. Collapsing those two labelled 使う as つか.い, which is simply the
+    wrong reading for that word.
     """
-    return _to_hiragana(reading.replace("-", "").strip())
+    return _match_key(reading)
 
 
 def _display_reading(reading: str) -> str:
-    """A reading as a person writes it: ``つか.う`` becomes ``つか(う)``.
+    """A reading for a card: ``つか.う`` becomes ``つか(う)``.
 
     KANJIDIC's dot is machine notation for where the kanji stops and the
     okurigana begins. The information is worth keeping — it is why 使う is
     written with one kana after the character — but a bare dot on a card reads
-    as a typo, which is exactly how it was reported.
+    as a typo, which is exactly how it was reported. A leading ``-`` is not
+    discarded: it becomes ``〜`` so a suffix-only reading such as ``-づか.い``
+    is not presented as though the character were read づかい on its own.
     """
-    text = reading.replace("-", "").strip()
+    text = reading.strip()
+    position = "〜" if text.startswith("-") else ""
+    text = text.removeprefix("-")
     if "." not in text:
-        return text
+        return f"{position}{text}"
     stem, _, okurigana = text.partition(".")
-    return f"{stem}({okurigana})" if okurigana else stem
+    shown = f"{stem}({okurigana})" if okurigana else stem
+    return f"{position}{shown}"
 
 
 def _priority_rank(priorities: Iterable[str]) -> int:
@@ -278,13 +284,13 @@ def _shows_reading(character: str, written: str, pronounced: str, stem: str) -> 
     return False
 
 
-def _examples_for(
+def _ranked_examples_for(
     character: str,
     reading: str,
     words: list[dict[str, Any]],
     rivals: Iterable[str] = (),
-) -> tuple[Example, ...]:
-    """Words that show this character being read this way.
+) -> tuple[tuple[int, Example], ...]:
+    """Ranked words that show this character being read this way.
 
     ``rivals`` are the character's other readings. A word goes to the *longest*
     reading that fits it, because one reading is often a prefix of another: 分's
@@ -332,15 +338,26 @@ def _examples_for(
             ))
     scored.sort(key=lambda pair: (pair[0], len(pair[1].written)))
     seen: set[str] = set()
-    kept: list[Example] = []
-    for _, example in scored:
+    kept: list[tuple[int, Example]] = []
+    for rank, example in scored:
         if example.written in seen:
             continue
         seen.add(example.written)
-        kept.append(example)
+        kept.append((rank, example))
         if len(kept) >= EXAMPLES_PER_READING:
             break
     return tuple(kept)
+
+
+def _examples_for(
+    character: str,
+    reading: str,
+    words: list[dict[str, Any]],
+    rivals: Iterable[str] = (),
+) -> tuple[Example, ...]:
+    """The capped examples stored for one reading, commonest first."""
+    ranked = _ranked_examples_for(character, reading, words, rivals)
+    return tuple(example for _, example in ranked[:EXAMPLES_PER_READING])
 
 
 def fetch_kanji(character: str, *, transport: Transport | None = None) -> KanjiInfo:
@@ -367,10 +384,11 @@ def fetch_kanji(character: str, *, transport: Transport | None = None) -> KanjiI
     if not isinstance(words, list):
         words = []
 
-    # Deduplicated by stem: KANJIDIC lists まえ and -まえ separately — the same
-    # reading, marked for a suffix position — and both match the same words, so
-    # a row each prints the same examples twice. The plain form is kept.
-    readings: list[Reading] = []
+    # Deduplicated by the complete spoken reading: KANJIDIC sometimes writes
+    # the same sound twice with different boundary notation (``-い.き`` and
+    # ``-いき``). The plain-position form wins when both it and a suffix form
+    # exist, while genuinely different okurigana remain separate readings.
+    ranked_readings: list[tuple[int, int, Reading]] = []
     seen_stems: set[tuple[str, str]] = set()
     all_readings = [
         str(value)
@@ -384,13 +402,24 @@ def fetch_kanji(character: str, *, transport: Transport | None = None) -> KanjiI
             if not marker[1] or marker in seen_stems:
                 continue
             seen_stems.add(marker)
-            readings.append(
-                Reading(
-                    kind=kind,
-                    reading=_display_reading(text),
-                    examples=_examples_for(character, text, words, all_readings),
-                )
+            ranked_examples = _ranked_examples_for(
+                character, text, words, all_readings
             )
+            reading = Reading(
+                kind=kind,
+                reading=_display_reading(text),
+                examples=tuple(
+                    example
+                    for _, example in ranked_examples[:EXAMPLES_PER_READING]
+                ),
+            )
+            best_rank = ranked_examples[0][0] if ranked_examples else 999
+            ranked_readings.append((best_rank, len(ranked_readings), reading))
+
+    # The renderer has a deliberately small row budget. KANJIDIC's kana order
+    # does not express usefulness, so let the best JMdict priority tag decide
+    # which readings reach that budget; source order is the stable tie-breaker.
+    readings = [reading for _, _, reading in sorted(ranked_readings)]
 
     try:
         svg = send(f"{KANJIVG}/{ord(character):05x}.svg").decode("utf-8")
@@ -413,16 +442,6 @@ def fetch_kanji(character: str, *, transport: Transport | None = None) -> KanjiI
 CANVAS = 109
 
 
-def _stroke_path(path: str, *, newest: bool) -> str:
-    """One stroke. The newest is marked so a cell shows what *this* step adds.
-
-    Written as a helper rather than inline: an f-string cannot carry a
-    backslash-escaped quote before Python 3.12, and this project targets 3.11.
-    """
-    marker = ' class="new"' if newest else ""
-    return f'<path d="{path}"{marker}/>' 
-
-
 def render_kanji_html(entries: Iterable[KanjiInfo]) -> str:
     """The collapsible block a card shows, or ``""`` when there is nothing.
 
@@ -432,7 +451,7 @@ def render_kanji_html(entries: Iterable[KanjiInfo]) -> str:
     import html as html_mod
 
     blocks: list[str] = []
-    for info in entries:
+    for block_index, info in enumerate(entries):
         parts: list[str] = []
         header = html_mod.escape("、".join(info.meanings[:3]))
         tags = []
@@ -448,37 +467,61 @@ def render_kanji_html(entries: Iterable[KanjiInfo]) -> str:
         )
 
         if info.strokes:
+            # Define every (usually long) path once. Each stage recursively
+            # references the completed stage before it, and each visible cell
+            # adds only its newest stroke. The old cumulative-path markup
+            # repeated n(n+1)/2 path strings for an n-stroke character.
+            definitions = []
             cells = []
-            for index in range(len(info.strokes)):
-                drawn = "".join(
-                    _stroke_path(html_mod.escape(path), newest=step == index)
-                    for step, path in enumerate(info.strokes[: index + 1])
+            for index, path in enumerate(info.strokes):
+                stroke_id = f"kanji-{block_index}-stroke-{index}"
+                stage_id = f"kanji-{block_index}-stage-{index}"
+                definitions.append(
+                    f'<path id="{stroke_id}" d="{html_mod.escape(path)}"/>'
                 )
+                prior = (
+                    f'<use href="#kanji-{block_index}-stage-{index - 1}"/>'
+                    if index
+                    else ""
+                )
+                definitions.append(
+                    f'<g id="{stage_id}">{prior}<use href="#{stroke_id}"/></g>'
+                )
+                drawn = prior + f'<use class="new" href="#{stroke_id}"/>'
                 cells.append(
                     f'<span class="stroke-cell"><svg viewBox="0 0 {CANVAS} {CANVAS}" '
                     f'xmlns="http://www.w3.org/2000/svg">{drawn}</svg></span>'
                 )
-            parts.append(f'<div class="stroke-order">{"".join(cells)}</div>')
+            parts.append(
+                '<svg class="stroke-defs" aria-hidden="true" width="0" height="0" '
+                f'xmlns="http://www.w3.org/2000/svg"><defs>{"".join(definitions)}'
+                f'</defs></svg><div class="stroke-order">{"".join(cells)}</div>'
+            )
 
         # Round robin: one example from every reading before any reading gets a
         # second. Filling reading by reading spent the whole row budget on the
         # first two — 使's card showed つか(い) twice and left out つか(う),
         # which is the reading of 使う, the word the card is about.
         rows = []
-        with_examples = [r for r in info.readings if r.examples]
-        for depth in range(EXAMPLES_PER_READING):
-            for reading in with_examples:
-                if depth >= len(reading.examples):
+        depth_limit = max((max(len(r.examples), 1) for r in info.readings), default=0)
+        for depth in range(depth_limit):
+            for reading in info.readings:
+                if reading.examples and depth >= len(reading.examples):
                     continue
-                example = reading.examples[depth]
+                if not reading.examples and depth > 0:
+                    continue
+                example = reading.examples[depth] if reading.examples else None
                 label = "音" if reading.kind == "on" else "訓"
+                written = html_mod.escape(example.written) if example else ""
+                pronounced = html_mod.escape(example.pronounced) if example else ""
+                gloss = html_mod.escape(example.gloss) if example else ""
                 rows.append(
                     '<div class="kanji-example">'
                     f'<span class="kanji-kind">{label}</span>'
                     f'<span class="kanji-reading">{html_mod.escape(reading.reading)}</span>'
-                    f'<span class="kanji-word">{html_mod.escape(example.written)}</span>'
-                    f'<span class="kanji-kana">{html_mod.escape(example.pronounced)}</span>'
-                    f'<span class="kanji-gloss">{html_mod.escape(example.gloss)}</span>'
+                    f'<span class="kanji-word">{written}</span>'
+                    f'<span class="kanji-kana">{pronounced}</span>'
+                    f'<span class="kanji-gloss">{gloss}</span>'
                     "</div>"
                 )
         if rows:

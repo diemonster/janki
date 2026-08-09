@@ -9,6 +9,7 @@ pytest.importorskip("genanki")
 
 from japanese_anki.config import ProjectConfig
 from japanese_anki.exporters.anki import AnkiBuildError, build_deck
+from japanese_anki.io import DataError
 from japanese_anki.models import ExampleSentence, VocabularyRecord
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -183,8 +184,10 @@ def test_the_pitch_diagram_reaches_the_card(tmp_path: Path) -> None:
     names, values = _fields(tmp_path / "o.apkg")
     pitch = values[names.index("PitchAccent")]
     # 橋 is odaka: the fall lands on the particle, so the last mora carries the
-    # drop and the particle slot is low.
-    assert 'drop' in pitch
+    # drop and the particle slot is low. Pinned to the exact span rather than a
+    # bare `'drop' in pitch`, which stays green if the drop moves to another
+    # mora or stops being high — the two things this test is named for.
+    assert '<span class="mora high drop rise">し</span>' in pitch
     assert 'class="mora particle low"' in pitch
 
 
@@ -308,7 +311,9 @@ def test_a_malformed_second_pattern_leaves_the_first_one_drawn(tmp_path: Path) -
     names, values = _fields(tmp_path / "o.apkg")
     pitch = values[names.index("PitchAccent")]
     assert pitch.count('<span class="pitch">') == 1, "the pattern that fits is drawn"
-    assert 'drop' in pitch, "and drawn as odaka, which LHL is"
+    assert (
+        '<span class="mora high drop rise">し</span>' in pitch
+    ), "and drawn as odaka, which LHL is"
     assert any("'LH' does not fit" in w for w in result.warnings), "the drop is reported"
 
 
@@ -333,7 +338,9 @@ def test_the_audio_accent_leads_the_diagram(tmp_path: Path) -> None:
     # purpose — asserting 橋 has two accepted accents on the card whose job is
     # telling 橋 from 端.
     assert pitch.count('<span class="pitch">') == 1
-    assert 'drop' in pitch, "and it is odaka, which the clip says"
+    assert (
+        '<span class="mora high drop rise">し</span>' in pitch
+    ), "and it is odaka, which the clip says"
     assert 'class="mora particle high"' not in pitch, "the overridden heiban is gone"
 
 
@@ -350,7 +357,9 @@ def test_an_audio_accent_alone_still_draws(tmp_path: Path) -> None:
     _build(tmp_path)
 
     names, values = _fields(tmp_path / "o.apkg")
-    assert 'drop' in values[names.index("PitchAccent")]
+    assert (
+        '<span class="mora high drop rise">し</span>' in values[names.index("PitchAccent")]
+    )
 
 
 def test_a_repeated_pattern_is_drawn_once(tmp_path: Path) -> None:
@@ -611,9 +620,65 @@ def test_the_cap_can_be_turned_off(tmp_path: Path) -> None:
     assert "s9" in meanings and "more sense" not in meanings
 
 
+@pytest.mark.parametrize(
+    "written",
+    ["yes", "4.9", "all", "[1, 2]"],
+    ids=["yaml-true", "a-float", "a-word", "a-list"],
+)
+def test_a_deck_max_meanings_that_is_not_an_integer_is_refused(
+    tmp_path: Path, written: str
+) -> None:
+    """Deck files are YAML 1.1, so `max_meanings: yes` arrives as `True` and a
+    bare `int()` turns it into 1 — every card in the deck showing one gloss and
+    "+N more senses" with nothing printed to say why. `all` was worse: `int()`
+    raised a `ValueError`, which is not a `JankiError`, so `janki build` ended
+    in a traceback that named no deck file."""
+    _project(tmp_path)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:する:する", expression="する", reading="する",
+        meanings=[f"sense {n}" for n in range(1, 18)],
+    )])
+    deck = tmp_path / "decks" / "d.yaml"
+    deck.write_text(
+        f'name: D\ndeck:\n  source: "../vocabulary.json"\n  max_meanings: {written}\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(DataError, match="max_meanings must be an integer"):
+        build_deck(deck, ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
+
+
+def test_a_deck_may_still_set_its_own_cap(tmp_path: Path) -> None:
+    """The refusal above must not cost the setting itself."""
+    _project(tmp_path)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:する:する", expression="する", reading="する",
+        meanings=[f"sense {n}" for n in range(1, 18)],
+    )])
+    deck = tmp_path / "decks" / "d.yaml"
+    deck.write_text(
+        'name: D\ndeck:\n  source: "../vocabulary.json"\n  max_meanings: 2\n',
+        encoding="utf-8",
+    )
+
+    build_deck(deck, ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
+
+    names, values = _fields(tmp_path / "o.apkg")
+    meanings = values[names.index("Meanings")]
+    assert "sense 2" in meanings and "sense 3" not in meanings
+    assert "+15 more senses" in meanings
+
+
 def test_the_record_keeps_every_sense(tmp_path: Path) -> None:
     """The cap is a card decision. Nothing is discarded on the way in — this
-    project's rule — so the file still holds all 17."""
+    project's rule — so the file still holds all 17.
+
+    Both halves are asserted together on purpose. The disk half alone restates
+    what the fixture just wrote: `build_deck` has no write path to the
+    normalized file, so deleting the cap, breaking `_meanings_html`, or moving
+    the trim into `resolve_deck_records` all left it green. It is the pair —
+    four on the card *while* 17 are on disk — that says where the cap lives.
+    """
     _project(tmp_path)
     record = VocabularyRecord(
         id="word:する:する", expression="する", reading="する",
@@ -623,8 +688,12 @@ def test_the_record_keeps_every_sense(tmp_path: Path) -> None:
 
     build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
 
+    names, values = _fields(tmp_path / "o.apkg")
+    meanings = values[names.index("Meanings")]
+    assert "sense 5" not in meanings and "+13 more senses" in meanings, "capped on the card"
+
     stored = json.loads((tmp_path / "vocabulary.json").read_text(encoding="utf-8"))
-    assert len(stored[0]["meanings"]) == 17
+    assert len(stored[0]["meanings"]) == 17, "and not on the way in"
 
 
 def test_every_back_template_offers_both_lookups(tmp_path: Path) -> None:
@@ -637,7 +706,10 @@ def test_every_back_template_offers_both_lookups(tmp_path: Path) -> None:
             encoding="utf-8"
         )
         assert "shirabelookup://search?w={{ShirabeQuery}}" in markup, name
-        assert "https://jpdb.io/search?q={{Expression}}" in markup, name
+        # jpdb's query is built at display time from `data-query` rather than
+        # interpolated into the href, so the expression gets percent-encoded.
+        assert 'data-query="{{Expression}}"' in markup, name
+        assert "jpdb.io/search?q=" in markup, name
 
 
 def test_the_jpdb_link_reaches_the_card(tmp_path: Path) -> None:
@@ -665,9 +737,15 @@ def test_the_jpdb_link_reaches_the_card(tmp_path: Path) -> None:
     templates = next(iter(models.values()))["tmpls"]
     con.close()
 
-    backs = "".join(template["afmt"] for template in templates)
-    assert "jpdb.io/search?q={{Expression}}" in backs
-    assert "shirabelookup://" in backs, "and the existing one survived"
+    # Per template, not over the concatenation of all of them: joining first
+    # means one template carrying the link satisfies the assertion for every
+    # card type, and dropping it from a single template goes unnoticed.
+    assert templates, "the notetype has card types at all"
+    for template in templates:
+        back = template["afmt"]
+        assert 'data-query="{{Expression}}"' in back, template["name"]
+        assert "jpdb.io/search?q=" in back, template["name"]
+        assert "shirabelookup://" in back, f"{template['name']}: the existing one survived"
 
 
 # --- the kanji reference section --------------------------------------------
@@ -730,10 +808,27 @@ def test_a_stroke_cell_per_stroke_each_adding_one(tmp_path: Path) -> None:
 
     names, values = _fields(tmp_path / "o.apkg")
     section = values[names.index("KanjiInfo")]
-    assert section.count("<svg") == 3, "three strokes, three cells"
-    cells = section.split("<svg")[1:]
-    assert [cell.count("<path") for cell in cells] == [1, 2, 3], "each adds one"
+    # Counted by cell, not by `<svg`: the block may carry other SVG elements
+    # (a defs block, say) that are not stroke cells.
+    cells = section.split('<span class="stroke-cell">')[1:]
+    assert len(cells) == 3, "three strokes, three cells"
     assert all(cell.count('class="new"') == 1 for cell in cells), "exactly one newest"
+
+    # Each cell draws its own stroke as the new one, over the accumulated
+    # picture so far. Cells reference shared `<defs>` rather than repeating path
+    # data, so "one more stroke than the last" is a property of that chain: cell
+    # n is stage n-1 plus stroke n, and stage n-1 was built the same way.
+    for index, cell in enumerate(cells):
+        assert f'class="new" href="#kanji-0-stroke-{index}"' in cell, f"cell {index}"
+        assert (f'href="#kanji-0-stage-{index - 1}"' in cell) is (index > 0), f"cell {index}"
+
+    defs = section.split('<div class="stroke-order">')[0]
+    for index in range(3):
+        stage = defs.split(f'<g id="kanji-0-stage-{index}">')[1].split("</g>")[0]
+        expected = [f'#kanji-0-stroke-{index}']
+        if index:
+            expected.insert(0, f'#kanji-0-stage-{index - 1}')
+        assert [ref.split('"')[0] for ref in stage.split('href="')[1:]] == expected
 
 
 def test_a_word_with_no_kanji_gets_no_section(tmp_path: Path) -> None:

@@ -59,16 +59,19 @@ One primary example sentence is shown on the card. Keep it:
 
 Additional examples may remain in source data for future templates.
 
-## Shirabe link
+## Dictionary lookup links
 
-Cards include an iOS deep link using:
+Cards include an iOS Shirabe deep link using:
 
 ```text
 shirabelookup://search?w=<expression>
 ```
 
-This is intentionally isolated in the template so it can be replaced easily if
-Shirabe's current URL scheme differs.
+They also include `https://jpdb.io/search?q=<expression>&lang=english` as a web
+fallback during desktop review. Both links are intentionally isolated in the
+back templates so either can be replaced easily if its current URL contract
+differs. The jpdb query is percent-encoded in the rendered card; HTML escaping
+alone does not protect query delimiters such as `&` and `#`.
 
 ## Audio
 

@@ -214,9 +214,13 @@
     inset 2px 0 0 0 var(--pitch-high),
     inset -2px 0 0 0 var(--pitch-high);
 }
-/* The particle has no text, so it needs a width to carry its own line. */
+/* The zero-width space gives the empty particle slot a line box for its inset
+   shadow; width alone leaves the padding box with zero height. */
 .pitch-accent .mora.particle {
   width: .7em;
+}
+.pitch-accent .mora.particle::before {
+  content: "\200B";
 }
 
 .example-audio {
@@ -317,7 +321,7 @@
   height: 100%;
 }
 
-.stroke-cell svg path {
+.stroke-cell svg > use {
   fill: none;
   stroke: currentColor;
   stroke-width: 4.5;
@@ -327,7 +331,7 @@
 }
 
 /* The stroke this cell adds, so the eye lands on what changed. */
-.stroke-cell svg path.new {
+.stroke-cell svg > use.new {
   stroke: var(--pitch-high);
   opacity: 1;
 }

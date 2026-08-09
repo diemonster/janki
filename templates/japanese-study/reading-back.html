@@ -5,4 +5,9 @@
 {{#Romaji}}<details class="romaji"><summary>Romaji</summary>{{Romaji}}</details>{{/Romaji}}
 {{#CasualJapanese}}<section class="example casual"><h3>Casually</h3><div class="example-japanese">{{CasualJapanese}}</div>{{#CasualFurigana}}<div class="example-furigana">{{furigana:CasualFurigana}}</div>{{/CasualFurigana}}{{#CasualEnglish}}<div class="example-english">{{CasualEnglish}}</div>{{/CasualEnglish}}{{#CasualAudio}}<div class="example-audio">{{CasualAudio}}</div>{{/CasualAudio}}</section>{{/CasualJapanese}}
 {{#KanjiInfo}}<section class="kanji-info">{{KanjiInfo}}</section>{{/KanjiInfo}}
-<div class="actions"><a href="shirabelookup://search?w={{ShirabeQuery}}">Open in Shirabe</a><a href="https://jpdb.io/search?q={{Expression}}&amp;lang=english">Open in jpdb</a></div>
+<div class="actions"><a href="shirabelookup://search?w={{ShirabeQuery}}">Open in Shirabe</a><a class="jpdb-link" data-query="{{Expression}}" href="https://jpdb.io/search?lang=english">Open in jpdb</a></div>
+<script>
+document.querySelectorAll("a.jpdb-link[data-query]").forEach(function (link) {
+  link.href = "https://jpdb.io/search?q=" + encodeURIComponent(link.dataset.query) + "&lang=english";
+});
+</script>

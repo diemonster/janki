@@ -304,6 +304,12 @@ def test_the_particle_slot_is_drawn_so_odaka_is_visible() -> None:
     assert "drop" in odaka
 
 
+def test_a_one_mora_heiban_word_rises_into_its_particle() -> None:
+    assert '<span class="mora particle high rise"></span>' in render_pitch_html(
+        "め", ["LH"]
+    )
+
+
 def test_every_pattern_is_drawn_primary_first() -> None:
     # A word with two accepted accents has two; showing one would teach that the
     # other is wrong.

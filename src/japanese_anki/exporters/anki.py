@@ -531,6 +531,19 @@ def resolve_deck_records(deck_path: Path) -> tuple[dict[str, Any], list[Vocabula
     model_name = deck_config.get("model_name")
     if model_name is not None and not isinstance(model_name, str):
         raise DataError(f"deck.model_name must be a string, got {model_name!r}: {deck_path}")
+    # And `max_meanings`, which used to reach a bare `int()` at the note-building
+    # loop. Deck files are read with `yaml.safe_load` — YAML 1.1 — so
+    # `max_meanings: yes` arrives as `True` and `int(True)` is 1: every card in
+    # the deck would show one gloss and "+N more senses" with nothing printed.
+    # `max_meanings: all` was worse, raising a bare `ValueError` that `cli.main`
+    # does not catch, so `janki build` ended in a traceback naming no deck file.
+    max_meanings = deck_config.get("max_meanings")
+    if max_meanings is not None and (
+        isinstance(max_meanings, bool) or not isinstance(max_meanings, int)
+    ):
+        raise DataError(
+            f"deck.max_meanings must be an integer, got {max_meanings!r}: {deck_path}"
+        )
 
     by_id: dict[str, VocabularyRecord] = {}
     source_value = deck_config.get("source")
@@ -693,14 +706,20 @@ def build_deck(
     # Packaged basename -> (absolute path, the record that claimed it first).
     claimed: dict[str, tuple[str, str]] = {}
     media_warnings: list[str] = []
+    # A deck may say its own number; most take the project's. `resolve_deck_records`
+    # has already refused anything that is not an integer, so an explicit null is
+    # the only remaining way to reach here without one, and it means "the
+    # project's" rather than an error.
+    deck_max_meanings = deck_config.get("max_meanings")
+    if deck_max_meanings is None:
+        deck_max_meanings = project_config.max_meanings
     for record in records:
         note = genanki.Note(
             model=model,
             fields=_field_values(
                 record, media_dir, deck_path.parent, media_files, media_warnings,
                 claimed,
-                # A deck may say its own number; most take the project's.
-                int(deck_config.get("max_meanings", project_config.max_meanings)),
+                deck_max_meanings,
                 render_kanji_html(kanji_store.for_text(record.expression)),
             ),
             tags=[_clean_tag(tag) for tag in record.tags if _clean_tag(tag)],
