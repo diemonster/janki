@@ -222,17 +222,31 @@ def test_force_regenerates_under_the_same_name(tmp_path: Path) -> None:
     assert second.records[0].audio == name
 
 
-def test_a_changed_reading_needs_new_audio(tmp_path: Path) -> None:
-    """Staleness falls out of content addressing rather than being tracked:
-    the clip for the old reading is simply not the clip this record needs."""
+def test_a_changed_accent_needs_new_audio(tmp_path: Path) -> None:
+    """The content fingerprint covers the accent, so re-accenting a word makes
+    its recorded clip detectably out of date. Word audio is addressed by record
+    id, so the *file* keeps its name and is rewritten in place."""
     book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
     first, _, _ = run([record()], tmp_path, words=True, book=book)
-    moved = [record(id="word:橋:はし", reading="はし", pitch_accent=["HLL"])]
+    reaccented = [record(pitch_accent=["HLL"], audio=first.records[0].audio)]
 
-    second, provider, _ = run(moved, tmp_path, words=True, book=book)
+    second, provider, _ = run(reaccented, tmp_path, words=True, book=book)
 
     assert provider.said == [("ハ'シ", True)], "the new accent is spoken"
     assert second.file_count == 1
+    assert second.records[0].audio == first.records[0].audio, "same address"
+
+
+def test_a_changed_reading_lands_under_a_new_name(tmp_path: Path) -> None:
+    """A different reading is a different record id, and the word clip is
+    addressed by that — so it is a different file, not a rewrite."""
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    first, _, _ = run([record()], tmp_path, words=True, book=book)
+    renamed = [record(id="word:箸:はし", expression="箸", pitch_accent=["HLL"])]
+
+    second, _, _ = run(renamed, tmp_path, words=True, book=book)
+
+    assert second.records[0].audio != first.records[0].audio
 
 
 # ---------------------------------------------------------------------------
@@ -348,3 +362,115 @@ def test_azure_is_refused_by_name_rather_than_falling_back(
     assert cli.main(["--root", str(root), "audio", "--words", "--provider", "azure"]) == 1
 
     assert "M5.7" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# What the review found
+# ---------------------------------------------------------------------------
+
+
+def test_a_dropped_reference_is_regenerated_not_called_current(tmp_path: Path) -> None:
+    """The ledger alone cannot answer "is this current?". A record whose audio
+    field was cleared — a reverted vocabulary.json, a migrate-inline that
+    rewrote examples — still matches by content fingerprint, so the run would
+    report it up to date while the field stayed empty. Then --prune, which reads
+    the records, deletes the clip nothing appears to want."""
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    first, _, _ = run([record()], tmp_path, words=True, book=book)
+    dropped = [record()]  # same content, audio field empty
+
+    second, provider, _ = run(dropped, tmp_path, words=True, book=book)
+
+    assert provider.said == [("ハシ'", True)], "re-voiced rather than skipped"
+    assert second.records[0].audio.startswith("audio/janki-")
+    assert second.up_to_date == 0
+
+
+def test_a_missing_file_is_regenerated_too(tmp_path: Path) -> None:
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    first, _, _ = run([record()], tmp_path, words=True, book=book)
+    (tmp_path / "media" / first.records[0].audio).unlink()
+
+    second, provider, _ = run(first.records, tmp_path, words=True, book=book)
+
+    assert provider.said == [("ハシ'", True)]
+    assert second.up_to_date == 0
+
+
+def test_pruning_takes_the_ledger_entries_with_it(tmp_path: Path) -> None:
+    """Or the ledger outlives the media it describes, and goes on answering
+    "already recorded" for a file that is gone."""
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    first, _, _ = run([record()], tmp_path, words=True, book=book)
+    orphaned = [record()]  # reference dropped, so the clip is unreferenced
+
+    removed = prune_unreferenced(orphaned, tmp_path / "media", book)
+
+    assert len(removed) == 1
+    assert not book.records["word:橋:はし"].get("audio")
+
+
+def test_an_edited_sentence_supersedes_its_old_entry(tmp_path: Path) -> None:
+    """Example clips are addressed by record id + sentence, so an edit makes a
+    new file and a new entry while the old one lingers — reported stale forever,
+    and on a revert it answers "already recorded" while the record points at the
+    other sentence's clip: the card shows one sentence and plays another."""
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    first, _, _ = run(
+        [record(examples=[ExampleSentence(japanese="橋を渡ります。")])],
+        tmp_path, words=False, examples=True, book=book,
+    )
+    edited = [record(examples=[ExampleSentence(japanese="橋を渡りました。")])]
+
+    run(edited, tmp_path, words=False, examples=True, book=book)
+
+    entries = book.records["word:橋:はし"]["audio"]
+    assert len(entries) == 1, "the superseded entry is gone"
+    assert book.stale_audio(edited) == [], "and nothing is reported stale"
+
+
+def test_a_record_with_no_reading_is_reported_rather_than_dropped(
+    tmp_path: Path,
+) -> None:
+    result, provider, _ = run([record(reading="")], tmp_path, words=True)
+
+    assert provider.said == []
+    assert result.no_reading == ["word:橋:はし"]
+
+
+def test_a_provider_failure_keeps_what_was_already_written(tmp_path: Path) -> None:
+    """300 records and a failure at 299 must not throw away 298 clips: they are
+    on disk, their entries are in hand, and the names are deterministic so a
+    re-run skips exactly what landed."""
+    from japanese_anki.errors import JankiError
+
+    class DiesOnSecond(FakeVoice):
+        def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
+            if self.said:
+                raise JankiError("engine went away")
+            return super().synthesize(text_or_kana, forced_accent=forced_accent)
+
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    records = [record(), record(id="word:箸:はし", expression="箸")]
+
+    result, _, _ = run(records, tmp_path, words=True, book=book, provider=DiesOnSecond())
+
+    assert result.file_count == 1, "the first record's clip survived"
+    assert result.records[0].audio.startswith("audio/")
+    assert "engine went away" in result.stopped_by
+    assert book.records["word:橋:はし"]["audio"], "and its ledger entry"
+
+
+def test_bare_janki_audio_refuses_rather_than_voicing_everything(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--words or not --examples` made the refusal unreachable: a bare
+    invocation silently voiced every record in the collection."""
+    root = project(tmp_path, [record()])
+    voice = FakeVoice()
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: voice)
+
+    assert cli.main(["--root", str(root), "audio"]) == 1
+
+    assert "--words" in capsys.readouterr().err
+    assert voice.said == []

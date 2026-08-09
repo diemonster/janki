@@ -1813,12 +1813,16 @@ def command_audio(args: argparse.Namespace) -> int:
         raise AudioError(f"{provider.name} is not answering. {provider.launch_hint}")
 
     book = ledger.load(config.ledger_file)
+    media_dir = config.media_dir.resolve()
     result = audio_cmd.generate_audio(
         records,
         provider=provider,
         book=book,
-        media_dir=config.media_dir.resolve(),
-        words=args.words or not args.examples,
+        media_dir=media_dir,
+        # Passed straight through: `generate_audio` refuses when neither is
+        # asked for, and a default here would make that refusal unreachable and
+        # quietly voice every record in the collection.
+        words=args.words,
         examples=args.examples,
         ids=args.ids or None,
         force=args.force,
@@ -1842,6 +1846,13 @@ def command_audio(args: argparse.Namespace) -> int:
             "never confirmed and were left unvoiced; check them first.",
             file=sys.stderr,
         )
+    if result.no_reading:
+        print(
+            f"warning: {len(result.no_reading)} record(s) have no reading to "
+            f"speak: {', '.join(result.no_reading[:5])}"
+            + (" ..." if len(result.no_reading) > 5 else ""),
+            file=sys.stderr,
+        )
 
     if result.file_count:
         save_records_json(output_path, result.records)
@@ -1853,10 +1864,20 @@ def command_audio(args: argparse.Namespace) -> int:
         + (f" {result.up_to_date} already current." if result.up_to_date else "")
     )
     if args.prune:
-        removed = audio_cmd.prune_unreferenced(result.records, config.media_dir.resolve())
+        removed = audio_cmd.prune_unreferenced(result.records, media_dir, book)
         print(f"Pruned {len(removed)} unreferenced clip(s).")
+        if removed:
+            ledger_error = _save_ledger(book) or ledger_error
     if ledger_error is not None:
         _report_ledger_failure(ledger_error)
+        return 1
+    if result.stopped_by:
+        print(f"error: {result.stopped_by}", file=sys.stderr)
+        print(
+            "The clips written before this are saved; re-running picks up where "
+            "it stopped.",
+            file=sys.stderr,
+        )
         return 1
     return 0
 

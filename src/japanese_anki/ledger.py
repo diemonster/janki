@@ -566,19 +566,59 @@ class Ledger:
                 result.append(key)
         return result
 
-    def has_audio(self, record_id: str, *, of: str, content_fp: str) -> bool:
-        """Is there already a clip for this record saying exactly this?
+    def audio_file_for(self, record_id: str, *, of: str, content_fp: str) -> str | None:
+        """The clip recorded for this exact content, or ``None``.
 
-        Asked of the ledger rather than of the filesystem: a file whose name
-        matches proves only that something was written at that address, while
-        the entry says what was spoken. They agree in the ordinary case; where
-        they do not, this is the one that can tell "the same audio" from "a file
-        that happens to be called that".
+        The *name*, not a yes/no, because "is this current?" needs three facts
+        and the ledger only holds one of them: an entry proves something was
+        recorded saying this, but not that the record still points at it or that
+        the file survives on disk. A caller that asks only the ledger will call
+        a record current whose reference was dropped — and then a prune,
+        reading the records, deletes the clip nothing appears to want.
         """
-        return any(
-            entry.get("of") == of and str(entry.get("content_fp") or "") == content_fp
-            for entry in self._audio_entries(record_id)
-        )
+        for entry in self._audio_entries(record_id):
+            if entry.get("of") == of and str(entry.get("content_fp") or "") == content_fp:
+                return str(entry.get("file") or "") or None
+        return None
+
+    def forget_audio_files(self, files: Iterable[str]) -> int:
+        """Drop every audio entry naming one of ``files``. Returns how many.
+
+        So the ledger cannot outlive the media it describes: a pruned file whose
+        entry survived would keep answering "already recorded" forever, and
+        nothing would ever synthesize it again.
+        """
+        names = {str(item) for item in files}
+        dropped = 0
+        for entry in self.records.values():
+            keep = [item for item in entry.get("audio", []) if str(item.get("file")) not in names]
+            dropped += len(entry.get("audio", [])) - len(keep)
+            if entry.get("audio"):
+                entry["audio"] = keep
+        return dropped
+
+    def drop_superseded_audio(self, record_id: str, *, of: str, keep: set[str]) -> int:
+        """Drop this record's ``of`` entries whose content is no longer current.
+
+        Example clips are addressed by ``fp(record.id + sentence)``, so editing
+        a sentence produces a *new* file and a *new* entry while the old one
+        stays — reported as stale forever, since nothing removes entries, and
+        worse on a revert: the old entry answers "already recorded" while the
+        record still points at the other sentence's clip, so the card shows one
+        sentence and plays another. Word audio is immune, being addressed by
+        record id alone and so replaced in place.
+        """
+        entry = self.records.get(_record_key(record_id))
+        if not entry or not entry.get("audio"):
+            return 0
+        kept = [
+            item
+            for item in entry["audio"]
+            if item.get("of") != of or str(item.get("content_fp") or "") in keep
+        ]
+        dropped = len(entry["audio"]) - len(kept)
+        entry["audio"] = kept
+        return dropped
 
     def missing_audio(self, records: Iterable[VocabularyRecord]) -> list[str]:
         """Records with no word audio recorded at all.

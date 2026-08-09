@@ -83,15 +83,50 @@ class AudioResult:
     #: Records skipped for having no accent pattern, which is the interesting
     #: skip: it means a card will have no word audio until somebody supplies one.
     no_pattern: list[str] = field(default_factory=list)
+    #: Records with no reading at all, which cannot be voiced and are not the
+    #: same problem as a missing accent.
+    no_reading: list[str] = field(default_factory=list)
     #: Examples skipped because their furigana was never confirmed (M4.2's flag).
     unverified: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     #: Clips that already existed and were left alone.
     up_to_date: int = 0
+    #: Why the run stopped early, if it did. The clips written before it are
+    #: still in ``records`` and their entries still in the ledger: throwing that
+    #: away would make the next run pay for all of them again, and names are
+    #: deterministic, so what landed is exactly what a re-run would skip.
+    stopped_by: str = ""
 
     @property
     def file_count(self) -> int:
         return sum(len(names) for names in self.written.values())
+
+
+def _is_current(
+    book: ledger_mod.Ledger,
+    record_id: str,
+    *,
+    of: str,
+    content_fp: str,
+    named: str,
+    audio_dir: Path,
+) -> bool:
+    """Is there a usable clip for this content already?
+
+    Three facts, and the ledger holds only the first: an entry saying this was
+    recorded, the record still pointing at that file, and the file existing.
+    Asking the ledger alone calls a record current whose reference was dropped —
+    a reverted ``vocabulary.json``, a ``migrate-inline`` that rewrote
+    ``examples`` — and then ``--prune``, which reads the records, deletes the
+    clip nothing appears to want. The ledger goes on answering "already
+    recorded" and nothing ever synthesizes it again.
+    """
+    if not named:
+        return False
+    recorded = book.audio_file_for(record_id, of=of, content_fp=content_fp)
+    if recorded is None or recorded != Path(named).name:
+        return False
+    return (audio_dir / recorded).is_file()
 
 
 def _write(path: Path, data: bytes) -> None:
@@ -121,7 +156,14 @@ def _word_audio(
         return record
 
     content_fp = ledger_mod.word_audio_content_fingerprint(record)
-    if not force and book.has_audio(record.id, of="word", content_fp=content_fp):
+    if not force and _is_current(
+        book,
+        record.id,
+        of="word",
+        content_fp=content_fp,
+        named=record.audio,
+        audio_dir=audio_dir,
+    ):
         result.up_to_date += 1
         return record
 
@@ -176,6 +218,19 @@ def _example_audio(
     force: bool,
 ) -> VocabularyRecord:
     flagged = _unverified_fingerprints(record)
+    # Every sentence this record currently has. Entries for anything else are
+    # about sentences that were edited away: left in place they are reported
+    # stale forever, and on a revert they answer "already recorded" while the
+    # record still points at the other sentence's clip.
+    book.drop_superseded_audio(
+        record.id,
+        of="example",
+        keep={
+            ledger_mod.example_audio_content_fingerprint(item)
+            for item in record.examples
+            if item.japanese
+        },
+    )
     examples: list[ExampleSentence] = []
     changed = False
 
@@ -191,8 +246,13 @@ def _example_audio(
             continue
 
         content_fp = ledger_mod.example_audio_content_fingerprint(example)
-        if not force and book.has_audio(
-            record.id, of="example", content_fp=content_fp
+        if not force and _is_current(
+            book,
+            record.id,
+            of="example",
+            content_fp=content_fp,
+            named=example.audio,
+            audio_dir=audio_dir,
         ):
             result.up_to_date += 1
             examples.append(example)
@@ -251,30 +311,45 @@ def generate_audio(
     wanted = _targets(result.records, ids)
 
     for index, record in enumerate(result.records):
-        if record.id not in wanted:
+        if record.id not in wanted or result.stopped_by:
             continue
         updated = record
-        if words and updated.reading:
-            updated = _word_audio(
-                updated,
-                provider=provider,
-                book=book,
-                audio_dir=audio_dir,
-                media_dir=media_dir,
-                result=result,
-                force=force,
-                allow_default_accent=allow_default_accent,
-            )
-        if examples:
-            updated = _example_audio(
-                updated,
-                provider=provider,
-                book=book,
-                audio_dir=audio_dir,
-                media_dir=media_dir,
-                result=result,
-                force=force,
-            )
+        if words and not updated.reading:
+            # The one skip that used to be silent, which made a run's summary
+            # identical to one where the record did not exist.
+            result.no_reading.append(record.id)
+        try:
+            if words and updated.reading:
+                updated = _word_audio(
+                    updated,
+                    provider=provider,
+                    book=book,
+                    audio_dir=audio_dir,
+                    media_dir=media_dir,
+                    result=result,
+                    force=force,
+                    allow_default_accent=allow_default_accent,
+                )
+            if examples:
+                updated = _example_audio(
+                    updated,
+                    provider=provider,
+                    book=book,
+                    audio_dir=audio_dir,
+                    media_dir=media_dir,
+                    result=result,
+                    force=force,
+                )
+        except AudioError:
+            # This module's own refusals — a caller error, not a run to salvage.
+            raise
+        except JankiError as exc:
+            # The provider failed. Stop, but keep what was already written: the
+            # clips are on disk with their ledger entries in hand, and throwing
+            # that away would make the next run pay for all of them again.
+            # Names are deterministic, so what landed is exactly what a re-run
+            # would skip.
+            result.stopped_by = f"{record.id}: {exc}"
         result.records[index] = updated
     return result
 
@@ -293,7 +368,9 @@ def _targets(records: Sequence[VocabularyRecord], ids: Sequence[str] | None) -> 
 
 
 def prune_unreferenced(
-    records: Iterable[VocabularyRecord], media_dir: Path
+    records: Iterable[VocabularyRecord],
+    media_dir: Path,
+    book: ledger_mod.Ledger | None = None,
 ) -> list[Path]:
     """Delete ``janki-*`` clips nothing points at, and return what went.
 
@@ -318,4 +395,8 @@ def prune_unreferenced(
         if path.name not in referenced:
             path.unlink()
             removed.append(path)
+    if book is not None and removed:
+        # Or the ledger outlives the media: an entry for a deleted file goes on
+        # answering "already recorded" and nothing ever synthesizes it again.
+        book.forget_audio_files(path.name for path in removed)
     return removed
