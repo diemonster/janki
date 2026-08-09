@@ -213,9 +213,7 @@
       "negative": "できない",
       "past": "できた",
       "past_negative": "できなかった",
-      "te_form": "できて",
-      "potential": "できられる",
-      "passive": "できられる"
+      "te_form": "できて"
     },
     "tags": [
       "jpdb",
@@ -391,9 +389,7 @@
       "negative": "分からない",
       "past": "分かった",
       "past_negative": "分からなかった",
-      "te_form": "分かって",
-      "potential": "分かれる",
-      "passive": "分かられる"
+      "te_form": "分かって"
     },
     "tags": [
       "jpdb",
@@ -625,7 +621,6 @@
       "past": "知った",
       "past_negative": "知らなかった",
       "te_form": "知って",
-      "potential": "知れる",
       "passive": "知られる"
     },
     "tags": [

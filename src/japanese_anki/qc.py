@@ -22,6 +22,7 @@ Pure functions, no CLI and no network: the caller supplies the parse.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, replace
 
 from japanese_anki import jpdb
@@ -335,6 +336,23 @@ class FuriganaVerdict:
         return self.verified
 
 
+def _comparable(reading: str) -> str:
+    """A reading reduced to the sounds, for comparing two of them.
+
+    jpdb does not tokenize punctuation, so its rendering of 話す。 has no full
+    stop while the example's does — comparing them raw reports a mismatch for a
+    character neither side disagrees about. Separators go for the same reason.
+
+    Normalized as well, because the two sides come from different places: a
+    decomposed dakuten would reject correct furigana, with a message showing two
+    strings that render identically, which is undiagnosable.
+    """
+    text = normalize_identity_part(reading)
+    return "".join(
+        ch for ch in text if not unicodedata.category(ch).startswith(("P", "Z", "C"))
+    )
+
+
 def verify_example_furigana(
     example: ExampleSentence, parse: jpdb.ParseResult
 ) -> FuriganaVerdict:
@@ -361,27 +379,45 @@ def verify_example_furigana(
     kanji — so the check was mostly reporting its own segmentation, and the
     audio it suppressed was audio of correct sentences.
 
-    So the verdict is on the **joined** text and the **joined** reading. That is
-    blind to grouping and still catches both things this exists for:
+    Comparing the *joined group texts* fixed those and broke a worse set: jpdb
+    does not tokenize the leading kana of お茶, so its ruby covers 茶 while a
+    card's covers お茶. The correct ``お茶[おちゃ]`` failed while the wrong
+    ``お 茶[ちゃ]`` — which reads おおちゃ — passed. That is the defect
+    :func:`spilled_furigana_groups` names as the one a naive fix manufactures,
+    and it suppressed sentence audio permanently: ``janki audio`` skips a
+    flagged example and ``recheck_furigana`` can only clear what this verifies.
+
+    So the verdict is on **what the sentence sounds like**: the kana
+    :func:`furigana_reading` spells out of the example, against the kana it
+    spells out of jpdb's own rendering. That is what the consumers depend on —
+    sentence audio speaks it, romaji is transliterated from it — and it is blind
+    to both granularity and ruby extent while still catching:
 
     * a wrong reading — jpdb reads 日本語 as にっぽんご where an example says
-      にほんご — because the joined readings differ; and
-    * the ``お茶[ちゃ]`` spill, because the joined *text* differs (お茶 against
-      茶). The space is notation, but it is notation that decides which
-      characters a reading covers, and :func:`furigana_reading` would yield ちゃ
-      with the お simply gone.
+      にほんご; and
+    * the ``お茶[ちゃ]`` spill, which reads ちゃ where jpdb reads おちゃ: the お
+      is simply gone, and that truncated reading is what would be spoken.
 
     A sentence with no kanji has no groups on either side, and verifies.
+
+    **Known limitation.** jpdb sends some tokens with ``furigana: null`` and
+    :func:`_render` falls back to the vocabulary entry, which is the *dictionary
+    form* — so できます renders as できる and a sentence using it is flagged for a
+    difference nobody made. Measured on a real 20-record import this cost one
+    example out of twenty, and that one also carried a genuine にっぽんご/にほんご
+    disagreement, so it was going to be flagged anyway. Closing it means asking
+    jpdb's parse for ``position``/``length`` and slicing the surface form out of
+    the sentence, which changes what every caller of ``_render`` sees; it is
+    worth doing when a flagged-but-correct example costs more than a re-check.
     """
-    expected_pairs = parse_pairs(parse)
-    found_pairs = furigana_pairs(example.furigana)
     expected = _render(parse)
 
-    def joined(pairs: tuple[tuple[str, str], ...]) -> tuple[str, str]:
-        return ("".join(text for text, _ in pairs), "".join(read for _, read in pairs))
-
-    expected_text, expected_reading = joined(expected_pairs)
-    found_text, found_reading = joined(found_pairs)
+    expected_reading = _comparable(furigana_reading(expected))
+    # Falling back to the sentence when there is no furigana field at all: an
+    # all-kana sentence needs none, and its reading *is* its text. A sentence
+    # with kanji still fails, because the kanji pass through unread — 話す
+    # yields 話す, not はなす.
+    found_reading = _comparable(furigana_reading(example.furigana or example.japanese))
 
     differences: list[str] = []
 
@@ -403,18 +439,13 @@ def verify_example_furigana(
             f"the furigana spells {base}, but the sentence is {sentence}"
         )
 
-    if (expected_text, expected_reading) == (found_text, found_reading) and not differences:
+    if expected_reading == found_reading and not differences:
         return FuriganaVerdict(True, expected, example.furigana)
 
-    if expected_text != found_text:
+    if expected_reading != found_reading:
         differences.append(
-            f"jpdb puts ruby over {expected_text or '(nothing)'}; this puts it "
-            f"over {found_text or '(nothing)'}"
-        )
-    elif expected_reading != found_reading:
-        differences.append(
-            f"jpdb reads {expected_text} as {expected_reading}; this reads it "
-            f"as {found_reading}"
+            f"jpdb reads this as {expected_reading or '(nothing)'}; the furigana "
+            f"reads {found_reading or '(nothing)'}"
         )
 
     # No per-group differences appended: since the verdict stopped depending on

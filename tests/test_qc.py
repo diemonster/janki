@@ -132,7 +132,7 @@ def test_a_wrong_reading_is_flagged_with_both_sides() -> None:
     verdict = verify_example_furigana(example(japanese="話す", furigana="話[か]す"), parse)
 
     assert not verdict
-    assert verdict.differences[0] == "jpdb reads 話 as はな; this reads it as か"
+    assert verdict.differences[0] == "jpdb reads this as はなす; the furigana reads かす"
     assert verdict.expected == "話[はな]す"
     assert verdict.found == "話[か]す"
 
@@ -162,7 +162,9 @@ def test_a_reading_that_actually_differs_is_still_flagged() -> None:
     )
 
     assert not verdict
-    assert verdict.differences[0] == "jpdb reads 日本語 as にっぽんご; this reads it as にほんご"
+    assert verdict.differences[0] == (
+        "jpdb reads this as にっぽんご; the furigana reads にほんご"
+    )
 
 
 def test_a_missing_space_still_fails_though_the_split_is_free() -> None:
@@ -177,7 +179,7 @@ def test_a_missing_space_still_fails_though_the_split_is_free() -> None:
     )
 
     assert not verdict
-    assert "puts ruby over" in verdict.differences[0]
+    assert "the furigana reads ちゃ" in verdict.differences[0], "the お is gone"
 
 
 def test_missing_furigana_is_flagged_not_passed() -> None:
@@ -186,14 +188,18 @@ def test_missing_furigana_is_flagged_not_passed() -> None:
     verdict = verify_example_furigana(example(japanese="話す", furigana=""), parse)
 
     assert not verdict
-    assert "this puts it over (nothing)" in verdict.differences[0]
+    assert "the furigana reads 話す" in verdict.differences[0], (
+        "the kanji passes through unread, which is the missing reading"
+    )
 
 
-def test_furigana_the_parse_does_not_have_is_flagged() -> None:
+def test_furigana_matching_a_kana_parse_verifies() -> None:
+    """Kept as the inverse of its old self. The parse here is synthetic — a bare
+    kana token for the sentence 猫 — and under a reading comparison it *agrees*:
+    jpdb reads ねこ and the furigana says ねこ. There is nothing to flag."""
     verdict = verify_example_furigana(example(japanese="猫", furigana="猫[ねこ]"), parse_of("ねこ"))
 
-    assert not verdict
-    assert "jpdb puts ruby over (nothing)" in verdict.differences[0]
+    assert verdict, verdict.differences
 
 
 def test_a_sentence_with_no_kanji_verifies_with_no_furigana() -> None:

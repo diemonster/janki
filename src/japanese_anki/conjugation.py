@@ -127,6 +127,28 @@ _IRREGULAR: dict[str, dict[str, str]] = {
     },
 }
 
+# Verbs whose *mechanical* potential or passive is a real word that means
+# something else. The ある carve-out above was found the first time real
+# vocabulary arrived and stopped at the one verb with a hand-written table;
+# these came from reading a built deck. Each entry names the forms to drop.
+#
+# The rule this serves is the module's own: a form a verb does not have is
+# omitted rather than invented, because the table goes onto a card and a
+# beginner memorizes whatever is on it.
+_NO_FORM: dict[str, tuple[str, ...]] = {
+    # できる is *already* the potential of する. できられる is not used, and a
+    # card teaching it teaches a form no one says.
+    "できる": ("potential", "passive"),
+    "出来る": ("potential", "passive"),
+    # 分かれる is "to branch, to diverge" — a separate lexeme, homographic with
+    # 別れる's reading. 分かる has no potential in use, and 分かられる none either.
+    "分かる": ("potential", "passive"),
+    "わかる": ("potential", "passive"),
+    # 知れる is "to become known" (底が知れない), not "can know". The *passive*
+    # 知られる is ordinary and stays.
+    "知る": ("potential",),
+}
+
 # Expressions where no mechanical answer is safe. Matched as a suffix against
 # both the expression and the reading, so the kanji and kana spellings of the
 # same problem are one entry.
@@ -343,7 +365,10 @@ def conjugate(expression: str, reading: str, verb_group: str) -> dict[str, str]:
         # regular table would happily produce the second. One word has one
         # table; anything built on top of it is a human's call.
         return {}
-    return _BUILDERS[group](expression)
+    table = _BUILDERS[group](expression)
+    for form in _NO_FORM.get(expression, ()) + _NO_FORM.get(reading, ()):
+        table.pop(form, None)
+    return table
 
 
 def conjugate_i_adjective(expression: str, reading: str = "") -> dict[str, str]:

@@ -590,3 +590,47 @@ def test_every_hand_written_exception_is_pinned_by_a_case_above() -> None:
     assert set(_IRREGULAR_ADJECTIVE_SUFFIXES) == tested_adjective
     assert set(_NA_ADJECTIVE_SUFFIXES_ENDING_IN_I) == tested_na_adjectives
     assert set(_HONORIFIC_MASU_STEMS) == tested_honorifics
+
+
+# --- forms a verb does not actually have ------------------------------------
+
+
+def test_a_mechanical_potential_that_is_a_different_word_is_dropped() -> None:
+    """分かれる is "to branch, to diverge" — a separate lexeme, homographic with
+    別れる's reading. The generator would happily produce it as 分かる's
+    potential, and it goes on a card, so a beginner memorizes 分かれる as
+    "can understand"."""
+    table = conjugate("分かる", "わかる", "godan")
+
+    assert "potential" not in table
+    assert "passive" not in table
+    assert table["negative"] == "分からない", "the rest of the table is untouched"
+
+
+def test_the_potential_of_a_potential_is_not_invented() -> None:
+    """できる is already the potential of する. できられる is not used."""
+    table = conjugate("できる", "できる", "ichidan")
+
+    assert "potential" not in table and "passive" not in table
+
+
+def test_only_the_form_that_is_wrong_is_dropped() -> None:
+    """知れる is "to become known" (底が知れない), not "can know" — but 知られる
+    is an ordinary passive and stays. Dropping the whole pair would lose a form
+    the verb really has."""
+    table = conjugate("知る", "しる", "godan")
+
+    assert "potential" not in table
+    assert table["passive"] == "知られる"
+
+
+def test_an_ordinary_verb_keeps_both(tmp_path: Path = None) -> None:
+    table = conjugate("使う", "つかう", "godan")
+
+    assert table["potential"] == "使える"
+    assert table["passive"] == "使われる"
+
+
+def test_the_kana_spelling_is_covered_too() -> None:
+    """A record may store わかる or 分かる; the same word has the same gap."""
+    assert "potential" not in conjugate("わかる", "わかる", "godan")
