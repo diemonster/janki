@@ -620,9 +620,15 @@ def test_a_repair_never_discards_what_a_rebuild_cannot_put_back(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], key: str, value: object
 ) -> None:
     """Emptying `enriched` or `exports` destroys exactly the history the refusal
-    message promises to keep: the record reads as un-enriched and the next
-    `janki enrich` pays for it again, and nothing anywhere records which build
-    shipped it.
+    message promises to keep, and no later run can re-derive either.
+
+    `enriched` is provenance, not targeting: which pass ran, which model, which
+    fields it wrote, on what date. Enrichment targeting is content-defined —
+    `missing_enrichment` is a staticmethod that says outright it never consults
+    these entries — so nothing re-pays for the record, and nothing can ever say
+    again who filled a field, because a filled field does not carry that.
+    `exports` is worse: nothing outside the ledger records which build included
+    which note.
 
     Nothing else is reconstructible either — see
     `test_sources_are_parked_too_because_a_rebuild_cannot_restore_them`, which

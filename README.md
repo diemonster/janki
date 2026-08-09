@@ -142,8 +142,8 @@ counts. A deck name works as well as a path — `verbs` is looked up under
 ### The whole pipeline
 
 ```bash
-janki refresh                  # every deck
-janki refresh --deck verbs     # one
+janki refresh                  # build every deck
+janki refresh --deck verbs     # build only this deck
 ```
 
 Runs `enrich --jpdb` → `enrich --ai` → `audio --words --examples` →
@@ -153,6 +153,10 @@ it produces: jpdb fills the readings and accents `audio` needs to force a pitch,
 finished. Skip any stage with `--no-jpdb`, `--no-ai`, `--no-audio`, `--no-build`.
 A stage that fails stops the run rather than building a package from
 half-enriched records.
+
+`--deck` scopes the **build** stage only: enrichment and audio still run over
+every record in the normalized file, because a word's reading and its clip
+belong to the word rather than to whichever deck happens to carry it.
 
 ## Common commands
 

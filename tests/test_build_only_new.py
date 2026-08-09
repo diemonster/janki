@@ -423,3 +423,200 @@ def test_an_interrupted_build_leaves_the_previous_package_intact(
     assert (root / "dist" / "verbs.apkg").read_bytes() == good, "the old one survived"
     leftovers = [p.name for p in (root / "dist").iterdir() if p.name != "verbs.apkg"]
     assert leftovers == [], "and no partial file was left behind"
+
+
+# --- a throwaway package must not consume the deck's new-ness ---------------
+
+
+def test_an_output_build_does_not_claim_the_deck_shipped(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--output` is a package to eyeball, or `make gates` proving the exporter
+    still runs. Recording those as exports consumes the records' new-ness: the
+    next `--only-new` skips them, so they never reach a card and nothing says
+    so. This is not hypothetical — `make gates` built the real deck and
+    committed the export entries it created."""
+    root = _project(tmp_path, [_record("橋", "はし")])
+
+    assert _run(root, "build", "verbs", "--output", str(tmp_path / "throwaway.apkg")) == 0
+
+    assert (tmp_path / "throwaway.apkg").exists(), "the package was still written"
+    assert not (root / "ledger.json").exists() or _exports(root) == {}
+    capsys.readouterr()
+    assert _run(root, "build", "verbs", "--only-new", "--yes") == 0
+    assert "nothing new" not in capsys.readouterr().out, "still new, as it should be"
+
+
+def test_the_gate_does_not_write_the_ledger(tmp_path: Path) -> None:
+    """The Makefile's `gates` target builds the real deck in the real project
+    root. Any durable write there is a committed-file diff nobody asked for —
+    and worse, it consumed the new-ness of every record it touched."""
+    gates = (PROJECT_ROOT / "Makefile").read_text(encoding="utf-8")
+    line = next(ln for ln in gates.splitlines() if "JANKI) build" in ln and "gates" not in ln)
+    assert "--output" in line, f"the gate must build a throwaway package, got: {line.strip()}"
+
+
+# --- an incremental build is still a build ----------------------------------
+
+
+def test_only_new_refuses_a_broken_deck_even_with_nothing_new(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A deck whose already-shipped records are broken is a broken deck. An
+    incremental build that exits 0 on one a full build refuses hides that until
+    the next full build — and `janki refresh` reports "4 stages completed" on a
+    deck that cannot be built at all."""
+    root = _project(tmp_path, [_record("橋", "はし")])
+    assert _run(root, "build", "verbs", "--only-new", "--yes") == 0
+    records = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    records[0]["furigana"] = "橋[はし"  # unbalanced: an error, not a warning
+    (root / "vocabulary.json").write_text(
+        json.dumps(records, ensure_ascii=False), encoding="utf-8"
+    )
+    capsys.readouterr()
+
+    assert _run(root, "build", "verbs", "--only-new", "--yes") == 1
+
+    assert "Deck validation failed" in capsys.readouterr().err
+
+
+# --- work the deck will never see -------------------------------------------
+
+
+def test_audio_added_after_a_record_shipped_is_reported(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`unexported` asks only whether a stem key exists, so a shipped record is
+    invisible to `--only-new` forever — including when a later run gives it the
+    clip it was shipped without. Silent, and the pipeline reports success."""
+    root = _project(tmp_path, [_record("橋", "はし")])
+    (root / "ledger.json").write_text(
+        json.dumps({
+            "version": 1,
+            "records": {
+                "word:橋:はし": {
+                    "added_at": "2026-01-01",
+                    "sources": [], "enriched": [],
+                    "audio": [{"file": "janki-x.wav", "of": "word", "provider": "voicevox",
+                               "voice": 13, "speed": 0.7, "content_fp": "x",
+                               "at": "2026-02-01"}],
+                    "exports": {"verbs": "2026-01-01"},
+                }
+            },
+        }),
+        encoding="utf-8",
+    )
+    capsys.readouterr()
+
+    assert _run(root, "build", "verbs", "--only-new", "--yes") == 0
+
+    err = capsys.readouterr().err
+    assert "1 record(s) gained audio or enrichment after this deck last shipped" in err
+
+
+def test_work_finished_the_same_day_is_not_reported(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Dates are days. A warning that fires on every same-day pipeline run —
+    which is what `janki refresh` is — is one nobody reads."""
+    root = _project(tmp_path, [_record("橋", "はし")])
+    (root / "ledger.json").write_text(
+        json.dumps({
+            "version": 1,
+            "records": {
+                "word:橋:はし": {
+                    "added_at": "2026-01-01", "sources": [], "enriched": [],
+                    "audio": [{"file": "janki-x.wav", "of": "word", "provider": "voicevox",
+                               "voice": 13, "speed": 0.7, "content_fp": "x",
+                               "at": "2026-01-01"}],
+                    "exports": {"verbs": "2026-01-01"},
+                }
+            },
+        }),
+        encoding="utf-8",
+    )
+    capsys.readouterr()
+
+    assert _run(root, "build", "verbs", "--only-new", "--yes") == 0
+
+    assert "gained audio" not in capsys.readouterr().err
+
+
+# --- refresh does not force past the gate -----------------------------------
+
+
+def test_refresh_still_asks_at_a_terminal(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Refresh forced `--yes`, so the quick path shipped bare cards *and* marked
+    them exported — hiding them from every later `--only-new`, which DESIGN_V2
+    calls the worst-case version of "quickly build". Refresh is interactive: the
+    enrich stages ahead of it prompt too."""
+    root = _project(tmp_path, [_record("橋", "はし")])
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)
+    asked: list[str] = []
+
+    def answer(prompt: str) -> str:
+        asked.append(prompt)
+        return "n"
+
+    monkeypatch.setattr("builtins.input", answer)
+
+    assert _run(root, "refresh", "--no-jpdb", "--no-ai", "--no-audio") == 0
+
+    assert asked, "the gap prompt was reached"
+    assert not (root / "dist").exists(), "and declining built nothing"
+
+
+# --- flag combinations and the save failure ---------------------------------
+
+
+def test_all_with_output_is_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--output` names one file. Silently ignoring it while building several
+    decks leaves the user looking for a package that was never written."""
+    root = _project(tmp_path, [_record("橋", "はし")])
+
+    assert _run(root, "build", "--all", "--output", str(tmp_path / "x.apkg")) == 1
+
+    assert "cannot be combined with --all" in capsys.readouterr().err
+    assert not (tmp_path / "x.apkg").exists()
+
+
+def test_a_failed_ledger_save_says_the_package_was_still_written(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _project(tmp_path, [_record("橋", "はし")])
+
+    def refuse(self: Any) -> None:
+        raise cli.ledger.LedgerError("the ledger directory is read-only")
+
+    monkeypatch.setattr(cli.ledger.Ledger, "save", refuse)
+
+    assert _run(root, "build", "verbs") == 1
+
+    captured = capsys.readouterr()
+    assert (root / "dist" / "verbs.apkg").exists(), "the package is real"
+    assert "The package(s) above were written" in captured.err
+
+
+def test_a_failed_save_after_building_nothing_claims_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The message asserted packages were written and records would be revisited
+    — on a run that wrote no package and had no export entry pending."""
+    root = _project(tmp_path, [_record("橋", "はし")])
+    assert _run(root, "build", "verbs", "--only-new", "--yes") == 0
+
+    def refuse(self: Any) -> None:
+        raise cli.ledger.LedgerError("the ledger directory is read-only")
+
+    monkeypatch.setattr(cli.ledger.Ledger, "save", refuse)
+    capsys.readouterr()
+
+    assert _run(root, "build", "verbs", "--only-new", "--yes") == 1
+
+    err = capsys.readouterr().err
+    assert "the ledger directory is read-only" in err
+    assert "package(s) above were written" not in err

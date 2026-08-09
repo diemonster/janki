@@ -2169,7 +2169,27 @@ def _build_one(
     include_ids: set[str] | None = None
     if only_new:
         _, records = resolve_deck_records(deck_path)
-        new_ids = book.unexported(stem, [record.id for record in records]) if book else []
+        # Validated before the "nothing new" shortcut, not after it. A deck
+        # whose already-shipped records are broken is a broken deck, and an
+        # incremental build that exits 0 on one a full build refuses would hide
+        # that until the next full build.
+        issues = validate_records(records, deck_path)
+        if has_errors(issues):
+            formatted = "\n".join(issue.format() for issue in issues)
+            raise AnkiBuildError(f"Deck validation failed:\n{formatted}")
+
+        ids = [record.id for record in records]
+        new_ids = book.unexported(stem, ids) if book else []
+        if book is not None:
+            behind = book.exported_before_their_work(stem, ids)
+            if behind:
+                print(
+                    f"warning: {stem}: {len(behind)} record(s) gained audio or "
+                    "enrichment after this deck last shipped them. --only-new "
+                    "cannot see them; run 'janki build "
+                    f"{stem}' to rebuild the whole deck.",
+                    file=sys.stderr,
+                )
         if not new_ids:
             print(f"{stem}: nothing new to build ({len(records)} record(s) already exported)")
             return False
@@ -2189,29 +2209,36 @@ def _build_one(
         f"Built {result.output_path}{scope} — {result.note_count} note{plural}, "
         f"cards: {cards}, media: {result.media_count}"
     )
-    if book is not None:
+    if book is not None and output is None:
+        # Only a build to the deck's *own* declared package records exports. A
+        # `--output` build is a throwaway — a package to eyeball, or `make
+        # gates` proving the exporter still runs — and claiming those records
+        # shipped consumes their new-ness: the next `--only-new` skips them and
+        # they never reach a card, with nothing to say so.
         for record_id in result.record_ids:
             book.record_export(record_id, stem)
     return True
 
 
-def _finish_build(book: ledger.Ledger) -> int:
+def _finish_build(book: ledger.Ledger, built: bool) -> int:
     """Save the export entries, reporting a failure without losing the build.
 
-    The packages are already on disk by now. A save that fails must say so and
-    exit non-zero — the next `--only-new` will rebuild what this run shipped —
-    but it must not present itself as the build having failed.
+    ``built`` says whether any package reached disk. A run that built nothing —
+    "nothing new to build", or a declined prompt — has no export entries
+    pending, so a failing save there must not announce packages that do not
+    exist and records that will be revisited.
     """
     error = _save_ledger(book)
-    if error is not None:
-        _report_ledger_failure(error)
+    if error is None:
+        return 0
+    _report_ledger_failure(error)
+    if built:
         print(
             "The package(s) above were written; only the export history was "
             "not. The next '--only-new' will include those records again.",
             file=sys.stderr,
         )
-        return 1
-    return 0
+    return 1
 
 
 def command_build(args: argparse.Namespace) -> int:
@@ -2232,21 +2259,22 @@ def command_build(args: argparse.Namespace) -> int:
         )
         if not deck_paths:
             raise AnkiBuildError(f"No deck files found under {config.deck_dir}")
+        built = False
         for deck_path in deck_paths:
-            _build_one(
+            built = _build_one(
                 deck_path, config, book=book,
                 only_new=args.only_new, assume_yes=args.yes,
-            )
-        return _finish_build(book)
+            ) or built
+        return _finish_build(book, built)
 
     if not args.deck:
         raise AnkiBuildError("Provide a deck YAML path or use --all")
     output = args.output.resolve() if args.output else None
-    _build_one(
+    built = _build_one(
         resolve_deck_path(args.deck, config), config, output,
         book=book, only_new=args.only_new, assume_yes=args.yes,
     )
-    return _finish_build(book)
+    return _finish_build(book, built)
 
 
 #: The refresh pipeline, in order. Each entry is the stage's own command line,
@@ -2290,7 +2318,12 @@ def command_refresh(args: argparse.Namespace) -> int:
             continue
         argv = [*root, *command]
         if name == "build":
-            argv += [*deck, "--only-new", "--yes"]
+            # No `--yes`: refresh is an interactive command — the enrich stages
+            # ahead of it prompt too — and the gap prompt exists precisely
+            # because shipping bare cards *and marking them exported* hides
+            # them from every later `--only-new`. A non-TTY still proceeds, so
+            # scripted runs are unaffected.
+            argv += [*deck, "--only-new"]
         stage = parser.parse_args(argv)
         print(f"— {name}: janki {' '.join(argv[len(root):])}")
         code = stage.handler(stage)

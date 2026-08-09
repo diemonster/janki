@@ -152,6 +152,10 @@ def _shape_problems(entry: dict[str, Any]) -> list[tuple[str, str]]:
     ]
 
 
+def _first_bad(problems: list[tuple[str, str]]) -> str:
+    return problems[0][0] if problems else "<key>"
+
+
 def _shape_error(path: Path, record_id: str, problems: list[tuple[str, str]]) -> LedgerError:
     detail = ", ".join(
         f"{key!r} as {got}, not a {_ENTRY_SHAPE[key].__name__}" for key, got in problems
@@ -160,8 +164,9 @@ def _shape_error(path: Path, record_id: str, problems: list[tuple[str, str]]) ->
         f"Ledger {path}: record {record_id!r} has {detail}. That file is "
         "machine-written; 'janki status --rebuild' repairs entries like this "
         "in place. Nothing is thrown away — the unreadable value is parked "
-        "beside the key it came from, under a name ending '_unreadable', and "
-        "the repair prints the exact name it used."
+        f"beside the key it came from, under a name starting '{_first_bad(problems)}"
+        "_unreadable' (numbered if an earlier repair already used that name), "
+        "and the repair prints the exact name it used."
     )
 
 
@@ -802,6 +807,43 @@ class Ledger:
             for record in records
             if not any(entry.get("of") == "word" for entry in self._audio_entries(record.id))
         ]
+
+    def exported_before_their_work(self, deck_stem: str, ids: Iterable[str]) -> list[str]:
+        """Records this deck shipped *before* their newest audio or enrichment.
+
+        ``unexported`` asks only whether a stem key exists, so once a record has
+        shipped it is invisible to ``--only-new`` forever — including when a
+        later run gives it the audio or examples it was shipped without. That is
+        the quiet half of an incremental build: `janki refresh` voices a word on
+        Tuesday and the deck that already carries it silently never learns.
+
+        Dates are days, not timestamps, so "later" means a strictly later day.
+        Work finished the same day it shipped is not reported: it may have
+        landed either side of the build, and a warning that fires on every
+        same-day pipeline run — which is what `janki refresh` is — is one
+        nobody reads.
+        """
+        stem = str(deck_stem).strip()
+        if not stem:
+            raise LedgerError("Exports are tracked per deck file stem; none was given")
+        result: list[str] = []
+        for record_id in ids:
+            entry = self.records.get(str(record_id))
+            if not isinstance(entry, dict):
+                continue
+            exports = entry.get("exports")
+            shipped = exports.get(stem) if isinstance(exports, dict) else None
+            if not isinstance(shipped, str) or not shipped:
+                continue
+            dates = [
+                str(item.get("at") or "")
+                for key in ("audio", "enriched")
+                for item in (entry.get(key) or [])
+                if isinstance(item, dict)
+            ]
+            if any(date > shipped for date in dates if date):
+                result.append(str(record_id))
+        return result
 
     def stale_audio(self, records: Iterable[VocabularyRecord]) -> list[str]:
         """Records whose recorded audio no longer matches their content.
