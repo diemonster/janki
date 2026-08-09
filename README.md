@@ -111,6 +111,49 @@ rather than merging. Sync *before* importing, so the choice is trivial: upload
 your own collection and nothing is at stake. Then sync normally to make the
 deck available in AnkiMobile.
 
+### Building only what is new
+
+A deck that has shipped 400 records and gained 3 does not need a 400-note
+package:
+
+```bash
+janki build verbs --only-new
+```
+
+That includes only the records this deck has never been built with, per the
+ledger's export history, and records the rest as exported so the next run knows.
+A plain `janki build` records them too — the history is what makes `--only-new`
+correct, and a full build that stayed quiet would make every record it shipped
+look new forever. When there is nothing new it writes no package at all, rather
+than replacing your last good one with an empty deck.
+
+Before building it says what the new records are missing:
+
+```
+warning: verbs: 2 of 3 new records have no word audio
+warning: verbs: 3 of 3 new records have no example sentence
+Build them anyway? [y/N]
+```
+
+`--yes` skips the question; a non-interactive run proceeds and prints the
+counts. A deck name works as well as a path — `verbs` is looked up under
+`deck_dir`, and a real file at that path always wins.
+
+### The whole pipeline
+
+```bash
+janki refresh                  # every deck
+janki refresh --deck verbs     # one
+```
+
+Runs `enrich --jpdb` → `enrich --ai` → `audio --words --examples` →
+`build --only-new`, in that order, because each stage needs what the one before
+it produces: jpdb fills the readings and accents `audio` needs to force a pitch,
+`--ai` writes the examples `audio` then voices, and the build ships what they
+finished. Skip any stage with `--no-jpdb`, `--no-ai`, `--no-audio`, `--no-build`.
+A stage that fails stops the run rather than building a package from
+half-enriched records.
+
 ## Common commands
 
 ```bash

@@ -42,7 +42,9 @@
           "model": "claude-opus-5"
         }
       ],
-      "exports": {},
+      "exports": {
+        "verbs": "2026-08-08"
+      },
       "sources": [
         {
           "ref": "",
@@ -84,7 +86,9 @@
           "model": "jpdb"
         }
       ],
-      "exports": {},
+      "exports": {
+        "verbs": "2026-08-08"
+      },
       "sources": [
         {
           "ref": "",
@@ -134,7 +138,9 @@
           "model": "claude-opus-5"
         }
       ],
-      "exports": {},
+      "exports": {
+        "verbs": "2026-08-08"
+      },
       "sources": [
         {
           "ref": "",

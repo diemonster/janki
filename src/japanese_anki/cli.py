@@ -2076,35 +2076,234 @@ def command_validate(args: argparse.Namespace) -> int:
     return 1 if has_errors(all_issues) else 0
 
 
-def _build_one(deck_path: Path, config: ProjectConfig, output: Path | None = None) -> None:
-    result = build_deck(deck_path, config, output)
+def resolve_deck_path(deck: Path, config: ProjectConfig) -> Path:
+    """A deck argument as a path, or as a bare name under ``deck_dir``.
+
+    `janki build verbs` is what a person types; requiring
+    `data/decks/verbs.yaml` every time is friction with no safety in it, since
+    the name has to match a file either way. An argument that exists as written
+    wins, so a deck file in the working directory is never shadowed by a
+    same-named one under ``deck_dir``.
+    """
+    if deck.exists():
+        return deck.resolve()
+    if deck.parent == Path("") or deck.parent == Path("."):
+        for suffix in ("", ".yaml", ".yml"):
+            candidate = config.deck_dir / f"{deck.name}{suffix}"
+            if candidate.exists():
+                return candidate.resolve()
+    raise AnkiBuildError(
+        f"No such deck: {deck}. Give a path to a deck file, or the bare name "
+        f"of one under {config.deck_dir}."
+    )
+
+
+#: What `--only-new` looks for in the records it is about to ship, and what to
+#: call each gap. Every one of these is a card that behaves differently from its
+#: neighbours for a reason invisible on the card itself, which is why they are
+#: reported by count before the build rather than discovered during study.
+_BUILD_GAPS: tuple[tuple[str, str], ...] = (
+    ("no word audio", "audio"),
+    ("no example sentence", "examples"),
+    ("no pitch accent", "accent"),
+)
+
+
+def _gap_counts(records: Sequence[VocabularyRecord]) -> dict[str, int]:
+    counts = {"audio": 0, "examples": 0, "accent": 0}
+    for record in records:
+        if not record.audio:
+            counts["audio"] += 1
+        if not any(example.japanese.strip() for example in record.examples):
+            counts["examples"] += 1
+        if not record.pitch_accent and not record.audio_accent.strip():
+            counts["accent"] += 1
+    return counts
+
+
+def _confirm_gaps(
+    records: Sequence[VocabularyRecord], assume_yes: bool, *, stem: str
+) -> bool:
+    """Report what the new records are missing, and ask before shipping them."""
+    counts = _gap_counts(records)
+    described = [
+        f"{counts[key]} of {len(records)} new records have {label}"
+        for label, key in _BUILD_GAPS
+        if counts[key]
+    ]
+    if not described:
+        return True
+    for line in described:
+        print(f"warning: {stem}: {line}", file=sys.stderr)
+    if assume_yes or not sys.stdin.isatty():
+        # Unattended runs proceed: `janki refresh` drives this, and a pipeline
+        # that stops for an unanswerable question is worse than one that ships
+        # a card missing its audio and says so.
+        return True
+    try:
+        answer = input("Build them anyway? [y/N] ")
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return False
+    return answer.strip().lower() in {"y", "yes"}
+
+
+def _build_one(
+    deck_path: Path,
+    config: ProjectConfig,
+    output: Path | None = None,
+    *,
+    book: ledger.Ledger | None = None,
+    only_new: bool = False,
+    assume_yes: bool = False,
+) -> bool:
+    """Build one deck. Returns whether a package was written.
+
+    ``book`` is the caller's ledger — loaded once per command and saved once,
+    the rule this module follows everywhere. Exports are recorded for a plain
+    build too, not only `--only-new`: `unexported` is what makes the next
+    `--only-new` correct, and a full build that shipped a record without
+    saying so would make that record look new forever.
+    """
+    stem = deck_path.stem
+    include_ids: set[str] | None = None
+    if only_new:
+        _, records = resolve_deck_records(deck_path)
+        new_ids = book.unexported(stem, [record.id for record in records]) if book else []
+        if not new_ids:
+            print(f"{stem}: nothing new to build ({len(records)} record(s) already exported)")
+            return False
+        include_ids = set(new_ids)
+        included = [record for record in records if record.id in include_ids]
+        if not _confirm_gaps(included, assume_yes, stem=stem):
+            print(f"{stem}: not built.")
+            return False
+
+    result = build_deck(deck_path, config, output, include_ids=include_ids)
     for warning in result.warnings:
         print(f"warning: {warning}", file=sys.stderr)
     cards = ", ".join(result.card_types)
+    scope = " (new only)" if only_new else ""
+    plural = "" if result.note_count == 1 else "s"
     print(
-        f"Built {result.output_path} — {result.note_count} notes, "
+        f"Built {result.output_path}{scope} — {result.note_count} note{plural}, "
         f"cards: {cards}, media: {result.media_count}"
     )
+    if book is not None:
+        for record_id in result.record_ids:
+            book.record_export(record_id, stem)
+    return True
+
+
+def _finish_build(book: ledger.Ledger) -> int:
+    """Save the export entries, reporting a failure without losing the build.
+
+    The packages are already on disk by now. A save that fails must say so and
+    exit non-zero — the next `--only-new` will rebuild what this run shipped —
+    but it must not present itself as the build having failed.
+    """
+    error = _save_ledger(book)
+    if error is not None:
+        _report_ledger_failure(error)
+        print(
+            "The package(s) above were written; only the export history was "
+            "not. The next '--only-new' will include those records again.",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
 
 
 def command_build(args: argparse.Namespace) -> int:
     config = _load_config(args)
+    # Loaded before anything is built, so a ledger janki cannot read refuses
+    # the command rather than surfacing after a package is already on disk.
+    book = ledger.load(config.ledger_file)
     if args.all:
         if args.deck:
             raise AnkiBuildError("Do not provide a deck path together with --all")
+        if args.output:
+            raise AnkiBuildError(
+                "--output names one file; it cannot be combined with --all. "
+                "Each deck's own 'output:' key names its file."
+            )
         deck_paths = sorted(
             [*config.deck_dir.glob("*.yaml"), *config.deck_dir.glob("*.yml")]
         )
         if not deck_paths:
             raise AnkiBuildError(f"No deck files found under {config.deck_dir}")
         for deck_path in deck_paths:
-            _build_one(deck_path, config)
-        return 0
+            _build_one(
+                deck_path, config, book=book,
+                only_new=args.only_new, assume_yes=args.yes,
+            )
+        return _finish_build(book)
 
     if not args.deck:
         raise AnkiBuildError("Provide a deck YAML path or use --all")
     output = args.output.resolve() if args.output else None
-    _build_one(args.deck.resolve(), config, output)
+    _build_one(
+        resolve_deck_path(args.deck, config), config, output,
+        book=book, only_new=args.only_new, assume_yes=args.yes,
+    )
+    return _finish_build(book)
+
+
+#: The refresh pipeline, in order. Each entry is the stage's own command line,
+#: parsed by the real parser rather than assembled as a Namespace — a stage
+#: that grows a flag then keeps its default here instead of raising
+#: AttributeError halfway through a run.
+_REFRESH_STAGES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("jpdb", "--no-jpdb", ("enrich", "--jpdb")),
+    ("ai", "--no-ai", ("enrich", "--ai")),
+    ("audio", "--no-audio", ("audio", "--words", "--examples")),
+    ("build", "--no-build", ("build",)),
+)
+
+
+def command_refresh(args: argparse.Namespace) -> int:
+    """Run the whole pipeline in order: enrich, voice, build what is new.
+
+    The stages are the four commands a person runs by hand after adding words,
+    in the only order that works — jpdb fills the readings and accents that
+    `audio` needs to force a pitch, `--ai` writes the examples that `audio`
+    then voices, and `--only-new` ships what the earlier stages just finished.
+    Running them out of order silently produces less: a build before `audio`
+    ships cards with no sound and marks them exported, so the next `--only-new`
+    will not revisit them.
+
+    Each stage is the real command, called in-process — not a subprocess, so a
+    failure is a `JankiError` with a stack rather than an exit code, and not a
+    reimplementation, so there is one definition of what "enrich --jpdb" means.
+    A stage that fails stops the run: every later stage depends on what the
+    failed one was supposed to produce, and the alternative is a package built
+    from half-enriched records.
+    """
+    parser = build_parser()
+    root = ["--root", str(args.root)] if args.root else []
+    deck = [str(args.deck)] if args.deck else ["--all"]
+
+    ran: list[str] = []
+    for name, flag, command in _REFRESH_STAGES:
+        if getattr(args, f"no_{name}"):
+            print(f"— {name}: skipped ({flag})")
+            continue
+        argv = [*root, *command]
+        if name == "build":
+            argv += [*deck, "--only-new", "--yes"]
+        stage = parser.parse_args(argv)
+        print(f"— {name}: janki {' '.join(argv[len(root):])}")
+        code = stage.handler(stage)
+        if code != 0:
+            print(
+                f"refresh stopped at '{name}' (exit {code}). The stages after it "
+                "depend on what it was supposed to produce.",
+                file=sys.stderr,
+            )
+            return code
+        ran.append(name)
+
+    print(f"refresh: {len(ran)} stage(s) completed: {', '.join(ran) or 'none'}")
     return 0
 
 
@@ -2528,7 +2727,35 @@ def build_parser() -> argparse.ArgumentParser:
     build_command.add_argument("deck", type=_path, nargs="?")
     build_command.add_argument("--all", action="store_true")
     build_command.add_argument("--output", type=_path)
+    build_command.add_argument(
+        "--only-new",
+        action="store_true",
+        help=(
+            "Include only records this deck has never been built with, per the "
+            "ledger's export history."
+        ),
+    )
+    build_command.add_argument(
+        "--yes",
+        action="store_true",
+        help="Do not ask about records missing audio, examples, or pitch accent.",
+    )
     build_command.set_defaults(handler=command_build)
+
+    refresh_parser = subparsers.add_parser(
+        "refresh",
+        help="Enrich, voice, and build what is new — the whole pipeline in order.",
+    )
+    refresh_parser.add_argument(
+        "--deck",
+        type=_path,
+        help="Build only this deck (path or bare name). Default: every deck.",
+    )
+    for _name, _flag, _command in _REFRESH_STAGES:
+        refresh_parser.add_argument(
+            _flag, action="store_true", help=f"Skip the {_name} stage."
+        )
+    refresh_parser.set_defaults(handler=command_refresh)
 
     status_parser = subparsers.add_parser(
         "status", help="Summarize records, ledger state, and duplicate candidates"

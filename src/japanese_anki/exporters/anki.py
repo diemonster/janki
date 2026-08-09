@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import html
+import os
 import re
 import unicodedata
+from collections.abc import Container
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -72,6 +74,11 @@ class BuildResult:
     #: Media janki could not package — a hand-written ``[sound:]`` tag. The
     #: build succeeds; the caller decides how loudly to say so.
     warnings: tuple[str, ...] = ()
+    #: The records that reached the package, in note order. What the caller
+    #: writes export entries from: ``--only-new`` narrows the set here, so a
+    #: caller re-deriving it from the deck file would record records the
+    #: package does not contain and make them invisible to the next run.
+    record_ids: tuple[str, ...] = ()
 
 
 def _read_text(path: Path) -> str:
@@ -529,7 +536,16 @@ def build_deck(
     deck_path: Path,
     project_config: ProjectConfig,
     output_path: Path | None = None,
+    include_ids: Container[str] | None = None,
 ) -> BuildResult:
+    """Build one deck package.
+
+    ``include_ids`` narrows the notes to those ids — ``build --only-new``'s
+    hook. Filtering happens *after* validation, deliberately: a deck whose
+    excluded records are broken is a broken deck, and letting an incremental
+    build pass while a full one fails would hide that until the next full
+    build, which is the least convenient moment to find out.
+    """
     if genanki is None:
         raise AnkiBuildError(
             "genanki is not installed. Run: python -m pip install -e '.[dev]'"
@@ -540,6 +556,9 @@ def build_deck(
     if has_errors(issues):
         formatted = "\n".join(issue.format() for issue in issues)
         raise AnkiBuildError(f"Deck validation failed:\n{formatted}")
+
+    if include_ids is not None:
+        records = [record for record in records if record.id in include_ids]
 
     card_types = _resolve_card_types(deck_config, project_config)
     template_dir = project_config.template_dir
@@ -605,7 +624,19 @@ def build_deck(
 
     package = genanki.Package(deck)
     package.media_files = sorted(set(media_files))
-    package.write_to_file(str(output_path))
+    # Written beside the target and renamed into place. genanki needs a real
+    # path and writes the zip incrementally, so an interrupted build (a ^C, a
+    # full disk, a media file that vanishes mid-write) otherwise leaves a
+    # truncated `.apkg` where a good one was — and a truncated package does not
+    # look broken until Anki refuses it. `os.replace` is atomic within a
+    # directory, so the previous package survives intact until the new one is
+    # whole.
+    scratch = output_path.with_name(f".{output_path.name}.partial")
+    try:
+        package.write_to_file(str(scratch))
+        os.replace(scratch, output_path)
+    finally:
+        scratch.unlink(missing_ok=True)
     return BuildResult(
         output_path=output_path,
         deck_name=deck_name,
@@ -613,4 +644,5 @@ def build_deck(
         card_types=tuple(card_types),
         media_count=len(set(media_files)),
         warnings=tuple(media_warnings),
+        record_ids=tuple(record.id for record in records),
     )

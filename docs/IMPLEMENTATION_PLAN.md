@@ -1846,7 +1846,7 @@ Design: DESIGN_V2 "Schema changes" + "Audio > Mechanics".
   shallow-merge nuance, link `NOTETYPE_UPGRADE.md`; follow whatever
   import procedure M5.5 concluded.
 
-### [ ] M5.6 `build --only-new` + `janki refresh`
+### [x] M5.6 `build --only-new` + `janki refresh`
 
 Depends on: M5.4 (exporter settled), M2.6, M4.2 (refresh calls them),
 M1.3
@@ -1870,6 +1870,22 @@ Design: DESIGN_V2 "CLI surface".
   (genanki needs a real path — `write_to_file(tmp)` then `os.replace`) so
   an interrupted build can't leave a truncated package that a later
   `--only-new`-era run mistakes for a good one.
+
+*Landed 2026-08-08.* Two things the plan did not name and the code needed:
+
+- **`--only-new` with nothing new writes no package.** genanki will happily
+  produce a zero-note deck, which would replace the last good `.apkg` with an
+  empty one — worse than an out-of-date deck, because the file on disk is what
+  the user imports.
+- **Exports are recorded from `BuildResult.record_ids`, not from the deck
+  file.** Recording every deck record would mark records exported that the
+  package does not contain, and those are invisible to every later
+  `--only-new` — they would never reach a card and nothing would report it.
+  Pinning this needed a ledger seeded with an *older* export date; with both
+  builds dated today the right and wrong behaviours are byte-identical.
+
+Verified live against the real project: all four stages ran in order and each
+correctly reported a no-op.
 
 ### [ ] M5.7 Azure sentence-audio provider
 
