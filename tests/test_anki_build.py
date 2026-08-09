@@ -49,12 +49,20 @@ def test_audio_is_resolved_against_media_dir_not_the_deck(tmp_path: Path) -> Non
     clip = root / "media" / "audio" / "janki-abc.wav"
     clip.parent.mkdir(parents=True)
     clip.write_bytes(b"RIFF....WAVEfake")
+    # The image branch changed base directory in the same commit and needs its
+    # own coverage. Both paths are media-dir-relative on purpose: `data/decks`
+    # and `data/media` are siblings, so a "../media/..." path resolves the same
+    # under either base and would pin nothing.
+    picture = root / "media" / "img" / "bridge.png"
+    picture.parent.mkdir(parents=True)
+    picture.write_bytes(b"\x89PNG fake")
     record = VocabularyRecord(
         id="word:橋:はし",
         expression="橋",
         reading="はし",
         meanings=["bridge"],
         audio="audio/janki-abc.wav",
+        image="img/bridge.png",
     )
     (root / "vocabulary.json").write_text(
         json.dumps([record.to_dict()], ensure_ascii=False), encoding="utf-8"
@@ -70,4 +78,4 @@ def test_audio_is_resolved_against_media_dir_not_the_deck(tmp_path: Path) -> Non
         root / "out.apkg",
     )
 
-    assert result.media_count == 1, "the clip was found and packaged"
+    assert result.media_count == 2, "the clip and the image were both found"

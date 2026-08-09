@@ -972,10 +972,15 @@ and `list_user_decks` were run against the live API on the real
 collection. Still fake-transport only, and worth naming so this note
 keeps doing its job: **`import-jpdb --deck` end to end**
 (`deck/list-vocabulary` → `lookup-vocabulary`) and **`enrich --staging`**.
-The first is the shape janki guesses at hardest — it reconciles a row
-list against an `occurences` list and warns on a length mismatch, all
-against a hand-written fake — so it is the one to run before any deck is
-built from it. `enrich --jpdb`
+The first is the shape janki guesses at hardest: it fetches a
+`[vid, sid]` row list and then batches `lookup-vocabulary` over it,
+matching answers to requests **positionally** — so a batch that comes
+back short raises and aborts the whole deck import rather than warning
+(`jpdb.py`'s "the results are positional"). All against a hand-written
+fake, which makes it the one to run before any deck is built from it.
+(Not the `occurences` reconciliation: `import_deck` leaves
+`fetch_occurences` at its `False` default and no caller in `src/` sets
+it, so that branch is unreachable from this flow.) `enrich --jpdb`
 filled `pitch_accent` and `frequency_rank` for all three records
 (行く `LHH` rank 100, 話す `LHLL` rank 200, 食べる `LHLL` rank 200) and
 recorded the pass in the ledger. The owner's decks were listed live: 584
@@ -1721,11 +1726,16 @@ accent phrases of はし three ways:
 | 箸 atamadaka | `HLL` → `ハ'シ` | accent **1** | accent 1 |
 | 端 heiban | `LHH` → `ハシ'` | accent **2** | accent 1 |
 
-Left to guess the engine gives all three **accent 1** — 橋, 箸 and 端
-would be spoken identically, which is exactly the failure DESIGN_V2
-predicted. Forced, they come out distinct, and 橋 vs 箸 synthesize to
-different bytes through janki's own provider (same length, different
-md5). The three real records voiced correctly, a re-run reported "3
+Left to guess the engine gives all three **accent 1** — so 橋 and 端 are
+spoken as 箸, which is exactly the failure DESIGN_V2 predicted. Forcing
+separates 箸 from the other two, and 橋 vs 箸 synthesize to different
+bytes through janki's own provider (same length, different md5). It does
+**not** make all three distinct, and must not be read that way: 橋 and 端
+share `ハシ'` and accent 2 by design, because AquesTalk carries one mark
+per phrase and the odaka/heiban difference lands on a particle janki does
+not speak (`pitch.py`'s module docstring). What forcing buys is that 橋
+and 端 stop being pronounced *wrongly*, not that they become
+distinguishable from each other in isolation. The three real records voiced correctly, a re-run reported "3
 already current" and wrote nothing, and `--examples` voiced the
 sentences. Decisions: (1) at
 least one of `--words`/`--examples` is required rather than defaulting —
