@@ -43,6 +43,7 @@ __all__ = [
     "AUDIO_SUBDIR",
     "AudioError",
     "AudioResult",
+    "SynthesisError",
     "generate_audio",
     "media_relative",
     "prune_unreferenced",
@@ -50,7 +51,23 @@ __all__ = [
 
 
 class AudioError(JankiError):
-    """Audio could not be generated, or was asked for in a way janki refuses."""
+    """Audio was asked for in a way janki refuses — a caller error.
+
+    Deliberately narrow. These are raised before anything is spent and cannot
+    happen mid-run, which is what lets the run loop re-raise them untouched
+    while salvaging everything else.
+    """
+
+
+class SynthesisError(JankiError):
+    """The provider answered, and the answer was not usable audio.
+
+    Separate from :class:`AudioError` because it happens *during* a run, on one
+    record out of many. Folding it in would send an empty response from record
+    40 of 300 unwinding past the code that saves the 39 clips already written —
+    leaving files on disk with no record reference and no ledger entry, which
+    the next ``--prune`` deletes.
+    """
 
 
 #: Where clips live, under the project's ``media_dir``.
@@ -131,7 +148,7 @@ def _is_current(
 
 def _write(path: Path, data: bytes) -> None:
     if not data:
-        raise AudioError(f"The provider returned no audio for {path.name}.")
+        raise SynthesisError(f"The provider returned no audio for {path.name}.")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
 
@@ -217,24 +234,33 @@ def _example_audio(
     result: AudioResult,
     force: bool,
 ) -> VocabularyRecord:
+    """Voice this record's examples, keeping whatever gets written.
+
+    The order matters twice, and both were wrong before.
+
+    Superseded ledger entries are dropped **after** the loop, not before it, and
+    only when nothing still points at their file. Dropping first deletes the one
+    durable record of a mismatch in exactly the cases where no replacement
+    follows — an edited sentence whose new text is flagged unverified, or a
+    provider that fails on the first example — leaving the record naming clip A
+    while its sentence is B, with nothing left to report it.
+
+    And a provider failure is caught **here**, so the partially-updated example
+    list is returned rather than discarded. Unwinding past this point loses the
+    reference to every clip already written for the record: the files stay on
+    disk, unreferenced, and the next ``--prune`` deletes them — while the run
+    reports "the clips written before this are saved".
+    """
     flagged = _unverified_fingerprints(record)
-    # Every sentence this record currently has. Entries for anything else are
-    # about sentences that were edited away: left in place they are reported
-    # stale forever, and on a revert they answer "already recorded" while the
-    # record still points at the other sentence's clip.
-    book.drop_superseded_audio(
-        record.id,
-        of="example",
-        keep={
-            ledger_mod.example_audio_content_fingerprint(item)
-            for item in record.examples
-            if item.japanese
-        },
-    )
     examples: list[ExampleSentence] = []
     changed = False
 
-    for example in record.examples:
+    for position, example in enumerate(record.examples):
+        if result.stopped_by:
+            # Keep the rest of the list intact so the record still names every
+            # clip it had before this run.
+            examples.append(example)
+            continue
         if not example.japanese:
             examples.append(example)
             continue
@@ -258,11 +284,20 @@ def _example_audio(
             examples.append(example)
             continue
 
-        data = provider.synthesize(example.japanese, forced_accent=False)
-        name = (
-            f"janki-{ledger_mod.example_audio_filename_fingerprint(record, example)}.wav"
-        )
-        _write(audio_dir / name, data)
+        try:
+            data = provider.synthesize(example.japanese, forced_accent=False)
+            name = (
+                f"janki-"
+                f"{ledger_mod.example_audio_filename_fingerprint(record, example)}.wav"
+            )
+            _write(audio_dir / name, data)
+        except AudioError:
+            raise
+        except JankiError as exc:
+            result.stopped_by = f"{record.id} (example {position + 1}): {exc}"
+            examples.append(example)
+            continue
+
         book.record_audio(
             record.id,
             file=name,
@@ -277,9 +312,25 @@ def _example_audio(
         )
         changed = True
 
-    if not changed:
-        return record
-    return replace(record, examples=examples)
+    updated = replace(record, examples=examples) if changed else record
+
+    # Now that whatever could be written has been: forget entries for sentences
+    # this record no longer has *and* whose file nothing points at. An entry
+    # whose clip is still referenced is the only evidence that the card names
+    # one sentence and plays another, so it stays until that is actually fixed.
+    book.drop_superseded_audio(
+        updated.id,
+        of="example",
+        keep={
+            ledger_mod.example_audio_content_fingerprint(item)
+            for item in updated.examples
+            if item.japanese
+        },
+        keep_files={
+            Path(item.audio).name for item in updated.examples if item.audio
+        },
+    )
+    return updated
 
 
 def generate_audio(

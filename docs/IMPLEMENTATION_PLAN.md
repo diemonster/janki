@@ -1746,10 +1746,13 @@ the ledger against VOICEVOX's audio. (3) The command checks
 `available()` before spending: a run that voices forty clips and dies on
 the forty-first leaves forty files and half a ledger, and "the engine is
 not running" is the ordinary cause. (4) "Is there already a clip for
-this?" is asked of the **ledger**, not the filesystem — a matching
-filename proves only that something was written at that address, while
-the entry says what was spoken — and the query lives in `ledger` as
-`has_audio`, which owns the entry shape. (5) `--prune` deletes only
+this?" needs **three** facts and the ledger holds one: an entry saying
+this was recorded, the record still naming that file, and the file
+existing. Asking the ledger alone (which is what shipped first, as
+`has_audio`) calls a record current whose reference was dropped, and then
+`--prune` deletes the clip nothing appears to want. `ledger` exposes
+`audio_file_for`, returning the *name* rather than a yes/no, and
+`audio_cmd._is_current` checks all three. (5) `--prune` deletes only
 `janki-*`: a clip somebody dropped into `data/media` by hand is theirs.
 A pattern that does not fit its reading is reported and skipped, because
 `to_aquestalk` refuses rather than guesses and this command must not

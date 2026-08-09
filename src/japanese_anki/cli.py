@@ -1868,9 +1868,9 @@ def command_audio(args: argparse.Namespace) -> int:
         print(f"Pruned {len(removed)} unreferenced clip(s).")
         if removed:
             ledger_error = _save_ledger(book) or ledger_error
-    if ledger_error is not None:
-        _report_ledger_failure(ledger_error)
-        return 1
+    # Both are reported, and the run's own failure first: a ledger warning on
+    # its own reads as a successful partial run, and the records this never
+    # reached would be invisible.
     if result.stopped_by:
         print(f"error: {result.stopped_by}", file=sys.stderr)
         print(
@@ -1878,8 +1878,9 @@ def command_audio(args: argparse.Namespace) -> int:
             "it stopped.",
             file=sys.stderr,
         )
-        return 1
-    return 0
+    if ledger_error is not None:
+        _report_ledger_failure(ledger_error)
+    return 1 if (result.stopped_by or ledger_error is not None) else 0
 
 
 def command_promote(args: argparse.Namespace) -> int:

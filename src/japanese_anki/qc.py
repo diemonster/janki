@@ -162,6 +162,14 @@ def _segments(value: object) -> list[object]:
     return []
 
 
+#: The only kana that legitimately sit *under* their word's ruby: the honorific
+#: prefixes. ``お茶[おちゃ]`` and ``ご飯[ごはん]`` are written this way and are
+#: correct. Every other kana-leading run is a group that swallowed the sentence
+#: in front of it — including ``は花[はな]``, where the swallowed kana happens to
+#: match the reading's first character and a prefix test would wave it through
+#: while the は particle vanishes from the reconstructed reading.
+_HONORIFIC_PREFIXES = frozenset("おごみ")
+
 #: Kana a ruby group's text run can begin with. Latin and Han are excluded on
 #: purpose — ``ＡＴＭ[エーティーエム]`` and ``日[にっ]`` are never spills.
 _KANA = re.compile(r"[\u3041-\u309f\u30a0-\u30ff]")
@@ -188,26 +196,44 @@ def spilled_furigana_groups(furigana: str) -> tuple[tuple[str, str], ...]:
 
     * a Han character — ``日本語[にほんご]``, the ordinary case;
     * a letter or digit — ``ＡＴＭ[エーティーエム]``, ruby over a loanword;
-    * kana the **reading also begins with** — ``お茶[おちゃ]``, whole-word ruby
-      covering the word's own leading kana.
+    * an **honorific prefix** the reading also begins with — ``お茶[おちゃ]``,
+      ``ご飯[ごはん]``, which are written as whole-word ruby and are correct.
 
-    Anything else is text the group has swallowed: kana the reading does not
-    start with (``お茶[ちゃ]``, ``と城崎温泉[きのさきおんせん]``) or punctuation
-    (``、妻と日本語[にほんご]``). A heuristic rather than a proof —
-    ``と隣[となり]`` slips past, since と is genuinely the reading's first kana —
-    but it catches every spill that changes what the sentence reads as, and
-    flags nothing that is right.
+    Anything else is text the group has swallowed: any other kana
+    (``と城崎温泉[きのさきおんせん]``, ``は花[はな]``), an honorific whose reading
+    disagrees (``お茶[ちゃ]``), or punctuation (``、妻と日本語[にほんご]``).
+
+    The exemption is a short list rather than "kana the reading starts with",
+    which is the tempting generalisation and lets ``は花[はな]`` through — the
+    swallowed は matches はな's first character, so a prefix test waves it by
+    while は disappears from the reconstructed reading and from the romaji and
+    audio built on it. ``お茶[おちゃ]`` and ``は花[はな]`` are structurally
+    identical, so only knowing which kana are prefixes separates them.
+
+    **Known gap: a run beginning with a Han character is never flagged.**
+    ``毎日[まいにち]妻と日本語[にほんご]`` is a real spill — にほんご is drawn
+    across 妻と日本語 — and this returns nothing for it. It cannot be told from
+    the legitimate ``日[にっ]本[ぽん]``, or from whole-word ruby over a compound
+    that contains kana (``取り引き[とりひき]``), without deciding where the word
+    boundary is — which is the segmentation this project refuses to guess at.
+    Flagging the class would tell someone to add a space that breaks a correct
+    field, which is the harm this function was rewritten to stop causing.
 
     Returns ``(text run, reading)`` pairs so a message can name them.
     """
     spilled: list[tuple[str, str]] = []
     for match in _GROUP.finditer(furigana):
-        text, reading = match.group(1), match.group(2)
+        # Normalized like every other comparison in this module. Without it the
+        # verdict depends on Unicode composition — a decomposed が is か plus a
+        # combining mark, so a spill reads as correct in NFD and wrong in NFC —
+        # and halfwidth katakana fall outside the kana ranges entirely.
+        text = normalize_identity_part(match.group(1))
+        reading = normalize_identity_part(match.group(2))
         if not text or not reading:
             continue
         first = text[0]
         if _KANA.match(first):
-            if first != reading[0]:
+            if not (first in _HONORIFIC_PREFIXES and reading.startswith(first)):
                 spilled.append((text, reading))
         elif not first.isalnum():
             # Punctuation cannot be part of the word the ruby annotates.

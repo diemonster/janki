@@ -324,10 +324,9 @@ def test_whole_word_ruby_over_leading_kana_is_not_flagged() -> None:
     assert not any("missing a space" in m for m in _issue_messages(record))
 
 
-def test_a_spill_whose_run_starts_with_kanji_is_still_caught() -> None:
-    """The case a "starts with kana" test misses: にほんご is drawn across
-    妻と日本語, and 妻と then vanishes from the reconstructed reading — which is
-    what the romaji field and sentence audio are built from."""
+def test_a_spill_whose_run_starts_with_punctuation_is_caught() -> None:
+    """Punctuation cannot be part of the word a ruby annotates, so a run
+    beginning with one has swallowed the sentence in front of it."""
     record = _with_example(
         "毎日[まいにち]、妻と日本語[にほんご]で 話[はな]します。",
         japanese="毎日、妻と日本語で話します。",
@@ -351,6 +350,62 @@ def test_ruby_over_a_loanword_is_not_flagged() -> None:
         reading="エーティーエム",
         meanings=["ATM"],
         furigana="ＡＴＭ[エーティーエム]",
+    )
+
+    assert not any("missing a space" in m for m in _issue_messages(record))
+
+
+def test_a_spill_whose_kana_matches_the_reading_is_still_caught() -> None:
+    """は花[はな] is structurally identical to お茶[おちゃ] — leading kana that
+    begins the reading — so a prefix test waves it through. It is a real spill:
+    は vanishes from the reconstructed reading, and from the romaji and audio
+    built on it."""
+    record = _with_example(
+        "庭[にわ]は花[はな]が きれいです。", japanese="庭は花がきれいです。"
+    )
+
+    assert any("'は花'" in m for m in _issue_messages(record))
+
+
+def test_an_honorific_prefix_under_its_ruby_is_not_flagged() -> None:
+    record = VocabularyRecord(
+        id="word:ご飯:ごはん",
+        expression="ご飯",
+        reading="ごはん",
+        meanings=["cooked rice"],
+        furigana="ご飯[ごはん]",
+    )
+
+    assert not any("missing a space" in m for m in _issue_messages(record))
+
+
+def test_the_verdict_does_not_depend_on_unicode_composition() -> None:
+    """A decomposed が is か plus a combining mark, so an unnormalized compare
+    reads the same field as correct in NFD and wrong in NFC."""
+    composed = "彼[かれ]が課長[かちょう]です。"
+    decomposed = unicodedata.normalize("NFD", composed)
+
+    flagged_composed = _issue_messages(_with_example(composed, japanese="彼が課長です。"))
+    flagged_decomposed = _issue_messages(
+        _with_example(decomposed, japanese="彼が課長です。")
+    )
+
+    assert any("missing a space" in m for m in flagged_composed)
+    assert any("missing a space" in m for m in flagged_decomposed)
+
+
+def test_a_spill_whose_run_starts_with_kanji_is_a_known_gap() -> None:
+    """にほんご really is drawn across 妻と日本語 here, and this is not caught.
+
+    It cannot be told from a legitimate 日[にっ]本[ぽん], or from whole-word ruby
+    over a compound containing kana, without deciding where the word boundary
+    is — the segmentation janki refuses to guess. Flagging the class would tell
+    someone to add a space that breaks a correct field, which is the harm the
+    check was rewritten to stop causing. Pinned so the gap is visible rather
+    than mistaken for coverage."""
+    record = _with_example(
+        "毎日[まいにち]妻と日本語[にほんご]で 話[はな]します。",
+        japanese="毎日妻と日本語で話します。",
     )
 
     assert not any("missing a space" in m for m in _issue_messages(record))

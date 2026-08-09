@@ -591,13 +591,27 @@ class Ledger:
         names = {str(item) for item in files}
         dropped = 0
         for entry in self.records.values():
-            keep = [item for item in entry.get("audio", []) if str(item.get("file")) not in names]
-            dropped += len(entry.get("audio", [])) - len(keep)
+            # Same guard every other reader in this module uses: a hand-edited
+            # or older ledger can carry `"audio": null` or a bare string, and a
+            # TypeError out of `janki audio --prune` is not the clean
+            # `LedgerError` this module promises.
+            existing = [
+                item for item in (entry.get("audio") or []) if isinstance(item, dict)
+            ]
+            keep = [item for item in existing if str(item.get("file") or "") not in names]
+            dropped += len(existing) - len(keep)
             if entry.get("audio"):
                 entry["audio"] = keep
         return dropped
 
-    def drop_superseded_audio(self, record_id: str, *, of: str, keep: set[str]) -> int:
+    def drop_superseded_audio(
+        self,
+        record_id: str,
+        *,
+        of: str,
+        keep: set[str],
+        keep_files: set[str] | None = None,
+    ) -> int:
         """Drop this record's ``of`` entries whose content is no longer current.
 
         Example clips are addressed by ``fp(record.id + sentence)``, so editing
@@ -611,12 +625,19 @@ class Ledger:
         entry = self.records.get(_record_key(record_id))
         if not entry or not entry.get("audio"):
             return 0
+        existing = [item for item in (entry.get("audio") or []) if isinstance(item, dict)]
+        spared = keep_files or set()
         kept = [
             item
-            for item in entry["audio"]
-            if item.get("of") != of or str(item.get("content_fp") or "") in keep
+            for item in existing
+            if item.get("of") != of
+            or str(item.get("content_fp") or "") in keep
+            # An entry whose clip a record still names is the only evidence that
+            # the card shows one sentence and plays another. Dropping it hides
+            # the mismatch instead of fixing it.
+            or str(item.get("file") or "") in spared
         ]
-        dropped = len(entry["audio"]) - len(kept)
+        dropped = len(existing) - len(kept)
         entry["audio"] = kept
         return dropped
 

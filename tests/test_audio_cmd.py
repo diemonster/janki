@@ -10,6 +10,7 @@ anything.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -238,11 +239,14 @@ def test_a_changed_accent_needs_new_audio(tmp_path: Path) -> None:
 
 
 def test_a_changed_reading_lands_under_a_new_name(tmp_path: Path) -> None:
-    """A different reading is a different record id, and the word clip is
-    addressed by that — so it is a different file, not a rewrite."""
+    """A word clip is addressed by record id, and janki's id is
+    `word:<expression>:<reading>` — so changing the reading changes the id and
+    therefore the file. Not a rewrite in place, which is what a changed *accent*
+    gets."""
     book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
     first, _, _ = run([record()], tmp_path, words=True, book=book)
-    renamed = [record(id="word:箸:はし", expression="箸", pitch_accent=["HLL"])]
+    # きょう: three kana, so four pattern positions.
+    renamed = [record(id="word:橋:きょう", reading="きょう", pitch_accent=["LHHH"])]
 
     second, _, _ = run(renamed, tmp_path, words=True, book=book)
 
@@ -294,10 +298,20 @@ def test_an_unknown_id_is_refused(tmp_path: Path) -> None:
         run([record()], tmp_path, words=True, ids=["word:nope:nope"])
 
 
-def test_a_provider_that_returns_nothing_is_refused(tmp_path: Path) -> None:
-    # Zero bytes is not a clip; writing it would put a silent file on a card.
-    with pytest.raises(AudioError):
-        run([record()], tmp_path, words=True, provider=FakeVoice(audio=b""))
+def test_a_provider_that_returns_nothing_stops_the_run_rather_than_unwinding(
+    tmp_path: Path,
+) -> None:
+    """Zero bytes is not a clip. But it is a *provider* failure on one record,
+    not a caller error — folding it into AudioError sent an empty response from
+    record 40 of 300 unwinding past the code that saves the 39 already written,
+    leaving files with no reference and no ledger entry for --prune to delete."""
+    result, _, _ = run(
+        [record(), record(id="word:箸:はし", expression="箸")],
+        tmp_path, words=True, provider=FakeVoice(audio=b""),
+    )
+
+    assert "returned no audio" in result.stopped_by
+    assert result.file_count == 0
 
 
 # ---------------------------------------------------------------------------
@@ -474,3 +488,140 @@ def test_bare_janki_audio_refuses_rather_than_voicing_everything(
 
     assert "--words" in capsys.readouterr().err
     assert voice.said == []
+
+
+def test_a_superseded_entry_survives_while_its_clip_is_still_referenced(
+    tmp_path: Path,
+) -> None:
+    """The mismatch has to stay visible until it is actually fixed. Editing a
+    sentence whose replacement is flagged unverified writes nothing — dropping
+    the old entry first would leave the record naming clip A with sentence B and
+    no evidence anywhere that the card shows one and plays the other."""
+    from japanese_anki.identifiers import short_fingerprint
+
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    first, _, _ = run(
+        [record(examples=[ExampleSentence(japanese="橋を渡ります。")])],
+        tmp_path, words=False, examples=True, book=book,
+    )
+    edited_text = "橋を渡りました。"
+    edited = [
+        record(
+            examples=[
+                replace(first.records[0].examples[0], japanese=edited_text)
+            ],
+            source=SourceReference(
+                type="jpdb",
+                imported_from="deck",
+                raw_fields={"furigana_unverified": short_fingerprint(edited_text)},
+            ),
+        )
+    ]
+
+    result, provider, _ = run(edited, tmp_path, words=False, examples=True, book=book)
+
+    assert provider.said == [], "flagged, so nothing was written"
+    assert book.records["word:橋:はし"]["audio"], "and the entry stayed"
+    assert book.stale_audio(result.records) == ["word:橋:はし"], "still reported"
+
+
+def test_clips_written_before_a_failure_stay_referenced(tmp_path: Path) -> None:
+    """Or the record does not name them, --prune deletes them as unreferenced,
+    and the run says "the clips written before this are saved" while it does."""
+    from japanese_anki.errors import JankiError
+
+    class DiesOnSecond(FakeVoice):
+        def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
+            if self.said:
+                raise JankiError("engine went away")
+            return super().synthesize(text_or_kana, forced_accent=forced_accent)
+
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    three = [
+        record(
+            examples=[
+                ExampleSentence(japanese="橋を渡ります。"),
+                ExampleSentence(japanese="橋が長いです。"),
+                ExampleSentence(japanese="橋の上です。"),
+            ]
+        )
+    ]
+
+    result, _, _ = run(
+        three, tmp_path, words=False, examples=True, book=book, provider=DiesOnSecond()
+    )
+
+    assert result.file_count == 1
+    assert result.records[0].examples[0].audio.startswith("audio/"), "named by the record"
+    assert prune_unreferenced(result.records, tmp_path / "media", book) == []
+
+
+def test_the_command_prunes_the_saved_ledger_too(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The durability half: `prune_unreferenced` taking a Ledger object proves
+    nothing about `janki audio --prune` writing that ledger back to disk. Drop
+    the book argument at the call site, or the save after it, and ledger.json
+    keeps entries for files that are gone."""
+    root = project(tmp_path, [record()])
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: FakeVoice())
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 0
+
+    # A clip nothing will ever regenerate: an example entry whose sentence the
+    # record does not have. Dropping a *word* reference would only re-voice it
+    # under the same address, so it would never be orphaned.
+    orphan = root / "media" / "audio" / "janki-orphan.wav"
+    orphan.write_bytes(b"stale")
+    book = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    book["records"]["word:橋:はし"]["audio"].append(
+        {
+            "at": "2026-08-08", "file": "janki-orphan.wav", "of": "example",
+            "provider": "fakevox", "voice": 7, "content_fp": "deadbeef",
+        }
+    )
+    (root / "ledger.json").write_text(json.dumps(book, ensure_ascii=False), encoding="utf-8")
+
+    assert cli.main(["--root", str(root), "audio", "--words", "--prune"]) == 0
+
+    assert not orphan.exists(), "the file went"
+    saved = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    files = [a["file"] for a in saved["records"]["word:橋:はし"].get("audio", [])]
+    assert "janki-orphan.wav" not in files, "and its entry left the saved ledger"
+
+
+def test_a_stopped_run_is_reported_even_when_the_ledger_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A ledger warning on its own reads as a successful partial run, and the
+    records the run never reached would be invisible."""
+    from japanese_anki.errors import JankiError
+
+    class Dies(FakeVoice):
+        def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
+            raise JankiError("engine went away")
+
+    root = project(tmp_path, [record()])
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: Dies())
+    monkeypatch.setattr(
+        cli.ledger.Ledger,
+        "save",
+        lambda self: (_ for _ in ()).throw(cli.ledger.LedgerError("read-only")),
+    )
+
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 1
+
+    err = capsys.readouterr().err
+    assert "engine went away" in err
+    assert "read-only" in err
+
+
+def test_a_ledger_whose_audio_is_not_a_list_does_not_traceback(tmp_path: Path) -> None:
+    """Every other reader in ledger.py guards this shape; the two new methods
+    did not, so a hand-edited ledger gave a TypeError out of --prune instead of
+    the clean LedgerError this module promises."""
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    book.records["word:橋:はし"] = {"audio": None}
+    book.records["word:箸:はし"] = {"audio": ["janki-bare-string.wav"]}
+
+    assert book.forget_audio_files({"janki-abc.wav"}) == 0
+    assert book.drop_superseded_audio("word:箸:はし", of="example", keep=set()) == 0

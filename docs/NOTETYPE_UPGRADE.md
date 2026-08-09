@@ -38,15 +38,6 @@ grows a `+` notetype nobody asked for.
    reps 4 / its revlog row. The library is `anki` 26.8.1 and the desktop here
    is **25.09** — the same Rust backend, but *not the same build*, which is one
    more reason the desktop step below was not optional.
-
-**The three fields the spike appended were placeholders.** It used
-`PitchPattern`, `PitchDiagram`, `ExampleAudio`; the names M5.4 must actually
-append are **`PitchAccent`, `FrequencyRank`, `ExampleAudio`** (DESIGN_V2
-"Anki note-field surface", and M5.4's own checklist). Nothing here depends on
-the names — what was tested is that three appended fields upgrade in place —
-but field appends are one-way, so taking the list from this document rather
-than from the plan would put the wrong names in a live collection permanently.
-`FrequencyRank` was never exercised at all.
 2. **Desktop app 25.09, default options** — the owner studied two cards and
    imported the appended build through File → Import. Inspecting the resulting
    profile found the split above: 3 notes still on the 19-field notetype, an
@@ -57,6 +48,15 @@ than from the plan would put the wrong names in a live collection permanently.
    else about the GUI path.
 
 ## What this means for M5.4
+
+**The three fields the spike appended were placeholders.** It used
+`PitchPattern`, `PitchDiagram`, `ExampleAudio`; the names to append are
+**`PitchAccent`, `FrequencyRank`, `ExampleAudio`** (DESIGN_V2 "Anki note-field
+surface", and M5.4's own checklist). Nothing tested here depends on the names —
+what was proven is that three appended fields upgrade in place — but field
+appends are one-way, so taking the list from this document rather than from the
+plan would put the wrong names in a live collection permanently. `FrequencyRank`
+was never exercised at all.
 
 Appending the fields is correct; shipping it without saying this is not. M5.4
 has to deal with the fact that the good path is opt-in:
@@ -77,15 +77,25 @@ Beyond the checkbox:
 
 - **Fields are appended, never inserted or reordered.** Note values are
   positional; inserting in the middle shifts everything after it.
-- **`model_id` and the notetype name are unchanged** — and in janki neither is
-  a constant you hold still by not touching it. Both are *derived from the
-  enabled card set*: `model_id` is `model_id_base + _card_mask(card_types)` and
-  the name carries the same list. So turning a card type on or off in a deck's
-  `cards:` — or in `[cards]` — mints a **different** notetype, which is a fresh
-  one beside the old rather than an upgrade of it, and every card already
-  scheduled under the old id is orphaned. That is the same outcome as
-  renumbering `model_id` by hand, arrived at by editing something that does not
-  look like an id at all.
+- **`model_id` and the notetype name are unchanged** — and by default neither
+  is a constant you hold still by not touching it. Both *default to* values
+  derived from the enabled card set: `model_id` is
+  `model_id_base + _card_mask(card_types)` and the name carries the same list.
+  So turning a card type on or off in a deck's `cards:` mints a **different**
+  notetype by default — a fresh one beside the old rather than an upgrade —
+  orphaning every card already scheduled under the old id. Same outcome as
+  renumbering `model_id` by hand, reached by editing something that does not
+  look like an id.
+
+  A deck can pin both: `deck.model_id` and `deck.model_name` in the deck YAML
+  are read before the derived values (`exporters/anki.py`) and honoured as
+  written. **Pinning `model_id` is the sanctioned response to a card-set
+  change** — it keeps the notetype and turns the change into a rename plus an
+  added template on the existing one, which is what preserves scheduling. Both
+  keys are currently undocumented outside this file and no shipped deck uses
+  them; M5.4 should document them, and its `janki status` detector must read
+  `deck.model_id` rather than assuming the derived value, or it will
+  misidentify any deck that pins one.
 - **Note GUIDs are unchanged** — for janki that is the record id, which
   `stable_record_id` already protects.
 - **Existing templates keep working with the new fields empty**, since that is
