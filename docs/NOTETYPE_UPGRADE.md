@@ -35,7 +35,18 @@ grows a `+` notetype nobody asked for.
 
 1. **Library, `merge_notetypes=True`** — notetype `1607392313` went 19 → 22
    fields, all three notes matched by GUID, the reviewed card kept ivl 21 /
-   reps 4 / its revlog row.
+   reps 4 / its revlog row. The library is `anki` 26.8.1 and the desktop here
+   is **25.09** — the same Rust backend, but *not the same build*, which is one
+   more reason the desktop step below was not optional.
+
+**The three fields the spike appended were placeholders.** It used
+`PitchPattern`, `PitchDiagram`, `ExampleAudio`; the names M5.4 must actually
+append are **`PitchAccent`, `FrequencyRank`, `ExampleAudio`** (DESIGN_V2
+"Anki note-field surface", and M5.4's own checklist). Nothing here depends on
+the names — what was tested is that three appended fields upgrade in place —
+but field appends are one-way, so taking the list from this document rather
+than from the plan would put the wrong names in a live collection permanently.
+`FrequencyRank` was never exercised at all.
 2. **Desktop app 25.09, default options** — the owner studied two cards and
    imported the appended build through File → Import. Inspecting the resulting
    profile found the split above: 3 notes still on the 19-field notetype, an
@@ -66,8 +77,15 @@ Beyond the checkbox:
 
 - **Fields are appended, never inserted or reordered.** Note values are
   positional; inserting in the middle shifts everything after it.
-- **`model_id` and the notetype name are unchanged.** The id is what makes this
-  an upgrade rather than a second notetype.
+- **`model_id` and the notetype name are unchanged** — and in janki neither is
+  a constant you hold still by not touching it. Both are *derived from the
+  enabled card set*: `model_id` is `model_id_base + _card_mask(card_types)` and
+  the name carries the same list. So turning a card type on or off in a deck's
+  `cards:` — or in `[cards]` — mints a **different** notetype, which is a fresh
+  one beside the old rather than an upgrade of it, and every card already
+  scheduled under the old id is orphaned. That is the same outcome as
+  renumbering `model_id` by hand, arrived at by editing something that does not
+  look like an id at all.
 - **Note GUIDs are unchanged** — for janki that is the record id, which
   `stable_record_id` already protects.
 - **Existing templates keep working with the new fields empty**, since that is
