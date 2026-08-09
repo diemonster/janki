@@ -965,7 +965,15 @@ every command that does not need the network was run — `jpdb ping` from `/` wi
 no project and no key, `import-jpdb export.csv` end to end, and every documented
 error path — but the API-backed flows need a live `JPDB_API_KEY`, which is
 owner-only for the same reason M2.1F is. Those are covered by tests against fake
-transports, not by a live run, and this note is where that gap is recorded.*
+transports, not by a live run, and this note is where that gap is recorded.
+
+**Gap closed 2026-08-08.** `jpdb ping`, `/parse` and `enrich --jpdb` were
+all run against the live API on the real collection. `enrich --jpdb`
+filled `pitch_accent` and `frequency_rank` for all three records
+(行く `LHH` rank 100, 話す `LHLL` rank 200, 食べる `LHLL` rank 200) and
+recorded the pass in the ledger. The owner's decks were listed live: 584
+words in Genki Vol 1, 641 across all decks — the number that decides
+whether batch mode earns its keep.*
 
 Depends on: all M2 tasks except M2.1F (owner-only; see the lane map)
 Files: `README.md`.
@@ -1510,7 +1518,13 @@ M5.7 anytime after M5.3.
 ### [x] M5.1 Pitch conversion + HTML renderer (merge gate: golden tests)
 
 *Done 2026-08-08. DESIGN_V2's conversion implemented exactly, golden set
-in place. Five decisions worth recording. (1) **Heiban and odaka produce
+in place. **Verified against live jpdb the same day**, which is what the
+goldens were previously asserting from memory: 橋 `LHL`, 箸 `HLL`, 端
+`LHH`, 病院 `LLHHHH`, 授業 `HHLLLL` — every hand-written golden matches
+the API exactly, the `len(pattern) == len(reading) + 1` invariant holds
+on all five, and 病院's leading `LL` confirms the "read the level off the
+mora's first kana" decision. Run end to end on the real collection too:
+行く → `イク'`, 話す → `ハナ'ス`, 食べる → `タベ'ル`. Five decisions worth recording. (1) **Heiban and odaka produce
 the same AquesTalk string, and that is right, not a bug to fix later.**
 The notation carries one mark per phrase and the engine writes heiban on
 the final mora — where odaka's goes. The two differ only in the pitch of

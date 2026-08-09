@@ -4,7 +4,25 @@
     "word:行く:いく": {
       "added_at": "2026-08-07",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-08",
+          "fields": [
+            "frequency_rank",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-08-08",
+          "fields": [
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -17,7 +35,17 @@
     "word:話す:はなす": {
       "added_at": "2026-08-07",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-08",
+          "fields": [
+            "frequency_rank",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -30,7 +58,25 @@
     "word:食べる:たべる": {
       "added_at": "2026-08-07",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-08",
+          "fields": [
+            "frequency_rank",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-08-08",
+          "fields": [
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5"
+        }
+      ],
       "exports": {},
       "sources": [
         {

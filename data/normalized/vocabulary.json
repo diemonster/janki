@@ -16,7 +16,8 @@
         "japanese": "家族と城崎温泉に行きました。",
         "furigana": "家族[かぞく]と城崎温泉[きのさきおんせん]に行[い]きました。",
         "romaji": "Kazoku to Kinosaki Onsen ni ikimashita.",
-        "english": "I went to Kinosaki Onsen with my family."
+        "english": "I went to Kinosaki Onsen with my family.",
+        "audio": ""
       }
     ],
     "conjugations": {
@@ -34,9 +35,14 @@
       "starter",
       "topic::travel"
     ],
-    "usage_notes": "",
+    "usage_notes": "Godan verb, but its て-form and past are irregular: 行って / 行った (not 行いて). The place you go to is marked with に or へ; the purpose with に after a noun or verb stem (買い物に行く). Also read ゆく in more literary or set expressions.",
     "audio": "",
     "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 100,
     "source": {
       "type": "manual",
       "imported_from": "",
@@ -62,7 +68,8 @@
         "japanese": "毎日、妻と日本語で話します。",
         "furigana": "毎日[まいにち]、妻[つま]と日本語[にほんご]で話[はな]します。",
         "romaji": "Mainichi, tsuma to Nihongo de hanashimasu.",
-        "english": "I speak Japanese with my wife every day."
+        "english": "I speak Japanese with my wife every day.",
+        "audio": ""
       }
     ],
     "conjugations": {
@@ -83,6 +90,11 @@
     "usage_notes": "Use it for speaking or talking. The person spoken with is often marked by と.",
     "audio": "",
     "image": "",
+    "pitch_accent": [
+      "LHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 200,
     "source": {
       "type": "manual",
       "imported_from": "",
@@ -107,7 +119,8 @@
         "japanese": "クリスマスに家族と韓国料理を食べます。",
         "furigana": "クリスマスに家族[かぞく]と韓国料理[かんこくりょうり]を食[た]べます。",
         "romaji": "Kurisumasu ni kazoku to Kankoku ryouri o tabemasu.",
-        "english": "At Christmas, I eat Korean food with my family."
+        "english": "At Christmas, I eat Korean food with my family.",
+        "audio": ""
       }
     ],
     "conjugations": {
@@ -125,9 +138,14 @@
       "starter",
       "topic::food"
     ],
-    "usage_notes": "",
+    "usage_notes": "Regular ichidan verb: 食べる → 食べます、食べない、食べて. Takes を for the thing eaten. Note that Japanese uses 飲む (to drink) rather than 食べる for soup and similar liquids, e.g. スープを飲む.",
     "audio": "",
     "image": "",
+    "pitch_accent": [
+      "LHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 200,
     "source": {
       "type": "manual",
       "imported_from": "",
