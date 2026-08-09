@@ -150,7 +150,16 @@ def _anki_collection(data: dict[str, Any], root: Path) -> str:
     value = _str(data, "anki", "collection", "").strip()
     if not value:
         return ""
-    expanded = Path(value).expanduser()
+    try:
+        expanded = Path(value).expanduser()
+    except RuntimeError as exc:
+        # `~ghost/…`, or `~/…` where HOME is unset and the uid has no passwd
+        # entry. `RuntimeError` is not a `JankiError`, and every command loads
+        # the config — so an unexpandable path in a setting only `janki status`
+        # reads would have taken down `build`, `import` and `audio` too.
+        raise ConfigError(
+            f"[anki] collection: could not expand {value!r}: {exc}"
+        ) from exc
     return str(expanded if expanded.is_absolute() else (root / expanded).resolve())
 
 

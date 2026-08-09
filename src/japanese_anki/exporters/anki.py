@@ -494,6 +494,21 @@ def resolve_deck_records(deck_path: Path) -> tuple[dict[str, Any], list[Vocabula
             f"deck.cards must be a mapping of card type to true/false, got "
             f"{type(cards).__name__}: {deck_path}"
         )
+    # `model_id` and `model_name` for the same reason. They were checked in
+    # `deck_notetype` only, so the two commands disagreed about which decks are
+    # valid: `janki build` coerced `model_name: 2024` to the string "2024" and
+    # shipped it, while `janki status` refused the file and dropped that deck
+    # from the collection check — switching the drift detector off for a deck
+    # that imports fine. A non-numeric `model_id` was worse: `build` let it out
+    # as a raw `ValueError` traceback.
+    model_id = deck_config.get("model_id")
+    if model_id is not None and (
+        isinstance(model_id, bool) or not isinstance(model_id, int)
+    ):
+        raise DataError(f"deck.model_id must be an integer, got {model_id!r}: {deck_path}")
+    model_name = deck_config.get("model_name")
+    if model_name is not None and not isinstance(model_name, str):
+        raise DataError(f"deck.model_name must be a string, got {model_name!r}: {deck_path}")
 
     by_id: dict[str, VocabularyRecord] = {}
     source_value = deck_config.get("source")
@@ -571,19 +586,14 @@ def deck_notetype(deck_path: Path, project_config: ProjectConfig) -> tuple[int, 
     """
     deck_config, _ = resolve_deck_records(deck_path)
     card_types = _resolve_card_types(deck_config, project_config)
-    raw = deck_config.get("model_id", project_config.model_id_base + _card_mask(card_types))
-    try:
-        model_id = int(raw)
-    except (TypeError, ValueError) as exc:
-        # `janki status` reads this and is documented as the command that keeps
-        # working, so a hand-edited `model_id: auto` has to arrive as a clean
-        # refusal naming the file rather than as a traceback out of `int()`.
-        raise AnkiBuildError(
-            f"{deck_path}: deck model_id must be an integer, got {raw!r}"
-        ) from exc
-    name = deck_config.get("model_name", f"Japanese Study ({'+'.join(card_types)})")
-    if not isinstance(name, str):
-        raise AnkiBuildError(f"{deck_path}: deck model_name must be a string, got {name!r}")
+    # Both already refused by `resolve_deck_records`, so this and `build_deck`
+    # cannot disagree about which decks are valid.
+    model_id = int(
+        deck_config.get("model_id", project_config.model_id_base + _card_mask(card_types))
+    )
+    name = str(
+        deck_config.get("model_name", f"Japanese Study ({'+'.join(card_types)})")
+    )
     return model_id, name, len(FIELD_NAMES)
 
 

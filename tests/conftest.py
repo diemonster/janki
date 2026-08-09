@@ -10,12 +10,24 @@ from pathlib import Path
 
 import pytest
 
-from japanese_anki import collection
+from japanese_anki import collection, status
+
+
+@pytest.fixture(scope="session")
+def _empty_anki_root(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """One directory for the whole run.
+
+    `mktemp` in a function-scoped fixture made a new numbered directory per
+    test — 1500+ of them — and pytest parses every existing suffix on each
+    call, so the guard against wasted I/O was itself quadratic in the number of
+    tests. The directory is empty and never written to.
+    """
+    return tmp_path_factory.mktemp("no-anki")
 
 
 @pytest.fixture(autouse=True)
 def _no_real_anki_collection(
-    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+    _empty_anki_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> Path:
     """Point Anki discovery at an empty directory for every test.
 
@@ -34,6 +46,10 @@ def _no_real_anki_collection(
     their own root to `find_profiles`, or monkeypatch `status.find_profiles`,
     and are unaffected by this.
     """
-    empty = tmp_path_factory.mktemp("no-anki")
-    monkeypatch.setattr(collection, "default_anki_root", lambda: empty)
-    return empty
+    # Both namespaces: `status` imports the name into its own globals, so
+    # patching only `collection` left `resolve_collection`'s "not found under
+    # …" message reading the developer's real Anki path — machine-dependent
+    # output inside the suite.
+    monkeypatch.setattr(collection, "default_anki_root", lambda: _empty_anki_root)
+    monkeypatch.setattr(status, "default_anki_root", lambda: _empty_anki_root)
+    return _empty_anki_root

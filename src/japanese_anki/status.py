@@ -407,13 +407,16 @@ def check_collection(
     # Grouped by notetype, because decks with the same card set derive the same
     # model id — this repo's own two do — and one problem reported once per deck
     # is the same actionable line buried under copies of itself.
-    grouped: dict[int, tuple[list[str], str, int]] = {}
+    # Keyed on the whole comparison, not the id: two decks may pin one id and
+    # different names, and keeping only the first deck's name dropped the
+    # collision finding for the second — the worst one to lose, since importing
+    # both in sequence renames the notetype in the live collection.
+    grouped: dict[tuple[int, str, int], list[str]] = {}
     for stem, model_id, model_name, fields in decks:
-        stems, _, _ = grouped.setdefault(model_id, ([], model_name, fields))
-        stems.append(stem)
+        grouped.setdefault((model_id, model_name, fields), []).append(stem)
 
     findings: list[NotetypeFinding] = []
-    for model_id, (stems, model_name, fields) in grouped.items():
+    for (model_id, model_name, fields), stems in grouped.items():
         landed = by_id.get(model_id)
         if landed is None:
             # Never imported, or imported under a different id. Not a failure —

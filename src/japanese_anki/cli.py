@@ -853,15 +853,33 @@ def _recheck_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
     if result.changed:
         save_records_json(output_path, result.records)
         for record_id in result.cleared:
-            book.record_enriched(record_id, kind="jpdb", model="jpdb", fields=["furigana"])
+            # `fields=["furigana"]` was a false statement: this pass writes no
+            # record field at all — it clears an *example's* unverified flag.
+            # Worse, `record_enriched` dedups on (kind, model, fields), so a
+            # later genuine --jpdb pass that really did fill `furigana` would
+            # collapse into this entry and inherit its date.
+            book.record_enriched(
+                record_id, kind="jpdb", model="jpdb", fields=["furigana_unverified"]
+            )
     ledger_error = _save_ledger(book) if result.changed else None
 
-    print(
-        f"Confirmed {cleared} example(s) across {len(result.cleared)} record(s); "
-        f"their audio is no longer held back."
-        if cleared
-        else "Nothing to confirm: no flagged example is vouched for by jpdb yet."
-    )
+    if cleared:
+        print(
+            f"Confirmed {cleared} example(s) across {len(result.cleared)} record(s); "
+            "their audio is no longer held back."
+        )
+    elif result.unparsed and not result.differing:
+        # jpdb answered nothing at all — an expired key, or the API down. Saying
+        # "not vouched for yet" asserts a judgment that was never obtained.
+        print(
+            f"jpdb could not parse any of the {len(result.unparsed)} flagged "
+            "example(s), so nothing was confirmed or ruled out.",
+            file=sys.stderr,
+        )
+    elif result.differing:
+        print("Nothing to confirm: jpdb reads every flagged example differently.")
+    else:
+        print("Nothing to confirm: no example carries an unverified-furigana flag.")
     if result.differing:
         total = sum(len(items) for items in result.differing.values())
         print(f"Still unconfirmed ({total}) — jpdb reads these differently:")
@@ -871,8 +889,21 @@ def _recheck_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
                 print(f"    {why}")
     for sentence in result.unparsed:
         print(f"warning: jpdb could not parse: {sentence}", file=sys.stderr)
+    if result.unparsed and not cleared and not result.differing:
+        return 1
     if ledger_error is not None:
-        _report_ledger_failure(ledger_error)
+        _report_enrichment_ledger_failure(
+            ledger_error,
+            rerun=(
+                "Re-running --recheck-furigana records nothing: the flags it "
+                "cleared are already gone from the records, so it finds nothing "
+                "left to confirm."
+            ),
+            aftermath=(
+                "The records themselves are correct and their audio will "
+                "generate; only the note that jpdb vouched for them is missing."
+            ),
+        )
         return 1
     return 0
 
@@ -953,6 +984,12 @@ def command_enrich(args: argparse.Namespace) -> int:
             "what it is for, and why it confirms one record at a time."
         )
     force_fields = enrich.parse_force_fields(args.force_fields, ai=args.ai)
+    if args.recheck_furigana and (args.staging is not None or force_fields):
+        raise JankiError(
+            "--recheck-furigana re-asks jpdb about examples that already exist; "
+            "it reads no staging file and writes no field, so --staging and "
+            "--force-fields have nothing to act on."
+        )
     if args.staging is not None and (force_fields or args.ids):
         raise JankiError(
             "enrich --staging proposes readings for held rows and writes nothing "
@@ -2616,7 +2653,17 @@ def command_status(args: argparse.Namespace) -> int:
     # Above the ids-only branch with the others: ids mode *moves* human-readable
     # lines to stderr, it does not drop them, and a scripted run must still hear
     # that its last import left the notes on the old notetype.
-    for line in _collection_lines(config):
+    try:
+        collection_lines = _collection_lines(config)
+    except Exception as exc:  # noqa: BLE001 - an advisory check, never a gate
+        # Not `JankiError`: the discovery step can raise `RuntimeError` (no home
+        # directory, in a container or a cron unit) or `PermissionError` (an
+        # unreadable Anki folder), and neither is caught upstream. This runs
+        # before `--rebuild`, so an unhandled one aborted the *ledger repair* —
+        # an advisory warning cancelling the one status invocation that writes
+        # durable state.
+        collection_lines = [f"warning: could not check Anki: {exc}"]
+    for line in collection_lines:
         print(line, file=sys.stderr)
 
     if args.rebuild:

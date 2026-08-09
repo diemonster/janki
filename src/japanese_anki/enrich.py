@@ -899,7 +899,20 @@ def recheck_furigana(
     nobody doubted is not put in doubt by a parse that happens to fail today.
     """
     result = RecheckResult(records=list(records))
+    known = {record.id for record in result.records}
     wanted = set(ids) if ids else None
+    if wanted is not None:
+        # Named and not found is a typo, not an empty result. Every other
+        # ids-taking pass here refuses the same way; without it
+        # `--recheck-furigana word:わかる:わかる` (the id is word:分かる:わかる)
+        # reported a clean negative and exited 0.
+        missing = sorted(wanted - known)
+        if missing:
+            raise EnrichError(
+                "No record has "
+                + ("this id: " if len(missing) == 1 else "these ids: ")
+                + ", ".join(missing)
+            )
     for index, record in enumerate(result.records):
         if wanted is not None and record.id not in wanted:
             continue
