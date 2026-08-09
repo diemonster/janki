@@ -159,8 +159,9 @@ def _shape_error(path: Path, record_id: str, problems: list[tuple[str, str]]) ->
     return LedgerError(
         f"Ledger {path}: record {record_id!r} has {detail}. That file is "
         "machine-written; 'janki status --rebuild' repairs entries like this "
-        "in place. Nothing is thrown away: what it cannot read and cannot "
-        "rebuild is parked under '<key>_unreadable' in the same entry."
+        "in place. Nothing is thrown away — the unreadable value is parked "
+        "beside the key it came from, under a name ending '_unreadable', and "
+        "the repair prints the exact name it used."
     )
 
 

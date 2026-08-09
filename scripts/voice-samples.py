@@ -185,10 +185,12 @@ def main() -> int:
         with urllib.request.urlopen(f"{args.url}/speakers", timeout=30) as response:
             speakers = json.load(response)
     except (OSError, ValueError) as exc:
-        # ValueError too: a scheme-less `--url localhost:50021` is a plain
-        # `ValueError: unknown url type`, and a non-JSON body (a proxy or
-        # captive portal answering on the port) is a JSONDecodeError, which is
-        # one as well. Both are exactly the typo this message exists for.
+        # ValueError too: a non-JSON body — a proxy or captive portal
+        # answering on the engine's port — makes `json.load` raise
+        # JSONDecodeError, which is one. (A `--url` typo is usually already an
+        # OSError: `localhost:50021` parses as scheme `localhost` and comes
+        # back as URLError. Only a colon-less `--url localhost` is a bare
+        # ValueError. Checked, 2026-08-08.)
         print(f"No VOICEVOX engine at {args.url}: {exc}", file=sys.stderr)
         print(VoicevoxProvider(base_url=args.url).launch_hint, file=sys.stderr)
         return 1

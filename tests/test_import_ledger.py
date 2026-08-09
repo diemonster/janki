@@ -619,11 +619,14 @@ def test_a_non_dict_exports_is_refused_rather_than_crashing(tmp_path: Path) -> N
 def test_a_repair_never_discards_what_a_rebuild_cannot_put_back(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], key: str, value: object
 ) -> None:
-    """`sources` and `audio` are safe to empty — the rebuild in the same command
-    refills them from the records and the media directory. `enriched` and
-    `exports` are reconstructible by nothing at all, so emptying them destroys
-    exactly the history the refusal message promises to keep: the record reads
-    as un-enriched and the next `janki enrich` pays for it again."""
+    """Emptying `enriched` or `exports` destroys exactly the history the refusal
+    message promises to keep: the record reads as un-enriched and the next
+    `janki enrich` pays for it again, and nothing anywhere records which build
+    shipped it.
+
+    Nothing else is reconstructible either — see
+    `test_sources_are_parked_too_because_a_rebuild_cannot_restore_them`, which
+    is why the repair parks every key rather than a chosen few."""
     root, _ = _project(tmp_path)
     _misshapen(root, **{key: value})
     capsys.readouterr()
