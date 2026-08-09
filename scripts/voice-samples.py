@@ -11,9 +11,11 @@ word left to the engine comes out as 箸.
     python3 scripts/voice-samples.py --male          # only the male voices
     python3 scripts/voice-samples.py --word 橋 --reading はし --pattern LHL
 
-Set your pick as `[tts] voicevox_speaker` in janki.toml, then re-voice with
-`janki audio --words --examples --force` — voice and speed are not part of the
-content fingerprint, so nothing is stale without it.
+Set your pick as `[tts] voicevox_speaker` in janki.toml, then re-voice the
+*words* with `janki audio --words`. No `--force`: the ledger records the voice
+behind every clip, so changing this makes exactly the word clips stale. Leave
+`--examples` off unless the *sentence* voice changed — with an OpenAI sentence
+provider configured, re-voicing examples is a billed round trip per sentence.
 
 **Why it restarts the engine.** VOICEVOX loads a model per speaker on demand and
 keeps it, so sampling the whole roster grows unboundedly: a 2 GiB VM gets about

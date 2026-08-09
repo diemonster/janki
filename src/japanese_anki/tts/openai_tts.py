@@ -72,7 +72,7 @@ VOICES: tuple[str, ...] = (
 
 #: The only rate control this API has. There is no ``speed`` parameter on
 #: ``gpt-4o-mini-tts``, so pace is asked for in prose or not at all — which is
-#: why ``speed`` on this provider is recorded but never sent.
+#: why ``speed`` on this provider is a constant rather than a setting.
 DEFAULT_INSTRUCTIONS = (
     "Read this as a native speaker of standard Tokyo Japanese, for someone "
     "learning the language. Speak noticeably slower than conversational pace, "
@@ -180,12 +180,14 @@ class OpenAiSpeechProvider:
 
     @property
     def speed(self) -> float:
-        """Recorded, never sent: this API has no rate parameter.
+        """Recorded, never sent, and in practice always 1.0.
 
-        It is still part of what makes a clip what it is, and the ledger
-        compares it, so a provider that reported nothing would make a
-        configuration change undetectable. Pace is asked for in
-        ``instructions`` instead.
+        This API has no rate parameter, so nothing configurable reaches it: the
+        CLI deliberately does not pass ``voicevox_speed`` here, because tying an
+        OpenAI clip's staleness to a VOICEVOX knob would re-bill every sentence
+        whenever the *word* pace was tuned. The property exists to satisfy the
+        protocol and to keep the ledger's comparison uniform; pace for this
+        engine lives in ``instructions``, which :attr:`settings` records.
         """
         return self._speed
 

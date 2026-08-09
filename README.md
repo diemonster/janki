@@ -769,8 +769,9 @@ reconstructs, so it never grows the file.
 `audio` is written by `janki audio`, one entry per clip, recording the engine,
 the voice, the rate and any style settings that decided how it sounds — so
 changing any of them makes exactly those clips stale. `exports` is written by
-every build, so `--unexported` answers what a deck has never shipped, which is
-what makes `build --only-new` correct. An export entry also records what the
+every build to a deck's *own* package — a `--output` build is a throwaway and
+records nothing — so `--unexported` answers what a deck has never shipped, which
+is what makes `build --only-new` correct. An export entry also records what the
 record was *missing* when it shipped, so a word that went out silent and has a
 clip now can be reported rather than silently left behind.
 
@@ -1036,12 +1037,14 @@ bills per character. That model has no rate parameter, so pace is asked for in
 prose through `openai_instructions`; the shipped default asks for a noticeably
 slower delivery. Leave `sentence_provider` unset and one voice does everything.
 
-Only the four models on `/v1/audio/speech` work: `tts-1`, `tts-1-hd`,
-`gpt-4o-mini-tts` and its dated snapshots. The conversational models
-(`gpt-audio`, `gpt-realtime`) generate speech natively, which sounds like it
-should be better — but they *respond* to text rather than reading it. Asked to
-read 「日本語を話しますか。」 they answer it. See M5.7 in
-`docs/IMPLEMENTATION_PLAN.md` for the measurements.
+Only three model families on `/v1/audio/speech` work: `tts-1`, `tts-1-hd`, and
+`gpt-4o-mini-tts` with its dated snapshots. The conversational audio models
+(`gpt-audio`, `gpt-audio-1.5`, `gpt-audio-mini`) generate speech natively, which
+sounds like it should be better — but they *respond* to text rather than reading
+it. Asked to read 「日本語を話しますか。」 they answer it; the measurements are in
+M5.7 of `docs/IMPLEMENTATION_PLAN.md`. The realtime family (`gpt-realtime-*`)
+was not tested: it is a live speech-to-speech session, a different shape from
+writing a file to disk.
 
 ### Changing a voice re-voices only what that voice said
 
@@ -1054,9 +1057,14 @@ janki audio --examples       # after changing the sentence voice; words untouche
 ```
 
 No `--force` needed. That flag remains for rewriting audio the settings did not
-change. Filenames are content-addressed and unchanged by a re-voice, so clips
-are rewritten in place and Anki's media sync picks up the new audio behind the
-same `[sound:]` references.
+change.
+
+Within one engine, filenames are content-addressed and unchanged by a re-voice,
+so clips are rewritten in place and Anki's media sync picks up the new audio
+behind the same `[sound:]` references. **Switching engines changes the file
+extension** — VOICEVOX writes `.wav`, OpenAI `.mp3` — so the note's `[sound:]`
+reference is repointed and the old clip is left behind unreferenced. Follow that
+one with `janki audio --examples --prune`.
 
 This also means a re-voice interrupted part way — an OOM, a dropped connection —
 is finished simply by running the command again.

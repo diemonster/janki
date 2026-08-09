@@ -16,8 +16,10 @@ File shape (`data/ledger.json`)::
           "sources": [{"type": "shirabe", "ref": "export.csv", "seen_at": "2026-08-06"}],
           "enriched": [{"at": "...", "kind": "jpdb", "model": "jpdb", "fields": [...]}],
           "audio": [{"file": "janki-<fp>.wav", "of": "word", "provider": "voicevox",
-                     "voice": 46, "speed": 1.0, "content_fp": "<fp>", "at": "...",
-                     "settings": {}}],
+                     "voice": 46, "speed": 1.0, "content_fp": "<fp>", "at": "..."},
+                    {"file": "janki-<fp>.mp3", "of": "example", "provider": "openai",
+                     "voice": "onyx", "speed": 1.0, "content_fp": "<fp>", "at": "...",
+                     "settings": {"model": "...", "instructions": "..."}}],
           "exports": {"personal-vocabulary": "2026-08-12",
                       "verbs": {"at": "2026-08-12", "missing": ["audio"]}}
         }

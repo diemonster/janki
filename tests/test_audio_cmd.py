@@ -1056,3 +1056,20 @@ def test_a_provider_flag_overriding_the_file_still_selects_the_sentence_voice(
     words = cli._speech_provider(config, "voicevox")
 
     assert cli._sentence_provider(config, "voicevox", words).voice == 52
+
+
+def test_the_word_rate_does_not_reach_the_openai_sentence_provider(tmp_path: Path) -> None:
+    """`voicevox_speed` is a VOICEVOX knob and that API has no rate parameter, so
+    passing it through would tie every OpenAI clip's staleness to the *word*
+    pace: tuning that would re-synthesize and re-bill every sentence in the
+    collection, rewrite each mp3 in place under its content-addressed name, and
+    leave nothing visible but a changed number in the ledger."""
+    (tmp_path / "janki.toml").write_text(
+        '[tts]\nsentence_provider = "openai"\nvoicevox_speed = 0.7\n', encoding="utf-8"
+    )
+    config = ProjectConfig.load(tmp_path)
+
+    sentences = cli._sentence_provider(config, None, object())
+
+    assert sentences.name == "openai"
+    assert sentences.speed == 1.0, "the word engine's rate stayed out of it"
