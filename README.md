@@ -111,6 +111,37 @@ rather than merging. Sync *before* importing, so the choice is trivial: upload
 your own collection and nothing is at stake. Then sync normally to make the
 deck available in AnkiMobile.
 
+### Checking that an import actually landed
+
+`janki status` reads your Anki collection and says when a deck's notetype is not
+what a build would write — the **Merge Notetypes** failure above, after the fact:
+
+```
+warning: Anki: verbs: 'Japanese Study (recognition+production)+' sits beside
+'Japanese Study (recognition+production)' with 0 note(s) — an import that left
+'Merge Notetypes' unticked. The notes on it are on the wrong notetype.
+```
+
+It is **read-only**: the collection is copied to a temporary directory and the
+copy is opened, so it works whether or not Anki is running and cannot touch what
+you are studying. janki never writes to your collection.
+
+Only your janki decks are inspected, by each deck's own model id. A collection
+full of downloaded shared decks with their own `+` notetypes is neither
+inspected nor mentioned — janki did not create those and cannot fix them.
+
+With one Anki profile it finds the collection itself. With several, name one:
+
+```toml
+[anki]
+profile = "User 1"
+# or point straight at it:
+# collection = "~/Library/Application Support/Anki2/User 1/collection.anki2"
+```
+
+Nothing here is ever an error. No Anki, no import yet, or a collection janki
+cannot read are all ordinary states, and `janki status` keeps working in each.
+
 ### Building only what is new
 
 A deck that has shipped 400 records and gained 3 does not need a 400-note

@@ -23,7 +23,12 @@ from japanese_anki import (
 from japanese_anki.audio_cmd import AudioError
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
-from japanese_anki.exporters.anki import AnkiBuildError, build_deck, resolve_deck_records
+from japanese_anki.exporters.anki import (
+    AnkiBuildError,
+    build_deck,
+    deck_notetype,
+    resolve_deck_records,
+)
 from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.importers import jpdb_import, jpdb_reviews
 from japanese_anki.importers.shirabe import import_file, inspect_file
@@ -2453,6 +2458,38 @@ def command_refresh(args: argparse.Namespace) -> int:
     return 0
 
 
+def _collection_lines(config: ProjectConfig) -> list[str]:
+    """What Anki says about the notetypes this project's decks build.
+
+    Only about *this project's* decks: the check is keyed by each deck's own
+    model id, so a collection full of shared decks with their own clone
+    notetypes is neither inspected nor mentioned. janki did not create those and
+    cannot fix them, and a report that listed them would bury the one line that
+    is actionable.
+
+    Anything that goes wrong here is a warning, never a failure. A missing Anki,
+    an unreadable collection, or several profiles to choose between are all
+    ordinary states, and `janki status` has to keep working in every one of
+    them — it is the command people run *because* something is confusing.
+    """
+    collection, note = status.resolve_collection(config)
+    if collection is None:
+        return [f"warning: {note}"] if note else []
+    decks = []
+    for deck_path in sorted([*config.deck_dir.glob("*.yaml"), *config.deck_dir.glob("*.yml")]):
+        try:
+            model_id, model_name, fields = deck_notetype(deck_path, config)
+        except JankiError as exc:
+            return [f"warning: could not read {deck_path.name}: {exc}"]
+        decks.append((deck_path.stem, model_id, model_name, fields))
+
+    findings, warnings = status.check_collection(collection, decks)
+    lines = [f"warning: {message}" for message in warnings]
+    for finding in findings:
+        lines.append(f"warning: Anki: {finding.deck_stem}: {finding.message}")
+    return lines
+
+
 def command_status(args: argparse.Namespace) -> int:
     config = _load_config(args)
     # --rebuild is the one command asking to *fix* the ledger, so it is the one
@@ -2505,6 +2542,8 @@ def command_status(args: argparse.Namespace) -> int:
 
     for line in status.format_report(report):
         print(line)
+    for line in _collection_lines(config):
+        print(line, file=sys.stderr)
     if args.unexported:
         for line in status.format_unexported(report):
             print(line)

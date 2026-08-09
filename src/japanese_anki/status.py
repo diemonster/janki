@@ -31,9 +31,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from japanese_anki.collection import (
+    CollectionError,
+    clone_suffix_of,
+    find_profiles,
+    read_notetypes,
+)
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
-from japanese_anki.exporters.anki import deck_declared_ids, resolve_deck_records
+from japanese_anki.exporters.anki import (
+    deck_declared_ids,
+    resolve_deck_records,
+)
 from japanese_anki.identifiers import normalize_identity_part
 from japanese_anki.io import load_records
 from japanese_anki.ledger import (
@@ -323,6 +332,96 @@ def build_report(
         staging_dir=config.staging_dir,
         staged=list(staged),
     )
+
+
+def resolve_collection(config: ProjectConfig) -> tuple[Path | None, str]:
+    """Which collection to inspect, and why not, when there is none.
+
+    Returns ``(path, note)``. A ``note`` without a path is never an error: not
+    having Anki installed, or not having imported yet, is an ordinary state for
+    a tool that builds packages, and `janki status` must stay useful there.
+    """
+    if config.anki_collection.strip():
+        named = Path(config.anki_collection).expanduser()
+        if named.is_file():
+            return named, ""
+        return None, f"[anki] collection is {named}, which does not exist"
+
+    profiles = find_profiles()
+    if not profiles:
+        return None, ""
+    wanted = config.anki_profile.strip()
+    if wanted:
+        if wanted in profiles:
+            return profiles[wanted], ""
+        available = ", ".join(sorted(profiles))
+        return None, f"[anki] profile {wanted!r} not found. Available: {available}"
+    if len(profiles) == 1:
+        return next(iter(profiles.values())), ""
+    # Guessing between profiles would report findings about a collection the
+    # user never meant, which is worse than reporting nothing.
+    return None, (
+        "several Anki profiles found (" + ", ".join(sorted(profiles)) + "); set "
+        "[anki] profile in janki.toml to check one"
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class NotetypeFinding:
+    """One thing wrong with how a deck landed in Anki."""
+
+    deck_stem: str
+    message: str
+
+
+def check_collection(
+    collection: Path,
+    decks: Iterable[tuple[str, int, str, int]],
+) -> tuple[list[NotetypeFinding], list[str]]:
+    """Compare what a build would write against what the collection holds.
+
+    ``decks`` is ``(stem, model_id, model_name, field count)`` per deck — taken
+    from the exporter rather than recomputed, so a deck that pins ``model_id``
+    is read the way it is built.
+
+    Returns findings and warnings separately: a collection janki cannot read is
+    not a finding about the user's decks, and must not read like one.
+    """
+    try:
+        notetypes = read_notetypes(collection)
+    except CollectionError as exc:
+        return [], [str(exc)]
+
+    by_id = {notetype.id: notetype for notetype in notetypes}
+    findings: list[NotetypeFinding] = []
+    for stem, model_id, model_name, fields in decks:
+        landed = by_id.get(model_id)
+        if landed is None:
+            # Never imported, or imported under a different id. Not a failure —
+            # a deck built and not yet imported is the ordinary state.
+            continue
+        if landed.field_count < fields:
+            findings.append(NotetypeFinding(
+                stem,
+                f"'{landed.name}' has {landed.field_count} fields where this "
+                f"deck writes {fields}. Re-import with 'Merge Notetypes' ticked; "
+                "without it the new fields never reach a note.",
+            ))
+        for clone in clone_suffix_of(landed.name, notetypes):
+            findings.append(NotetypeFinding(
+                stem,
+                f"'{clone.name}' sits beside '{landed.name}' with "
+                f"{clone.note_count} note(s) — an import that left 'Merge "
+                "Notetypes' unticked. The notes on it are on the wrong notetype.",
+            ))
+        if model_name.strip() != landed.name.strip():
+            findings.append(NotetypeFinding(
+                stem,
+                f"this deck builds notetype '{model_name}' but id {model_id} is "
+                f"named '{landed.name}' in Anki. A rename is harmless; a "
+                "collision is not.",
+            ))
+    return findings, []
 
 
 def format_report(report: StatusReport) -> list[str]:

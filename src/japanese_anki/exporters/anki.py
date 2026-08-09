@@ -532,6 +532,25 @@ def _resolve_card_types(
     return card_types
 
 
+def deck_notetype(deck_path: Path, project_config: ProjectConfig) -> tuple[int, str, int]:
+    """``(model_id, model_name, field count)`` a build of this deck would use.
+
+    Exported so the collection check asks the *same* question a build answers.
+    Both keys default to values derived from the enabled card set, and a deck may
+    pin either — a detector that recomputed them would misreport any deck that
+    does, which is the one case the M5.5 spike singled out.
+    """
+    deck_config, _ = resolve_deck_records(deck_path)
+    card_types = _resolve_card_types(deck_config, project_config)
+    model_id = int(
+        deck_config.get("model_id", project_config.model_id_base + _card_mask(card_types))
+    )
+    model_name = str(
+        deck_config.get("model_name", f"Japanese Study ({'+'.join(card_types)})")
+    )
+    return model_id, model_name, len(FIELD_NAMES)
+
+
 def build_deck(
     deck_path: Path,
     project_config: ProjectConfig,

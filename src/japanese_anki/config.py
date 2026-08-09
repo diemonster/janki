@@ -32,7 +32,13 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "media_dir",
         "scan_inbox",
     ),
-    "anki": ("default_deck_name", "default_deck_id", "model_id_base"),
+    "anki": (
+        "default_deck_name",
+        "default_deck_id",
+        "model_id_base",
+        "collection",
+        "profile",
+    ),
     "cards": ("recognition", "production", "reading"),
     "ai": ("extract_model", "enrich_model"),
     "tts": (
@@ -241,6 +247,12 @@ class ProjectConfig:
     default_deck_name: str
     default_deck_id: int
     model_id_base: int
+    #: Path to a `collection.anki2`, or empty to look under Anki's own
+    #: directory. Only ever read, and only from a copy.
+    anki_collection: str
+    #: Which Anki profile to inspect when several exist. Empty means: the one,
+    #: if there is exactly one; otherwise say so rather than guess.
+    anki_profile: str
     default_cards: dict[str, bool]
     extract_model: str
     enrich_model: str
@@ -315,6 +327,8 @@ class ProjectConfig:
             default_deck_name=_str(data, "anki", "default_deck_name", "Japanese Anki"),
             default_deck_id=_int(data, "anki", "default_deck_id", 2059400110),
             model_id_base=_int(data, "anki", "model_id_base", 1607392310),
+            anki_collection=_str(data, "anki", "collection", ""),
+            anki_profile=_str(data, "anki", "profile", ""),
             default_cards={
                 "recognition": _bool(data, "cards", "recognition", True),
                 "production": _bool(data, "cards", "production", True),

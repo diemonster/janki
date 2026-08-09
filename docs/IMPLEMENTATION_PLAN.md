@@ -1979,7 +1979,7 @@ Files: new `src/japanese_anki/tts/azure.py`, `tests/test_azure_tts.py`.~~
 **Not built.** The instructions above are the cancelled Azure plan, kept
 for the record. What shipped is `tts/openai_tts.py`; see below.
 
-### [ ] M5.8 Tell the user when an import silently did not upgrade
+### [x] M5.8 Tell the user when an import silently did not upgrade
 
 Depends on: M5.4
 Files: TBD — the shape of this task is the decision it has to make first.
@@ -2011,6 +2011,44 @@ is in the collection:
 
 Whatever it picks, the detector must read `deck.model_id` rather than the
 derived value, or it will misreport any deck that pins one.
+
+*Done 2026-08-09. It picked **read the file**, and the choice was easy
+once measured.* `src/japanese_anki/collection.py` is standard library
+only: three SQL queries against a **copy** of `collection.anki2`. The
+`anki` package would cost a large version-coupled dependency and
+AnkiConnect an add-on install plus a running Anki, and neither buys
+anything for a question with a yes-or-no answer. If janki ever needs to
+*write*, that trade changes — `notetypes.config` is protobuf and writes
+need USN/`mod`/`scm` bookkeeping, so writing by hand is not on the table.
+
+The plan said direct reading "needs Anki closed". That was half right and
+the fix is trivial: Anki holds an exclusive lock, so an ordinary
+read-only open answers `database is locked` — but copying the file and
+reading the copy works with Anki open, which is when someone actually
+runs `janki status`. Three wrinkles, all found by trying it against a
+real collection rather than reasoning about it:
+
+- Anki registers a custom `unicase` collation; any query ordering by a
+  collated column fails until one is registered.
+- The collection is WAL-mode, so copying the main file alone can read a
+  stale snapshot. The `-wal`/`-shm` sidecars are copied with it.
+- `notetypes.config` is protobuf, not JSON. Nothing needed from it —
+  names and field counts are plain relational tables.
+
+`deck_notetype` is exported from the exporter so the check asks the same
+question a build answers, honouring a pinned `model_id`/`model_name`
+rather than recomputing them.
+
+**Scope, deliberately narrow.** Only the notetypes this project's decks
+build are inspected. The collection this was written against holds 1,815
+notes on `+` clones — Yotsubato, Tofugu, a Quizlet course, all from
+re-importing updated shared decks — and none are janki's business.
+Listing them would bury the one actionable line.
+
+Nothing here is ever an error. No Anki, no import yet, several profiles
+to choose between, or a collection too old to read are all ordinary
+states reported as warnings, because `janki status` is the command people
+run *because* something is already confusing.
 
 ### [x] M5.W Milestone 5 wrap
 
