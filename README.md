@@ -125,6 +125,32 @@ max_meanings = 4    # 0 shows them all; a deck may set its own
 The record keeps all of them. The cap is a card decision, so `janki status`, a
 search, and a human choosing which sense matters all still see the full list.
 
+### Stroke order and kanji readings
+
+```bash
+janki kanji            # look up every character the collection uses
+janki kanji --refresh  # re-fetch, rather than only what is new
+```
+
+Each card back gains a collapsed block per kanji in the word: stroke order
+drawn one stroke at a time on graph paper, the 音/訓 readings, and a common word
+for each — 音 ゼン → 前線 ぜんせん "front line", 訓 まえ → 名前 なまえ "name".
+Collapsed because it is a reminder, not the thing being tested.
+
+The data is looked up per *character* and shared: 前 is the same 前 in 名前 and
+前線, so it is fetched once into `data/kanji.json` and read by every record that
+contains it. Re-running costs one request per new character. A build never
+needs the network — a character not looked up simply has no block.
+
+Example words are ranked by JMdict's frequency tags, which matters more than it
+sounds: the raw list for 前 is 740 entries opening on 前官礼遇 and 前駆体.
+Untagged entries are dropped rather than ranked last, so a rare character shows
+its readings with no example rather than an obscure one that looks endorsed.
+
+Sources are **KANJIDIC2** (CC BY-SA 4.0, EDRDG) via kanjiapi.dev and
+**KanjiVG** (CC BY-SA 3.0, Ulrich Apel). A personal deck is fine; a deck you
+share must credit both — the same footing as the VOICEVOX voice terms.
+
 ### Checking that an import actually landed
 
 `janki status` reads your Anki collection and says when a deck's notetype is not

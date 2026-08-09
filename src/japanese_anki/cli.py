@@ -15,6 +15,7 @@ from japanese_anki import (
     enrich,
     extract,
     jpdb,
+    kanji,
     ledger,
     migrate,
     promote,
@@ -2550,6 +2551,51 @@ def _collection_lines(config: ProjectConfig) -> list[str]:
     return lines
 
 
+def command_kanji(args: argparse.Namespace) -> int:
+    """Look up the characters this collection uses, once each.
+
+    Reference data, not card content: 前 is the same 前 in 名前 and 前線, so it
+    is fetched per *character* and shared by every record that contains one.
+    Only what is missing is fetched, so re-running after adding words costs one
+    request per new character rather than a re-download of everything.
+    """
+    config = _load_config(args)
+    output_path = config.normalized_file.resolve()
+    records = load_records(output_path) if output_path.exists() else []
+    if not records:
+        print(f"No records to read characters from in {output_path}.")
+        return 0
+
+    wanted: list[str] = []
+    for record in records:
+        wanted.extend(kanji.kanji_in(record.expression))
+    wanted = list(dict.fromkeys(wanted))
+
+    store = kanji.load_store(config.kanji_file)
+    todo = wanted if args.refresh else store.missing(wanted)
+    if not todo:
+        print(f"All {len(wanted)} character(s) already looked up in {config.kanji_file}.")
+        return 0
+
+    failures: list[str] = []
+    for character in todo:
+        try:
+            store.entries[character] = kanji.fetch_kanji(character)
+        except JankiError as exc:
+            # One character that cannot be looked up must not cost the rest:
+            # every other card in the deck still gets its section.
+            failures.append(f"{character}: {exc}")
+    kanji.save_store(config.kanji_file, store)
+
+    print(
+        f"Looked up {len(todo) - len(failures)} character(s) into "
+        f"{status.display_path(config.kanji_file, config.root)}."
+    )
+    for failure in failures:
+        print(f"warning: {failure}", file=sys.stderr)
+    return 1 if failures and len(failures) == len(todo) else 0
+
+
 def command_status(args: argparse.Namespace) -> int:
     config = _load_config(args)
     # --rebuild is the one command asking to *fix* the ledger, so it is the one
@@ -3013,6 +3059,17 @@ def build_parser() -> argparse.ArgumentParser:
             _flag, action="store_true", help=f"Skip the {_name} stage."
         )
     refresh_parser.set_defaults(handler=command_refresh)
+
+    kanji_parser = subparsers.add_parser(
+        "kanji",
+        help="Look up stroke order and on/kun readings for the characters in use.",
+    )
+    kanji_parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help="Re-fetch every character, not only the ones not looked up yet.",
+    )
+    kanji_parser.set_defaults(handler=command_kanji)
 
     status_parser = subparsers.add_parser(
         "status", help="Summarize records, ledger state, and duplicate candidates"

@@ -17,6 +17,8 @@ except ImportError:  # pragma: no cover - exercised by the bootstrap environment
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.io import DataError, load_records, load_structured
+from japanese_anki.kanji import load_store as load_kanji_store
+from japanese_anki.kanji import render_kanji_html
 from japanese_anki.models import ModelError, VocabularyRecord
 from japanese_anki.pitch import PitchError, render_pitch_html
 from japanese_anki.validation import has_errors, validate_records
@@ -55,6 +57,7 @@ FIELD_NAMES = [
     "PitchAccent",
     "FrequencyRank",
     "ExampleAudio",
+    "KanjiInfo",
 ]
 
 CARD_FILES = {
@@ -317,6 +320,7 @@ def _field_values(
     warnings: list[str],
     claimed: dict[str, tuple[str, str]],
     max_meanings: int = 0,
+    kanji_html: str = "",
 ) -> list[str]:
     """One note's fields, with media resolved against ``media_dir``.
 
@@ -381,6 +385,7 @@ def _field_values(
         _pitch_field(record, warnings),
         str(record.frequency_rank) if record.frequency_rank is not None else "",
         example_audio_field,
+        kanji_html,
     ]
 
 
@@ -650,6 +655,8 @@ def build_deck(
     deck.description = str(deck_config.get("description", ""))
 
     media_dir = project_config.media_dir.resolve()
+    # Looked up once for the whole build: 前 is the same 前 in every word.
+    kanji_store = load_kanji_store(project_config.kanji_file)
     media_files: list[str] = []
     # Packaged basename -> (absolute path, the record that claimed it first).
     claimed: dict[str, tuple[str, str]] = {}
@@ -662,6 +669,7 @@ def build_deck(
                 claimed,
                 # A deck may say its own number; most take the project's.
                 int(deck_config.get("max_meanings", project_config.max_meanings)),
+                render_kanji_html(kanji_store.for_text(record.expression)),
             ),
             tags=[_clean_tag(tag) for tag in record.tags if _clean_tag(tag)],
             guid=genanki.guid_for(record.id),

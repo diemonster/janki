@@ -1,0 +1,286 @@
+"""Kanji reference data: what a card says about the characters in a word.
+
+Every test drives the transport seam, so none reaches the network. The shapes
+here are the real ones — 前 really does return 740 words that open on 一歩前進,
+and KANJIDIC really does list まえ and -まえ as separate readings.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from japanese_anki.kanji import (
+    KANJIAPI,
+    KANJIVG,
+    KanjiError,
+    KanjiInfo,
+    fetch_kanji,
+    kanji_in,
+    load_store,
+    render_kanji_html,
+    save_store,
+)
+
+
+def fake_transport(*, info: dict, words: list | None = None, svg: str | None = None):
+    """Answer the three URLs `fetch_kanji` asks for."""
+
+    def send(url: str) -> bytes:
+        if url.startswith(f"{KANJIVG}/"):
+            if svg is None:
+                raise KanjiError("no stroke data")
+            return svg.encode("utf-8")
+        if "/words/" in url:
+            return json.dumps(words or []).encode("utf-8")
+        if url.startswith(f"{KANJIAPI}/kanji/"):
+            return json.dumps(info).encode("utf-8")
+        raise AssertionError(f"unexpected url {url}")
+
+    return send
+
+
+SVG = (
+    '<svg viewBox="0 0 109 109">'
+    '<path id="kvg:0524d-s1" kvg:type="a" d="M1,1L2,2"/>'
+    '<path id="kvg:0524d-s2" kvg:type="b" d="M3,3L4,4"/>'
+    "</svg>"
+)
+
+
+def word(written: str, pronounced: str, gloss: str, priorities: list[str]) -> dict:
+    return {
+        "meanings": [{"glosses": [gloss]}],
+        "variants": [
+            {"written": written, "pronounced": pronounced, "priorities": priorities}
+        ],
+    }
+
+
+# --- picking the characters -------------------------------------------------
+
+
+def test_kanji_are_returned_in_the_order_they_are_written() -> None:
+    """A card shows them left to right as the word is written; a set would put
+    them in whichever order the hash landed."""
+    assert kanji_in("使用") == ["使", "用"]
+    assert kanji_in("前線と名前") == ["前", "線", "名"], "and each only once"
+    assert kanji_in("する") == [], "kana carries no character block"
+
+
+# --- ranking the examples ---------------------------------------------------
+
+
+def test_a_common_word_beats_an_obscure_one() -> None:
+    """The raw list for 前 is 740 entries opening on 一歩前進, 前官礼遇, 前駆体 —
+    accurate and useless. JMdict's nfXX band is a frequency decile, and the
+    three a commercial paper card chose all carry one."""
+    send = fake_transport(
+        info={"stroke_count": 9, "on_readings": ["ゼン"], "kun_readings": []},
+        words=[
+            word("前官礼遇", "ぜんかんれいぐう", "privileges of a former post", []),
+            word("前線", "ぜんせん", "front line", ["news1", "nf08"]),
+            word("午前", "ごぜん", "morning", ["ichi1", "news1", "nf02"]),
+        ],
+    )
+
+    info = fetch_kanji("前", transport=send)
+
+    written = [example.written for example in info.readings[0].examples]
+    assert written == ["午前", "前線"], "commonest first, and the untagged one dropped"
+
+
+def test_an_untagged_word_is_never_chosen_over_a_tagged_one() -> None:
+    send = fake_transport(
+        info={"on_readings": ["ゼン"], "kun_readings": []},
+        words=[
+            word("前駆体", "ぜんくたい", "precursor", []),
+            word("前年", "ぜんねん", "the preceding year", ["news1", "nf12"]),
+        ],
+    )
+
+    info = fetch_kanji("前", transport=send)
+
+    assert [e.written for e in info.readings[0].examples] == ["前年"]
+
+
+def test_only_words_that_use_that_reading_are_offered() -> None:
+    """音 and 訓 are different rows on the card because they are different
+    facts: 前線 shows ゼン and 名前 shows まえ, and swapping them teaches the
+    wrong reading."""
+    send = fake_transport(
+        info={"on_readings": ["ゼン"], "kun_readings": ["まえ"]},
+        words=[
+            word("前線", "ぜんせん", "front line", ["news1", "nf08"]),
+            word("名前", "なまえ", "name", ["ichi1", "nf02"]),
+        ],
+    )
+
+    info = fetch_kanji("前", transport=send)
+
+    by_kind = {r.kind: [e.written for e in r.examples] for r in info.readings}
+    assert by_kind == {"on": ["前線"], "kun": ["名前"]}
+
+
+def test_a_katakana_on_reading_matches_a_hiragana_word() -> None:
+    """KANJIDIC writes on'yomi in katakana and words in hiragana, so a literal
+    containment test finds nothing at all."""
+    send = fake_transport(
+        info={"on_readings": ["ゼン"], "kun_readings": []},
+        words=[word("前線", "ぜんせん", "front line", ["nf08"])],
+    )
+
+    assert fetch_kanji("前", transport=send).readings[0].examples[0].written == "前線"
+
+
+def test_okurigana_and_suffix_marks_are_stripped_before_matching() -> None:
+    """`つか.う` marks okurigana — only つか is written with the character — and
+    a naive match against つかう would fail on the dot."""
+    send = fake_transport(
+        info={"on_readings": [], "kun_readings": ["つか.う"]},
+        words=[word("使い方", "つかいかた", "how to use", ["nf20"])],
+    )
+
+    assert fetch_kanji("使", transport=send).readings[0].examples[0].written == "使い方"
+
+
+def test_a_reading_listed_twice_is_shown_once() -> None:
+    """KANJIDIC lists まえ and -まえ — the same reading, marked for a suffix
+    position. Both match the same words, so a row each prints the same example
+    twice."""
+    send = fake_transport(
+        info={"on_readings": [], "kun_readings": ["まえ", "-まえ"]},
+        words=[word("名前", "なまえ", "name", ["ichi1"])],
+    )
+
+    info = fetch_kanji("前", transport=send)
+
+    assert [r.reading for r in info.readings] == ["まえ"]
+
+
+# --- the strokes ------------------------------------------------------------
+
+
+def test_stroke_paths_are_captured_in_writing_order() -> None:
+    send = fake_transport(info={"stroke_count": 2}, svg=SVG)
+
+    info = fetch_kanji("前", transport=send)
+
+    assert info.strokes == ("M1,1L2,2", "M3,3L4,4")
+
+
+def test_a_character_kanjivg_does_not_cover_still_works() -> None:
+    """Readings without strokes are still most of the card, so a missing
+    diagram must not cost the whole lookup."""
+    send = fake_transport(info={"stroke_count": 9, "on_readings": ["ゼン"]}, svg=None)
+
+    info = fetch_kanji("前", transport=send)
+
+    assert info.strokes == ()
+    assert info.stroke_count == 9, "KANJIDIC still knows how many there are"
+
+
+def test_something_that_is_not_a_kanji_is_refused() -> None:
+    with pytest.raises(KanjiError, match="Not a kanji"):
+        fetch_kanji("あ")
+
+
+# --- rendering --------------------------------------------------------------
+
+
+def _info(**kwargs) -> KanjiInfo:
+    return KanjiInfo(character="前", **kwargs)
+
+
+def test_each_stroke_cell_adds_exactly_one_stroke() -> None:
+    rendered = render_kanji_html([_info(strokes=("a", "b", "c"))])
+
+    cells = rendered.split("<svg")[1:]
+    assert [cell.count("<path") for cell in cells] == [1, 2, 3]
+    assert all(cell.count('class="new"') == 1 for cell in cells)
+
+
+def test_a_character_with_no_strokes_draws_no_grid() -> None:
+    rendered = render_kanji_html([_info(meanings=("before",))])
+
+    assert "stroke-order" not in rendered
+    assert "before" in rendered, "but the rest of the block is still there"
+
+
+def test_the_block_names_its_character_and_level() -> None:
+    rendered = render_kanji_html([_info(stroke_count=9, jlpt=5, grade=2, meanings=("before",))])
+
+    assert "<summary>前</summary>" in rendered
+    assert "N5" in rendered and "9画" in rendered and "grade 2" in rendered
+
+
+def test_html_in_the_data_is_escaped() -> None:
+    rendered = render_kanji_html([_info(meanings=("<script>x</script>",))])
+
+    assert "<script>" not in rendered
+
+
+def test_nothing_at_all_renders_nothing() -> None:
+    assert render_kanji_html([]) == ""
+
+
+# --- the store --------------------------------------------------------------
+
+
+def test_the_store_round_trips(tmp_path: Path) -> None:
+    from japanese_anki.kanji import Example, KanjiStore, Reading
+
+    store = KanjiStore(entries={"前": KanjiInfo(
+        character="前", stroke_count=9, jlpt=5, meanings=("before",),
+        readings=(Reading(kind="on", reading="ゼン", examples=(
+            Example(written="前線", pronounced="ぜんせん", gloss="front line"),
+        )),),
+        strokes=("M1,1",),
+    )})
+    path = tmp_path / "kanji.json"
+
+    save_store(path, store)
+    again = load_store(path)
+
+    assert again.entries["前"] == store.entries["前"]
+
+
+def test_a_missing_store_is_empty_not_an_error(tmp_path: Path) -> None:
+    """A build must not require the lookup to have been run."""
+    assert load_store(tmp_path / "nothing.json").entries == {}
+
+
+def test_the_store_reports_what_it_has_not_seen(tmp_path: Path) -> None:
+    from japanese_anki.kanji import KanjiStore
+
+    store = KanjiStore(entries={"前": KanjiInfo(character="前")})
+
+    assert store.missing(["前", "線", "線"]) == ["線"], "deduplicated"
+
+
+def test_a_store_that_is_not_an_object_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "kanji.json"
+    path.write_text("[]", encoding="utf-8")
+
+    with pytest.raises(KanjiError, match="keyed by character"):
+        load_store(path)
+
+
+def test_a_character_with_no_common_word_offers_none(tmp_path: Path) -> None:
+    """Ranking alone would bury untagged entries only while something tagged
+    exists to bury them under. For a rare character it would surface
+    前官礼遇-grade words as though they were the ones to learn — better to show
+    the reading with no example than a wrong impression of usefulness."""
+    send = fake_transport(
+        info={"on_readings": ["ゼン"], "kun_readings": []},
+        words=[
+            word("前官礼遇", "ぜんかんれいぐう", "privileges of a former post", []),
+            word("前駆体", "ぜんくたい", "precursor", []),
+        ],
+    )
+
+    info = fetch_kanji("前", transport=send)
+
+    assert info.readings[0].examples == ()

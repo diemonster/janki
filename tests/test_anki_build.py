@@ -125,7 +125,7 @@ def _fields(apkg: Path) -> tuple[list[str], list[str]]:
     return [f["name"] for f in model["flds"]], values.split("\x1f")
 
 
-def test_the_three_new_fields_are_appended_at_the_end(tmp_path: Path) -> None:
+def test_new_fields_are_appended_at_the_end(tmp_path: Path) -> None:
     """Appended, never inserted: a note's values are positional, so inserting
     shifts every value after it on every note that already exists — and an
     append is one-way besides, since the field is in every collection that has
@@ -139,7 +139,7 @@ def test_the_three_new_fields_are_appended_at_the_end(tmp_path: Path) -> None:
     build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
 
     names, values = _fields(tmp_path / "o.apkg")
-    assert names[-3:] == ["PitchAccent", "FrequencyRank", "ExampleAudio"]
+    assert names[-4:] == ["PitchAccent", "FrequencyRank", "ExampleAudio", "KanjiInfo"]
     assert len(values) == len(names), "the positional list stayed parallel"
     assert values[names.index("FrequencyRank")] == "200", "and carries its value"
 
@@ -665,3 +665,125 @@ def test_the_jpdb_link_reaches_the_card(tmp_path: Path) -> None:
     backs = "".join(template["afmt"] for template in templates)
     assert "jpdb.io/search?q={{Expression}}" in backs
     assert "shirabelookup://" in backs, "and the existing one survived"
+
+
+# --- the kanji reference section --------------------------------------------
+
+
+def _kanji_file(root: Path, entries: dict) -> None:
+    (root / "kanji.json").write_text(json.dumps(entries, ensure_ascii=False), encoding="utf-8")
+    config = (root / "janki.toml").read_text(encoding="utf-8")
+    (root / "janki.toml").write_text(
+        config.replace('dist_dir = "dist"', 'dist_dir = "dist"\nkanji_file = "kanji.json"'),
+        encoding="utf-8",
+    )
+
+
+KANJI_使 = {
+    "使": {
+        "stroke_count": 8, "grade": 3, "jlpt": 4,
+        "meanings": ["use", "send on a mission"],
+        "readings": [
+            {"kind": "on", "reading": "シ",
+             "examples": [{"written": "大使", "pronounced": "たいし", "gloss": "ambassador"}]},
+            {"kind": "kun", "reading": "つか.う",
+             "examples": [{"written": "使う", "pronounced": "つかう", "gloss": "to use"}]},
+        ],
+        "strokes": ["M1,1L9,9", "M2,2L8,8", "M3,3L7,7"],
+    }
+}
+
+
+def test_the_kanji_section_reaches_the_card(tmp_path: Path) -> None:
+    """Reference data, not record content: 使 is looked up once and read by
+    every record whose expression contains it."""
+    _project(tmp_path)
+    _kanji_file(tmp_path, KANJI_使)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:使う:つかう", expression="使う", reading="つかう", meanings=["to use"],
+    )])
+
+    build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
+
+    names, values = _fields(tmp_path / "o.apkg")
+    section = values[names.index("KanjiInfo")]
+    assert "<summary>使</summary>" in section
+    assert "N4" in section and "8画" in section
+    assert "大使" in section and "たいし" in section, "the on'yomi example"
+    assert "使う" in section and "to use" in section, "the kun'yomi example"
+
+
+def test_a_stroke_cell_per_stroke_each_adding_one(tmp_path: Path) -> None:
+    """The progression is the whole point — a single finished glyph says nothing
+    about the order it is written in. Cell n draws strokes 1..n, with the newest
+    marked so the eye lands on what changed."""
+    _project(tmp_path)
+    _kanji_file(tmp_path, KANJI_使)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:使う:つかう", expression="使う", reading="つかう", meanings=["to use"],
+    )])
+
+    build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
+
+    names, values = _fields(tmp_path / "o.apkg")
+    section = values[names.index("KanjiInfo")]
+    assert section.count("<svg") == 3, "three strokes, three cells"
+    cells = section.split("<svg")[1:]
+    assert [cell.count("<path") for cell in cells] == [1, 2, 3], "each adds one"
+    assert all(cell.count('class="new"') == 1 for cell in cells), "exactly one newest"
+
+
+def test_a_word_with_no_kanji_gets_no_section(tmp_path: Path) -> None:
+    _project(tmp_path)
+    _kanji_file(tmp_path, KANJI_使)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:する:する", expression="する", reading="する", meanings=["to do"],
+    )])
+
+    build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
+
+    names, values = _fields(tmp_path / "o.apkg")
+    assert values[names.index("KanjiInfo")] == ""
+
+
+def test_a_kanji_not_looked_up_yet_is_simply_absent(tmp_path: Path) -> None:
+    """A build must not require a network round trip, or fail because one
+    character could not be fetched. The section is an extra, not a gate."""
+    _project(tmp_path)
+    _kanji_file(tmp_path, KANJI_使)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:橋:はし", expression="橋", reading="はし", meanings=["bridge"],
+    )])
+
+    result = build_deck(
+        tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg"
+    )
+
+    assert result.note_count == 1
+    names, values = _fields(tmp_path / "o.apkg")
+    assert values[names.index("KanjiInfo")] == ""
+
+
+def test_each_kanji_of_a_compound_gets_its_own_block(tmp_path: Path) -> None:
+    """So opening one does not open both, and the summary can carry the
+    character it is about."""
+    _project(tmp_path)
+    entries = dict(KANJI_使)
+    entries["用"] = {
+        "stroke_count": 5, "jlpt": 4, "meanings": ["utilize"],
+        "readings": [{"kind": "on", "reading": "ヨウ", "examples": []}],
+        "strokes": ["M1,1L9,9"],
+    }
+    _kanji_file(tmp_path, entries)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:使用:しよう", expression="使用", reading="しよう", meanings=["use"],
+    )])
+
+    build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
+
+    names, values = _fields(tmp_path / "o.apkg")
+    section = values[names.index("KanjiInfo")]
+    assert section.count("<details") == 2
+    assert section.index("<summary>使</summary>") < section.index("<summary>用</summary>"), (
+        "in the order the word is written"
+    )

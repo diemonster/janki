@@ -234,3 +234,130 @@
   opacity: 0.55;
   font-size: 0.85em;
 }
+
+/* Kanji reference, one collapsed block per character in the word. Collapsed
+   because it is a reminder rather than the thing being tested: the card asks
+   for a word, and the strokes are there for the moment you cannot recall how
+   one is written. A two-kanji word gets two, so opening one does not open both.
+
+   Sources are KANJIDIC2 (CC BY-SA 4.0, EDRDG) and KanjiVG (CC BY-SA 3.0,
+   Ulrich Apel); a shared deck must credit both. */
+.kanji-info {
+  margin-top: 22px;
+  text-align: left;
+}
+
+.kanji-info details.kanji {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px solid rgba(128, 128, 128, 0.28);
+  border-radius: 10px;
+}
+
+.kanji-info details.kanji > summary {
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1.4;
+  list-style: none;
+}
+
+.kanji-info details.kanji > summary::-webkit-details-marker {
+  display: none;
+}
+
+.kanji-info details.kanji > summary::after {
+  content: " ▸";
+  font-size: 13px;
+  opacity: 0.5;
+}
+
+.kanji-info details.kanji[open] > summary::after {
+  content: " ▾";
+}
+
+.kanji-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  margin: 6px 0 10px;
+  font-size: 14px;
+}
+
+.kanji-head .kanji-tags {
+  opacity: 0.6;
+}
+
+/* The graph-paper strip: one cell per stroke, each showing every stroke drawn
+   so far with the newest one picked out. That progression is the whole point —
+   a single finished glyph says nothing about the order it is written in. */
+.stroke-order {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  margin-bottom: 10px;
+}
+
+.stroke-cell {
+  width: 42px;
+  height: 42px;
+  box-sizing: border-box;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  margin: -0.5px 0 0 -0.5px;
+  background-image:
+    linear-gradient(rgba(128, 128, 128, 0.18) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(128, 128, 128, 0.18) 1px, transparent 1px);
+  background-position: center center;
+  background-size: 50% 50%;
+}
+
+.stroke-cell svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.stroke-cell svg path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.45;
+}
+
+/* The stroke this cell adds, so the eye lands on what changed. */
+.stroke-cell svg path.new {
+  stroke: var(--pitch-high);
+  opacity: 1;
+}
+
+.kanji-examples {
+  font-size: 14px;
+}
+
+.kanji-example {
+  display: grid;
+  grid-template-columns: 1.6em 4.5em auto auto 1fr;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 0;
+  border-top: 1px dotted rgba(128, 128, 128, 0.35);
+}
+
+.kanji-example .kanji-kind {
+  padding: 0 3px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.kanji-example .kanji-word {
+  font-size: 16px;
+}
+
+.kanji-example .kanji-kana,
+.kanji-example .kanji-gloss {
+  opacity: 0.7;
+}
