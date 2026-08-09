@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from japanese_anki import (
+    audio_cmd,
     claude_client,
     enrich,
     extract,
@@ -19,6 +20,7 @@ from japanese_anki import (
     promote,
     status,
 )
+from japanese_anki.audio_cmd import AudioError
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import AnkiBuildError, build_deck, resolve_deck_records
@@ -49,6 +51,7 @@ from japanese_anki.staging import (
     rewrite_staging,
     write_staging,
 )
+from japanese_anki.tts import voicevox
 from japanese_anki.validation import has_errors, validate_records
 
 
@@ -1767,6 +1770,97 @@ def _inside_archive(path: Path, archive_dir: Path) -> bool:
     return path.is_relative_to(archive_dir)
 
 
+def _speech_provider(config: ProjectConfig, chosen: str | None) -> Any:
+    """The provider this run speaks through.
+
+    ``azure`` is named in the config and the flag from the start so the value
+    is not a typo the day M5.7 lands, and refused clearly until then — a
+    provider that silently fell back to VOICEVOX would record Azure's name in
+    the ledger against VOICEVOX's audio.
+    """
+    name = (chosen or config.tts_provider or "voicevox").strip().lower()
+    if name == "voicevox":
+        return voicevox.VoicevoxProvider(
+            base_url=config.voicevox_url, speaker=config.voicevox_speaker
+        )
+    if name == "azure":
+        raise AudioError(
+            "The Azure provider arrives in M5.7. Until then use --provider "
+            "voicevox, which is the one that can force a pitch accent."
+        )
+    raise AudioError(
+        f"Unknown TTS provider {name!r}. Known: voicevox, azure (M5.7)."
+    )
+
+
+def command_audio(args: argparse.Namespace) -> int:
+    """Generate the audio a card plays.
+
+    Refuses before spending anything when the engine is not answering: a run
+    that synthesizes forty clips and then fails on the forty-first has written
+    forty files and half a ledger, and the common reason is simply that the
+    engine is not running.
+    """
+    config = _load_config(args)
+    output_path = config.normalized_file.resolve()
+    records = load_records(output_path) if output_path.exists() else []
+    if not records:
+        print(f"No records to voice in {output_path}.")
+        return 0
+
+    provider = _speech_provider(config, args.provider)
+    if not provider.available():
+        raise AudioError(f"{provider.name} is not answering. {provider.launch_hint}")
+
+    book = ledger.load(config.ledger_file)
+    result = audio_cmd.generate_audio(
+        records,
+        provider=provider,
+        book=book,
+        media_dir=config.media_dir.resolve(),
+        words=args.words or not args.examples,
+        examples=args.examples,
+        ids=args.ids or None,
+        force=args.force,
+        allow_default_accent=args.allow_default_accent,
+    )
+
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    if result.no_pattern:
+        print(
+            f"warning: {len(result.no_pattern)} record(s) have no accent pattern "
+            "and were skipped rather than voiced with a guessed one — "
+            "'janki enrich --jpdb' fills it, or --allow-default-accent opts into "
+            f"the guess: {', '.join(result.no_pattern[:5])}"
+            + (" ..." if len(result.no_pattern) > 5 else ""),
+            file=sys.stderr,
+        )
+    if result.unverified:
+        print(
+            f"warning: {len(result.unverified)} example(s) carry furigana jpdb "
+            "never confirmed and were left unvoiced; check them first.",
+            file=sys.stderr,
+        )
+
+    if result.file_count:
+        save_records_json(output_path, result.records)
+    ledger_error = _save_ledger(book)
+
+    print(
+        f"Wrote {result.file_count} clip(s) for {len(result.written)} record(s) "
+        f"into {config.media_dir.resolve() / audio_cmd.AUDIO_SUBDIR}."
+        + (f" {result.up_to_date} already current." if result.up_to_date else "")
+    )
+    if args.prune:
+        removed = audio_cmd.prune_unreferenced(result.records, config.media_dir.resolve())
+        print(f"Pruned {len(removed)} unreferenced clip(s).")
+    if ledger_error is not None:
+        _report_ledger_failure(ledger_error)
+        return 1
+    return 0
+
+
 def command_promote(args: argparse.Namespace) -> int:
     """Move a reviewed staging file's records into the normalized collection.
 
@@ -2337,6 +2431,39 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     extract_parser.set_defaults(handler=command_extract)
+
+    audio_parser = subparsers.add_parser(
+        "audio", help="Generate word and example audio for records"
+    )
+    audio_parser.add_argument(
+        "ids", nargs="*", metavar="ID", help="Record ids. Omit for every record."
+    )
+    audio_parser.add_argument(
+        "--words", action="store_true", help="Word audio, with the accent forced."
+    )
+    audio_parser.add_argument(
+        "--examples", action="store_true", help="Example-sentence audio, read naturally."
+    )
+    audio_parser.add_argument(
+        "--provider",
+        choices=("voicevox", "azure"),
+        help="Override [tts] provider for this run.",
+    )
+    audio_parser.add_argument(
+        "--force", action="store_true", help="Regenerate clips that already exist."
+    )
+    audio_parser.add_argument(
+        "--prune", action="store_true", help="Delete janki-* clips nothing references."
+    )
+    audio_parser.add_argument(
+        "--allow-default-accent",
+        action="store_true",
+        help=(
+            "Voice records with no accent pattern, letting the engine choose — "
+            "tagged 'accent_unverified' in the ledger."
+        ),
+    )
+    audio_parser.set_defaults(handler=command_audio)
 
     promote_parser = subparsers.add_parser(
         "promote",

@@ -1690,7 +1690,26 @@ The spike was worth running twice: the library alone would have shipped
 "append is safe" as unconditional, and the condition is the part that
 bites.*
 
-### [ ] M5.3 `janki audio`
+### [~] claimed task/m5.3 2026-08-08 — M5.3 `janki audio`
+
+*Code and unit tests done; **live VOICEVOX run outstanding**, which is
+what the task stays claimed for. Contract as written. Decisions: (1) at
+least one of `--words`/`--examples` is required rather than defaulting —
+they are different recordings made different ways, and neither is the
+obvious default. (2) `--provider azure` is refused **by name** until
+M5.7 rather than falling back to VOICEVOX, which would record Azure in
+the ledger against VOICEVOX's audio. (3) The command checks
+`available()` before spending: a run that voices forty clips and dies on
+the forty-first leaves forty files and half a ledger, and "the engine is
+not running" is the ordinary cause. (4) "Is there already a clip for
+this?" is asked of the **ledger**, not the filesystem — a matching
+filename proves only that something was written at that address, while
+the entry says what was spoken — and the query lives in `ledger` as
+`has_audio`, which owns the entry shape. (5) `--prune` deletes only
+`janki-*`: a clip somebody dropped into `data/media` by hand is theirs.
+A pattern that does not fit its reading is reported and skipped, because
+`to_aquestalk` refuses rather than guesses and this command must not
+convert that refusal into a guess of its own.*
 
 Depends on: M5.1, M5.2, M2.2, M1.3
 Files: new `src/japanese_anki/audio_cmd.py`, `src/japanese_anki/cli.py`,

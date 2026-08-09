@@ -566,6 +566,20 @@ class Ledger:
                 result.append(key)
         return result
 
+    def has_audio(self, record_id: str, *, of: str, content_fp: str) -> bool:
+        """Is there already a clip for this record saying exactly this?
+
+        Asked of the ledger rather than of the filesystem: a file whose name
+        matches proves only that something was written at that address, while
+        the entry says what was spoken. They agree in the ordinary case; where
+        they do not, this is the one that can tell "the same audio" from "a file
+        that happens to be called that".
+        """
+        return any(
+            entry.get("of") == of and str(entry.get("content_fp") or "") == content_fp
+            for entry in self._audio_entries(record_id)
+        )
+
     def missing_audio(self, records: Iterable[VocabularyRecord]) -> list[str]:
         """Records with no word audio recorded at all.
 
