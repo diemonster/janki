@@ -1661,40 +1661,34 @@ whole ballgame.
   (marker-value round-trip).
 - `available()` failure message includes a launch hint.
 
-### [~] M5.5 Notetype-upgrade verification (spike; blocks M5.4)
+### [x] M5.5 Notetype-upgrade verification (spike; blocks M5.4)
 
-*Library half done 2026-08-08; **GUI confirmation outstanding**, and that
-is what M5.4 must not start without. Findings in
-`docs/NOTETYPE_UPGRADE.md`. The answer is **safe: append + reimport** —
-same `model_id` with fields appended upgraded notetype `1607392313` from
-19 to 22 fields in place, matched all three notes by GUID, and preserved
-a hand-planted review history (ivl 21, reps 4, one revlog row) with no
-duplicates. Conditions: append only (values are positional), same
-`model_id` and name, unchanged GUIDs, and templates that tolerate the new
-fields being empty on every pre-existing note.
+*Done 2026-08-08, in the desktop app as well as the library — and the two
+disagreed, which is the finding. Full write-up in
+`docs/NOTETYPE_UPGRADE.md`.
 
-Two traps recorded rather than smoothed over. Reading `col.models.all()`
-in the same session as the import returns a **stale** 19-field notetype
-while notes already carry 22 values — an apparently broken half-upgrade
-that is only a cached view; the first version of the findings said the
-opposite because of it. And a scratch script named `inspect.py` shadows
-the stdlib module the `anki` package imports, breaking the library
-entirely. Re-open the collection before concluding, and name spike
-scripts so they cannot collide.*
+**Append + reimport upgrades the notetype in place, matches notes by GUID
+and keeps review history — but only with "Merge Notetypes" enabled, and
+Anki's default is off.** With it off the import keeps every existing note
+on the 19-field notetype and files the incoming 22-field one as a
+separate, empty notetype with `+` appended to its name. Nothing errors,
+nothing is lost, scheduling survives either way — the new fields simply
+never reach a note. Established three ways: library with the flag on
+(19→22 in place, ivl 21 / reps 4 preserved), the owner's real GUI import
+at default settings (3 notes on the old type, an empty `…+` beside it,
+both studied cards still `Due 2026-08-08`), and the library with the flag
+off, which reproduced the GUI result exactly and so identifies the option
+as the whole difference.
 
-Depends on: — (start anytime)
-Files: new `docs/NOTETYPE_UPGRADE.md` (findings); throwaway scripts in
-scratch (not committed).
-Design: DESIGN_V2 "Schema changes" (the unproven claim).
+**M5.4 must therefore**: document the checkbox wherever the README says
+to import a rebuilt deck; detect the failure (a notetype named `…+`, or
+an existing one with fewer fields than `FIELD_NAMES`) and say so in
+`janki status`; and **never** renumber `model_id` to force a fresh
+notetype, which would orphan every card's scheduling.
 
-- Empirically answer: importing an `.apkg` with the same `model_id` but
-  three appended fields into a live Anki collection with review
-  history — in-place notetype upgrade with GUID-matched note updates,
-  or remap/skip? Method: scratch Anki profile → build current →
-  import → review a card → rebuild with appended fields → re-import.
-- Document the verified procedure (either "safe: append + reimport" or
-  the required in-Anki/scripted notetype migration). M5.4 implements
-  whatever this concludes and links it.
+The spike was worth running twice: the library alone would have shipped
+"append is safe" as unconditional, and the condition is the part that
+bites.*
 
 ### [ ] M5.3 `janki audio`
 

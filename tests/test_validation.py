@@ -235,3 +235,73 @@ def test_a_decomposed_reading_is_counted_in_kana_not_codepoints() -> None:
     assert len(decomposed) == 5, "four kana, five codepoints"
 
     assert _issue_messages(_accented("LHHHH", reading=decomposed)) == []
+
+
+_SENTENCE = "家族と城崎温泉に行きました。"
+
+
+def _with_example(furigana: str, japanese: str = _SENTENCE) -> VocabularyRecord:
+    from japanese_anki.models import ExampleSentence
+
+    return VocabularyRecord(
+        id="word:行く:いく",
+        expression="行く",
+        reading="いく",
+        meanings=["to go"],
+        examples=[ExampleSentence(japanese=japanese, furigana=furigana, english="x")],
+    )
+
+
+def test_furigana_missing_a_space_is_flagged() -> None:
+    """Anki splits the field on spaces and draws the reading over everything
+    back to the previous one — so an unspaced group spills onto the kana before
+    it. Found on a real card: きのさきおんせん rendered across と城崎温泉."""
+    record = _with_example("家族[かぞく]と城崎温泉[きのさきおんせん]に行[い]きました。")
+
+    messages = _issue_messages(record)
+
+    assert any("'と城崎温泉'" in m and "'に行'" in m for m in messages)
+    assert not any(m.startswith("error") for m in messages)
+
+
+def test_correctly_spaced_furigana_is_not_flagged() -> None:
+    record = _with_example("家族[かぞく]と 城崎温泉[きのさきおんせん]に 行[い]きました。")
+
+    assert not any("missing a space" in m for m in _issue_messages(record))
+
+
+def test_the_classic_ocha_case_is_flagged() -> None:
+    """お茶[ちゃ] puts ちゃ over both characters; the correct form is お 茶[ちゃ].
+    The word-level field has the same rule as the example's."""
+    record = VocabularyRecord(
+        id="word:お茶:おちゃ",
+        expression="お茶",
+        reading="おちゃ",
+        meanings=["tea"],
+        furigana="お茶[ちゃ]",
+    )
+
+    assert any("'お茶'" in m for m in _issue_messages(record))
+
+
+def test_a_group_at_the_very_start_needs_no_space() -> None:
+    record = VocabularyRecord(
+        id="word:行く:いく",
+        expression="行く",
+        reading="いく",
+        meanings=["to go"],
+        furigana="行[い]く",
+    )
+
+    assert not any("missing a space" in m for m in _issue_messages(record))
+
+
+def test_unbalanced_brackets_still_win_over_the_spacing_check() -> None:
+    # A field janki cannot parse gets the error it deserves, not a confusing
+    # second complaint derived from a broken parse.
+    record = _with_example("家族[かぞく]と 城崎温泉[きのさきおんせん に 行[い]きました。")
+
+    messages = _issue_messages(record)
+
+    assert any("unbalanced" in m for m in messages)
+    assert not any("missing a space" in m for m in messages)

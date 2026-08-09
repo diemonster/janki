@@ -31,6 +31,33 @@ _STAGING_HINT = (
 )
 
 
+def _misplaced_furigana(furigana: str) -> list[str]:
+    """Bracketed groups whose reading will land on the kana before them.
+
+    Anki's furigana filter splits the field on **spaces**: everything from the
+    last space up to the ``[`` is the text the reading is drawn over. So a group
+    that is not preceded by a space swallows whatever came before it, and the
+    reading is rendered across that too — ``と城崎温泉[きのさきおんせん]`` puts
+    きのさきおんせん over と城崎温泉, and ``お茶[ちゃ]`` puts ちゃ over both
+    characters.
+
+    Detected by the group's own text starting with kana, which is what a missing
+    space always produces: a correctly spaced group begins at the word being
+    annotated. Brackets are only ever written over kanji here, so a kana-leading
+    group is the mistake and not a style.
+
+    Parsed with :func:`japanese_anki.qc.furigana_pairs` rather than a second
+    regex — janki should not hold two ideas about what Anki will draw.
+    """
+    from japanese_anki import qc
+
+    return [
+        text
+        for text, _reading in qc.furigana_pairs(furigana)
+        if text and not contains_kanji(text[0])
+    ]
+
+
 def _kana(reading: str) -> str:
     """``reading`` with combining marks composed, which is what a kana count is.
 
@@ -122,6 +149,14 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
         add("error", "at least one English meaning is required")
     if record.furigana and record.furigana.count("[") != record.furigana.count("]"):
         add("error", "furigana brackets are unbalanced")
+    elif record.furigana and (spilled := _misplaced_furigana(record.furigana)):
+        add(
+            "warning",
+            "furigana is missing a space before "
+            + ", ".join(repr(text) for text in spilled)
+            + " — Anki draws a reading over everything back to the previous "
+            "space, so it will spill onto the kana before it",
+        )
     if record.furigana and not record.reading:
         add("warning", "furigana is present but the plain reading is empty")
     if record.verb_group and not record.part_of_speech:
@@ -154,6 +189,14 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
             add("warning", f"example {index} has English but no Japanese sentence")
         if example.furigana and example.furigana.count("[") != example.furigana.count("]"):
             add("error", f"example {index} has unbalanced furigana brackets")
+        elif example.furigana and (spilled := _misplaced_furigana(example.furigana)):
+            add(
+                "warning",
+                f"example {index} furigana is missing a space before "
+                + ", ".join(repr(text) for text in spilled)
+                + " — Anki draws a reading over everything back to the previous "
+                "space, so it will spill onto the kana before it",
+            )
     return issues
 
 
