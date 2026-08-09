@@ -897,10 +897,83 @@ class RecheckResult:
     differing: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
     #: Sentences jpdb could not parse at all — unverified, not fine.
     unparsed: list[str] = field(default_factory=list)
+    #: ``record id -> [(sentence, why)]`` cleared because an adjudicator judged
+    #: the writer's reading the ordinary one where jpdb disagreed.
+    adjudicated: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
 
     @property
     def changed(self) -> bool:
         return bool(self.cleared)
+
+
+ADJUDICATE_INSTRUCTIONS = """\
+You settle disagreements about how a Japanese sentence is read.
+
+You are given a sentence, the reading a dictionary parse produced, and the
+reading its writer produced. Say which one a native speaker would use for this
+sentence in ordinary modern Japanese.
+
+Both are usually defensible; you are judging *ordinary usage*, not possibility.
+日本語 is にほんご, not にっぽんご, even though both are attested.
+
+Answer "writer" or "dictionary" — or "unsure", which is a real answer and the
+right one whenever the two readings are both ordinary, the word is rare, or the
+difference is a proper noun you cannot place. An unsure verdict leaves the
+sentence flagged for a human, which costs a re-check; a confident wrong one puts
+a reading nobody uses onto a card."""
+
+
+@functools.cache
+def adjudication_schema() -> Any:
+    """The shape an adjudication must take."""
+    from pydantic import BaseModel, Field
+
+    class Adjudication(BaseModel):
+        verdict: str = Field(
+            description="'writer', 'dictionary', or 'unsure'."
+        )
+        why: str = Field(default="", description="One short clause.")
+
+    return Adjudication
+
+
+def adjudicate_reading(
+    sentence: str,
+    dictionary_reading: str,
+    writer_reading: str,
+    *,
+    model: str,
+    client: Any | None = None,
+) -> tuple[str, str]:
+    """``(verdict, why)`` for one disagreement. Never raises.
+
+    A model is a poor *source* of readings — non-deterministic, and confidently
+    wrong on exactly the rare words where a check matters — but a good judge of
+    which of two given readings is the ordinary one, which is a much narrower
+    question. So it never proposes a reading, only picks between two that
+    already exist, and "unsure" is an answer it is told to give.
+
+    Anything that goes wrong is ``("unsure", …)``: an adjudicator that cannot
+    answer must leave the flag alone, not clear it.
+    """
+    blocks = claude_client.system_blocks(ADJUDICATE_INSTRUCTIONS)
+    prompt = (
+        f"Sentence: {sentence}\n"
+        f"Dictionary reading: {dictionary_reading}\n"
+        f"Writer reading: {writer_reading}\n"
+        "Which is how this sentence is normally read?"
+    )
+    try:
+        call = claude_client.parse_call(
+            model, blocks, prompt, adjudication_schema(), client, max_tokens=200
+        )
+    except JankiError as exc:
+        return "unsure", f"the adjudicator could not be reached: {exc}"
+    if call.parsed is None:
+        return "unsure", f"the adjudicator did not answer ({call.stop_reason})"
+    verdict = str(getattr(call.parsed, "verdict", "") or "").strip().lower()
+    why = str(getattr(call.parsed, "why", "") or "").strip()
+    return (verdict if verdict in {"writer", "dictionary", "unsure"} else "unsure"), why
 
 
 def recheck_furigana(
@@ -909,6 +982,8 @@ def recheck_furigana(
     jpdb_client: jpdb.JpdbClient | None = None,
     ids: Sequence[str] | None = None,
     accept: bool = False,
+    adjudicate_model: str = "",
+    ai_client: Any | None = None,
 ) -> RecheckResult:
     """Re-ask jpdb whether each flagged example's furigana is right.
 
@@ -986,10 +1061,27 @@ def recheck_furigana(
             if verdict:
                 cleared.append(sentence)
                 flagged.discard(fingerprint)
-            else:
-                result.differing.setdefault(record.id, []).append(
-                    (sentence, "; ".join(verdict.differences[:2]))
+                continue
+            why = "; ".join(verdict.differences[:2])
+            if adjudicate_model:
+                # jpdb and the writer disagree, and jpdb is not always right —
+                # its parse reads 日本語 as にっぽんご. A model is a poor source
+                # of readings but a good judge of which of two is ordinary, so
+                # it breaks the tie and nothing else.
+                call, reason = adjudicate_reading(
+                    sentence,
+                    verdict.expected,
+                    example.furigana or example.japanese,
+                    model=adjudicate_model,
+                    client=ai_client,
                 )
+                if call == "writer":
+                    cleared.append(sentence)
+                    flagged.discard(fingerprint)
+                    result.adjudicated.setdefault(record.id, []).append((sentence, reason))
+                    continue
+                why = f"{why} — adjudicator: {call}" + (f", {reason}" if reason else "")
+            result.differing.setdefault(record.id, []).append((sentence, why))
         if not cleared:
             continue
         result.cleared[record.id] = cleared

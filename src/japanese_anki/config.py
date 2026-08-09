@@ -41,7 +41,7 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "profile",
     ),
     "cards": ("recognition", "production", "reading", "max_meanings"),
-    "ai": ("extract_model", "enrich_model"),
+    "ai": ("extract_model", "enrich_model", "adjudicate_model"),
     "tts": (
         "provider",
         "voicevox_url",
@@ -288,6 +288,10 @@ class ProjectConfig:
     max_meanings: int
     extract_model: str
     enrich_model: str
+    #: Settles a furigana disagreement between jpdb and the writer. Cheap on
+    #: purpose: it picks between two given readings and never proposes one.
+    #: Empty turns adjudication off and every disagreement stays flagged.
+    adjudicate_model: str
     tts_provider: str
     voicevox_url: str
     voicevox_speaker: int
@@ -370,6 +374,9 @@ class ProjectConfig:
             max_meanings=_int(data, "cards", "max_meanings", 4),
             extract_model=_str(data, "ai", "extract_model", "claude-opus-5"),
             enrich_model=_str(data, "ai", "enrich_model", "claude-opus-5"),
+            adjudicate_model=_str(
+                data, "ai", "adjudicate_model", "claude-haiku-4-5-20251001"
+            ),
             tts_provider=_str(data, "tts", "provider", "voicevox"),
             voicevox_url=_str(data, "tts", "voicevox_url", "http://localhost:50021"),
             voicevox_speaker=_int(data, "tts", "voicevox_speaker", 46),

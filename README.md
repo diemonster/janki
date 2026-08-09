@@ -151,6 +151,33 @@ Sources are **KANJIDIC2** (CC BY-SA 4.0, EDRDG) via kanjiapi.dev and
 **KanjiVG** (CC BY-SA 3.0, Ulrich Apel). A personal deck is fine; a deck you
 share must credit both — the same footing as the VOICEVOX voice terms.
 
+### When jpdb and the sentence disagree
+
+`enrich --ai` writes a sentence and jpdb checks its furigana — two independent
+sources, which is the point. But jpdb is not always right: its parse reads
+日本語 as **にっぽんご**, and the language is にほんご. A disagreement it wins
+leaves a correct sentence unvoiced forever, since `janki audio` will not speak
+a flagged example.
+
+So a disagreement is *adjudicated*. A cheap model is shown both readings and
+asked which one a native speaker uses for that sentence — a much narrower
+question than "what is the reading", and one it never answers by proposing a
+third. `unsure` is an answer it is told to give, and it leaves the flag alone.
+
+```bash
+janki enrich --recheck-furigana                  # re-ask, adjudicating disputes
+janki enrich --recheck-furigana --no-adjudicate  # leave every dispute flagged
+janki enrich --recheck-furigana --accept IDS     # your call, not jpdb's
+```
+
+`janki refresh` runs this between writing and voicing, so a dispute is settled
+before it can silence a card. The ledger records **who vouched** — `jpdb`, `ai`
+with the adjudicating model, or `human` — because a reading a model judged is
+not the same evidence as one a dictionary confirmed, and months later that is
+the only thing explaining why a sentence was trusted.
+
+Set `[ai] adjudicate_model = ""` to turn it off entirely.
+
 ### Checking that an import actually landed
 
 `janki status` reads your Anki collection and says when a deck's notetype is not

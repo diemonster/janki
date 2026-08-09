@@ -229,3 +229,110 @@ def test_a_missing_key_is_a_janki_error_not_a_traceback(tmp_path: Path) -> None:
                 ["--root", str(root), "enrich", "--recheck-furigana", "--staging", "x"]
             )
         )
+
+
+# --- adjudication -----------------------------------------------------------
+
+
+class FakeAdjudicator:
+    """Stands in for the model, recording what it was asked to settle."""
+
+    def __init__(self, verdict: str, why: str = "") -> None:
+        self.verdict, self.why = verdict, why
+        self.asked: list[tuple[str, str, str]] = []
+
+    def __call__(self, sentence, dictionary_reading, writer_reading, **_kwargs):
+        self.asked.append((sentence, dictionary_reading, writer_reading))
+        return self.verdict, self.why
+
+
+def _disagreeing() -> tuple[VocabularyRecord, FakeJpdb]:
+    """A record whose example jpdb reads differently — the 日本語 case."""
+    example = ExampleSentence(japanese="日本語", furigana="日本語[にほんご]")
+    subject = VocabularyRecord(
+        id="word:日本語:にほんご", expression="日本語", reading="にほんご",
+        meanings=["Japanese"], examples=[example],
+        source=SourceReference(type="manual", raw_fields={
+            "furigana_unverified": fingerprint("日本語")}),
+    )
+    client = FakeJpdb({"日本語": parse_of(["日", "にっ"], ["本", "ぽん"], ["語", "ご"])})
+    return subject, client
+
+
+def test_the_adjudicator_can_overrule_jpdb(monkeypatch: pytest.MonkeyPatch) -> None:
+    """jpdb's parse reads 日本語 as にっぽんご and the language is にほんご. Before
+    this, the only ways out were writing a reading nobody uses onto a card or
+    leaving a correct sentence unvoiced."""
+    subject, client = _disagreeing()
+    judge = FakeAdjudicator("writer", "にほんご is the standard reading")
+    monkeypatch.setattr(enrich, "adjudicate_reading", judge)
+
+    result = enrich.recheck_furigana(
+        [subject], jpdb_client=client, adjudicate_model="test-model"
+    )
+
+    assert result.cleared == {"word:日本語:にほんご": ["日本語"]}
+    assert result.adjudicated["word:日本語:にほんご"][0][1] == "にほんご is the standard reading"
+    assert judge.asked, "it was actually consulted"
+
+
+def test_the_adjudicator_siding_with_jpdb_leaves_the_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    subject, client = _disagreeing()
+    monkeypatch.setattr(enrich, "adjudicate_reading", FakeAdjudicator("dictionary", "jpdb"))
+
+    result = enrich.recheck_furigana(
+        [subject], jpdb_client=client, adjudicate_model="test-model"
+    )
+
+    assert result.cleared == {}
+    assert "adjudicator: dictionary" in result.differing["word:日本語:にほんご"][0][1]
+
+
+def test_unsure_is_a_real_answer_and_keeps_the_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An adjudicator that cannot answer must leave the flag alone. An unsure
+    verdict costs a re-check; a confident wrong one puts a reading nobody uses
+    onto a card."""
+    subject, client = _disagreeing()
+    monkeypatch.setattr(enrich, "adjudicate_reading", FakeAdjudicator("unsure", "rare word"))
+
+    result = enrich.recheck_furigana(
+        [subject], jpdb_client=client, adjudicate_model="test-model"
+    )
+
+    assert result.cleared == {}
+    assert result.adjudicated == {}
+
+
+def test_no_model_configured_means_no_adjudication(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    subject, client = _disagreeing()
+    judge = FakeAdjudicator("writer")
+    monkeypatch.setattr(enrich, "adjudicate_reading", judge)
+
+    result = enrich.recheck_furigana([subject], jpdb_client=client, adjudicate_model="")
+
+    assert judge.asked == [], "not consulted at all"
+    assert result.cleared == {}
+
+
+def test_an_agreeing_example_is_never_adjudicated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Adjudication is for disagreements. Asking about one jpdb already
+    confirmed spends a request to be told what is already known."""
+    example = ExampleSentence(japanese=SENTENCE, furigana="橋[はし]を 渡[わた]る。")
+    subject = record(example, flagged=fingerprint(SENTENCE))
+    client = FakeJpdb({SENTENCE: parse_of(["橋", "はし"], "を", ["渡", "わた"], "る")})
+    judge = FakeAdjudicator("writer")
+    monkeypatch.setattr(enrich, "adjudicate_reading", judge)
+
+    result = enrich.recheck_furigana(
+        [subject], jpdb_client=client, adjudicate_model="test-model"
+    )
+
+    assert result.cleared and judge.asked == []

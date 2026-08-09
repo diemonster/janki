@@ -917,7 +917,7 @@
         "furigana": "毎日[まいにち]、妻[つま]と 日本語[にほんご]で 話[はな]します。",
         "romaji": "mainichitsumatonihongodehanashimasu.",
         "english": "I speak Japanese with my wife every day.",
-        "audio": "",
+        "audio": "audio/janki-54f40032c3f7.mp3",
         "register": "polite"
       },
       {
@@ -958,9 +958,7 @@
       "type": "manual",
       "imported_from": "",
       "row": null,
-      "raw_fields": {
-        "furigana_unverified": "6fa562268aa5"
-      }
+      "raw_fields": {}
     }
   },
   {

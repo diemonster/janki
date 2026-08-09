@@ -336,7 +336,10 @@ def test_refresh_runs_the_stages_in_order(
     called: list[str] = []
 
     def fake_enrich(args: Any) -> int:
-        called.append("enrich --jpdb" if args.jpdb else "enrich --ai")
+        if args.recheck_furigana:
+            called.append("enrich --recheck-furigana")
+        else:
+            called.append("enrich --jpdb" if args.jpdb else "enrich --ai")
         return 0
 
     def fake_audio(args: Any) -> int:
@@ -350,10 +353,18 @@ def test_refresh_runs_the_stages_in_order(
 
     out = capsys.readouterr().out
     assert called == [
-        "enrich --jpdb", "enrich --ai", "audio words=True examples=True",
+        "enrich --jpdb",
+        "enrich --ai",
+        # Between the writing and the voicing: `--ai` flags every example jpdb
+        # reads differently and `audio` refuses to speak a flagged one, so a
+        # disagreement left unsettled here is a sentence silent on a card.
+        "enrich --recheck-furigana",
+        "audio words=True examples=True",
     ]
-    assert out.index("— jpdb") < out.index("— ai") < out.index("— audio") < out.index("— build")
-    assert "refresh: 4 stage(s) completed" in out
+    order = ["— jpdb", "— ai", "— recheck", "— audio", "— build"]
+    positions = [out.index(stage) for stage in order]
+    assert positions == sorted(positions), "each stage needs what the one before produced"
+    assert "refresh: 5 stage(s) completed" in out
 
 
 def test_a_skipped_stage_is_named_not_silent(
@@ -365,7 +376,7 @@ def test_a_skipped_stage_is_named_not_silent(
     monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
     root = _project(tmp_path, [_record("橋", "はし")])
 
-    assert _run(root, "refresh", "--no-jpdb", "--no-ai", "--no-audio") == 0
+    assert _run(root, "refresh", "--no-jpdb", "--no-ai", "--no-audio", "--no-recheck") == 0
 
     out = capsys.readouterr().out
     assert "— jpdb: skipped (--no-jpdb)" in out
@@ -613,7 +624,7 @@ def test_refresh_still_asks_at_a_terminal(
 
     monkeypatch.setattr("builtins.input", answer)
 
-    assert _run(root, "refresh", "--no-jpdb", "--no-ai", "--no-audio") == 0
+    assert _run(root, "refresh", "--no-jpdb", "--no-ai", "--no-audio", "--no-recheck") == 0
 
     assert asked, "the gap prompt was reached"
     assert not (root / "dist").exists(), "and declining built nothing"
@@ -838,6 +849,6 @@ def test_refresh_reports_a_failed_save_from_the_build_stage(
 
     monkeypatch.setattr(cli.ledger.Ledger, "save", refuse)
 
-    assert _run(root, "refresh", "--no-jpdb", "--no-ai", "--no-audio") == 1
+    assert _run(root, "refresh", "--no-jpdb", "--no-ai", "--no-audio", "--no-recheck") == 1
 
     assert "refresh stopped at 'build'" in capsys.readouterr().err

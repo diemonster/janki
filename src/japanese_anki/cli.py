@@ -849,28 +849,50 @@ def _recheck_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
         jpdb_client=None if args.accept else jpdb.JpdbClient(jpdb.api_key_from_env()),
         ids=args.ids or None,
         accept=args.accept,
+        # Off when a human is already doing the vouching, and off when the
+        # config names no model.
+        adjudicate_model="" if (args.accept or args.no_adjudicate) else config.adjudicate_model,
     )
 
     cleared = sum(len(items) for items in result.cleared.values())
     if result.changed:
         save_records_json(output_path, result.records)
-        who = "human" if args.accept else "jpdb"
+        adjudicated = {rid for rid in result.adjudicated}
+        who_for = lambda rid: (  # noqa: E731 - a lookup, not a policy
+            "human" if args.accept else ("ai" if rid in adjudicated else "jpdb")
+        )
         for record_id in result.cleared:
             # `fields=["furigana"]` was a false statement: this pass writes no
             # record field at all — it clears an *example's* unverified flag.
             # Worse, `record_enriched` dedups on (kind, model, fields), so a
             # later genuine --jpdb pass that really did fill `furigana` would
             # collapse into this entry and inherit its date.
+            # Who vouched is part of the record: a reading a model adjudicated
+            # is not the same evidence as one a dictionary confirmed, and six
+            # months later that difference is the only thing that explains why
+            # a sentence was trusted.
+            who = who_for(record_id)
             book.record_enriched(
-                record_id, kind=who, model=who, fields=["furigana_unverified"]
+                record_id,
+                kind=who,
+                model=config.adjudicate_model if who == "ai" else who,
+                fields=["furigana_unverified"],
             )
     ledger_error = _save_ledger(book) if result.changed else None
 
+    settled = sum(len(items) for items in result.adjudicated.values())
     if cleared:
-        vouched = "your" if args.accept else "jpdb's"
+        if args.accept:
+            vouched = "your authority"
+        elif settled == cleared:
+            vouched = "the adjudicator's reading"
+        elif settled:
+            vouched = f"jpdb's parse, {settled} of them after adjudication"
+        else:
+            vouched = "jpdb's parse"
         print(
             f"Confirmed {cleared} example(s) across {len(result.cleared)} record(s) "
-            f"on {vouched} authority; their audio is no longer held back."
+            f"on {vouched}; their audio is no longer held back."
         )
     elif result.unparsed and not result.differing:
         # jpdb answered nothing at all — an expired key, or the API down. Saying
@@ -884,6 +906,16 @@ def _recheck_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
         print("Nothing to confirm: jpdb reads every flagged example differently.")
     else:
         print("Nothing to confirm: no example carries an unverified-furigana flag.")
+    if settled:
+        print(
+            f"{settled} of those were settled by the adjudicator, which judged the "
+            "sentence's own reading the ordinary one where jpdb disagreed:"
+        )
+        for record_id, items in result.adjudicated.items():
+            for sentence, why in items:
+                print(f"  {record_id}: {sentence}")
+                if why:
+                    print(f"    {why}")
     if result.differing:
         total = sum(len(items) for items in result.differing.values())
         print(f"Still unconfirmed ({total}) — jpdb reads these differently:")
@@ -2499,6 +2531,11 @@ def command_build(args: argparse.Namespace) -> int:
 _REFRESH_STAGES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("jpdb", "--no-jpdb", ("enrich", "--jpdb")),
     ("ai", "--no-ai", ("enrich", "--ai")),
+    # Between writing and voicing on purpose: `--ai` flags every example jpdb
+    # reads differently, and `audio` refuses to speak a flagged one. Without a
+    # re-check in between, a disagreement the adjudicator would have settled in
+    # seconds leaves the sentence silent until someone notices.
+    ("recheck", "--no-recheck", ("enrich", "--recheck-furigana")),
     ("audio", "--no-audio", ("audio", "--words", "--examples")),
     ("build", "--no-build", ("build",)),
 )
@@ -2935,6 +2972,14 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Drop the pending batch without collecting it, for one that can no "
             "longer be applied. Its results stay reachable from the console."
+        ),
+    )
+    enrich_parser.add_argument(
+        "--no-adjudicate",
+        action="store_true",
+        help=(
+            "With --recheck-furigana: leave every jpdb disagreement flagged "
+            "instead of asking a model which reading is the ordinary one."
         ),
     )
     enrich_parser.add_argument(
