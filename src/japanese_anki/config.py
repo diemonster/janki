@@ -38,6 +38,7 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "provider",
         "voicevox_url",
         "voicevox_speaker",
+        "voicevox_sentence_speaker",
         "voicevox_speed",
         "azure_voice",
         "azure_region",
@@ -225,6 +226,9 @@ class ProjectConfig:
     tts_provider: str
     voicevox_url: str
     voicevox_speaker: int
+    #: Which voice reads example sentences. 0 or absent means the same one
+    #: that speaks the words.
+    voicevox_sentence_speaker: int
     voicevox_speed: float
     azure_voice: str
     azure_region: str
@@ -291,6 +295,7 @@ class ProjectConfig:
             tts_provider=_str(data, "tts", "provider", "voicevox"),
             voicevox_url=_str(data, "tts", "voicevox_url", "http://localhost:50021"),
             voicevox_speaker=_int(data, "tts", "voicevox_speaker", 46),
+            voicevox_sentence_speaker=_int(data, "tts", "voicevox_sentence_speaker", 0),
             voicevox_speed=_float(data, "tts", "voicevox_speed", 1.0),
             azure_voice=_str(data, "tts", "azure_voice", "ja-JP-NanamiNeural"),
             azure_region=_str(data, "tts", "azure_region", "westus2"),

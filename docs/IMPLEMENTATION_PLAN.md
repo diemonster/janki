@@ -1887,10 +1887,42 @@ Design: DESIGN_V2 "CLI surface".
 Verified live against the real project: all four stages ran in order and each
 correctly reported a no-op.
 
-### [ ] M5.7 Azure sentence-audio provider
+### [~] M5.7 Azure sentence-audio provider — **dropped 2026-08-09**
 
-Depends on: M5.3
-Files: new `src/japanese_anki/tts/azure.py`, `tests/test_azure_tts.py`.
+Both premises were tested and neither held.
+
+**"A natural adult voice matters more for sentences"** was written when
+VOICEVOX meant speaker 46, the default character voice. The owner chose
+青山龍星 (13) at 0.7×. The premise was about a voice nobody was using.
+
+**Reading control** was the stronger argument, and the only one that
+was about correctness rather than taste: word audio forces the accent,
+sentence audio forces nothing, so VOICEVOX guesses every reading in a
+sentence and a wrong guess teaches a wrong reading. Azure's
+`<sub alias>` fed from verified furigana would fix that. Checked
+against a live engine, speaker 13: eight classic two-reading traps
+(今日, 上手, 大人, 今朝, 市場, 何か, 人気, 一日中) all correct, and all
+three of the project's own example sentences correct — including
+城崎温泉 → キノサキオンセン, a non-obvious place-name reading. OpenJTalk,
+which VOICEVOX uses underneath, is better at this than the plan assumed.
+
+Against that: an Azure account, `AZURE_SPEECH_KEY`, per-character
+billing, a network round-trip per sentence, and a second provider to
+maintain — replacing something local, free, and working.
+
+**What shipped instead** is `voicevox_sentence_speaker`: a second local
+voice for example sentences, which is the part of the idea that was
+actually wanted (a sentence should not sound like a longer word). It
+went in as a **second provider** rather than a second voice on one
+provider, because everything downstream — the voice the ledger records,
+the voice `_is_current` compares — already asks *a provider*. That seam
+is exactly where an Azure provider would attach, so this stays cheap to
+revisit if the reading accuracy above ever stops holding, or if the deck
+is shared publicly and VOICEVOX's per-character terms of use become the
+deciding factor.
+
+~~Depends on: M5.3
+Files: new `src/japanese_anki/tts/azure.py`, `tests/test_azure_tts.py`.~~
 
 - REST via the M5.2 transport shape (no SDK dep): key header, SSML
   body, voice/region from config, `AZURE_SPEECH_KEY` env.

@@ -65,6 +65,7 @@ def record(**overrides: Any) -> VocabularyRecord:
 def run(records: list[VocabularyRecord], tmp_path: Path, **kwargs: Any):
     book = kwargs.pop("book", None) or ledger_mod.Ledger(path=tmp_path / "ledger.json")
     provider = kwargs.pop("provider", None) or FakeVoice()
+    kwargs.setdefault("sentence_provider", None)
     result = generate_audio(
         records, provider=provider, book=book, media_dir=tmp_path / "media", **kwargs
     )
@@ -750,3 +751,97 @@ def test_an_entry_the_ledger_cannot_read_is_kept_rather_than_erased(
 
     assert book.drop_superseded_audio("word:箸:はし", of="example", keep=set()) == 0
     assert book.records["word:箸:はし"]["audio"] == ["janki-legacy.wav"]
+
+
+# ---------------------------------------------------------------------------
+# A separate voice for sentences
+# ---------------------------------------------------------------------------
+
+
+def test_examples_take_the_sentence_provider_and_words_do_not(tmp_path: Path) -> None:
+    """Two providers rather than one provider with two voices: everything
+    downstream — which voice the ledger records, which voice `_is_current`
+    compares against — already asks *a provider*, and one that answered
+    differently per utterance would make both wrong."""
+    words = FakeVoice(voice=13)
+    sentences = FakeVoice(voice=52)
+    record_with_example = record(
+        examples=[ExampleSentence(japanese="橋を渡る。", english="Cross the bridge.")]
+    )
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+
+    generate_audio(
+        [record_with_example], provider=words, sentence_provider=sentences,
+        book=book, media_dir=tmp_path / "media", words=True, examples=True,
+    )
+
+    assert words.said == [("ハシ'", True)], "the word, accent forced"
+    assert sentences.said == [("橋を渡る。", False)], "the sentence, read naturally"
+    voices = {e["of"]: e["voice"] for e in book.records[record().id]["audio"]}
+    assert voices == {"word": 13, "example": 52}, "and the ledger says which is which"
+
+
+def test_changing_only_the_sentence_voice_revoices_only_the_sentences(
+    tmp_path: Path,
+) -> None:
+    """The currency check reads the provider that made each kind, so a new
+    sentence voice must not re-synthesize every word as well."""
+    example = [ExampleSentence(japanese="橋を渡る。", english="Cross the bridge.")]
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    first, _, _ = run(
+        [record(examples=example)], tmp_path, words=True, examples=True, book=book,
+        provider=FakeVoice(voice=13), sentence_provider=FakeVoice(voice=52),
+    )
+
+    words = FakeVoice(voice=13)
+    sentences = FakeVoice(voice=99)
+    second, _, _ = run(
+        first.records, tmp_path, words=True, examples=True, book=book,
+        provider=words, sentence_provider=sentences,
+    )
+
+    assert words.said == [], "the word was left alone"
+    assert len(sentences.said) == 1, "only the sentence was re-voiced"
+    assert second.up_to_date == 1
+
+
+def test_one_voice_by_default(tmp_path: Path) -> None:
+    """An unset sentence voice must not change what anything records — the
+    ledger entries have to keep meaning exactly what they meant before."""
+    words = FakeVoice(voice=13)
+    example = [ExampleSentence(japanese="橋を渡る。", english="Cross.")]
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+
+    generate_audio(
+        [record(examples=example)], provider=words, book=book,
+        media_dir=tmp_path / "media", words=True, examples=True,
+    )
+
+    assert len(words.said) == 2, "one engine spoke both"
+    assert {e["voice"] for e in book.records[record().id]["audio"]} == {13}
+
+
+def test_the_configured_sentence_voice_reaches_its_own_provider(tmp_path: Path) -> None:
+    (tmp_path / "janki.toml").write_text(
+        "[tts]\nvoicevox_speaker = 13\nvoicevox_sentence_speaker = 52\n"
+        "voicevox_speed = 0.7\n",
+        encoding="utf-8",
+    )
+    config = ProjectConfig.load(tmp_path)
+
+    words = cli._speech_provider(config, None)
+    sentences = cli._sentence_provider(config, None, words)
+
+    assert (words.voice, sentences.voice) == (13, 52)
+    assert sentences.speed == 0.7, "and takes the same rate"
+
+
+def test_an_unset_sentence_voice_returns_the_word_provider(tmp_path: Path) -> None:
+    (tmp_path / "janki.toml").write_text(
+        "[tts]\nvoicevox_speaker = 13\n", encoding="utf-8"
+    )
+    config = ProjectConfig.load(tmp_path)
+
+    words = cli._speech_provider(config, None)
+
+    assert cli._sentence_provider(config, None, words) is words, "the same object"

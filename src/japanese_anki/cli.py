@@ -1770,6 +1770,26 @@ def _inside_archive(path: Path, archive_dir: Path) -> bool:
     return path.is_relative_to(archive_dir)
 
 
+def _sentence_provider(config: ProjectConfig, chosen: str | None, words: Any) -> Any:
+    """The provider that reads example sentences.
+
+    ``words`` when nothing else is configured, so the default is one voice
+    throughout and the ledger keeps recording what it always did. A separate
+    sentence voice is worth having because the two recordings do different
+    jobs: a word is a thing to identify, a sentence is a thing to follow, and
+    hearing them in one voice makes the sentence sound like a longer word.
+    """
+    if config.tts_provider == "voicevox" and (chosen or "voicevox") == "voicevox":
+        speaker = config.voicevox_sentence_speaker
+        if speaker and speaker != config.voicevox_speaker:
+            return voicevox.VoicevoxProvider(
+                base_url=config.voicevox_url,
+                speaker=speaker,
+                speed=config.voicevox_speed,
+            )
+    return words
+
+
 def _speech_provider(config: ProjectConfig, chosen: str | None) -> Any:
     """The provider this run speaks through.
 
@@ -1811,14 +1831,17 @@ def command_audio(args: argparse.Namespace) -> int:
         return 0
 
     provider = _speech_provider(config, args.provider)
-    if not provider.available():
-        raise AudioError(f"{provider.name} is not answering. {provider.launch_hint}")
+    sentences = _sentence_provider(config, args.provider, provider)
+    for engine in {id(provider): provider, id(sentences): sentences}.values():
+        if not engine.available():
+            raise AudioError(f"{engine.name} is not answering. {engine.launch_hint}")
 
     book = ledger.load(config.ledger_file)
     media_dir = config.media_dir.resolve()
     result = audio_cmd.generate_audio(
         records,
         provider=provider,
+        sentence_provider=sentences,
         book=book,
         media_dir=media_dir,
         # Passed straight through: `generate_audio` refuses when neither is

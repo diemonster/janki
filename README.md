@@ -950,6 +950,19 @@ python3 scripts/voice-samples.py            # every speaker, plus a page to comp
 python3 scripts/voice-samples.py --male     # just the male voices
 ```
 
+A sentence may take a different voice from the words:
+
+```toml
+[tts]
+voicevox_speaker = 13               # speaks the words, accent forced
+voicevox_sentence_speaker = 52      # reads the example sentences
+```
+
+Leave the second unset and one voice does both. It is worth setting because the
+two recordings do different jobs — a word is a thing to identify, a sentence is
+a thing to follow — and in one voice the sentence sounds like a longer word.
+Changing it re-voices only the sentences; `janki audio --examples` is enough.
+
 That writes clips and an `index.html` to `~/Desktop/janki-voice-samples`
 (`--out` to put them elsewhere). Each one runs through janki's own forced-accent
 path, so the sample word carries its real accent rather than the engine's guess

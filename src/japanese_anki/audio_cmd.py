@@ -358,6 +358,7 @@ def generate_audio(
     provider: SpeechProvider,
     book: ledger_mod.Ledger,
     media_dir: Path,
+    sentence_provider: SpeechProvider | None = None,
     words: bool = True,
     examples: bool = False,
     ids: Sequence[str] | None = None,
@@ -369,7 +370,18 @@ def generate_audio(
     Both kinds are off unless asked for, and at least one must be: "generate
     audio" without saying which is a request whose meaning would change under
     the user the day the other kind gains a default.
+
+    ``sentence_provider`` voices examples; ``provider`` voices words. They
+    default to the same engine, and the seam exists because the two jobs are
+    not the same job: a word is spoken with its accent forced, which only an
+    engine that can be told an accent can do, while a sentence is read
+    naturally, where nothing is forced and a different voice is a free choice.
+    Two providers rather than one provider with two voices, because everything
+    downstream — which voice the ledger records, which voice ``_is_current``
+    compares against — is already asked of *a provider*, and a provider that
+    answered differently depending on the utterance would make both wrong.
     """
+    sentence_provider = sentence_provider or provider
     if not (words or examples):
         raise AudioError(
             "janki audio needs --words, --examples, or both: they are different "
@@ -403,7 +415,7 @@ def generate_audio(
             if examples:
                 updated = _example_audio(
                     updated,
-                    provider=provider,
+                    provider=sentence_provider,
                     book=book,
                     audio_dir=audio_dir,
                     media_dir=media_dir,
