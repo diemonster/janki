@@ -672,6 +672,16 @@ def ai_schema() -> Any:
 
     class GeneratedExample(BaseModel):
         japanese: str = Field(description="The sentence, in Japanese.")
+        # Not `register`: that name shadows an attribute on pydantic's BaseModel
+        # and the class emits a warning on every construction. The record field
+        # keeps the linguistic term.
+        speech_level: str = Field(
+            default="polite",
+            description=(
+                "'polite' for a 〜ます/です sentence, 'casual' for the plain form "
+                "a friend would use."
+            ),
+        )
         furigana: str = Field(
             default="",
             description=(
@@ -752,14 +762,21 @@ def ai_prompt(record: VocabularyRecord, recent: Sequence[str] = ()) -> str:
 
 
 AI_INSTRUCTIONS = """\
-Write one example sentence for the word, and a usage note if there is something
-worth saying.
+Write **two** example sentences for the word, and a usage note if there is
+something worth saying.
 
-The sentence must contain the word itself, conjugated if that reads more
-naturally, and must be simple enough for a beginner working through Genki-style
-grammar. Give its furigana in Anki notation, with a space before every bracketed
-group that follows kana. Do not fill in romaji — janki generates that from the
-furigana and discards whatever you send.
+The first sentence is polite (〜ます / 〜です); set its speech_level to
+"polite". The second is the same kind of everyday sentence in **casual** plain
+form, as a friend would say it; set its speech_level to "casual". Write a different sentence
+rather than the same one with the ending swapped — casual speech drops
+particles, uses different sentence-final forms (〜の, 〜んだ, 〜よ, 〜ね), and a
+mechanical de-politening teaches none of that.
+
+Both must contain the word itself, conjugated if that reads more naturally, and
+both must be simple enough for a beginner working through Genki-style grammar.
+Give each sentence's furigana in Anki notation, with a space before every
+bracketed group that follows kana. Do not fill in romaji — janki generates that
+from the furigana and discards whatever you send.
 
 Say nothing you are not sure of. An empty usage note is a fine answer; an
 invented nuance is not."""
@@ -804,10 +821,17 @@ def apply_ai_result(
     kept: list[ExampleSentence] = []
 
     for item in getattr(parsed, "examples", []) or []:
+        register = str(getattr(item, "speech_level", "") or "").strip().lower()
         example = ExampleSentence(
             japanese=str(getattr(item, "japanese", "") or "").strip(),
             furigana=str(getattr(item, "furigana", "") or "").strip(),
             english=str(getattr(item, "english", "") or "").strip(),
+            # Anything the model does not label is polite: that is what the
+            # instructions ask for first and what every example written before
+            # the field existed actually is. Guessing "casual" would put a ます
+            # sentence in a slot labelled casual, which teaches the opposite of
+            # what the label says.
+            register=register if register in ("polite", "casual") else "polite",
         )
         if not example.japanese:
             continue
@@ -882,8 +906,9 @@ class RecheckResult:
 def recheck_furigana(
     records: Sequence[VocabularyRecord],
     *,
-    jpdb_client: jpdb.JpdbClient,
+    jpdb_client: jpdb.JpdbClient | None = None,
     ids: Sequence[str] | None = None,
+    accept: bool = False,
 ) -> RecheckResult:
     """Re-ask jpdb whether each flagged example's furigana is right.
 
@@ -897,7 +922,23 @@ def recheck_furigana(
 
     Only flagged examples are re-checked, and only ever cleared: an example
     nobody doubted is not put in doubt by a parse that happens to fail today.
+
+    ``accept`` clears the flags of the named records on a *human's* authority
+    instead of asking jpdb. It exists because jpdb can be wrong: its parse reads
+    日本語 as にっぽんご, and the language is にほんご. Without it the choice was
+    to write a reading nobody uses into a card or to leave a correct sentence
+    unvoiced forever. It requires ``ids`` — accepting everything unread is not a
+    judgment — and the ledger records ``kind="human"`` so the entry says who
+    vouched.
     """
+    if accept and not ids:
+        raise EnrichError(
+            "--accept clears a flag on your authority rather than jpdb's, so it "
+            "needs the record ids you are vouching for. Accepting everything "
+            "unread is not a judgment."
+        )
+    if not accept and jpdb_client is None:
+        raise EnrichError("A furigana re-check needs a jpdb client or --accept.")
     result = RecheckResult(records=list(records))
     known = {record.id for record in result.records}
     wanted = set(ids) if ids else None
@@ -929,6 +970,10 @@ def recheck_furigana(
             sentence = example.japanese.strip()
             fingerprint = short_fingerprint(sentence)
             if not sentence or fingerprint not in flagged:
+                continue
+            if accept:
+                cleared.append(sentence)
+                flagged.discard(fingerprint)
                 continue
             try:
                 parse = jpdb_client.parse(sentence)

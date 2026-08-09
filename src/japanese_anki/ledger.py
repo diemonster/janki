@@ -85,7 +85,13 @@ LEDGER_VERSION = 1
 # that rewrites a field rather than filling it, and "this record's glosses were
 # replaced by a model" is a different fact about a record than "its examples
 # were written by one".
-ENRICHMENT_KINDS: tuple[str, ...] = ("jpdb", "ai", "polish")
+ENRICHMENT_KINDS: tuple[str, ...] = ("jpdb", "ai", "polish", "human")
+
+# ``human`` is the fourth because a dictionary can be wrong and a person has to
+# be able to say so. jpdb's parse reads 日本語 as にっぽんご; the language is
+# にほんご, and without a way to record "a human overruled this" the only
+# options were to accept a reading nobody uses or to leave a correct sentence
+# unvoiced forever. The pitch side has had this since M5.1, as ``audio_accent``.
 
 # What a piece of audio says: the word itself, or one example sentence.
 AUDIO_KINDS: tuple[str, ...] = ("word", "example")

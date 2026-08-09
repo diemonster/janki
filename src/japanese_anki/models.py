@@ -116,6 +116,11 @@ class ExampleSentence:
     english: str = ""
     # Media-dir-relative filename of this sentence's generated audio (M5.3).
     audio: str = ""
+    #: ``polite`` (〜ます/です) or ``casual`` (plain form), or empty for an
+    #: example written before the distinction existed. A learner meets both and
+    #: they are not interchangeable — a textbook teaches ます first and a friend
+    #: never uses it — so a card that shows only one teaches half the word.
+    register: str = ""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> ExampleSentence:
@@ -126,6 +131,7 @@ class ExampleSentence:
             romaji=str(data.get("romaji", "")).strip(),
             english=str(data.get("english", "")).strip(),
             audio=str(data.get("audio", "")).strip(),
+            register=str(data.get("register", "")).strip().lower(),
         )
 
 
@@ -241,3 +247,17 @@ class VocabularyRecord:
     @property
     def first_example(self) -> ExampleSentence:
         return self.examples[0] if self.examples else ExampleSentence()
+
+    def example_in(self, register: str) -> ExampleSentence:
+        """The first example written in this register, or an empty one.
+
+        Falls back to nothing rather than to another register: a card slot
+        labelled "casual" holding a ます sentence teaches the opposite of what
+        it says. An example written before the field existed carries no
+        register and answers neither.
+        """
+        wanted = register.strip().lower()
+        for example in self.examples:
+            if example.register.strip().lower() == wanted:
+                return example
+        return ExampleSentence()

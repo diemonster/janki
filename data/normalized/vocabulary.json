@@ -21,7 +21,8 @@
         "furigana": "机[つくえ]の 上[うえ]に 本[ほん]があります。",
         "romaji": "tsukuenouenihongaarimasu.",
         "english": "There is a book on the desk.",
-        "audio": "audio/janki-854f62cb09f1.mp3"
+        "audio": "audio/janki-854f62cb09f1.mp3",
+        "register": ""
       }
     ],
     "conjugations": {
@@ -75,7 +76,8 @@
         "furigana": "妹[いもうと]は 今[いま]、 家[いえ]にいます。",
         "romaji": "imoutohaima, ieniimasu.",
         "english": "My little sister is at home right now.",
-        "audio": "audio/janki-7e0d3173f31e.mp3"
+        "audio": "audio/janki-7e0d3173f31e.mp3",
+        "register": ""
       }
     ],
     "conjugations": {
@@ -145,7 +147,8 @@
         "furigana": "週末[しゅうまつ]は 何[なに]をしますか。",
         "romaji": "shuumatsuhananioshimasuka.",
         "english": "What are you doing this weekend?",
-        "audio": "audio/janki-1756bfe74b41.mp3"
+        "audio": "audio/janki-1756bfe74b41.mp3",
+        "register": ""
       }
     ],
     "conjugations": {
@@ -205,7 +208,8 @@
         "furigana": "日本語[にほんご]が 少[すこ]しできます。",
         "romaji": "nihongogasukoshidekimasu.",
         "english": "I can speak a little Japanese.",
-        "audio": ""
+        "audio": "audio/janki-461fd5400ad1.mp3",
+        "register": ""
       }
     ],
     "conjugations": {
@@ -235,8 +239,7 @@
         "vid": "1340450",
         "sid": "450331373",
         "deck": "Anki Test - Top 20 Verbs",
-        "card_state": "new",
-        "furigana_unverified": "f52332a418d6"
+        "card_state": "new"
       }
     }
   },
@@ -268,7 +271,8 @@
         "furigana": "兄[あに]はエンジニアになりました。",
         "romaji": "anihaenjinianinarimashita.",
         "english": "My older brother became an engineer.",
-        "audio": "audio/janki-a772a671da71.mp3"
+        "audio": "audio/janki-a772a671da71.mp3",
+        "register": ""
       }
     ],
     "conjugations": {
@@ -321,11 +325,20 @@
     "transitivity": "transitive",
     "examples": [
       {
-        "japanese": "仕事で毎日このソフトを使います。",
-        "furigana": "仕事[しごと]で 毎日[まいにち]このソフトを 使[つか]います。",
-        "romaji": "shigotodemainichikonosofutootsukaimasu.",
-        "english": "I use this software every day at work.",
-        "audio": "audio/janki-f17711fb5390.mp3"
+        "japanese": "仕事でこのソフトを使います。",
+        "furigana": "仕事[しごと]でこのソフトを 使[つか]います。",
+        "romaji": "shigotodekonosofutootsukaimasu.",
+        "english": "I use this software for work.",
+        "audio": "audio/janki-19ca6f82b17f.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "そのペン、ちょっと使ってもいい？",
+        "furigana": "そのペン、ちょっと 使[つか]ってもいい？",
+        "romaji": "sonopen, chottotsukattemoii?",
+        "english": "Can I use that pen for a sec?",
+        "audio": "audio/janki-90c2d4875647.mp3",
+        "register": "casual"
       }
     ],
     "conjugations": {
@@ -381,7 +394,8 @@
         "furigana": "この 漢字[かんじ]の 意味[いみ]が 分[わ]かりません。",
         "romaji": "konokanjinoimigawakarimasen.",
         "english": "I don't understand the meaning of this kanji.",
-        "audio": "audio/janki-d68b9484d8ea.mp3"
+        "audio": "audio/janki-d68b9484d8ea.mp3",
+        "register": ""
       }
     ],
     "conjugations": {
@@ -439,7 +453,8 @@
         "furigana": "明日[あした]は 雨[あめ]が 降[ふ]ると 思[おも]います。",
         "romaji": "ashitahaamegafurutoomoimasu.",
         "english": "I think it will rain tomorrow.",
-        "audio": "audio/janki-75b59debe988.mp3"
+        "audio": "audio/janki-75b59debe988.mp3",
+        "register": ""
       }
     ],
     "conjugations": {
@@ -494,7 +509,8 @@
         "furigana": "友[とも]だちに 手紙[てがみ]を 書[か]きました。",
         "romaji": "tomodachinitegamiokakimashita.",
         "english": "I wrote a letter to my friend.",
-        "audio": "audio/janki-571fc02bfcea.mp3"
+        "audio": "audio/janki-571fc02bfcea.mp3",
+        "register": ""
       }
     ],
     "conjugations": {
@@ -552,7 +568,8 @@
         "furigana": "友[とも]だちが 来週[らいしゅう]、 東京[とうきょう]に 来[き]ます。",
         "romaji": "tomodachigaraishuutoukyounikimasu.",
         "english": "My friend is coming to Tokyo next week.",
-        "audio": "audio/janki-7b9c78d01bc0.mp3"
+        "audio": "audio/janki-7b9c78d01bc0.mp3",
+        "register": ""
       }
     ],
     "conjugations": {
@@ -612,7 +629,8 @@
         "furigana": "あの 人[ひと]の 名前[なまえ]を 知[し]っていますか。",
         "romaji": "anohitononamaeoshitteimasuka.",
         "english": "Do you know that person's name?",
-        "audio": "audio/janki-9444a9ae908e.mp3"
+        "audio": "audio/janki-9444a9ae908e.mp3",
+        "register": ""
       }
     ],
     "conjugations": {
@@ -672,7 +690,8 @@
         "furigana": "毎朝[まいあさ]、 電車[でんしゃ]で 音楽[おんがく]を 聞[き]きます。",
         "romaji": "maiasadenshadeongakuokikimasu.",
         "english": "Every morning I listen to music on the train.",
-        "audio": "audio/janki-ad677d2b4b3c.mp3"
+        "audio": "audio/janki-ad677d2b4b3c.mp3",
+        "register": ""
       }
     ],
     "conjugations": {
@@ -726,7 +745,8 @@
         "furigana": "家族[かぞく]と 城崎温泉[きのさきおんせん]に 行[い]きました。",
         "romaji": "Kazoku to Kinosaki Onsen ni ikimashita.",
         "english": "I went to Kinosaki Onsen with my family.",
-        "audio": "audio/janki-2ebf18566d10.mp3"
+        "audio": "audio/janki-2ebf18566d10.mp3",
+        "register": ""
       }
     ],
     "conjugations": {
@@ -784,7 +804,8 @@
         "furigana": "昨日[きのう]、 家[いえ]で 映画[えいが]を 見[み]ました。",
         "romaji": "kinou, iedeeigaomimashita.",
         "english": "Yesterday I watched a movie at home.",
-        "audio": "audio/janki-30792677a074.mp3"
+        "audio": "audio/janki-30792677a074.mp3",
+        "register": ""
       }
     ],
     "conjugations": {
@@ -840,7 +861,8 @@
         "furigana": "友[とも]だちは「また 明日[あした]」と 言[い]いました。",
         "romaji": "tomodachiha\"mataashita\"toiimashita.",
         "english": "My friend said, \"See you tomorrow.\"",
-        "audio": "audio/janki-af8b89ef7e2b.mp3"
+        "audio": "audio/janki-af8b89ef7e2b.mp3",
+        "register": ""
       }
     ],
     "conjugations": {
@@ -892,10 +914,19 @@
     "examples": [
       {
         "japanese": "毎日、妻と日本語で話します。",
-        "furigana": "毎日[まいにち]、 妻[つま]と 日本語[にほんご]で 話[はな]します。",
-        "romaji": "Mainichi, tsuma to Nihongo de hanashimasu.",
+        "furigana": "毎日[まいにち]、妻[つま]と 日本語[にほんご]で 話[はな]します。",
+        "romaji": "mainichitsumatonihongodehanashimasu.",
         "english": "I speak Japanese with my wife every day.",
-        "audio": "audio/janki-54f40032c3f7.mp3"
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "昨日、田中さんと電話で話したんだ。",
+        "furigana": "昨日[きのう]、田中[たなか]さんと 電話[でんわ]で 話[はな]したんだ。",
+        "romaji": "kinoutanakasantodenwadehanashitanda.",
+        "english": "I talked with Tanaka on the phone yesterday.",
+        "audio": "audio/janki-778560810eb7.mp3",
+        "register": "casual"
       }
     ],
     "conjugations": {
@@ -927,7 +958,9 @@
       "type": "manual",
       "imported_from": "",
       "row": null,
-      "raw_fields": {}
+      "raw_fields": {
+        "furigana_unverified": "6fa562268aa5"
+      }
     }
   },
   {
@@ -953,7 +986,8 @@
         "furigana": "この 本[ほん]はもう 読[よ]みましたか。",
         "romaji": "konohonhamouyomimashitaka.",
         "english": "Have you already read this book?",
-        "audio": "audio/janki-dac765c14d68.mp3"
+        "audio": "audio/janki-dac765c14d68.mp3",
+        "register": ""
       }
     ],
     "conjugations": {
@@ -1009,7 +1043,8 @@
         "furigana": "駅[えき]の 前[まえ]のスーパーで 野菜[やさい]を 買[か]います。",
         "romaji": "ekinomaenosuupaadeyasaiokaimasu.",
         "english": "I buy vegetables at the supermarket in front of the station.",
-        "audio": "audio/janki-6bc127937827.mp3"
+        "audio": "audio/janki-6bc127937827.mp3",
+        "register": ""
       }
     ],
     "conjugations": {
@@ -1063,7 +1098,8 @@
         "furigana": "クリスマスに 家族[かぞく]と 韓国料理[かんこくりょうり]を 食[た]べます。",
         "romaji": "Kurisumasu ni kazoku to Kankoku ryouri o tabemasu.",
         "english": "At Christmas, I eat Korean food with my family.",
-        "audio": "audio/janki-2823397bff63.mp3"
+        "audio": "audio/janki-2823397bff63.mp3",
+        "register": ""
       }
     ],
     "conjugations": {
@@ -1121,14 +1157,16 @@
         "furigana": "いっしょにお 茶[ちゃ]を 飲[の]みませんか。",
         "romaji": "isshoniochaonomimasenka.",
         "english": "Would you like to have some tea with me?",
-        "audio": "audio/janki-356176b35f72.mp3"
+        "audio": "audio/janki-356176b35f72.mp3",
+        "register": ""
       },
       {
         "japanese": "薬を飲んでから、寝ます。",
         "furigana": "薬[くすり]を 飲[の]んでから、 寝[ね]ます。",
         "romaji": "kusurionondekara, nemasu.",
         "english": "I'll take my medicine and then go to bed.",
-        "audio": "audio/janki-70077ab82f05.mp3"
+        "audio": "audio/janki-70077ab82f05.mp3",
+        "register": ""
       }
     ],
     "conjugations": {

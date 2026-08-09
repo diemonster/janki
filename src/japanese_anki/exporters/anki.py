@@ -19,7 +19,7 @@ from japanese_anki.errors import JankiError
 from japanese_anki.io import DataError, load_records, load_structured
 from japanese_anki.kanji import load_store as load_kanji_store
 from japanese_anki.kanji import render_kanji_html
-from japanese_anki.models import ModelError, VocabularyRecord
+from japanese_anki.models import ExampleSentence, ModelError, VocabularyRecord
 from japanese_anki.pitch import PitchError, render_pitch_html
 from japanese_anki.validation import has_errors, validate_records
 
@@ -58,6 +58,10 @@ FIELD_NAMES = [
     "FrequencyRank",
     "ExampleAudio",
     "KanjiInfo",
+    "CasualJapanese",
+    "CasualFurigana",
+    "CasualEnglish",
+    "CasualAudio",
 ]
 
 CARD_FILES = {
@@ -332,6 +336,11 @@ def _field_values(
     for a file that lives in ``data/media/audio/``.
     """
     example = record.first_example
+    casual = record.example_in("casual")
+    if casual.japanese and casual is example:
+        # A record whose only example is casual fills the casual slot and leaves
+        # the main one empty, rather than showing the same sentence twice.
+        example = ExampleSentence()
     audio_field = ""
     if record.audio:
         found = _resolve_media(
@@ -342,6 +351,7 @@ def _field_values(
         audio_field = f"[sound:{found.name}]" if found else record.audio
 
     example_audio_field = ""
+    casual_audio_field = ""
     if example.audio:
         found = _resolve_media(
             example.audio, media_dir=media_dir, deck_dir=deck_dir,
@@ -349,6 +359,14 @@ def _field_values(
             media_files=media_files, warnings=warnings, claimed=claimed,
         )
         example_audio_field = f"[sound:{found.name}]" if found else example.audio
+
+    if casual.audio:
+        found = _resolve_media(
+            casual.audio, media_dir=media_dir, deck_dir=deck_dir,
+            record_id=record.id, label="Casual example audio",
+            media_files=media_files, warnings=warnings, claimed=claimed,
+        )
+        casual_audio_field = f"[sound:{found.name}]" if found else casual.audio
 
     image_field = ""
     if record.image:
@@ -386,6 +404,10 @@ def _field_values(
         str(record.frequency_rank) if record.frequency_rank is not None else "",
         example_audio_field,
         kanji_html,
+        html.escape(casual.japanese),
+        html.escape(casual.furigana),
+        html.escape(casual.english),
+        casual_audio_field,
     ]
 
 

@@ -139,7 +139,10 @@ def test_new_fields_are_appended_at_the_end(tmp_path: Path) -> None:
     build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
 
     names, values = _fields(tmp_path / "o.apkg")
-    assert names[-4:] == ["PitchAccent", "FrequencyRank", "ExampleAudio", "KanjiInfo"]
+    assert names[-8:] == [
+        "PitchAccent", "FrequencyRank", "ExampleAudio", "KanjiInfo",
+        "CasualJapanese", "CasualFurigana", "CasualEnglish", "CasualAudio",
+    ]
     assert len(values) == len(names), "the positional list stayed parallel"
     assert values[names.index("FrequencyRank")] == "200", "and carries its value"
 
@@ -787,3 +790,64 @@ def test_each_kanji_of_a_compound_gets_its_own_block(tmp_path: Path) -> None:
     assert section.index("<summary>使</summary>") < section.index("<summary>用</summary>"), (
         "in the order the word is written"
     )
+
+
+# --- the casual sentence ----------------------------------------------------
+
+
+def _with_registers(polite: str = "使います。", casual: str = "使う？") -> VocabularyRecord:
+    return VocabularyRecord(
+        id="word:使う:つかう", expression="使う", reading="つかう", meanings=["to use"],
+        examples=[
+            ExampleSentence(japanese=polite, english="polite", register="polite"),
+            ExampleSentence(japanese=casual, english="casual", register="casual"),
+        ],
+    )
+
+
+def test_both_registers_reach_the_card(tmp_path: Path) -> None:
+    """A learner meets both and they are not interchangeable — a textbook
+    teaches ます first and a friend never uses it, so a card showing only one
+    teaches half the word."""
+    _project(tmp_path)
+    _write_records(tmp_path, [_with_registers()])
+
+    build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
+
+    names, values = _fields(tmp_path / "o.apkg")
+    assert values[names.index("ExampleJapanese")] == "使います。"
+    assert values[names.index("CasualJapanese")] == "使う？"
+    assert values[names.index("CasualEnglish")] == "casual"
+
+
+def test_a_record_with_only_a_casual_example_does_not_show_it_twice(tmp_path: Path) -> None:
+    """Otherwise the same sentence fills both slots and the card claims a
+    polite/casual contrast it does not have."""
+    _project(tmp_path)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:使う:つかう", expression="使う", reading="つかう", meanings=["to use"],
+        examples=[ExampleSentence(japanese="使う？", register="casual")],
+    )])
+
+    build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
+
+    names, values = _fields(tmp_path / "o.apkg")
+    assert values[names.index("CasualJapanese")] == "使う？"
+    assert values[names.index("ExampleJapanese")] == ""
+
+
+def test_an_example_with_no_register_stays_the_polite_one(tmp_path: Path) -> None:
+    """Every example written before the field existed carries no register, and
+    is the ordinary 〜ます sentence. Putting one in the casual slot would label
+    it as something it is not."""
+    _project(tmp_path)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:使う:つかう", expression="使う", reading="つかう", meanings=["to use"],
+        examples=[ExampleSentence(japanese="使います。")],
+    )])
+
+    build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
+
+    names, values = _fields(tmp_path / "o.apkg")
+    assert values[names.index("ExampleJapanese")] == "使います。"
+    assert values[names.index("CasualJapanese")] == ""

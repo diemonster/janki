@@ -845,13 +845,16 @@ def _recheck_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
     book = ledger.load(config.ledger_file)
     result = enrich.recheck_furigana(
         records,
-        jpdb_client=jpdb.JpdbClient(jpdb.api_key_from_env()),
+        # No key is asked for when a human is doing the vouching.
+        jpdb_client=None if args.accept else jpdb.JpdbClient(jpdb.api_key_from_env()),
         ids=args.ids or None,
+        accept=args.accept,
     )
 
     cleared = sum(len(items) for items in result.cleared.values())
     if result.changed:
         save_records_json(output_path, result.records)
+        who = "human" if args.accept else "jpdb"
         for record_id in result.cleared:
             # `fields=["furigana"]` was a false statement: this pass writes no
             # record field at all — it clears an *example's* unverified flag.
@@ -859,14 +862,15 @@ def _recheck_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
             # later genuine --jpdb pass that really did fill `furigana` would
             # collapse into this entry and inherit its date.
             book.record_enriched(
-                record_id, kind="jpdb", model="jpdb", fields=["furigana_unverified"]
+                record_id, kind=who, model=who, fields=["furigana_unverified"]
             )
     ledger_error = _save_ledger(book) if result.changed else None
 
     if cleared:
+        vouched = "your" if args.accept else "jpdb's"
         print(
-            f"Confirmed {cleared} example(s) across {len(result.cleared)} record(s); "
-            "their audio is no longer held back."
+            f"Confirmed {cleared} example(s) across {len(result.cleared)} record(s) "
+            f"on {vouched} authority; their audio is no longer held back."
         )
     elif result.unparsed and not result.differing:
         # jpdb answered nothing at all — an expired key, or the API down. Saying
@@ -984,6 +988,8 @@ def command_enrich(args: argparse.Namespace) -> int:
             "what it is for, and why it confirms one record at a time."
         )
     force_fields = enrich.parse_force_fields(args.force_fields, ai=args.ai)
+    if args.accept and not args.recheck_furigana:
+        raise JankiError("--accept is part of --recheck-furigana; it has no meaning alone.")
     if args.recheck_furigana and (args.staging is not None or force_fields):
         raise JankiError(
             "--recheck-furigana re-asks jpdb about examples that already exist; "
@@ -2929,6 +2935,14 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Drop the pending batch without collecting it, for one that can no "
             "longer be applied. Its results stay reachable from the console."
+        ),
+    )
+    enrich_parser.add_argument(
+        "--accept",
+        action="store_true",
+        help=(
+            "With --recheck-furigana: clear the named records' flags on your "
+            "authority rather than jpdb's, for an example jpdb reads wrongly."
         ),
     )
     enrich_parser.add_argument(
