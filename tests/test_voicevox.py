@@ -109,6 +109,7 @@ def provider(engine: FakeEngine, **kwargs: Any) -> VoicevoxProvider:
         base_url=kwargs.pop("base_url", "http://localhost:50021"),
         speaker=kwargs.pop("speaker", 46),
         transport=engine,
+        speed=kwargs.pop("speed", 1.0),
     )
 
 
@@ -456,3 +457,35 @@ def test_a_status_survives_an_error_body_that_will_not_read(
 
     assert urllib_transport("GET", "http://localhost:50021/version") == (404, b"")
     assert VoicevoxProvider().available() is False
+
+
+def test_speed_modifies_the_fetched_envelope_rather_than_replacing_it() -> None:
+    """`speedScale` is the engine's own time-stretch: it slows delivery while
+    holding the pitch, so the accent this provider exists to force is not
+    dragged flat with it."""
+    engine = FakeEngine()
+
+    provider(engine, speed=0.85).synthesize("ハシ'", forced_accent=True)
+
+    submitted = engine.body("/synthesis")
+    assert submitted["speedScale"] == 0.85
+    assert submitted["accent_phrases"] == FORCED, "the forced accent survives"
+    assert submitted["outputSamplingRate"] == 24000, "the rest of the envelope does too"
+
+
+def test_the_default_speed_leaves_the_envelope_alone() -> None:
+    # Not the same as writing 1.0 back: an untouched key is one less thing to
+    # be wrong about on an engine version that reinterprets it.
+    engine = FakeEngine()
+
+    provider(engine).synthesize("ハシ'", forced_accent=True)
+
+    assert engine.body("/synthesis")["speedScale"] == GUESSED["speedScale"]
+
+
+def test_speed_applies_to_a_sentence_too() -> None:
+    engine = FakeEngine()
+
+    provider(engine, speed=0.9).synthesize("毎日話します。", forced_accent=False)
+
+    assert engine.body("/synthesis")["speedScale"] == 0.9

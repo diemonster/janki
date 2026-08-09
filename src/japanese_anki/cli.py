@@ -1781,7 +1781,9 @@ def _speech_provider(config: ProjectConfig, chosen: str | None) -> Any:
     name = (chosen or config.tts_provider or "voicevox").strip().lower()
     if name == "voicevox":
         return voicevox.VoicevoxProvider(
-            base_url=config.voicevox_url, speaker=config.voicevox_speaker
+            base_url=config.voicevox_url,
+            speaker=config.voicevox_speaker,
+            speed=config.voicevox_speed,
         )
     if name == "azure":
         raise AudioError(

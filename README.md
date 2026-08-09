@@ -866,3 +866,42 @@ requests include:
   ever guessed: an empty field means the dictionary did not say, and `janki
   status` counts it as missing rather than inventing a value. See
   `docs/DESIGN_V2.md`.
+
+### Choosing a voice, and slowing it down
+
+```toml
+[tts]
+voicevox_speaker = 13    # 玄野武宏 = 11, 青山龍星 = 13, 小夜/SAYO = 46 (the default)
+voicevox_speed = 0.85    # 0.5–2.0; below 1 slows delivery
+```
+
+VOICEVOX ships 40-odd speakers, most with several styles. Ask your running
+engine for the list:
+
+```bash
+curl -s http://localhost:50021/speakers |
+  python3 -c 'import json,sys
+for s in json.load(sys.stdin):
+    print(s["name"], {st["name"]: st["id"] for st in s["styles"]})'
+```
+
+`voicevox_speed` is the engine's own time-stretch, so it slows the delivery
+without dragging the pitch down with it — which matters here more than usual,
+since the accent contour is the thing the word audio exists to teach.
+
+**Changing either one does not make existing audio stale.** The ledger's content
+fingerprint covers what was *said* — the reading and its accent — not who said
+it or how fast. So re-run with `--force`:
+
+```bash
+janki audio --words --examples --force
+```
+
+Filenames are content-addressed and unchanged by a re-voice, so the clips are
+rewritten in place and Anki's media sync picks up the new audio for the same
+`[sound:]` references.
+
+One practical note if you run the engine in Docker: it loads a model per speaker
+on demand and keeps them, so sampling many voices in one session can exhaust a
+small VM. A 2 GiB colima gets through about nine before the container is
+OOM-killed; restart it between batches, or give the VM more memory.

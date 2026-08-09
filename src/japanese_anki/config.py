@@ -37,6 +37,7 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "provider",
         "voicevox_url",
         "voicevox_speaker",
+        "voicevox_speed",
         "azure_voice",
         "azure_region",
     ),
@@ -69,6 +70,29 @@ def _int(data: dict[str, Any], section: str, key: str, default: int) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         raise ConfigError(f"[{section}] {key} must be an integer, got {value!r}")
     return value
+
+
+def _float(data: dict[str, Any], section: str, key: str, default: float) -> float:
+    """Read a rate setting, refusing values that only look like one.
+
+    ``bool`` is rejected for the same reason ``_int`` rejects it — ``True``
+    would read as 1.0 and sound like nothing was set. An ``int`` *is* accepted:
+    ``voicevox_speed = 1`` is a reasonable thing to write and means exactly
+    1.0, unlike the cases where a float would silently truncate.
+
+    The range is the engine's: VOICEVOX clamps ``speedScale`` to 0.5–2.0, and a
+    value outside it would be quietly clamped into audio that is not what was
+    asked for. Refused here so the number in the file is the number spoken.
+    """
+    value = _get(data, section, key, default)
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ConfigError(f"[{section}] {key} must be a number, got {value!r}")
+    if not 0.5 <= float(value) <= 2.0:
+        raise ConfigError(
+            f"[{section}] {key} must be between 0.5 and 2.0 (the engine's own "
+            f"range for speech rate), got {value!r}"
+        )
+    return float(value)
 
 
 def _bool(data: dict[str, Any], section: str, key: str, default: bool) -> bool:
@@ -187,6 +211,7 @@ class ProjectConfig:
     tts_provider: str
     voicevox_url: str
     voicevox_speaker: int
+    voicevox_speed: float
     azure_voice: str
     azure_region: str
 
@@ -252,6 +277,7 @@ class ProjectConfig:
             tts_provider=_str(data, "tts", "provider", "voicevox"),
             voicevox_url=_str(data, "tts", "voicevox_url", "http://localhost:50021"),
             voicevox_speaker=_int(data, "tts", "voicevox_speaker", 46),
+            voicevox_speed=_float(data, "tts", "voicevox_speed", 1.0),
             azure_voice=_str(data, "tts", "azure_voice", "ja-JP-NanamiNeural"),
             azure_region=_str(data, "tts", "azure_region", "westus2"),
         )

@@ -130,9 +130,11 @@ class VoicevoxProvider:
         base_url: str = "http://localhost:50021",
         speaker: int = 46,
         transport: Transport | None = None,
+        speed: float = 1.0,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._speaker = int(speaker)
+        self._speed = float(speed)
         self._transport: Transport = transport or urllib_transport
 
     @property
@@ -232,9 +234,17 @@ class VoicevoxProvider:
                     f"phrases for {text_or_kana!r}; janki will not fall back to "
                     "a guessed accent."
                 )
-            # Only this key. The rest of the query is the engine's own envelope
-            # — sampling rate, pauses, scales — and is versioned with it.
+            # Only this key of the *accent*. The rest of the query is the
+            # engine's own envelope — sampling rate, pauses, scales — and is
+            # versioned with it.
             query["accent_phrases"] = forced
+        if self._speed != 1.0:
+            # The engine's own time-stretch: it slows delivery while holding
+            # the pitch, so the accent this provider exists to force is not
+            # dragged flat with it. *Modifying* one field of the fetched
+            # envelope, which is a different thing from constructing one —
+            # constructing is what breaks on a version that adds a field.
+            query["speedScale"] = self._speed
 
         return self._call(
             "POST", self._url("/synthesis", speaker=self._speaker), query

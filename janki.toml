@@ -29,7 +29,9 @@ enrich_model = "claude-opus-5"
 [tts]
 provider = "voicevox"              # or "azure"
 voicevox_url = "http://localhost:50021"
-voicevox_speaker = 46
+voicevox_speaker = 46               # `janki jpdb`-style ids; see the README
+voicevox_speed = 1.0                # 0.5–2.0; below 1 slows delivery without
+                                    # dropping the pitch
 azure_voice = "ja-JP-NanamiNeural"
 azure_region = "westus2"
 

@@ -401,3 +401,34 @@ def test_an_unreadable_config_file_is_a_clean_error(tmp_path: Path) -> None:
         config_path.chmod(0o644)
 
     assert "janki.toml" in str(excinfo.value)
+
+
+def test_voicevox_speed_defaults_to_normal(tmp_path: Path) -> None:
+    _write_config(tmp_path, '[tts]\nprovider = "voicevox"\n')
+
+    assert ProjectConfig.load(tmp_path).voicevox_speed == 1.0
+
+
+def test_voicevox_speed_is_read(tmp_path: Path) -> None:
+    _write_config(tmp_path, "[tts]\nvoicevox_speed = 0.85\n")
+
+    assert ProjectConfig.load(tmp_path).voicevox_speed == 0.85
+
+
+def test_a_whole_number_speed_is_accepted(tmp_path: Path) -> None:
+    # `voicevox_speed = 1` is a reasonable thing to write and means 1.0 exactly.
+    _write_config(tmp_path, "[tts]\nvoicevox_speed = 1\n")
+
+    assert ProjectConfig.load(tmp_path).voicevox_speed == 1.0
+
+
+@pytest.mark.parametrize("value", ["0.2", "3.0", "true", '"0.85"'])
+def test_a_speed_outside_the_engines_range_is_refused(
+    tmp_path: Path, value: str
+) -> None:
+    """VOICEVOX clamps speedScale to 0.5-2.0, so a value outside it would be
+    quietly clamped into audio that is not what the file asked for."""
+    _write_config(tmp_path, f"[tts]\nvoicevox_speed = {value}\n")
+
+    with pytest.raises(ConfigError):
+        ProjectConfig.load(tmp_path)
