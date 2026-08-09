@@ -476,11 +476,16 @@ def test_speed_modifies_the_fetched_envelope_rather_than_replacing_it() -> None:
 def test_the_default_speed_leaves_the_envelope_alone() -> None:
     # Not the same as writing 1.0 back: an untouched key is one less thing to
     # be wrong about on an engine version that reinterprets it.
-    engine = FakeEngine()
+    #
+    # The fetched envelope carries a rate no default would produce, so the
+    # assertion distinguishes "left alone" from "overwritten with 1.0". Against
+    # GUESSED's own 1.0 this test read `1.0 == 1.0` and passed with the guard
+    # at voicevox.py deleted.
+    engine = FakeEngine(audio_query={**GUESSED, "speedScale": 1.25})
 
     provider(engine).synthesize("ハシ'", forced_accent=True)
 
-    assert engine.body("/synthesis")["speedScale"] == GUESSED["speedScale"]
+    assert engine.body("/synthesis")["speedScale"] == 1.25
 
 
 def test_speed_applies_to_a_sentence_too() -> None:

@@ -80,17 +80,26 @@ def _float(data: dict[str, Any], section: str, key: str, default: float) -> floa
     ``voicevox_speed = 1`` is a reasonable thing to write and means exactly
     1.0, unlike the cases where a float would silently truncate.
 
-    The range is the engine's: VOICEVOX clamps ``speedScale`` to 0.5–2.0, and a
-    value outside it would be quietly clamped into audio that is not what was
-    asked for. Refused here so the number in the file is the number spoken.
+    Only non-positive values are refused, and that bound is arithmetic rather
+    than taste: a rate of zero or below has no meaning, and VOICEVOX answers
+    both with a 500. Everything above it is the engine's call, the same way
+    ``voicevox_speaker`` is type-checked but not range-checked — janki cannot
+    know which speakers an engine has, and it does not know which rates an
+    engine will honour either. Verified against VOICEVOX ENGINE on 2026-08-08:
+    ``speedScale`` is an unconstrained number in its schema, and 0.3 and 4.0
+    both come back at exactly the durations they ask for. 0.5–2.0 is the range
+    of the *editor's slider*, not a clamp, and enforcing it here rejected audio
+    the engine would have produced correctly — while failing in
+    ``ProjectConfig.load``, so an out-of-range rate took down ``janki status``
+    and ``janki build``, neither of which synthesizes anything.
     """
     value = _get(data, section, key, default)
     if isinstance(value, bool) or not isinstance(value, int | float):
         raise ConfigError(f"[{section}] {key} must be a number, got {value!r}")
-    if not 0.5 <= float(value) <= 2.0:
+    if float(value) <= 0:
         raise ConfigError(
-            f"[{section}] {key} must be between 0.5 and 2.0 (the engine's own "
-            f"range for speech rate), got {value!r}"
+            f"[{section}] {key} must be greater than 0 (it multiplies the rate "
+            f"of speech), got {value!r}"
         )
     return float(value)
 

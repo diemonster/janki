@@ -875,15 +875,19 @@ voicevox_speaker = 13    # 玄野武宏 = 11, 青山龍星 = 13, 小夜/SAYO = 4
 voicevox_speed = 0.85    # 0.5–2.0; below 1 slows delivery
 ```
 
-VOICEVOX ships 40-odd speakers, most with several styles. Ask your running
-engine for the list:
+VOICEVOX ships 40-odd speakers, most with several styles. To hear them rather
+than read a list:
 
 ```bash
-curl -s http://localhost:50021/speakers |
-  python3 -c 'import json,sys
-for s in json.load(sys.stdin):
-    print(s["name"], {st["name"]: st["id"] for st in s["styles"]})'
+python3 scripts/voice-samples.py            # every speaker, plus a page to compare them
+python3 scripts/voice-samples.py --male     # just the male voices
 ```
+
+That writes clips and an `index.html` to `~/Desktop/janki-voice-samples`
+(`--out` to put them elsewhere). Each one runs through janki's own forced-accent
+path, so the sample word carries its real accent rather than the engine's guess
+— what you hear is what a card will sound like. Use `--word/--reading/--pattern`
+to audition with a word you care about.
 
 `voicevox_speed` is the engine's own time-stretch, so it slows the delivery
 without dragging the pitch down with it — which matters here more than usual,

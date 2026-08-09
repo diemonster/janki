@@ -860,6 +860,7 @@ def test_rebuild_leaves_a_real_audio_entry_alone(
         of="word",
         provider="voicevox",
         voice=46,
+        speed=0.85,
         content_fp=word_audio_content_fingerprint(record),
         at="2026-08-11",
     )
@@ -869,14 +870,15 @@ def test_rebuild_leaves_a_real_audio_entry_alone(
 
     capsys.readouterr()
     entries = ledger.load(root / "ledger.json").records[record.id]["audio"]
-    # A rebuilt entry knows neither the engine nor the voice; it must never
-    # replace an entry that does.
+    # A rebuilt entry knows neither the engine, the voice, nor the rate; it must
+    # never replace an entry that does.
     assert entries == [
         {
             "file": filename,
             "of": "word",
             "provider": "voicevox",
             "voice": 46,
+            "speed": 0.85,
             "content_fp": word_audio_content_fingerprint(record),
             "at": "2026-08-11",
         }

@@ -127,20 +127,35 @@ def _is_current(
     content_fp: str,
     named: str,
     audio_dir: Path,
+    provider: SpeechProvider,
 ) -> bool:
     """Is there a usable clip for this content already?
 
-    Three facts, and the ledger holds only the first: an entry saying this was
-    recorded, the record still pointing at that file, and the file existing.
+    Four facts, and the ledger holds only two: an entry saying this was
+    recorded, in this run's voice and at this run's rate, the record still
+    pointing at that file, and the file existing.
+
     Asking the ledger alone calls a record current whose reference was dropped —
     a reverted ``vocabulary.json``, a ``migrate-inline`` that rewrote
     ``examples`` — and then ``--prune``, which reads the records, deletes the
     clip nothing appears to want. The ledger goes on answering "already
     recorded" and nothing ever synthesizes it again.
+
+    Asking about content alone calls a clip current that says the right words
+    in the wrong voice. That is what made a changed ``voicevox_speaker`` need
+    ``--force`` to take effect, and what made an interrupted re-voice
+    unresumable: the clips already redone were current, and so — wrongly — were
+    the ones still in the old voice.
     """
     if not named:
         return False
-    recorded = book.audio_file_for(record_id, of=of, content_fp=content_fp)
+    recorded = book.audio_file_for(
+        record_id,
+        of=of,
+        content_fp=content_fp,
+        voice=provider.voice,
+        speed=provider.speed,
+    )
     if recorded is None or recorded != Path(named).name:
         return False
     return (audio_dir / recorded).is_file()
@@ -180,6 +195,7 @@ def _word_audio(
         content_fp=content_fp,
         named=record.audio,
         audio_dir=audio_dir,
+        provider=provider,
     ):
         result.up_to_date += 1
         return record
@@ -211,6 +227,7 @@ def _word_audio(
         of="word",
         provider=provider.name,
         voice=provider.voice,
+        speed=provider.speed,
         content_fp=content_fp,
         **details,
     )
@@ -279,6 +296,7 @@ def _example_audio(
             content_fp=content_fp,
             named=example.audio,
             audio_dir=audio_dir,
+            provider=provider,
         ):
             result.up_to_date += 1
             examples.append(example)
@@ -304,6 +322,7 @@ def _example_audio(
             of="example",
             provider=provider.name,
             voice=provider.voice,
+            speed=provider.speed,
             content_fp=content_fp,
         )
         result.written.setdefault(record.id, []).append(name)

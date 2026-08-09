@@ -55,6 +55,10 @@ MEDIA_PREFIX = "janki-"
 # would put a plausible lie in the ledger.
 REBUILT_PROVIDER = "unknown"
 REBUILT_VOICE = -1
+# Same reasoning for the rate. Negative so it can never equal a configured
+# speed: a rebuilt entry must not let ``janki audio`` call the clip current,
+# because nothing knows how it was spoken.
+REBUILT_SPEED = -1.0
 
 
 def display_path(path: Path, root: Path) -> str:
@@ -722,6 +726,7 @@ def rebuild(
                     of="word",
                     provider=REBUILT_PROVIDER,
                     voice=REBUILT_VOICE,
+                    speed=REBUILT_SPEED,
                     content_fp=content_fp,
                     rebuilt=True,
                 )
@@ -744,6 +749,7 @@ def rebuild(
                 of="example",
                 provider=REBUILT_PROVIDER,
                 voice=REBUILT_VOICE,
+                speed=REBUILT_SPEED,
                 content_fp=example_audio_content_fingerprint(example),
                 rebuilt=True,
             )

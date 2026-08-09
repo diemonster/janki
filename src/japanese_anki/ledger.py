@@ -91,6 +91,39 @@ def _iso_date(value: str | None) -> str:
     return parsed.isoformat()
 
 
+#: The structured keys of a record entry, and the type each must hold. A ledger
+#: is committed and hand-edited often enough that one of these arriving as
+#: ``null`` — or as anything else — is a real input, and a reader that trusts
+#: the shape turns it into a ``TypeError`` or an ``AttributeError`` rather than
+#: the clean ``LedgerError`` this module promises.
+_ENTRY_SHAPE: dict[str, type] = {
+    "sources": list,
+    "enriched": list,
+    "audio": list,
+    "exports": dict,
+}
+
+
+def _shape_problems(entry: dict[str, Any]) -> list[tuple[str, str]]:
+    """``(key, type name)`` for every structured key holding the wrong type."""
+    return [
+        (key, type(entry[key]).__name__)
+        for key, want in _ENTRY_SHAPE.items()
+        if key in entry and not isinstance(entry[key], want)
+    ]
+
+
+def _shape_error(path: Path, record_id: str, problems: list[tuple[str, str]]) -> LedgerError:
+    detail = ", ".join(
+        f"{key!r} as {got}, not a {_ENTRY_SHAPE[key].__name__}" for key, got in problems
+    )
+    return LedgerError(
+        f"Ledger {path}: record {record_id!r} has {detail}. That file is "
+        "machine-written; 'janki status --rebuild' repairs entries like this "
+        "in place, keeping the export and enrichment history it holds."
+    )
+
+
 def _record_key(record_id: str) -> str:
     key = str(record_id).strip()
     if not key:
@@ -204,6 +237,10 @@ class Ledger:
     # Only a ledger that read the file has something to compare against; one
     # built directly is in-memory state that never claimed to mirror a file.
     guarded: bool = field(default=False, compare=False, repr=False)
+    # Record ids whose structured keys ``load(repair=True)`` coerced back into
+    # shape, so ``status --rebuild`` can report what it fixed rather than fixing
+    # it silently. Empty on every ordinary load, which refuses instead.
+    repaired: list[str] = field(default_factory=list, compare=False, repr=False)
 
     # -- persistence -------------------------------------------------------
 
@@ -264,13 +301,16 @@ class Ledger:
 
     # -- mutators ----------------------------------------------------------
 
-    #: List-valued keys of a record entry. A ledger is committed and hand-edited
-    #: often enough that one of these arriving as ``null`` — or as anything else
-    #: — is a real input, and every reader guarding for itself is how the one
-    #: that does not (``record_audio``) turns a bad shape into a traceback.
-    _LIST_KEYS = ("sources", "enriched", "audio")
-
     def _entry(self, record_id: str, at: str | None = None) -> dict[str, Any]:
+        """The entry for a record, created if absent.
+
+        The shape check here is a backstop, not the gate: :func:`load` refuses a
+        misshapen ledger before any caller has written anything, because a
+        refusal raised from a mutator fires *after* ``vocabulary.json`` has been
+        replaced — leaving an import that did almost everything and reported
+        nothing. This still runs for a ``Ledger`` built directly rather than
+        loaded, which has no file to have been checked.
+        """
         key = _record_key(record_id)
         entry = self.records.get(key)
         if entry is None:
@@ -283,14 +323,9 @@ class Ledger:
             }
             self.records[key] = entry
             return entry
-        for name in self._LIST_KEYS:
-            if name in entry and not isinstance(entry[name], list):
-                raise LedgerError(
-                    f"Ledger {self.path}: record {record_id!r} has "
-                    f"{name!r} as {type(entry[name]).__name__}, not a list. "
-                    "That file is machine-written; fix it by hand or delete it "
-                    "and run 'janki status --rebuild'."
-                )
+        problems = _shape_problems(entry)
+        if problems:
+            raise _shape_error(self.path, record_id, problems)
         return entry
 
     def record_added(self, record_id: str, *, at: str | None = None) -> bool:
@@ -410,6 +445,7 @@ class Ledger:
         provider: str,
         voice: int,
         content_fp: str,
+        speed: float = 1.0,
         at: str | None = None,
         **details: Any,
     ) -> bool:
@@ -422,6 +458,14 @@ class Ledger:
         ``at`` describes the same file saying the same thing, so re-recording
         it reports no change and keeps the original date — a re-run that
         regenerated nothing must not mark the ledger dirty.
+
+        ``voice`` and ``speed`` are stored because both are audible and neither
+        is in ``content_fp``, which covers what was said and deliberately not
+        who said it or how fast. Without them on disk, a re-voice interrupted
+        part way — the OOM a small VM hits routinely — leaves half the
+        collection in one voice and half in another, every clip's fingerprint
+        still correct, and no way for ``janki status`` or a resumed run to tell
+        which is which.
         """
         if of not in AUDIO_KINDS:
             raise LedgerError(
@@ -434,12 +478,21 @@ class Ledger:
             voice_id = int(voice)
         except (TypeError, ValueError) as exc:
             raise LedgerError(f"Audio voice must be an integer, got {voice!r}") from exc
+        try:
+            rate = float(speed)
+        except (TypeError, ValueError) as exc:
+            raise LedgerError(f"Audio speed must be a number, got {speed!r}") from exc
+        # Type-checked but not range-checked, exactly like ``voice`` beside it:
+        # ``status --rebuild`` stores a negative sentinel for both, because a
+        # file on disk carries no record of how fast it was spoken and a
+        # plausible guess in the ledger is worse than an admitted unknown.
         _checked_details("record_audio", details)
         reference: dict[str, Any] = {
             "file": name,
             "of": of,
             "provider": str(provider),
             "voice": voice_id,
+            "speed": rate,
             "content_fp": str(content_fp),
             **details,
             "at": _iso_date(at),
@@ -581,7 +634,15 @@ class Ledger:
                 result.append(key)
         return result
 
-    def audio_file_for(self, record_id: str, *, of: str, content_fp: str) -> str | None:
+    def audio_file_for(
+        self,
+        record_id: str,
+        *,
+        of: str,
+        content_fp: str,
+        voice: int | None = None,
+        speed: float | None = None,
+    ) -> str | None:
         """The clip recorded for this exact content, or ``None``.
 
         The *name*, not a yes/no, because "is this current?" needs three facts
@@ -590,10 +651,28 @@ class Ledger:
         the file survives on disk. A caller that asks only the ledger will call
         a record current whose reference was dropped — and then a prune,
         reading the records, deletes the clip nothing appears to want.
+
+        ``voice`` and ``speed`` narrow it to a clip that also *sounds* the way
+        this run would make it. A caller that passes them is asking "would
+        regenerating change anything?", which is the question ``janki audio``
+        actually has; content alone answers a different one and answers it yes
+        for a clip in last week's voice. An entry missing either key — anything
+        written before they were recorded — never matches, so it is
+        regenerated: a clip janki cannot describe is not one it should keep,
+        and re-synthesizing costs seconds.
         """
         for entry in self._audio_entries(record_id):
-            if entry.get("of") == of and str(entry.get("content_fp") or "") == content_fp:
-                return str(entry.get("file") or "") or None
+            if entry.get("of") != of or str(entry.get("content_fp") or "") != content_fp:
+                continue
+            if voice is not None and entry.get("voice") != int(voice):
+                continue
+            if speed is not None:
+                recorded = entry.get("speed")
+                if not isinstance(recorded, int | float) or isinstance(recorded, bool):
+                    continue
+                if float(recorded) != float(speed):
+                    continue
+            return str(entry.get("file") or "") or None
         return None
 
     def forget_audio_files(self, files: Iterable[str]) -> int:
@@ -733,8 +812,21 @@ class Ledger:
         ]
 
 
-def load(path: Path) -> Ledger:
-    """Read a ledger. A missing (or empty) file is an empty ledger, not an error."""
+def load(path: Path, *, repair: bool = False) -> Ledger:
+    """Read a ledger. A missing (or empty) file is an empty ledger, not an error.
+
+    This is where a misshapen entry is refused, and the timing is the point: a
+    ledger is loaded before an import writes anything, so a refusal here costs
+    the user nothing. The same refusal raised from a mutator fires *after*
+    ``vocabulary.json`` has been replaced and rows have been staged, so the
+    command has done almost all of its work and reports none of it.
+
+    ``repair=True`` coerces a wrong-typed structured key back to an empty one
+    and names the record in :attr:`Ledger.repaired` instead of refusing. Only
+    ``status --rebuild`` passes it, because only ``--rebuild`` is asking to fix
+    the file: deleting the ledger is the other way out of a bad shape, and it
+    destroys the export and enrichment history that no rebuild can reconstruct.
+    """
     path = Path(path)
     try:
         text = path.read_text(encoding="utf-8")
@@ -766,9 +858,18 @@ def load(path: Path) -> Ledger:
         records = {}
     if not isinstance(records, dict):
         raise LedgerError(f"Ledger {path}: 'records' must be an object keyed by record id")
+    repaired: list[str] = []
     for record_id, entry in records.items():
         if not isinstance(entry, dict):
             raise LedgerError(f"Ledger {path}: entry for '{record_id}' must be an object")
+        problems = _shape_problems(entry)
+        if not problems:
+            continue
+        if not repair:
+            raise _shape_error(path, record_id, problems)
+        for key, _ in problems:
+            entry[key] = _ENTRY_SHAPE[key]()
+        repaired.append(record_id)
 
     pending_batches = data.get("pending_batches")
     if pending_batches is None:
@@ -787,4 +888,5 @@ def load(path: Path) -> Ledger:
         },
         baseline=text,
         guarded=True,
+        repaired=repaired,
     )

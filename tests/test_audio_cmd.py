@@ -19,6 +19,7 @@ import pytest
 from japanese_anki import audio_cmd, cli
 from japanese_anki import ledger as ledger_mod
 from japanese_anki.audio_cmd import AudioError, generate_audio, prune_unreferenced
+from japanese_anki.config import ProjectConfig
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
 
 WAV = b"RIFF....WAVEfake"
@@ -27,13 +28,17 @@ WAV = b"RIFF....WAVEfake"
 class FakeVoice:
     """Stands in for a speech engine, recording what it was told to say."""
 
-    def __init__(self, *, reachable: bool = True, audio: bytes = WAV) -> None:
+    def __init__(
+        self, *, reachable: bool = True, audio: bytes = WAV, voice: int = 7,
+        speed: float = 1.0,
+    ) -> None:
         self.said: list[tuple[str, bool]] = []
         self.reachable = reachable
         self.audio = audio
+        self.voice = voice
+        self.speed = speed
 
     name = "fakevox"
-    voice = 7
     launch_hint = "start the fake engine"
 
     def available(self) -> bool:
@@ -193,6 +198,27 @@ def test_a_confirmed_example_beside_a_flagged_one_is_still_voiced(tmp_path: Path
 
 
 # ---------------------------------------------------------------------------
+# The config reaches the engine
+# ---------------------------------------------------------------------------
+
+
+def test_the_configured_voice_and_rate_reach_the_provider(tmp_path: Path) -> None:
+    """`_speech_provider` is the only join between janki.toml and the engine, and
+    both halves of it are silent when wrong: a dropped speed gives audio at the
+    wrong rate with no error, and — since the ledger now records what the
+    provider reports — a ledger that agrees with the audio and with nothing the
+    user asked for."""
+    (tmp_path / "janki.toml").write_text(
+        '[tts]\nvoicevox_speaker = 13\nvoicevox_speed = 0.7\n', encoding="utf-8"
+    )
+    config = ProjectConfig.load(tmp_path)
+
+    provider = cli._speech_provider(config, None)
+
+    assert (provider.voice, provider.speed) == (13, 0.7)
+
+
+# ---------------------------------------------------------------------------
 # Doing it twice
 # ---------------------------------------------------------------------------
 
@@ -206,6 +232,85 @@ def test_a_second_run_writes_nothing_new(tmp_path: Path) -> None:
     assert provider.said == []
     assert second.file_count == 0
     assert second.up_to_date == 1
+
+
+def test_a_new_voice_is_not_current_without_force(tmp_path: Path) -> None:
+    """Voice is audible and deliberately not part of the content fingerprint, so
+    the ledger has to carry it. Without that, changing `voicevox_speaker` and
+    re-running reported everything "already current" and re-voiced nothing —
+    the change only took effect under `--force`, which is a bigger hammer than
+    the situation calls for."""
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    first, _, _ = run([record()], tmp_path, words=True, book=book)
+
+    second, provider, _ = run(
+        first.records, tmp_path, words=True, book=book, provider=FakeVoice(voice=13)
+    )
+
+    assert provider.said == [("ハシ'", True)], "re-voiced in the new voice"
+    assert second.up_to_date == 0
+    entries = book.records[record().id]["audio"]
+    assert [entry["voice"] for entry in entries] == [13], "and the ledger says so"
+
+
+def test_a_new_speed_is_not_current_either(tmp_path: Path) -> None:
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    first, _, _ = run([record()], tmp_path, words=True, book=book)
+
+    second, provider, _ = run(
+        first.records, tmp_path, words=True, book=book, provider=FakeVoice(speed=0.7)
+    )
+
+    assert provider.said == [("ハシ'", True)]
+    assert second.up_to_date == 0
+    assert [e["speed"] for e in book.records[record().id]["audio"]] == [0.7]
+
+
+def test_an_entry_from_before_speed_was_recorded_is_regenerated(tmp_path: Path) -> None:
+    """A ledger written by an older janki has no `speed` key, so nothing can say
+    how its clips were spoken. Regenerating is seconds; keeping audio janki
+    cannot describe is a collection that quietly speaks at two rates."""
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    first, _, _ = run([record()], tmp_path, words=True, book=book)
+    for entry in book.records[record().id]["audio"]:
+        del entry["speed"]
+
+    second, provider, _ = run(first.records, tmp_path, words=True, book=book)
+
+    assert provider.said == [("ハシ'", True)]
+    assert second.up_to_date == 0
+
+
+def test_a_re_voice_interrupted_part_way_resumes(tmp_path: Path) -> None:
+    """The scenario the missing rate made unrecoverable: a re-voice of two
+    records dies after the first, and the re-run has to finish the second rather
+    than call the whole collection current. Both clips must end up in one voice,
+    and the ledger must be able to prove it."""
+    records = [record(), record(id="word:箸:はし", expression="箸", pitch_accent=["HLL"])]
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    first, _, _ = run(records, tmp_path, words=True, book=book)
+
+    # The engine dies after the first clip of the new voice.
+    dying = FakeVoice(voice=13)
+    original = dying.synthesize
+
+    def die_after_one(text: str, *, forced_accent: bool) -> bytes:
+        if dying.said:
+            raise ledger_mod.LedgerError("engine went away")
+        return original(text, forced_accent=forced_accent)
+
+    dying.synthesize = die_after_one  # type: ignore[method-assign]
+    interrupted, _, _ = run(first.records, tmp_path, words=True, book=book, provider=dying)
+    assert interrupted.stopped_by, "the run reported that it stopped"
+
+    resumed, provider, _ = run(
+        interrupted.records, tmp_path, words=True, book=book, provider=FakeVoice(voice=13)
+    )
+
+    assert len(provider.said) == 1, "only the record the failure skipped"
+    assert resumed.up_to_date == 1, "the one already re-voiced is left alone"
+    voices = {e["voice"] for r in records for e in book.records[r.id]["audio"]}
+    assert voices == {13}, "and the collection ends in one voice"
 
 
 def test_force_regenerates_under_the_same_name(tmp_path: Path) -> None:

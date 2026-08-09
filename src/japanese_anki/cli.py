@@ -2110,7 +2110,10 @@ def command_build(args: argparse.Namespace) -> int:
 
 def command_status(args: argparse.Namespace) -> int:
     config = _load_config(args)
-    book = ledger.load(config.ledger_file)
+    # --rebuild is the one command asking to *fix* the ledger, so it is the one
+    # that loads a misshapen entry instead of refusing it. Every other command
+    # refuses, and refuses here — before anything is written.
+    book = ledger.load(config.ledger_file, repair=args.rebuild)
     universe = status.collect_records(config)
     staged, staged_warnings = status.collect_staged(config)
 
@@ -2128,6 +2131,12 @@ def command_status(args: argparse.Namespace) -> int:
             book, universe.records, config.media_dir, sources_by_id=universe.normalized_sources
         )
         book.save()
+        for record_id in book.repaired:
+            print(
+                f"repaired: {record_id} had a structured key of the wrong type; "
+                "it was reset to empty and the rest of the entry kept",
+                file=prose,
+            )
         for line in status.format_rebuild(summary, config.root):
             print(line, file=prose)
 

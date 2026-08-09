@@ -146,6 +146,10 @@ class VoicevoxProvider:
         return self._speaker
 
     @property
+    def speed(self) -> float:
+        return self._speed
+
+    @property
     def launch_hint(self) -> str:
         return LAUNCH_HINT
 

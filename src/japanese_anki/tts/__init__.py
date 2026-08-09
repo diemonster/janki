@@ -45,6 +45,16 @@ class SpeechProvider(Protocol):
         """
 
     @property
+    def speed(self) -> float:
+        """How fast, as the ledger records it. 1.0 is the engine's own pace.
+
+        Beside ``voice`` for the same reason, and recorded for a sharper one:
+        rate is audible and is not part of a clip's content fingerprint, so
+        without it in the ledger a re-voice that stops half way leaves a
+        collection speaking at two speeds that nothing can detect afterwards.
+        """
+
+    @property
     def launch_hint(self) -> str:
         """What to tell someone whose engine is not answering."""
 
