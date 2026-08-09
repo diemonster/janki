@@ -808,7 +808,7 @@ verb_group: "godan"
 transitivity: "intransitive"
 examples:
   - japanese: "毎日、妻と日本語で話します。"
-    furigana: "毎日[まいにち]、妻[つま]と日本語[にほんご]で話[はな]します。"
+    furigana: "毎日[まいにち]、 妻[つま]と 日本語[にほんご]で 話[はな]します。"
     romaji: "Mainichi, tsuma to Nihongo de hanashimasu."
     english: "I speak Japanese with my wife every day."
 conjugations:

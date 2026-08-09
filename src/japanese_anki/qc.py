@@ -162,6 +162,59 @@ def _segments(value: object) -> list[object]:
     return []
 
 
+#: Kana a ruby group's text run can begin with. Latin and Han are excluded on
+#: purpose — ``ＡＴＭ[エーティーエム]`` and ``日[にっ]`` are never spills.
+_KANA = re.compile(r"[\u3041-\u309f\u30a0-\u30ff]")
+
+
+def spilled_furigana_groups(furigana: str) -> tuple[tuple[str, str], ...]:
+    """Ruby groups whose reading will be drawn over kana that are not theirs.
+
+    Anki resumes each group's text run where the last one ended, so a group with
+    no space before it swallows whatever sits between: ``毎日[まいにち]、妻と
+    日本語[にほんご]`` draws にほんご across 妻と日本語, and those particles then
+    vanish from :func:`furigana_reading` — which is what the romaji field and
+    M5.3's sentence audio are built from.
+
+    Position alone cannot decide this, which is the trap. ``日[にっ]本[ぽん]``
+    also abuts with no space and is perfectly correct: there is nothing between
+    the groups to spill onto. Nor can "the run starts with kana", which flags
+    ``お茶[おちゃ]`` — legitimate whole-word ruby — and following that warning
+    yields ``お 茶[おちゃ]``, whose reading is ``おおちゃ``: the check would
+    manufacture the defect it exists to catch.
+
+    So it looks at what the run *starts* with, and asks the reading when it has
+    to. Three ways a run legitimately begins:
+
+    * a Han character — ``日本語[にほんご]``, the ordinary case;
+    * a letter or digit — ``ＡＴＭ[エーティーエム]``, ruby over a loanword;
+    * kana the **reading also begins with** — ``お茶[おちゃ]``, whole-word ruby
+      covering the word's own leading kana.
+
+    Anything else is text the group has swallowed: kana the reading does not
+    start with (``お茶[ちゃ]``, ``と城崎温泉[きのさきおんせん]``) or punctuation
+    (``、妻と日本語[にほんご]``). A heuristic rather than a proof —
+    ``と隣[となり]`` slips past, since と is genuinely the reading's first kana —
+    but it catches every spill that changes what the sentence reads as, and
+    flags nothing that is right.
+
+    Returns ``(text run, reading)`` pairs so a message can name them.
+    """
+    spilled: list[tuple[str, str]] = []
+    for match in _GROUP.finditer(furigana):
+        text, reading = match.group(1), match.group(2)
+        if not text or not reading:
+            continue
+        first = text[0]
+        if _KANA.match(first):
+            if first != reading[0]:
+                spilled.append((text, reading))
+        elif not first.isalnum():
+            # Punctuation cannot be part of the word the ruby annotates.
+            spilled.append((text, reading))
+    return tuple(spilled)
+
+
 def furigana_base(furigana: str) -> str:
     """The sentence a furigana field spells, with every reading removed.
 

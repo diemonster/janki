@@ -32,30 +32,18 @@ _STAGING_HINT = (
 
 
 def _misplaced_furigana(furigana: str) -> list[str]:
-    """Bracketed groups whose reading will land on the kana before them.
+    """Ruby groups whose reading will land on the text before them.
 
-    Anki's furigana filter splits the field on **spaces**: everything from the
-    last space up to the ``[`` is the text the reading is drawn over. So a group
-    that is not preceded by a space swallows whatever came before it, and the
-    reading is rendered across that too — ``と城崎温泉[きのさきおんせん]`` puts
-    きのさきおんせん over と城崎温泉, and ``お茶[ちゃ]`` puts ちゃ over both
-    characters.
-
-    Detected by the group's own text starting with kana, which is what a missing
-    space always produces: a correctly spaced group begins at the word being
-    annotated. Brackets are only ever written over kanji here, so a kana-leading
-    group is the mistake and not a style.
-
-    Parsed with :func:`japanese_anki.qc.furigana_pairs` rather than a second
-    regex — janki should not hold two ideas about what Anki will draw.
+    Delegates to :func:`japanese_anki.qc.spilled_furigana_groups` — janki
+    should not hold two ideas about what Anki will draw, and the rule is subtler
+    than it looks. See that function for the two plausible tests that are wrong:
+    position alone (``日[にっ]本[ぽん]`` abuts legitimately) and "the run starts
+    with kana" (which flags correct whole-word ruby, and whose advice would
+    break it).
     """
     from japanese_anki import qc
 
-    return [
-        text
-        for text, _reading in qc.furigana_pairs(furigana)
-        if text and not contains_kanji(text[0])
-    ]
+    return [text for text, _reading in qc.spilled_furigana_groups(furigana)]
 
 
 def _kana(reading: str) -> str:

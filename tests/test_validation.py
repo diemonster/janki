@@ -261,7 +261,9 @@ def test_furigana_missing_a_space_is_flagged() -> None:
     messages = _issue_messages(record)
 
     assert any("'と城崎温泉'" in m and "'に行'" in m for m in messages)
-    assert not any(m.startswith("error") for m in messages)
+    # A warning, not an error: `has_errors` is what `build` refuses on, and a
+    # renderable-but-wrong field must not stop a deck from building.
+    assert not has_errors(validate_records([record]))
 
 
 def test_correctly_spaced_furigana_is_not_flagged() -> None:
@@ -272,7 +274,8 @@ def test_correctly_spaced_furigana_is_not_flagged() -> None:
 
 def test_the_classic_ocha_case_is_flagged() -> None:
     """お茶[ちゃ] puts ちゃ over both characters; the correct form is お 茶[ちゃ].
-    The word-level field has the same rule as the example's."""
+    Told apart from お茶[おちゃ] — correct whole-word ruby — by whether the
+    reading starts with the same kana the run does."""
     record = VocabularyRecord(
         id="word:お茶:おちゃ",
         expression="お茶",
@@ -298,10 +301,56 @@ def test_a_group_at_the_very_start_needs_no_space() -> None:
 
 def test_unbalanced_brackets_still_win_over_the_spacing_check() -> None:
     # A field janki cannot parse gets the error it deserves, not a confusing
-    # second complaint derived from a broken parse.
-    record = _with_example("家族[かぞく]と 城崎温泉[きのさきおんせん に 行[い]きました。")
+    # second complaint derived from a broken parse. The input has to contain a
+    # group the spacing check *would* flag — `に行[い]` — or the test passes
+    # whether the branches are exclusive or not.
+    record = _with_example("家族[かぞく]と 城崎温泉[きのさきおんせん]に行[い]きました[。")
 
     messages = _issue_messages(record)
 
     assert any("unbalanced" in m for m in messages)
     assert not any("missing a space" in m for m in messages)
+
+
+def test_whole_word_ruby_over_leading_kana_is_not_flagged() -> None:
+    """お茶[おちゃ] is correct: the ruby covers the word's own leading kana.
+    Flagging it would be worse than useless — acting on the advice gives
+    お 茶[おちゃ], whose reading is おおちゃ, which is the defect the check
+    exists to catch."""
+    record = _with_example(
+        "毎日[まいにち] お茶[おちゃ]を 飲[の]みます。", japanese="毎日お茶を飲みます。"
+    )
+
+    assert not any("missing a space" in m for m in _issue_messages(record))
+
+
+def test_a_spill_whose_run_starts_with_kanji_is_still_caught() -> None:
+    """The case a "starts with kana" test misses: にほんご is drawn across
+    妻と日本語, and 妻と then vanishes from the reconstructed reading — which is
+    what the romaji field and sentence audio are built from."""
+    record = _with_example(
+        "毎日[まいにち]、妻と日本語[にほんご]で 話[はな]します。",
+        japanese="毎日、妻と日本語で話します。",
+    )
+
+    assert any("'、妻と日本語'" in m for m in _issue_messages(record))
+
+
+def test_per_kanji_furigana_without_spaces_is_not_flagged() -> None:
+    # 日[にっ]本[ぽん]語[ご] abuts with no spaces and is correct: there is
+    # nothing between the groups for a reading to spill onto.
+    record = _with_example("日[にっ]本[ぽん]語[ご]", japanese="日本語")
+
+    assert not any("missing a space" in m for m in _issue_messages(record))
+
+
+def test_ruby_over_a_loanword_is_not_flagged() -> None:
+    record = VocabularyRecord(
+        id="word:ATM:エーティーエム",
+        expression="ＡＴＭ",
+        reading="エーティーエム",
+        meanings=["ATM"],
+        furigana="ＡＴＭ[エーティーエム]",
+    )
+
+    assert not any("missing a space" in m for m in _issue_messages(record))
