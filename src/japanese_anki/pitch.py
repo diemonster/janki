@@ -238,6 +238,11 @@ def render_pitch_html(reading: str, patterns: Sequence[str]) -> str:
             classes = ["mora", "high" if per_mora[index] == "H" else "low"]
             if per_mora[index] == "H" and levels[index + 1] == "L":
                 classes.append("drop")
+            # A rise as well as a fall: jpdb's notation draws the vertical at
+            # both transitions, and without it a heiban word is a flat line a
+            # reader takes for "no accent recorded" rather than "no drop".
+            if index > 0 and per_mora[index] == "H" and per_mora[index - 1] == "L":
+                classes.append("rise")
             spans.append(
                 f'<span class="{" ".join(classes)}">{html.escape(mora)}</span>'
             )

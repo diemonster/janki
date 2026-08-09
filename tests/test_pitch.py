@@ -281,7 +281,10 @@ def test_every_mora_gets_a_span_marked_high_or_low() -> None:
 
     assert rendered.count("<span") == 5, "three morae, the particle slot, and the wrapper"
     assert '<span class="mora low">た</span>' in rendered
-    assert '<span class="mora high drop">ま</span>' in rendered
+    # `rise` as well as `drop`: jpdb's notation draws the vertical at both
+    # transitions. Without the rise a heiban word is a flat line, which a
+    # reader takes for "no accent recorded" rather than "no drop".
+    assert '<span class="mora high drop rise">ま</span>' in rendered
     assert '<span class="mora low">ご</span>' in rendered
 
 
@@ -350,3 +353,25 @@ def test_the_chosen_pattern_is_upper_cased() -> None:
     identically."""
     assert select_pattern(record(pitch_accent=["lhl"])) == "LHL"
     assert select_pattern(record(pitch_accent=["LHH"], audio_accent="lhl")) == "LHL"
+
+
+def test_a_word_that_starts_high_has_no_rise_into_it() -> None:
+    """Atamadaka begins high, so there is nothing below to climb from. Marking
+    a rise there draws a vertical on the left edge of the first mora, out of
+    nowhere."""
+    rendered = render_pitch_html("なる", ["HLL"])
+
+    assert '<span class="mora high drop">な</span>' in rendered
+    assert "rise" not in rendered
+
+
+def test_a_flat_word_still_marks_its_one_transition() -> None:
+    """する is す low, る high — exactly what jpdb draws. The rise is the only
+    feature a heiban word has, and it is what distinguishes "flat" from
+    "nothing known"."""
+    rendered = render_pitch_html("する", ["LHH"])
+
+    assert '<span class="mora low">す</span>' in rendered
+    assert '<span class="mora high rise">る</span>' in rendered
+    assert '<span class="mora particle high"></span>' in rendered
+    assert "drop" not in rendered, "nothing falls in a heiban word"

@@ -96,6 +96,29 @@ def _html_lines(values: list[str]) -> str:
     return "<br>".join(html.escape(value) for value in values if value)
 
 
+def _meanings_html(values: list[str], limit: int) -> str:
+    """The glosses a card shows, and an honest note when it shows fewer.
+
+    Capped at *display* rather than trimmed at import: jpdb's sense list is
+    input, and this project does not discard input — `janki status`, a later
+    search, and a human deciding which sense matters all still see all of them
+    in `vocabulary.json`. The card is the thing with a size.
+
+    The order is jpdb's own, which is roughly commonest-first, so the first few
+    are the ones a learner meets. The count is kept rather than dropped: that
+    する has 13 more senses is a fact about する, and a silent cut would teach
+    that it has four.
+    """
+    shown = [value for value in values if value]
+    if limit <= 0 or len(shown) <= limit:
+        return _html_lines(shown)
+    hidden = len(shown) - limit
+    return _html_lines(shown[:limit]) + (
+        f'<br><span class="more-senses">+{hidden} more sense'
+        f'{"" if hidden == 1 else "s"}</span>'
+    )
+
+
 def _conjugation_html(values: dict[str, str]) -> str:
     if not values:
         return ""
@@ -293,6 +316,7 @@ def _field_values(
     media_files: list[str],
     warnings: list[str],
     claimed: dict[str, tuple[str, str]],
+    max_meanings: int = 0,
 ) -> list[str]:
     """One note's fields, with media resolved against ``media_dir``.
 
@@ -340,7 +364,7 @@ def _field_values(
         html.escape(record.reading),
         html.escape(record.furigana),
         html.escape(record.romaji),
-        _html_lines(record.meanings),
+        _meanings_html(record.meanings, max_meanings),
         html.escape(record.part_of_speech),
         html.escape(record.verb_group),
         html.escape(record.transitivity),
@@ -636,6 +660,8 @@ def build_deck(
             fields=_field_values(
                 record, media_dir, deck_path.parent, media_files, media_warnings,
                 claimed,
+                # A deck may say its own number; most take the project's.
+                int(deck_config.get("max_meanings", project_config.max_meanings)),
             ),
             tags=[_clean_tag(tag) for tag in record.tags if _clean_tag(tag)],
             guid=genanki.guid_for(record.id),

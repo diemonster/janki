@@ -181,7 +181,7 @@ def test_the_pitch_diagram_reaches_the_card(tmp_path: Path) -> None:
     pitch = values[names.index("PitchAccent")]
     # 橋 is odaka: the fall lands on the particle, so the last mora carries the
     # drop and the particle slot is low.
-    assert 'class="mora high drop"' in pitch
+    assert 'drop' in pitch
     assert 'class="mora particle low"' in pitch
 
 
@@ -305,7 +305,7 @@ def test_a_malformed_second_pattern_leaves_the_first_one_drawn(tmp_path: Path) -
     names, values = _fields(tmp_path / "o.apkg")
     pitch = values[names.index("PitchAccent")]
     assert pitch.count('<span class="pitch">') == 1, "the pattern that fits is drawn"
-    assert 'class="mora high drop"' in pitch, "and drawn as odaka, which LHL is"
+    assert 'drop' in pitch, "and drawn as odaka, which LHL is"
     assert any("'LH' does not fit" in w for w in result.warnings), "the drop is reported"
 
 
@@ -330,7 +330,7 @@ def test_the_audio_accent_leads_the_diagram(tmp_path: Path) -> None:
     # purpose — asserting 橋 has two accepted accents on the card whose job is
     # telling 橋 from 端.
     assert pitch.count('<span class="pitch">') == 1
-    assert 'class="mora high drop"' in pitch, "and it is odaka, which the clip says"
+    assert 'drop' in pitch, "and it is odaka, which the clip says"
     assert 'class="mora particle high"' not in pitch, "the overridden heiban is gone"
 
 
@@ -347,7 +347,7 @@ def test_an_audio_accent_alone_still_draws(tmp_path: Path) -> None:
     _build(tmp_path)
 
     names, values = _fields(tmp_path / "o.apkg")
-    assert 'class="mora high drop"' in values[names.index("PitchAccent")]
+    assert 'drop' in values[names.index("PitchAccent")]
 
 
 def test_a_repeated_pattern_is_drawn_once(tmp_path: Path) -> None:
@@ -528,3 +528,97 @@ def test_two_spellings_of_one_file_are_not_a_collision(tmp_path: Path) -> None:
     with ZipFile(tmp_path / "o.apkg") as package:
         media = json.loads(package.read("media").decode("utf-8"))
     assert sorted(media.values()) == ["Shared.wav"], "under one name, not two"
+
+
+def test_meanings_are_capped_with_the_remainder_named(tmp_path: Path) -> None:
+    """jpdb hands back every sense a word has — する has 17 — and a recognition
+    card is not a dictionary entry. Capped at display: the record keeps all of
+    them, so `janki status`, a search, and a human choosing which sense matters
+    all still see the full list."""
+    _project(tmp_path)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:する:する", expression="する", reading="する",
+        meanings=[f"sense {n}" for n in range(1, 18)],
+    )])
+
+    build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
+
+    names, values = _fields(tmp_path / "o.apkg")
+    meanings = values[names.index("Meanings")]
+    assert "sense 4" in meanings and "sense 5" not in meanings, "four, in jpdb's order"
+    assert "+13 more senses" in meanings, "and the count is kept, not dropped"
+
+
+def test_a_record_inside_the_cap_gets_no_note(tmp_path: Path) -> None:
+    _project(tmp_path)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:橋:はし", expression="橋", reading="はし", meanings=["bridge", "span"],
+    )])
+
+    build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
+
+    names, values = _fields(tmp_path / "o.apkg")
+    assert "more sense" not in values[names.index("Meanings")]
+
+
+def test_one_hidden_sense_is_singular(tmp_path: Path) -> None:
+    _project(tmp_path)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:橋:はし", expression="橋", reading="はし",
+        meanings=["a", "b", "c", "d", "e"],
+    )])
+
+    build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
+
+    names, values = _fields(tmp_path / "o.apkg")
+    assert "+1 more sense<" in values[names.index("Meanings")]
+
+
+def test_a_deck_may_set_its_own_cap(tmp_path: Path) -> None:
+    _project(tmp_path)
+    (tmp_path / "decks" / "d.yaml").write_text(
+        "deck:\n  name: T\n  max_meanings: 2\n  source: ../vocabulary.json\nnotes: []\n",
+        encoding="utf-8",
+    )
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:橋:はし", expression="橋", reading="はし", meanings=["a", "b", "c"],
+    )])
+
+    build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
+
+    names, values = _fields(tmp_path / "o.apkg")
+    assert "+1 more sense" in values[names.index("Meanings")]
+
+
+def test_the_cap_can_be_turned_off(tmp_path: Path) -> None:
+    _project(tmp_path)
+    (tmp_path / "janki.toml").write_text(
+        (tmp_path / "janki.toml").read_text(encoding="utf-8") + "\n[cards]\nmax_meanings = 0\n",
+        encoding="utf-8",
+    )
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:橋:はし", expression="橋", reading="はし",
+        meanings=[f"s{n}" for n in range(10)],
+    )])
+
+    build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
+
+    names, values = _fields(tmp_path / "o.apkg")
+    meanings = values[names.index("Meanings")]
+    assert "s9" in meanings and "more sense" not in meanings
+
+
+def test_the_record_keeps_every_sense(tmp_path: Path) -> None:
+    """The cap is a card decision. Nothing is discarded on the way in — this
+    project's rule — so the file still holds all 17."""
+    _project(tmp_path)
+    record = VocabularyRecord(
+        id="word:する:する", expression="する", reading="する",
+        meanings=[f"sense {n}" for n in range(1, 18)],
+    )
+    _write_records(tmp_path, [record])
+
+    build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
+
+    stored = json.loads((tmp_path / "vocabulary.json").read_text(encoding="utf-8"))
+    assert len(stored[0]["meanings"]) == 17

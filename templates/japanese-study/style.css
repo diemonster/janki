@@ -1,4 +1,9 @@
+/* Pitch colours, on `.card` rather than `:root`: Anki styles the card element,
+   and a custom property set on :root is not reliably inherited into the
+   reviewer's shadow tree. */
 .card {
+  --pitch-low: #4a6fb5;
+  --pitch-high: #c95f70;
   box-sizing: border-box;
   max-width: 760px;
   margin: 0 auto;
@@ -144,22 +149,31 @@
 
 @media (prefers-color-scheme: dark) {
   .card {
+    /* Lifted, because the same blue and red go muddy on a dark ground. */
+    --pitch-low: #7fa3e0;
+    --pitch-high: #e8899a;
     color: #f2f2f2;
     background: #181818;
   }
 }
 
-/* Pitch accent, drawn the way a Japanese dictionary draws it: a line over the
-   high morae, and a drop down the right-hand side of the mora the pitch falls
-   from. One row per accepted pattern, primary first — a word with two accents
-   has two, and showing one would teach that the other is wrong.
+/* Pitch accent, drawn the way jpdb draws it: a line *under* the low morae and
+   *over* the high ones, with a vertical connecting the two at every change.
+   One row per accepted pattern, primary first — a word with two accents has
+   two, and showing one would teach that the other is wrong.
+
+   The two-line form is not decoration. The traditional dictionary notation —
+   an overline on the high morae only — makes a heiban word look like a word
+   with nothing recorded, because "flat and high" and "no data" render the
+   same. Every mora carrying a line on one side or the other means the diagram
+   always says something.
 
    The particle slot is the empty span at the end. It is what makes odaka
    visible at all: the fall happens *after* the word, so a diagram stopping at
    the last kana has nowhere to show it, and 橋 would look identical to 端. */
 .pitch-accent {
-  margin: .35rem 0 .1rem;
-  line-height: 2.1;
+  margin: .5rem 0 .2rem;
+  line-height: 2.4;
 }
 .pitch-accent .pitch {
   display: inline-block;
@@ -168,19 +182,34 @@
 }
 .pitch-accent .mora {
   display: inline-block;
-  padding: 0 .1em;
-  border-top: 2px solid transparent;
+  position: relative;
+  padding: 0 .15em;
   font-size: 1.05rem;
 }
+/* Low: the line runs underneath. High: over the top. */
+.pitch-accent .mora.low {
+  box-shadow: inset 0 -2px 0 0 var(--pitch-low);
+}
 .pitch-accent .mora.high {
-  border-top-color: currentColor;
+  box-shadow: inset 0 2px 0 0 var(--pitch-high);
+}
+/* The verticals. `rise` climbs the left edge into a high run; `drop` falls
+   down the right edge of the mora the pitch falls from. */
+.pitch-accent .mora.rise {
+  box-shadow: inset 0 2px 0 0 var(--pitch-high), inset 2px 0 0 0 var(--pitch-high);
 }
 .pitch-accent .mora.drop {
-  border-right: 2px solid currentColor;
+  box-shadow: inset 0 2px 0 0 var(--pitch-high), inset -2px 0 0 0 var(--pitch-high);
+}
+.pitch-accent .mora.rise.drop {
+  box-shadow:
+    inset 0 2px 0 0 var(--pitch-high),
+    inset 2px 0 0 0 var(--pitch-high),
+    inset -2px 0 0 0 var(--pitch-high);
 }
 /* The particle has no text, so it needs a width to carry its own line. */
 .pitch-accent .mora.particle {
-  width: .6em;
+  width: .7em;
 }
 
 .example-audio {
@@ -191,4 +220,10 @@
   margin-top: .75rem;
   font-size: .8rem;
   opacity: .65;
+}
+
+/* "+13 more senses": present, but not competing with the glosses themselves. */
+.more-senses {
+  opacity: 0.55;
+  font-size: 0.85em;
 }

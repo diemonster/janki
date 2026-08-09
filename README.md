@@ -111,6 +111,20 @@ rather than merging. Sync *before* importing, so the choice is trivial: upload
 your own collection and nothing is at stake. Then sync normally to make the
 deck available in AnkiMobile.
 
+### How much a card shows
+
+jpdb hands back every sense a word has — する has 17 — and a recognition card is
+not a dictionary entry. Cards show the first few, in jpdb's own
+roughly-commonest-first order, and say how many they left:
+
+```toml
+[cards]
+max_meanings = 4    # 0 shows them all; a deck may set its own
+```
+
+The record keeps all of them. The cap is a card decision, so `janki status`, a
+search, and a human choosing which sense matters all still see the full list.
+
 ### Checking that an import actually landed
 
 `janki status` reads your Anki collection and says when a deck's notetype is not

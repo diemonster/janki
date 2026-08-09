@@ -39,7 +39,7 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "collection",
         "profile",
     ),
-    "cards": ("recognition", "production", "reading"),
+    "cards": ("recognition", "production", "reading", "max_meanings"),
     "ai": ("extract_model", "enrich_model"),
     "tts": (
         "provider",
@@ -270,6 +270,10 @@ class ProjectConfig:
     #: if there is exactly one; otherwise say so rather than guess.
     anki_profile: str
     default_cards: dict[str, bool]
+    #: How many glosses a card shows. jpdb hands back every sense a word has
+    #: — する has 17 — and a card is for recognising a word, not for holding
+    #: its dictionary entry. 0 means show them all.
+    max_meanings: int
     extract_model: str
     enrich_model: str
     tts_provider: str
@@ -350,6 +354,7 @@ class ProjectConfig:
                 "production": _bool(data, "cards", "production", True),
                 "reading": _bool(data, "cards", "reading", False),
             },
+            max_meanings=_int(data, "cards", "max_meanings", 4),
             extract_model=_str(data, "ai", "extract_model", "claude-opus-5"),
             enrich_model=_str(data, "ai", "enrich_model", "claude-opus-5"),
             tts_provider=_str(data, "tts", "provider", "voicevox"),
