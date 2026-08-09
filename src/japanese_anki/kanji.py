@@ -251,10 +251,54 @@ def _priority_rank(priorities: Iterable[str]) -> int:
     return best
 
 
-def _examples_for(reading: str, words: list[dict[str, Any]]) -> tuple[Example, ...]:
+def _shows_reading(character: str, written: str, pronounced: str, stem: str) -> bool:
+    """Can this word *prove* that this character is read this way?
+
+    A substring test cannot. 図書館 contains か, so 書's か.く claimed it as an
+    example — but that か is 館's, and the card then asserted a reading nobody
+    verified. 教科書 answered the same way (か from 科), 部分 answered 分's ブ
+    (it is ブン), and 絵を描く answered 書 without containing 書 at all, because
+    JMdict lists the spellings together.
+
+    What *is* provable is position. If the character opens the word, its reading
+    opens the pronunciation; if it closes the word, its reading closes the
+    pronunciation. A character in the middle of a compound cannot be pinned to
+    any run of kana without knowing how its neighbours are read, so those are
+    refused rather than guessed at — the rule this project applies to every
+    other reading.
+    """
+    # No separate "is the character even in the word" guard: a word the
+    # character neither opens nor closes cannot be proved either way, and that
+    # includes a word it is absent from — 絵を描く, which JMdict lists under 書
+    # because the spellings share an entry.
+    if written.startswith(character):
+        return pronounced.startswith(stem)
+    if written.endswith(character):
+        return pronounced.endswith(stem)
+    return False
+
+
+def _examples_for(
+    character: str,
+    reading: str,
+    words: list[dict[str, Any]],
+    rivals: Iterable[str] = (),
+) -> tuple[Example, ...]:
+    """Words that show this character being read this way.
+
+    ``rivals`` are the character's other readings. A word goes to the *longest*
+    reading that fits it, because one reading is often a prefix of another: 分's
+    ブ and ブン both open 分野 (ぶんや), and offering 分野 as an example of ブ
+    teaches a reading the word does not use.
+    """
     stem = _match_key(reading)
     if not stem:
         return ()
+    longer = sorted(
+        (other for other in {_match_key(r) for r in rivals} if len(other) > len(stem)),
+        key=len,
+        reverse=True,
+    )
     scored: list[tuple[int, Example]] = []
     for entry in words:
         glosses = entry.get("meanings") or [{}]
@@ -269,7 +313,14 @@ def _examples_for(reading: str, words: list[dict[str, Any]]) -> tuple[Example, .
                 # though they were the ones to learn.
                 continue
             pronounced = _to_hiragana(str(variant.get("pronounced") or ""))
-            if stem not in pronounced:
+            written = str(variant.get("written") or "")
+            if not _shows_reading(character, written, pronounced, stem):
+                continue
+            if any(
+                _shows_reading(character, written, pronounced, other) for other in longer
+            ):
+                # A longer reading of the same character also fits, so this word
+                # is that reading's example rather than this one's.
                 continue
             scored.append((
                 _priority_rank(priorities),
@@ -321,6 +372,11 @@ def fetch_kanji(character: str, *, transport: Transport | None = None) -> KanjiI
     # a row each prints the same examples twice. The plain form is kept.
     readings: list[Reading] = []
     seen_stems: set[tuple[str, str]] = set()
+    all_readings = [
+        str(value)
+        for key in ("on_readings", "kun_readings")
+        for value in (info.get(key) or [])
+    ]
     for kind, key in (("on", "on_readings"), ("kun", "kun_readings")):
         for value in sorted((info.get(key) or []), key=lambda r: ("-" in r, r)):
             text = str(value)
@@ -332,7 +388,7 @@ def fetch_kanji(character: str, *, transport: Transport | None = None) -> KanjiI
                 Reading(
                     kind=kind,
                     reading=_display_reading(text),
-                    examples=_examples_for(text, words),
+                    examples=_examples_for(character, text, words, all_readings),
                 )
             )
 

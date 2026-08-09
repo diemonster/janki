@@ -349,3 +349,74 @@ def test_every_reading_gets_a_row_before_any_gets_a_second() -> None:
     # The container div is class="kanji-examples", which contains the row
     # class as a substring — count the rows themselves.
     assert rendered.count('<div class="kanji-example">') == 4, "and the cap holds"
+
+
+# --- the character has to be provably the one being read --------------------
+
+
+def test_a_word_the_character_is_not_even_in_is_refused() -> None:
+    """JMdict lists spellings together, so 書's word list contains 絵を描く. A
+    substring test over the kana accepted it; the position rule refuses it for
+    the same reason it refuses a buried character — nothing proves the pairing."""
+    send = fake_transport(
+        info={"on_readings": [], "kun_readings": ["か.く"]},
+        words=[
+            word("絵を描く", "えをかく", "to draw a picture", ["ichi1"]),
+            word("書く", "かく", "to write", ["ichi1"]),
+        ],
+    )
+
+    info = fetch_kanji("書", transport=send)
+
+    assert [e.written for e in info.readings[0].examples] == ["書く"]
+
+
+def test_a_character_buried_in_a_compound_cannot_be_pinned() -> None:
+    """書 sits in the middle of 図書館 (としょかん), and しょ really is in there —
+    so containment accepts it. But nothing proves *that* しょ is 書's rather than
+    part of と-しょ-かん's reading of another character, and the card would
+    assert a pairing nobody verified. Refused rather than guessed at.
+
+    The reading here has to be one the pronunciation genuinely contains, or the
+    test passes on the full-reading match and never reaches the position rule."""
+    send = fake_transport(
+        info={"on_readings": ["ショ"], "kun_readings": []},
+        words=[word("図書館", "としょかん", "library", ["ichi1"])],
+    )
+
+    assert fetch_kanji("書", transport=send).readings[0].examples == ()
+
+
+def test_the_reading_must_sit_where_the_character_sits() -> None:
+    """部分 (ぶぶん) ends in 分, so 分's reading must end the pronunciation. ブ
+    does not — the word uses ブン — and the old containment test took it."""
+    send = fake_transport(
+        info={"on_readings": ["ブ"], "kun_readings": []},
+        words=[word("部分", "ぶぶん", "part", ["ichi1"])],
+    )
+
+    assert fetch_kanji("分", transport=send).readings[0].examples == ()
+
+
+def test_the_longest_reading_that_fits_claims_the_word() -> None:
+    """One reading is often a prefix of another: 分's ブ and ブン both open
+    分野 (ぶんや). Offering it under ブ teaches a reading the word does not
+    use."""
+    send = fake_transport(
+        info={"on_readings": ["ブ", "ブン"], "kun_readings": []},
+        words=[word("分野", "ぶんや", "field", ["ichi1"])],
+    )
+
+    info = fetch_kanji("分", transport=send)
+
+    got = {r.reading: [e.written for e in r.examples] for r in info.readings}
+    assert got == {"ブ": [], "ブン": ["分野"]}
+
+
+def test_a_word_the_character_opens_matches_on_its_prefix() -> None:
+    send = fake_transport(
+        info={"on_readings": ["ゼン"], "kun_readings": []},
+        words=[word("前線", "ぜんせん", "front line", ["nf08"])],
+    )
+
+    assert fetch_kanji("前", transport=send).readings[0].examples[0].written == "前線"

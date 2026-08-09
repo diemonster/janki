@@ -59,18 +59,7 @@
       {
         "kind": "kun",
         "reading": "づか(い)",
-        "examples": [
-          {
-            "written": "無駄遣い",
-            "pronounced": "むだづかい",
-            "gloss": "waste (of money, time, etc.)"
-          },
-          {
-            "written": "言葉遣い",
-            "pronounced": "ことばづかい",
-            "gloss": "speech"
-          }
-        ]
+        "examples": []
       }
     ],
     "strokes": [
@@ -125,14 +114,14 @@
         "reading": "ブ",
         "examples": [
           {
-            "written": "部分",
-            "pronounced": "ぶぶん",
-            "gloss": "portion"
+            "written": "五分",
+            "pronounced": "ごぶ",
+            "gloss": "half"
           },
           {
-            "written": "分野",
-            "pronounced": "ぶんや",
-            "gloss": "field"
+            "written": "大分",
+            "pronounced": "だいぶ",
+            "gloss": "considerably"
           }
         ]
       },
@@ -168,12 +157,7 @@
         "reading": "わ(かる)",
         "examples": [
           {
-            "written": "解る",
-            "pronounced": "わかる",
-            "gloss": "to understand"
-          },
-          {
-            "written": "判る",
+            "written": "分かる",
             "pronounced": "わかる",
             "gloss": "to understand"
           }
@@ -200,9 +184,9 @@
             "gloss": "division"
           },
           {
-            "written": "分ける",
-            "pronounced": "わける",
-            "gloss": "to divide (into)"
+            "written": "追分",
+            "pronounced": "おいわけ",
+            "gloss": "forked road"
           }
         ]
       },
@@ -214,11 +198,6 @@
             "written": "分ける",
             "pronounced": "わける",
             "gloss": "to divide (into)"
-          },
-          {
-            "written": "引き分ける",
-            "pronounced": "ひきわける",
-            "gloss": "to pull apart"
           }
         ]
       }
@@ -325,11 +304,6 @@
             "written": "書く",
             "pronounced": "かく",
             "gloss": "to write"
-          },
-          {
-            "written": "絵を描く",
-            "pronounced": "えをかく",
-            "gloss": "to paint (draw) a picture"
           }
         ]
       },
@@ -343,9 +317,9 @@
             "gloss": "title (e.g. Doctor, Professor, Lord)"
           },
           {
-            "written": "肩書き",
-            "pronounced": "かたがき",
-            "gloss": "title (e.g. Doctor, Professor, Lord)"
+            "written": "覚書",
+            "pronounced": "おぼえがき",
+            "gloss": "memo"
           }
         ]
       },
@@ -359,9 +333,9 @@
             "gloss": "title (e.g. Doctor, Professor, Lord)"
           },
           {
-            "written": "肩書き",
-            "pronounced": "かたがき",
-            "gloss": "title (e.g. Doctor, Professor, Lord)"
+            "written": "覚書",
+            "pronounced": "おぼえがき",
+            "gloss": "memo"
           }
         ]
       }
@@ -423,14 +397,14 @@
         "reading": "き",
         "examples": [
           {
-            "written": "出来事",
-            "pronounced": "できごと",
-            "gloss": "incident"
+            "written": "上出来",
+            "pronounced": "じょうでき",
+            "gloss": "good performance"
           },
           {
-            "written": "出来高",
-            "pronounced": "できだか",
-            "gloss": "yield"
+            "written": "行き来",
+            "pronounced": "ゆきき",
+            "gloss": "coming and going"
           }
         ]
       },
@@ -462,29 +436,13 @@
             "written": "来る",
             "pronounced": "くる",
             "gloss": "to come (spatially or temporally)"
-          },
-          {
-            "written": "連れてくる",
-            "pronounced": "つれてくる",
-            "gloss": "to bring someone along"
           }
         ]
       },
       {
         "kind": "kun",
         "reading": "こ",
-        "examples": [
-          {
-            "written": "古来",
-            "pronounced": "こらい",
-            "gloss": "from ancient times"
-          },
-          {
-            "written": "来航",
-            "pronounced": "らいこう",
-            "gloss": "arrival of ships (from abroad)"
-          }
-        ]
+        "examples": []
       }
     ],
     "strokes": [
@@ -516,9 +474,9 @@
             "gloss": "prefectural governor"
           },
           {
-            "written": "県知事",
-            "pronounced": "けんちじ",
-            "gloss": "prefectural governor"
+            "written": "知人",
+            "pronounced": "ちじん",
+            "gloss": "friend"
           }
         ]
       },
@@ -526,11 +484,6 @@
         "kind": "kun",
         "reading": "し(らせる)",
         "examples": [
-          {
-            "written": "思い知らせる",
-            "pronounced": "おもいしらせる",
-            "gloss": "to make (someone) realize (e.g. their mistake)"
-          },
           {
             "written": "知らせる",
             "pronounced": "しらせる",
@@ -546,11 +499,6 @@
             "written": "知る",
             "pronounced": "しる",
             "gloss": "to know"
-          },
-          {
-            "written": "思い知る",
-            "pronounced": "おもいしる",
-            "gloss": "to realize"
           }
         ]
       }
@@ -586,9 +534,9 @@
             "gloss": "newspaper"
           },
           {
-            "written": "新聞社",
-            "pronounced": "しんぶんしゃ",
-            "gloss": "newspaper company"
+            "written": "見聞",
+            "pronounced": "けんぶん",
+            "gloss": "information"
           }
         ]
       },
@@ -614,11 +562,6 @@
         "examples": [
           {
             "written": "聞く",
-            "pronounced": "きく",
-            "gloss": "to hear"
-          },
-          {
-            "written": "聴く",
             "pronounced": "きく",
             "gloss": "to hear"
           }
@@ -716,11 +659,6 @@
         "reading": "い(く)",
         "examples": [
           {
-            "written": "低空飛行",
-            "pronounced": "ていくうひこう",
-            "gloss": "low-altitude flying"
-          },
-          {
             "written": "行く",
             "pronounced": "いく",
             "gloss": "to go"
@@ -802,14 +740,14 @@
         "reading": "ゆ(き)",
         "examples": [
           {
-            "written": "売れ行き",
-            "pronounced": "うれゆき",
-            "gloss": "sales"
+            "written": "奥行",
+            "pronounced": "おくゆき",
+            "gloss": "depth"
           },
           {
-            "written": "先行き",
-            "pronounced": "さきゆき",
-            "gloss": "the future"
+            "written": "行き",
+            "pronounced": "ゆき",
+            "gloss": "the way there"
           }
         ]
       },
@@ -818,14 +756,14 @@
         "reading": "ゆき",
         "examples": [
           {
-            "written": "売れ行き",
-            "pronounced": "うれゆき",
-            "gloss": "sales"
+            "written": "奥行",
+            "pronounced": "おくゆき",
+            "gloss": "depth"
           },
           {
-            "written": "先行き",
-            "pronounced": "さきゆき",
-            "gloss": "the future"
+            "written": "行き",
+            "pronounced": "ゆき",
+            "gloss": "the way there"
           }
         ]
       }
@@ -901,9 +839,9 @@
             "gloss": "to see"
           },
           {
-            "written": "試みる",
-            "pronounced": "こころみる",
-            "gloss": "to try"
+            "written": "見る見る",
+            "pronounced": "みるみる",
+            "gloss": "very fast"
           }
         ]
       }
@@ -969,9 +907,9 @@
             "gloss": "to say"
           },
           {
-            "written": "云う",
-            "pronounced": "いう",
-            "gloss": "to say"
+            "written": "言うまでもない",
+            "pronounced": "いうまでもない",
+            "gloss": "goes without saying"
           }
         ]
       },
@@ -1082,13 +1020,7 @@
       {
         "kind": "on",
         "reading": "トウ",
-        "examples": [
-          {
-            "written": "句読点",
-            "pronounced": "くとうてん",
-            "gloss": "punctuation mark"
-          }
-        ]
+        "examples": []
       },
       {
         "kind": "on",
@@ -1098,11 +1030,6 @@
             "written": "読本",
             "pronounced": "とくほん",
             "gloss": "reading-book"
-          },
-          {
-            "written": "副読本",
-            "pronounced": "ふくとくほん",
-            "gloss": "supplementary reader"
           }
         ]
       },
@@ -1267,11 +1194,6 @@
             "written": "食う",
             "pronounced": "くう",
             "gloss": "to eat"
-          },
-          {
-            "written": "喰う",
-            "pronounced": "くう",
-            "gloss": "to eat"
           }
         ]
       },
@@ -1283,11 +1205,6 @@
             "written": "食らう",
             "pronounced": "くらう",
             "gloss": "to eat"
-          },
-          {
-            "written": "面食らう",
-            "pronounced": "めんくらう",
-            "gloss": "to be confused"
           }
         ]
       },
@@ -1357,11 +1274,6 @@
         "examples": [
           {
             "written": "飲む",
-            "pronounced": "のむ",
-            "gloss": "to drink"
-          },
-          {
-            "written": "呑む",
             "pronounced": "のむ",
             "gloss": "to drink"
           }
