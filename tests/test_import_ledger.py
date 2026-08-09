@@ -586,7 +586,7 @@ def test_the_error_names_a_repair_that_works(
     assert cli.main(["--root", str(root), "status", "--rebuild"]) == 0
 
     out = capsys.readouterr().out
-    assert "repaired: word:話す:はなす had 'audio' of the wrong type" in out
+    assert "repaired: word:話す:はなす" in out and "'audio_unreadable'" in out
     entry = _entries(root)["word:話す:はなす"]
     assert entry["audio"] == [], "the bad key was reset"
     assert entry["exports"] == {"verbs": "2026-07-01"}, "and the history kept"
@@ -608,7 +608,7 @@ def test_a_non_dict_exports_is_refused_rather_than_crashing(tmp_path: Path) -> N
         ledger.load(root / "ledger.json")
 
     book = ledger.load(root / "ledger.json", repair=True)
-    assert book.repaired == {"word:話す:はなす": ["exports"]}
+    assert book.repaired == {"word:話す:はなす": ["exports_unreadable"]}
     assert book.record_export("word:話す:はなす", "verbs") is True
 
 
@@ -637,18 +637,46 @@ def test_a_repair_never_discards_what_a_rebuild_cannot_put_back(
     assert entry[f"{key}_unreadable"] == value, "and the old value survived"
 
 
-def test_a_repair_of_a_rebuildable_key_says_the_rebuild_will_fill_it(
+def test_sources_are_parked_too_because_a_rebuild_cannot_restore_them(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The other half: a user must be able to tell a lossless `audio` reset from
-    a lossy one, which a message saying only "a structured key" cannot do."""
+    """`sources` looked reconstructible and is not. It is append-only by design:
+    a word imported from Shirabe and later mined from jpdb has two sightings
+    with two real dates, and `status.rebuild` writes back a *single* reference
+    dated today, from the record's own `source`. It also only visits records
+    still in the universe — this entry's record is in no `vocabulary.json` at
+    all, so the rebuild never touches it and "it will be filled back in" was
+    simply false."""
     root, _ = _project(tmp_path)
-    _misshapen(root, sources=None)
+    _misshapen(root, sources={"type": "shirabe", "ref": "export.csv"})
     capsys.readouterr()
 
     assert cli.main(["--root", str(root), "status", "--rebuild"]) == 0
 
-    out = capsys.readouterr().out
-    assert "'sources' of the wrong type, reset to empty; the rebuild below" in out
-    assert "sources_unreadable" not in out
-    assert "sources_unreadable" not in _entries(root)["word:話す:はなす"]
+    entry = _entries(root)["word:話す:はなす"]
+    assert entry["sources"] == []
+    assert entry["sources_unreadable"] == {"type": "shirabe", "ref": "export.csv"}
+
+
+def test_a_second_repair_does_not_overwrite_the_first_ones_rescue(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The quarantine is the only copy, so writing over it destroys exactly what
+    this mechanism exists to keep — and it is a plausible sequence: repair,
+    hand-edit the key wrongly a second time, repair again."""
+    root, _ = _project(tmp_path)
+    _misshapen(root, enriched={"jpdb": {"at": "2026-07-01"}})
+    capsys.readouterr()
+    assert cli.main(["--root", str(root), "status", "--rebuild"]) == 0
+
+    ledger_path = root / "ledger.json"
+    payload = json.loads(ledger_path.read_text(encoding="utf-8"))
+    payload["records"]["word:話す:はなす"]["enriched"] = {"ai": "a later bad edit"}
+    ledger_path.write_text(json.dumps(payload), encoding="utf-8")
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "status", "--rebuild"]) == 0
+
+    entry = _entries(root)["word:話す:はなす"]
+    assert entry["enriched_unreadable"] == {"jpdb": {"at": "2026-07-01"}}, "the first survives"
+    assert entry["enriched_unreadable_2"] == {"ai": "a later bad edit"}, "beside the second"

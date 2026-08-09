@@ -491,3 +491,40 @@ def test_a_pattern_with_no_reading_to_draw_it_over_is_reported(tmp_path: Path) -
     names, values = _fields(tmp_path / "o.apkg")
     assert values[names.index("PitchAccent")] == ""
     assert any("no reading to draw it over" in w for w in result.warnings)
+
+
+def _case_insensitive(root: Path) -> bool:
+    probe = root / "CaseProbe.tmp"
+    probe.write_bytes(b"")
+    try:
+        return (root / "caseprobe.tmp").exists()
+    finally:
+        probe.unlink()
+
+
+def test_two_spellings_of_one_file_are_not_a_collision(tmp_path: Path) -> None:
+    """`resolve()` rebuilds the path from the components as written — it fixes
+    neither case nor Unicode composition — so on the very filesystem the
+    collision key accounts for, two references to *one* file compared unequal
+    and aborted the build, advising "rename one" when there is only one.
+
+    Skipped where the filesystem really does distinguish them, because there the
+    two spellings are two files and refusing them is correct."""
+    _project(tmp_path)
+    if not _case_insensitive(tmp_path):
+        pytest.skip("case-sensitive filesystem: these are genuinely two files")
+    (tmp_path / "media" / "audio").mkdir(parents=True)
+    (tmp_path / "media" / "audio" / "Shared.wav").write_bytes(b"one file, two spellings")
+    _write_records(tmp_path, [
+        VocabularyRecord(id="word:橋:はし", expression="橋", reading="はし",
+                         meanings=["bridge"], audio="audio/Shared.wav"),
+        VocabularyRecord(id="word:箸:はし", expression="箸", reading="はし",
+                         meanings=["chopsticks"], audio="audio/shared.wav"),
+    ])
+
+    result = _build(tmp_path)
+
+    assert result.media_count == 1, "one file on disk, packaged once"
+    with ZipFile(tmp_path / "o.apkg") as package:
+        media = json.loads(package.read("media").decode("utf-8"))
+    assert sorted(media.values()) == ["Shared.wav"], "under one name, not two"

@@ -184,7 +184,11 @@ def main() -> int:
     try:
         with urllib.request.urlopen(f"{args.url}/speakers", timeout=30) as response:
             speakers = json.load(response)
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
+        # ValueError too: a scheme-less `--url localhost:50021` is a plain
+        # `ValueError: unknown url type`, and a non-JSON body (a proxy or
+        # captive portal answering on the port) is a JSONDecodeError, which is
+        # one as well. Both are exactly the typo this message exists for.
         print(f"No VOICEVOX engine at {args.url}: {exc}", file=sys.stderr)
         print(VoicevoxProvider(base_url=args.url).launch_hint, file=sys.stderr)
         return 1

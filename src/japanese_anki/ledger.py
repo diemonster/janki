@@ -44,7 +44,7 @@ changed since it was read rather than clobber it.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+from collections.abc import Container, Iterable
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -103,19 +103,44 @@ _ENTRY_SHAPE: dict[str, type] = {
     "exports": dict,
 }
 
-#: Which of those ``status --rebuild`` can put back. Sources come from each
-#: record's own ``source`` and audio from the files on disk, so emptying them
-#: costs nothing — the rebuild in the same command refills them. ``enriched``
-#: and ``exports`` are reconstructible by nothing at all (``status.rebuild``
-#: says so of exports in its own docstring), so a repair that emptied them
-#: would destroy the history the refusal message promises to keep. Those are
-#: quarantined instead, under ``<key>_unreadable``.
-RECONSTRUCTIBLE = frozenset({"sources", "audio"})
+#: A repair parks every unreadable value; none of these keys is reconstructible.
+#:
+#: An earlier version exempted ``sources`` and ``audio`` on the grounds that
+#: ``status --rebuild`` refills them. It does not, in three separate ways:
+#:
+#: * ``rebuild`` iterates the *record universe*, so an entry whose record is no
+#:   longer in ``vocabulary.json`` — hand-deleted, renamed, or in a deck that
+#:   was removed — is never visited at all, and ``Ledger.remove`` is called from
+#:   one narrow path, so those entries are an ordinary state rather than a bug.
+#: * A rebuilt ``sources`` is a *single* reference dated today. ``sources`` is
+#:   append-only by design (DESIGN_V2): a word imported from Shirabe and later
+#:   mined from jpdb has two sightings with two real dates, and a rebuild can
+#:   only ever restore the one the record itself carries.
+#: * A rebuilt ``audio`` entry is strictly weaker than the one it replaces —
+#:   ``provider`` unknown, ``voice`` and ``speed`` the ``-1`` sentinels (so the
+#:   next ``janki audio`` re-synthesizes everything), no ``accent_unverified``
+#:   marker, an empty content fingerprint for any accented record, and nothing
+#:   at all for a superseded clip.
+#:
+#: So the copy is unconditional. It is cheap, ``_shape_problems`` ignores the
+#: extra key, and it is the only thing that makes ``_shape_error``'s promise
+#: — nothing is thrown away — true.
 
 
-def quarantine_key(key: str) -> str:
-    """Where :func:`load` parks a value it could not read but must not lose."""
-    return f"{key}_unreadable"
+def quarantine_key(key: str, taken: Container[str] = ()) -> str:
+    """Where :func:`load` parks a value it could not read but must not lose.
+
+    Suffixed when the obvious name is already in use, because a second repair
+    of the same key must not overwrite what the first one saved — which would
+    destroy the history this whole mechanism exists to keep, silently.
+    """
+    base = f"{key}_unreadable"
+    if base not in taken:
+        return base
+    index = 2
+    while f"{base}_{index}" in taken:
+        index += 1
+    return f"{base}_{index}"
 
 
 def _shape_problems(entry: dict[str, Any]) -> list[tuple[str, str]]:
@@ -884,14 +909,13 @@ def load(path: Path, *, repair: bool = False) -> Ledger:
             continue
         if not repair:
             raise _shape_error(path, record_id, problems)
+        parked: list[str] = []
         for key, _ in problems:
-            if key not in RECONSTRUCTIBLE:
-                # Nothing can put this back, so the unreadable value is parked
-                # rather than dropped: a user following the refusal message must
-                # not lose enrichment or export history by taking its advice.
-                entry[quarantine_key(key)] = entry[key]
+            where = quarantine_key(key, entry)
+            entry[where] = entry[key]
             entry[key] = _ENTRY_SHAPE[key]()
-        repaired[record_id] = [key for key, _ in problems]
+            parked.append(where)
+        repaired[record_id] = parked
 
     pending_batches = data.get("pending_batches")
     if pending_batches is None:

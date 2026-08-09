@@ -171,18 +171,44 @@ def _resolve_media(
         key = unicodedata.normalize("NFC", candidate.name).casefold()
         owner = claimed.setdefault(key, (resolved, record_id))
         if owner[0] != resolved:
-            raise AnkiBuildError(
-                f"Two different files would be packaged under one media name: "
-                f"{owner[0]} for {owner[1]} and {resolved} for {record_id}. "
-                "Anki stores media by basename, so one would overwrite the "
-                "other and a card would play the wrong clip. Rename one."
-            )
+            # `resolve()` rebuilds the path from the components as written,
+            # fixing neither case nor composition, so two spellings of *one*
+            # file compare unequal on exactly the filesystem the key above
+            # accounts for. Ask the filesystem: `samefile` says no on a
+            # case-sensitive volume, where they really are two files and
+            # refusing them is right, and yes on macOS, where they are one.
+            if not _same_file(owner[0], candidate):
+                raise AnkiBuildError(
+                    f"Two different files would be packaged under one media "
+                    f"name: {owner[0]} for {owner[1]} and {resolved} for "
+                    f"{record_id}. Anki stores media by basename, so one would "
+                    "overwrite the other and a card would play the wrong clip. "
+                    "Rename one."
+                )
+            # One file, two spellings: package it under the name the first
+            # record claimed. Appending this spelling too would ship the same
+            # bytes twice under two names Anki then collides anyway, and count
+            # two in `media_count`.
+            candidate = Path(owner[0])
+            resolved = owner[0]
         media_files.append(resolved)
         return candidate
     raise AnkiBuildError(
         f"{label} for {record_id} does not exist: tried "
         f"{(media_dir / value).resolve()} and {(deck_dir / value).resolve()}"
     )
+
+
+def _same_file(existing: str, candidate: Path) -> bool:
+    """Are these two paths the same file on disk? ``False`` if it cannot tell."""
+    try:
+        return Path(existing).samefile(candidate)
+    except OSError:
+        # One of them vanished mid-build, or the volume refused the stat. The
+        # honest answer is "cannot prove they are the same", which routes to
+        # the collision error rather than to silently packaging one over the
+        # other.
+        return False
 
 
 def _accent_patterns(record: VocabularyRecord) -> list[str]:
