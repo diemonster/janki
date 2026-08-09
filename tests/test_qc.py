@@ -132,14 +132,29 @@ def test_a_wrong_reading_is_flagged_with_both_sides() -> None:
     verdict = verify_example_furigana(example(japanese="話す", furigana="話[か]す"), parse)
 
     assert not verdict
-    assert verdict.differences == ("jpdb reads 話 as はな, not か",)
+    assert verdict.differences[0] == "jpdb reads 話 as はな; this reads it as か"
     assert verdict.expected == "話[はな]す"
     assert verdict.found == "話[か]す"
 
 
-def test_a_different_segmentation_is_flagged() -> None:
-    # Exactly what a model invents plausibly and wrongly, and what would go on
-    # to drive sentence audio.
+def test_a_finer_split_saying_the_same_thing_verifies() -> None:
+    """jpdb returns furigana per *character*; an example is written per *word*,
+    which is how a card is read. Comparing the group sequences pairwise failed
+    on every multi-kanji compound — measured against a real import, 12 of 17
+    correct examples were flagged and their audio suppressed, while the 5 that
+    passed did so only because their words happened to be single kanji."""
+    parse = parse_of([["週", "しゅう"], ["末", "まつ"]])
+
+    verdict = verify_example_furigana(
+        example(japanese="週末", furigana="週末[しゅうまつ]"), parse
+    )
+
+    assert verdict, verdict.differences
+
+
+def test_a_reading_that_actually_differs_is_still_flagged() -> None:
+    """The same split, a different reading: jpdb reads 日本語 as にっぽんご. Both
+    are real, but a disagreement about the *sound* is what this exists for."""
     parse = parse_of([["日", "にっ"], ["本", "ぽん"], ["語", "ご"]])
 
     verdict = verify_example_furigana(
@@ -147,7 +162,22 @@ def test_a_different_segmentation_is_flagged() -> None:
     )
 
     assert not verdict
-    assert "jpdb splits 日 where this splits 日本語" in verdict.differences[0]
+    assert verdict.differences[0] == "jpdb reads 日本語 as にっぽんご; this reads it as にほんご"
+
+
+def test_a_missing_space_still_fails_though_the_split_is_free() -> None:
+    """The one grouping difference that is not free. `お茶[ちゃ]` puts ちゃ over
+    both characters, so Anki renders the wrong ruby and `furigana_reading`
+    yields ちゃ with the お gone — a difference in the *text* under the ruby,
+    which the joined comparison still sees."""
+    parse = parse_of(["お", ["茶", "ちゃ"]])
+
+    verdict = verify_example_furigana(
+        example(japanese="お茶", furigana="お茶[ちゃ]"), parse
+    )
+
+    assert not verdict
+    assert "puts ruby over" in verdict.differences[0]
 
 
 def test_missing_furigana_is_flagged_not_passed() -> None:
@@ -156,14 +186,14 @@ def test_missing_furigana_is_flagged_not_passed() -> None:
     verdict = verify_example_furigana(example(japanese="話す", furigana=""), parse)
 
     assert not verdict
-    assert "nothing here" in verdict.differences[0]
+    assert "this puts it over (nothing)" in verdict.differences[0]
 
 
 def test_furigana_the_parse_does_not_have_is_flagged() -> None:
     verdict = verify_example_furigana(example(japanese="猫", furigana="猫[ねこ]"), parse_of("ねこ"))
 
     assert not verdict
-    assert "is not in jpdb's reading" in verdict.differences[0]
+    assert "jpdb puts ruby over (nothing)" in verdict.differences[0]
 
 
 def test_a_sentence_with_no_kanji_verifies_with_no_furigana() -> None:

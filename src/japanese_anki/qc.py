@@ -351,11 +351,37 @@ def verify_example_furigana(
     notation, but it is notation that decides which characters a reading
     belongs to.
 
+    **Granularity is not disagreement.** jpdb returns furigana per *character* —
+    週[しゅう] 末[まつ] — while an example is written per *word*, 週末[しゅうまつ],
+    which is how Anki decks are read and what belongs on a card. Comparing the
+    group sequences pairwise therefore failed on every multi-kanji compound:
+    仕事, 漢字, 意味, 明日, 毎日 all "differed" while saying exactly the same
+    thing. Measured against a real jpdb import, that flagged 12 of 17 correct
+    examples and passed only the sentences whose words happened to be single
+    kanji — so the check was mostly reporting its own segmentation, and the
+    audio it suppressed was audio of correct sentences.
+
+    So the verdict is on the **joined** text and the **joined** reading. That is
+    blind to grouping and still catches both things this exists for:
+
+    * a wrong reading — jpdb reads 日本語 as にっぽんご where an example says
+      にほんご — because the joined readings differ; and
+    * the ``お茶[ちゃ]`` spill, because the joined *text* differs (お茶 against
+      茶). The space is notation, but it is notation that decides which
+      characters a reading covers, and :func:`furigana_reading` would yield ちゃ
+      with the お simply gone.
+
     A sentence with no kanji has no groups on either side, and verifies.
     """
     expected_pairs = parse_pairs(parse)
     found_pairs = furigana_pairs(example.furigana)
     expected = _render(parse)
+
+    def joined(pairs: tuple[tuple[str, str], ...]) -> tuple[str, str]:
+        return ("".join(text for text, _ in pairs), "".join(read for _, read in pairs))
+
+    expected_text, expected_reading = joined(expected_pairs)
+    found_text, found_reading = joined(found_pairs)
 
     differences: list[str] = []
 
@@ -377,24 +403,24 @@ def verify_example_furigana(
             f"the furigana spells {base}, but the sentence is {sentence}"
         )
 
-    if expected_pairs == found_pairs and not differences:
+    if (expected_text, expected_reading) == (found_text, found_reading) and not differences:
         return FuriganaVerdict(True, expected, example.furigana)
 
-    for index in range(max(len(expected_pairs), len(found_pairs))):
-        theirs = expected_pairs[index] if index < len(expected_pairs) else None
-        ours = found_pairs[index] if index < len(found_pairs) else None
-        if theirs == ours:
-            continue
-        if theirs is None:
-            differences.append(f"{ours[0]}[{ours[1]}] is not in jpdb's reading")
-        elif ours is None:
-            differences.append(f"jpdb reads {theirs[0]} as {theirs[1]}; nothing here")
-        elif theirs[0] != ours[0]:
-            differences.append(
-                f"jpdb splits {theirs[0]} where this splits {ours[0]}"
-            )
-        else:
-            differences.append(f"jpdb reads {theirs[0]} as {theirs[1]}, not {ours[1]}")
+    if expected_text != found_text:
+        differences.append(
+            f"jpdb puts ruby over {expected_text or '(nothing)'}; this puts it "
+            f"over {found_text or '(nothing)'}"
+        )
+    elif expected_reading != found_reading:
+        differences.append(
+            f"jpdb reads {expected_text} as {expected_reading}; this reads it "
+            f"as {found_reading}"
+        )
+
+    # No per-group differences appended: since the verdict stopped depending on
+    # grouping, "jpdb splits 来 where this splits 来週" describes something that
+    # is not a failure, and printing it beside the real reason invites the
+    # reader to fix the thing that was already fine.
     return FuriganaVerdict(False, expected, example.furigana, tuple(differences))
 
 

@@ -827,6 +827,55 @@ def _enrich_staging(
     return 0
 
 
+def _recheck_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
+    """Re-ask jpdb about examples that were flagged, and clear the ones it now
+    vouches for.
+
+    Cheap and jpdb-only: it writes no sentence and calls no model, so a flag
+    left by a check that has since improved costs a parse rather than a
+    rewrite.
+    """
+    output_path = config.normalized_file.resolve()
+    records = load_records(output_path) if output_path.exists() else []
+    if not records:
+        print(f"No records to check in {output_path}.")
+        return 0
+
+    book = ledger.load(config.ledger_file)
+    result = enrich.recheck_furigana(
+        records,
+        jpdb_client=jpdb.JpdbClient(jpdb.api_key_from_env()),
+        ids=args.ids or None,
+    )
+
+    cleared = sum(len(items) for items in result.cleared.values())
+    if result.changed:
+        save_records_json(output_path, result.records)
+        for record_id in result.cleared:
+            book.record_enriched(record_id, kind="jpdb", model="jpdb", fields=["furigana"])
+    ledger_error = _save_ledger(book) if result.changed else None
+
+    print(
+        f"Confirmed {cleared} example(s) across {len(result.cleared)} record(s); "
+        f"their audio is no longer held back."
+        if cleared
+        else "Nothing to confirm: no flagged example is vouched for by jpdb yet."
+    )
+    if result.differing:
+        total = sum(len(items) for items in result.differing.values())
+        print(f"Still unconfirmed ({total}) — jpdb reads these differently:")
+        for record_id, items in result.differing.items():
+            for sentence, why in items:
+                print(f"  {record_id}: {sentence}")
+                print(f"    {why}")
+    for sentence in result.unparsed:
+        print(f"warning: jpdb could not parse: {sentence}", file=sys.stderr)
+    if ledger_error is not None:
+        _report_ledger_failure(ledger_error)
+        return 1
+    return 0
+
+
 def command_enrich(args: argparse.Namespace) -> int:
     """Fill empty fields on existing records from a dictionary.
 
@@ -841,6 +890,7 @@ def command_enrich(args: argparse.Namespace) -> int:
             ("--jpdb", args.jpdb),
             ("--ai", args.ai),
             ("--polish-meanings", args.polish_meanings),
+            ("--recheck-furigana", args.recheck_furigana),
         )
         if chosen
     ]
@@ -933,6 +983,9 @@ def command_enrich(args: argparse.Namespace) -> int:
     # --ai verifies example furigana *with* it.
     if args.polish_meanings:
         return _polish_meanings(config, args)
+
+    if args.recheck_furigana:
+        return _recheck_furigana(config, args)
 
     # Neither of these asks jpdb anything — one writes a ledger entry, the
     # other builds requests — so neither may demand a key to run.
@@ -2783,6 +2836,15 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Drop the pending batch without collecting it, for one that can no "
             "longer be applied. Its results stay reachable from the console."
+        ),
+    )
+    enrich_parser.add_argument(
+        "--recheck-furigana",
+        action="store_true",
+        help=(
+            "Re-ask jpdb about examples flagged as unverified, and clear the "
+            "ones it vouches for so their audio can be generated. Writes no "
+            "sentences and calls no model."
         ),
     )
     enrich_parser.add_argument(

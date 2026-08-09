@@ -863,6 +863,89 @@ def _flag_unverified(record: VocabularyRecord, sentences: Sequence[str]) -> Voca
 
 
 @dataclass(slots=True)
+class RecheckResult:
+    """What a furigana re-check found."""
+
+    records: list[VocabularyRecord] = field(default_factory=list)
+    #: ``record id -> [sentence]`` cleared, because jpdb now agrees.
+    cleared: dict[str, list[str]] = field(default_factory=dict)
+    #: ``record id -> [(sentence, why)]`` still not vouched for.
+    differing: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
+    #: Sentences jpdb could not parse at all — unverified, not fine.
+    unparsed: list[str] = field(default_factory=list)
+
+    @property
+    def changed(self) -> bool:
+        return bool(self.cleared)
+
+
+def recheck_furigana(
+    records: Sequence[VocabularyRecord],
+    *,
+    jpdb_client: jpdb.JpdbClient,
+    ids: Sequence[str] | None = None,
+) -> RecheckResult:
+    """Re-ask jpdb whether each flagged example's furigana is right.
+
+    The flag is written once, when an example is created, and read much later by
+    ``janki audio`` deciding whether to speak a sentence. That makes it stale
+    twice over: a human can fix the furigana by hand, and the *check itself* can
+    improve — as it did when it stopped mistaking jpdb's per-character
+    segmentation for disagreement, which had flagged 12 of 17 correct examples.
+    Neither an AI pass nor an edit re-asks, so without this the only way to clear
+    a flag was to rewrite the sentence and pay for it again.
+
+    Only flagged examples are re-checked, and only ever cleared: an example
+    nobody doubted is not put in doubt by a parse that happens to fail today.
+    """
+    result = RecheckResult(records=list(records))
+    wanted = set(ids) if ids else None
+    for index, record in enumerate(result.records):
+        if wanted is not None and record.id not in wanted:
+            continue
+        raw_fields = dict(record.source.raw_fields)
+        flagged = {
+            item.strip()
+            for item in raw_fields.get(UNVERIFIED_KEY, "").split(",")
+            if item.strip()
+        }
+        if not flagged:
+            continue
+        cleared: list[str] = []
+        for example in record.examples:
+            sentence = example.japanese.strip()
+            fingerprint = short_fingerprint(sentence)
+            if not sentence or fingerprint not in flagged:
+                continue
+            try:
+                parse = jpdb_client.parse(sentence)
+            except JankiError:
+                # Nothing means unverified rather than fine, the same way the
+                # AI pass treats an absent client.
+                result.unparsed.append(sentence)
+                continue
+            verdict = qc.verify_example_furigana(example, parse)
+            if verdict:
+                cleared.append(sentence)
+                flagged.discard(fingerprint)
+            else:
+                result.differing.setdefault(record.id, []).append(
+                    (sentence, "; ".join(verdict.differences[:2]))
+                )
+        if not cleared:
+            continue
+        result.cleared[record.id] = cleared
+        if flagged:
+            raw_fields[UNVERIFIED_KEY] = ",".join(sorted(flagged))
+        else:
+            raw_fields.pop(UNVERIFIED_KEY, None)
+        result.records[index] = replace(
+            record, source=replace(record.source, raw_fields=raw_fields)
+        )
+    return result
+
+
+@dataclass(slots=True)
 class AiResult:
     """What an AI pass would write, and everything it refused along the way."""
 

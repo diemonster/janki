@@ -41,15 +41,25 @@ def table(*forms: str) -> dict[str, str]:
 # --------------------------------------------------------------------------
 
 
-def test_the_key_set_and_its_order_are_what_the_curated_records_already_carry() -> None:
+def test_the_key_set_and_its_order_are_what_the_stored_records_already_carry() -> None:
     # The exporter labels each row from the dict's own keys in iteration order,
     # so a generated table has to key and order itself like a hand-typed one or
     # the cards change shape. This is that contract, read off the shipped data.
+    #
+    # An *ordered subset*, not equality: this module omits a form a verb does
+    # not have rather than inventing one — ある has no standard potential or
+    # passive, because ありえる is a separate lexeme — so demanding all seven
+    # keys asserted the opposite of what the module documents. It passed only
+    # while the file happened to hold three regular verbs, and failed the first
+    # time real vocabulary arrived.
     records = json.loads(CURATED_RECORDS.read_text(encoding="utf-8"))
     stored = [tuple(record["conjugations"]) for record in records if record.get("conjugations")]
-    assert stored, "the curated records are the fixture for this test; they cannot be empty"
+    assert stored, "the stored records are the fixture for this test; they cannot be empty"
+    assert any(keys == CONJUGATION_FORMS for keys in stored), "at least one full table"
     for keys in stored:
-        assert keys == CONJUGATION_FORMS
+        assert set(keys) <= set(CONJUGATION_FORMS), f"unknown form in {keys}"
+        order = [form for form in CONJUGATION_FORMS if form in set(keys)]
+        assert list(keys) == order, f"{keys} is not in the canonical order"
 
 
 def test_the_curated_records_are_reproduced_form_for_form() -> None:
