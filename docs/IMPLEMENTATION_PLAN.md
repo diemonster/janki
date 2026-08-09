@@ -1583,7 +1583,28 @@ naive rule is wrong for heiban.
   ん words, length-mismatch error. Expected AquesTalk strings cited in
   test comments.
 
-### [~] claimed task/m5.2 2026-08-08 — M5.2 VOICEVOX provider
+### [x] M5.2 VOICEVOX provider
+
+*Done 2026-08-08. Flow exactly as specified. One deviation and three
+decisions. **Deviation:** the protocol has a fourth member, `launch_hint`.
+The task list gives `name`/`voice` and the reason — M5.3 writes them
+without an `isinstance` ladder — and "an engine that is not running" is
+the most common failure of a locally-hosted one, so the CLI needs to say
+how to start it under exactly the same reasoning. (1) `available()`
+never raises: a local engine being down is this system's ordinary state,
+so refused connection, timeout and error status are all the same answer,
+and the caller prints the hint. (2) The accent mark is stripped only on
+the forced path — in ordinary text an apostrophe is punctuation, and
+removing it would change what is spoken. (3) `/audio_query` answering
+with anything but an object is refused rather than replaced with a
+hand-built AudioQuery, which is the same quiet-failure trap as
+constructing defaults.
+
+The four ways this breaks are each pinned by the test that names them,
+verified by mutation: `is_kana` reaching `/audio_query` (the silent one —
+FastAPI drops it, the request succeeds, the audio is guessed), the forced
+phrases never substituted, the mark left in for `/audio_query`, and a
+hand-constructed AudioQuery.*
 
 Depends on: M1.6 (not M5.1 — tests use a hand-written AquesTalk string)
 Files: new `src/japanese_anki/tts/__init__.py` (provider protocol),
