@@ -26,6 +26,7 @@ rather than a header rewrite janki would have to maintain.
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import urllib.error
@@ -80,7 +81,8 @@ DEFAULT_INSTRUCTIONS = (
 )
 
 KEY_HINT = (
-    "Set OPENAI_API_KEY in your environment and try again — it is never read "
+    "no OPENAI_API_KEY. The engine is reachable; the key is missing. Set it "
+    "in your environment and try again — it is never read "
     "from janki.toml. Put it in ~/.zshenv rather than ~/.zshrc so non-login "
     "shells (and this tool) can see it."
 )
@@ -98,24 +100,39 @@ def urllib_transport(
     timeout: float = DEFAULT_TIMEOUT,
 ) -> tuple[int, bytes]:
     """One HTTPS call, returning the raw body. Status is returned, not raised."""
-    data = json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
-    request = urllib.request.Request(
-        url, data=data, headers=headers or {}, method=method
-    )
     try:
+        # Encoding and `Request()` are *inside* the try. Both can raise before
+        # any I/O — a lone surrogate in a sentence is a UnicodeEncodeError, a
+        # malformed URL a ValueError — and anything escaping this function
+        # escapes `synthesize`, `_example_audio`, `generate_audio` and `main`
+        # as a traceback, taking down the run *without saving* the clips
+        # already written. Those files then have no record reference and the
+        # next `--prune` deletes them, which is the loss the whole
+        # stop-and-keep design exists to prevent.
+        data = (
+            json.dumps(body, ensure_ascii=False).encode("utf-8")
+            if body is not None
+            else None
+        )
+        request = urllib.request.Request(
+            url, data=data, headers=headers or {}, method=method
+        )
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return response.status, response.read()
     except urllib.error.HTTPError as exc:
         # Reading the error body is socket I/O on a connection that already
-        # misbehaved, and it happens inside this handler where the clause below
-        # cannot reach it. The status is the part worth having.
+        # misbehaved, and it happens inside this handler where the clauses
+        # below cannot reach it. The status is the part worth having.
         try:
             detail = exc.read()
-        except OSError:
+        except (OSError, http.client.HTTPException):
             detail = b""
         return exc.code, detail
-    except (OSError, ValueError) as exc:
-        # ValueError as well as OSError: a malformed URL raises before any I/O.
+    except (OSError, ValueError, http.client.HTTPException) as exc:
+        # HTTPException is neither of the other two: a truncated response body
+        # is `http.client.IncompleteRead`, and `BadStatusLine` and
+        # `LineTooLong` arrive the same way. The VOICEVOX transport guards the
+        # same three, and this claims to be the same seam.
         raise TtsError(f"Could not reach the OpenAI speech API: {exc}") from exc
 
 
@@ -175,6 +192,18 @@ class OpenAiSpeechProvider:
     @property
     def suffix(self) -> str:
         return ".mp3"
+
+    @property
+    def settings(self) -> dict[str, str]:
+        """What else decides how this clip sounds, for the ledger to compare.
+
+        ``instructions`` is the *only* pace control this API has and ``model``
+        changes the voice outright, yet neither is in the content fingerprint —
+        which covers what was said — nor in ``voice``. Without them recorded,
+        rewriting the instructions to ask for a slower delivery left every clip
+        reporting "already current" and nothing was re-voiced.
+        """
+        return {"model": self._model, "instructions": self._instructions}
 
     @property
     def instructions(self) -> str:

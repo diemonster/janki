@@ -1947,11 +1947,13 @@ Azure remains unbuilt and the reasoning above still holds against it.
 ~~Depends on: M5.3
 Files: new `src/japanese_anki/tts/azure.py`, `tests/test_azure_tts.py`.~~
 
-- REST via the M5.2 transport shape (no SDK dep): key header, SSML
+~~- REST via the M5.2 transport shape (no SDK dep): key header, SSML
   body, voice/region from config, `AZURE_SPEECH_KEY` env.
   `<sub alias="...">` substitution fed from **verified** furigana for
   reading-ambiguous tokens. Fake-transport tests assert SSML shape and
-  sub/alias injection. Wire into `audio --provider azure`.
+  sub/alias injection. Wire into `audio --provider azure`.~~
+**Not built.** The instructions above are the cancelled Azure plan, kept
+for the record. What shipped is `tts/openai_tts.py`; see below.
 
 ### [ ] M5.8 Tell the user when an import silently did not upgrade
 

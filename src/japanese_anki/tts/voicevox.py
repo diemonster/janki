@@ -53,7 +53,7 @@ __all__ = [
 DEFAULT_TIMEOUT = 30.0
 
 LAUNCH_HINT = (
-    "Start the VOICEVOX engine and try again — open the VOICEVOX app, or run "
+    "the engine is not answering. Start VOICEVOX and try again — open the VOICEVOX app, or run "
     "the engine directly (it listens on http://localhost:50021 by default). "
     "Set tts.voicevox_url in janki.toml if it listens somewhere else."
 )
@@ -152,6 +152,11 @@ class VoicevoxProvider:
     @property
     def suffix(self) -> str:
         return ".wav"
+
+    @property
+    def settings(self) -> dict[str, str]:
+        """Nothing beyond voice and speed decides how a VOICEVOX clip sounds."""
+        return {}
 
     @property
     def launch_hint(self) -> str:

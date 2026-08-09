@@ -155,6 +155,7 @@ def _is_current(
         content_fp=content_fp,
         voice=provider.voice,
         speed=provider.speed,
+        settings=provider.settings,
     )
     if recorded is None or recorded != Path(named).name:
         return False
@@ -230,6 +231,7 @@ def _word_audio(
         provider=provider.name,
         voice=provider.voice,
         speed=provider.speed,
+        settings=provider.settings,
         content_fp=content_fp,
         **details,
     )
@@ -326,6 +328,7 @@ def _example_audio(
             provider=provider.name,
             voice=provider.voice,
             speed=provider.speed,
+            settings=provider.settings,
             content_fp=content_fp,
         )
         result.written.setdefault(record.id, []).append(name)

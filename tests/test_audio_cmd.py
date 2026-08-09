@@ -41,6 +41,7 @@ class FakeVoice:
     name = "fakevox"
     launch_hint = "start the fake engine"
     suffix = ".wav"
+    settings: dict[str, str] = {}
 
     def available(self) -> bool:
         return self.reachable
@@ -846,3 +847,143 @@ def test_an_unset_sentence_voice_returns_the_word_provider(tmp_path: Path) -> No
     words = cli._speech_provider(config, None)
 
     assert cli._sentence_provider(config, None, words) is words, "the same object"
+
+
+class FakeMp3Voice(FakeVoice):
+    """A second engine whose audio is not WAV — the whole point of `suffix`."""
+
+    name = "fakemp3"
+    suffix = ".mp3"
+
+
+def test_the_file_is_named_for_the_format_the_provider_returns(tmp_path: Path) -> None:
+    """A hard-coded `.wav` would name an mp3 file `.wav` and hand Anki a lie
+    about its contents. Every earlier filename assertion used a `.wav` fake, so
+    reverting the suffix threading left the whole suite green."""
+    example = [ExampleSentence(japanese="橋を渡る。", english="Cross the bridge.")]
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+
+    result = generate_audio(
+        [record(examples=example)],
+        provider=FakeVoice(voice=13),
+        sentence_provider=FakeMp3Voice(voice=52),
+        book=book, media_dir=tmp_path / "media", words=True, examples=True,
+    )
+
+    word, sentence = result.records[0].audio, result.records[0].examples[0].audio
+    assert word.endswith(".wav") and sentence.endswith(".mp3")
+    assert not word.endswith(".mp3") and not sentence.endswith(".wav")
+    assert (tmp_path / "media" / word).is_file()
+    assert (tmp_path / "media" / sentence).is_file(), "on disk under the same name"
+    files = {e["of"]: e["file"] for e in book.records[record().id]["audio"]}
+    assert files["word"].endswith(".wav") and files["example"].endswith(".mp3")
+
+
+class FakeStyledVoice(FakeVoice):
+    """An engine whose delivery is set by something other than voice and speed."""
+
+    def __init__(self, *, style: str, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.style = style
+
+    name = "fakestyled"
+
+    @property
+    def settings(self) -> dict[str, str]:
+        return {"instructions": self.style}
+
+
+def test_changed_engine_settings_make_a_clip_stale(tmp_path: Path) -> None:
+    """`instructions` is the only pace control the OpenAI API has, and it is in
+    neither the content fingerprint nor the voice. Unrecorded, rewriting it to
+    ask for a slower delivery left every clip "already current" and nothing was
+    re-voiced — the setting that exists to change the audio changed nothing."""
+    example = [ExampleSentence(japanese="橋を渡る。", english="Cross.")]
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    first, _, _ = run(
+        [record(examples=example)], tmp_path, words=False, examples=True, book=book,
+        provider=FakeStyledVoice(style="normally"),
+    )
+
+    engine = FakeStyledVoice(style="very slowly")
+    second, _, _ = run(
+        first.records, tmp_path, words=False, examples=True, book=book, provider=engine,
+    )
+
+    assert len(engine.said) == 1, "the new instructions re-voiced it"
+    assert second.up_to_date == 0
+    entry = book.records[record().id]["audio"][0]
+    assert entry["settings"] == {"instructions": "very slowly"}
+
+
+def test_an_engine_with_nothing_to_say_records_no_settings(tmp_path: Path) -> None:
+    """So a VOICEVOX entry keeps exactly the shape it has always had, and no
+    committed ledger moves."""
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+
+    run([record()], tmp_path, words=True, book=book)
+
+    assert "settings" not in book.records[record().id]["audio"][0]
+
+
+def test_the_cli_gives_sentences_their_own_engine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The CLI is the only entry point a user has, and nothing drove it: every
+    other test called `generate_audio` or `_sentence_provider` directly, so
+    deleting the wiring left the feature a no-op with the suite green."""
+    root = project(tmp_path, [record(
+        examples=[ExampleSentence(japanese="橋を渡る。", english="Cross.")]
+    )])
+    words, sentences = FakeVoice(voice=13), FakeVoice(voice=52)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: words)
+    monkeypatch.setattr(cli, "_sentence_provider", lambda config, chosen, w: sentences)
+
+    assert cli.main(["--root", str(root), "audio", "--words", "--examples"]) == 0
+
+    book = ledger_mod.load(root / "ledger.json")
+    voices = {e["of"]: e["voice"] for e in book.records[record().id]["audio"]}
+    assert voices == {"word": 13, "example": 52}, "saved to disk, not just in memory"
+
+
+def test_the_word_suffix_follows_the_word_provider_too(tmp_path: Path) -> None:
+    """The mirror of the test above. With a `.wav` word fake, hard-coding
+    `.wav` on the word path leaves that test green — the assertion is satisfied
+    by the constant rather than by the provider."""
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+
+    result = generate_audio(
+        [record()], provider=FakeMp3Voice(voice=13), book=book,
+        media_dir=tmp_path / "media", words=True,
+    )
+
+    assert result.records[0].audio.endswith(".mp3")
+    assert book.records[record().id]["audio"][0]["file"].endswith(".mp3")
+
+
+def test_a_sentence_voice_of_zero_is_a_real_voice(tmp_path: Path) -> None:
+    """0 is 四国めたん・あまあま, and the audition page prints it as a copyable
+    value. Treating it as "unset" silently discards a valid configuration —
+    the exact failure `_int` exists to prevent, and the asymmetry is worse:
+    `voicevox_speaker = 0` worked while `voicevox_sentence_speaker = 0` did
+    not."""
+    (tmp_path / "janki.toml").write_text(
+        "[tts]\nvoicevox_speaker = 13\nvoicevox_sentence_speaker = 0\n", encoding="utf-8"
+    )
+    config = ProjectConfig.load(tmp_path)
+
+    words = cli._speech_provider(config, None)
+    sentences = cli._sentence_provider(config, None, words)
+
+    assert sentences is not words, "0 selected a different speaker"
+    assert sentences.voice == 0
+
+
+def test_an_absent_sentence_speaker_is_the_only_way_to_opt_out(tmp_path: Path) -> None:
+    (tmp_path / "janki.toml").write_text("[tts]\nvoicevox_speaker = 13\n", encoding="utf-8")
+    config = ProjectConfig.load(tmp_path)
+
+    words = cli._speech_provider(config, None)
+
+    assert config.voicevox_sentence_speaker is None
+    assert cli._sentence_provider(config, None, words) is words

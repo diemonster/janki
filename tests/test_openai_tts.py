@@ -269,3 +269,36 @@ def test_the_voice_list_matches_what_the_api_accepts() -> None:
     than mid-run on the first sentence of a long collection."""
     assert "cove" not in openai_tts.VOICES, "a ChatGPT app voice, not an API one"
     assert {"onyx", "ash", "nova", "cedar", "marin"} <= set(openai_tts.VOICES)
+
+
+# --- the transport itself ---------------------------------------------------
+
+
+def test_a_truncated_response_arrives_as_a_janki_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`http.client.IncompleteRead` is neither an OSError nor a ValueError, so
+    it escaped every handler up to `main` as a traceback — taking the run down
+    *without saving*, which leaves the clips already written with no record
+    reference for the next `--prune` to delete. That is the loss the
+    stop-and-keep design exists to prevent."""
+    import http.client
+    import urllib.request
+
+    def truncated(*_args: Any, **_kwargs: Any) -> Any:
+        raise http.client.IncompleteRead(b"half a body")
+
+    monkeypatch.setattr(urllib.request, "urlopen", truncated)
+
+    with pytest.raises(TtsError, match="Could not reach"):
+        openai_tts.urllib_transport("POST", "https://api.openai.com/v1/audio/speech", {"a": 1}, {})
+
+
+def test_a_surrogate_in_a_sentence_is_a_janki_error_not_a_traceback() -> None:
+    """Encoding happens inside the guard too: a lone surrogate is a
+    UnicodeEncodeError, which is a ValueError, and it fires before any I/O —
+    outside the try it took the same run-losing path."""
+    with pytest.raises(TtsError, match="Could not reach"):
+        openai_tts.urllib_transport(
+            "POST", "https://api.openai.com/v1/audio/speech", {"input": "\ud800"}, {}
+        )

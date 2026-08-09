@@ -44,7 +44,7 @@ changed since it was read rather than clobber it.
 from __future__ import annotations
 
 import json
-from collections.abc import Container, Iterable
+from collections.abc import Container, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -152,21 +152,20 @@ def _shape_problems(entry: dict[str, Any]) -> list[tuple[str, str]]:
     ]
 
 
-def _first_bad(problems: list[tuple[str, str]]) -> str:
-    return problems[0][0] if problems else "<key>"
-
-
 def _shape_error(path: Path, record_id: str, problems: list[tuple[str, str]]) -> LedgerError:
     detail = ", ".join(
         f"{key!r} as {got}, not a {_ENTRY_SHAPE[key].__name__}" for key, got in problems
     )
+    # Every slot, not the first: an entry can carry two bad keys, and a message
+    # naming one leaves the reader with no reason to look for the other.
+    slots = ", ".join(f"'{key}_unreadable'" for key, _ in problems) or "'<key>_unreadable'"
     return LedgerError(
         f"Ledger {path}: record {record_id!r} has {detail}. That file is "
         "machine-written; 'janki status --rebuild' repairs entries like this "
-        "in place. Nothing is thrown away — the unreadable value is parked "
-        f"beside the key it came from, under a name starting '{_first_bad(problems)}"
-        "_unreadable' (numbered if an earlier repair already used that name), "
-        "and the repair prints the exact name it used."
+        "in place. Nothing is thrown away — each unreadable value is parked "
+        f"beside the key it came from, under {slots} (numbered if an earlier "
+        "repair already used that name), and the repair prints the exact names "
+        "it used."
     )
 
 
@@ -177,11 +176,14 @@ def _voice_key(voice: Any) -> int | str:
     names them — and the ledger records what was used rather than normalising
     it into whichever shape came first.
     """
-    if isinstance(voice, bool):
+    # Narrow on purpose. `str(voice)` for anything at all would write
+    # `"voice": "None"` — or `"{'id': 13}"` — into a committed file and report
+    # success, where the `int()` this replaced raised.
+    if isinstance(voice, bool) or not isinstance(voice, int | str):
         raise LedgerError(f"Audio voice must be an id or a name, got {voice!r}")
     if isinstance(voice, int):
         return voice
-    name = str(voice).strip()
+    name = voice.strip()
     if not name:
         raise LedgerError("An audio entry needs the voice it was spoken in")
     return name
@@ -511,6 +513,7 @@ class Ledger:
         voice: int | str,
         content_fp: str,
         speed: float,
+        settings: Mapping[str, str] | None = None,
         at: str | None = None,
         **details: Any,
     ) -> bool:
@@ -556,6 +559,9 @@ class Ledger:
             "voice": voice_id,
             "speed": rate,
             "content_fp": str(content_fp),
+            # Only when there is something to say, so a VOICEVOX entry keeps
+            # exactly the shape it has always had and no committed ledger moves.
+            **({"settings": dict(settings)} if settings else {}),
             **details,
             "at": _iso_date(at),
         }
@@ -569,20 +575,38 @@ class Ledger:
         entries.append(reference)
         return True
 
-    def record_export(self, record_id: str, deck_stem: str, *, at: str | None = None) -> bool:
+    def record_export(
+        self,
+        record_id: str,
+        deck_stem: str,
+        *,
+        gaps: Iterable[str] = (),
+        at: str | None = None,
+    ) -> bool:
         """Note that a deck build included this record.
 
         Keyed by deck file stem, not Anki deck name: stems are unique in the
         repo, deck names collide when two deck files fall back to the default.
+
+        ``gaps`` names what the record was *missing* when it shipped — no
+        audio, no example, no accent. Recording it is what makes
+        :meth:`shipped_incomplete` exact: dates are days, so a record shipped
+        at 09:00 and voiced at 10:00 the same day can never be caught by
+        comparing them, and that record is silently wrong forever. What it
+        lacked at build time is a fact, not an inference.
         """
         stem = str(deck_stem).strip()
         if not stem:
             raise LedgerError("An export entry needs a deck file stem")
         when = _iso_date(at)
+        missing = sorted({str(gap).strip() for gap in gaps if str(gap).strip()})
         exports = self._entry(record_id, at).setdefault("exports", {})
-        if exports.get(stem) == when:
+        # The value is a date when there is nothing more to say, so every
+        # existing ledger keeps its shape and only a gap makes it grow.
+        value: Any = {"at": when, "missing": missing} if missing else when
+        if exports.get(stem) == value:
             return False
-        exports[stem] = when
+        exports[stem] = value
         return True
 
     def remove(self, record_id: str) -> bool:
@@ -704,6 +728,7 @@ class Ledger:
         content_fp: str,
         voice: int | str | None = None,
         speed: float | None = None,
+        settings: Mapping[str, str] | None = None,
     ) -> str | None:
         """The clip recorded for this exact content, or ``None``.
 
@@ -734,6 +759,11 @@ class Ledger:
                     continue
                 if float(recorded) != float(speed):
                     continue
+            # `or {}` on both sides: an engine with nothing to say and an entry
+            # written before there was anywhere to say it are the same fact,
+            # and must not read as a difference.
+            if settings is not None and dict(entry.get("settings") or {}) != dict(settings):
+                continue
             return str(entry.get("file") or "") or None
         return None
 
@@ -822,6 +852,44 @@ class Ledger:
             if not any(entry.get("of") == "word" for entry in self._audio_entries(record.id))
         ]
 
+    def shipped_incomplete(self, deck_stem: str, records: Iterable[VocabularyRecord]) -> list[str]:
+        """Records this deck shipped with a hole that has since been filled.
+
+        Exact, where :meth:`exported_before_their_work` can only compare days:
+        the build recorded what each record was missing, so "it went out silent
+        and now it has a clip" is a fact about two states rather than an
+        inference from two dates. This is the case that mattered — ship at
+        09:00 with the gap warning, voice at 10:00, and no date comparison can
+        ever tell.
+        """
+        stem = str(deck_stem).strip()
+        if not stem:
+            raise LedgerError("Exports are tracked per deck file stem; none was given")
+        result: list[str] = []
+        for record in records:
+            entry = self.records.get(str(record.id))
+            exports = entry.get("exports") if isinstance(entry, dict) else None
+            shipped = exports.get(stem) if isinstance(exports, dict) else None
+            if not isinstance(shipped, dict):
+                continue
+            missing = {str(gap) for gap in shipped.get("missing") or []}
+            filled = {
+                gap
+                for gap in missing
+                if (gap == "audio" and record.audio)
+                or (
+                    gap == "examples"
+                    and any(example.japanese.strip() for example in record.examples)
+                )
+                or (
+                    gap == "accent"
+                    and (record.pitch_accent or record.audio_accent.strip())
+                )
+            }
+            if filled:
+                result.append(record.id)
+        return result
+
     def exported_before_their_work(self, deck_stem: str, ids: Iterable[str]) -> list[str]:
         """Records this deck shipped *before* their newest audio or enrichment.
 
@@ -831,11 +899,16 @@ class Ledger:
         the quiet half of an incremental build: `janki refresh` voices a word on
         Tuesday and the deck that already carries it silently never learns.
 
-        Dates are days, not timestamps, so "later" means a strictly later day.
-        Work finished the same day it shipped is not reported: it may have
-        landed either side of the build, and a warning that fires on every
-        same-day pipeline run — which is what `janki refresh` is — is one
-        nobody reads.
+        Dates are days, not timestamps, so "later" means a strictly later day —
+        and this **permanently** cannot see work finished on the shipping day,
+        not merely during that day's run. Both sides are day-granular, so
+        timestamping exports alone would not fix it; both would have to move,
+        which is a change across every ``at`` in the file.
+
+        :meth:`shipped_incomplete` covers the case that made this matter — a
+        record that went out missing audio and has it now — exactly and without
+        dates. What is left here is the looser question of content edited after
+        a build, where a same-day edit is a known blind spot.
         """
         stem = str(deck_stem).strip()
         if not stem:
@@ -846,7 +919,10 @@ class Ledger:
             if not isinstance(entry, dict):
                 continue
             exports = entry.get("exports")
-            shipped = exports.get(stem) if isinstance(exports, dict) else None
+            value = exports.get(stem) if isinstance(exports, dict) else None
+            # Two shapes: a bare date, or `{at, missing}` once a build had a
+            # gap to record. Both carry the date; only one carries more.
+            shipped = value.get("at") if isinstance(value, dict) else value
             if not isinstance(shipped, str) or not shipped:
                 continue
             dates = [

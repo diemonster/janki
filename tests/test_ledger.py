@@ -571,6 +571,12 @@ def test_audio_arguments_are_checked(tmp_path: Path) -> None:
         book.record_audio("word:話す:はなす", **{**arguments, "voice": "   "}, speed=1.0)
     with pytest.raises(LedgerError):
         book.record_audio("word:話す:はなす", **{**arguments, "voice": True}, speed=1.0)
+    # None and any other object: `str(voice)` for anything at all would write
+    # `"voice": "None"` — or `"{'id': 13}"` — into a committed file and report
+    # success, where the `int()` this replaced raised.
+    for bad in (None, {"id": 13}, 1.5):
+        with pytest.raises(LedgerError, match="must be an id or a name"):
+            book.record_audio("word:話す:はなす", **{**arguments, "voice": bad}, speed=1.0)
 
 
 def test_a_named_voice_is_stored_as_its_name(tmp_path: Path) -> None:

@@ -67,6 +67,16 @@ class SpeechProvider(Protocol):
         """
 
     @property
+    def settings(self) -> dict[str, str]:
+        """Anything else that decides how a clip sounds, for the ledger.
+
+        Empty for an engine whose voice and rate say it all. An engine with a
+        prose style prompt, or a choice of model, puts them here: they are
+        audible, they are not in the content fingerprint, and a clip whose
+        ledger entry cannot describe them is one nothing can tell is stale.
+        """
+
+    @property
     def launch_hint(self) -> str:
         """What to tell someone whose engine is not answering."""
 

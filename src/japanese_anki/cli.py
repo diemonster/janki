@@ -1770,6 +1770,18 @@ def _inside_archive(path: Path, archive_dir: Path) -> bool:
     return path.is_relative_to(archive_dir)
 
 
+def _provider_name(config: ProjectConfig, chosen: str | None) -> str:
+    """The engine this run speaks words through, normalised once.
+
+    One definition, because two normalisations disagree: ``_speech_provider``
+    lower-cased and defaulted while ``_sentence_provider`` compared the raw
+    config string, so ``provider = "Voicevox"`` — or an empty one, or
+    ``--provider voicevox`` overriding an ``azure`` file — built a VOICEVOX word
+    provider and then silently discarded the configured sentence voice.
+    """
+    return (chosen or config.tts_provider or "voicevox").strip().lower()
+
+
 def _sentence_provider(config: ProjectConfig, chosen: str | None, words: Any) -> Any:
     """The provider that reads example sentences.
 
@@ -1785,15 +1797,17 @@ def _sentence_provider(config: ProjectConfig, chosen: str | None, words: Any) ->
             voice=config.openai_voice,
             model=config.openai_model,
             instructions=config.openai_instructions,
+            speed=config.voicevox_speed,
         )
     if name not in {"", "voicevox"}:
         raise AudioError(
             f"Unknown [tts] sentence_provider {name!r}. Known: voicevox, openai, "
             "or leave it empty to read sentences in the same voice as the words."
         )
-    if (chosen or config.tts_provider or "voicevox") == "voicevox":
+    if _provider_name(config, chosen) == "voicevox":
         speaker = config.voicevox_sentence_speaker
-        if speaker and speaker != config.voicevox_speaker:
+        # `is not None`, not truthiness: 0 is a real style id.
+        if speaker is not None and speaker != config.voicevox_speaker:
             return voicevox.VoicevoxProvider(
                 base_url=config.voicevox_url,
                 speaker=speaker,
@@ -1803,14 +1817,16 @@ def _sentence_provider(config: ProjectConfig, chosen: str | None, words: Any) ->
 
 
 def _speech_provider(config: ProjectConfig, chosen: str | None) -> Any:
-    """The provider this run speaks through.
+    """The provider this run speaks *words* through.
 
-    ``azure`` is named in the config and the flag from the start so the value
-    is not a typo the day M5.7 lands, and refused clearly until then — a
-    provider that silently fell back to VOICEVOX would record Azure's name in
-    the ledger against VOICEVOX's audio.
+    Only VOICEVOX can force a pitch accent, which is what a word clip is for,
+    so this stays VOICEVOX. ``azure`` is still refused by name rather than
+    falling through to "unknown": it was a real plan, it was evaluated and
+    dropped, and a user who wrote it in their config deserves to hear which of
+    those happened. Sentences are a separate choice — see
+    :func:`_sentence_provider`.
     """
-    name = (chosen or config.tts_provider or "voicevox").strip().lower()
+    name = _provider_name(config, chosen)
     if name == "voicevox":
         return voicevox.VoicevoxProvider(
             base_url=config.voicevox_url,
@@ -1819,11 +1835,15 @@ def _speech_provider(config: ProjectConfig, chosen: str | None) -> Any:
         )
     if name == "azure":
         raise AudioError(
-            "The Azure provider arrives in M5.7. Until then use --provider "
-            "voicevox, which is the one that can force a pitch accent."
+            "The Azure provider was evaluated and dropped — VOICEVOX reads the "
+            "ambiguous kanji correctly and needs no account (see M5.7 in "
+            "docs/IMPLEMENTATION_PLAN.md). Words use VOICEVOX, which is the "
+            "only engine here that can force a pitch accent; for sentences set "
+            "[tts] sentence_provider = \"openai\"."
         )
     raise AudioError(
-        f"Unknown TTS provider {name!r}. Known: voicevox, azure (M5.7)."
+        f"Unknown TTS provider {name!r}. Words are voiced by voicevox. For "
+        "sentences, set [tts] sentence_provider to voicevox or openai."
     )
 
 
@@ -1843,10 +1863,19 @@ def command_audio(args: argparse.Namespace) -> int:
         return 0
 
     provider = _speech_provider(config, args.provider)
-    sentences = _sentence_provider(config, args.provider, provider)
-    for engine in {id(provider): provider, id(sentences): sentences}.values():
+    # Only what this run will actually use. A `--words` run never reaches the
+    # sentence provider, and refusing to start because *that* engine lacks a
+    # key would abort a job it plays no part in.
+    sentences = _sentence_provider(config, args.provider, provider) if args.examples else provider
+    # Keyed by identity so one engine doing both jobs is checked once.
+    engines: dict[int, Any] = {}
+    if args.words:
+        engines[id(provider)] = provider
+    if args.examples:
+        engines[id(sentences)] = sentences
+    for engine in engines.values():
         if not engine.available():
-            raise AudioError(f"{engine.name} is not answering. {engine.launch_hint}")
+            raise AudioError(f"{engine.name}: {engine.launch_hint}")
 
     book = ledger.load(config.ledger_file)
     media_dir = config.media_dir.resolve()
@@ -2144,15 +2173,28 @@ _BUILD_GAPS: tuple[tuple[str, str], ...] = (
 )
 
 
+def _record_gaps(record: VocabularyRecord) -> tuple[str, ...]:
+    """What this record is missing, by the names the ledger stores.
+
+    One definition, used both to warn before a build and to record what the
+    build shipped without — so "it went out silent" and "it has a clip now"
+    are answered against the same question rather than two similar ones.
+    """
+    gaps = []
+    if not record.audio:
+        gaps.append("audio")
+    if not any(example.japanese.strip() for example in record.examples):
+        gaps.append("examples")
+    if not record.pitch_accent and not record.audio_accent.strip():
+        gaps.append("accent")
+    return tuple(gaps)
+
+
 def _gap_counts(records: Sequence[VocabularyRecord]) -> dict[str, int]:
     counts = {"audio": 0, "examples": 0, "accent": 0}
     for record in records:
-        if not record.audio:
-            counts["audio"] += 1
-        if not any(example.japanese.strip() for example in record.examples):
-            counts["examples"] += 1
-        if not record.pitch_accent and not record.audio_accent.strip():
-            counts["accent"] += 1
+        for gap in _record_gaps(record):
+            counts[gap] += 1
     return counts
 
 
@@ -2192,7 +2234,11 @@ def _build_one(
     only_new: bool = False,
     assume_yes: bool = False,
 ) -> bool:
-    """Build one deck. Returns whether a package was written.
+    """Build one deck. Returns whether any export entry is now pending.
+
+    Not "was a package written": the two diverge for a `--output` build, which
+    writes a real package and deliberately records nothing, and the caller uses
+    this to decide whether a failed ledger save has anything to apologise for.
 
     ``book`` is the caller's ledger — loaded once per command and saved once,
     the rule this module follows everywhere. Exports are recorded for a plain
@@ -2202,8 +2248,9 @@ def _build_one(
     """
     stem = deck_path.stem
     include_ids: set[str] | None = None
+    recorded = False
+    _, records = resolve_deck_records(deck_path)
     if only_new:
-        _, records = resolve_deck_records(deck_path)
         # Validated before the "nothing new" shortcut, not after it. A deck
         # whose already-shipped records are broken is a broken deck, and an
         # incremental build that exits 0 on one a full build refuses would hide
@@ -2216,13 +2263,14 @@ def _build_one(
         ids = [record.id for record in records]
         new_ids = book.unexported(stem, ids) if book else []
         if book is not None:
-            behind = book.exported_before_their_work(stem, ids)
+            behind = set(book.exported_before_their_work(stem, ids))
+            behind |= set(book.shipped_incomplete(stem, records))
             if behind:
                 print(
-                    f"warning: {stem}: {len(behind)} record(s) gained audio or "
-                    "enrichment after this deck last shipped them. --only-new "
-                    "cannot see them; run 'janki build "
-                    f"{stem}' to rebuild the whole deck.",
+                    f"warning: {stem}: {len(behind)} record(s) shipped without "
+                    "audio, examples or accent and have it now, or changed "
+                    "after this deck last built them. --only-new cannot see "
+                    f"them; run 'janki build {stem}' to rebuild the whole deck.",
                     file=sys.stderr,
                 )
         if not new_ids:
@@ -2244,15 +2292,29 @@ def _build_one(
         f"Built {result.output_path}{scope} — {result.note_count} note{plural}, "
         f"cards: {cards}, media: {result.media_count}"
     )
-    if book is not None and output is None:
+    if book is None:
+        return True
+    if output is not None:
         # Only a build to the deck's *own* declared package records exports. A
         # `--output` build is a throwaway — a package to eyeball, or `make
         # gates` proving the exporter still runs — and claiming those records
         # shipped consumes their new-ness: the next `--only-new` skips them and
-        # they never reach a card, with nothing to say so.
-        for record_id in result.record_ids:
-            book.record_export(record_id, stem)
-    return True
+        # they never reach a card, with nothing to say so. Said out loud,
+        # because a `--only-new --output` run that quietly records nothing
+        # rebuilds the identical package every day and never says why.
+        print(
+            f"not recorded as exported: --output builds are throwaways. "
+            f"Run 'janki build {stem}' to build the deck's own package and "
+            "record it.",
+            file=sys.stderr,
+        )
+        return recorded
+    by_id = {record.id: record for record in records}
+    for record_id in result.record_ids:
+        shipped = by_id.get(record_id)
+        gaps = _record_gaps(shipped) if shipped is not None else ()
+        recorded = book.record_export(record_id, stem, gaps=gaps) or recorded
+    return recorded
 
 
 def _finish_build(book: ledger.Ledger, built: bool) -> int:
@@ -2295,12 +2357,20 @@ def command_build(args: argparse.Namespace) -> int:
         if not deck_paths:
             raise AnkiBuildError(f"No deck files found under {config.deck_dir}")
         built = False
-        for deck_path in deck_paths:
-            built = _build_one(
-                deck_path, config, book=book,
-                only_new=args.only_new, assume_yes=args.yes,
-            ) or built
-        return _finish_build(book, built)
+        try:
+            for deck_path in deck_paths:
+                built = _build_one(
+                    deck_path, config, book=book,
+                    only_new=args.only_new, assume_yes=args.yes,
+                ) or built
+        finally:
+            # In a `finally` because a later deck refusing must not discard
+            # what earlier decks already recorded in memory. Export state is
+            # reconstructible by nothing, so a lost entry means those records
+            # ship again on every future --only-new while `janki status` keeps
+            # calling them unexported.
+            _finish_build(book, built)
+        return 0
 
     if not args.deck:
         raise AnkiBuildError("Provide a deck YAML path or use --all")

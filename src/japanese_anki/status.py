@@ -616,10 +616,29 @@ class RebuildSummary:
     media_dir: Path
 
 
-# When several files claim one fingerprint, the rebuilt entry binds the first
-# by this order: .wav is what janki's own generators write, so it is the best
-# guess, and the order being documented makes the choice reproducible.
+# When several files claim one fingerprint and *the record names none of them*,
+# the rebuilt entry binds the first by this order. It is a last resort: janki
+# writes .wav for words and .mp3 for OpenAI sentences, so the extension alone
+# stopped being evidence the day a second engine arrived. When the record names
+# a file, that beats this outright — see `_claim_for`.
 _EXTENSION_PREFERENCE: tuple[str, ...] = (".wav", ".mp3", ".ogg", ".m4a")
+
+
+def _claim_for(candidates: list[Path], named: str) -> Path:
+    """Which file a rebuilt entry should bind, preferring the one named.
+
+    The record is the better evidence: a switch from VOICEVOX to OpenAI leaves
+    ``janki-<fp>.wav`` beside the new ``janki-<fp>.mp3`` until a prune, and
+    ranking by extension binds the stale WAV — then reports the mp3 the record
+    actually plays as the ambiguous one, telling the user to delete the file
+    that is correct.
+    """
+    if named:
+        wanted = Path(named).name
+        for candidate in candidates:
+            if candidate.name == wanted:
+                return candidate
+    return min(candidates, key=_media_rank)
 
 
 def _media_rank(path: Path) -> tuple[int, str]:
@@ -645,9 +664,16 @@ def _media_by_fingerprint(media_dir: Path) -> dict[str, list[Path]]:
     return found
 
 
-def _first(paths: list[Path] | None) -> Path | None:
-    """The preferred claimant of a fingerprint, if any file claims it."""
-    return paths[0] if paths else None
+def _first(paths: list[Path] | None, named: str = "") -> Path | None:
+    """The preferred claimant of a fingerprint, if any file claims it.
+
+    ``named`` is what the record itself plays. It wins over the extension
+    ranking, which is only a guess and became a bad one when a second engine
+    started writing a second format.
+    """
+    if not paths:
+        return None
+    return _claim_for(paths, named)
 
 
 def _has_audio_entry(book: Ledger, record_id: str, filename: str) -> bool:
@@ -713,7 +739,9 @@ def rebuild(
         if book.record_source_seen(record.id, source.type or "manual", source.imported_from):
             sources += 1
 
-        word_file = _first(media.get(word_audio_filename_fingerprint(record)))
+        word_file = _first(
+            media.get(word_audio_filename_fingerprint(record)), record.audio
+        )
         if word_file is not None:
             claimed.add(word_file)
             if not _has_audio_entry(book, record.id, word_file.name):
@@ -735,7 +763,10 @@ def rebuild(
         for example in record.examples:
             if not example.japanese:
                 continue
-            example_file = _first(media.get(example_audio_filename_fingerprint(record, example)))
+            example_file = _first(
+                media.get(example_audio_filename_fingerprint(record, example)),
+                example.audio,
+            )
             if example_file is None:
                 continue
             claimed.add(example_file)

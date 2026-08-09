@@ -325,6 +325,10 @@ def test_refresh_runs_the_stages_in_order(
     the build ships what those finished. A build before `audio` ships silent
     cards *and marks them exported*, so the next `--only-new` never revisits
     them."""
+    # Pin the non-TTY branch explicitly. Under `pytest -s` from a terminal
+    # `sys.stdin.isatty()` is True and these records have every gap, so the
+    # run would block on the build stage's prompt and hang the suite.
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
     root = _project(tmp_path, [_record("橋", "はし")])
     called: list[str] = []
 
@@ -351,7 +355,7 @@ def test_refresh_runs_the_stages_in_order(
 
 def test_a_skipped_stage_is_named_not_silent(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+, monkeypatch: pytest.MonkeyPatch) -> None:
     root = _project(tmp_path, [_record("橋", "はし")])
 
     assert _run(root, "refresh", "--no-jpdb", "--no-ai", "--no-audio") == 0
@@ -368,6 +372,14 @@ def test_a_failing_stage_stops_the_run(
     so continuing would build a package from half-enriched records — and mark
     those records exported, which is the state `--only-new` cannot recover
     from."""
+    # Pin the non-TTY branch explicitly. Under `pytest -s` from a terminal
+    # `sys.stdin.isatty()` is True and these records have every gap, so the
+    # run would block on the build stage's prompt and hang the suite.
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
+    # Pin the non-TTY branch explicitly. Under `pytest -s` from a terminal
+    # `sys.stdin.isatty()` is True and these records have every gap, so the
+    # run would block on the build stage's prompt and hang the suite.
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
     root = _project(tmp_path, [_record("橋", "はし")])
     monkeypatch.setattr(cli, "command_enrich", lambda args: 3)
 
@@ -447,13 +459,51 @@ def test_an_output_build_does_not_claim_the_deck_shipped(
     assert "nothing new" not in capsys.readouterr().out, "still new, as it should be"
 
 
-def test_the_gate_does_not_write_the_ledger(tmp_path: Path) -> None:
-    """The Makefile's `gates` target builds the real deck in the real project
-    root. Any durable write there is a committed-file diff nobody asked for —
-    and worse, it consumed the new-ness of every record it touched."""
-    gates = (PROJECT_ROOT / "Makefile").read_text(encoding="utf-8")
-    line = next(ln for ln in gates.splitlines() if "JANKI) build" in ln and "gates" not in ln)
-    assert "--output" in line, f"the gate must build a throwaway package, got: {line.strip()}"
+def _gates_recipe() -> list[str]:
+    """The `gates:` target's own recipe lines, by target rather than substring.
+
+    The first version of this filtered lines containing "gates", which the
+    recipe itself now contains — `dist/.gates-check.apkg` — so it silently
+    inspected the `build-sample` target instead and would have failed naming
+    the wrong one the day that target was renamed.
+    """
+    lines = (PROJECT_ROOT / "Makefile").read_text(encoding="utf-8").splitlines()
+    start = next(i for i, ln in enumerate(lines) if ln.startswith("gates:"))
+    recipe = []
+    for line in lines[start + 1:]:
+        if not line.startswith("\t") and not line.startswith("    ") and line.strip():
+            break
+        recipe.append(line)
+    return recipe
+
+
+def test_the_gate_builds_a_throwaway_package(tmp_path: Path) -> None:
+    """`gates` builds the real deck in the real project root, and every build
+    records exports — so the mandatory pre-commit gate consumed the new-ness of
+    every record it touched. `--output` makes it a throwaway, which records
+    nothing."""
+    # $(JANKI), not "build": the target's own echo line says "sample deck
+    # builds" and would match a naive substring.
+    build_lines = [ln for ln in _gates_recipe() if "$(JANKI)" in ln and " build " in ln]
+
+    assert build_lines, "the gate still builds a deck"
+    for line in build_lines:
+        assert "--output" in line, f"gate build must be a throwaway: {line.strip()}"
+
+
+def test_a_throwaway_build_leaves_the_ledger_byte_identical(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The behaviour the Makefile check stands for, asserted directly rather
+    than inferred from a recipe line."""
+    root = _project(tmp_path, [_record("橋", "はし")])
+    assert _run(root, "build", "verbs") == 0
+    before = (root / "ledger.json").read_bytes()
+    capsys.readouterr()
+
+    assert _run(root, "build", "verbs", "--output", str(tmp_path / "gate.apkg")) == 0
+
+    assert (root / "ledger.json").read_bytes() == before, "not one byte moved"
 
 
 # --- an incremental build is still a build ----------------------------------
@@ -511,7 +561,7 @@ def test_audio_added_after_a_record_shipped_is_reported(
     assert _run(root, "build", "verbs", "--only-new", "--yes") == 0
 
     err = capsys.readouterr().err
-    assert "1 record(s) gained audio or enrichment after this deck last shipped" in err
+    assert "1 record(s) shipped without audio" in err
 
 
 def test_work_finished_the_same_day_is_not_reported(
@@ -619,4 +669,133 @@ def test_a_failed_save_after_building_nothing_claims_nothing(
 
     err = capsys.readouterr().err
     assert "the ledger directory is read-only" in err
+    assert "package(s) above were written" not in err
+
+
+# --- the same-day blind spot, closed by recording what shipped --------------
+
+
+def test_a_record_shipped_silent_and_voiced_the_same_day_is_still_caught(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Dates are days on both sides, so no comparison of them can see this:
+    ship at 09:00 with the gap warning, voice at 10:00, and the export date and
+    the audio date are the same string. The build records what the record was
+    *missing* instead, so "it went out silent and has a clip now" is a fact
+    about two states rather than an inference from two dates."""
+    root = _project(tmp_path, [_record("橋", "はし")])
+    assert _run(root, "build", "verbs", "--only-new", "--yes") == 0
+    assert _entry_gaps(root, "word:橋:はし") == ["accent", "audio", "examples"]
+
+    # The same day: give it the clip it shipped without.
+    records = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    records[0]["audio"] = "audio/janki-x.wav"
+    (root / "vocabulary.json").write_text(
+        json.dumps(records, ensure_ascii=False), encoding="utf-8"
+    )
+    (root / "media" / "audio").mkdir(parents=True)
+    (root / "media" / "audio" / "janki-x.wav").write_bytes(b"clip")
+    capsys.readouterr()
+
+    assert _run(root, "build", "verbs", "--only-new", "--yes") == 0
+
+    assert "shipped without audio" in capsys.readouterr().err
+
+
+def test_a_record_that_shipped_complete_is_never_reported(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The export value stays a bare date when there is nothing to record, so
+    no existing ledger changes shape and a complete record cannot trip this."""
+    root = _project(
+        tmp_path,
+        [_record("橋", "はし", pitch_accent=["LHL"], audio="audio/x.wav",
+                 examples=[{"japanese": "橋を渡る。", "english": "Cross."}])],
+    )
+    (root / "media" / "audio").mkdir(parents=True)
+    (root / "media" / "audio" / "x.wav").write_bytes(b"clip")
+    assert _run(root, "build", "verbs", "--only-new", "--yes") == 0
+    capsys.readouterr()
+
+    exports = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    value = exports["records"]["word:橋:はし"]["exports"]["verbs"]
+    assert isinstance(value, str), "a plain date, the shape it has always had"
+
+    assert _run(root, "build", "verbs", "--only-new", "--yes") == 0
+    assert "shipped without" not in capsys.readouterr().err
+
+
+def _entry_gaps(root: Path, record_id: str) -> list[str]:
+    payload = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    return sorted(payload["records"][record_id]["exports"]["verbs"]["missing"])
+
+
+# --- a failing deck must not discard what earlier decks recorded ------------
+
+
+def test_one_broken_deck_does_not_lose_another_decks_exports(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`build --all` sorts its decks, so an abort in a later one used to unwind
+    past `_finish_build` and drop everything the earlier ones recorded in
+    memory. Export state is reconstructible by nothing, so those records ship
+    again on every future --only-new while `status` calls them unexported."""
+    root = _project(tmp_path, [_record("橋", "はし"), _record("話す", "はなす")])
+    # `nouns` sorts first and is fine; `verbs` carries a record with an error.
+    # Inline notes, so `nouns` does not read the file `verbs` is about to
+    # choke on — otherwise both decks fail and the test proves nothing.
+    (root / "decks" / "nouns.yaml").write_text(
+        "deck:\n  name: Nouns\n  output: nouns.apkg\n"
+        "notes:\n"
+        "  - id: word:本:ほん\n    expression: 本\n    reading: ほん\n"
+        "    meanings: [book]\n",
+        encoding="utf-8",
+    )
+    records = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    records[0]["furigana"] = "橋[はし"
+    (root / "vocabulary.json").write_text(
+        json.dumps(records, ensure_ascii=False), encoding="utf-8"
+    )
+
+    assert _run(root, "build", "--all", "--only-new", "--yes") == 1
+
+    assert "Deck validation failed" in capsys.readouterr().err
+    assert (root / "ledger.json").exists(), "the ledger was still saved"
+    assert _exports(root).get("word:本:ほん", {}).get("nouns"), (
+        "the deck that built before the failure kept its export entry"
+    )
+
+
+# --- an --output build says it recorded nothing -----------------------------
+
+
+def test_an_output_build_says_it_recorded_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Otherwise `--only-new --output` rebuilds the identical package every day
+    — the records never leave "new" — and never says why."""
+    root = _project(tmp_path, [_record("橋", "はし")])
+
+    assert _run(root, "build", "verbs", "--only-new", "--yes",
+                "--output", str(tmp_path / "x.apkg")) == 0
+
+    assert "not recorded as exported" in capsys.readouterr().err
+
+
+def test_a_failed_save_after_an_output_build_claims_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A package *was* written, but no export entry was pending, so the "next
+    --only-new will include those records again" line is false here too."""
+    root = _project(tmp_path, [_record("橋", "はし")])
+
+    def refuse(self: Any) -> None:
+        raise cli.ledger.LedgerError("read-only")
+
+    monkeypatch.setattr(cli.ledger.Ledger, "save", refuse)
+
+    assert _run(root, "build", "verbs", "--output", str(tmp_path / "x.apkg")) == 1
+
+    err = capsys.readouterr().err
+    assert "read-only" in err
     assert "package(s) above were written" not in err

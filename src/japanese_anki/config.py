@@ -115,6 +115,22 @@ def _float(data: dict[str, Any], section: str, key: str, default: float) -> floa
     return float(value)
 
 
+def _int_or_none(data: dict[str, Any], section: str, key: str) -> int | None:
+    """An optional integer setting, where *absent* is the only way to opt out.
+
+    A sentinel would have to be a number, and every number here is a real
+    VOICEVOX style id — 0 is 四国めたん・あまあま, which the audition page prints
+    as a copyable value. Treating 0 as "unset" would silently discard a valid
+    configuration, which is the failure ``_int`` exists to prevent.
+    """
+    value = _get(data, section, key, None)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ConfigError(f"[{section}] {key} must be an integer, got {value!r}")
+    return value
+
+
 def _bool(data: dict[str, Any], section: str, key: str, default: bool) -> bool:
     """Read a boolean setting, refusing values that only look like one.
 
@@ -231,9 +247,11 @@ class ProjectConfig:
     tts_provider: str
     voicevox_url: str
     voicevox_speaker: int
-    #: Which voice reads example sentences. 0 or absent means the same one
-    #: that speaks the words.
-    voicevox_sentence_speaker: int
+    #: Which VOICEVOX voice reads example sentences. ``None`` — the key absent
+    #: — means the same one that speaks the words. Not 0: that is a real style
+    #: id, and a sentinel that collides with a valid value is how a correct
+    #: configuration gets silently dropped.
+    voicevox_sentence_speaker: int | None
     voicevox_speed: float
     #: Which engine reads example sentences: '' (the word engine), 'voicevox',
     #: or 'openai'. Words are never affected — only VOICEVOX can force an
@@ -307,7 +325,7 @@ class ProjectConfig:
             tts_provider=_str(data, "tts", "provider", "voicevox"),
             voicevox_url=_str(data, "tts", "voicevox_url", "http://localhost:50021"),
             voicevox_speaker=_int(data, "tts", "voicevox_speaker", 46),
-            voicevox_sentence_speaker=_int(data, "tts", "voicevox_sentence_speaker", 0),
+            voicevox_sentence_speaker=_int_or_none(data, "tts", "voicevox_sentence_speaker"),
             voicevox_speed=_float(data, "tts", "voicevox_speed", 1.0),
             sentence_provider=_str(data, "tts", "sentence_provider", ""),
             openai_voice=_str(data, "tts", "openai_voice", openai_tts.DEFAULT_VOICE),
