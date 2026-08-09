@@ -33,6 +33,7 @@ request/response contract (:func:`furigana_to_anki`,
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import random
@@ -202,11 +203,28 @@ def urllib_transport(
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return response.status, _decode_body(response.read(), response.status, url)
     except urllib.error.HTTPError as exc:
-        return exc.code, _decode_body(exc.read(), exc.code, url)
+        # Reading the error body is live socket I/O on a connection that has
+        # already misbehaved — `urlopen` raises at the status line, with the
+        # response unread — and it happens *inside* this handler, where the
+        # sibling clauses below cannot reach it. The status is what jpdb's
+        # retry logic needs; a body that will not come is not worth losing it.
+        try:
+            detail = exc.read()
+        except (OSError, http.client.HTTPException):
+            detail = b""
+        return exc.code, _decode_body(detail, exc.code, url)
     except urllib.error.URLError as exc:
         raise JpdbError(f"Could not reach {url}: {exc.reason}") from exc
     except TimeoutError as exc:
         raise JpdbError(f"{url} timed out after {timeout:g}s") from exc
+    except (OSError, http.client.HTTPException) as exc:
+        # `URLError` covers less than it looks: `urlopen` wraps only the
+        # *request*, so a peer that accepts the connection and closes it
+        # without answering arrives as a bare `RemoteDisconnected` — a
+        # `ConnectionResetError` and a `BadStatusLine`, neither a `URLError`.
+        # Escaping as a non-JankiError means a traceback where an error
+        # message belongs.
+        raise JpdbError(f"Could not reach {url}: {exc}") from exc
 
 
 def _backoff_delay(attempt: int, base: float, cap: float, jitter: Callable[[], float]) -> float:

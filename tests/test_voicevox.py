@@ -417,7 +417,22 @@ def test_an_http_error_status_is_returned_rather_than_raised(
     assert urllib_transport("POST", "http://localhost:50021/audio_query", {}) == (422, b"why")
 
 
+@pytest.mark.parametrize(
+    "boom",
+    [
+        # An HTTPException that is not an OSError...
+        http.client.IncompleteRead(b"partial", 5000),
+        # ...and an OSError that is not an HTTPException. Each half of the
+        # guard's tuple fails independently, so neither can be deleted quietly.
+        # The second is the likelier peer: urlopen leaves the socket timeout
+        # armed and raises at the status line, so a peer that sends headers
+        # then stalls or resets raises here rather than IncompleteRead.
+        ConnectionResetError(54, "Connection reset by peer"),
+    ],
+    ids=["http-exception", "os-error"],
+)
 def test_a_status_survives_an_error_body_that_will_not_read(
+    boom: BaseException,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """`urlopen` raises HTTPError as soon as the status line lands, with the
@@ -428,7 +443,7 @@ def test_a_status_survives_an_error_body_that_will_not_read(
 
     class Stalling(io.BytesIO):
         def read(self, *args: Any) -> bytes:
-            raise http.client.IncompleteRead(b"partial", 5000)
+            raise boom
 
     monkeypatch.setattr(
         "urllib.request.urlopen",

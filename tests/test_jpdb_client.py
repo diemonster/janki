@@ -7,6 +7,7 @@ committed fixture, not a capture.
 
 from __future__ import annotations
 
+import http.client
 import io
 import json
 import urllib.error
@@ -17,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from japanese_anki import cli
+from japanese_anki import cli, jpdb
 from japanese_anki.jpdb import (
     API_KEY_ENV,
     DEFAULT_TOKEN_FIELDS,
@@ -695,3 +696,49 @@ def test_api_key_from_env_reads_and_trims() -> None:
     assert api_key_from_env({API_KEY_ENV: " abc \n"}) == "abc"
     with pytest.raises(JpdbError, match=API_KEY_ENV):
         api_key_from_env({})
+
+
+@pytest.mark.parametrize(
+    "boom",
+    [
+        http.client.IncompleteRead(b"partial", 5000),
+        ConnectionResetError(54, "Connection reset by peer"),
+    ],
+    ids=["http-exception", "os-error"],
+)
+def test_a_status_survives_an_error_body_that_will_not_read(
+    boom: BaseException, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Same defect the VOICEVOX transport had: `exc.read()` is live I/O inside
+    the handler, where the sibling `except` clauses cannot catch it. A proxy
+    answering 502 with a Content-Length it does not honour would escape as a
+    raw IncompleteRead rather than a JpdbError."""
+
+    class Stalling(io.BytesIO):
+        def read(self, *args: object) -> bytes:
+            raise boom
+
+    def fake_urlopen(request: object, timeout: float = 0) -> object:
+        raise urllib.error.HTTPError(
+            "https://jpdb.io/api/v1/ping", 502, "Bad Gateway", {}, Stalling()
+        )
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    status, payload = jpdb.urllib_transport("https://jpdb.io/api/v1/ping", {}, {})
+
+    assert status == 502
+
+
+def test_a_peer_that_hangs_up_is_a_jpdb_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`urlopen` wraps only the request in URLError, so a peer that accepts the
+    connection and closes it without answering arrives as a bare
+    RemoteDisconnected — neither a URLError nor a TimeoutError."""
+
+    def fake_urlopen(request: object, timeout: float = 0) -> object:
+        raise http.client.RemoteDisconnected("closed without response")
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    with pytest.raises(jpdb.JpdbError):
+        jpdb.urllib_transport("https://jpdb.io/api/v1/ping", {}, {})

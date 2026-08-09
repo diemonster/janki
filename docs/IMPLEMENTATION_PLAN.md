@@ -967,8 +967,15 @@ error path — but the API-backed flows need a live `JPDB_API_KEY`, which is
 owner-only for the same reason M2.1F is. Those are covered by tests against fake
 transports, not by a live run, and this note is where that gap is recorded.
 
-**Gap closed 2026-08-08.** `jpdb ping`, `/parse` and `enrich --jpdb` were
-all run against the live API on the real collection. `enrich --jpdb`
+**Gap partly closed 2026-08-08.** `jpdb ping`, `/parse`, `enrich --jpdb`
+and `list_user_decks` were run against the live API on the real
+collection. Still fake-transport only, and worth naming so this note
+keeps doing its job: **`import-jpdb --deck` end to end**
+(`deck/list-vocabulary` → `lookup-vocabulary`) and **`enrich --staging`**.
+The first is the shape janki guesses at hardest — it reconciles a row
+list against an `occurences` list and warns on a length mismatch, all
+against a hand-written fake — so it is the one to run before any deck is
+built from it. `enrich --jpdb`
 filled `pitch_accent` and `frequency_rank` for all three records
 (行く `LHH` rank 100, 話す `LHLL` rank 200, 食べる `LHLL` rank 200) and
 recorded the pass in the ledger. The owner's decks were listed live: 584
@@ -1521,9 +1528,17 @@ M5.7 anytime after M5.3.
 in place. **Verified against live jpdb the same day**, which is what the
 goldens were previously asserting from memory: 橋 `LHL`, 箸 `HLL`, 端
 `LHH`, 病院 `LLHHHH`, 授業 `HHLLLL` — every hand-written golden matches
-the API exactly, the `len(pattern) == len(reading) + 1` invariant holds
-on all five, and 病院's leading `LL` confirms the "read the level off the
-mora's first kana" decision. Run end to end on the real collection too:
+the API exactly, and the `len(pattern) == len(reading) + 1` invariant
+holds on all five. 病院 returning **six** characters for a **four**-mora
+word is the part that matters: it confirms the one-character-per-*kana*
+width, which is what forces the regrouping. It does **not** confirm the
+"read the level off the mora's first kana" choice, as an earlier version
+of this note claimed — びょ's two kana both carry `L` there, so first-
+and last-kana readings agree, and 授業 is non-discriminating the same
+way. No live response can confirm that rule: it only differs on a source
+that writes a small kana with the *following* mora's level, which is
+malformed input jpdb does not produce. It stays a defensive choice, held
+in place by `test_the_moras_level_is_read_off_its_first_kana` alone. Run end to end on the real collection too:
 行く → `イク'`, 話す → `ハナ'ス`, 食べる → `タベ'ル`. Five decisions worth recording. (1) **Heiban and odaka produce
 the same AquesTalk string, and that is right, not a bug to fix later.**
 The notation carries one mark per phrase and the engine writes heiban on
