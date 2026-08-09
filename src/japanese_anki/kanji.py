@@ -193,14 +193,45 @@ def _to_hiragana(text: str) -> str:
     )
 
 
-def _reading_stem(reading: str) -> str:
-    """The part of a KANJIDIC reading that appears inside a word.
+def _match_key(reading: str) -> str:
+    """The kana a word must contain to be an example of this reading.
 
-    ``つか.う`` marks okurigana after the dot — only ``つか`` is written with the
-    character — and ``-まえ`` marks a suffix position. Both would fail a naive
-    containment test against a word's pronunciation.
+    The **whole** reading, okurigana included: ``つか.う`` and ``つか.い`` are two
+    readings of 使 that differ only after the dot, and matching on the stem
+    alone makes 使う and 使い方 examples of both. It also let 教科書 (きょうかしょ)
+    answer to 書's か.く, because か is inside きょうかしょ.
+
+    The dot is a boundary marker rather than a sound, and ``-`` marks a suffix
+    position, so both are dropped; on'yomi are katakana while words are
+    hiragana, so the result is converted.
     """
-    return _to_hiragana(reading.split(".")[0].replace("-", "").strip())
+    return _to_hiragana(reading.replace(".", "").replace("-", "").strip())
+
+
+def _dedupe_key(reading: str) -> str:
+    """What makes two KANJIDIC readings the same reading.
+
+    Only the position marker. ``まえ`` and ``-まえ`` are one reading written
+    twice, so a row each prints the same example twice — but ``つか.う`` and
+    ``つか.い`` are genuinely different, and collapsing them labelled 使う as
+    つか.い, which is simply the wrong reading for that word.
+    """
+    return _to_hiragana(reading.replace("-", "").strip())
+
+
+def _display_reading(reading: str) -> str:
+    """A reading as a person writes it: ``つか.う`` becomes ``つか(う)``.
+
+    KANJIDIC's dot is machine notation for where the kanji stops and the
+    okurigana begins. The information is worth keeping — it is why 使う is
+    written with one kana after the character — but a bare dot on a card reads
+    as a typo, which is exactly how it was reported.
+    """
+    text = reading.replace("-", "").strip()
+    if "." not in text:
+        return text
+    stem, _, okurigana = text.partition(".")
+    return f"{stem}({okurigana})" if okurigana else stem
 
 
 def _priority_rank(priorities: Iterable[str]) -> int:
@@ -221,7 +252,7 @@ def _priority_rank(priorities: Iterable[str]) -> int:
 
 
 def _examples_for(reading: str, words: list[dict[str, Any]]) -> tuple[Example, ...]:
-    stem = _reading_stem(reading)
+    stem = _match_key(reading)
     if not stem:
         return ()
     scored: list[tuple[int, Example]] = []
@@ -291,14 +322,18 @@ def fetch_kanji(character: str, *, transport: Transport | None = None) -> KanjiI
     readings: list[Reading] = []
     seen_stems: set[tuple[str, str]] = set()
     for kind, key in (("on", "on_readings"), ("kun", "kun_readings")):
-        for value in sorted((info.get(key) or []), key=lambda r: ("-" in r, "." in r, r)):
+        for value in sorted((info.get(key) or []), key=lambda r: ("-" in r, r)):
             text = str(value)
-            stem = (kind, _reading_stem(text))
-            if not stem[1] or stem in seen_stems:
+            marker = (kind, _dedupe_key(text))
+            if not marker[1] or marker in seen_stems:
                 continue
-            seen_stems.add(stem)
+            seen_stems.add(marker)
             readings.append(
-                Reading(kind=kind, reading=text, examples=_examples_for(text, words))
+                Reading(
+                    kind=kind,
+                    reading=_display_reading(text),
+                    examples=_examples_for(text, words),
+                )
             )
 
     try:

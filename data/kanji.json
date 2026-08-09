@@ -31,23 +31,34 @@
       },
       {
         "kind": "kun",
-        "reading": "つか.い",
+        "reading": "つか(い)",
         "examples": [
-          {
-            "written": "使う",
-            "pronounced": "つかう",
-            "gloss": "to use (a tool, method, etc.)"
-          },
           {
             "written": "使い方",
             "pronounced": "つかいかた",
             "gloss": "way of using (something)"
+          },
+          {
+            "written": "使い",
+            "pronounced": "つかい",
+            "gloss": "errand"
           }
         ]
       },
       {
         "kind": "kun",
-        "reading": "-づか.い",
+        "reading": "つか(う)",
+        "examples": [
+          {
+            "written": "使う",
+            "pronounced": "つかう",
+            "gloss": "to use (a tool, method, etc.)"
+          }
+        ]
+      },
+      {
+        "kind": "kun",
+        "reading": "づか(い)",
         "examples": [
           {
             "written": "無駄遣い",
@@ -143,7 +154,45 @@
       },
       {
         "kind": "kun",
-        "reading": "わ.かつ",
+        "reading": "わ(かつ)",
+        "examples": [
+          {
+            "written": "分かつ",
+            "pronounced": "わかつ",
+            "gloss": "to divide"
+          }
+        ]
+      },
+      {
+        "kind": "kun",
+        "reading": "わ(かる)",
+        "examples": [
+          {
+            "written": "解る",
+            "pronounced": "わかる",
+            "gloss": "to understand"
+          },
+          {
+            "written": "判る",
+            "pronounced": "わかる",
+            "gloss": "to understand"
+          }
+        ]
+      },
+      {
+        "kind": "kun",
+        "reading": "わ(かれる)",
+        "examples": [
+          {
+            "written": "分かれる",
+            "pronounced": "わかれる",
+            "gloss": "to branch"
+          }
+        ]
+      },
+      {
+        "kind": "kun",
+        "reading": "わ(け)",
         "examples": [
           {
             "written": "分け",
@@ -154,6 +203,22 @@
             "written": "分ける",
             "pronounced": "わける",
             "gloss": "to divide (into)"
+          }
+        ]
+      },
+      {
+        "kind": "kun",
+        "reading": "わ(ける)",
+        "examples": [
+          {
+            "written": "分ける",
+            "pronounced": "わける",
+            "gloss": "to divide (into)"
+          },
+          {
+            "written": "引き分ける",
+            "pronounced": "ひきわける",
+            "gloss": "to pull apart"
           }
         ]
       }
@@ -191,28 +256,28 @@
       },
       {
         "kind": "kun",
-        "reading": "おぼ.す",
+        "reading": "おぼ(す)",
         "examples": []
       },
       {
         "kind": "kun",
-        "reading": "おも.う",
+        "reading": "おも(う)",
         "examples": [
-          {
-            "written": "思い",
-            "pronounced": "おもい",
-            "gloss": "thought"
-          },
           {
             "written": "思う",
             "pronounced": "おもう",
             "gloss": "to think"
+          },
+          {
+            "written": "思う存分",
+            "pronounced": "おもうぞんぶん",
+            "gloss": "to one's heart's content"
           }
         ]
       },
       {
         "kind": "kun",
-        "reading": "おもえら.く",
+        "reading": "おもえら(く)",
         "examples": []
       }
     ],
@@ -254,23 +319,23 @@
       },
       {
         "kind": "kun",
-        "reading": "か.く",
+        "reading": "か(く)",
         "examples": [
           {
-            "written": "教科書",
-            "pronounced": "きょうかしょ",
-            "gloss": "textbook"
+            "written": "書く",
+            "pronounced": "かく",
+            "gloss": "to write"
           },
           {
-            "written": "図書館",
-            "pronounced": "としょかん",
-            "gloss": "library"
+            "written": "絵を描く",
+            "pronounced": "えをかく",
+            "gloss": "to paint (draw) a picture"
           }
         ]
       },
       {
         "kind": "kun",
-        "reading": "-がき",
+        "reading": "が(き)",
         "examples": [
           {
             "written": "肩書",
@@ -286,7 +351,7 @@
       },
       {
         "kind": "kun",
-        "reading": "-が.き",
+        "reading": "がき",
         "examples": [
           {
             "written": "肩書",
@@ -371,6 +436,42 @@
       },
       {
         "kind": "kun",
+        "reading": "き(たす)",
+        "examples": []
+      },
+      {
+        "kind": "kun",
+        "reading": "き(たる)",
+        "examples": []
+      },
+      {
+        "kind": "kun",
+        "reading": "きた(す)",
+        "examples": []
+      },
+      {
+        "kind": "kun",
+        "reading": "きた(る)",
+        "examples": []
+      },
+      {
+        "kind": "kun",
+        "reading": "く(る)",
+        "examples": [
+          {
+            "written": "来る",
+            "pronounced": "くる",
+            "gloss": "to come (spatially or temporally)"
+          },
+          {
+            "written": "連れてくる",
+            "pronounced": "つれてくる",
+            "gloss": "to bring someone along"
+          }
+        ]
+      },
+      {
+        "kind": "kun",
         "reading": "こ",
         "examples": [
           {
@@ -382,33 +483,6 @@
             "written": "来航",
             "pronounced": "らいこう",
             "gloss": "arrival of ships (from abroad)"
-          }
-        ]
-      },
-      {
-        "kind": "kun",
-        "reading": "きた.す",
-        "examples": [
-          {
-            "written": "行ったり来たり",
-            "pronounced": "いったりきたり",
-            "gloss": "going to and fro"
-          }
-        ]
-      },
-      {
-        "kind": "kun",
-        "reading": "く.る",
-        "examples": [
-          {
-            "written": "昨年来",
-            "pronounced": "さくねんらい",
-            "gloss": "since last year"
-          },
-          {
-            "written": "来る",
-            "pronounced": "くる",
-            "gloss": "to come (spatially or temporally)"
           }
         ]
       }
@@ -450,7 +524,23 @@
       },
       {
         "kind": "kun",
-        "reading": "し.らせる",
+        "reading": "し(らせる)",
+        "examples": [
+          {
+            "written": "思い知らせる",
+            "pronounced": "おもいしらせる",
+            "gloss": "to make (someone) realize (e.g. their mistake)"
+          },
+          {
+            "written": "知らせる",
+            "pronounced": "しらせる",
+            "gloss": "to notify"
+          }
+        ]
+      },
+      {
+        "kind": "kun",
+        "reading": "し(る)",
         "examples": [
           {
             "written": "知る",
@@ -458,9 +548,9 @@
             "gloss": "to know"
           },
           {
-            "written": "知らん顔",
-            "pronounced": "しらんかお",
-            "gloss": "feigned ignorance"
+            "written": "思い知る",
+            "pronounced": "おもいしる",
+            "gloss": "to realize"
           }
         ]
       }
@@ -520,17 +610,28 @@
       },
       {
         "kind": "kun",
-        "reading": "き.く",
+        "reading": "き(く)",
         "examples": [
           {
-            "written": "聞かす",
-            "pronounced": "きかす",
-            "gloss": "to let (someone) hear"
+            "written": "聞く",
+            "pronounced": "きく",
+            "gloss": "to hear"
           },
           {
-            "written": "聞き手",
-            "pronounced": "ききて",
-            "gloss": "hearer"
+            "written": "聴く",
+            "pronounced": "きく",
+            "gloss": "to hear"
+          }
+        ]
+      },
+      {
+        "kind": "kun",
+        "reading": "き(こえる)",
+        "examples": [
+          {
+            "written": "聞こえる",
+            "pronounced": "きこえる",
+            "gloss": "to be heard"
           }
         ]
       }
@@ -612,55 +713,45 @@
       },
       {
         "kind": "kun",
-        "reading": "い.く",
+        "reading": "い(く)",
         "examples": [
           {
-            "written": "行政",
-            "pronounced": "ぎょうせい",
-            "gloss": "administration"
+            "written": "低空飛行",
+            "pronounced": "ていくうひこう",
+            "gloss": "low-altitude flying"
           },
           {
-            "written": "行為",
-            "pronounced": "こうい",
-            "gloss": "act"
+            "written": "行く",
+            "pronounced": "いく",
+            "gloss": "to go"
           }
         ]
       },
       {
         "kind": "kun",
-        "reading": "おこ.なう",
-        "examples": [
-          {
-            "written": "行う",
-            "pronounced": "おこなう",
-            "gloss": "to perform"
-          },
-          {
-            "written": "行い",
-            "pronounced": "おこない",
-            "gloss": "deed"
-          }
-        ]
-      },
-      {
-        "kind": "kun",
-        "reading": "おこな.う",
+        "reading": "おこ(なう)",
         "examples": [
           {
             "written": "行う",
             "pronounced": "おこなう",
             "gloss": "to perform"
-          },
-          {
-            "written": "行い",
-            "pronounced": "おこない",
-            "gloss": "deed"
           }
         ]
       },
       {
         "kind": "kun",
-        "reading": "ゆ.く",
+        "reading": "おこな(う)",
+        "examples": [
+          {
+            "written": "行う",
+            "pronounced": "おこなう",
+            "gloss": "to perform"
+          }
+        ]
+      },
+      {
+        "kind": "kun",
+        "reading": "ゆ(く)",
         "examples": [
           {
             "written": "行方",
@@ -668,15 +759,15 @@
             "gloss": "(one's) whereabouts"
           },
           {
-            "written": "売れ行き",
-            "pronounced": "うれゆき",
-            "gloss": "sales"
+            "written": "行く手",
+            "pronounced": "ゆくて",
+            "gloss": "one's way"
           }
         ]
       },
       {
         "kind": "kun",
-        "reading": "-いき",
+        "reading": "い(き)",
         "examples": [
           {
             "written": "行き",
@@ -692,7 +783,39 @@
       },
       {
         "kind": "kun",
-        "reading": "-ゆき",
+        "reading": "いき",
+        "examples": [
+          {
+            "written": "行き",
+            "pronounced": "いき",
+            "gloss": "the way there"
+          },
+          {
+            "written": "行き過ぎ",
+            "pronounced": "いきすぎ",
+            "gloss": "going too far"
+          }
+        ]
+      },
+      {
+        "kind": "kun",
+        "reading": "ゆ(き)",
+        "examples": [
+          {
+            "written": "売れ行き",
+            "pronounced": "うれゆき",
+            "gloss": "sales"
+          },
+          {
+            "written": "先行き",
+            "pronounced": "さきゆき",
+            "gloss": "the future"
+          }
+        ]
+      },
+      {
+        "kind": "kun",
+        "reading": "ゆき",
         "examples": [
           {
             "written": "売れ行き",
@@ -748,17 +871,39 @@
       },
       {
         "kind": "kun",
-        "reading": "み.える",
+        "reading": "み(える)",
         "examples": [
           {
-            "written": "見方",
-            "pronounced": "みかた",
-            "gloss": "viewpoint"
+            "written": "見える",
+            "pronounced": "みえる",
+            "gloss": "to be seen"
+          }
+        ]
+      },
+      {
+        "kind": "kun",
+        "reading": "み(せる)",
+        "examples": [
+          {
+            "written": "見せる",
+            "pronounced": "みせる",
+            "gloss": "to show"
+          }
+        ]
+      },
+      {
+        "kind": "kun",
+        "reading": "み(る)",
+        "examples": [
+          {
+            "written": "見る",
+            "pronounced": "みる",
+            "gloss": "to see"
           },
           {
-            "written": "見直し",
-            "pronounced": "みなおし",
-            "gloss": "review"
+            "written": "試みる",
+            "pronounced": "こころみる",
+            "gloss": "to try"
           }
         ]
       }
@@ -816,6 +961,22 @@
       },
       {
         "kind": "kun",
+        "reading": "い(う)",
+        "examples": [
+          {
+            "written": "言う",
+            "pronounced": "いう",
+            "gloss": "to say"
+          },
+          {
+            "written": "云う",
+            "pronounced": "いう",
+            "gloss": "to say"
+          }
+        ]
+      },
+      {
+        "kind": "kun",
         "reading": "こと",
         "examples": [
           {
@@ -827,22 +988,6 @@
             "written": "一言",
             "pronounced": "ひとこと",
             "gloss": "single word"
-          }
-        ]
-      },
-      {
-        "kind": "kun",
-        "reading": "い.う",
-        "examples": [
-          {
-            "written": "言う",
-            "pronounced": "いう",
-            "gloss": "to say"
-          },
-          {
-            "written": "云う",
-            "pronounced": "いう",
-            "gloss": "to say"
           }
         ]
       }
@@ -884,23 +1029,18 @@
       },
       {
         "kind": "kun",
-        "reading": "はなし",
+        "reading": "はな(す)",
         "examples": [
           {
-            "written": "話",
-            "pronounced": "はなし",
-            "gloss": "talk"
-          },
-          {
-            "written": "話合い",
-            "pronounced": "はなしあい",
-            "gloss": "discussion"
+            "written": "話す",
+            "pronounced": "はなす",
+            "gloss": "to talk"
           }
         ]
       },
       {
         "kind": "kun",
-        "reading": "はな.す",
+        "reading": "はなし",
         "examples": [
           {
             "written": "話",
@@ -984,7 +1124,18 @@
       },
       {
         "kind": "kun",
-        "reading": "よ.む",
+        "reading": "よ(む)",
+        "examples": [
+          {
+            "written": "読む",
+            "pronounced": "よむ",
+            "gloss": "to read"
+          }
+        ]
+      },
+      {
+        "kind": "kun",
+        "reading": "よ(み)",
         "examples": [
           {
             "written": "読み",
@@ -1042,17 +1193,12 @@
       },
       {
         "kind": "kun",
-        "reading": "か.う",
+        "reading": "か(う)",
         "examples": [
           {
-            "written": "買物",
-            "pronounced": "かいもの",
-            "gloss": "shopping"
-          },
-          {
-            "written": "買い",
-            "pronounced": "かい",
-            "gloss": "buying"
+            "written": "買う",
+            "pronounced": "かう",
+            "gloss": "to buy"
           }
         ]
       }
@@ -1115,51 +1261,51 @@
       },
       {
         "kind": "kun",
-        "reading": "く.う",
+        "reading": "く(う)",
         "examples": [
           {
-            "written": "食品",
-            "pronounced": "しょくひん",
-            "gloss": "food"
+            "written": "食う",
+            "pronounced": "くう",
+            "gloss": "to eat"
           },
           {
-            "written": "食事",
-            "pronounced": "しょくじ",
-            "gloss": "meal"
+            "written": "喰う",
+            "pronounced": "くう",
+            "gloss": "to eat"
           }
         ]
       },
       {
         "kind": "kun",
-        "reading": "た.べる",
+        "reading": "く(らう)",
         "examples": [
           {
-            "written": "食べ物",
-            "pronounced": "たべもの",
-            "gloss": "food"
+            "written": "食らう",
+            "pronounced": "くらう",
+            "gloss": "to eat"
           },
           {
-            "written": "食卓",
-            "pronounced": "しょくたく",
-            "gloss": "dining table"
+            "written": "面食らう",
+            "pronounced": "めんくらう",
+            "gloss": "to be confused"
           }
         ]
       },
       {
         "kind": "kun",
-        "reading": "は.む",
+        "reading": "た(べる)",
         "examples": [
           {
-            "written": "はみ出す",
-            "pronounced": "はみだす",
-            "gloss": "to protrude"
-          },
-          {
-            "written": "食み出る",
-            "pronounced": "はみでる",
-            "gloss": "to protrude"
+            "written": "食べる",
+            "pronounced": "たべる",
+            "gloss": "to eat"
           }
         ]
+      },
+      {
+        "kind": "kun",
+        "reading": "は(む)",
+        "examples": []
       }
     ],
     "strokes": [
@@ -1207,7 +1353,23 @@
       },
       {
         "kind": "kun",
-        "reading": "の.む",
+        "reading": "の(む)",
+        "examples": [
+          {
+            "written": "飲む",
+            "pronounced": "のむ",
+            "gloss": "to drink"
+          },
+          {
+            "written": "呑む",
+            "pronounced": "のむ",
+            "gloss": "to drink"
+          }
+        ]
+      },
+      {
+        "kind": "kun",
+        "reading": "の(み)",
         "examples": [
           {
             "written": "飲物",

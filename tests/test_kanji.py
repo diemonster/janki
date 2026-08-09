@@ -135,15 +135,51 @@ def test_a_katakana_on_reading_matches_a_hiragana_word() -> None:
     assert fetch_kanji("前", transport=send).readings[0].examples[0].written == "前線"
 
 
-def test_okurigana_and_suffix_marks_are_stripped_before_matching() -> None:
-    """`つか.う` marks okurigana — only つか is written with the character — and
-    a naive match against つかう would fail on the dot."""
+def test_okurigana_separates_two_readings_that_share_a_stem() -> None:
+    """使 has both つか.う and つか.い. Matching on the stem alone made 使う and
+    使い方 examples of both — and merging them labelled 使う as つか.い, which is
+    the wrong reading for that word. Reported from a real card."""
     send = fake_transport(
-        info={"on_readings": [], "kun_readings": ["つか.う"]},
-        words=[word("使い方", "つかいかた", "how to use", ["nf20"])],
+        info={"on_readings": [], "kun_readings": ["つか.う", "つか.い"]},
+        words=[
+            word("使う", "つかう", "to use", ["ichi1"]),
+            word("使い方", "つかいかた", "way of using", ["nf20"]),
+        ],
     )
 
-    assert fetch_kanji("使", transport=send).readings[0].examples[0].written == "使い方"
+    info = fetch_kanji("使", transport=send)
+
+    got = {r.reading: [e.written for e in r.examples] for r in info.readings}
+    assert got == {"つか(う)": ["使う"], "つか(い)": ["使い方"]}
+
+
+def test_a_stem_match_does_not_reach_into_an_unrelated_word() -> None:
+    """書's か.く matched 教科書 — きょうか*し*ょ contains か — so an on'yomi
+    compound was offered as an example of a kun reading."""
+    send = fake_transport(
+        info={"on_readings": ["ショ"], "kun_readings": ["か.く"]},
+        words=[
+            word("教科書", "きょうかしょ", "textbook", ["ichi1"]),
+            word("書く", "かく", "to write", ["ichi1"]),
+        ],
+    )
+
+    info = fetch_kanji("書", transport=send)
+
+    kun = next(r for r in info.readings if r.kind == "kun")
+    assert [e.written for e in kun.examples] == ["書く"]
+
+
+def test_the_okurigana_marker_is_not_shown_as_a_dot() -> None:
+    """KANJIDIC's dot is machine notation for where the kanji stops. The
+    information is worth keeping — it is why 使う has one kana after the
+    character — but a bare dot on a card reads as a typo, which is how it was
+    reported."""
+    send = fake_transport(
+        info={"on_readings": [], "kun_readings": ["つか.う"]}, words=[]
+    )
+
+    assert fetch_kanji("使", transport=send).readings[0].reading == "つか(う)"
 
 
 def test_a_reading_listed_twice_is_shown_once() -> None:
@@ -158,6 +194,7 @@ def test_a_reading_listed_twice_is_shown_once() -> None:
     info = fetch_kanji("前", transport=send)
 
     assert [r.reading for r in info.readings] == ["まえ"]
+    assert [e.written for e in info.readings[0].examples] == ["名前"]
 
 
 # --- the strokes ------------------------------------------------------------
