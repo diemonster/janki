@@ -415,3 +415,29 @@ def test_an_http_error_status_is_returned_rather_than_raised(
     )
 
     assert urllib_transport("POST", "http://localhost:50021/audio_query", {}) == (422, b"why")
+
+
+def test_a_status_survives_an_error_body_that_will_not_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`urlopen` raises HTTPError as soon as the status line lands, with the
+    body unread — so reading it is live I/O on a connection already known to be
+    misbehaving. It happens inside the handler, where the sibling `except`
+    clauses cannot catch it: something else on port 50021 answering 404 with a
+    Content-Length it does not honour would escape as a raw IncompleteRead."""
+
+    class Stalling(io.BytesIO):
+        def read(self, *args: Any) -> bytes:
+            raise http.client.IncompleteRead(b"partial", 5000)
+
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        _urlopen_raising(
+            urllib.error.HTTPError(
+                "http://localhost:50021/version", 404, "Not Found", {}, Stalling()
+            )
+        ),
+    )
+
+    assert urllib_transport("GET", "http://localhost:50021/version") == (404, b"")
+    assert VoicevoxProvider().available() is False

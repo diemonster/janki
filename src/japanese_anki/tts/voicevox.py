@@ -93,7 +93,17 @@ def urllib_transport(
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return response.status, response.read()
     except urllib.error.HTTPError as exc:
-        return exc.code, exc.read()
+        # Reading the error body is real socket I/O on a connection that has
+        # already misbehaved — `urlopen` raises as soon as the status line
+        # arrives, with the response still unread — and it happens *inside* this
+        # handler, where the sibling `except` clauses below cannot reach it. So
+        # it gets its own guard. The status is the part worth having; a body
+        # that would not come is not worth losing it over.
+        try:
+            detail = exc.read()
+        except (OSError, http.client.HTTPException):
+            detail = b""
+        return exc.code, detail
     except urllib.error.URLError as exc:
         raise TtsError(f"Could not reach VOICEVOX at {url}: {exc.reason}. {LAUNCH_HINT}") from exc
     except TimeoutError as exc:
