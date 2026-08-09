@@ -1583,7 +1583,7 @@ naive rule is wrong for heiban.
   ん words, length-mismatch error. Expected AquesTalk strings cited in
   test comments.
 
-### [ ] M5.2 VOICEVOX provider
+### [~] claimed task/m5.2 2026-08-08 — M5.2 VOICEVOX provider
 
 Depends on: M1.6 (not M5.1 — tests use a hand-written AquesTalk string)
 Files: new `src/japanese_anki/tts/__init__.py` (provider protocol),
