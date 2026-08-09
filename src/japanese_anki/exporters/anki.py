@@ -15,6 +15,7 @@ from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.io import DataError, load_records, load_structured
 from japanese_anki.models import ModelError, VocabularyRecord
+from japanese_anki.pitch import PitchError, render_pitch_html
 from japanese_anki.validation import has_errors, validate_records
 
 
@@ -42,6 +43,15 @@ FIELD_NAMES = [
     "Image",
     "ShirabeQuery",
     "Source",
+    # M5.4, appended in one release. **Never insert into this list** — a note's
+    # values are positional, so an insertion shifts every value after it on
+    # every existing note, and an append is one-way besides: the field is in
+    # every collection that has imported the deck. See docs/NOTETYPE_UPGRADE.md
+    # for what an append does to a live notetype, and for the "Merge Notetypes"
+    # box that has to be ticked for it to happen at all.
+    "PitchAccent",
+    "FrequencyRank",
+    "ExampleAudio",
 ]
 
 CARD_FILES = {
@@ -58,6 +68,9 @@ class BuildResult:
     note_count: int
     card_types: tuple[str, ...]
     media_count: int
+    #: Media janki could not package — a hand-written ``[sound:]`` tag. The
+    #: build succeeds; the caller decides how loudly to say so.
+    warnings: tuple[str, ...] = ()
 
 
 def _read_text(path: Path) -> str:
@@ -99,8 +112,72 @@ def _source_text(record: VocabularyRecord) -> str:
     return " · ".join(part for part in parts if part)
 
 
+def _resolve_media(
+    value: str,
+    *,
+    media_dir: Path,
+    deck_dir: Path,
+    record_id: str,
+    label: str,
+    media_files: list[str],
+    warnings: list[str],
+) -> Path | None:
+    """Find a media file, preferring ``media_dir`` and falling back to the deck.
+
+    ``media_dir`` is where janki writes and what the config names, so it is
+    tried first. The deck-relative reading is kept because it is what the
+    exporter did before `media_dir` existed, and a hand-written note may still
+    carry a path meant that way — dropping it would break those decks for no
+    gain. Note the two agree for a `../media/...`-style path, since the
+    directories are siblings; only a media-dir-relative path distinguishes them.
+
+    Returns ``None`` when the value is a verbatim ``[sound:]`` tag, which the
+    caller passes through untouched.
+    """
+    if value.startswith("[sound:"):
+        # No file is packaged for a tag written by hand, so if the media is not
+        # already in the collection the card is silently mute. Worth a word,
+        # since this pipeline generates its own audio and would not produce one.
+        warnings.append(
+            f"{record_id}: {label} is a verbatim {value!r} — janki packages no "
+            "file for it, so the card is silent unless that media is already in "
+            "your collection."
+        )
+        return None
+    for base in (media_dir, deck_dir):
+        candidate = (base / value).resolve()
+        if candidate.exists():
+            media_files.append(str(candidate))
+            return candidate
+    raise AnkiBuildError(
+        f"{label} for {record_id} does not exist: tried "
+        f"{(media_dir / value).resolve()} and {(deck_dir / value).resolve()}"
+    )
+
+
+def _pitch_field(record: VocabularyRecord) -> str:
+    """The accent diagram, or nothing.
+
+    Every pattern the record carries, primary first — a word with two accepted
+    accents has two, and showing one would teach that the other is wrong. A
+    pattern that does not fit its reading is *left out* rather than drawn
+    wrong: `render_pitch_html` refuses it, and a card is the last place to
+    start guessing at an alignment janki declined to guess at everywhere else.
+    """
+    if not record.reading or not record.pitch_accent:
+        return ""
+    try:
+        return render_pitch_html(record.reading, record.pitch_accent)
+    except PitchError:
+        return ""
+
+
 def _field_values(
-    record: VocabularyRecord, media_dir: Path, media_files: list[str]
+    record: VocabularyRecord,
+    media_dir: Path,
+    deck_dir: Path,
+    media_files: list[str],
+    warnings: list[str],
 ) -> list[str]:
     """One note's fields, with media resolved against ``media_dir``.
 
@@ -114,26 +191,32 @@ def _field_values(
     example = record.first_example
     audio_field = ""
     if record.audio:
-        if record.audio.startswith("[sound:"):
-            audio_field = record.audio
-        else:
-            audio_path = (media_dir / record.audio).resolve()
-            if not audio_path.exists():
-                raise AnkiBuildError(
-                    f"Audio file for {record.id} does not exist: {audio_path}"
-                )
-            media_files.append(str(audio_path))
-            audio_field = f"[sound:{audio_path.name}]"
+        found = _resolve_media(
+            record.audio, media_dir=media_dir, deck_dir=deck_dir,
+            record_id=record.id, label="Audio",
+            media_files=media_files, warnings=warnings,
+        )
+        audio_field = f"[sound:{found.name}]" if found else record.audio
+
+    example_audio_field = ""
+    if example.audio:
+        found = _resolve_media(
+            example.audio, media_dir=media_dir, deck_dir=deck_dir,
+            record_id=record.id, label="Example audio",
+            media_files=media_files, warnings=warnings,
+        )
+        example_audio_field = f"[sound:{found.name}]" if found else example.audio
 
     image_field = ""
     if record.image:
-        image_path = (media_dir / record.image).resolve()
-        if not image_path.exists():
-            raise AnkiBuildError(
-                f"Image file for {record.id} does not exist: {image_path}"
-            )
-        media_files.append(str(image_path))
-        image_field = f'<img src="{html.escape(image_path.name)}">'
+        found = _resolve_media(
+            record.image, media_dir=media_dir, deck_dir=deck_dir,
+            record_id=record.id, label="Image",
+            media_files=media_files, warnings=warnings,
+        )
+        image_field = (
+            f'<img src="{html.escape(found.name)}">' if found else record.image
+        )
 
     return [
         record.id,
@@ -155,6 +238,9 @@ def _field_values(
         image_field,
         html.escape(record.expression),
         html.escape(_source_text(record)),
+        _pitch_field(record),
+        str(record.frequency_rank) if record.frequency_rank is not None else "",
+        example_audio_field,
     ]
 
 
@@ -387,10 +473,13 @@ def build_deck(
 
     media_dir = project_config.media_dir.resolve()
     media_files: list[str] = []
+    media_warnings: list[str] = []
     for record in records:
         note = genanki.Note(
             model=model,
-            fields=_field_values(record, media_dir, media_files),
+            fields=_field_values(
+                record, media_dir, deck_path.parent, media_files, media_warnings
+            ),
             tags=[_clean_tag(tag) for tag in record.tags if _clean_tag(tag)],
             guid=genanki.guid_for(record.id),
         )
@@ -411,4 +500,5 @@ def build_deck(
         note_count=len(records),
         card_types=tuple(card_types),
         media_count=len(set(media_files)),
+        warnings=tuple(media_warnings),
     )

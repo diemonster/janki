@@ -3,10 +3,13 @@
 <div class="expression">{{Expression}}</div>
 {{#Furigana}}<div class="reading">{{furigana:Furigana}}</div>{{/Furigana}}
 {{^Furigana}}{{#Reading}}<div class="reading">{{Reading}}</div>{{/Reading}}{{/Furigana}}
+{{#PitchAccent}}<div class="pitch-accent">{{PitchAccent}}</div>{{/PitchAccent}}
+{{#Audio}}<div class="audio">{{Audio}}</div>{{/Audio}}
 {{#ExampleJapanese}}
 <section class="example">
   <div class="example-japanese">{{ExampleJapanese}}</div>
   {{#ExampleEnglish}}<div class="example-english">{{ExampleEnglish}}</div>{{/ExampleEnglish}}
+  {{#ExampleAudio}}<div class="audio example-audio">{{ExampleAudio}}</div>{{/ExampleAudio}}
 </section>
 {{/ExampleJapanese}}
 {{#UsageNotes}}<section class="notes">{{UsageNotes}}</section>{{/UsageNotes}}

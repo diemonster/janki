@@ -1783,7 +1783,33 @@ Design: DESIGN_V2 "Audio > Mechanics".
   `--force` regenerates in place (same filenames; Anki media sync
   picks up content changes).
 
-### [ ] M5.4 Exporter + templates (ships all new note fields at once)
+### [x] M5.4 Exporter + templates (ships all new note fields at once)
+
+*Done 2026-08-08. `FIELD_NAMES` 19 → 22, appended in one release, with the
+rule written at the append itself and in CARD_DESIGN. Verified in a real
+build: notetype `1607392313` carries 22 fields, notes carry 22 values,
+and the three real records package 6 media files.
+
+Decisions. (1) One `_resolve_media` for all three media fields rather
+than three copies of the same branch — that duplication is what let the
+image path keep the old base directory after audio moved. (2) A verbatim
+`[sound:]` tag warns and is passed through: no file is packaged, so the
+card is silent unless that media is already in the collection, which for
+a pipeline that generates its own audio is a trap rather than a feature.
+Warnings ride out on `BuildResult` rather than printing from the
+exporter, so `build` decides how loudly to say it. (3) A pattern that
+does not fit its reading leaves `PitchAccent` **empty** — a card is the
+last place to start guessing at an alignment refused everywhere else.
+(4) The diagram draws the particle slot, which is what makes odaka
+visible: the fall lands after the word, so a diagram stopping at the last
+kana would make 橋 look identical to 端. Their *audio* does collapse
+(M5.1); the diagram does not. (5) Production-back gains word audio and
+the diagram, since a production card asks you to say the word and the
+answer side should say it back.
+
+Each behaviour pinned by mutation: swapping the appended field order,
+raising instead of skipping an unfittable pattern, dropping the
+`media_dir` fallback, and removing the passthrough warning all go red.*
 
 Depends on: M5.3, M5.5, M5.1
 Files: `src/japanese_anki/exporters/anki.py`,

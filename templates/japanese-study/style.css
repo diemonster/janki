@@ -148,3 +148,47 @@
     background: #181818;
   }
 }
+
+/* Pitch accent, drawn the way a Japanese dictionary draws it: a line over the
+   high morae, and a drop down the right-hand side of the mora the pitch falls
+   from. One row per accepted pattern, primary first — a word with two accents
+   has two, and showing one would teach that the other is wrong.
+
+   The particle slot is the empty span at the end. It is what makes odaka
+   visible at all: the fall happens *after* the word, so a diagram stopping at
+   the last kana has nowhere to show it, and 橋 would look identical to 端. */
+.pitch-accent {
+  margin: .35rem 0 .1rem;
+  line-height: 2.1;
+}
+.pitch-accent .pitch {
+  display: inline-block;
+  margin-right: 1.1rem;
+  white-space: nowrap;
+}
+.pitch-accent .mora {
+  display: inline-block;
+  padding: 0 .1em;
+  border-top: 2px solid transparent;
+  font-size: 1.05rem;
+}
+.pitch-accent .mora.high {
+  border-top-color: currentColor;
+}
+.pitch-accent .mora.drop {
+  border-right: 2px solid currentColor;
+}
+/* The particle has no text, so it needs a width to carry its own line. */
+.pitch-accent .mora.particle {
+  width: .6em;
+}
+
+.example-audio {
+  margin-top: .35rem;
+}
+
+.frequency {
+  margin-top: .75rem;
+  font-size: .8rem;
+  opacity: .65;
+}

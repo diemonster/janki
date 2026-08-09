@@ -2076,6 +2076,8 @@ def command_validate(args: argparse.Namespace) -> int:
 
 def _build_one(deck_path: Path, config: ProjectConfig, output: Path | None = None) -> None:
     result = build_deck(deck_path, config, output)
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
     cards = ", ".join(result.card_types)
     print(
         f"Built {result.output_path} — {result.note_count} notes, "
