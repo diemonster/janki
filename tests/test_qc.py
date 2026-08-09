@@ -22,6 +22,8 @@ from japanese_anki.qc import (
     furigana_reading,
     parse_pairs,
     regenerate_example_romaji,
+    repair_spilled_punctuation,
+    stray_furigana_spaces,
     target_forms,
     verify_example_furigana,
 )
@@ -521,3 +523,101 @@ def test_the_docstrings_romaji_examples_are_what_the_code_returns() -> None:
     # A typed space immediately before a ruby group is indistinguishable from
     # notation and goes with it.
     assert furigana_reading("本を 食[た]べる") == "本をたべる"
+
+
+# --- the separator space ------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("written", "expected"),
+    [
+        ("週末[しゅうまつ]、何[なに]するの？", "週末[しゅうまつ]、 何[なに]するの？"),
+        (
+            "風邪[かぜ]なの？ 薬[くすり]、飲[の]んだ？",
+            "風邪[かぜ]なの？ 薬[くすり]、 飲[の]んだ？",
+        ),
+        ("今[いま]、何[なん]て 言[い]ったの？", "今[いま]、 何[なん]て 言[い]ったの？"),
+    ],
+    ids=["a-comma", "after-a-question-mark", "twice-in-one-sentence"],
+)
+def test_punctuation_a_group_swallowed_gets_the_separator_back(
+    written: str, expected: str
+) -> None:
+    """Punctuation cannot belong to the annotated word and the word plainly
+    starts after it, so the space goes between. Nothing about the reading or the
+    segmentation is inferred — which is what makes this safe to run unattended
+    on model output."""
+    assert repair_spilled_punctuation(written) == expected
+
+
+def test_a_spill_that_would_need_a_guess_is_left_alone() -> None:
+    """`、妻と日本語[にほんご]` has swallowed a noun and a particle too. Deciding
+    that にほんご annotates 日本語 rather than 妻と日本語 is choosing where the
+    word begins, and this project does not guess a segmentation."""
+    written = "毎日[まいにち]、妻と 日本語[にほんご]を 話[はな]す"
+
+    assert repair_spilled_punctuation(written) == written
+
+
+@pytest.mark.parametrize(
+    "written",
+    ["お茶[おちゃ]を 飲[の]む", "日[にっ]本[ぽん]", "話[はな]す 人[ひと]", "ご飯[ごはん]"],
+    ids=["whole-word-ruby", "abutting-groups", "ordinary", "an-honorific"],
+)
+def test_correct_furigana_is_returned_unchanged(written: str) -> None:
+    """Whole-word ruby and legitimately abutting groups must survive: `お 茶[おちゃ]`
+    reads おおちゃ, so a repair that touched them would manufacture the defect."""
+    assert repair_spilled_punctuation(written) == written
+
+
+def test_the_repaired_field_no_longer_reports_a_spill() -> None:
+    """The two functions have to agree, or `enrich` repairs something `validate`
+    still condemns."""
+    from japanese_anki.qc import spilled_furigana_groups
+
+    repaired = repair_spilled_punctuation("週末[しゅうまつ]、何[なに]するの？")
+
+    assert spilled_furigana_groups(repaired) == ()
+
+
+def test_the_comma_survives_into_the_reading_once_repaired() -> None:
+    """Which is the point: `furigana_reading` drops the space before a group, so
+    an unrepaired field loses the comma from the romaji and the sentence audio
+    as well as drawing the ruby wrongly."""
+    repaired = repair_spilled_punctuation("週末[しゅうまつ]、何[なに]するの？")
+
+    assert "、" in furigana_reading(repaired)
+
+
+# --- spaces that are content --------------------------------------------------
+
+
+def test_a_space_no_group_follows_is_reported() -> None:
+    """In a furigana field a space means "the next group starts here".
+    `furigana_reading` removes it only when a group follows, so this one lives
+    on into the reading, the romaji and the audio, and draws on the card as a
+    gap the plain sentence does not have."""
+    assert stray_furigana_spaces("日本語[にほんご]の ニュースが 少[すこ]し 分[わ]かります。") == (
+        "ニュースが",
+    )
+
+
+def test_notation_spaces_are_not_reported() -> None:
+    assert stray_furigana_spaces("毎晩[まいばん]、 音楽[おんがく]を 聞[き]いて") == ()
+
+
+def test_a_field_with_no_spaces_at_all_is_quiet() -> None:
+    assert stray_furigana_spaces("日本語[にほんご]") == ()
+
+
+def test_punctuation_followed_by_a_swallowed_particle_is_left_alone() -> None:
+    """`、と日本語[にほんご]` has swallowed a particle as well as the comma.
+    Inserting the separator after the comma alone gives `、 と日本語[にほんご]`,
+    which is still a spill — it would rewrite the record without fixing it, and
+    make the field look attended to. Left for a human, and still reported."""
+    from japanese_anki.qc import spilled_furigana_groups
+
+    written = "毎日[まいにち]、と日本語[にほんご]を 話[はな]す"
+
+    assert repair_spilled_punctuation(written) == written
+    assert spilled_furigana_groups(written), "and it stays flagged"

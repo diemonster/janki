@@ -168,8 +168,8 @@
       },
       {
         "japanese": "週末、何するの？",
-        "furigana": "週末[しゅうまつ]、何[なに]するの？",
-        "romaji": "shuumatsunanisuruno?",
+        "furigana": "週末[しゅうまつ]、 何[なに]するの？",
+        "romaji": "shuumatsu, nanisuruno?",
         "english": "What are you doing this weekend?",
         "audio": "audio/janki-e49963fb019a.mp3",
         "register": "casual"
@@ -300,8 +300,8 @@
     "examples": [
       {
         "japanese": "来年、日本語の先生になります。",
-        "furigana": "来年[らいねん]、日本[にほん] 語[ご]の 先生[せんせい]になります。",
-        "romaji": "rainennihongonosenseininarimasu.",
+        "furigana": "来年[らいねん]、 日本[にほん] 語[ご]の 先生[せんせい]になります。",
+        "romaji": "rainen, nihongonosenseininarimasu.",
         "english": "Next year I'm going to become a Japanese teacher.",
         "audio": "audio/janki-5695efa42bdc.mp3",
         "register": "polite"
@@ -431,8 +431,8 @@
     "examples": [
       {
         "japanese": "日本語のニュースが少し分かります。",
-        "furigana": "日本語[にほんご]の ニュースが 少[すこ]し 分[わ]かります。",
-        "romaji": "nihongono nyuusugasukoshiwakarimasu.",
+        "furigana": "日本語[にほんご]のニュースが 少[すこ]し 分[わ]かります。",
+        "romaji": "nihongononyuusugasukoshiwakarimasu.",
         "english": "I understand a little of the Japanese news.",
         "audio": "audio/janki-ff47181f4085.mp3",
         "register": "polite"
@@ -506,8 +506,8 @@
       },
       {
         "japanese": "この店のラーメン、おいしいと思うよ。",
-        "furigana": "この 店[みせ]の ラーメン、おいしいと 思[おも]うよ。",
-        "romaji": "konomiseno raamen, oishiitoomouyo.",
+        "furigana": "この 店[みせ]のラーメン、おいしいと 思[おも]うよ。",
+        "romaji": "konomisenoraamen, oishiitoomouyo.",
         "english": "I think the ramen at this place is good.",
         "audio": "audio/janki-710929eb6000.mp3",
         "register": "casual"
@@ -562,8 +562,8 @@
     "examples": [
       {
         "japanese": "毎晩、日本語で日記を書きます。",
-        "furigana": "毎晩[まいばん]、日本語[にほんご]で 日記[にっき]を 書[か]きます。",
-        "romaji": "maibannihongodenikkiokakimasu.",
+        "furigana": "毎晩[まいばん]、 日本語[にほんご]で 日記[にっき]を 書[か]きます。",
+        "romaji": "maiban, nihongodenikkiokakimasu.",
         "english": "I write in my diary in Japanese every night.",
         "audio": "audio/janki-3dbc30623a5f.mp3",
         "register": "polite"
@@ -767,16 +767,16 @@
     "examples": [
       {
         "japanese": "毎晩、音楽を聞いて宿題をします。",
-        "furigana": "毎晩[まいばん]、音楽[おんがく]を 聞[き]いて 宿題[しゅくだい]をします。",
-        "romaji": "maiban'ongakuokiiteshukudaioshimasu.",
+        "furigana": "毎晩[まいばん]、 音楽[おんがく]を 聞[き]いて 宿題[しゅくだい]をします。",
+        "romaji": "maiban, ongakuokiiteshukudaioshimasu.",
         "english": "Every night I listen to music and do my homework.",
         "audio": "audio/janki-2f6d04ff6693.mp3",
         "register": "polite"
       },
       {
         "japanese": "その話、誰から聞いたの？",
-        "furigana": "その 話[はなし]、誰[だれ]から 聞[き]いたの？",
-        "romaji": "sonohanashidarekarakiitano?",
+        "furigana": "その 話[はなし]、 誰[だれ]から 聞[き]いたの？",
+        "romaji": "sonohanashi, darekarakiitano?",
         "english": "Who did you hear that from?",
         "audio": "audio/janki-dd27a1a35619.mp3",
         "register": "casual"
@@ -970,8 +970,8 @@
       },
       {
         "japanese": "今、何て言ったの？",
-        "furigana": "今[いま]、何[なん]て 言[い]ったの？",
-        "romaji": "imananteittano?",
+        "furigana": "今[いま]、 何[なん]て 言[い]ったの？",
+        "romaji": "ima, nanteittano?",
         "english": "What did you just say?",
         "audio": "audio/janki-24bbbf21cb40.mp3",
         "register": "casual"
@@ -1026,16 +1026,16 @@
     "examples": [
       {
         "japanese": "毎日、妻と日本語で話します。",
-        "furigana": "毎日[まいにち]、妻[つま]と 日本語[にほんご]で 話[はな]します。",
-        "romaji": "mainichitsumatonihongodehanashimasu.",
+        "furigana": "毎日[まいにち]、 妻[つま]と 日本語[にほんご]で 話[はな]します。",
+        "romaji": "mainichi, tsumatonihongodehanashimasu.",
         "english": "I speak Japanese with my wife every day.",
         "audio": "audio/janki-54f40032c3f7.mp3",
         "register": "polite"
       },
       {
         "japanese": "昨日、田中さんと電話で話したんだ。",
-        "furigana": "昨日[きのう]、田中[たなか]さんと 電話[でんわ]で 話[はな]したんだ。",
-        "romaji": "kinoutanakasantodenwadehanashitanda.",
+        "furigana": "昨日[きのう]、 田中[たなか]さんと 電話[でんわ]で 話[はな]したんだ。",
+        "romaji": "kinou, tanakasantodenwadehanashitanda.",
         "english": "I talked with Tanaka on the phone yesterday.",
         "audio": "audio/janki-778560810eb7.mp3",
         "register": "casual"
@@ -1093,8 +1093,8 @@
     "examples": [
       {
         "japanese": "毎晩、寝る前に日本語の本を読みます。",
-        "furigana": "毎晩[まいばん]、寝[ね]る 前[まえ]に 日本語[にほんご]の 本[ほん]を 読[よ]みます。",
-        "romaji": "maibannerumaeninihongonohon'oyomimasu.",
+        "furigana": "毎晩[まいばん]、 寝[ね]る 前[まえ]に 日本語[にほんご]の 本[ほん]を 読[よ]みます。",
+        "romaji": "maiban, nerumaeninihongonohon'oyomimasu.",
         "english": "Every night I read a Japanese book before going to bed.",
         "audio": "audio/janki-84f645fe2ee8.mp3",
         "register": "polite"
@@ -1296,8 +1296,8 @@
       },
       {
         "japanese": "風邪なの？薬、飲んだ？",
-        "furigana": "風邪[かぜ]なの？ 薬[くすり]、飲[の]んだ？",
-        "romaji": "kazenano?kusurinonda?",
+        "furigana": "風邪[かぜ]なの？ 薬[くすり]、 飲[の]んだ？",
+        "romaji": "kazenano?kusuri, nonda?",
         "english": "Do you have a cold? Did you take any medicine?",
         "audio": "audio/janki-b2124f0c84eb.mp3",
         "register": "casual"

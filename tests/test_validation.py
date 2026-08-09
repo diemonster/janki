@@ -454,3 +454,22 @@ def test_the_warning_quotes_the_run_as_it_appears_in_the_field() -> None:
     record = _with_example("毎日[まいにち]ﾆﾎﾝ語[にほんご]です。", japanese="毎日ﾆﾎﾝ語です。")
 
     assert any("'ﾆﾎﾝ語'" in m for m in _issue_messages(record))
+
+
+def test_a_space_no_reading_annotates_is_reported() -> None:
+    """A space in a furigana field means "the next group's run starts here".
+    One before an unannotated katakana word survives into the reading, the
+    romaji and the sentence audio, and draws on the card as a gap that the
+    ExampleJapanese field beside it does not have. Nothing reported it: the
+    spill check only inspects characters inside a group's run, and the jpdb
+    comparison strips category-Z before comparing."""
+    messages = _issue_messages(
+        _with_example("日本語[にほんご]の ニュースが 少[すこ]し 分[わ]かります。")
+    )
+
+    assert len(messages) == 1
+    assert "space before 'ニュースが'" in messages[0]
+
+
+def test_the_notation_spaces_of_an_ordinary_field_are_not_reported() -> None:
+    assert _issue_messages(_with_example("毎晩[まいばん]、 音楽[おんがく]を 聞[き]いて")) == []

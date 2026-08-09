@@ -846,6 +846,16 @@ def apply_ai_result(
         )
         if not example.japanese:
             continue
+        # Before anything reads the furigana. A model writes 週末[しゅうまつ]、何[なに]
+        # without the separator space perhaps half the time, and Anki then draws
+        # なに over 、何 while the comma vanishes from the reading the romaji and
+        # the sentence audio are built from. The repair adds only the separator,
+        # never a reading or a segmentation, so it is safe to run unattended;
+        # spills that would need a guess are left for `spilled_furigana_groups`.
+        if example.furigana:
+            example = replace(
+                example, furigana=qc.repair_spilled_punctuation(example.furigana)
+            )
         if not qc.example_contains_target(example, record.expression, record.verb_group):
             outcome.rejected.append(example.japanese)
             continue

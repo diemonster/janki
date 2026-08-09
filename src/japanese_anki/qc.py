@@ -255,6 +255,78 @@ def spilled_furigana_groups(furigana: str) -> tuple[tuple[str, str], ...]:
     return tuple(spilled)
 
 
+def repair_spilled_punctuation(furigana: str) -> str:
+    """Insert the separator space a group is missing after leading punctuation.
+
+    The one spill whose repair is not a guess. A run beginning with punctuation
+    — ``週末[しゅうまつ]、何[なに]するの？`` — has swallowed characters that
+    *cannot* belong to the annotated word, and the word plainly starts after
+    them, so the space goes between: ``週末[しゅうまつ]、 何[なに]するの？``.
+    Nothing about the reading or the segmentation is inferred; only the notation
+    separator Anki needs is added, which is why this may run unattended.
+
+    Every other spill is left alone. ``、妻と日本語[にほんご]`` has swallowed a
+    noun and a particle as well, and deciding that にほんご annotates 日本語
+    rather than 妻と日本語 means choosing where the word begins — a guess about
+    segmentation, which this project does not make. Those stay reported by
+    :func:`spilled_furigana_groups` for a human.
+
+    Written because `enrich --ai` produced ten of these in one run and the cards
+    were built from them: Anki draws なに over ``、何``, and the comma then
+    disappears from :func:`furigana_reading`, so it is missing from the romaji
+    and from the sentence audio too.
+    """
+
+    def separate(match: re.Match[str]) -> str:
+        raw, reading = match.group(1), match.group(2)
+        leading = 0
+        for char in raw:
+            # `isalnum` and Han both say "not punctuation" here; the run start
+            # rules in `spilled_furigana_groups` are the mirror of this.
+            if char.isspace() or char.isalnum() or _KANA.match(char):
+                break
+            if not unicodedata.category(char).startswith("P"):
+                break
+            leading += 1
+        rest = raw[leading:]
+        # Only when what remains can legitimately start a run. `、、` alone, or
+        # punctuation followed by kana, is not something to repair silently.
+        if not leading or not rest:
+            return match.group(0)
+        head = normalize_identity_part(rest[0]) or rest[0]
+        if _KANA.match(head):
+            return match.group(0)
+        return f"{raw[:leading]} {rest}[{reading}]"
+
+    return _GROUP.sub(separate, furigana)
+
+
+def stray_furigana_spaces(furigana: str) -> tuple[str, ...]:
+    """Spaces that are content rather than notation, with the word after each.
+
+    In a furigana field an ASCII space means one thing: "the next group's text
+    run starts here". :func:`furigana_reading` removes a space only when a
+    bracketed group follows it, so a space anywhere else survives into the
+    reading, into the regenerated romaji, and into the sentence audio — and Anki
+    renders it as a gap the plain sentence field does not have.
+
+    ``日本語[にほんご]の ニュースが 少[すこ]し 分[わ]かります。`` has one before
+    ニュース, which no group annotates. The card then reads
+    ``日本語の ニュースが少し分かります。`` beside an `ExampleJapanese` with no
+    gap at all, and the romaji carries the space too.
+    """
+    stray: list[str] = []
+    for index, char in enumerate(furigana):
+        if char != " ":
+            continue
+        rest = furigana[index + 1 :]
+        match = _GROUP.match(rest)
+        if match is None:
+            following = rest.split(" ", 1)[0]
+            stray.append(following or "(end of field)")
+    return tuple(stray)
+
+
 def furigana_base(furigana: str) -> str:
     """The sentence a furigana field spells, with every reading removed.
 

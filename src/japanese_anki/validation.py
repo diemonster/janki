@@ -46,6 +46,18 @@ def _misplaced_furigana(furigana: str) -> list[str]:
     return [text for text, _reading in qc.spilled_furigana_groups(furigana)]
 
 
+def _stray_furigana_spaces(furigana: str) -> tuple[str, ...]:
+    """Spaces in a furigana field that no ruby group follows.
+
+    Delegates to :func:`japanese_anki.qc.stray_furigana_spaces` for the same
+    reason as above: `furigana_reading` decides which spaces are notation, so
+    only it can say which are content.
+    """
+    from japanese_anki import qc
+
+    return qc.stray_furigana_spaces(furigana)
+
+
 def _kana(reading: str) -> str:
     """``reading`` with combining marks composed, which is what a kana count is.
 
@@ -184,6 +196,16 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
                 + ", ".join(repr(text) for text in spilled)
                 + " — Anki draws a reading over everything back to the previous "
                 "space, so it will spill onto the kana before it",
+            )
+        if example.furigana and (stray := _stray_furigana_spaces(example.furigana)):
+            add(
+                "warning",
+                f"example {index} furigana has a space before "
+                + ", ".join(repr(text) for text in stray)
+                + ", which no reading annotates — in a furigana field a space "
+                "means 'the next group starts here', so this one survives into "
+                "the reading, the romaji and the audio, and shows on the card "
+                "as a gap the sentence itself does not have",
             )
     return issues
 

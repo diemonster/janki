@@ -954,3 +954,35 @@ def test_a_failed_ledger_write_does_not_call_a_re_run_pointless(
     assert "not a free repair" in err
     assert "either skips these records" not in err
     assert stored(root)["word:話す:はなす"]["examples"]
+
+
+# --- the separator space, on the way in ---------------------------------------
+
+
+def test_a_swallowed_comma_is_repaired_before_anything_reads_the_furigana() -> None:
+    """A model writes `週末[しゅうまつ]、何[なに]` without the separator perhaps
+    half the time. Anki then draws なに over `、何`, and the comma disappears
+    from the reading the romaji and the sentence audio are built from — so the
+    repair has to happen before the example is kept, not in a later pass over
+    the file."""
+    outcome = apply_ai_result(
+        record(),
+        answer(generated(
+            "週末、何を話すの？", furigana="週末[しゅうまつ]、何[なに]を 話[はな]すの？"
+        )),
+    )
+
+    kept = outcome.record.examples[0]
+    assert kept.furigana == "週末[しゅうまつ]、 何[なに]を 話[はな]すの？"
+    assert kept.romaji == "shuumatsu, naniohanasuno?", "the comma survives into the romaji"
+
+
+def test_a_spill_needing_a_guess_is_kept_as_written() -> None:
+    """`、妻と日本語[にほんご]` needs someone to decide where the word starts.
+    It stays exactly as the model wrote it, for `janki validate` to report."""
+    written = "毎日[まいにち]、妻と 日本語[にほんご]を 話[はな]す"
+    outcome = apply_ai_result(
+        record(), answer(generated("毎日、妻と日本語を話す", furigana=written))
+    )
+
+    assert outcome.record.examples[0].furigana == written
