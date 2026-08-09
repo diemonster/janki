@@ -100,15 +100,24 @@ def _source_text(record: VocabularyRecord) -> str:
 
 
 def _field_values(
-    record: VocabularyRecord, deck_path: Path, media_files: list[str]
+    record: VocabularyRecord, media_dir: Path, media_files: list[str]
 ) -> list[str]:
+    """One note's fields, with media resolved against ``media_dir``.
+
+    Media paths are stored relative to the project's ``media_dir`` — that is
+    what ``janki audio`` writes and what the config names — rather than to the
+    deck file. Resolving them against the deck's own directory looked equivalent
+    while nothing had audio, and stopped being equivalent the moment something
+    did: the first real clip sent the exporter looking in ``data/decks/audio/``
+    for a file that lives in ``data/media/audio/``.
+    """
     example = record.first_example
     audio_field = ""
     if record.audio:
         if record.audio.startswith("[sound:"):
             audio_field = record.audio
         else:
-            audio_path = (deck_path.parent / record.audio).resolve()
+            audio_path = (media_dir / record.audio).resolve()
             if not audio_path.exists():
                 raise AnkiBuildError(
                     f"Audio file for {record.id} does not exist: {audio_path}"
@@ -118,7 +127,7 @@ def _field_values(
 
     image_field = ""
     if record.image:
-        image_path = (deck_path.parent / record.image).resolve()
+        image_path = (media_dir / record.image).resolve()
         if not image_path.exists():
             raise AnkiBuildError(
                 f"Image file for {record.id} does not exist: {image_path}"
@@ -376,11 +385,12 @@ def build_deck(
     deck = genanki.Deck(deck_id, deck_name)
     deck.description = str(deck_config.get("description", ""))
 
+    media_dir = project_config.media_dir.resolve()
     media_files: list[str] = []
     for record in records:
         note = genanki.Note(
             model=model,
-            fields=_field_values(record, deck_path, media_files),
+            fields=_field_values(record, media_dir, media_files),
             tags=[_clean_tag(tag) for tag in record.tags if _clean_tag(tag)],
             guid=genanki.guid_for(record.id),
         )
