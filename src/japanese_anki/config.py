@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import difflib
+import math
 import sys
 import tomllib
 from collections.abc import Mapping
@@ -80,9 +81,9 @@ def _float(data: dict[str, Any], section: str, key: str, default: float) -> floa
     ``voicevox_speed = 1`` is a reasonable thing to write and means exactly
     1.0, unlike the cases where a float would silently truncate.
 
-    Only non-positive values are refused, and that bound is arithmetic rather
-    than taste: a rate of zero or below has no meaning, and VOICEVOX answers
-    both with a 500. Everything above it is the engine's call, the same way
+    Non-positive values are refused, and so are NaN and infinity; those bounds
+    are arithmetic rather than taste: a rate of zero or below has no meaning,
+    and VOICEVOX answers both with a 500. Everything above it is the engine's call, the same way
     ``voicevox_speaker`` is type-checked but not range-checked — janki cannot
     know which speakers an engine has, and it does not know which rates an
     engine will honour either. Verified against VOICEVOX ENGINE on 2026-08-08:
@@ -96,10 +97,14 @@ def _float(data: dict[str, Any], section: str, key: str, default: float) -> floa
     value = _get(data, section, key, default)
     if isinstance(value, bool) or not isinstance(value, int | float):
         raise ConfigError(f"[{section}] {key} must be a number, got {value!r}")
-    if float(value) <= 0:
+    # `isfinite` first, because every comparison against NaN is False: a bare
+    # `<= 0` waves `nan` and `inf` straight through, and both are ordinary TOML
+    # float literals that `tomllib` hands back as floats. The rejected 0.5-2.0
+    # bound caught them by accident, being two comparisons rather than one.
+    if not math.isfinite(float(value)) or float(value) <= 0:
         raise ConfigError(
-            f"[{section}] {key} must be greater than 0 (it multiplies the rate "
-            f"of speech), got {value!r}"
+            f"[{section}] {key} must be a finite number greater than 0 (it "
+            f"multiplies the rate of speech), got {value!r}"
         )
     return float(value)
 

@@ -422,11 +422,18 @@ def test_a_whole_number_speed_is_accepted(tmp_path: Path) -> None:
     assert ProjectConfig.load(tmp_path).voicevox_speed == 1.0
 
 
-@pytest.mark.parametrize("value", ["0", "-1.0", "true", '"0.85"'])
+@pytest.mark.parametrize(
+    "value", ["0", "-1.0", "nan", "inf", "-inf", "true", '"0.85"']
+)
 def test_a_speed_that_is_not_a_rate_is_refused(tmp_path: Path, value: str) -> None:
     """Zero and below have no meaning as a multiplier, and VOICEVOX answers both
     with a 500. A quoted number and a bool are the `_int` cases: both would read
-    as something plausible and sound like nothing was set."""
+    as something plausible and sound like nothing was set.
+
+    `nan` and `inf` are ordinary TOML float literals, and every comparison
+    against NaN is False — so a bare `<= 0` accepts both, and the rate reaches
+    the engine as the bare token `NaN` in a request body, failing mid-run on the
+    first record instead of at load."""
     _write_config(tmp_path, f"[tts]\nvoicevox_speed = {value}\n")
 
     with pytest.raises(ConfigError):

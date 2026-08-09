@@ -323,8 +323,15 @@ def test_the_audio_accent_leads_the_diagram(tmp_path: Path) -> None:
     _build(tmp_path)
 
     names, values = _fields(tmp_path / "o.apkg")
-    first = values[names.index("PitchAccent")].split("</span></span>")[0]
-    assert 'class="mora high drop"' in first, "odaka — what the clip says — is drawn first"
+    pitch = values[names.index("PitchAccent")]
+    # One diagram, not two. `select_pattern` never falls through to
+    # `pitch_accent` once `audio_accent` is set, so drawing both would put an
+    # accent on the card that no clip says and that the curator overrode on
+    # purpose — asserting 橋 has two accepted accents on the card whose job is
+    # telling 橋 from 端.
+    assert pitch.count('<span class="pitch">') == 1
+    assert 'class="mora high drop"' in pitch, "and it is odaka, which the clip says"
+    assert 'class="mora particle high"' not in pitch, "the overridden heiban is gone"
 
 
 def test_an_audio_accent_alone_still_draws(tmp_path: Path) -> None:
@@ -420,3 +427,67 @@ def test_a_sound_tag_in_the_image_field_is_refused(tmp_path: Path) -> None:
 
     with pytest.raises(AnkiBuildError, match="Image for word:橋:はし does not exist"):
         _build(tmp_path)
+
+
+def test_two_records_may_share_one_file(tmp_path: Path) -> None:
+    """The direction the collision guard must *not* fire in. Every other media
+    test uses one record and one file, so refusing any second claim on a
+    basename — including the same file — left the suite green while breaking
+    every deck where two notes share an asset."""
+    _project(tmp_path)
+    (tmp_path / "media" / "audio").mkdir(parents=True)
+    (tmp_path / "media" / "audio" / "shared.wav").write_bytes(b"one clip, two cards")
+    _write_records(tmp_path, [
+        VocabularyRecord(id="word:橋:はし", expression="橋", reading="はし",
+                         meanings=["bridge"], audio="audio/shared.wav"),
+        # The same file by a different spelling: `.resolve()` collapses them, so
+        # this also pins that the guard compares resolved paths and not strings.
+        VocabularyRecord(id="word:箸:はし", expression="箸", reading="はし",
+                         meanings=["chopsticks"], audio="../media/audio/shared.wav"),
+    ])
+
+    result = _build(tmp_path)
+
+    assert result.media_count == 1, "one file, packaged once"
+    names, values = _fields(tmp_path / "o.apkg")
+    assert values[names.index("Audio")] == "[sound:shared.wav]"
+
+
+def test_names_that_differ_only_in_case_still_collide(tmp_path: Path) -> None:
+    """Anki's media folder is what flattens these, and on macOS it is neither
+    case- nor composition-sensitive. Comparing basenames byte-for-byte waved
+    `Hand.wav` and `hand.wav` through to the outcome the guard exists to stop."""
+    _project(tmp_path)
+    (tmp_path / "media" / "audio").mkdir(parents=True)
+    (tmp_path / "decks" / "sounds").mkdir(parents=True)
+    (tmp_path / "media" / "audio" / "Hand.wav").write_bytes(b"one")
+    (tmp_path / "decks" / "sounds" / "hand.wav").write_bytes(b"two")
+    _write_records(tmp_path, [
+        VocabularyRecord(id="word:橋:はし", expression="橋", reading="はし",
+                         meanings=["bridge"], audio="audio/Hand.wav"),
+        VocabularyRecord(id="word:箸:はし", expression="箸", reading="はし",
+                         meanings=["chopsticks"], audio="sounds/hand.wav"),
+    ])
+
+    with pytest.raises(AnkiBuildError) as caught:
+        _build(tmp_path)
+
+    message = str(caught.value)
+    assert "Hand.wav" in message and "hand.wav" in message, "both names as written"
+
+
+def test_a_pattern_with_no_reading_to_draw_it_over_is_reported(tmp_path: Path) -> None:
+    """A hand-written inline note can carry an accent and no reading.
+    Validation's own length check is gated on `reading` too, so without this the
+    pattern went nowhere and nothing anywhere said so."""
+    _project(tmp_path)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:ひらがな:", expression="ひらがな", meanings=["hiragana"],
+        pitch_accent=["LHHH"],
+    )])
+
+    result = _build(tmp_path)
+
+    names, values = _fields(tmp_path / "o.apkg")
+    assert values[names.index("PitchAccent")] == ""
+    assert any("no reading to draw it over" in w for w in result.warnings)

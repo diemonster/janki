@@ -103,6 +103,20 @@ _ENTRY_SHAPE: dict[str, type] = {
     "exports": dict,
 }
 
+#: Which of those ``status --rebuild`` can put back. Sources come from each
+#: record's own ``source`` and audio from the files on disk, so emptying them
+#: costs nothing — the rebuild in the same command refills them. ``enriched``
+#: and ``exports`` are reconstructible by nothing at all (``status.rebuild``
+#: says so of exports in its own docstring), so a repair that emptied them
+#: would destroy the history the refusal message promises to keep. Those are
+#: quarantined instead, under ``<key>_unreadable``.
+RECONSTRUCTIBLE = frozenset({"sources", "audio"})
+
+
+def quarantine_key(key: str) -> str:
+    """Where :func:`load` parks a value it could not read but must not lose."""
+    return f"{key}_unreadable"
+
 
 def _shape_problems(entry: dict[str, Any]) -> list[tuple[str, str]]:
     """``(key, type name)`` for every structured key holding the wrong type."""
@@ -120,7 +134,8 @@ def _shape_error(path: Path, record_id: str, problems: list[tuple[str, str]]) ->
     return LedgerError(
         f"Ledger {path}: record {record_id!r} has {detail}. That file is "
         "machine-written; 'janki status --rebuild' repairs entries like this "
-        "in place, keeping the export and enrichment history it holds."
+        "in place. Nothing is thrown away: what it cannot read and cannot "
+        "rebuild is parked under '<key>_unreadable' in the same entry."
     )
 
 
@@ -240,7 +255,9 @@ class Ledger:
     # Record ids whose structured keys ``load(repair=True)`` coerced back into
     # shape, so ``status --rebuild`` can report what it fixed rather than fixing
     # it silently. Empty on every ordinary load, which refuses instead.
-    repaired: list[str] = field(default_factory=list, compare=False, repr=False)
+    repaired: dict[str, list[str]] = field(
+        default_factory=dict, compare=False, repr=False
+    )
 
     # -- persistence -------------------------------------------------------
 
@@ -445,7 +462,7 @@ class Ledger:
         provider: str,
         voice: int,
         content_fp: str,
-        speed: float = 1.0,
+        speed: float,
         at: str | None = None,
         **details: Any,
     ) -> bool:
@@ -858,7 +875,7 @@ def load(path: Path, *, repair: bool = False) -> Ledger:
         records = {}
     if not isinstance(records, dict):
         raise LedgerError(f"Ledger {path}: 'records' must be an object keyed by record id")
-    repaired: list[str] = []
+    repaired: dict[str, list[str]] = {}
     for record_id, entry in records.items():
         if not isinstance(entry, dict):
             raise LedgerError(f"Ledger {path}: entry for '{record_id}' must be an object")
@@ -868,8 +885,13 @@ def load(path: Path, *, repair: bool = False) -> Ledger:
         if not repair:
             raise _shape_error(path, record_id, problems)
         for key, _ in problems:
+            if key not in RECONSTRUCTIBLE:
+                # Nothing can put this back, so the unreadable value is parked
+                # rather than dropped: a user following the refusal message must
+                # not lose enrichment or export history by taking its advice.
+                entry[quarantine_key(key)] = entry[key]
             entry[key] = _ENTRY_SHAPE[key]()
-        repaired.append(record_id)
+        repaired[record_id] = [key for key, _ in problems]
 
     pending_batches = data.get("pending_batches")
     if pending_batches is None:

@@ -586,7 +586,7 @@ def test_the_error_names_a_repair_that_works(
     assert cli.main(["--root", str(root), "status", "--rebuild"]) == 0
 
     out = capsys.readouterr().out
-    assert "repaired: word:話す:はなす" in out
+    assert "repaired: word:話す:はなす had 'audio' of the wrong type" in out
     entry = _entries(root)["word:話す:はなす"]
     assert entry["audio"] == [], "the bad key was reset"
     assert entry["exports"] == {"verbs": "2026-07-01"}, "and the history kept"
@@ -608,5 +608,47 @@ def test_a_non_dict_exports_is_refused_rather_than_crashing(tmp_path: Path) -> N
         ledger.load(root / "ledger.json")
 
     book = ledger.load(root / "ledger.json", repair=True)
-    assert book.repaired == ["word:話す:はなす"]
+    assert book.repaired == {"word:話す:はなす": ["exports"]}
     assert book.record_export("word:話す:はなす", "verbs") is True
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [("enriched", {"jpdb": {"at": "2026-07-01"}}), ("exports", ["verbs"])],
+)
+def test_a_repair_never_discards_what_a_rebuild_cannot_put_back(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], key: str, value: object
+) -> None:
+    """`sources` and `audio` are safe to empty — the rebuild in the same command
+    refills them from the records and the media directory. `enriched` and
+    `exports` are reconstructible by nothing at all, so emptying them destroys
+    exactly the history the refusal message promises to keep: the record reads
+    as un-enriched and the next `janki enrich` pays for it again."""
+    root, _ = _project(tmp_path)
+    _misshapen(root, **{key: value})
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "status", "--rebuild"]) == 0
+
+    out = capsys.readouterr().out
+    assert f"kept as '{key}_unreadable'" in out, "and says where it went"
+    entry = _entries(root)["word:話す:はなす"]
+    assert entry[key] == ([] if key == "enriched" else {}), "the key is usable again"
+    assert entry[f"{key}_unreadable"] == value, "and the old value survived"
+
+
+def test_a_repair_of_a_rebuildable_key_says_the_rebuild_will_fill_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The other half: a user must be able to tell a lossless `audio` reset from
+    a lossy one, which a message saying only "a structured key" cannot do."""
+    root, _ = _project(tmp_path)
+    _misshapen(root, sources=None)
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "status", "--rebuild"]) == 0
+
+    out = capsys.readouterr().out
+    assert "'sources' of the wrong type, reset to empty; the rebuild below" in out
+    assert "sources_unreadable" not in out
+    assert "sources_unreadable" not in _entries(root)["word:話す:はなす"]

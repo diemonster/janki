@@ -144,6 +144,7 @@ def test_summary_reports_exports_audio_enrichment_and_staleness(
         of="word",
         provider="voicevox",
         voice=46,
+        speed=1.0,
         content_fp="stale-fingerprint",
         at="2026-08-11",
     )
@@ -534,6 +535,7 @@ def test_missing_audio_lists_records_without_word_audio(
         of="word",
         provider="voicevox",
         voice=46,
+        speed=1.0,
         content_fp=word_audio_content_fingerprint(_record("話す", "はなす")),
     )
     book.save()
@@ -576,6 +578,7 @@ def test_format_ids_narrows_to_the_flags_and_deduplicates(
         of="word",
         provider="voicevox",
         voice=46,
+        speed=1.0,
         content_fp=word_audio_content_fingerprint(_record("食べる", "たべる")),
     )
     book.save()
@@ -827,6 +830,11 @@ def test_rebuild_recovers_sources_and_audio_and_admits_what_it_cannot(
     audio = sorted(entry["audio"], key=lambda item: item["of"])
     assert [item["of"] for item in audio] == ["example", "word"]
     assert all(item["provider"] == "unknown" and item["rebuilt"] is True for item in audio)
+    # Negative sentinels, and load-bearing: a rebuilt entry knows neither the
+    # voice nor the rate, and `_is_current` compares both. A plausible 1.0 here
+    # would let `janki audio` call a clip current whose rate nothing knows.
+    assert all(item["voice"] == status_module.REBUILT_VOICE == -1 for item in audio)
+    assert all(item["speed"] == status_module.REBUILT_SPEED == -1.0 for item in audio)
     # Both filenames pin their content here: the word file's address embeds the
     # record id (and so the reading), the example file's embeds the sentence.
     assert audio[1]["content_fp"] == word_audio_content_fingerprint(record)
@@ -1090,6 +1098,7 @@ def test_a_record_whose_example_was_edited_after_its_audio_reads_as_stale(
         of="example",
         provider="azure",
         voice=0,
+        speed=1.0,
         content_fp=example_audio_content_fingerprint(ExampleSentence(japanese="毎日話した。")),
     )
     book.save()

@@ -52,9 +52,16 @@ def slug(name: str) -> str:
 
 
 def restart(container: str, base_url: str) -> bool:
-    subprocess.run(
+    """Cycle the engine and wait for it. False if it did not come back."""
+    result = subprocess.run(
         ["docker", "restart", container], env=os.environ, capture_output=True, timeout=180
     )
+    if result.returncode != 0:
+        # Not fatal on its own — the engine may be running outside this
+        # container — but silence here is how a wrong --container turns into a
+        # two-minute stall with no explanation.
+        detail = result.stderr.decode(errors="replace").strip() or "docker restart failed"
+        print(f"  {container}: {detail}", file=sys.stderr)
     provider = VoicevoxProvider(base_url=base_url)
     for _ in range(60):
         if provider.available():
@@ -174,8 +181,13 @@ def main() -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     cycle = 0 if args.no_restart else args.batch
 
-    with urllib.request.urlopen(f"{args.url}/speakers", timeout=30) as response:
-        speakers = json.load(response)
+    try:
+        with urllib.request.urlopen(f"{args.url}/speakers", timeout=30) as response:
+            speakers = json.load(response)
+    except OSError as exc:
+        print(f"No VOICEVOX engine at {args.url}: {exc}", file=sys.stderr)
+        print(VoicevoxProvider(base_url=args.url).launch_hint, file=sys.stderr)
+        return 1
 
     targets = []
     for speaker in speakers:
@@ -183,33 +195,55 @@ def main() -> int:
         if talk and (not args.male or talk[0]["id"] in MALE):
             targets.append((speaker["name"], talk[0]["id"], len(speaker["styles"])))
 
-    rows, done = [], 0
+    rows, attempted, skipped = [], 0, []
     for name, sid, n_styles in targets:
-        if cycle and done and done % cycle == 0:
-            restart(args.container, args.url)
+        if cycle and attempted and attempted % cycle == 0 and not restart(
+            args.container, args.url
+        ):
+            print("  engine did not come back; stopping", file=sys.stderr)
+            break
+        attempted += 1
         base = f"{slug(name)}-{sid}"
+        wanted = [
+            (f"{base}-word-1.0.wav", kana, True, 1.0),
+            (f"{base}-word-0.85.wav", kana, True, 0.85),
+            (f"{base}-sentence-0.85.wav", args.sentence, False, 0.85),
+        ]
+        # Clear this speaker's slots first. `cell()` only asks whether the file
+        # exists, so a leftover from an earlier run — a different --word, even —
+        # would be embedded under this run's label, which is the one thing the
+        # page must not do.
+        for filename, *_ in wanted:
+            (args.out / filename).unlink(missing_ok=True)
+
+        ok = False
         for attempt in (1, 2):
             try:
-                (args.out / f"{base}-word-1.0.wav").write_bytes(
-                    synth(args.url, kana, sid, kana=True, speed=1.0))
-                (args.out / f"{base}-word-0.85.wav").write_bytes(
-                    synth(args.url, kana, sid, kana=True, speed=0.85))
-                (args.out / f"{base}-sentence-0.85.wav").write_bytes(
-                    synth(args.url, args.sentence, sid, kana=False, speed=0.85))
+                for filename, text, forced, speed in wanted:
+                    (args.out / filename).write_bytes(
+                        synth(args.url, text, sid, kana=forced, speed=speed))
+                ok = True
                 break
             except Exception as exc:  # noqa: BLE001 - any engine failure is retryable once
                 if attempt == 2 or cycle == 0 or not restart(args.container, args.url):
                     print(f"  skipped {name} ({sid}): {exc}", file=sys.stderr)
                     break
-        else:
+        if not ok:
+            # Counted as skipped rather than done: reporting a speaker complete
+            # because the loop reached the bottom is how a run that voiced nine
+            # speakers printed 43/43 and rendered a page claiming all of them.
+            for filename, *_ in wanted:
+                (args.out / filename).unlink(missing_ok=True)
+            skipped.append(f"{name} ({sid})")
             continue
         rows.append({"name": name, "id": sid, "base": base, "styles": n_styles})
-        done += 1
-        print(f"  {done}/{len(targets)} {name} ({sid})")
+        print(f"  {len(rows)}/{len(targets)} {name} ({sid})")
 
     page = write_page(args.out, rows, args.word)
-    print(f"\n{len(rows)} speakers -> {page}")
-    return 0
+    print(f"\n{len(rows)} of {len(targets)} speakers -> {page}")
+    if skipped:
+        print(f"skipped {len(skipped)}: {', '.join(skipped)}", file=sys.stderr)
+    return 0 if rows else 1
 
 
 if __name__ == "__main__":

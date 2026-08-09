@@ -2131,12 +2131,16 @@ def command_status(args: argparse.Namespace) -> int:
             book, universe.records, config.media_dir, sources_by_id=universe.normalized_sources
         )
         book.save()
-        for record_id in book.repaired:
-            print(
-                f"repaired: {record_id} had a structured key of the wrong type; "
-                "it was reset to empty and the rest of the entry kept",
-                file=prose,
-            )
+        for record_id, keys in book.repaired.items():
+            for key in keys:
+                where = (
+                    "reset to empty; the rebuild below fills it back in"
+                    if key in ledger.RECONSTRUCTIBLE
+                    else f"reset to empty and its old value kept as "
+                    f"'{ledger.quarantine_key(key)}' — nothing can rebuild it"
+                )
+                print(f"repaired: {record_id} had {key!r} of the wrong type, {where}",
+                      file=prose)
         for line in status.format_rebuild(summary, config.root):
             print(line, file=prose)
 

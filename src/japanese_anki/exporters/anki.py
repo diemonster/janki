@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import re
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -162,10 +163,16 @@ def _resolve_media(
         if not candidate.exists():
             continue
         resolved = str(candidate)
-        owner = claimed.setdefault(candidate.name, (resolved, record_id))
+        # Keyed the way Anki's media folder collides, not byte-for-byte: it
+        # normalizes names to NFC, and this project's platform is case
+        # insensitive, so `Hand.wav` and `hand.wav` are one file there and a
+        # verbatim comparison would wave them through. The message keeps both
+        # names as written, since those are what exist on disk.
+        key = unicodedata.normalize("NFC", candidate.name).casefold()
+        owner = claimed.setdefault(key, (resolved, record_id))
         if owner[0] != resolved:
             raise AnkiBuildError(
-                f"Two different files would be packaged as {candidate.name!r}: "
+                f"Two different files would be packaged under one media name: "
                 f"{owner[0]} for {owner[1]} and {resolved} for {record_id}. "
                 "Anki stores media by basename, so one would overwrite the "
                 "other and a card would play the wrong clip. Rename one."
@@ -179,18 +186,28 @@ def _resolve_media(
 
 
 def _accent_patterns(record: VocabularyRecord) -> list[str]:
-    """Every accent this record carries, primary first, de-duplicated.
+    """Every accepted accent this record carries, primary first, de-duplicated.
 
-    Ordered the way `pitch.select_pattern` orders them, and that agreement is
-    the point rather than tidiness: `select_pattern` decides which accent
-    `janki audio` *forces into the clip*, so a diagram built from a different
-    list draws one accent onto a card that plays another. `audio_accent` is
-    where a reader who listened and disagreed writes their answer down, so it
-    leads; jpdb's own ordering follows. Upper-cased for the same reason
-    `select_pattern` upper-cases — `_levels` reads H and L.
+    Follows `pitch.select_pattern` exactly, and that agreement is the point
+    rather than tidiness: `select_pattern` decides which accent `janki audio`
+    *forces into the clip*, so a diagram built from a different list draws one
+    accent onto a card that plays another.
+
+    `audio_accent` therefore **replaces** the list rather than joining it.
+    `select_pattern` never falls through to `pitch_accent` once it is set, so
+    drawing both puts a diagram on the card that no clip says and that the
+    curator overrode on purpose — asserting 橋 has two accepted accents on the
+    card whose job is telling 橋 from 端. `models.py` and DESIGN_V2 both
+    describe the field as a replacement.
+
+    Upper-cased for the reason `select_pattern` upper-cases — `_levels` reads
+    H and L.
     """
+    override = record.audio_accent.strip().upper()
+    if override:
+        return [override]
     patterns: list[str] = []
-    for candidate in (record.audio_accent, *record.pitch_accent):
+    for candidate in record.pitch_accent:
         cleaned = candidate.strip().upper()
         if cleaned and cleaned not in patterns:
             patterns.append(cleaned)
@@ -214,6 +231,15 @@ def _pitch_field(record: VocabularyRecord, warnings: list[str]) -> str:
     the same refusal instead of guessing past it.
     """
     if not record.reading:
+        if _accent_patterns(record):
+            # The docstring above promises every drop is reported, and this
+            # return is a drop. Reachable from a hand-written inline note:
+            # validation's own length check is gated on `reading` too, so
+            # nothing else says the pattern went nowhere.
+            warnings.append(
+                f"{record.id}: has a pitch pattern but no reading to draw it "
+                "over, so no diagram was drawn"
+            )
         return ""
     rendered: list[str] = []
     for pattern in _accent_patterns(record):
