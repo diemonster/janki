@@ -137,6 +137,22 @@ def _int_or_none(data: dict[str, Any], section: str, key: str) -> int | None:
     return value
 
 
+def _anki_collection(data: dict[str, Any], root: Path) -> str:
+    """``[anki] collection`` as an absolute path, or ``""``.
+
+    Resolved against the project root like every ``[paths]`` value. Left raw it
+    resolved against the *working directory*, so a relative path either vanished
+    or — worse — silently matched an unrelated `collection.anki2` that happened
+    to sit wherever the command was run. ``~`` is expanded first, so the
+    documented absolute form is unchanged.
+    """
+    value = _str(data, "anki", "collection", "").strip()
+    if not value:
+        return ""
+    expanded = Path(value).expanduser()
+    return str(expanded if expanded.is_absolute() else (root / expanded).resolve())
+
+
 def _bool(data: dict[str, Any], section: str, key: str, default: bool) -> bool:
     """Read a boolean setting, refusing values that only look like one.
 
@@ -327,7 +343,7 @@ class ProjectConfig:
             default_deck_name=_str(data, "anki", "default_deck_name", "Japanese Anki"),
             default_deck_id=_int(data, "anki", "default_deck_id", 2059400110),
             model_id_base=_int(data, "anki", "model_id_base", 1607392310),
-            anki_collection=_str(data, "anki", "collection", ""),
+            anki_collection=_anki_collection(data, project_root),
             anki_profile=_str(data, "anki", "profile", ""),
             default_cards={
                 "recognition": _bool(data, "cards", "recognition", True),

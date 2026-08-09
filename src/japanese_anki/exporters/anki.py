@@ -542,13 +542,20 @@ def deck_notetype(deck_path: Path, project_config: ProjectConfig) -> tuple[int, 
     """
     deck_config, _ = resolve_deck_records(deck_path)
     card_types = _resolve_card_types(deck_config, project_config)
-    model_id = int(
-        deck_config.get("model_id", project_config.model_id_base + _card_mask(card_types))
-    )
-    model_name = str(
-        deck_config.get("model_name", f"Japanese Study ({'+'.join(card_types)})")
-    )
-    return model_id, model_name, len(FIELD_NAMES)
+    raw = deck_config.get("model_id", project_config.model_id_base + _card_mask(card_types))
+    try:
+        model_id = int(raw)
+    except (TypeError, ValueError) as exc:
+        # `janki status` reads this and is documented as the command that keeps
+        # working, so a hand-edited `model_id: auto` has to arrive as a clean
+        # refusal naming the file rather than as a traceback out of `int()`.
+        raise AnkiBuildError(
+            f"{deck_path}: deck model_id must be an integer, got {raw!r}"
+        ) from exc
+    name = deck_config.get("model_name", f"Japanese Study ({'+'.join(card_types)})")
+    if not isinstance(name, str):
+        raise AnkiBuildError(f"{deck_path}: deck model_name must be a string, got {name!r}")
+    return model_id, name, len(FIELD_NAMES)
 
 
 def build_deck(

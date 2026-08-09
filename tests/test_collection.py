@@ -200,21 +200,76 @@ def test_no_anki_at_all_is_an_empty_answer_not_an_error(tmp_path: Path) -> None:
 
 
 def test_a_clone_beside_the_deck_notetype_is_reported(tmp_path: Path) -> None:
-    """The failure `docs/NOTETYPE_UPGRADE.md` documents: Merge Notetypes left
-    off leaves every note on the old notetype and files a `+` clone beside it.
-    Nothing errors and no field ever reaches a card."""
+    """The clone finding alone, with the field counts matching so it is the only
+    one that can fire — otherwise the field-count message satisfies a
+    "Merge Notetypes" substring on its own and deleting the clone loop entirely
+    leaves the test green."""
     path = _collection(tmp_path / "collection.anki2", [
-        (100, JANKI, 19, 3),
-        (101, JANKI + "+", 22, 0),
+        (100, JANKI, 22, 3),
+        (101, JANKI + "+", 25, 0),
     ])
 
     findings, warnings = status.check_collection(path, [("verbs", 100, JANKI, 22)])
 
     assert warnings == []
+    assert len(findings) == 1
+    assert "sits beside" in findings[0].message
+    assert f"'{JANKI}+'" in findings[0].message
+    assert findings[0].where == "verbs"
+
+
+def test_an_empty_clone_says_the_notes_stayed_where_they_were(tmp_path: Path) -> None:
+    """The verified failure leaves the clone with **0 notes** and the notes on
+    the old notetype without the new fields. Telling the user the notes are "on"
+    the clone sends them looking for cards that are not there."""
+    path = _collection(tmp_path / "collection.anki2", [
+        (100, JANKI, 22, 7),
+        (101, JANKI + "+", 25, 0),
+    ])
+
+    findings, _ = status.check_collection(path, [("verbs", 100, JANKI, 22)])
+
+    assert "your 7 note(s) stayed on" in findings[0].message
+    assert "ended up on it" not in findings[0].message
+
+
+def test_a_clone_that_did_take_the_notes_says_that_instead(tmp_path: Path) -> None:
+    path = _collection(tmp_path / "collection.anki2", [
+        (100, JANKI, 22, 0),
+        (101, JANKI + "+", 25, 12),
+    ])
+
+    findings, _ = status.check_collection(path, [("verbs", 100, JANKI, 22)])
+
+    assert "12 note(s) ended up on it" in findings[0].message
+
+
+def test_both_failures_at_once_are_reported_separately(tmp_path: Path) -> None:
+    path = _collection(tmp_path / "collection.anki2", [
+        (100, JANKI, 19, 3),
+        (101, JANKI + "+", 22, 0),
+    ])
+
+    findings, _ = status.check_collection(path, [("verbs", 100, JANKI, 22)])
+
     messages = " ".join(f.message for f in findings)
+    assert len(findings) == 2
     assert "19 fields where this deck writes 22" in messages
-    assert "Merge Notetypes" in messages
-    assert all(f.deck_stem == "verbs" for f in findings)
+    assert "sits beside" in messages
+
+
+def test_decks_sharing_a_notetype_report_the_problem_once(tmp_path: Path) -> None:
+    """Every deck with the same enabled card set derives the same model id —
+    this repo's own two do — so a per-deck finding printed one problem, and one
+    remedy, twice."""
+    path = _collection(tmp_path / "collection.anki2", [(100, JANKI, 19, 3)])
+
+    findings, _ = status.check_collection(
+        path, [("verbs", 100, JANKI, 22), ("personal-vocabulary", 100, JANKI, 22)]
+    )
+
+    assert len(findings) == 1
+    assert findings[0].where == "personal-vocabulary, verbs", "naming both decks"
 
 
 def test_another_decks_clones_are_never_mentioned(tmp_path: Path) -> None:
@@ -399,3 +454,129 @@ def test_status_still_works_with_no_collection_configured(
     assert cli.main(["--root", str(tmp_path), "status"]) == 0
 
     assert "Records: 0" in capsys.readouterr().out
+
+
+# --- a broken deck must not cancel the check --------------------------------
+
+
+def _project(tmp_path: Path, decks: dict[str, str], anki: str = "") -> Path:
+    import shutil
+
+    (tmp_path / "janki.toml").write_text(
+        "[paths]\n"
+        'normalized_file = "vocabulary.json"\n'
+        'deck_dir = "decks"\n'
+        'template_dir = "templates/japanese-study"\n'
+        'ledger_file = "ledger.json"\n' + (f"[anki]\n{anki}\n" if anki else ""),
+        encoding="utf-8",
+    )
+    (tmp_path / "vocabulary.json").write_text("[]", encoding="utf-8")
+    shutil.copytree(
+        PROJECT_ROOT / "templates" / "japanese-study",
+        tmp_path / "templates" / "japanese-study",
+        dirs_exist_ok=True,
+    )
+    (tmp_path / "decks").mkdir(exist_ok=True)
+    for name, body in decks.items():
+        (tmp_path / "decks" / name).write_text(body, encoding="utf-8")
+    return tmp_path
+
+
+GOOD_DECK = "deck:\n  name: T\n  model_id: 100\nnotes: []\n"
+
+
+def test_one_unreadable_deck_does_not_cancel_the_whole_check(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A `return` on the first bad deck meant the one thing this command exists
+    to say went unsaid because of a deck the user already knew was broken — and
+    which `status` reports separately anyway."""
+    root = _project(
+        tmp_path,
+        {"verbs.yaml": GOOD_DECK, "broken.yaml": "deck:\n  cards: []\nnotes: []\n"},
+        anki=f'collection = "{tmp_path / "collection.anki2"}"',
+    )
+    _collection(tmp_path / "collection.anki2", [(100, JANKI, 19, 3), (101, JANKI + "+", 22, 0)])
+
+    assert cli.main(["--root", str(root), "status"]) == 0
+
+    err = capsys.readouterr().err
+    assert "could not read broken.yaml" in err
+    assert "Anki: verbs:" in err, "the other deck was still checked"
+
+
+def test_a_non_numeric_model_id_is_a_clean_refusal(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`status` is documented as the command that keeps working, so a
+    hand-edited `model_id: auto` must not escape `int()` as a traceback."""
+    root = _project(
+        tmp_path,
+        {"verbs.yaml": "deck:\n  name: T\n  model_id: auto\nnotes: []\n"},
+        anki=f'collection = "{tmp_path / "collection.anki2"}"',
+    )
+    _collection(tmp_path / "collection.anki2", [(100, JANKI, 19, 3)])
+
+    assert cli.main(["--root", str(root), "status"]) == 0
+
+    assert "model_id must be an integer" in capsys.readouterr().err
+
+
+def test_the_warnings_survive_format_ids(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """ids mode *moves* human-readable lines to stderr; it does not drop them.
+    A scripted run must still hear that its last import did not land."""
+    root = _project(
+        tmp_path, {"verbs.yaml": GOOD_DECK},
+        anki=f'collection = "{tmp_path / "collection.anki2"}"',
+    )
+    _collection(tmp_path / "collection.anki2", [(100, JANKI, 19, 3)])
+
+    assert cli.main(["--root", str(root), "status", "--format", "ids"]) == 0
+
+    captured = capsys.readouterr()
+    assert "Merge Notetypes" in captured.err
+    assert captured.out.strip() == "", "stdout stays ids-only"
+
+
+def test_a_relative_collection_path_resolves_against_the_project(tmp_path: Path) -> None:
+    """Every `[paths]` value resolves against the root; this one resolved against
+    the working directory, so it either vanished or silently inspected an
+    unrelated collection that happened to sit there."""
+    from japanese_anki.config import ProjectConfig
+
+    root = _project(tmp_path, {"verbs.yaml": GOOD_DECK}, anki='collection = "anki/mine.anki2"')
+    _collection(tmp_path / "anki" / "mine.anki2", [(100, JANKI, 22, 1)])
+
+    config = ProjectConfig.load(root)
+
+    assert Path(config.anki_collection) == (tmp_path / "anki" / "mine.anki2").resolve()
+    assert status.resolve_collection(config)[0] is not None
+
+
+def test_a_named_profile_that_cannot_be_found_still_says_so(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Silence would leave a user who explicitly named a profile no way to tell
+    janki was looking somewhere else — `anki -b`, a portable install, a
+    different XDG_DATA_HOME."""
+    monkeypatch.setattr(status, "find_profiles", dict)
+    config = _config(tmp_path, 'profile = "User 1"')
+
+    found, note = status.resolve_collection(config)
+
+    assert found is None
+    assert "'User 1' not found" in note
+
+
+def test_a_malformed_database_is_not_called_an_old_format(tmp_path: Path) -> None:
+    """Sending someone with a corrupt collection off to think it is merely old
+    is the opposite of this command's job."""
+    path = tmp_path / "collection.anki2"
+    path.write_bytes(b"SQLite format 3\x00" + b"\x00" * 200)
+
+    with pytest.raises(CollectionError) as caught:
+        read_notetypes(path)
+
+    assert "older collection format" not in str(caught.value)

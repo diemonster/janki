@@ -2476,17 +2476,24 @@ def _collection_lines(config: ProjectConfig) -> list[str]:
     if collection is None:
         return [f"warning: {note}"] if note else []
     decks = []
+    lines = []
     for deck_path in sorted([*config.deck_dir.glob("*.yaml"), *config.deck_dir.glob("*.yml")]):
         try:
             model_id, model_name, fields = deck_notetype(deck_path, config)
         except JankiError as exc:
-            return [f"warning: could not read {deck_path.name}: {exc}"]
+            # Skipped, not fatal: the rest of this module's rule is that a deck
+            # file which cannot be read is a warning and a skipped deck. A
+            # `return` here cancelled the collection check for every *other*
+            # deck, so the one thing this command exists to say went unsaid
+            # because of a deck the user already knew was broken.
+            lines.append(f"warning: could not read {deck_path.name}: {exc}")
+            continue
         decks.append((deck_path.stem, model_id, model_name, fields))
 
     findings, warnings = status.check_collection(collection, decks)
-    lines = [f"warning: {message}" for message in warnings]
+    lines.extend(f"warning: {message}" for message in warnings)
     for finding in findings:
-        lines.append(f"warning: Anki: {finding.deck_stem}: {finding.message}")
+        lines.append(f"warning: Anki: {finding.where}: {finding.message}")
     return lines
 
 
@@ -2507,6 +2514,11 @@ def command_status(args: argparse.Namespace) -> int:
 
     for warning in [*universe.warnings, *staged_warnings]:
         print(f"warning: {warning}", file=sys.stderr)
+    # Above the ids-only branch with the others: ids mode *moves* human-readable
+    # lines to stderr, it does not drop them, and a scripted run must still hear
+    # that its last import left the notes on the old notetype.
+    for line in _collection_lines(config):
+        print(line, file=sys.stderr)
 
     if args.rebuild:
         summary = status.rebuild(
@@ -2542,8 +2554,6 @@ def command_status(args: argparse.Namespace) -> int:
 
     for line in status.format_report(report):
         print(line)
-    for line in _collection_lines(config):
-        print(line, file=sys.stderr)
     if args.unexported:
         for line in status.format_unexported(report):
             print(line)

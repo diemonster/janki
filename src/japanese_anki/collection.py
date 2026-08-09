@@ -184,14 +184,20 @@ def _read_copy(work: Path, source: Path) -> list[Notetype]:
             """
         ).fetchall()
     except sqlite3.Error as exc:
-        # A collection old enough to predate the `notetypes` table keeps its
-        # notetypes as JSON in `col.models`. Reporting that as an error would
-        # make `janki status` fail for someone whose collection is simply older
-        # than this check, so the caller treats it as "cannot tell".
-        raise CollectionError(
-            f"Could not read notetypes from {source}: {exc}. This may be an "
-            "older collection format than janki knows how to inspect."
-        ) from exc
+        # The "older format" hypothesis only when that is what the error says.
+        # A collection predating the `notetypes` table keeps them as JSON in
+        # `col.models` — but `database disk image is malformed` (a torn copy, if
+        # Anki checkpoints between the main file and its sidecars) is a
+        # different problem entirely, and sending someone with a corrupt
+        # collection off to think it is merely old is the opposite of this
+        # command's job.
+        hint = (
+            " This may be an older collection format than janki knows how to "
+            "inspect."
+            if "no such table" in str(exc)
+            else ""
+        )
+        raise CollectionError(f"Could not read notetypes from {source}: {exc}.{hint}") from exc
     finally:
         connection.close()
     return sorted(

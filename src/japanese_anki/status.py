@@ -34,6 +34,7 @@ from typing import Any
 from japanese_anki.collection import (
     CollectionError,
     clone_suffix_of,
+    default_anki_root,
     find_profiles,
     read_notetypes,
 )
@@ -342,20 +343,27 @@ def resolve_collection(config: ProjectConfig) -> tuple[Path | None, str]:
     a tool that builds packages, and `janki status` must stay useful there.
     """
     if config.anki_collection.strip():
-        named = Path(config.anki_collection).expanduser()
+        named = Path(config.anki_collection)   # already absolute, from the config
         if named.is_file():
             return named, ""
         return None, f"[anki] collection is {named}, which does not exist"
 
     profiles = find_profiles()
-    if not profiles:
-        return None, ""
     wanted = config.anki_profile.strip()
     if wanted:
+        # Read before the empty check: a user who named a profile and got total
+        # silence has no way to tell janki looked somewhere else — an Anki
+        # started with `-b`, a portable install, a different XDG_DATA_HOME.
         if wanted in profiles:
             return profiles[wanted], ""
+        if not profiles:
+            root = default_anki_root()
+            where = f" under {root}" if root else " (no Anki directory found)"
+            return None, f"[anki] profile {wanted!r} not found{where}"
         available = ", ".join(sorted(profiles))
         return None, f"[anki] profile {wanted!r} not found. Available: {available}"
+    if not profiles:
+        return None, ""
     if len(profiles) == 1:
         return next(iter(profiles.values())), ""
     # Guessing between profiles would report findings about a collection the
@@ -370,7 +378,10 @@ def resolve_collection(config: ProjectConfig) -> tuple[Path | None, str]:
 class NotetypeFinding:
     """One thing wrong with how a deck landed in Anki."""
 
-    deck_stem: str
+    #: The deck stems that build this notetype, joined. Decks sharing a card set
+    #: share a notetype — this repo's own two do — so a finding reported per
+    #: deck printed the same problem and the same remedy twice.
+    where: str
     message: str
 
 
@@ -393,30 +404,49 @@ def check_collection(
         return [], [str(exc)]
 
     by_id = {notetype.id: notetype for notetype in notetypes}
-    findings: list[NotetypeFinding] = []
+    # Grouped by notetype, because decks with the same card set derive the same
+    # model id — this repo's own two do — and one problem reported once per deck
+    # is the same actionable line buried under copies of itself.
+    grouped: dict[int, tuple[list[str], str, int]] = {}
     for stem, model_id, model_name, fields in decks:
+        stems, _, _ = grouped.setdefault(model_id, ([], model_name, fields))
+        stems.append(stem)
+
+    findings: list[NotetypeFinding] = []
+    for model_id, (stems, model_name, fields) in grouped.items():
         landed = by_id.get(model_id)
         if landed is None:
             # Never imported, or imported under a different id. Not a failure —
             # a deck built and not yet imported is the ordinary state.
             continue
+        where = ", ".join(sorted(stems))
         if landed.field_count < fields:
             findings.append(NotetypeFinding(
-                stem,
+                where,
                 f"'{landed.name}' has {landed.field_count} fields where this "
                 f"deck writes {fields}. Re-import with 'Merge Notetypes' ticked; "
                 "without it the new fields never reach a note.",
             ))
         for clone in clone_suffix_of(landed.name, notetypes):
+            # The documented failure leaves the clone *empty* and the notes on
+            # the old notetype without the new fields. Saying "the notes on it
+            # are on the wrong notetype" of a clone holding zero notes sends the
+            # reader looking for cards that are not there.
+            fate = (
+                f"your {landed.note_count} note(s) stayed on '{landed.name}' "
+                "without the new fields"
+                if clone.note_count == 0
+                else f"{clone.note_count} note(s) ended up on it instead of "
+                f"'{landed.name}'"
+            )
             findings.append(NotetypeFinding(
-                stem,
-                f"'{clone.name}' sits beside '{landed.name}' with "
-                f"{clone.note_count} note(s) — an import that left 'Merge "
-                "Notetypes' unticked. The notes on it are on the wrong notetype.",
+                where,
+                f"'{clone.name}' sits beside '{landed.name}' — an import that "
+                f"left 'Merge Notetypes' unticked, and {fate}.",
             ))
         if model_name.strip() != landed.name.strip():
             findings.append(NotetypeFinding(
-                stem,
+                where,
                 f"this deck builds notetype '{model_name}' but id {model_id} is "
                 f"named '{landed.name}' in Anki. A rename is harmless; a "
                 "collision is not.",
