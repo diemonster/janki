@@ -380,11 +380,12 @@ def test_an_honorific_prefix_under_its_ruby_is_not_flagged() -> None:
     assert not any("missing a space" in m for m in _issue_messages(record))
 
 
-def test_the_verdict_does_not_depend_on_unicode_composition() -> None:
-    """A decomposed ご is こ plus a combining mark, so an unnormalized honorific
-    check reports a *correct* ご飯[ごはん] as a spill — the false positive the
-    rewrite exists to avoid. The spill direction does not discriminate: が
-    decomposes to か, which is kana and not an honorific either way."""
+def test_a_correct_honorific_survives_decomposition() -> None:
+    """A decomposed ご is こ plus a combining mark, so the honorific check has to
+    look at the *normalized* head — `qc` takes the first character raw (to keep
+    a leading U+3000 that NFKC would delete) and normalizes it before asking
+    whether it is an honorific. Read raw, a decomposed ご is こ, which is not in
+    the allowlist, and a correct ご飯[ごはん] reports as a spill."""
     composed = VocabularyRecord(
         id="word:ご飯:ごはん", expression="ご飯", reading="ごはん",
         meanings=["cooked rice"], furigana="ご飯[ごはん]",
@@ -395,6 +396,27 @@ def test_the_verdict_does_not_depend_on_unicode_composition() -> None:
 
     assert not any("missing a space" in m for m in _issue_messages(composed))
     assert not any("missing a space" in m for m in _issue_messages(decomposed))
+
+
+def test_a_real_spill_is_still_caught_when_decomposed() -> None:
+    """The other direction, and the one the suite lost: a *detected* spill must
+    survive decomposition too. Without it every composition test asserted only
+    that nothing is flagged, which a checker that flags nothing at all passes.
+    が decomposes to か — still kana, still not an honorific — so 課長[かちょう]
+    with no space before it spills either way.
+
+    The message is compared *after* normalizing, because the run is reported
+    verbatim: in the decomposed field it really is か + U+3099 + 課長, and that
+    is what the reader has to search their file for."""
+    field = "彼[かれ]が課長[かちょう]です。"
+
+    for furigana in (field, unicodedata.normalize("NFD", field)):
+        messages = _issue_messages(_with_example(furigana))
+
+        assert len(messages) == 1
+        assert "missing a space before 'が課長'" in unicodedata.normalize(
+            "NFC", messages[0]
+        )
 
 
 def test_a_spill_whose_run_starts_with_kanji_is_a_known_gap() -> None:

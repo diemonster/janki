@@ -88,8 +88,28 @@ them except the few its `exclude_ids` leaves to the starter deck):
 janki build data/decks/personal-vocabulary.yaml
 ```
 
-The package will appear under `dist/` and can be imported into Anki Desktop.
-Sync Anki normally to make it available in AnkiMobile.
+The package will appear under `dist/`.
+
+### Importing into Anki Desktop
+
+**File → Import, and tick "Merge Notetypes".** It is off by default, and with it
+off an import that adds a field does something else entirely and says nothing:
+every existing note stays on the old notetype, and the new one is filed beside
+it under the same name with a `+` appended and zero notes in it. No error, no
+duplicates, review history intact — the new fields simply never reach a card.
+With the box ticked the notetype upgrades in place, notes are matched by GUID,
+and scheduling survives. Verified in Anki Desktop 25.09; see
+[docs/NOTETYPE_UPGRADE.md](docs/NOTETYPE_UPGRADE.md).
+
+You need this whenever a janki release adds a field — the pitch diagram,
+frequency rank, and example audio arrived that way. It is harmless otherwise.
+
+**A field append forces one full AnkiWeb sync.** Adding a field is a schema
+change (verified against the `anki` library, 2026-08-08: it bumps the
+collection's `scm` mark), so the next sync asks you to choose a direction
+rather than merging. Sync *before* importing, so the choice is trivial: upload
+your own collection and nothing is at stake. Then sync normally to make the
+deck available in AnkiMobile.
 
 ## Common commands
 

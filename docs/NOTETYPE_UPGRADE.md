@@ -56,7 +56,7 @@ surface", and M5.4's own checklist). Nothing tested here depends on the names �
 what was proven is that three appended fields upgrade in place — but field
 appends are one-way, so taking the list from this document rather than from the
 plan would put the wrong names in a live collection permanently. `FrequencyRank`
-was never exercised at all.
+was never exercised by the spike; M5.4 pins its value, including that 0 renders as `"0"` rather than as a hole.
 
 Appending the fields is correct; shipping it without saying this is not. M5.4
 has to deal with the fact that the good path is opt-in:
@@ -70,6 +70,19 @@ has to deal with the fact that the good path is opt-in:
 - **Do not renumber `model_id` to force a fresh notetype.** That orphans every
   existing card's scheduling, which is the outcome this whole exercise exists to
   avoid.
+
+## It also forces one full sync
+
+Appending a field is a **schema change**, so the next AnkiWeb sync is
+one-directional: Anki asks you to choose which side wins rather than merging.
+Verified 2026-08-08 against `anki` 26.08.1 — `add_field` + `update_dict` moves
+the collection's `scm` mark off its last sync point, which is the flag that
+triggers it.
+
+Nothing is at risk if you **sync before importing**: your own collection is then
+the newer side and "upload" is the obvious choice. Import first on one device
+and sync second on another and the choice stops being obvious. The README says
+this where it tells you to import.
 
 ## Conditions the in-place upgrade depends on
 

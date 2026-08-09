@@ -1706,6 +1706,21 @@ an existing one with fewer fields than `FIELD_NAMES`) and say so in
 `janki status`; and **never** renumber `model_id` to force a fresh
 notetype, which would orphan every card's scheduling.
 
+*Revised 2026-08-08.* The first and third landed in M5.4. The detector
+did not, and the reason is that it was specified against the wrong
+subject: `janki status` reports on **`vocabulary.json`** — "the
+collection" in janki's vocabulary is the repo, not Anki's. Nothing in
+janki opens `collection.anki2` or knows where it lives, so "detect the
+`…+` notetype" is a new capability rather than a status tweak. It moves
+to **M5.8**, which is where that capability gets decided.
+
+One thing this spike did not record and should have: **appending a field
+is a schema change**, so it forces a one-directional full AnkiWeb sync.
+Verified 2026-08-08 against `anki` 26.08.1 — `models.add_field` +
+`update_dict` bumps the collection's `scm` mark. The README now says to
+sync before importing, so the direction you are asked to choose is the
+trivial one.
+
 The spike was worth running twice: the library alone would have shipped
 "append is safe" as unconditional, and the condition is the part that
 bites.*
@@ -1866,6 +1881,39 @@ Files: new `src/japanese_anki/tts/azure.py`, `tests/test_azure_tts.py`.
   `<sub alias="...">` substitution fed from **verified** furigana for
   reading-ambiguous tokens. Fake-transport tests assert SSML shape and
   sub/alias injection. Wire into `audio --provider azure`.
+
+### [ ] M5.8 Tell the user when an import silently did not upgrade
+
+Depends on: M5.4
+Files: TBD — the shape of this task is the decision it has to make first.
+
+Carried out of M5.5's spike (see the revision note there). With "Merge
+Notetypes" left off, an import leaves the old notetype in place and files
+a `…+` clone with zero notes beside it. Nothing is lost, nothing errors,
+and none of the new fields reach a card — the user finds out when they
+notice a diagram that never appears.
+
+The obstacle is that janki cannot see any of this. It has no path to
+`collection.anki2`, no config naming one, and reading it directly needs
+Anki closed. So this task's first job is choosing how janki learns what
+is in the collection:
+
+- **Read `collection.anki2` directly** — no dependency, but only while
+  Anki is shut, and a wrong guess at the profile path is worse than
+  silence.
+- **AnkiConnect** — an HTTP API most collections already have installed,
+  works with Anki open, and would let `janki status` ask directly. Also
+  the route by which a later janki could write into a live collection
+  rather than shipping a package — which would make this whole failure
+  mode structurally impossible, since the checkbox belongs to the import
+  dialog and there would be no import dialog. (Prior art:
+  `ankimcp/anki-mcp-server-addon` runs an MCP server *inside* Anki on the
+  same bridge-to-the-Qt-thread pattern AnkiConnect uses.)
+- **Say nothing and document harder** — the README now covers the
+  checkbox and the full-sync consequence, which may be enough.
+
+Whatever it picks, the detector must read `deck.model_id` rather than the
+derived value, or it will misreport any deck that pins one.
 
 ### [ ] M5.W Milestone 5 wrap
 

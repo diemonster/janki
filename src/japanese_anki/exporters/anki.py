@@ -121,6 +121,8 @@ def _resolve_media(
     label: str,
     media_files: list[str],
     warnings: list[str],
+    claimed: dict[str, tuple[str, str]],
+    sound_tags: bool = True,
 ) -> Path | None:
     """Find a media file, preferring ``media_dir`` and falling back to the deck.
 
@@ -132,9 +134,20 @@ def _resolve_media(
     directories are siblings; only a media-dir-relative path distinguishes them.
 
     Returns ``None`` when the value is a verbatim ``[sound:]`` tag, which the
-    caller passes through untouched.
+    caller passes through untouched — audio fields only. An ``[sound:]`` in the
+    *image* field is a mis-mapped record, not a hand-written tag: passing it
+    through warned about silence for something that was never going to make a
+    sound, and did it by writing the value into the card unescaped, which is
+    the one field value here that would not have been.
+
+    Anki flattens media into one folder by basename, and genanki packages each
+    file under `os.path.basename`, so two different files whose names collide
+    become one on import — the second overwrites the first and a card plays
+    another word's audio. Content-addressed `janki-<fp>.wav` names make that
+    unreachable for generated clips; a hand-written path can still do it, so a
+    basename already claimed by a *different* file is refused here.
     """
-    if value.startswith("[sound:"):
+    if value.startswith("[sound:") and sound_tags:
         # No file is packaged for a tag written by hand, so if the media is not
         # already in the collection the card is silently mute. Worth a word,
         # since this pipeline generates its own audio and would not produce one.
@@ -146,16 +159,45 @@ def _resolve_media(
         return None
     for base in (media_dir, deck_dir):
         candidate = (base / value).resolve()
-        if candidate.exists():
-            media_files.append(str(candidate))
-            return candidate
+        if not candidate.exists():
+            continue
+        resolved = str(candidate)
+        owner = claimed.setdefault(candidate.name, (resolved, record_id))
+        if owner[0] != resolved:
+            raise AnkiBuildError(
+                f"Two different files would be packaged as {candidate.name!r}: "
+                f"{owner[0]} for {owner[1]} and {resolved} for {record_id}. "
+                "Anki stores media by basename, so one would overwrite the "
+                "other and a card would play the wrong clip. Rename one."
+            )
+        media_files.append(resolved)
+        return candidate
     raise AnkiBuildError(
         f"{label} for {record_id} does not exist: tried "
         f"{(media_dir / value).resolve()} and {(deck_dir / value).resolve()}"
     )
 
 
-def _pitch_field(record: VocabularyRecord) -> str:
+def _accent_patterns(record: VocabularyRecord) -> list[str]:
+    """Every accent this record carries, primary first, de-duplicated.
+
+    Ordered the way `pitch.select_pattern` orders them, and that agreement is
+    the point rather than tidiness: `select_pattern` decides which accent
+    `janki audio` *forces into the clip*, so a diagram built from a different
+    list draws one accent onto a card that plays another. `audio_accent` is
+    where a reader who listened and disagreed writes their answer down, so it
+    leads; jpdb's own ordering follows. Upper-cased for the same reason
+    `select_pattern` upper-cases — `_levels` reads H and L.
+    """
+    patterns: list[str] = []
+    for candidate in (record.audio_accent, *record.pitch_accent):
+        cleaned = candidate.strip().upper()
+        if cleaned and cleaned not in patterns:
+            patterns.append(cleaned)
+    return patterns
+
+
+def _pitch_field(record: VocabularyRecord, warnings: list[str]) -> str:
     """The accent diagram, or nothing.
 
     Every pattern the record carries, primary first — a word with two accepted
@@ -163,13 +205,26 @@ def _pitch_field(record: VocabularyRecord) -> str:
     pattern that does not fit its reading is *left out* rather than drawn
     wrong: `render_pitch_html` refuses it, and a card is the last place to
     start guessing at an alignment janki declined to guess at everywhere else.
+
+    Rendered one pattern at a time, because `render_pitch_html` refuses a whole
+    list when any single member does not fit — so one malformed second entry
+    discarded a perfectly good primary and the card got no diagram at all.
+    Validation rates that mismatch a *warning*, so the build proceeds and the
+    loss was silent; each drop is now reported, the way `janki audio` reports
+    the same refusal instead of guessing past it.
     """
-    if not record.reading or not record.pitch_accent:
+    if not record.reading:
         return ""
-    try:
-        return render_pitch_html(record.reading, record.pitch_accent)
-    except PitchError:
-        return ""
+    rendered: list[str] = []
+    for pattern in _accent_patterns(record):
+        try:
+            rendered.append(render_pitch_html(record.reading, [pattern]))
+        except PitchError as exc:
+            warnings.append(
+                f"{record.id}: pitch pattern {pattern!r} does not fit reading "
+                f"{record.reading!r}, so no diagram was drawn for it ({exc})"
+            )
+    return "".join(rendered)
 
 
 def _field_values(
@@ -178,6 +233,7 @@ def _field_values(
     deck_dir: Path,
     media_files: list[str],
     warnings: list[str],
+    claimed: dict[str, tuple[str, str]],
 ) -> list[str]:
     """One note's fields, with media resolved against ``media_dir``.
 
@@ -194,7 +250,7 @@ def _field_values(
         found = _resolve_media(
             record.audio, media_dir=media_dir, deck_dir=deck_dir,
             record_id=record.id, label="Audio",
-            media_files=media_files, warnings=warnings,
+            media_files=media_files, warnings=warnings, claimed=claimed,
         )
         audio_field = f"[sound:{found.name}]" if found else record.audio
 
@@ -203,7 +259,7 @@ def _field_values(
         found = _resolve_media(
             example.audio, media_dir=media_dir, deck_dir=deck_dir,
             record_id=record.id, label="Example audio",
-            media_files=media_files, warnings=warnings,
+            media_files=media_files, warnings=warnings, claimed=claimed,
         )
         example_audio_field = f"[sound:{found.name}]" if found else example.audio
 
@@ -212,7 +268,8 @@ def _field_values(
         found = _resolve_media(
             record.image, media_dir=media_dir, deck_dir=deck_dir,
             record_id=record.id, label="Image",
-            media_files=media_files, warnings=warnings,
+            media_files=media_files, warnings=warnings, claimed=claimed,
+            sound_tags=False,
         )
         image_field = (
             f'<img src="{html.escape(found.name)}">' if found else record.image
@@ -238,7 +295,7 @@ def _field_values(
         image_field,
         html.escape(record.expression),
         html.escape(_source_text(record)),
-        _pitch_field(record),
+        _pitch_field(record, warnings),
         str(record.frequency_rank) if record.frequency_rank is not None else "",
         example_audio_field,
     ]
@@ -473,12 +530,15 @@ def build_deck(
 
     media_dir = project_config.media_dir.resolve()
     media_files: list[str] = []
+    # Packaged basename -> (absolute path, the record that claimed it first).
+    claimed: dict[str, tuple[str, str]] = {}
     media_warnings: list[str] = []
     for record in records:
         note = genanki.Note(
             model=model,
             fields=_field_values(
-                record, media_dir, deck_path.parent, media_files, media_warnings
+                record, media_dir, deck_path.parent, media_files, media_warnings,
+                claimed,
             ),
             tags=[_clean_tag(tag) for tag in record.tags if _clean_tag(tag)],
             guid=genanki.guid_for(record.id),

@@ -10,7 +10,7 @@
           "file": "janki-eb61ba87f92e.wav",
           "of": "word",
           "provider": "voicevox",
-          "voice": 46
+          "voice": 13
         },
         {
           "at": "2026-08-08",
@@ -18,7 +18,7 @@
           "file": "janki-2ebf18566d10.wav",
           "of": "example",
           "provider": "voicevox",
-          "voice": 46
+          "voice": 13
         }
       ],
       "enriched": [
@@ -58,7 +58,7 @@
           "file": "janki-acd6838cb46b.wav",
           "of": "word",
           "provider": "voicevox",
-          "voice": 46
+          "voice": 13
         },
         {
           "at": "2026-08-08",
@@ -66,7 +66,7 @@
           "file": "janki-54f40032c3f7.wav",
           "of": "example",
           "provider": "voicevox",
-          "voice": 46
+          "voice": 13
         }
       ],
       "enriched": [
@@ -98,7 +98,7 @@
           "file": "janki-d9debfd6e317.wav",
           "of": "word",
           "provider": "voicevox",
-          "voice": 46
+          "voice": 13
         },
         {
           "at": "2026-08-08",
@@ -106,7 +106,7 @@
           "file": "janki-2823397bff63.wav",
           "of": "example",
           "provider": "voicevox",
-          "voice": 46
+          "voice": 13
         }
       ],
       "enriched": [
