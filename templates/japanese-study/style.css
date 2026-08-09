@@ -122,7 +122,14 @@
   cursor: pointer;
 }
 
+/* Two lookups, wrapped rather than squeezed: Shirabe is a deep link into the
+   iPhone app and does nothing on a desktop, jpdb is a web page and works
+   everywhere, so neither is the "real" one to make primary. */
 .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
   margin-top: 28px;
 }
 

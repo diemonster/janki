@@ -622,3 +622,46 @@ def test_the_record_keeps_every_sense(tmp_path: Path) -> None:
 
     stored = json.loads((tmp_path / "vocabulary.json").read_text(encoding="utf-8"))
     assert len(stored[0]["meanings"]) == 17
+
+
+def test_every_back_template_offers_both_lookups(tmp_path: Path) -> None:
+    """A card that shows a word should let you go and read about it. Shirabe is
+    a deep link into the iPhone app and does nothing on a desktop; jpdb is a web
+    page and works everywhere — so a deck with only the first strands anyone
+    studying at a computer."""
+    for name in ("recognition-back.html", "production-back.html", "reading-back.html"):
+        markup = (PROJECT_ROOT / "templates" / "japanese-study" / name).read_text(
+            encoding="utf-8"
+        )
+        assert "shirabelookup://search?w={{ShirabeQuery}}" in markup, name
+        assert "https://jpdb.io/search?q={{Expression}}" in markup, name
+
+
+def test_the_jpdb_link_reaches_the_card(tmp_path: Path) -> None:
+    """Through the built package, not just the template on disk: the template
+    is only real once it is inside a notetype."""
+    _project(tmp_path)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:使う:つかう", expression="使う", reading="つかう", meanings=["to use"],
+    )])
+
+    build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
+
+    import sqlite3
+    import tempfile
+    with ZipFile(tmp_path / "o.apkg") as package:
+        name = (
+            "collection.anki21"
+            if "collection.anki21" in package.namelist()
+            else "collection.anki2"
+        )
+        db = Path(tempfile.mkdtemp()) / "c.db"
+        db.write_bytes(package.read(name))
+    con = sqlite3.connect(db)
+    models = json.loads(con.execute("select models from col").fetchone()[0])
+    templates = next(iter(models.values()))["tmpls"]
+    con.close()
+
+    backs = "".join(template["afmt"] for template in templates)
+    assert "jpdb.io/search?q={{Expression}}" in backs
+    assert "shirabelookup://" in backs, "and the existing one survived"
