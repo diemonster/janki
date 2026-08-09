@@ -404,12 +404,18 @@ def render_kanji_html(entries: Iterable[KanjiInfo]) -> str:
                 )
             parts.append(f'<div class="stroke-order">{"".join(cells)}</div>')
 
+        # Round robin: one example from every reading before any reading gets a
+        # second. Filling reading by reading spent the whole row budget on the
+        # first two — 使's card showed つか(い) twice and left out つか(う),
+        # which is the reading of 使う, the word the card is about.
         rows = []
-        for reading in info.readings:
-            if not reading.examples:
-                continue
-            label = "音" if reading.kind == "on" else "訓"
-            for example in reading.examples:
+        with_examples = [r for r in info.readings if r.examples]
+        for depth in range(EXAMPLES_PER_READING):
+            for reading in with_examples:
+                if depth >= len(reading.examples):
+                    continue
+                example = reading.examples[depth]
+                label = "音" if reading.kind == "on" else "訓"
                 rows.append(
                     '<div class="kanji-example">'
                     f'<span class="kanji-kind">{label}</span>'

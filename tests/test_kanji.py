@@ -321,3 +321,31 @@ def test_a_character_with_no_common_word_offers_none(tmp_path: Path) -> None:
     info = fetch_kanji("前", transport=send)
 
     assert info.readings[0].examples == ()
+
+
+def test_every_reading_gets_a_row_before_any_gets_a_second() -> None:
+    """Filling reading by reading spent the whole row budget on the first two:
+    使's card showed つか(い) twice and left out つか(う) — the reading of 使う,
+    the word the card is about."""
+    from japanese_anki.kanji import Example, Reading
+
+    def reading(text: str, *words: str) -> Reading:
+        return Reading(
+            kind="kun",
+            reading=text,
+            examples=tuple(Example(written=w, pronounced="x", gloss="y") for w in words),
+        )
+
+    rendered = render_kanji_html([KanjiInfo(character="使", readings=(
+        reading("シ", "大使", "使用"),
+        reading("つか(い)", "使い方", "使い"),
+        reading("つか(う)", "使う"),
+        reading("づか(い)", "無駄遣い", "言葉遣い"),
+    ))])
+
+    assert "使う" in rendered, "the reading of the word this card is about"
+    for text in ("大使", "使い方", "無駄遣い"):
+        assert text in rendered, f"one example each, so {text} is there too"
+    # The container div is class="kanji-examples", which contains the row
+    # class as a substring — count the rows themselves.
+    assert rendered.count('<div class="kanji-example">') == 4, "and the cap holds"
