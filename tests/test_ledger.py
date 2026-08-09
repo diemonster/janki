@@ -568,7 +568,31 @@ def test_audio_arguments_are_checked(tmp_path: Path) -> None:
     with pytest.raises(LedgerError):
         book.record_audio("word:話す:はなす", **{**arguments, "file": "  "}, speed=1.0)
     with pytest.raises(LedgerError):
-        book.record_audio("word:話す:はなす", **{**arguments, "voice": "nanami"}, speed=1.0)
+        book.record_audio("word:話す:はなす", **{**arguments, "voice": "   "}, speed=1.0)
+    with pytest.raises(LedgerError):
+        book.record_audio("word:話す:はなす", **{**arguments, "voice": True}, speed=1.0)
+
+
+def test_a_named_voice_is_stored_as_its_name(tmp_path: Path) -> None:
+    """Engines disagree about what a voice is: VOICEVOX numbers its speakers,
+    OpenAI names them. Mapping `onyx` onto an index would put a number in a
+    committed file that means nothing outside janki and would change meaning the
+    day the voice list grows."""
+    book = ledger_module.load(tmp_path / "ledger.json")
+
+    book.record_audio(
+        "word:話す:はなす", file="janki-abc.mp3", of="example", provider="openai",
+        voice="onyx", speed=1.0, content_fp="1a2b3c",
+    )
+
+    entry = book.records["word:話す:はなす"]["audio"][0]
+    assert entry["voice"] == "onyx"
+    assert book.audio_file_for(
+        "word:話す:はなす", of="example", content_fp="1a2b3c", voice="onyx", speed=1.0
+    ) == "janki-abc.mp3"
+    assert book.audio_file_for(
+        "word:話す:はなす", of="example", content_fp="1a2b3c", voice="ash", speed=1.0
+    ) is None, "a different voice is not current"
 
 
 def test_detail_the_ledger_could_not_write_is_refused_at_the_call_site(tmp_path: Path) -> None:

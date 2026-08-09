@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from japanese_anki.errors import JankiError
+from japanese_anki.tts import openai_tts
 
 
 class ConfigError(JankiError):
@@ -40,6 +41,10 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "voicevox_speaker",
         "voicevox_sentence_speaker",
         "voicevox_speed",
+        "sentence_provider",
+        "openai_voice",
+        "openai_model",
+        "openai_instructions",
         "azure_voice",
         "azure_region",
     ),
@@ -230,6 +235,13 @@ class ProjectConfig:
     #: that speaks the words.
     voicevox_sentence_speaker: int
     voicevox_speed: float
+    #: Which engine reads example sentences: '' (the word engine), 'voicevox',
+    #: or 'openai'. Words are never affected — only VOICEVOX can force an
+    #: accent, which is what a word clip is for.
+    sentence_provider: str
+    openai_voice: str
+    openai_model: str
+    openai_instructions: str
     azure_voice: str
     azure_region: str
 
@@ -297,6 +309,12 @@ class ProjectConfig:
             voicevox_speaker=_int(data, "tts", "voicevox_speaker", 46),
             voicevox_sentence_speaker=_int(data, "tts", "voicevox_sentence_speaker", 0),
             voicevox_speed=_float(data, "tts", "voicevox_speed", 1.0),
+            sentence_provider=_str(data, "tts", "sentence_provider", ""),
+            openai_voice=_str(data, "tts", "openai_voice", openai_tts.DEFAULT_VOICE),
+            openai_model=_str(data, "tts", "openai_model", openai_tts.DEFAULT_MODEL),
+            openai_instructions=_str(
+                data, "tts", "openai_instructions", openai_tts.DEFAULT_INSTRUCTIONS
+            ),
             azure_voice=_str(data, "tts", "azure_voice", "ja-JP-NanamiNeural"),
             azure_region=_str(data, "tts", "azure_region", "westus2"),
         )

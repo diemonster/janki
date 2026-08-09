@@ -36,12 +36,14 @@ class SpeechProvider(Protocol):
         """Which engine this is, as the ledger records it."""
 
     @property
-    def voice(self) -> int:
+    def voice(self) -> int | str:
         """Which voice, as the ledger records it.
 
-        An int because both engines identify voices that way — VOICEVOX by
-        speaker id, Azure by an index into its configured voice — and the ledger
-        stores what was used rather than what it meant.
+        Whatever the engine calls it: VOICEVOX numbers its speakers, OpenAI
+        names them. The ledger stores what was used rather than what it meant,
+        so ``onyx`` is stored as ``onyx`` — mapping it onto an index would put
+        a number in a committed file that means nothing outside janki and would
+        silently change meaning the day the voice list grows.
         """
 
     @property
@@ -52,6 +54,16 @@ class SpeechProvider(Protocol):
         rate is audible and is not part of a clip's content fingerprint, so
         without it in the ledger a re-voice that stops half way leaves a
         collection speaking at two speeds that nothing can detect afterwards.
+        """
+
+    @property
+    def suffix(self) -> str:
+        """The file extension this engine's audio needs, including the dot.
+
+        On the provider because the format is the engine's choice, not the
+        caller's: VOICEVOX returns WAV, and OpenAI is asked for mp3 because its
+        WAV carries placeholder chunk sizes. A hard-coded ``.wav`` downstream
+        would name an mp3 file ``.wav`` and hand Anki a lie about its contents.
         """
 
     @property

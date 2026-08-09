@@ -40,6 +40,7 @@ class FakeVoice:
 
     name = "fakevox"
     launch_hint = "start the fake engine"
+    suffix = ".wav"
 
     def available(self) -> bool:
         return self.reachable

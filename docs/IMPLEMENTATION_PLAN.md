@@ -1887,7 +1887,7 @@ Design: DESIGN_V2 "CLI surface".
 Verified live against the real project: all four stages ran in order and each
 correctly reported a no-op.
 
-### [~] M5.7 Azure sentence-audio provider — **dropped 2026-08-09**
+### [x] M5.7 Sentence-audio provider — **OpenAI, not Azure**
 
 Both premises were tested and neither held.
 
@@ -1920,6 +1920,29 @@ is exactly where an Azure provider would attach, so this stays cheap to
 revisit if the reading accuracy above ever stops holding, or if the deck
 is shared publicly and VOICEVOX's per-character terms of use become the
 deciding factor.
+
+**Superseded 2026-08-09 by an OpenAI provider.** The owner listened to
+both engines on their own sentences and preferred OpenAI's. Since the
+key was already set for the AI enrichment passes, the account objection
+that sank Azure did not apply, and the sentence seam landed the day
+before was where it attached — `src/japanese_anki/tts/openai_tts.py`,
+`tests/test_openai_tts.py`, ~30 lines of CLI and config.
+
+What the build had to add beyond the seam:
+
+- **The protocol's `voice` widened to `int | str`.** VOICEVOX numbers
+  its speakers, OpenAI names them. Mapping `onyx` onto an index would
+  put a number in a committed ledger that means nothing outside janki.
+- **A `suffix` on the protocol.** The API's WAV is a *streaming* WAV
+  with `0xFFFFFFFF` placeholder chunk sizes — its header claims 89,478
+  seconds for a 4.5-second clip. mp3 avoids it, and a hard-coded `.wav`
+  downstream would have named an mp3 file `.wav`.
+- **A refusal, not a fallback.** `synthesize(forced_accent=True)`
+  raises. A provider that accepted the flag and ignored it would return
+  a clip for 橋 that says 箸 — the failure this milestone exists to
+  prevent, arriving as working audio.
+
+Azure remains unbuilt and the reasoning above still holds against it.
 
 ~~Depends on: M5.3
 Files: new `src/japanese_anki/tts/azure.py`, `tests/test_azure_tts.py`.~~

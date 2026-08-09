@@ -170,6 +170,23 @@ def _shape_error(path: Path, record_id: str, problems: list[tuple[str, str]]) ->
     )
 
 
+def _voice_key(voice: Any) -> int | str:
+    """A voice as the ledger stores it: an id if numeric, else its name.
+
+    Engines disagree about what a voice is — VOICEVOX numbers them, OpenAI
+    names them — and the ledger records what was used rather than normalising
+    it into whichever shape came first.
+    """
+    if isinstance(voice, bool):
+        raise LedgerError(f"Audio voice must be an id or a name, got {voice!r}")
+    if isinstance(voice, int):
+        return voice
+    name = str(voice).strip()
+    if not name:
+        raise LedgerError("An audio entry needs the voice it was spoken in")
+    return name
+
+
 def _record_key(record_id: str) -> str:
     key = str(record_id).strip()
     if not key:
@@ -491,7 +508,7 @@ class Ledger:
         file: str,
         of: str,
         provider: str,
-        voice: int,
+        voice: int | str,
         content_fp: str,
         speed: float,
         at: str | None = None,
@@ -522,10 +539,7 @@ class Ledger:
         name = str(file).strip()
         if not name:
             raise LedgerError("An audio entry needs the media file name")
-        try:
-            voice_id = int(voice)
-        except (TypeError, ValueError) as exc:
-            raise LedgerError(f"Audio voice must be an integer, got {voice!r}") from exc
+        voice_id = _voice_key(voice)
         try:
             rate = float(speed)
         except (TypeError, ValueError) as exc:
@@ -688,7 +702,7 @@ class Ledger:
         *,
         of: str,
         content_fp: str,
-        voice: int | None = None,
+        voice: int | str | None = None,
         speed: float | None = None,
     ) -> str | None:
         """The clip recorded for this exact content, or ``None``.
@@ -712,7 +726,7 @@ class Ledger:
         for entry in self._audio_entries(record_id):
             if entry.get("of") != of or str(entry.get("content_fp") or "") != content_fp:
                 continue
-            if voice is not None and entry.get("voice") != int(voice):
+            if voice is not None and entry.get("voice") != _voice_key(voice):
                 continue
             if speed is not None:
                 recorded = entry.get("speed")

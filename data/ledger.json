@@ -14,13 +14,13 @@
           "voice": 13
         },
         {
-          "at": "2026-08-08",
+          "at": "2026-08-09",
           "content_fp": "f90754eecf4b",
-          "file": "janki-2ebf18566d10.wav",
+          "file": "janki-2ebf18566d10.mp3",
           "of": "example",
-          "provider": "voicevox",
-          "speed": 0.7,
-          "voice": 13
+          "provider": "openai",
+          "speed": 1.0,
+          "voice": "onyx"
         }
       ],
       "enriched": [
@@ -43,7 +43,7 @@
         }
       ],
       "exports": {
-        "verbs": "2026-08-08"
+        "verbs": "2026-08-09"
       },
       "sources": [
         {
@@ -66,13 +66,13 @@
           "voice": 13
         },
         {
-          "at": "2026-08-08",
+          "at": "2026-08-09",
           "content_fp": "6fa562268aa5",
-          "file": "janki-54f40032c3f7.wav",
+          "file": "janki-54f40032c3f7.mp3",
           "of": "example",
-          "provider": "voicevox",
-          "speed": 0.7,
-          "voice": 13
+          "provider": "openai",
+          "speed": 1.0,
+          "voice": "onyx"
         }
       ],
       "enriched": [
@@ -87,7 +87,7 @@
         }
       ],
       "exports": {
-        "verbs": "2026-08-08"
+        "verbs": "2026-08-09"
       },
       "sources": [
         {
@@ -110,13 +110,13 @@
           "voice": 13
         },
         {
-          "at": "2026-08-08",
+          "at": "2026-08-09",
           "content_fp": "b8ede98f5113",
-          "file": "janki-2823397bff63.wav",
+          "file": "janki-2823397bff63.mp3",
           "of": "example",
-          "provider": "voicevox",
-          "speed": 0.7,
-          "voice": 13
+          "provider": "openai",
+          "speed": 1.0,
+          "voice": "onyx"
         }
       ],
       "enriched": [
@@ -139,7 +139,7 @@
         }
       ],
       "exports": {
-        "verbs": "2026-08-08"
+        "verbs": "2026-08-09"
       },
       "sources": [
         {

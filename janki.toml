@@ -30,7 +30,19 @@ enrich_model = "claude-opus-5"
 provider = "voicevox"              # or "azure"
 voicevox_url = "http://localhost:50021"
 voicevox_speaker = 13               # 青山龍星 — see the README for the full list
-voicevox_sentence_speaker = 0       # 0 = the same voice reads the sentences
+voicevox_sentence_speaker = 0       # only used when sentence_provider = "voicevox"
+
+# Example sentences read by OpenAI; words stay on VOICEVOX, which is the only
+# engine here that can force a pitch accent. Needs OPENAI_API_KEY in the
+# environment — never in this file.
+sentence_provider = "openai"
+openai_voice = "onyx"
+# gpt-4o-mini-tts has no rate parameter, so pace is asked for in prose.
+openai_instructions = """\
+Read this as a native speaker of standard Tokyo Japanese, for someone learning \
+the language. Speak noticeably slower than conversational pace, clearly and \
+calmly, with natural pitch accent, and pause briefly at each comma. Do not \
+sound hurried."""
 voicevox_speed = 0.7                # 0.5–2.0; below 1 slows delivery without
                                     # dropping the pitch
 azure_voice = "ja-JP-NanamiNeural"

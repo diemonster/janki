@@ -219,7 +219,9 @@ def _word_audio(
         data = provider.synthesize(record.reading, forced_accent=False)
         details = {ACCENT_UNVERIFIED: True}
 
-    name = f"janki-{ledger_mod.word_audio_filename_fingerprint(record)}.wav"
+    name = (
+        f"janki-{ledger_mod.word_audio_filename_fingerprint(record)}{provider.suffix}"
+    )
     _write(audio_dir / name, data)
     book.record_audio(
         record.id,
@@ -306,7 +308,8 @@ def _example_audio(
             data = provider.synthesize(example.japanese, forced_accent=False)
             name = (
                 f"janki-"
-                f"{ledger_mod.example_audio_filename_fingerprint(record, example)}.wav"
+                f"{ledger_mod.example_audio_filename_fingerprint(record, example)}"
+                f"{provider.suffix}"
             )
             _write(audio_dir / name, data)
         except AudioError:

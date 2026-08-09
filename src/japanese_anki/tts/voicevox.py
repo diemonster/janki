@@ -150,6 +150,10 @@ class VoicevoxProvider:
         return self._speed
 
     @property
+    def suffix(self) -> str:
+        return ".wav"
+
+    @property
     def launch_hint(self) -> str:
         return LAUNCH_HINT
 

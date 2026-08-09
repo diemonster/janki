@@ -51,7 +51,7 @@ from japanese_anki.staging import (
     rewrite_staging,
     write_staging,
 )
-from japanese_anki.tts import voicevox
+from japanese_anki.tts import openai_tts, voicevox
 from japanese_anki.validation import has_errors, validate_records
 
 
@@ -1779,7 +1779,19 @@ def _sentence_provider(config: ProjectConfig, chosen: str | None, words: Any) ->
     jobs: a word is a thing to identify, a sentence is a thing to follow, and
     hearing them in one voice makes the sentence sound like a longer word.
     """
-    if config.tts_provider == "voicevox" and (chosen or "voicevox") == "voicevox":
+    name = (config.sentence_provider or "").strip().lower()
+    if name == "openai":
+        return openai_tts.OpenAiSpeechProvider(
+            voice=config.openai_voice,
+            model=config.openai_model,
+            instructions=config.openai_instructions,
+        )
+    if name not in {"", "voicevox"}:
+        raise AudioError(
+            f"Unknown [tts] sentence_provider {name!r}. Known: voicevox, openai, "
+            "or leave it empty to read sentences in the same voice as the words."
+        )
+    if (chosen or config.tts_provider or "voicevox") == "voicevox":
         speaker = config.voicevox_sentence_speaker
         if speaker and speaker != config.voicevox_speaker:
             return voicevox.VoicevoxProvider(

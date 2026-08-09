@@ -950,15 +950,33 @@ python3 scripts/voice-samples.py            # every speaker, plus a page to comp
 python3 scripts/voice-samples.py --male     # just the male voices
 ```
 
-A sentence may take a different voice from the words:
+A sentence may take a different voice from the words — or a different engine:
 
 ```toml
 [tts]
 voicevox_speaker = 13               # speaks the words, accent forced
-voicevox_sentence_speaker = 52      # reads the example sentences
+voicevox_sentence_speaker = 52      # another VOICEVOX voice for sentences
 ```
 
-Leave the second unset and one voice does both. It is worth setting because the
+```toml
+[tts]
+sentence_provider = "openai"        # OpenAI reads the sentences instead
+openai_voice = "onyx"               # alloy, ash, ballad, cedar, coral, echo,
+                                    # fable, marin, nova, onyx, sage, shimmer,
+                                    # verse. (Cove and the other ChatGPT app
+                                    # voices are a different set — not this API's.)
+```
+
+OpenAI needs `OPENAI_API_KEY` in the environment and bills per character.
+`gpt-4o-mini-tts` has no rate parameter, so pace is asked for in prose via
+`openai_instructions`; the default asks for a noticeably slower delivery.
+
+**Words always stay on VOICEVOX.** It is the only engine here that can force a
+pitch accent, and a word clip that guesses renders 橋 and 箸 identically — the
+pair the card exists to distinguish. The OpenAI provider refuses a word rather
+than returning a plausible one.
+
+Leave both unset and one voice does everything. It is worth setting because the
 two recordings do different jobs — a word is a thing to identify, a sentence is
 a thing to follow — and in one voice the sentence sounds like a longer word.
 Changing it re-voices only the sentences; `janki audio --examples` is enough.
