@@ -17,12 +17,20 @@
     "transitivity": "intransitive",
     "examples": [
       {
-        "japanese": "机の上に本があります。",
-        "furigana": "机[つくえ]の 上[うえ]に 本[ほん]があります。",
-        "romaji": "tsukuenouenihongaarimasu.",
-        "english": "There is a book on the desk.",
-        "audio": "audio/janki-854f62cb09f1.mp3",
-        "register": ""
+        "japanese": "家の近くに新しいカフェがあります。",
+        "furigana": "家[いえ]の 近[ちか]くに 新[あたら]しいカフェがあります。",
+        "romaji": "ienochikakuniatarashiikafegaarimasu.",
+        "english": "There's a new café near my house.",
+        "audio": "audio/janki-09f5a7b8f24c.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "来週、日本語のテストがあるんだ。",
+        "furigana": "来週[らいしゅう]、 日本語[にほんご]のテストがあるんだ。",
+        "romaji": "raishuu, nihongonotesutogaarunda.",
+        "english": "You see, I have a Japanese test next week.",
+        "audio": "audio/janki-78343654a681.mp3",
+        "register": "casual"
       }
     ],
     "conjugations": {
@@ -72,12 +80,20 @@
     "transitivity": "intransitive",
     "examples": [
       {
-        "japanese": "妹は今、家にいます。",
-        "furigana": "妹[いもうと]は 今[いま]、 家[いえ]にいます。",
-        "romaji": "imoutohaima, ieniimasu.",
-        "english": "My little sister is at home right now.",
-        "audio": "audio/janki-7e0d3173f31e.mp3",
-        "register": ""
+        "japanese": "妻は今、リビングで本を読んでいます。",
+        "furigana": "妻[つま]は 今[いま]、リビングで 本[ほん]を 読[よ]んでいます。",
+        "romaji": "tsumahaima, ribingudehon'oyondeimasu.",
+        "english": "My wife is reading a book in the living room right now.",
+        "audio": "audio/janki-6d2e4865c7f6.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "ねえ、今どこにいるの？",
+        "furigana": "ねえ、 今[いま]どこにいるの？",
+        "romaji": "nee, imadokoniiruno?",
+        "english": "Hey, where are you right now?",
+        "audio": "audio/janki-573021a7773c.mp3",
+        "register": "casual"
       }
     ],
     "conjugations": {
@@ -143,12 +159,20 @@
     "transitivity": "intransitive",
     "examples": [
       {
-        "japanese": "週末は何をしますか。",
-        "furigana": "週末[しゅうまつ]は 何[なに]をしますか。",
-        "romaji": "shuumatsuhananioshimasuka.",
+        "japanese": "明日は家で仕事をします。",
+        "furigana": "明日[あした]は 家[いえ]で 仕事[しごと]をします。",
+        "romaji": "ashitahaiedeshigotooshimasu.",
+        "english": "Tomorrow I'll work at home.",
+        "audio": "audio/janki-66b0fd5e71ac.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "週末、何するの？",
+        "furigana": "週末[しゅうまつ]、何[なに]するの？",
+        "romaji": "shuumatsunanisuruno?",
         "english": "What are you doing this weekend?",
-        "audio": "audio/janki-1756bfe74b41.mp3",
-        "register": ""
+        "audio": "audio/janki-e49963fb019a.mp3",
+        "register": "casual"
       }
     ],
     "conjugations": {
@@ -204,12 +228,20 @@
     "transitivity": "intransitive",
     "examples": [
       {
-        "japanese": "日本語が少しできます。",
-        "furigana": "日本語[にほんご]が 少[すこ]しできます。",
-        "romaji": "nihongogasukoshidekimasu.",
-        "english": "I can speak a little Japanese.",
-        "audio": "audio/janki-461fd5400ad1.mp3",
-        "register": ""
+        "japanese": "妻はピアノができます。",
+        "furigana": "妻[つま]はピアノができます。",
+        "romaji": "tsumahapianogadekimasu.",
+        "english": "My wife can play the piano.",
+        "audio": "audio/janki-d021638874c8.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "駅の近くに新しいカフェができたんだ。",
+        "furigana": "駅[えき]の 近[ちか]くに 新[あたら]しいカフェができたんだ。",
+        "romaji": "ekinochikakuniatarashiikafegadekitanda.",
+        "english": "A new cafe has opened near the station, you see.",
+        "audio": "audio/janki-bf64f1fdae40.mp3",
+        "register": "casual"
       }
     ],
     "conjugations": {
@@ -267,12 +299,20 @@
     "transitivity": "intransitive",
     "examples": [
       {
-        "japanese": "兄はエンジニアになりました。",
-        "furigana": "兄[あに]はエンジニアになりました。",
-        "romaji": "anihaenjinianinarimashita.",
-        "english": "My older brother became an engineer.",
-        "audio": "audio/janki-a772a671da71.mp3",
-        "register": ""
+        "japanese": "来年、日本語の先生になります。",
+        "furigana": "来年[らいねん]、日本[にほん] 語[ご]の 先生[せんせい]になります。",
+        "romaji": "rainennihongonosenseininarimasu.",
+        "english": "Next year I'm going to become a Japanese teacher.",
+        "audio": "audio/janki-5695efa42bdc.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "ぼくはエンジニアになるつもりなんだ。",
+        "furigana": "ぼくはエンジニアになるつもりなんだ。",
+        "romaji": "bokuhaenjinianinarutsumorinanda.",
+        "english": "I'm planning to become an engineer, you see.",
+        "audio": "audio/janki-4dc12b295f67.mp3",
+        "register": "casual"
       }
     ],
     "conjugations": {
@@ -390,12 +430,20 @@
     "transitivity": "intransitive",
     "examples": [
       {
-        "japanese": "この漢字の意味が分かりません。",
-        "furigana": "この 漢字[かんじ]の 意味[いみ]が 分[わ]かりません。",
-        "romaji": "konokanjinoimigawakarimasen.",
-        "english": "I don't understand the meaning of this kanji.",
-        "audio": "audio/janki-d68b9484d8ea.mp3",
-        "register": ""
+        "japanese": "日本語のニュースが少し分かります。",
+        "furigana": "日本語[にほんご]の ニュースが 少[すこ]し 分[わ]かります。",
+        "romaji": "nihongono nyuusugasukoshiwakarimasu.",
+        "english": "I understand a little of the Japanese news.",
+        "audio": "audio/janki-ff47181f4085.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "この漢字の読み方が分からないんだ。",
+        "furigana": "この 漢字[かんじ]の 読[よ]み 方[かた]が 分[わ]からないんだ。",
+        "romaji": "konokanjinoyomikatagawakaranainda.",
+        "english": "I don't know how to read this kanji, you see.",
+        "audio": "audio/janki-e1258968efa7.mp3",
+        "register": "casual"
       }
     ],
     "conjugations": {
@@ -449,12 +497,20 @@
     "transitivity": "transitive",
     "examples": [
       {
-        "japanese": "明日は雨が降ると思います。",
-        "furigana": "明日[あした]は 雨[あめ]が 降[ふ]ると 思[おも]います。",
-        "romaji": "ashitahaamegafurutoomoimasu.",
-        "english": "I think it will rain tomorrow.",
-        "audio": "audio/janki-75b59debe988.mp3",
-        "register": ""
+        "japanese": "この映画はおもしろいと思います。",
+        "furigana": "この 映画[えいが]はおもしろいと 思[おも]います。",
+        "romaji": "konoeigahaomoshiroitoomoimasu.",
+        "english": "I think this movie is interesting.",
+        "audio": "audio/janki-5891400dfdba.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "この店のラーメン、おいしいと思うよ。",
+        "furigana": "この 店[みせ]の ラーメン、おいしいと 思[おも]うよ。",
+        "romaji": "konomiseno raamen, oishiitoomouyo.",
+        "english": "I think the ramen at this place is good.",
+        "audio": "audio/janki-710929eb6000.mp3",
+        "register": "casual"
       }
     ],
     "conjugations": {
@@ -505,12 +561,20 @@
     "transitivity": "transitive",
     "examples": [
       {
-        "japanese": "友だちに手紙を書きました。",
-        "furigana": "友[とも]だちに 手紙[てがみ]を 書[か]きました。",
-        "romaji": "tomodachinitegamiokakimashita.",
-        "english": "I wrote a letter to my friend.",
-        "audio": "audio/janki-571fc02bfcea.mp3",
-        "register": ""
+        "japanese": "毎晩、日本語で日記を書きます。",
+        "furigana": "毎晩[まいばん]、日本語[にほんご]で 日記[にっき]を 書[か]きます。",
+        "romaji": "maibannihongodenikkiokakimasu.",
+        "english": "I write in my diary in Japanese every night.",
+        "audio": "audio/janki-3dbc30623a5f.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "誕生日におばあちゃんに手紙を書くつもりなんだ。",
+        "furigana": "誕生日[たんじょうび]におばあちゃんに 手紙[てがみ]を 書[か]くつもりなんだ。",
+        "romaji": "tanjoubiniobaachannitegamiokakutsumorinanda.",
+        "english": "I'm planning to write my grandma a letter on her birthday.",
+        "audio": "audio/janki-01c1062a6278.mp3",
+        "register": "casual"
       }
     ],
     "conjugations": {
@@ -564,12 +628,20 @@
     "transitivity": "intransitive",
     "examples": [
       {
-        "japanese": "友だちが来週、東京に来ます。",
-        "furigana": "友[とも]だちが 来週[らいしゅう]、 東京[とうきょう]に 来[き]ます。",
-        "romaji": "tomodachigaraishuutoukyounikimasu.",
-        "english": "My friend is coming to Tokyo next week.",
-        "audio": "audio/janki-7b9c78d01bc0.mp3",
-        "register": ""
+        "japanese": "土曜日に友だちがうちに来ます。",
+        "furigana": "土曜日[どようび]に 友[とも]だちがうちに 来[き]ます。",
+        "romaji": "doyoubinitomodachigauchinikimasu.",
+        "english": "My friend is coming to my house on Saturday.",
+        "audio": "audio/janki-e217ec611934.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "明日、パーティーに来るの？",
+        "furigana": "明日[あした]、パーティーに 来[く]るの？",
+        "romaji": "ashita, paatiinikuruno?",
+        "english": "Are you coming to the party tomorrow?",
+        "audio": "audio/janki-aa27376fd70a.mp3",
+        "register": "casual"
       }
     ],
     "conjugations": {
@@ -625,12 +697,20 @@
     "transitivity": "transitive",
     "examples": [
       {
-        "japanese": "あの人の名前を知っていますか。",
-        "furigana": "あの 人[ひと]の 名前[なまえ]を 知[し]っていますか。",
-        "romaji": "anohitononamaeoshitteimasuka.",
-        "english": "Do you know that person's name?",
-        "audio": "audio/janki-9444a9ae908e.mp3",
-        "register": ""
+        "japanese": "田中さんの電話番号を知っていますか。",
+        "furigana": "田中[たなか]さんの 電話[でんわ] 番号[ばんごう]を 知[し]っていますか。",
+        "romaji": "tanakasannodenwabangouoshitteimasuka.",
+        "english": "Do you know Tanaka-san's phone number?",
+        "audio": "audio/janki-67b9e5dd94d0.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "ごめん、その店は知らないんだ。",
+        "furigana": "ごめん、その 店[みせ]は 知[し]らないんだ。",
+        "romaji": "gomen, sonomisehashiranainda.",
+        "english": "Sorry, I don't know that shop.",
+        "audio": "audio/janki-b3b43b15ac26.mp3",
+        "register": "casual"
       }
     ],
     "conjugations": {
@@ -686,12 +766,20 @@
     "transitivity": "transitive",
     "examples": [
       {
-        "japanese": "毎朝、電車で音楽を聞きます。",
-        "furigana": "毎朝[まいあさ]、 電車[でんしゃ]で 音楽[おんがく]を 聞[き]きます。",
-        "romaji": "maiasadenshadeongakuokikimasu.",
-        "english": "Every morning I listen to music on the train.",
-        "audio": "audio/janki-ad677d2b4b3c.mp3",
-        "register": ""
+        "japanese": "毎晩、音楽を聞いて宿題をします。",
+        "furigana": "毎晩[まいばん]、音楽[おんがく]を 聞[き]いて 宿題[しゅくだい]をします。",
+        "romaji": "maiban'ongakuokiiteshukudaioshimasu.",
+        "english": "Every night I listen to music and do my homework.",
+        "audio": "audio/janki-2f6d04ff6693.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "その話、誰から聞いたの？",
+        "furigana": "その 話[はなし]、誰[だれ]から 聞[き]いたの？",
+        "romaji": "sonohanashidarekarakiitano?",
+        "english": "Who did you hear that from?",
+        "audio": "audio/janki-dd27a1a35619.mp3",
+        "register": "casual"
       }
     ],
     "conjugations": {
@@ -745,7 +833,7 @@
         "furigana": "冬休[ふゆやす]みに 日本[にほん]へ 行[い]くつもりです。",
         "romaji": "fuyuyasumininihonheikutsumoridesu.",
         "english": "I'm planning to go to Japan over winter break.",
-        "audio": "",
+        "audio": "audio/janki-a9787eb64b8f.mp3",
         "register": "polite"
       },
       {
@@ -753,7 +841,7 @@
         "furigana": "週末[しゅうまつ]、どこか 行[い]くの？",
         "romaji": "shuumatsu, dokokaikuno?",
         "english": "Are you going anywhere this weekend?",
-        "audio": "",
+        "audio": "audio/janki-0b2396adb3c2.mp3",
         "register": "casual"
       }
     ],
@@ -808,12 +896,20 @@
     "transitivity": "transitive",
     "examples": [
       {
-        "japanese": "昨日、家で映画を見ました。",
-        "furigana": "昨日[きのう]、 家[いえ]で 映画[えいが]を 見[み]ました。",
-        "romaji": "kinou, iedeeigaomimashita.",
-        "english": "Yesterday I watched a movie at home.",
-        "audio": "audio/janki-30792677a074.mp3",
-        "register": ""
+        "japanese": "日曜日に妻と映画を見るつもりです。",
+        "furigana": "日曜日[にちようび]に 妻[つま]と 映画[えいが]を 見[み]るつもりです。",
+        "romaji": "nichiyoubinitsumatoeigaomirutsumoridesu.",
+        "english": "I'm planning to watch a movie with my wife on Sunday.",
+        "audio": "audio/janki-8df046ba4e92.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "昨日、あのドラマ見たの？",
+        "furigana": "昨日[きのう]、あのドラマ 見[み]たの？",
+        "romaji": "kinou, anodoramamitano?",
+        "english": "Did you watch that drama yesterday?",
+        "audio": "audio/janki-9008ee73f196.mp3",
+        "register": "casual"
       }
     ],
     "conjugations": {
@@ -865,12 +961,20 @@
     "transitivity": "",
     "examples": [
       {
-        "japanese": "友だちは「また明日」と言いました。",
-        "furigana": "友[とも]だちは「また 明日[あした]」と 言[い]いました。",
-        "romaji": "tomodachiha\"mataashita\"toiimashita.",
-        "english": "My friend said, \"See you tomorrow.\"",
-        "audio": "audio/janki-af8b89ef7e2b.mp3",
-        "register": ""
+        "japanese": "先生に「ありがとうございます」と言いました。",
+        "furigana": "先生[せんせい]に「ありがとうございます」と 言[い]いました。",
+        "romaji": "senseini\"arigatougozaimasu\"toiimashita.",
+        "english": "I said \"thank you\" to the teacher.",
+        "audio": "audio/janki-11b84e417faf.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "今、何て言ったの？",
+        "furigana": "今[いま]、何[なん]て 言[い]ったの？",
+        "romaji": "imananteittano?",
+        "english": "What did you just say?",
+        "audio": "audio/janki-24bbbf21cb40.mp3",
+        "register": "casual"
       }
     ],
     "conjugations": {
@@ -988,12 +1092,20 @@
     "transitivity": "transitive",
     "examples": [
       {
-        "japanese": "この本はもう読みましたか。",
-        "furigana": "この 本[ほん]はもう 読[よ]みましたか。",
-        "romaji": "konohonhamouyomimashitaka.",
-        "english": "Have you already read this book?",
-        "audio": "audio/janki-dac765c14d68.mp3",
-        "register": ""
+        "japanese": "毎晩、寝る前に日本語の本を読みます。",
+        "furigana": "毎晩[まいばん]、寝[ね]る 前[まえ]に 日本語[にほんご]の 本[ほん]を 読[よ]みます。",
+        "romaji": "maibannerumaeninihongonohon'oyomimasu.",
+        "english": "Every night I read a Japanese book before going to bed.",
+        "audio": "audio/janki-84f645fe2ee8.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "今、おもしろい小説を読んでるんだ。",
+        "furigana": "今[いま]、おもしろい 小説[しょうせつ]を 読[よ]んでるんだ。",
+        "romaji": "ima, omoshiroishousetsuoyonderunda.",
+        "english": "I'm reading an interesting novel right now, you see.",
+        "audio": "audio/janki-3da12f727eff.mp3",
+        "register": "casual"
       }
     ],
     "conjugations": {
@@ -1049,7 +1161,7 @@
         "furigana": "誕生日[たんじょうび]に 妻[つま]に 花[はな]を 買[か]うつもりです。",
         "romaji": "tanjoubinitsumanihanaokautsumoridesu.",
         "english": "I'm planning to buy flowers for my wife on her birthday.",
-        "audio": "",
+        "audio": "audio/janki-e725424bb90c.mp3",
         "register": "polite"
       },
       {
@@ -1057,7 +1169,7 @@
         "furigana": "新[あたら]しいヘッドホン、 買[か]ったんだ。",
         "romaji": "atarashiiheddohon, kattanda.",
         "english": "I bought new headphones, you know.",
-        "audio": "",
+        "audio": "audio/janki-043042bfce69.mp3",
         "register": "casual"
       }
     ],
@@ -1108,12 +1220,20 @@
     "transitivity": "transitive",
     "examples": [
       {
-        "japanese": "クリスマスに家族と韓国料理を食べます。",
-        "furigana": "クリスマスに 家族[かぞく]と 韓国料理[かんこくりょうり]を 食[た]べます。",
-        "romaji": "Kurisumasu ni kazoku to Kankoku ryouri o tabemasu.",
-        "english": "At Christmas, I eat Korean food with my family.",
-        "audio": "audio/janki-2823397bff63.mp3",
-        "register": ""
+        "japanese": "クリスマスに妻とケーキを食べるつもりです。",
+        "furigana": "クリスマスに 妻[つま]とケーキを 食[た]べるつもりです。",
+        "romaji": "kurisumasunitsumatokeekiotaberutsumoridesu.",
+        "english": "I'm planning to eat cake with my wife on Christmas.",
+        "audio": "audio/janki-cb144cd2b359.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "お昼ごはん、まだ食べてないの？",
+        "furigana": "お 昼[ひる]ごはん、まだ 食[た]べてないの？",
+        "romaji": "ohirugohan, madatabetenaino?",
+        "english": "You haven't eaten lunch yet?",
+        "audio": "audio/janki-8000a13564ae.mp3",
+        "register": "casual"
       }
     ],
     "conjugations": {
@@ -1167,20 +1287,20 @@
     "transitivity": "transitive",
     "examples": [
       {
-        "japanese": "いっしょにお茶を飲みませんか。",
-        "furigana": "いっしょにお 茶[ちゃ]を 飲[の]みませんか。",
-        "romaji": "isshoniochaonomimasenka.",
-        "english": "Would you like to have some tea with me?",
-        "audio": "audio/janki-356176b35f72.mp3",
-        "register": ""
+        "japanese": "毎朝、コーヒーを飲んでから会社に行きます。",
+        "furigana": "毎朝[まいあさ]、コーヒーを 飲[の]んでから 会社[かいしゃ]に 行[い]きます。",
+        "romaji": "maiasa, koohiionondekarakaishaniikimasu.",
+        "english": "Every morning I have coffee and then go to the office.",
+        "audio": "audio/janki-0e1574681f14.mp3",
+        "register": "polite"
       },
       {
-        "japanese": "薬を飲んでから、寝ます。",
-        "furigana": "薬[くすり]を 飲[の]んでから、 寝[ね]ます。",
-        "romaji": "kusurionondekara, nemasu.",
-        "english": "I'll take my medicine and then go to bed.",
-        "audio": "audio/janki-70077ab82f05.mp3",
-        "register": ""
+        "japanese": "風邪なの？薬、飲んだ？",
+        "furigana": "風邪[かぜ]なの？ 薬[くすり]、飲[の]んだ？",
+        "romaji": "kazenano?kusurinonda?",
+        "english": "Do you have a cold? Did you take any medicine?",
+        "audio": "audio/janki-b2124f0c84eb.mp3",
+        "register": "casual"
       }
     ],
     "conjugations": {
