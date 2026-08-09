@@ -3,7 +3,24 @@
   "records": {
     "word:行く:いく": {
       "added_at": "2026-08-07",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-08",
+          "content_fp": "0695806ba5ed",
+          "file": "janki-eb61ba87f92e.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "voice": 46
+        },
+        {
+          "at": "2026-08-08",
+          "content_fp": "f90754eecf4b",
+          "file": "janki-2ebf18566d10.wav",
+          "of": "example",
+          "provider": "voicevox",
+          "voice": 46
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-08",
@@ -34,7 +51,24 @@
     },
     "word:話す:はなす": {
       "added_at": "2026-08-07",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-08",
+          "content_fp": "e4aa90ca99c5",
+          "file": "janki-acd6838cb46b.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "voice": 46
+        },
+        {
+          "at": "2026-08-08",
+          "content_fp": "6fa562268aa5",
+          "file": "janki-54f40032c3f7.wav",
+          "of": "example",
+          "provider": "voicevox",
+          "voice": 46
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-08",
@@ -57,7 +91,24 @@
     },
     "word:食べる:たべる": {
       "added_at": "2026-08-07",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-08",
+          "content_fp": "a34d447224fb",
+          "file": "janki-d9debfd6e317.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "voice": 46
+        },
+        {
+          "at": "2026-08-08",
+          "content_fp": "b8ede98f5113",
+          "file": "janki-2823397bff63.wav",
+          "of": "example",
+          "provider": "voicevox",
+          "voice": 46
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-08",

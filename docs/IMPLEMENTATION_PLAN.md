@@ -1690,10 +1690,29 @@ The spike was worth running twice: the library alone would have shipped
 "append is safe" as unconditional, and the condition is the part that
 bites.*
 
-### [~] claimed task/m5.3 2026-08-08 — M5.3 `janki audio`
+### [x] M5.3 `janki audio`
 
-*Code and unit tests done; **live VOICEVOX run outstanding**, which is
-what the task stays claimed for. Contract as written. Decisions: (1) at
+*Done 2026-08-08, **including a live run against VOICEVOX 0.25.2** (the
+arm64 engine image under colima, native rather than emulated). Contract
+as written.
+
+The live run settled the question M5.2 was built for, and the answer is
+that the feature is load-bearing rather than theoretical. Asked for the
+accent phrases of はし three ways:
+
+| word | pattern | forced (`is_kana=true`) | engine's guess |
+| --- | --- | --- | --- |
+| 橋 odaka | `LHL` → `ハシ'` | accent **2** | accent 1 |
+| 箸 atamadaka | `HLL` → `ハ'シ` | accent **1** | accent 1 |
+| 端 heiban | `LHH` → `ハシ'` | accent **2** | accent 1 |
+
+Left to guess the engine gives all three **accent 1** — 橋, 箸 and 端
+would be spoken identically, which is exactly the failure DESIGN_V2
+predicted. Forced, they come out distinct, and 橋 vs 箸 synthesize to
+different bytes through janki's own provider (same length, different
+md5). The three real records voiced correctly, a re-run reported "3
+already current" and wrote nothing, and `--examples` voiced the
+sentences. Decisions: (1) at
 least one of `--words`/`--examples` is required rather than defaulting —
 they are different recordings made different ways, and neither is the
 obvious default. (2) `--provider azure` is refused **by name** until

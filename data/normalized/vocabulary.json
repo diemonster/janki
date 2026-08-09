@@ -17,7 +17,7 @@
         "furigana": "家族[かぞく]と 城崎温泉[きのさきおんせん]に 行[い]きました。",
         "romaji": "Kazoku to Kinosaki Onsen ni ikimashita.",
         "english": "I went to Kinosaki Onsen with my family.",
-        "audio": ""
+        "audio": "audio/janki-2ebf18566d10.wav"
       }
     ],
     "conjugations": {
@@ -36,7 +36,7 @@
       "topic::travel"
     ],
     "usage_notes": "Godan verb, but its て-form and past are irregular: 行って / 行った (not 行いて). The place you go to is marked with に or へ; the purpose with に after a noun or verb stem (買い物に行く). Also read ゆく in more literary or set expressions.",
-    "audio": "",
+    "audio": "audio/janki-eb61ba87f92e.wav",
     "image": "",
     "pitch_accent": [
       "LHH"
@@ -69,7 +69,7 @@
         "furigana": "毎日[まいにち]、 妻[つま]と 日本語[にほんご]で 話[はな]します。",
         "romaji": "Mainichi, tsuma to Nihongo de hanashimasu.",
         "english": "I speak Japanese with my wife every day.",
-        "audio": ""
+        "audio": "audio/janki-54f40032c3f7.wav"
       }
     ],
     "conjugations": {
@@ -88,7 +88,7 @@
       "topic::conversation"
     ],
     "usage_notes": "Use it for speaking or talking. The person spoken with is often marked by と.",
-    "audio": "",
+    "audio": "audio/janki-acd6838cb46b.wav",
     "image": "",
     "pitch_accent": [
       "LHLL"
@@ -120,7 +120,7 @@
         "furigana": "クリスマスに 家族[かぞく]と 韓国料理[かんこくりょうり]を 食[た]べます。",
         "romaji": "Kurisumasu ni kazoku to Kankoku ryouri o tabemasu.",
         "english": "At Christmas, I eat Korean food with my family.",
-        "audio": ""
+        "audio": "audio/janki-2823397bff63.wav"
       }
     ],
     "conjugations": {
@@ -139,7 +139,7 @@
       "topic::food"
     ],
     "usage_notes": "Regular ichidan verb: 食べる → 食べます、食べない、食べて. Takes を for the thing eaten. Note that Japanese uses 飲む (to drink) rather than 食べる for soup and similar liquids, e.g. スープを飲む.",
-    "audio": "",
+    "audio": "audio/janki-d9debfd6e317.wav",
     "image": "",
     "pitch_accent": [
       "LHLL"
