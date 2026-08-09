@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import sys
 from collections import Counter
@@ -18,6 +19,7 @@ from japanese_anki import (
     kanji,
     ledger,
     migrate,
+    patterns,
     promote,
     status,
 )
@@ -1171,6 +1173,12 @@ def _enrich_ai(
             f"{len(targets)} record(s). Promote or move it first, or pass --force."
         )
     book = ledger.load(config.ledger_file)
+    # Only reviewed documents. An unreviewed pattern set is a model's reading of
+    # a slide deck that nobody has checked, and letting it steer the sentences on
+    # every card would spread one bad inference across the whole collection.
+    taught = patterns.format_patterns(
+        patterns.reviewed_patterns(patterns.load_store(config.patterns_file))
+    )
     result = enrich.enrich_ai(
         records,
         model=model,
@@ -1178,7 +1186,12 @@ def _enrich_ai(
         force_fields=force_fields,
         ids=args.ids or None,
         jpdb_client=jpdb.JpdbClient(jpdb.api_key_from_env()),
+        taught=taught,
     )
+    if taught:
+        print(
+            f"Writing with {taught.count(chr(10) + '*')} reviewed pattern(s) in mind."
+        )
 
     for warning in result.warnings:
         print(f"warning: {warning}", file=sys.stderr)
@@ -2631,6 +2644,77 @@ def _collection_lines(config: ProjectConfig) -> list[str]:
     return lines
 
 
+def command_patterns(args: argparse.Namespace) -> int:
+    """Read documents for what they teach.
+
+    Separate from `extract`, which asks a page which *words* are on it. That is
+    the wrong question for a te-form chart — almost no vocabulary, entirely
+    about a form — and for a week's slides, which are really about 〜んだ and
+    つもり and happen to contain sixty unglossed words.
+
+    Nothing extracted here is used until a human marks it reviewed. It is
+    inference from prose and slide ordering, not a dictionary lookup, and this
+    project does not let an inferred thing onto a card unread.
+    """
+    config = _load_config(args)
+    store = patterns.load_store(config.patterns_file)
+
+    if args.review:
+        unknown = [name for name in args.review if name not in store]
+        if unknown:
+            raise JankiError(
+                "No document has been read under "
+                + ", ".join(sorted(unknown))
+                + f". Known: {', '.join(sorted(store)) or 'none'}"
+            )
+        for name in args.review:
+            store[name] = dataclasses.replace(store[name], reviewed=True)
+        patterns.save_store(config.patterns_file, store)
+        print(f"Marked {len(args.review)} document(s) reviewed; their patterns are now in use.")
+        return 0
+
+    if not args.files:
+        for name, entry in sorted(store.items()):
+            mark = "reviewed" if entry.reviewed else "UNREVIEWED"
+            print(f"{name} — {entry.kind}, {len(entry.patterns)} pattern(s) [{mark}]")
+            for pattern in entry.patterns:
+                gloss = f" — {pattern.gloss}" if pattern.gloss else ""
+                print(f"    {pattern.template}{gloss}")
+        if not store:
+            print("No documents read yet. Pass a PDF or image to read one.")
+        return 0
+
+    prepared_inputs = prepare_inputs(args.files, config.scan_inbox)
+    failures: list[str] = []
+    for prepared in prepared_inputs:
+        try:
+            found = patterns.extract_patterns(
+                prepared,
+                model=config.extract_model,
+                style_guide=claude_client.read_style_guide(config.root),
+            )
+        except JankiError as exc:
+            failures.append(f"{prepared.origin_path.name}: {exc}")
+            continue
+        store[found.source] = found
+        print(
+            f"{found.source}: {found.kind}, {len(found.patterns)} pattern(s) "
+            f"— {found.title or '(untitled)'}"
+        )
+        for pattern in found.patterns:
+            gloss = f" — {pattern.gloss}" if pattern.gloss else ""
+            print(f"    {pattern.template}{gloss}")
+    patterns.save_store(config.patterns_file, store)
+    for failure in failures:
+        print(f"warning: {failure}", file=sys.stderr)
+    if not failures:
+        print(
+            "\nNothing uses these yet. Read them, then: "
+            f"janki patterns --review {prepared_inputs[0].origin_path.name!r}"
+        )
+    return 1 if failures and len(failures) == len(prepared_inputs) else 0
+
+
 def command_kanji(args: argparse.Namespace) -> int:
     """Look up the characters this collection uses, once each.
 
@@ -2673,7 +2757,12 @@ def command_kanji(args: argparse.Namespace) -> int:
     )
     for failure in failures:
         print(f"warning: {failure}", file=sys.stderr)
-    return 1 if failures and len(failures) == len(todo) else 0
+    # Any loss is a non-zero exit, not only total loss. kanjiapi has no retry or
+    # backoff here, so one 403 or rate limit part-way through leaves most
+    # characters unlooked-up; exiting 0 let a scripted `janki kanji && janki
+    # build` carry straight on and ship cards whose kanji section is missing,
+    # with nothing but a stderr warning to say so.
+    return 1 if failures else 0
 
 
 def command_status(args: argparse.Namespace) -> int:
@@ -3165,6 +3254,23 @@ def build_parser() -> argparse.ArgumentParser:
             _flag, action="store_true", help=f"Skip the {_name} stage."
         )
     refresh_parser.set_defaults(handler=command_refresh)
+
+    patterns_parser = subparsers.add_parser(
+        "patterns",
+        help="Read a handout or slide deck for the grammar it teaches.",
+    )
+    patterns_parser.add_argument("files", type=_path, nargs="*")
+    patterns_parser.add_argument(
+        "--review",
+        action="append",
+        default=[],
+        metavar="DOCUMENT",
+        help=(
+            "Mark a document's patterns reviewed, so example sentences may use "
+            "them. Repeat for several."
+        ),
+    )
+    patterns_parser.set_defaults(handler=command_patterns)
 
     kanji_parser = subparsers.add_parser(
         "kanji",

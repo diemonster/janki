@@ -713,6 +713,14 @@
           ],
           "kind": "ai",
           "model": "claude-opus-5"
+        },
+        {
+          "at": "2026-08-09",
+          "fields": [
+            "examples"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5"
         }
       ],
       "exports": {
@@ -1021,6 +1029,14 @@
           "fields": [
             "examples",
             "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5"
+        },
+        {
+          "at": "2026-08-09",
+          "fields": [
+            "examples"
           ],
           "kind": "ai",
           "model": "claude-opus-5"

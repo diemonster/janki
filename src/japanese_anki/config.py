@@ -31,6 +31,7 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "staging_dir",
         "media_dir",
         "kanji_file",
+        "patterns_file",
         "scan_inbox",
     ),
     "anki": (
@@ -271,6 +272,8 @@ class ProjectConfig:
     media_dir: Path
     #: Looked-up reference data about characters, shared across records.
     kanji_file: Path
+    #: What documents teach, inferred and reviewed before anything uses it.
+    patterns_file: Path
     scan_inbox: Path
     default_deck_name: str
     default_deck_id: int
@@ -360,6 +363,9 @@ class ProjectConfig:
             staging_dir=project_path(_str(data, "paths", "staging_dir", "data/staging")),
             media_dir=project_path(_str(data, "paths", "media_dir", "data/media")),
             kanji_file=project_path(_str(data, "paths", "kanji_file", "data/kanji.json")),
+            patterns_file=project_path(
+                _str(data, "paths", "patterns_file", "data/patterns.json")
+            ),
             scan_inbox=project_path(_str(data, "paths", "scan_inbox", "data/inbox/scans")),
             default_deck_name=_str(data, "anki", "default_deck_name", "Japanese Anki"),
             default_deck_id=_int(data, "anki", "default_deck_id", 2059400110),

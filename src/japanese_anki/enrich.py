@@ -732,7 +732,11 @@ def ai_targets(
     return [record for record in records if record.id in needed]
 
 
-def ai_prompt(record: VocabularyRecord, recent: Sequence[str] = ()) -> str:
+def ai_prompt(
+    record: VocabularyRecord,
+    recent: Sequence[str] = (),
+    taught: str = "",
+) -> str:
     """The user turn for one record: what janki knows, and what it has seen.
 
     The dictionary facts go in so the model writes about *this* word rather
@@ -740,6 +744,11 @@ def ai_prompt(record: VocabularyRecord, recent: Sequence[str] = ()) -> str:
     from 一日 alone. The recent examples go in as variety pressure: asked for
     an example of twenty verbs in a row, a model will write twenty variations
     of 毎日〜ます unless it can see that it already did.
+
+    ``taught`` is the grammar the learner is currently studying, from documents
+    they have read and reviewed. It is a preference, not an instruction: a
+    sentence forced into a pattern that does not suit the word is worse than one
+    in ordinary Japanese, and the block says so.
     """
     lines = [f"Word: {record.expression}"]
     if record.reading:
@@ -753,6 +762,8 @@ def ai_prompt(record: VocabularyRecord, recent: Sequence[str] = ()) -> str:
     ):
         if value:
             lines.append(f"{label}: {value}")
+    if taught:
+        lines.append("\n" + taught)
     if recent:
         lines.append(
             "\nSentences already written in this run — write something "
@@ -1141,6 +1152,7 @@ def enrich_ai(
     ids: Sequence[str] | None = None,
     client: Any | None = None,
     jpdb_client: jpdb.JpdbClient | None = None,
+    taught: str = "",
 ) -> AiResult:
     """Write examples and usage notes for the records that lack them.
 
@@ -1158,7 +1170,11 @@ def enrich_ai(
     for record in targets:
         result.looked_up += 1
         call = claude_client.parse_call(
-            model, blocks, ai_prompt(record, recent[-VARIETY_EXAMPLES:]), ai_schema(), client
+            model,
+            blocks,
+            ai_prompt(record, recent[-VARIETY_EXAMPLES:], taught),
+            ai_schema(),
+            client,
         )
         absorb_ai_call(
             result,

@@ -741,12 +741,20 @@
     "transitivity": "intransitive",
     "examples": [
       {
-        "japanese": "家族と城崎温泉に行きました。",
-        "furigana": "家族[かぞく]と 城崎温泉[きのさきおんせん]に 行[い]きました。",
-        "romaji": "Kazoku to Kinosaki Onsen ni ikimashita.",
-        "english": "I went to Kinosaki Onsen with my family.",
-        "audio": "audio/janki-2ebf18566d10.mp3",
-        "register": ""
+        "japanese": "冬休みに日本へ行くつもりです。",
+        "furigana": "冬休[ふゆやす]みに 日本[にほん]へ 行[い]くつもりです。",
+        "romaji": "fuyuyasumininihonheikutsumoridesu.",
+        "english": "I'm planning to go to Japan over winter break.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "週末、どこか行くの？",
+        "furigana": "週末[しゅうまつ]、どこか 行[い]くの？",
+        "romaji": "shuumatsu, dokokaikuno?",
+        "english": "Are you going anywhere this weekend?",
+        "audio": "",
+        "register": "casual"
       }
     ],
     "conjugations": {
@@ -1037,12 +1045,20 @@
     "transitivity": "transitive",
     "examples": [
       {
-        "japanese": "駅の前のスーパーで野菜を買います。",
-        "furigana": "駅[えき]の 前[まえ]のスーパーで 野菜[やさい]を 買[か]います。",
-        "romaji": "ekinomaenosuupaadeyasaiokaimasu.",
-        "english": "I buy vegetables at the supermarket in front of the station.",
-        "audio": "audio/janki-6bc127937827.mp3",
-        "register": ""
+        "japanese": "誕生日に妻に花を買うつもりです。",
+        "furigana": "誕生日[たんじょうび]に 妻[つま]に 花[はな]を 買[か]うつもりです。",
+        "romaji": "tanjoubinitsumanihanaokautsumoridesu.",
+        "english": "I'm planning to buy flowers for my wife on her birthday.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "新しいヘッドホン、買ったんだ。",
+        "furigana": "新[あたら]しいヘッドホン、 買[か]ったんだ。",
+        "romaji": "atarashiiheddohon, kattanda.",
+        "english": "I bought new headphones, you know.",
+        "audio": "",
+        "register": "casual"
       }
     ],
     "conjugations": {

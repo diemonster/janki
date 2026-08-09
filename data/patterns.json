@@ -1,0 +1,181 @@
+{
+  "104 Week 11 Slide.pdf": {
+    "kind": "lesson",
+    "title": "JAPANESE 104 PRE-INTERMEDIATE — NIHONGODEKITA Week 11",
+    "reviewed": true,
+    "patterns": [
+      {
+        "template": "〜の？",
+        "gloss": "casual version of 〜んですか, used for questions and their answers in casual speech",
+        "examples": [
+          "ex. どうしたの?",
+          "Qどうして来なかったの？ A いそがしかったの。",
+          "どうして泣いているの？",
+          "どうしてパーティーに来なかったの？",
+          "どうして仕事をやめたの？",
+          "どうして遅れたの？",
+          "どうしてつかれているの？",
+          "どうして人が多いの？",
+          "どうして〇〇に行きたいの？",
+          "どうして〇〇をしているの？",
+          "どうして〇〇をつかうの？"
+        ],
+        "where": "slides 5–14"
+      },
+      {
+        "template": "な-adjective / noun + なの？",
+        "gloss": "inserts な before の when the predicate is a な-adjective or noun",
+        "examples": [
+          "どうして日本が好きなの？",
+          "どうしてなっとうがきらいなの？",
+          "どうしてスタバが 好きなの？ / 好きじゃないの？"
+        ],
+        "where": "slides 12–14"
+      },
+      {
+        "template": "〜んだ",
+        "gloss": "casual explanatory ending giving background, situation or reasons (\"It's that…\", \"You see, …\"), not used in questions",
+        "examples": [
+          "ex. Q: どうしたの？\n A:大へんだったんだ ...",
+          "B: 日本語の勉強するつもりだよ!\nA: そうなんだ!"
+        ],
+        "where": "slide 5"
+      },
+      {
+        "template": "dictionary form + つもり + だ/です",
+        "gloss": "states an intention or plan you have already had for a while (\"I'm planning to…\")",
+        "examples": [
+          "来年ニューヨークに行くつもりです。",
+          "パーティーに行くつもりです。",
+          "おさけを飲むつもりです。",
+          "来年けっこんするつもりです。",
+          "来月日本にりょこうするつもりです。",
+          "月曜日はうんどうするつもりです。",
+          "火曜日はせんたくするつもりです。",
+          "水曜日はべんきょうするつもりです。",
+          "土曜日は東京に行くつもりです。",
+          "ホテルにとまるつもりです。",
+          "たくさんしゃしんをとるつもりです。",
+          "しんかんせんで行くつもりです。",
+          "B：あ、ミアさんに聞きました。だから、スニーカーを買うつもりです。"
+        ],
+        "where": "slides 15–32 (rules on 16–18)"
+      },
+      {
+        "template": "ない form + つもり + だ/です",
+        "gloss": "states an intention not to do something (\"I'm not planning to…\")",
+        "examples": [
+          "A：去年はじっかに帰りました。でも、今年は帰らないつもりです。",
+          "パーティーに行かないつもりです。",
+          "おさけを飲まないつもりです。",
+          "けっこんしないつもりです。",
+          "来月日本にりょこうしないつもりです。",
+          "木曜日にテストがありますから、テレビは見ないつもりです。",
+          "何も食べないつもりです。",
+          "あさはやくおきないつもりです。",
+          "A3 : いいえ、今週はしないつもりです。"
+        ],
+        "where": "slides 15, 19–31"
+      },
+      {
+        "template": "occasion + に",
+        "gloss": "marks a holiday or special day as a point in time (but not an event treated as a place)",
+        "examples": [
+          "クリスマスにプレゼントをもらいました。",
+          "バレンタインデーに チョコレートをあげます。",
+          "はなびたいかいにアイスクリームを食べました。",
+          "今年のクリスマスに何をしますか？",
+          "お正月にハワイでごろごろしたいんです。",
+          "クリスマスにケーキを食べるつもりです。",
+          "なつ休みにはなびたいかいに行くつもりです。",
+          "バレンタインデーにこくはくするつもりです。",
+          "お正月に神社に行くつもりです。",
+          "ハロウィンに友だちの家でパーティーするつもりです。"
+        ],
+        "where": "slides 33–40"
+      }
+    ]
+  },
+  "teform_song.pdf": {
+    "kind": "pattern",
+    "title": "Te-form Song / How to Conjugate Verbs into Te-form",
+    "reviewed": true,
+    "patterns": [
+      {
+        "template": "う・つ・る → って",
+        "gloss": "godan verbs ending in う, つ, or る take the て-form ending って",
+        "examples": [
+          "かう ⇨ かって (う ending changes to って) (to buy)"
+        ],
+        "where": "p.1 (Te-form Song), p.2 (U-Verb section)"
+      },
+      {
+        "template": "む・ぶ・ぬ → んで",
+        "gloss": "godan verbs ending in む, ぶ, or ぬ take the て-form ending んで",
+        "examples": [
+          "す む",
+          "あ そ ぶ",
+          "し ぬ",
+          "ん で"
+        ],
+        "where": "p.1 (Te-form Song)"
+      },
+      {
+        "template": "く → いて",
+        "gloss": "godan verbs ending in く take the て-form ending いて",
+        "examples": [
+          "か く",
+          "い て"
+        ],
+        "where": "p.1 (Te-form Song)"
+      },
+      {
+        "template": "ぐ → いで",
+        "gloss": "godan verbs ending in ぐ take the て-form ending いで",
+        "examples": [
+          "お よ ぐ",
+          "い で"
+        ],
+        "where": "p.1 (Te-form Song)"
+      },
+      {
+        "template": "す → して",
+        "gloss": "godan verbs ending in す take the て-form ending して",
+        "examples": [
+          "は な す",
+          "し て"
+        ],
+        "where": "p.1 (Te-form Song)"
+      },
+      {
+        "template": "いく → いって",
+        "gloss": "いく is an exception to the く rule and becomes いって",
+        "examples": [
+          "いく ends with く but does not follow the rule.",
+          "いく is an exception and the te-form becomes いって"
+        ],
+        "where": "p.1, p.2 (Exception box)"
+      },
+      {
+        "template": "る-verb: 〜る → 〜て",
+        "gloss": "ichidan (Group II) verbs simply drop る and add て",
+        "examples": [
+          "Simply change the verb ending る to て",
+          "ex. たべる ⇨ たべて (to eat)",
+          "おきる ⇨ おきて (to wake up)"
+        ],
+        "where": "p.2 (Ru-Verb section)"
+      },
+      {
+        "template": "くる → きて / する → して",
+        "gloss": "the two irregular (Group III) verbs and compounds ending in them",
+        "examples": [
+          "There are only 2 irregular verbs: くる and する, and other verbs that end with them.",
+          "くる ⇨ きて (to come)",
+          "する ⇨ して (to do)"
+        ],
+        "where": "p.1, p.2 (Irregular Verbs section)"
+      }
+    ]
+  }
+}
