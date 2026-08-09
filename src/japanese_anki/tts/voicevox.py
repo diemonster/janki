@@ -29,6 +29,7 @@ sentence would require accent data janki does not have for one.
 
 from __future__ import annotations
 
+import http.client
 import json
 import urllib.error
 import urllib.parse
@@ -83,8 +84,12 @@ def urllib_transport(
     """
     data = json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
     headers = {"Content-Type": "application/json"} if data is not None else {}
-    request = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
+        # Inside the try: `Request()` rejects a URL with no scheme before any
+        # I/O, which is what an empty `tts.voicevox_url` produces, and that has
+        # to arrive as a JankiError like every other way of not reaching the
+        # engine.
+        request = urllib.request.Request(url, data=data, headers=headers, method=method)
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return response.status, response.read()
     except urllib.error.HTTPError as exc:
@@ -93,6 +98,18 @@ def urllib_transport(
         raise TtsError(f"Could not reach VOICEVOX at {url}: {exc.reason}. {LAUNCH_HINT}") from exc
     except TimeoutError as exc:
         raise TtsError(f"VOICEVOX at {url} timed out after {timeout:g}s") from exc
+    except ValueError as exc:
+        # `Request()` rejects a URL with no scheme before any I/O — which is
+        # what an empty `tts.voicevox_url` in janki.toml produces.
+        raise TtsError(f"{url!r} is not a URL janki can request: {exc}") from exc
+    except (OSError, http.client.HTTPException) as exc:
+        # Everything else the stack can throw at us. `URLError` covers less than
+        # it looks: `urlopen` wraps only the *request* in it, so a peer that
+        # accepts the connection and closes it without answering surfaces as a
+        # bare `RemoteDisconnected` — through an https-only port, another
+        # process on 50021, or the engine still starting up. Escaping as a
+        # non-JankiError means a traceback where the launch hint belongs.
+        raise TtsError(f"Could not reach VOICEVOX at {url}: {exc}. {LAUNCH_HINT}") from exc
 
 
 class VoicevoxProvider:
@@ -148,8 +165,11 @@ class VoicevoxProvider:
 
         A local engine that is not running is the ordinary state of this system,
         not an exceptional one, so every way of failing to reach it — refused
-        connection, timeout, an error status — is the same answer here. The
-        caller prints :attr:`launch_hint`.
+        connection, a peer that hangs up, a timeout, a URL that is not one, an
+        error status — is the same answer here. The caller prints
+        :attr:`launch_hint`. :func:`urllib_transport` is what makes that true:
+        it converts every transport failure to :class:`TtsError` so this does
+        not have to enumerate them.
         """
         try:
             status, _ = self._transport("GET", self._url("/version"), None)
@@ -188,7 +208,20 @@ class VoicevoxProvider:
                 f"VOICEVOX's /audio_query answered with {type(query).__name__}, not an "
                 "object; janki will not guess at an AudioQuery it cannot read."
             )
-        if forced is not None:
+        if forced_accent:
+            # Branching on the flag, not on the payload: `forced is not None`
+            # cannot tell "the engine answered null" from "we never asked", and
+            # the first of those would fall through to the accent /audio_query
+            # guessed — plausible audio, ledgered as forced, which is the whole
+            # failure this provider exists to prevent. An empty list is refused
+            # for the same reason: it is a schema-valid AudioQuery that
+            # synthesizes to silence.
+            if not isinstance(forced, list) or not forced:
+                raise TtsError(
+                    "VOICEVOX's /accent_phrases returned no usable accent "
+                    f"phrases for {text_or_kana!r}; janki will not fall back to "
+                    "a guessed accent."
+                )
             # Only this key. The rest of the query is the engine's own envelope
             # — sampling rate, pauses, scales — and is versioned with it.
             query["accent_phrases"] = forced

@@ -1600,7 +1600,20 @@ with anything but an object is refused rather than replaced with a
 hand-built AudioQuery, which is the same quiet-failure trap as
 constructing defaults.
 
-The four ways this breaks are each pinned by the test that names them,
+Amended same day, from review. The substitution was gated on the
+*payload* (`forced is not None`), which cannot tell "the engine answered
+`null`" from "we never asked" — so a 200 with `null` fell through to the
+accent `/audio_query` guessed, and an empty list synthesized to silence;
+both would be ledgered as forced-accent audio. It branches on the flag
+now and refuses an unusable answer. `urllib_transport` also converted
+too little: `urlopen` wraps only the *request* in `URLError`, so a peer
+that accepts a connection and closes it arrives as a bare
+`RemoteDisconnected`, and a schemeless URL (an empty `voicevox_url`) as a
+`ValueError` from `Request()` — which sat outside the `try`. Every
+transport failure is a `TtsError` now, which is what lets `available()`
+promise it never raises.
+
+The ways this breaks are each pinned by the test that names them,
 verified by mutation: `is_kana` reaching `/audio_query` (the silent one —
 FastAPI drops it, the request succeeds, the audio is guessed), the forced
 phrases never substituted, the mark left in for `/audio_query`, and a

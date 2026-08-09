@@ -10,14 +10,22 @@ would pass just as happily against the broken flow.
 
 from __future__ import annotations
 
+import http.client
+import io
 import json
+import urllib.error
 import urllib.parse
+import urllib.request
 from typing import Any
 
 import pytest
 
 from japanese_anki.tts import TtsError
-from japanese_anki.tts.voicevox import LAUNCH_HINT, VoicevoxProvider
+from japanese_anki.tts.voicevox import (
+    LAUNCH_HINT,
+    VoicevoxProvider,
+    urllib_transport,
+)
 
 #: A value that exists only to be recognised on the other side. If this reaches
 #: /synthesis, the forced accent phrases did.
@@ -35,6 +43,12 @@ GUESSED = {
 WAV = b"RIFF....WAVEfake"
 
 
+#: Distinct from ``None``, because ``None`` is one of the answers under test —
+#: an engine that replies 200 with JSON ``null`` is exactly the case a
+#: payload-gated substitution cannot tell from "we never asked".
+_UNSET = object()
+
+
 class FakeEngine:
     """Records every call, and answers per endpoint."""
 
@@ -42,14 +56,14 @@ class FakeEngine:
         self,
         *,
         version_status: int = 200,
-        accent_phrases: Any = None,
-        audio_query: Any = None,
+        accent_phrases: Any = _UNSET,
+        audio_query: Any = _UNSET,
         statuses: dict[str, int] | None = None,
     ) -> None:
         self.calls: list[tuple[str, str, Any]] = []
         self.version_status = version_status
-        self.accent_phrases = FORCED if accent_phrases is None else accent_phrases
-        self.audio_query = dict(GUESSED) if audio_query is None else audio_query
+        self.accent_phrases = FORCED if accent_phrases is _UNSET else accent_phrases
+        self.audio_query = dict(GUESSED) if audio_query is _UNSET else audio_query
         self.statuses = statuses or {}
 
     def __call__(self, method: str, url: str, body: Any = None) -> tuple[int, bytes]:
@@ -72,6 +86,9 @@ class FakeEngine:
 
     def paths(self) -> list[str]:
         return [urllib.parse.urlparse(url).path for _, url, _ in self.calls]
+
+    def methods(self) -> list[str]:
+        return [method for method, _, _ in self.calls]
 
     def query(self, path: str) -> dict[str, list[str]]:
         for _, url, _ in self.calls:
@@ -154,6 +171,7 @@ def test_the_calls_go_in_the_order_the_flow_requires() -> None:
     provider(engine).synthesize("ハシ'", forced_accent=True)
 
     assert engine.paths() == ["/accent_phrases", "/audio_query", "/synthesis"]
+    assert engine.methods() == ["POST", "POST", "POST"]
 
 
 def test_the_speaker_goes_to_every_endpoint() -> None:
@@ -215,6 +233,10 @@ def test_available_asks_for_the_version() -> None:
 
     assert provider(engine).available() is True
     assert engine.paths() == ["/version"]
+    # /version is GET-only on the real engine: POST it and FastAPI answers 405,
+    # so available() would be permanently False and M5.3 would skip every record
+    # while telling a running engine to start.
+    assert engine.methods() == ["GET"]
 
 
 def test_an_engine_that_is_not_running_is_a_no_rather_than_a_crash() -> None:
@@ -252,6 +274,24 @@ def test_an_error_at_any_step_names_the_step(path: str) -> None:
 
     assert path in str(caught.value)
     assert "422" in str(caught.value)
+
+
+@pytest.mark.parametrize("answer", [None, [], {"not": "a list"}])
+def test_an_unusable_accent_answer_is_refused_rather_than_guessed_around(
+    answer: Any,
+) -> None:
+    """`null` is indistinguishable from "we never asked" if the substitution is
+    gated on the payload, so the run would fall through to the accent
+    `/audio_query` guessed — plausible audio, ledgered as forced. An empty list
+    is worse behaved: it is a schema-valid AudioQuery that synthesizes to
+    silence."""
+    engine = FakeEngine(accent_phrases=answer)
+
+    with pytest.raises(TtsError) as caught:
+        provider(engine).synthesize("ハシ'", forced_accent=True)
+
+    assert "guessed accent" in str(caught.value)
+    assert "/synthesis" not in engine.paths()
 
 
 def test_an_audio_query_that_is_not_an_object_is_refused() -> None:
@@ -294,3 +334,84 @@ def test_a_trailing_slash_on_the_base_url_does_not_double_up() -> None:
     )
 
     assert all("//version" not in url and "50021//" not in url for _, url, _ in engine.calls)
+
+
+# ---------------------------------------------------------------------------
+# The real transport — the only thing that turns a down engine into a `False`
+# ---------------------------------------------------------------------------
+
+
+def _urlopen_raising(exc: BaseException) -> Any:
+    def fake(request: Any, timeout: float = 0) -> Any:
+        raise exc
+
+    return fake
+
+
+def test_a_refused_connection_becomes_a_janki_error_with_the_hint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without the conversion this is a bare URLError, which `cli.main` does not
+    catch — so the user gets a traceback where the launch hint belongs."""
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        _urlopen_raising(urllib.error.URLError(ConnectionRefusedError(61, "refused"))),
+    )
+
+    with pytest.raises(TtsError) as caught:
+        urllib_transport("GET", "http://localhost:50021/version")
+
+    assert LAUNCH_HINT in str(caught.value)
+    assert VoicevoxProvider().available() is False
+
+
+def test_a_peer_that_hangs_up_becomes_one_too(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`urlopen` wraps only the *request* in URLError, so a peer that accepts the
+    connection and closes it without answering arrives as a bare
+    RemoteDisconnected — an https-only port, another process on 50021, or the
+    engine still starting."""
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        _urlopen_raising(http.client.RemoteDisconnected("closed without response")),
+    )
+
+    with pytest.raises(TtsError):
+        urllib_transport("GET", "http://localhost:50021/version")
+
+    assert VoicevoxProvider().available() is False
+
+
+def test_a_url_that_is_not_a_url_is_a_janki_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    # What an empty tts.voicevox_url in janki.toml produces; Request() rejects
+    # it before any I/O.
+    with pytest.raises(TtsError) as caught:
+        urllib_transport("GET", "/version")
+
+    assert "not a URL" in str(caught.value)
+    assert VoicevoxProvider(base_url="").available() is False
+
+
+def test_a_timeout_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("urllib.request.urlopen", _urlopen_raising(TimeoutError()))
+
+    with pytest.raises(TtsError) as caught:
+        urllib_transport("GET", "http://localhost:50021/version", timeout=2)
+
+    assert "timed out after 2s" in str(caught.value)
+
+
+def test_an_http_error_status_is_returned_rather_than_raised(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The provider decides what a status means at a given step, so the
+    transport hands it back instead of deciding for it."""
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        _urlopen_raising(
+            urllib.error.HTTPError(
+                "http://localhost:50021/audio_query", 422, "Unprocessable", {}, io.BytesIO(b"why")
+            )
+        ),
+    )
+
+    assert urllib_transport("POST", "http://localhost:50021/audio_query", {}) == (422, b"why")
