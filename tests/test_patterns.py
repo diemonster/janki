@@ -150,6 +150,41 @@ def test_only_reviewed_documents_reach_a_prompt() -> None:
     assert [p.template for p in reviewed_patterns(store)] == ["〜んだ"]
 
 
+def test_a_conjugation_chart_does_not_steer_sentences() -> None:
+    """The te-form chart's rows are production rules, not sentence patterns.
+    "Prefer `く → いて` when a sentence can use one naturally" is not a coherent
+    instruction, and eight such rows drowned the six real lesson patterns while
+    biasing every generated example toward the て-form."""
+    store = {
+        "teform.pdf": PatternSet("teform.pdf", "pattern", reviewed=True,
+                                 patterns=(Pattern("く → いて"), Pattern("む・ぶ・ぬ → んで"))),
+        "week11.pdf": PatternSet("week11.pdf", "lesson", patterns=(Pattern("〜んだ"),),
+                                 reviewed=True),
+    }
+
+    assert [p.template for p in reviewed_patterns(store)] == ["〜んだ"]
+
+
+def test_a_word_list_does_not_steer_sentences_either() -> None:
+    store = {
+        "words.pdf": PatternSet("words.pdf", "vocabulary", patterns=(Pattern("〜たい"),),
+                                reviewed=True),
+    }
+
+    assert reviewed_patterns(store) == []
+
+
+def test_the_steering_kinds_can_be_asked_for_explicitly() -> None:
+    """The te-form chart is meant to become its own cards, so something has to
+    be able to ask for it — just not the sentence writer."""
+    store = {
+        "teform.pdf": PatternSet("teform.pdf", "pattern", patterns=(Pattern("く → いて"),),
+                                 reviewed=True),
+    }
+
+    assert [p.template for p in reviewed_patterns(store, kinds=("pattern",))] == ["く → いて"]
+
+
 def test_a_named_document_narrows_it_further() -> None:
     store = {
         "a.pdf": PatternSet("a.pdf", "lesson", patterns=(Pattern("〜んだ"),), reviewed=True),
@@ -199,6 +234,48 @@ def test_a_store_that_is_not_an_object_is_refused(tmp_path: Path) -> None:
     path.write_text("[]", encoding="utf-8")
 
     with pytest.raises(PatternError, match="keyed by document name"):
+        load_store(path)
+
+
+def test_an_entry_that_is_not_an_object_is_refused_not_skipped(tmp_path: Path) -> None:
+    """Skipping it erased it. `save_store` rewrites the whole file from what was
+    loaded, so an entry the loader quietly dropped was gone from the committed
+    store on the next command that writes — reported as success."""
+    path = tmp_path / "patterns.json"
+    path.write_text(
+        json.dumps({"teform.pdf": None, "week11.pdf": {"kind": "lesson"}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(PatternError, match="teform.pdf"):
+        load_store(path)
+
+
+def test_a_pattern_that_is_not_an_object_is_refused(tmp_path: Path) -> None:
+    """`"〜んだ".get(...)` raises AttributeError, which the CLI does not catch
+    and cannot format — a traceback rather than a message naming the file."""
+    path = tmp_path / "patterns.json"
+    path.write_text(
+        json.dumps({"week11.pdf": {"kind": "lesson", "patterns": ["〜んだ"]}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(PatternError, match="each pattern must be an object"):
+        load_store(path)
+
+
+def test_examples_given_as_a_string_are_refused(tmp_path: Path) -> None:
+    """A bare string iterates one character at a time, so "どうしたの?" became
+    ten single-character "examples", each looking like a sentence someone could
+    check against the document."""
+    path = tmp_path / "patterns.json"
+    path.write_text(
+        json.dumps({"week11.pdf": {"patterns": [{"template": "〜の？",
+                                                 "examples": "どうしたの?"}]}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(PatternError, match="examples must be a list"):
         load_store(path)
 
 

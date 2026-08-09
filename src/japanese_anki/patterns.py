@@ -89,10 +89,18 @@ class Pattern:
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> Pattern:
+        # `examples` must be a list. A bare string iterates one character at a
+        # time, so `"どうしたの?"` became ten single-character "examples" that
+        # each looked like a sentence from the document.
+        examples = raw.get("examples") or []
+        if not isinstance(examples, list):
+            raise PatternError(
+                f"examples must be a list of sentences, got {type(examples).__name__}"
+            )
         return cls(
             template=str(raw.get("template") or "").strip(),
             gloss=str(raw.get("gloss") or "").strip(),
-            examples=tuple(str(e).strip() for e in (raw.get("examples") or []) if str(e).strip()),
+            examples=tuple(str(e).strip() for e in examples if str(e).strip()),
             where=str(raw.get("where") or "").strip(),
         )
 
@@ -118,11 +126,28 @@ class PatternSet:
 
     @classmethod
     def from_dict(cls, source: str, raw: dict[str, Any]) -> PatternSet:
+        listed = raw.get("patterns") or []
+        if not isinstance(listed, list):
+            raise PatternError(
+                f"{source}: patterns must be a list, got {type(listed).__name__}"
+            )
+        for item in listed:
+            # `str.get` raises AttributeError, which the CLI does not catch and
+            # cannot format — a traceback instead of a message naming the file.
+            if not isinstance(item, dict):
+                raise PatternError(
+                    f"{source}: each pattern must be an object, got "
+                    f"{type(item).__name__}"
+                )
+        try:
+            built = tuple(Pattern.from_dict(item) for item in listed)
+        except PatternError as exc:
+            raise PatternError(f"{source}: {exc}") from exc
         return cls(
             source=source,
             kind=str(raw.get("kind") or "unknown"),
             title=str(raw.get("title") or ""),
-            patterns=tuple(Pattern.from_dict(p) for p in (raw.get("patterns") or [])),
+            patterns=built,
             reviewed=bool(raw.get("reviewed", False)),
         )
 
@@ -254,11 +279,17 @@ def load_store(path: Path) -> dict[str, PatternSet]:
         raise PatternError(f"Could not read {file}: {exc}") from exc
     if not isinstance(raw, dict):
         raise PatternError(f"{file} must hold a JSON object keyed by document name")
-    return {
-        str(name): PatternSet.from_dict(str(name), value)
-        for name, value in raw.items()
-        if isinstance(value, dict)
-    }
+    # Refused, not skipped. `save_store` rewrites the whole file from what was
+    # loaded, so dropping an entry it could not read would erase that document
+    # from the committed store on the next command that writes — silently, and
+    # reported as success. `kanji.load_store` refuses for the same reason.
+    for name, value in raw.items():
+        if not isinstance(value, dict):
+            raise PatternError(
+                f"{file}: entry for {str(name)!r} must be an object, got "
+                f"{type(value).__name__}"
+            )
+    return {str(name): PatternSet.from_dict(str(name), value) for name, value in raw.items()}
 
 
 def save_store(path: Path, store: dict[str, PatternSet]) -> None:
@@ -269,17 +300,38 @@ def save_store(path: Path, store: dict[str, PatternSet]) -> None:
     )
 
 
-def reviewed_patterns(store: dict[str, PatternSet], sources: Iterable[str] = ()) -> list[Pattern]:
+#: The only kind that steers a sentence. A ``pattern`` document is a conjugation
+#: chart — its rows are production rules, not sentence patterns — and a
+#: ``vocabulary`` document teaches no grammar at all.
+STEERING_KINDS: tuple[str, ...] = ("lesson",)
+
+
+def reviewed_patterns(
+    store: dict[str, PatternSet],
+    sources: Iterable[str] = (),
+    kinds: Iterable[str] = STEERING_KINDS,
+) -> list[Pattern]:
     """Patterns a human has signed off, optionally from named documents only.
+
+    Only lesson documents, which is the split this module is built around: a
+    lesson says which grammar the learner is being taught this week, and that is
+    a sensible thing to prefer in a sentence. A ``pattern`` document is the
+    te-form chart, whose rows are ``く → いて`` and ``む・ぶ・ぬ → んで`` — asking
+    a model to "prefer ``く → いて`` when a sentence can use one naturally" is
+    not a coherent instruction, and eight such rows drowned the six real ones
+    while biasing every generated example toward the て-form.
 
     Unreviewed sets are skipped rather than warned about here: this is asked on
     the way into writing a sentence, and a warning per record would drown the
     diff it is trying to help someone read.
     """
     wanted = {str(name) for name in sources}
+    steering = {str(kind) for kind in kinds}
     found: list[Pattern] = []
     for name, entry in sorted(store.items()):
         if not entry.reviewed:
+            continue
+        if entry.kind not in steering:
             continue
         if wanted and name not in wanted:
             continue

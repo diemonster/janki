@@ -4,6 +4,7 @@ import html
 import os
 import re
 import unicodedata
+import urllib.parse
 from collections.abc import Container
 from dataclasses import dataclass
 from pathlib import Path
@@ -398,7 +399,15 @@ def _field_values(
         html.escape(record.usage_notes).replace("\n", "<br>"),
         audio_field,
         image_field,
-        html.escape(record.expression),
+        # Percent-encoded, not HTML-escaped. This field's only job is to be a
+        # URL query — for the Shirabe deep link and the jpdb search — and
+        # entity escaping does not protect a query delimiter: `Q&A` became
+        # `?w=Q&amp;A`, which the webview decodes back to `?w=Q&A` so the app
+        # receives `w=Q`. A `#` truncates at the fragment. Encoding here rather
+        # than in template JavaScript keeps the cards script-free, which is what
+        # makes them render the same on AnkiMobile, AnkiDroid, the desktop and
+        # AnkiWeb — AnkiWeb strips template scripts outright.
+        urllib.parse.quote(record.expression, safe=""),
         html.escape(_source_text(record)),
         _pitch_field(record, warnings),
         str(record.frequency_rank) if record.frequency_rank is not None else "",

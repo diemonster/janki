@@ -1328,12 +1328,23 @@ def _batch_submit(
 
     model = args.model or config.enrich_model
     style_guide = claude_client.read_style_guide(config.root)
+    # The same reviewed patterns the immediate path uses. A batch is the same
+    # work at a different price, so it must be the same request.
+    taught = patterns.format_patterns(
+        patterns.reviewed_patterns(patterns.load_store(config.patterns_file))
+    )
     requests, pending_ids = enrich.batch_requests(
-        records, model=model, style_guide=style_guide, ids=args.ids or None
+        records,
+        model=model,
+        style_guide=style_guide,
+        ids=args.ids or None,
+        taught=taught,
     )
     if not requests:
         print("Nothing to submit: every record already has examples and usage notes.")
         return 0
+    if taught:
+        print(f"Writing with {taught.count(chr(10) + '*')} reviewed pattern(s) in mind.")
 
     batch_id = claude_client.submit_batch(requests)
     book.record_batch(
@@ -2659,6 +2670,18 @@ def command_patterns(args: argparse.Namespace) -> int:
     config = _load_config(args)
     store = patterns.load_store(config.patterns_file)
 
+    if args.review and args.files:
+        # `files` is nargs="*" and `--review` appends, so
+        # `janki patterns --review a.pdf b.pdf` binds b.pdf to `files` — a
+        # natural thing to type, and the review branch used to return before
+        # reading it, reporting only "Marked 1 document(s) reviewed".
+        raise JankiError(
+            "Read documents and mark them reviewed in separate runs: "
+            f"--review names {', '.join(args.review)} while "
+            f"{', '.join(str(path) for path in args.files)} would be read as "
+            "new document(s)."
+        )
+
     if args.review:
         unknown = [name for name in args.review if name not in store]
         if unknown:
@@ -2686,6 +2709,7 @@ def command_patterns(args: argparse.Namespace) -> int:
 
     prepared_inputs = prepare_inputs(args.files, config.scan_inbox)
     failures: list[str] = []
+    read: list[str] = []
     for prepared in prepared_inputs:
         try:
             found = patterns.extract_patterns(
@@ -2696,7 +2720,22 @@ def command_patterns(args: argparse.Namespace) -> int:
         except JankiError as exc:
             failures.append(f"{prepared.origin_path.name}: {exc}")
             continue
+        # `reviewed` is the one piece of human-entered state in this file, and
+        # `extract_patterns` always returns False. Replacing the entry outright
+        # silently un-reviewed a document on any re-read — including the
+        # ordinary `janki patterns data/inbox/scans/*.pdf` after adding one new
+        # handout — and the only signal was the absence of a line on the next
+        # enrich run. Refuse instead, and say which flag is in the way.
+        previous = store.get(found.source)
+        if previous is not None and previous.reviewed and not args.force:
+            failures.append(
+                f"{found.source}: already read and marked reviewed. Re-reading "
+                f"resets that, so pass --force if you mean to; it will need "
+                f"reviewing again before enrich uses it."
+            )
+            continue
         store[found.source] = found
+        read.append(found.source)
         print(
             f"{found.source}: {found.kind}, {len(found.patterns)} pattern(s) "
             f"— {found.title or '(untitled)'}"
@@ -2707,12 +2746,18 @@ def command_patterns(args: argparse.Namespace) -> int:
     patterns.save_store(config.patterns_file, store)
     for failure in failures:
         print(f"warning: {failure}", file=sys.stderr)
-    if not failures:
+    # Per document that succeeded, not gated on the whole run succeeding: a run
+    # where one of three documents failed still read two, and printing nothing
+    # about them left it with no next step.
+    if read:
         print(
-            "\nNothing uses these yet. Read them, then: "
-            f"janki patterns --review {prepared_inputs[0].origin_path.name!r}"
+            "\nNothing uses these yet. Read them, then: janki patterns --review "
+            + " --review ".join(repr(name) for name in read)
         )
-    return 1 if failures and len(failures) == len(prepared_inputs) else 0
+    # Any loss is a non-zero exit, for the reason spelled out in `command_kanji`
+    # below: `janki patterns *.pdf && janki patterns --review …` must not run on
+    # from a document that was never read.
+    return 1 if failures else 0
 
 
 def command_kanji(args: argparse.Namespace) -> int:
@@ -3268,6 +3313,14 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Mark a document's patterns reviewed, so example sentences may use "
             "them. Repeat for several."
+        ),
+    )
+    patterns_parser.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "Re-read a document already marked reviewed. Its patterns drop back "
+            "to unreviewed and stop steering sentences until reviewed again."
         ),
     )
     patterns_parser.set_defaults(handler=command_patterns)

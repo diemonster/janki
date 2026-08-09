@@ -1483,12 +1483,18 @@ def batch_requests(
     model: str,
     style_guide: str,
     ids: Sequence[str] | None = None,
+    taught: str = "",
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """The batch entries for every record that needs enriching, and their ids.
 
     A one-hour cache TTL rather than the default five minutes: the style guide
     leads every request, and a batch's requests are read over a span that a
     five-minute window would not survive.
+
+    ``taught`` carries the reviewed patterns, exactly as the immediate path
+    does. Without it the two paths wrote different sentences for the same
+    record at different prices — and batch is the one used for bulk, so most of
+    a collection would have got the unsteered version.
     """
     targets = ai_targets(records, ids)
     blocks = claude_client.system_blocks(style_guide, AI_INSTRUCTIONS, cache_ttl="1h")
@@ -1496,7 +1502,11 @@ def batch_requests(
     batch_key_map(record_ids)
     requests = [
         claude_client.batch_request(
-            batch_custom_id(record.id), model, blocks, ai_prompt(record), ai_schema()
+            batch_custom_id(record.id),
+            model,
+            blocks,
+            ai_prompt(record, taught=taught),
+            ai_schema(),
         )
         for record in targets
     ]

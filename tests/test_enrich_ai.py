@@ -176,6 +176,21 @@ def test_recent_sentences_ride_along_as_variety_pressure() -> None:
     assert "structurally different" in text
 
 
+def test_the_patterns_the_learner_is_studying_ride_along_too() -> None:
+    """The block reaching the prompt is the whole of what `janki patterns`
+    does for `enrich --ai`; without it the command reads documents nothing
+    consumes."""
+    from japanese_anki.patterns import Pattern, format_patterns
+
+    text = ai_prompt(record(), (), format_patterns([Pattern("〜んだ", "explains")]))
+
+    assert "〜んだ" in text and "explains" in text
+
+
+def test_no_reviewed_patterns_leaves_the_prompt_as_it_was() -> None:
+    assert "currently studying" not in ai_prompt(record())
+
+
 # --- the QC gate --------------------------------------------------------------
 
 

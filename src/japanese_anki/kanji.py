@@ -502,15 +502,24 @@ def render_kanji_html(entries: Iterable[KanjiInfo]) -> str:
         # second. Filling reading by reading spent the whole row budget on the
         # first two — 使's card showed つか(い) twice and left out つか(う),
         # which is the reading of 使う, the word the card is about.
+        #
+        # A reading with no example at all is placed only after every example
+        # has been placed, whatever order the caller's readings arrived in. The
+        # renderer cannot assume the sort `fetch_kanji` applies: `data/kanji.json`
+        # is committed, hand-editable, and older copies are in KANJIDIC's kana
+        # order. In that order 来's example-less き(たす)/き(たる)/きた(す)/きた(る)
+        # sat ahead of く(る), so the four-row budget went to 出来, 来年, 上出来
+        # and one blank — and 来る, the reading of the word the card is about,
+        # never rendered. That is the same loss the round robin exists to stop.
+        with_examples = [r for r in info.readings if r.examples]
+        without_examples = [r for r in info.readings if not r.examples]
         rows = []
-        depth_limit = max((max(len(r.examples), 1) for r in info.readings), default=0)
+        depth_limit = max((len(r.examples) for r in with_examples), default=0)
         for depth in range(depth_limit):
-            for reading in info.readings:
-                if reading.examples and depth >= len(reading.examples):
+            for reading in with_examples:
+                if depth >= len(reading.examples):
                     continue
-                if not reading.examples and depth > 0:
-                    continue
-                example = reading.examples[depth] if reading.examples else None
+                example = reading.examples[depth]
                 label = "音" if reading.kind == "on" else "訓"
                 written = html_mod.escape(example.written) if example else ""
                 pronounced = html_mod.escape(example.pronounced) if example else ""
@@ -524,6 +533,17 @@ def render_kanji_html(entries: Iterable[KanjiInfo]) -> str:
                     f'<span class="kanji-gloss">{gloss}</span>'
                     "</div>"
                 )
+        for reading in without_examples:
+            label = "音" if reading.kind == "on" else "訓"
+            rows.append(
+                '<div class="kanji-example">'
+                f'<span class="kanji-kind">{label}</span>'
+                f'<span class="kanji-reading">{html_mod.escape(reading.reading)}</span>'
+                '<span class="kanji-word"></span>'
+                '<span class="kanji-kana"></span>'
+                '<span class="kanji-gloss"></span>'
+                "</div>"
+            )
         if rows:
             kept = "".join(rows[:MAX_EXAMPLE_ROWS])
             parts.append(f'<div class="kanji-examples">{kept}</div>')

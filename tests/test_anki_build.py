@@ -696,6 +696,32 @@ def test_the_record_keeps_every_sense(tmp_path: Path) -> None:
     assert len(stored[0]["meanings"]) == 17, "and not on the way in"
 
 
+@pytest.mark.parametrize(
+    ("expression", "expected"),
+    [
+        ("使う", "%E4%BD%BF%E3%81%86"),
+        ("Q&A", "Q%26A"),
+        ("C#", "C%23"),
+    ],
+    ids=["japanese", "an-ampersand", "a-hash"],
+)
+def test_the_lookup_query_is_percent_encoded_not_entity_escaped(
+    tmp_path: Path, expression: str, expected: str
+) -> None:
+    """This field's only job is to be a URL query. `html.escape` turned `Q&A`
+    into `Q&amp;A`, which the webview decodes back to `Q&A` — so Shirabe
+    received `w=Q` and jpdb searched for `Q`. A `#` truncated at the fragment."""
+    _project(tmp_path)
+    _write_records(tmp_path, [VocabularyRecord(
+        id=f"word:{expression}:x", expression=expression, reading="x", meanings=["m"],
+    )])
+
+    build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
+
+    names, values = _fields(tmp_path / "o.apkg")
+    assert values[names.index("ShirabeQuery")] == expected
+
+
 def test_every_back_template_offers_both_lookups(tmp_path: Path) -> None:
     """A card that shows a word should let you go and read about it. Shirabe is
     a deep link into the iPhone app and does nothing on a desktop; jpdb is a web
@@ -706,10 +732,10 @@ def test_every_back_template_offers_both_lookups(tmp_path: Path) -> None:
             encoding="utf-8"
         )
         assert "shirabelookup://search?w={{ShirabeQuery}}" in markup, name
-        # jpdb's query is built at display time from `data-query` rather than
-        # interpolated into the href, so the expression gets percent-encoded.
-        assert 'data-query="{{Expression}}"' in markup, name
-        assert "jpdb.io/search?q=" in markup, name
+        # Both links take `ShirabeQuery`, which is percent-encoded at export
+        # time — entity escaping does not protect a query delimiter, and doing
+        # it in template JS would not survive AnkiWeb, which strips scripts.
+        assert "jpdb.io/search?q={{ShirabeQuery}}" in markup, name
 
 
 def test_the_jpdb_link_reaches_the_card(tmp_path: Path) -> None:
@@ -743,8 +769,7 @@ def test_the_jpdb_link_reaches_the_card(tmp_path: Path) -> None:
     assert templates, "the notetype has card types at all"
     for template in templates:
         back = template["afmt"]
-        assert 'data-query="{{Expression}}"' in back, template["name"]
-        assert "jpdb.io/search?q=" in back, template["name"]
+        assert "jpdb.io/search?q={{ShirabeQuery}}" in back, template["name"]
         assert "shirabelookup://" in back, f"{template['name']}: the existing one survived"
 
 

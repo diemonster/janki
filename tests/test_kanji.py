@@ -384,6 +384,35 @@ def test_every_reading_gets_a_row_before_any_gets_a_second() -> None:
     assert rendered.count('<div class="kanji-example">') == 4, "and the cap holds"
 
 
+def test_an_example_less_reading_never_takes_a_row_from_one_with_examples() -> None:
+    """The renderer cannot assume the caller sorted anything. `data/kanji.json`
+    is committed and hand-editable, and older copies are in KANJIDIC's kana
+    order — which for 来 puts four example-less readings ahead of く(る), so the
+    four-row budget went to three examples and one blank, and 来る, the reading
+    of the word the card is about, never rendered."""
+    from japanese_anki.kanji import Example, Reading
+
+    def reading(text: str, *words: str) -> Reading:
+        return Reading(
+            kind="kun",
+            reading=text,
+            examples=tuple(Example(written=w, pronounced="x", gloss="y") for w in words),
+        )
+
+    rendered = render_kanji_html([KanjiInfo(character="来", readings=(
+        reading("き(たす)"),          # example-less, and deliberately first
+        reading("き(たる)"),
+        reading("きた(す)"),
+        reading("きた(る)"),
+        reading("ライ", "来年"),
+        reading("く(る)", "来る"),
+    ))])
+
+    assert "来る" in rendered, "the reading of the word this card is about"
+    assert "来年" in rendered
+    assert rendered.count('<div class="kanji-example">') == 4, "and the cap holds"
+
+
 def test_a_reading_without_a_common_example_is_still_shown() -> None:
     from japanese_anki.kanji import Reading
 

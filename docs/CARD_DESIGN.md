@@ -70,8 +70,14 @@ shirabelookup://search?w=<expression>
 They also include `https://jpdb.io/search?q=<expression>&lang=english` as a web
 fallback during desktop review. Both links are intentionally isolated in the
 back templates so either can be replaced easily if its current URL contract
-differs. The jpdb query is percent-encoded in the rendered card; HTML escaping
-alone does not protect query delimiters such as `&` and `#`.
+differs.
+
+Both take the same `ShirabeQuery` field, which the builder percent-encodes at
+export time (`urllib.parse.quote(expression, safe="")`). HTML escaping alone
+does not protect query delimiters: `Q&A` rendered as `?w=Q&amp;A`, which the
+webview decodes back to `?w=Q&A`, so the app receives `w=Q`. Encoding happens
+at export rather than in template JavaScript because the cards carry no script
+at all — see the rule below.
 
 ## Audio
 
@@ -97,6 +103,13 @@ is a silent-mute trap rather than a feature.
 drop down the right of the mora the pitch falls from, which is how a Japanese
 dictionary draws it. No JavaScript: it is plain spans and CSS, so it renders the
 same on AnkiMobile, AnkiDroid and the desktop.
+
+**No card carries JavaScript**, and this is a correctness rule rather than a
+stylistic one — AnkiWeb's reviewer strips template scripts, so anything assembled
+in script is simply absent there, with no error to notice. A jpdb link built by
+an inline `encodeURIComponent` looked right everywhere it was tested and became
+a silent jump to an empty search page on AnkiWeb; the query is percent-encoded
+at export time instead. `tests/test_card_templates.py` pins this.
 
 Every accepted pattern is drawn, primary first. A word with two accents has two,
 and showing one would teach that the other is wrong.
