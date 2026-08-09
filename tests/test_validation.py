@@ -1,4 +1,5 @@
 import unicodedata
+from dataclasses import replace
 
 import pytest
 
@@ -380,18 +381,20 @@ def test_an_honorific_prefix_under_its_ruby_is_not_flagged() -> None:
 
 
 def test_the_verdict_does_not_depend_on_unicode_composition() -> None:
-    """A decomposed が is か plus a combining mark, so an unnormalized compare
-    reads the same field as correct in NFD and wrong in NFC."""
-    composed = "彼[かれ]が課長[かちょう]です。"
-    decomposed = unicodedata.normalize("NFD", composed)
-
-    flagged_composed = _issue_messages(_with_example(composed, japanese="彼が課長です。"))
-    flagged_decomposed = _issue_messages(
-        _with_example(decomposed, japanese="彼が課長です。")
+    """A decomposed ご is こ plus a combining mark, so an unnormalized honorific
+    check reports a *correct* ご飯[ごはん] as a spill — the false positive the
+    rewrite exists to avoid. The spill direction does not discriminate: が
+    decomposes to か, which is kana and not an honorific either way."""
+    composed = VocabularyRecord(
+        id="word:ご飯:ごはん", expression="ご飯", reading="ごはん",
+        meanings=["cooked rice"], furigana="ご飯[ごはん]",
+    )
+    decomposed = replace(
+        composed, furigana=unicodedata.normalize("NFD", "ご飯[ごはん]")
     )
 
-    assert any("missing a space" in m for m in flagged_composed)
-    assert any("missing a space" in m for m in flagged_decomposed)
+    assert not any("missing a space" in m for m in _issue_messages(composed))
+    assert not any("missing a space" in m for m in _issue_messages(decomposed))
 
 
 def test_a_spill_whose_run_starts_with_kanji_is_a_known_gap() -> None:
@@ -409,3 +412,23 @@ def test_a_spill_whose_run_starts_with_kanji_is_a_known_gap() -> None:
     )
 
     assert not any("missing a space" in m for m in _issue_messages(record))
+
+
+def test_a_full_width_space_does_not_separate_ruby_groups() -> None:
+    """Ordinary in Japanese text, and Anki does not read it as a separator:
+    `furigana_reading` drops only a single ASCII space, so the run before the
+    group vanishes from the reading the romaji and audio are built on."""
+    record = _with_example(
+        "毎日[まいにち]　妻と日本語[にほんご]で 話[はな]します。",
+        japanese="毎日　妻と日本語で話します。",
+    )
+
+    assert any("missing a space" in m for m in _issue_messages(record))
+
+
+def test_the_warning_quotes_the_run_as_it_appears_in_the_field() -> None:
+    """An NFKC-folded quote names a string the record does not contain, so
+    nobody can find what to fix."""
+    record = _with_example("毎日[まいにち]ﾆﾎﾝ語[にほんご]です。", japanese="毎日ﾆﾎﾝ語です。")
+
+    assert any("'ﾆﾎﾝ語'" in m for m in _issue_messages(record))

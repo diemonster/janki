@@ -223,21 +223,34 @@ def spilled_furigana_groups(furigana: str) -> tuple[tuple[str, str], ...]:
     """
     spilled: list[tuple[str, str]] = []
     for match in _GROUP.finditer(furigana):
-        # Normalized like every other comparison in this module. Without it the
-        # verdict depends on Unicode composition — a decomposed が is か plus a
-        # combining mark, so a spill reads as correct in NFD and wrong in NFC —
-        # and halfwidth katakana fall outside the kana ranges entirely.
-        text = normalize_identity_part(match.group(1))
+        raw = match.group(1)
+        # Compared normalized, so the verdict does not depend on Unicode
+        # composition — a decomposed ご is こ plus a combining mark, and an
+        # unnormalized honorific check reports a correct ご飯[ごはん] as a spill.
+        # Halfwidth katakana fold into range here too.
+        text = normalize_identity_part(raw)
         reading = normalize_identity_part(match.group(2))
-        if not text or not reading:
+        if not reading:
             continue
-        first = text[0]
-        if _KANA.match(first):
-            if not (first in _HONORIFIC_PREFIXES and reading.startswith(first)):
-                spilled.append((text, reading))
+        # The *first character* comes from the raw run. `normalize_identity_part`
+        # strips, and NFKC turns a leading U+3000 into an ASCII space that the
+        # strip then removes — so normalizing first deletes exactly the evidence
+        # this is looking for. A full-width space where the separator belongs is
+        # ordinary in Japanese text (see `_GROUP`), and it does not separate:
+        # `furigana_reading` drops only a single ASCII space, so the run before
+        # it vanishes from the reading the romaji and audio are built on.
+        first = raw[0] if raw else ""
+        if not first or first.isspace():
+            spilled.append((raw, reading))
+        elif _KANA.match(normalize_identity_part(first) or first):
+            head = text[0] if text else first
+            if not (head in _HONORIFIC_PREFIXES and reading.startswith(head)):
+                spilled.append((raw, reading))
         elif not first.isalnum():
             # Punctuation cannot be part of the word the ruby annotates.
-            spilled.append((text, reading))
+            spilled.append((raw, reading))
+    # Reported verbatim: a message quoting the NFKC-folded run names a string
+    # the record does not contain, so nobody can find what to fix.
     return tuple(spilled)
 
 

@@ -264,6 +264,12 @@ class Ledger:
 
     # -- mutators ----------------------------------------------------------
 
+    #: List-valued keys of a record entry. A ledger is committed and hand-edited
+    #: often enough that one of these arriving as ``null`` — or as anything else
+    #: — is a real input, and every reader guarding for itself is how the one
+    #: that does not (``record_audio``) turns a bad shape into a traceback.
+    _LIST_KEYS = ("sources", "enriched", "audio")
+
     def _entry(self, record_id: str, at: str | None = None) -> dict[str, Any]:
         key = _record_key(record_id)
         entry = self.records.get(key)
@@ -276,6 +282,15 @@ class Ledger:
                 "exports": {},
             }
             self.records[key] = entry
+            return entry
+        for name in self._LIST_KEYS:
+            if name in entry and not isinstance(entry[name], list):
+                raise LedgerError(
+                    f"Ledger {self.path}: record {record_id!r} has "
+                    f"{name!r} as {type(entry[name]).__name__}, not a list. "
+                    "That file is machine-written; fix it by hand or delete it "
+                    "and run 'janki status --rebuild'."
+                )
         return entry
 
     def record_added(self, record_id: str, *, at: str | None = None) -> bool:
@@ -595,13 +610,20 @@ class Ledger:
             # or older ledger can carry `"audio": null` or a bare string, and a
             # TypeError out of `janki audio --prune` is not the clean
             # `LedgerError` this module promises.
-            existing = [
-                item for item in (entry.get("audio") or []) if isinstance(item, dict)
+            audio = entry.get("audio")
+            if not isinstance(audio, list):
+                continue
+            # Partitioned, not filtered: writing the recognised subset back
+            # would erase entries this method cannot read, from a committed file
+            # that `status --rebuild` cannot reconstruct, silently.
+            unreadable = [item for item in audio if not isinstance(item, dict)]
+            keep = [
+                item
+                for item in audio
+                if isinstance(item, dict) and str(item.get("file") or "") not in names
             ]
-            keep = [item for item in existing if str(item.get("file") or "") not in names]
-            dropped += len(existing) - len(keep)
-            if entry.get("audio"):
-                entry["audio"] = keep
+            dropped += len(audio) - len(unreadable) - len(keep)
+            entry["audio"] = unreadable + keep
         return dropped
 
     def drop_superseded_audio(
@@ -625,11 +647,15 @@ class Ledger:
         entry = self.records.get(_record_key(record_id))
         if not entry or not entry.get("audio"):
             return 0
-        existing = [item for item in (entry.get("audio") or []) if isinstance(item, dict)]
+        audio = entry.get("audio")
+        if not isinstance(audio, list):
+            return 0
+        unreadable = [item for item in audio if not isinstance(item, dict)]
         spared = keep_files or set()
         kept = [
             item
-            for item in existing
+            for item in audio
+            if isinstance(item, dict)
             if item.get("of") != of
             or str(item.get("content_fp") or "") in keep
             # An entry whose clip a record still names is the only evidence that
@@ -637,8 +663,9 @@ class Ledger:
             # the mismatch instead of fixing it.
             or str(item.get("file") or "") in spared
         ]
-        dropped = len(existing) - len(kept)
-        entry["audio"] = kept
+        dropped = len(audio) - len(unreadable) - len(kept)
+        # Same partition as `forget_audio_files`, and for the same reason.
+        entry["audio"] = unreadable + kept
         return dropped
 
     def missing_audio(self, records: Iterable[VocabularyRecord]) -> list[str]:

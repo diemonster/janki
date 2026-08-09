@@ -616,12 +616,32 @@ def test_a_stopped_run_is_reported_even_when_the_ledger_fails(
 
 
 def test_a_ledger_whose_audio_is_not_a_list_does_not_traceback(tmp_path: Path) -> None:
-    """Every other reader in ledger.py guards this shape; the two new methods
-    did not, so a hand-edited ledger gave a TypeError out of --prune instead of
-    the clean LedgerError this module promises."""
+    """A hand-edited ledger gave a TypeError out of --prune instead of the clean
+    LedgerError this module promises. Guarding readers one at a time missed the
+    writer, so the shape is refused where entries are handed out."""
     book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
     book.records["word:橋:はし"] = {"audio": None}
-    book.records["word:箸:はし"] = {"audio": ["janki-bare-string.wav"]}
 
     assert book.forget_audio_files({"janki-abc.wav"}) == 0
+    with pytest.raises(ledger_mod.LedgerError) as caught:
+        book.record_audio(
+            "word:橋:はし", file="x.wav", of="word", provider="p", voice=1,
+            content_fp="fp",
+        )
+    assert "not a list" in str(caught.value)
+
+
+def test_an_entry_the_ledger_cannot_read_is_kept_rather_than_erased(
+    tmp_path: Path,
+) -> None:
+    """Writing the recognised subset back deletes what these methods cannot
+    read — from a committed file that `status --rebuild` cannot reconstruct,
+    with no error and no mention in any summary."""
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    book.records["word:箸:はし"] = {"audio": ["janki-legacy.wav"]}
+
+    assert book.forget_audio_files({"janki-abc.wav"}) == 0
+    assert book.records["word:箸:はし"]["audio"] == ["janki-legacy.wav"]
+
     assert book.drop_superseded_audio("word:箸:はし", of="example", keep=set()) == 0
+    assert book.records["word:箸:はし"]["audio"] == ["janki-legacy.wav"]
