@@ -1661,7 +1661,26 @@ whole ballgame.
   (marker-value round-trip).
 - `available()` failure message includes a launch hint.
 
-### [ ] M5.5 Notetype-upgrade verification (spike; blocks M5.4)
+### [~] M5.5 Notetype-upgrade verification (spike; blocks M5.4)
+
+*Library half done 2026-08-08; **GUI confirmation outstanding**, and that
+is what M5.4 must not start without. Findings in
+`docs/NOTETYPE_UPGRADE.md`. The answer is **safe: append + reimport** —
+same `model_id` with fields appended upgraded notetype `1607392313` from
+19 to 22 fields in place, matched all three notes by GUID, and preserved
+a hand-planted review history (ivl 21, reps 4, one revlog row) with no
+duplicates. Conditions: append only (values are positional), same
+`model_id` and name, unchanged GUIDs, and templates that tolerate the new
+fields being empty on every pre-existing note.
+
+Two traps recorded rather than smoothed over. Reading `col.models.all()`
+in the same session as the import returns a **stale** 19-field notetype
+while notes already carry 22 values — an apparently broken half-upgrade
+that is only a cached view; the first version of the findings said the
+opposite because of it. And a scratch script named `inspect.py` shadows
+the stdlib module the `anki` package imports, breaking the library
+entirely. Re-open the collection before concluding, and name spike
+scripts so they cannot collide.*
 
 Depends on: — (start anytime)
 Files: new `docs/NOTETYPE_UPGRADE.md` (findings); throwaway scripts in
