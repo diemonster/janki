@@ -247,7 +247,7 @@ refinement below).
   `model: "jpdb"`; supersedes the design example's single object, so
   jpdb and AI passes never overwrite each other), `audio` (list of
   `{file, of: "word"|"example", provider, voice: int, content_fp, at}`),
-  `exports` (`dict[deck_file_stem, iso_date]`), and a top-level
+  `exports` (`dict[deck_file_stem, iso_date | {at, missing}]`), and a top-level
   `pending_batches` section (consumed by M4.4).
 - API (idempotent, persisted via the atomic writer, file sorted by
   record id): `load(path)`, `record_added`, `record_source_seen`,
@@ -1943,6 +1943,30 @@ What the build had to add beyond the seam:
   prevent, arriving as working audio.
 
 Azure remains unbuilt and the reasoning above still holds against it.
+
+**Conversational audio models were tested too, and cannot do this job.**
+`gpt-audio` and `gpt-audio-1.5` on `/v1/chat/completions` generate speech
+natively rather than rendering finished text, which is the architecture
+ChatGPT's voice mode uses and a fair thing to want. But janki needs the
+clip to say *exactly* the sentence on the card, and they are chat models:
+asked to read 「日本語を話しますか。」 they **answer** it (0/3 verbatim,
+"はい、話せますよ…"), and asked to read 「すみません、駅はどこですか。」 they
+give directions to an invented station (0/3, a different route each time).
+`gpt-audio-mini` replied to a statement with a paragraph about Korean
+food. `gpt-audio-1.5` also swapped 。for an ASCII period once on a
+sentence it otherwise read correctly, changing the closing intonation.
+
+The failure is silent and total: the card plays fluent, confident
+Japanese that is not the sentence. Questions are ordinary in a beginner
+deck, so this is not an edge case. **TTS renders what it is given;
+conversational models respond to it** — janki needs the first, which is
+the same distinction that keeps words on VOICEVOX one level down.
+
+GPT-Live is not on the API as of 2026-08-09, and when it arrives it will
+be a conversational model, so it would fail this same test. The realtime
+family (`gpt-realtime-2.1`, WebRTC) is the right tool for live
+conversation practice, which is a different product from a deck builder:
+janki writes files to disk, with no browser, microphone, or session.
 
 ~~Depends on: M5.3
 Files: new `src/japanese_anki/tts/azure.py`, `tests/test_azure_tts.py`.~~

@@ -216,7 +216,7 @@ class OpenAiSpeechProvider:
     def _key(self) -> str:
         key = self._api_key if self._api_key is not None else os.environ.get("OPENAI_API_KEY", "")
         if not key.strip():
-            raise TtsError(f"No OPENAI_API_KEY. {KEY_HINT}")
+            raise TtsError(KEY_HINT[0].upper() + KEY_HINT[1:])
         return key.strip()
 
     def available(self) -> bool:

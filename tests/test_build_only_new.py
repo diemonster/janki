@@ -185,8 +185,11 @@ def test_exports_record_only_what_reached_the_package(
 
     assert _notes(root / "dist" / "verbs.apkg") == 1, "only 話す is in the package"
     # 橋 was not in it, so its entry keeps the date of the build that was.
-    assert _exports(root)["word:橋:はし"]["verbs"] == "2026-01-01"
-    assert _exports(root)["word:話す:はなす"]["verbs"] != "2026-01-01"
+    assert _export_date(root, "word:橋:はし") == "2026-01-01"
+    # Through `_export_date`, because 話す ships with gaps so its value is now a
+    # dict — and `dict != "2026-01-01"` is unconditionally true, which made this
+    # assertion pass even when the date it guards was wrong.
+    assert _export_date(root, "word:話す:はなす") != "2026-01-01"
 
 
 # --- the gaps it warns about ------------------------------------------------
@@ -325,9 +328,9 @@ def test_refresh_runs_the_stages_in_order(
     the build ships what those finished. A build before `audio` ships silent
     cards *and marks them exported*, so the next `--only-new` never revisits
     them."""
-    # Pin the non-TTY branch explicitly. Under `pytest -s` from a terminal
-    # `sys.stdin.isatty()` is True and these records have every gap, so the
-    # run would block on the build stage's prompt and hang the suite.
+    # Pin the non-TTY branch. Under `pytest -s` from a terminal
+    # `sys.stdin.isatty()` is True and this record has every gap, so the
+    # build stage would block on its prompt and hang the suite.
     monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
     root = _project(tmp_path, [_record("橋", "はし")])
     called: list[str] = []
@@ -354,8 +357,12 @@ def test_refresh_runs_the_stages_in_order(
 
 
 def test_a_skipped_stage_is_named_not_silent(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-, monkeypatch: pytest.MonkeyPatch) -> None:
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Pin the non-TTY branch. Under `pytest -s` from a terminal
+    # `sys.stdin.isatty()` is True and this record has every gap, so the
+    # build stage would block on its prompt and hang the suite.
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
     root = _project(tmp_path, [_record("橋", "はし")])
 
     assert _run(root, "refresh", "--no-jpdb", "--no-ai", "--no-audio") == 0
@@ -372,14 +379,8 @@ def test_a_failing_stage_stops_the_run(
     so continuing would build a package from half-enriched records — and mark
     those records exported, which is the state `--only-new` cannot recover
     from."""
-    # Pin the non-TTY branch explicitly. Under `pytest -s` from a terminal
-    # `sys.stdin.isatty()` is True and these records have every gap, so the
-    # run would block on the build stage's prompt and hang the suite.
-    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
-    # Pin the non-TTY branch explicitly. Under `pytest -s` from a terminal
-    # `sys.stdin.isatty()` is True and these records have every gap, so the
-    # run would block on the build stage's prompt and hang the suite.
-    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
+    # No isatty pin here: the run stops at the jpdb stage, so the build stage —
+    # the only one that prompts — is never reached.
     root = _project(tmp_path, [_record("橋", "はし")])
     monkeypatch.setattr(cli, "command_enrich", lambda args: 3)
 
@@ -725,6 +726,12 @@ def test_a_record_that_shipped_complete_is_never_reported(
     assert "shipped without" not in capsys.readouterr().err
 
 
+def _export_date(root: Path, record_id: str, stem: str = "verbs") -> str:
+    """The date out of an export value, whichever of its two forms it is."""
+    value = _exports(root)[record_id][stem]
+    return value["at"] if isinstance(value, dict) else value
+
+
 def _entry_gaps(root: Path, record_id: str) -> list[str]:
     payload = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
     return sorted(payload["records"][record_id]["exports"]["verbs"]["missing"])
@@ -799,3 +806,38 @@ def test_a_failed_save_after_an_output_build_claims_nothing(
     err = capsys.readouterr().err
     assert "read-only" in err
     assert "package(s) above were written" not in err
+
+
+def test_all_returns_the_ledger_failure_rather_than_zero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The `finally` that keeps earlier decks' exports discarded the exit code
+    with it, so a failed save exited 0 — and `refresh`, or a cron gating on the
+    code, recorded a clean build while the export history was lost."""
+    root = _project(tmp_path, [_record("橋", "はし")])
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
+
+    def refuse(self: Any) -> None:
+        raise cli.ledger.LedgerError("the ledger directory is read-only")
+
+    monkeypatch.setattr(cli.ledger.Ledger, "save", refuse)
+
+    assert _run(root, "build", "--all", "--only-new") == 1
+
+    assert "read-only" in capsys.readouterr().err
+
+
+def test_refresh_reports_a_failed_save_from_the_build_stage(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _project(tmp_path, [_record("橋", "はし")])
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
+
+    def refuse(self: Any) -> None:
+        raise cli.ledger.LedgerError("read-only")
+
+    monkeypatch.setattr(cli.ledger.Ledger, "save", refuse)
+
+    assert _run(root, "refresh", "--no-jpdb", "--no-ai", "--no-audio") == 1
+
+    assert "refresh stopped at 'build'" in capsys.readouterr().err

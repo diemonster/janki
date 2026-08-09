@@ -1109,3 +1109,48 @@ def test_a_record_whose_example_was_edited_after_its_audio_reads_as_stale(
     )
 
     assert report.stale_audio == [record.id]
+
+
+def test_rebuild_binds_the_file_the_record_actually_names(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Switching a sentence to OpenAI leaves `janki-<fp>.wav` beside the new
+    `janki-<fp>.mp3` until a prune. Ranking by extension bound the stale WAV —
+    then reported the mp3 the record actually plays as the ambiguous one,
+    telling the user to delete the file that is correct."""
+    record = _record("話す", "はなす")
+    fingerprint = word_audio_filename_fingerprint(record)
+    # The record plays the mp3 — the fact the rebuild has to defer to.
+    root = _project(
+        tmp_path, [record.to_dict() | {"audio": f"audio/janki-{fingerprint}.mp3"}]
+    )
+    media = root / "media" / "audio"
+    media.mkdir(parents=True, exist_ok=True)
+    (media / f"janki-{fingerprint}.wav").write_bytes(b"RIFF stale")
+    (media / f"janki-{fingerprint}.mp3").write_bytes(b"ID3 current")
+
+    assert _status(root, "--rebuild") == 0
+
+    capsys.readouterr()
+    entries = ledger.load(root / "ledger.json").records[record.id]["audio"]
+    assert [e["file"] for e in entries] == [f"janki-{fingerprint}.mp3"]
+
+
+def test_rebuild_falls_back_to_extension_when_the_record_names_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The old rule, kept for the case it was written for: no record preference
+    to defer to, so the ranking decides and stays reproducible."""
+    record = _record("話す", "はなす")
+    root = _project(tmp_path, [record.to_dict()])
+    fingerprint = word_audio_filename_fingerprint(record)
+    media = root / "media" / "audio"
+    media.mkdir(parents=True, exist_ok=True)
+    (media / f"janki-{fingerprint}.wav").write_bytes(b"RIFF")
+    (media / f"janki-{fingerprint}.mp3").write_bytes(b"ID3")
+
+    assert _status(root, "--rebuild") == 0
+
+    capsys.readouterr()
+    entries = ledger.load(root / "ledger.json").records[record.id]["audio"]
+    assert [e["file"] for e in entries] == [f"janki-{fingerprint}.wav"]

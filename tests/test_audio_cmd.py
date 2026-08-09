@@ -987,3 +987,72 @@ def test_an_absent_sentence_speaker_is_the_only_way_to_opt_out(tmp_path: Path) -
 
     assert config.voicevox_sentence_speaker is None
     assert cli._sentence_provider(config, None, words) is words
+
+
+def test_a_words_run_ignores_an_unavailable_sentence_engine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A `--words` run never reaches the sentence provider, so refusing to
+    start because *that* engine has no key aborts a job it plays no part in —
+    and the message blames the wrong thing, since nothing is unreachable."""
+    root = project(tmp_path, [record()])
+    down = FakeVoice(reachable=False)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: FakeVoice())
+    monkeypatch.setattr(cli, "_sentence_provider", lambda config, chosen, w: down)
+
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 0
+
+
+def test_an_examples_run_still_refuses_before_spending(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The other half: when the sentence engine *is* needed, an unusable one
+    stops the run before it writes a single clip."""
+    root = project(tmp_path, [record(
+        examples=[ExampleSentence(japanese="橋を渡る。", english="Cross.")]
+    )])
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: FakeVoice())
+    monkeypatch.setattr(
+        cli, "_sentence_provider", lambda config, chosen, w: FakeVoice(reachable=False)
+    )
+
+    assert cli.main(["--root", str(root), "audio", "--examples"]) == 1
+
+    assert "fakevox" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("written", ["Voicevox", "VOICEVOX", " voicevox ", ""])
+def test_the_provider_name_is_normalised_once(tmp_path: Path, written: str) -> None:
+    """Two normalisations disagreed: `_speech_provider` lower-cased and
+    defaulted while `_sentence_provider` compared the raw string, so
+    `provider = "Voicevox"` built a VOICEVOX word engine and then silently
+    discarded the configured sentence voice — every sentence in the word voice,
+    with no message."""
+    (tmp_path / "janki.toml").write_text(
+        f'[tts]\nprovider = "{written}"\nvoicevox_speaker = 13\n'
+        "voicevox_sentence_speaker = 52\n",
+        encoding="utf-8",
+    )
+    config = ProjectConfig.load(tmp_path)
+
+    words = cli._speech_provider(config, None)
+    sentences = cli._sentence_provider(config, None, words)
+
+    assert (words.voice, sentences.voice) == (13, 52)
+
+
+def test_a_provider_flag_overriding_the_file_still_selects_the_sentence_voice(
+    tmp_path: Path,
+) -> None:
+    """`--provider voicevox` over an `azure` file is a valid invocation, and
+    `_sentence_provider` read the file rather than the flag."""
+    (tmp_path / "janki.toml").write_text(
+        '[tts]\nprovider = "azure"\nvoicevox_speaker = 13\n'
+        "voicevox_sentence_speaker = 52\n",
+        encoding="utf-8",
+    )
+    config = ProjectConfig.load(tmp_path)
+
+    words = cli._speech_provider(config, "voicevox")
+
+    assert cli._sentence_provider(config, "voicevox", words).voice == 52

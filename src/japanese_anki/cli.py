@@ -1797,7 +1797,11 @@ def _sentence_provider(config: ProjectConfig, chosen: str | None, words: Any) ->
             voice=config.openai_voice,
             model=config.openai_model,
             instructions=config.openai_instructions,
-            speed=config.voicevox_speed,
+            # Deliberately not `voicevox_speed`: this API has no rate
+            # parameter, so tying its staleness to a VOICEVOX knob would bill
+            # for a full re-render of every sentence whenever the *word* pace
+            # was tuned, and write a rate into the ledger the engine was never
+            # told. Pace here lives in `instructions`, which `settings` records.
         )
     if name not in {"", "voicevox"}:
         raise AudioError(
@@ -2357,6 +2361,7 @@ def command_build(args: argparse.Namespace) -> int:
         if not deck_paths:
             raise AnkiBuildError(f"No deck files found under {config.deck_dir}")
         built = False
+        code = 0
         try:
             for deck_path in deck_paths:
                 built = _build_one(
@@ -2369,8 +2374,11 @@ def command_build(args: argparse.Namespace) -> int:
             # reconstructible by nothing, so a lost entry means those records
             # ship again on every future --only-new while `janki status` keeps
             # calling them unexported.
-            _finish_build(book, built)
-        return 0
+            # Captured, not discarded: a failed save is the loss this whole
+            # `finally` exists to report, and returning 0 anyway told `refresh`
+            # — and any cron gating on the exit code — that the build was clean.
+            code = _finish_build(book, built)
+        return code
 
     if not args.deck:
         raise AnkiBuildError("Provide a deck YAML path or use --all")

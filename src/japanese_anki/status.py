@@ -824,9 +824,10 @@ def format_rebuild(summary: RebuildSummary, root: Path) -> list[str]:
     if summary.ambiguous_media:
         lines.append(
             f"  {summary.ambiguous_media} {MEDIA_PREFIX}* file(s) share a fingerprint "
-            "with a file a rebuilt entry claimed (extension preference: "
-            f"{', '.join(_EXTENSION_PREFERENCE)}) — check which file janki actually "
-            "generated and delete the other"
+            "with a file a rebuilt entry claimed. The entry binds the file the "
+            "record names; failing that, by extension "
+            f"({', '.join(_EXTENSION_PREFERENCE)}). Check which file janki "
+            "actually generated and delete the other"
         )
     if summary.unmatched_media:
         lines.append(

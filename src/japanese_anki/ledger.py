@@ -16,8 +16,10 @@ File shape (`data/ledger.json`)::
           "sources": [{"type": "shirabe", "ref": "export.csv", "seen_at": "2026-08-06"}],
           "enriched": [{"at": "...", "kind": "jpdb", "model": "jpdb", "fields": [...]}],
           "audio": [{"file": "janki-<fp>.wav", "of": "word", "provider": "voicevox",
-                     "voice": 46, "content_fp": "<fp>", "at": "..."}],
-          "exports": {"personal-vocabulary": "2026-08-12"}
+                     "voice": 46, "speed": 1.0, "content_fp": "<fp>", "at": "...",
+                     "settings": {}}],
+          "exports": {"personal-vocabulary": "2026-08-12",
+                      "verbs": {"at": "2026-08-12", "missing": ["audio"]}}
         }
       },
       "pending_batches": {}
@@ -26,6 +28,19 @@ File shape (`data/ledger.json`)::
 `enriched` is a **list** (it is a single object in the design document): the
 jpdb pass and the AI pass each append, so neither overwrites the other's record
 of what it wrote.
+
+Two values in that shape are conditional, and both stay absent when there is
+nothing to say so no existing ledger moves:
+
+* **`exports[stem]`** is a plain date when the build shipped a complete record,
+  and `{"at": ..., "missing": [...]}` when it did not — `missing` naming what
+  the record lacked (`audio`, `examples`, `accent`). Dates are days, so
+  comparing them cannot tell that a record shipped at 09:00 was voiced at
+  10:00; what it went out without is a fact rather than an inference. Readers
+  must handle both forms.
+* **`audio[].settings`** carries anything beyond voice and rate that decides how
+  a clip sounds — for OpenAI, the model and the prose `instructions` that are
+  its only pace control. Absent for engines with nothing to add.
 
 Mutators only touch memory and report whether they changed anything; call
 :meth:`Ledger.save` once when a command is done. Every mutator is idempotent,
