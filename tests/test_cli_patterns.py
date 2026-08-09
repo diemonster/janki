@@ -148,29 +148,66 @@ def test_a_partial_failure_still_names_the_next_step(
 # --- the reviewed flag -------------------------------------------------------
 
 
-def test_re_reading_a_reviewed_document_is_refused(
+def test_a_reviewed_document_is_skipped_rather_than_re_read(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """`reviewed` is the only human-entered state in this file, and
     `extract_patterns` always returns False. Replacing the entry outright
     un-reviewed the document on any re-read — including the ordinary
     `janki patterns inbox/*.pdf` after adding one new handout — and the only
-    signal was a line missing from the next enrich run."""
+    signal was a line missing from the next enrich run.
+
+    Skipping is not failing, so the run still exits 0: a glob over an inbox
+    where one file has been reviewed must not stop
+    `janki patterns *.pdf && janki patterns --review new.pdf` from reaching its
+    second half."""
     root = project(tmp_path)
-    monkeypatch.setattr(
-        patterns_module.claude_client,
-        "parse_call",
-        reader({"week11.pdf": Parsed("lesson", "Week 11", ["〜んだ"])}),
-    )
+    calls: list[str] = []
+    inner = reader({"week11.pdf": Parsed("lesson", "Week 11", ["〜んだ"])})
+
+    def counting(*args: Any, **kwargs: Any):
+        calls.append("read")
+        return inner(*args, **kwargs)
+
+    monkeypatch.setattr(patterns_module.claude_client, "parse_call", counting)
     path = document(root, "week11.pdf")
     cli.main(["--root", str(root), "patterns", str(path)])
     cli.main(["--root", str(root), "patterns", "--review", "week11.pdf"])
     assert store_of(root)["week11.pdf"]["reviewed"] is True
+    assert len(calls) == 1
 
-    assert cli.main(["--root", str(root), "patterns", str(path)]) == 1
+    assert cli.main(["--root", str(root), "patterns", str(path)]) == 0
 
     assert store_of(root)["week11.pdf"]["reviewed"] is True, "still reviewed"
-    assert "pass --force" in capsys.readouterr().err
+    # Before the read, not after it: checking afterwards billed a full document
+    # read against every already-reviewed file in the inbox and discarded it.
+    assert len(calls) == 1, "and no second document read was paid for"
+    assert "already read and marked reviewed" in capsys.readouterr().out
+
+
+def test_a_skip_does_not_mask_a_real_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The two categories are kept apart, so a genuine extraction failure in the
+    same run still exits non-zero."""
+    root = project(tmp_path)
+    monkeypatch.setattr(
+        patterns_module.claude_client,
+        "parse_call",
+        reader({
+            "week11.pdf": Parsed("lesson", "Week 11", ["〜んだ"]),
+            "week12.pdf": JankiError("the model declined"),
+        }),
+    )
+    cli.main(["--root", str(root), "patterns", str(document(root, "week11.pdf"))])
+    cli.main(["--root", str(root), "patterns", "--review", "week11.pdf"])
+
+    code = cli.main([
+        "--root", str(root), "patterns",
+        str(root / "week11.pdf"), str(document(root, "week12.pdf")),
+    ])
+
+    assert code == 1
 
 
 def test_force_re_reads_it_and_says_it_is_unreviewed_again(
@@ -242,3 +279,66 @@ def test_listing_with_no_arguments_reports_what_has_been_read(
 
     out = capsys.readouterr().out
     assert "week11.pdf — lesson, 1 pattern(s) [UNREVIEWED]" in out
+
+
+def test_reviewing_a_chart_says_it_steers_no_sentences(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Only lesson documents steer example sentences, so "their patterns are now
+    in use" was false for a te-form chart — eight human-reviewed patterns
+    dropping out of the pipeline while four separate messages said they were
+    working."""
+    root = project(tmp_path)
+    monkeypatch.setattr(
+        patterns_module.claude_client,
+        "parse_call",
+        reader({"teform.pdf": Parsed("pattern", "Te-form Song", ["く → いて"])}),
+    )
+    cli.main(["--root", str(root), "patterns", str(document(root, "teform.pdf"))])
+    capsys.readouterr()
+
+    cli.main(["--root", str(root), "patterns", "--review", "teform.pdf"])
+
+    err = capsys.readouterr().err
+    assert "is a pattern document" in err
+    assert "nothing uses its patterns yet" in err
+
+
+def test_the_listing_marks_a_reviewed_chart_as_unused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = project(tmp_path)
+    monkeypatch.setattr(
+        patterns_module.claude_client,
+        "parse_call",
+        reader({"teform.pdf": Parsed("pattern", "Te-form Song", ["く → いて"])}),
+    )
+    cli.main(["--root", str(root), "patterns", str(document(root, "teform.pdf"))])
+    cli.main(["--root", str(root), "patterns", "--review", "teform.pdf"])
+    capsys.readouterr()
+
+    cli.main(["--root", str(root), "patterns"])
+
+    assert "[reviewed, not used for sentences]" in capsys.readouterr().out
+
+
+def test_a_reviewed_lesson_is_marked_plainly(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The other side of it: the honest label must not appear on the documents
+    that do steer, or it says nothing."""
+    root = project(tmp_path)
+    monkeypatch.setattr(
+        patterns_module.claude_client,
+        "parse_call",
+        reader({"week11.pdf": Parsed("lesson", "Week 11", ["〜んだ"])}),
+    )
+    cli.main(["--root", str(root), "patterns", str(document(root, "week11.pdf"))])
+    cli.main(["--root", str(root), "patterns", "--review", "week11.pdf"])
+    capsys.readouterr()
+
+    cli.main(["--root", str(root), "patterns"])
+
+    out = capsys.readouterr().out
+    assert "[reviewed]" in out
+    assert "not used for sentences" not in out

@@ -2693,12 +2693,27 @@ def command_patterns(args: argparse.Namespace) -> int:
         for name in args.review:
             store[name] = dataclasses.replace(store[name], reviewed=True)
         patterns.save_store(config.patterns_file, store)
-        print(f"Marked {len(args.review)} document(s) reviewed; their patterns are now in use.")
+        # Per document, and honest about which ones this actually puts to work.
+        # Only lesson documents steer example sentences, so "their patterns are
+        # now in use" was false for a te-form chart — eight human-reviewed
+        # patterns vanishing from the pipeline while the command said otherwise.
+        for name in args.review:
+            entry = store[name]
+            print(f"Marked {name} reviewed.")
+            if entry.kind not in patterns.STEERING_KINDS:
+                print(
+                    f"warning: {name} is a {entry.kind} document, and only "
+                    f"{'/'.join(patterns.STEERING_KINDS)} documents steer example "
+                    f"sentences — nothing uses its patterns yet.",
+                    file=sys.stderr,
+                )
         return 0
 
     if not args.files:
         for name, entry in sorted(store.items()):
             mark = "reviewed" if entry.reviewed else "UNREVIEWED"
+            if entry.reviewed and entry.kind not in patterns.STEERING_KINDS:
+                mark = "reviewed, not used for sentences"
             print(f"{name} — {entry.kind}, {len(entry.patterns)} pattern(s) [{mark}]")
             for pattern in entry.patterns:
                 gloss = f" — {pattern.gloss}" if pattern.gloss else ""
@@ -2709,8 +2724,25 @@ def command_patterns(args: argparse.Namespace) -> int:
 
     prepared_inputs = prepare_inputs(args.files, config.scan_inbox)
     failures: list[str] = []
+    skipped: list[str] = []
     read: list[str] = []
     for prepared in prepared_inputs:
+        # Before the read, not after it. `reviewed` is the one piece of
+        # human-entered state in this file and `extract_patterns` always returns
+        # False, so replacing an entry outright silently un-reviewed a document
+        # on the command's most ordinary invocation — `janki patterns
+        # data/inbox/scans/*.pdf` after dropping in one new handout. Checking
+        # afterwards fixed that but billed a full document read against every
+        # already-reviewed file in the inbox and threw the answer away; the
+        # store key is `origin_path.name`, which is known here.
+        previous = store.get(prepared.origin_path.name)
+        if previous is not None and previous.reviewed and not args.force:
+            skipped.append(
+                f"{prepared.origin_path.name}: already read and marked reviewed, "
+                f"so it was not read again. --force re-reads it; its patterns "
+                f"then need reviewing again before enrich uses them."
+            )
+            continue
         try:
             found = patterns.extract_patterns(
                 prepared,
@@ -2719,20 +2751,6 @@ def command_patterns(args: argparse.Namespace) -> int:
             )
         except JankiError as exc:
             failures.append(f"{prepared.origin_path.name}: {exc}")
-            continue
-        # `reviewed` is the one piece of human-entered state in this file, and
-        # `extract_patterns` always returns False. Replacing the entry outright
-        # silently un-reviewed a document on any re-read — including the
-        # ordinary `janki patterns data/inbox/scans/*.pdf` after adding one new
-        # handout — and the only signal was the absence of a line on the next
-        # enrich run. Refuse instead, and say which flag is in the way.
-        previous = store.get(found.source)
-        if previous is not None and previous.reviewed and not args.force:
-            failures.append(
-                f"{found.source}: already read and marked reviewed. Re-reading "
-                f"resets that, so pass --force if you mean to; it will need "
-                f"reviewing again before enrich uses it."
-            )
             continue
         store[found.source] = found
         read.append(found.source)
@@ -2744,6 +2762,13 @@ def command_patterns(args: argparse.Namespace) -> int:
             gloss = f" — {pattern.gloss}" if pattern.gloss else ""
             print(f"    {pattern.template}{gloss}")
     patterns.save_store(config.patterns_file, store)
+    # Deliberately skipping a document janki already has is not a problem, so it
+    # is a notice on stdout rather than a warning — and it must not reach the
+    # exit code, or the very idiom the non-zero exit protects
+    # (`janki patterns *.pdf && janki patterns --review new.pdf`) would break
+    # the moment one file in the inbox had been reviewed.
+    for notice in skipped:
+        print(f"note: {notice}")
     for failure in failures:
         print(f"warning: {failure}", file=sys.stderr)
     # Per document that succeeded, not gated on the whole run succeeding: a run
@@ -2754,6 +2779,14 @@ def command_patterns(args: argparse.Namespace) -> int:
             "\nNothing uses these yet. Read them, then: janki patterns --review "
             + " --review ".join(repr(name) for name in read)
         )
+        for name in read:
+            if store[name].kind not in patterns.STEERING_KINDS:
+                print(
+                    f"    ({name} is a {store[name].kind} document — reviewing it "
+                    f"records that you checked it, but example sentences are "
+                    f"steered only by "
+                    f"{'/'.join(patterns.STEERING_KINDS)} documents.)"
+                )
     # Any loss is a non-zero exit, for the reason spelled out in `command_kanji`
     # below: `janki patterns *.pdf && janki patterns --review …` must not run on
     # from a document that was never read.
@@ -3311,8 +3344,10 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         metavar="DOCUMENT",
         help=(
-            "Mark a document's patterns reviewed, so example sentences may use "
-            "them. Repeat for several."
+            "Mark a document's patterns reviewed. Example sentences may then "
+            "use them, if it is a lesson document — a conjugation chart is "
+            "reviewed for its own sake and steers no sentences. Repeat for "
+            "several."
         ),
     )
     patterns_parser.add_argument(
