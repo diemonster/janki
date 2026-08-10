@@ -468,12 +468,16 @@ def test_build_and_validate_name_the_deck_file_for_a_malformed_filter(
     deck = str(root / "decks" / "broken.yaml")
 
     assert cli.main(["--root", str(root), "build", deck]) == 1
+    build = capsys.readouterr()
     assert cli.main(["--root", str(root), "validate", deck]) == 1
+    validate = capsys.readouterr()
 
-    err = capsys.readouterr().err
-    assert "Traceback" not in err
-    assert err.count("error:") == 2
-    assert err.count("broken.yaml") == 2
+    # The build refuses outright; `validate` reports it against the file and
+    # carries on, so that one deck cannot cancel a sweep of every other. Both
+    # name the deck, and neither shows a traceback.
+    assert "Traceback" not in build.err + validate.err + validate.out
+    assert "error:" in build.err and "broken.yaml" in build.err
+    assert "broken.yaml" in validate.out + validate.err
 
 
 def test_real_deck_filters_still_filter(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

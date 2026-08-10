@@ -792,6 +792,45 @@ def test_one_broken_deck_does_not_lose_another_decks_exports(
     )
 
 
+def test_a_crash_in_a_later_deck_does_not_lose_an_earlier_one_s_exports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The other half, and the one the `finally` is now load-bearing for. A deck
+    that refuses is caught per deck so the sweep continues, so only something
+    that is *not* a `JankiError` — a bug in the builder, an interrupt at the gap
+    prompt — still unwinds through the loop. Export state is reconstructible by
+    nothing, so what earlier decks recorded must survive that too."""
+    from japanese_anki.exporters import anki as anki_module
+
+    root = _project(tmp_path, [_record("橋", "はし")])
+    (root / "decks" / "nouns.yaml").write_text(
+        "deck:\n  name: Nouns\n  output: nouns.apkg\n"
+        "notes:\n"
+        "  - id: word:本:ほん\n    expression: 本\n    reading: ほん\n"
+        "    meanings: [book]\n",
+        encoding="utf-8",
+    )
+    real = anki_module.build_deck
+    calls: list[int] = []
+
+    def crash(*args, **kwargs):
+        calls.append(1)
+        if len(calls) > 1:
+            raise RuntimeError("a bug in the builder")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(anki_module, "build_deck", crash)
+    monkeypatch.setattr(cli, "build_deck", crash)
+
+    with pytest.raises(RuntimeError):
+        _run(root, "build", "--all", "--only-new", "--yes")
+
+    assert (root / "ledger.json").exists(), "the ledger was still saved"
+    assert _exports(root).get("word:本:ほん", {}).get("nouns"), (
+        "the deck that built before the crash kept its export entry"
+    )
+
+
 # --- an --output build says it recorded nothing -----------------------------
 
 

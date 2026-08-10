@@ -2271,14 +2271,15 @@ def _validate_path(
     config: ProjectConfig | None = None,
 ) -> tuple[list, int]:
     raw = load_structured(path)
-    # `_deck_kind`, so this and the build cannot drift about what a kind is. On
-    # truthiness alone a typo — or a deliberate `kind: vocabulary` — sent an
-    # ordinary deck down the pattern path, which invented two errors that are
-    # false for it and skipped every record the file actually holds.
+    # `exporters.anki.deck_kind`, so this, the build and `status` cannot drift
+    # about what a kind is. On truthiness alone a typo — or a deliberate
+    # `kind: vocabulary` — sent an ordinary deck down the pattern path, which
+    # invented two errors that are false for it and skipped every record the
+    # file actually holds.
     #
     # Guarded on the shape first: `validate` also takes a records file, which is
-    # a list, and `_deck_kind` refuses a non-mapping because for a *deck* that
-    # is a real error.
+    # a list, and `deck_kind` refuses a non-mapping because for a *deck* that is
+    # a real error.
     if isinstance(raw, dict):
         try:
             kind = deck_kind(path)
@@ -2301,10 +2302,17 @@ def _validate_path(
         ]
         return issues, 0
 
-    if isinstance(raw, dict) and "deck" in raw:
-        _, records = resolve_deck_records(path)
-    else:
-        records = load_records(path)
+    try:
+        if isinstance(raw, dict) and "deck" in raw:
+            _, records = resolve_deck_records(path)
+        else:
+            records = load_records(path)
+    except JankiError as exc:
+        # This file's error, like the two branches above. A missing or
+        # unparseable collection used to escape to `main`, so the deck naming it
+        # — first by name in `data/decks/` — cancelled the sweep, and the one
+        # line printed named the collection but not the deck that pointed at it.
+        return [ValidationIssue("error", str(exc), source=str(path))], 0
     issues = validate_records(records, path)
     return issues, len(records)
 

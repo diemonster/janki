@@ -1052,6 +1052,39 @@ def test_an_unknown_kind_does_not_cancel_the_rest_of_a_sweep(
     assert "Validated 1 records" in capsys.readouterr().out
 
 
+def test_a_deck_naming_an_unreadable_collection_does_not_cancel_the_sweep(
+    tmp_path: Path, capsys
+) -> None:
+    """The third branch of the same rule. A word deck whose `source:` is missing
+    or will not parse used to let the error escape to `main`, so that deck —
+    first by name in `data/decks/` — cancelled the whole sweep, and the one line
+    printed named the collection but not the deck that pointed at it."""
+    import json
+
+    from japanese_anki import cli
+
+    project(tmp_path)
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps(
+            [verb("買う", "かう", "godan", part_of_speech="verb").to_dict()],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "decks" / "a-broken.yaml").write_text(
+        'name: B\ndeck:\n  source: "../gone.json"\n', encoding="utf-8"
+    )
+    (tmp_path / "decks" / "words.yaml").write_text(
+        'name: W\ndeck:\n  source: "../vocabulary.json"\n', encoding="utf-8"
+    )
+
+    assert cli.main(["--root", str(tmp_path), "validate"]) == 1
+
+    out = capsys.readouterr().out
+    assert "a-broken.yaml" in out, "the deck that pointed at it is named"
+    assert "Validated 1 records" in out, "and the other deck was still checked"
+
+
 def test_a_deck_kind_janki_does_know_is_left_to_the_ordinary_path(
     tmp_path: Path, capsys
 ) -> None:
