@@ -304,6 +304,13 @@ _GROUPS: tuple[str, ...] = ("godan", "ichidan", "kuru", "suru")
 _FORM_BY_ENDING: tuple[tuple[str, str], ...] = (
     ("なかった", "past_negative"),
     ("ない", "negative"),
+    # `CONJUGATION_FORMS` has seven entries, and leaving these two out meant a
+    # claim janki could disprove — `食べる ⇨ 食べれる`, ら抜き — was excused as
+    # "janki computes no form with this ending", which is false and reads as
+    # reassurance on a row the checker could have failed.
+    ("られる", "potential"),
+    ("れる", "passive"),
+    ("える", "potential"),
     ("て", "te_form"),
     ("で", "te_form"),
     ("た", "past"),
@@ -341,9 +348,17 @@ def _pairs_in(text: str) -> list[tuple[str, str]]:
     found: list[tuple[str, str]] = []
     for segment in segments:
         matches = _PAIR.findall(segment)
-        if not matches:
+        if matches:
+            found.extend(matches)
+            continue
+        # An arrow-less segment only makes the line ambiguous if it could have
+        # been one of the paired items. `う` and `つ` in `う・つ・る → って` are
+        # candidates; the prose in `う, つ, る verbs: かう ⇨ かいて` and the gloss
+        # in `買う ⇨ 買って, to buy` are not, and refusing on those threw away a
+        # garbled claim entirely — reported as "all 1 agree", which is the
+        # vanishing-under-an-all-clear this whole function exists to prevent.
+        if re.search(_WORD, segment):
             return []
-        found.extend(matches)
     return found
 
 
@@ -359,9 +374,19 @@ _NO_TABLE_ENDINGS: tuple[str, ...] = (
 )
 
 
-def _claimed_form(claimed: str) -> str:
-    """Which form a claim is about, or ``""`` when janki computes no such form."""
-    if any(claimed.endswith(ending) for ending in _NO_TABLE_ENDINGS):
+def _claimed_form(claimed: str, verb: str = "") -> str:
+    """Which form a claim is about, or ``""`` when janki computes no such form.
+
+    The polite endings are matched against the claim's tail *beyond the verb's
+    own stem*, not against the whole string. Matched against the whole string
+    they collided with verbs whose stem ends the same way: `だます ⇨ だしまして`
+    — a plausible transcription garble of だまして, which janki can disprove —
+    ends in まして and was excused, and so was every ます-verb's past against
+    ました (済ます, 冷ます, 覚ます, 励ます).
+    """
+    stem = verb[:-1] if verb else ""
+    tail = claimed[len(stem):] if stem and claimed.startswith(stem) else ""
+    if tail and any(tail.endswith(ending) for ending in _NO_TABLE_ENDINGS):
         return ""
     for ending, form in _FORM_BY_ENDING:
         if claimed.endswith(ending):
@@ -434,6 +459,15 @@ def check_pattern_rules(entry: PatternSet) -> tuple[RuleCheck, ...]:
     * **The verb group.** The chart states it in English prose; reading that
       would be a guess. Every group is tried, and agreement under any of them is
       the claim — weaker than "and it is godan", on purpose.
+
+    That last one has a cost worth naming, because it looks like a bug from the
+    outside: a form that is wrong *for the verb's real group* can be right for
+    another, and this agrees with it. ``食べる ⇨ 食べれる`` is ら抜き and janki
+    computes 食べられる — but 食べる run through the godan rules gives 食べれる,
+    so it passes. Narrowing that needs the group, which only the collection
+    knows and the chart does not say; the alternative is guessing which class a
+    chart's example verb belongs to, and a checker that guesses is worse than
+    one with a stated blind spot.
     """
     from japanese_anki.conjugation import conjugate
 
@@ -480,7 +514,7 @@ def check_pattern_rules(entry: PatternSet) -> tuple[RuleCheck, ...]:
                             break
                     if agreed:
                         break
-                wanted = _claimed_form(claimed)
+                wanted = _claimed_form(claimed, verb)
                 # A claim about a form janki has no table for is no opinion, the
                 # same as a word `conjugate` refuses. `CONJUGATION_FORMS` stops
                 # at seven, so a ます / たい / ば / volitional chart — a `pattern`

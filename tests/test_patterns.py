@@ -496,9 +496,13 @@ def test_which_form_a_row_matched_is_recorded() -> None:
 
 
 def test_a_decomposed_kanji_chart_is_normalized_before_matching() -> None:
-    """Both halves at once: a decomposed ぐ is く plus U+3099, outside the word
-    class, and the row is written in kanji, which the class only covers since it
-    was taken from `identifiers`. Either gap alone drops the row."""
+    """A decomposed ぐ is く plus U+3099, which is outside the word class, so
+    `_PAIR` cannot cross it to reach the arrow and the row matches nothing.
+
+    Only the normalization is pinned here. 泳 is U+6CF3, inside the old
+    hand-written `一-龥` too, so taking the kanji class from `identifiers`
+    changed nothing for this row — that switch mattered for 𠮟 and Extension-A,
+    which the test below covers."""
     import unicodedata
 
     checks = check_pattern_rules(chart(
@@ -569,3 +573,54 @@ def test_a_row_janki_has_no_opinion_about_is_recorded_not_dropped() -> None:
         ("買う", "買います", False),
     ]
     assert checks[1].held_back
+
+
+def test_prose_or_a_gloss_beside_a_pair_does_not_discard_the_line() -> None:
+    """`う, つ, る verbs: かう ⇨ かいて` is a verbatim chart row, and refusing
+    the whole line because a segment lacked an arrow threw the garbled claim
+    away entirely — reported as "all 1 agree", the vanishing-under-an-all-clear
+    this function exists to prevent."""
+    checks = check_pattern_rules(chart(
+        Pattern("う・つ・る → って", examples=("う, つ, る verbs: かう ⇨ かいて",)),
+        Pattern("て", examples=("買う ⇨ 買って, to buy",)),
+    ))
+
+    assert [(c.verb, c.claimed, c.agrees) for c in checks] == [
+        ("かう", "かいて", False),
+        ("買う", "買って", True),
+    ]
+
+
+def test_a_polite_form_of_a_masu_stem_verb_is_not_confused_with_a_garble() -> None:
+    """`だます ⇨ だしまして` is a plausible transcription slip of だまして, which
+    janki can disprove — but it ends in まして, so matching the polite endings
+    against the whole claim excused it. The endings are matched against the tail
+    beyond the verb's own stem now."""
+    checks = check_pattern_rules(chart(
+        Pattern("て", examples=("だます ⇨ だしまして",)),
+    ))
+
+    assert len(checks) == 1
+    assert checks[0].examined and not checks[0].agrees
+
+
+def test_a_real_polite_form_of_the_same_verb_is_still_held_back() -> None:
+    """The other side of it: 済ましました really is a polite past, and janki
+    computes no polite form at all."""
+    checks = check_pattern_rules(chart(
+        Pattern("ます", examples=("済ます ⇨ 済ましました",)),
+    ))
+
+    assert len(checks) == 1 and not checks[0].examined
+
+
+def test_a_potential_claim_is_checked_rather_than_excused() -> None:
+    """`CONJUGATION_FORMS` has seven entries and the ending table covered five,
+    so a claim janki *could* judge was reported as one it had no opinion about —
+    a false statement, reading as reassurance on a row it could have failed."""
+    checks = check_pattern_rules(chart(
+        Pattern("potential", examples=("書く ⇨ 書けれる",)),
+    ))
+
+    assert len(checks) == 1
+    assert checks[0].examined, "janki computes a potential; it has an opinion"

@@ -307,6 +307,17 @@ def repair_spilled_punctuation(furigana: str) -> str:
     return _GROUP.sub(separate, furigana)
 
 
+def _latin_word_char(char: str) -> bool:
+    """Whether a character is a Latin letter — text a space could belong to.
+
+    Narrower than "ASCII": `9 時に` and `ですね! 散歩` carry a real stray space,
+    and the digit and the mark beside them are not words with a space after
+    them. `[` and `]` are the ruby notation itself, and an absent neighbour is
+    the edge of the field; neither is evidence a space belongs to the sentence.
+    """
+    return bool(char) and char.isascii() and char.isalpha()
+
+
 def _ascii_content(char: str) -> bool:
     """Whether a character is ASCII *text*, as opposed to ruby notation.
 
@@ -358,28 +369,33 @@ def stray_furigana_spaces(furigana: str) -> tuple[str, ...]:
         #
         # A neighbour that is a bracket, or absent, is not content:
         # `語[ご] を` is the ordinary way a model mis-spaces the notation and was
-        # the check's most common trigger, and `]` being ASCII silenced it. A
-        # space at either end of the field is the case that is *most* provably
-        # notation gone wrong — there is no next group for it to start — so an
-        # absent neighbour must not read as content either.
+        # the check's most common trigger, and `]` being ASCII silenced it.
         #
-        # ASCII on *both* sides, though, is Latin text with a space inside it —
-        # the one shape where the space belongs to the sentence. Requiring only
-        # one ASCII neighbour silenced `ですね!  散歩[さんぽ]`, `iPhone  を` and
-        # `9  時[じ]に`, where the ASCII is punctuation or a digit and the run is
-        # a real defect.
-        # The two run lengths take different rules, because the evidence is
-        # different. At most one space can ever be notation, so a run of two is
-        # wrong wherever it is not inside Latin text, group following or not.
-        # A *single* space beside ASCII on either side is the Latin↔Japanese
-        # boundary — `iPhone を`, `と Twitter` — where the space may well be in
-        # the sentence too, and the warning would tell a reader to delete
-        # something the card really does contain.
-        if run > 1:
-            reportable = not (_ascii_content(before) and _ascii_content(after))
+        # A space at either *end* of the field is reported whatever sits beside
+        # it. It is the case that is most provably notation gone wrong — there
+        # is no next group for it to start — and the carve-out's reason ("the
+        # sentence may carry the space too") cannot apply, because no sentence
+        # begins or ends with one.
+        #
+        # Otherwise the two run lengths take different rules, because the
+        # evidence differs. At most one space can ever be notation, so a run of
+        # two is wrong wherever it is not inside Latin text. A *single* space is
+        # the Latin↔Japanese boundary — `iPhone を`, `と Twitter` — where the
+        # space may well be in the sentence, so the warning would send a reader
+        # to delete something the card really contains.
+        #
+        # Latin *letters* on both counts, not any ASCII: a digit or a mark is
+        # not a word with a space after it. `9 時に` and `! 散歩` are real
+        # defects, and testing `_ascii_content` silenced them exactly as the
+        # doubled-space branch had been repaired for.
+        at_edge = not before or not after
+        if at_edge:
+            reportable = True
+        elif run > 1:
+            reportable = not (_latin_word_char(before) and _latin_word_char(after))
         else:
             reportable = not (
-                _ascii_content(before) or _ascii_content(after)
+                _latin_word_char(before) or _latin_word_char(after)
             ) and _GROUP.match(rest) is None
         if reportable:
             stray.append(rest.split(" ", 1)[0] or "(end of field)")

@@ -703,12 +703,63 @@ def test_a_doubled_space_beside_ascii_that_is_not_a_word_is_still_reported(
 
 @pytest.mark.parametrize(
     "written",
-    ["iPhone を 使[つか]う", "と Twitter", '"ありがとう" と 言[い]った'],
-    ids=["latin-then-japanese", "japanese-then-latin", "after-a-quote"],
+    ["iPhone を 使[つか]う", "と Twitter"],
+    ids=["latin-then-japanese", "japanese-then-latin"],
 )
-def test_a_single_space_at_a_latin_boundary_stays_quiet(written: str) -> None:
-    """A single space with ASCII on one side is the Latin↔Japanese boundary,
+def test_a_single_space_at_a_latin_word_boundary_stays_quiet(written: str) -> None:
+    """A single space beside a Latin *word* is the Latin↔Japanese boundary,
     where the sentence may well carry the space too — so the warning would tell
     a reader to delete something the card really does contain. Only a *run* uses
     the both-sides rule, because at most one space can ever be notation."""
     assert stray_furigana_spaces(written) == ()
+
+
+def test_a_space_after_a_quote_mark_is_reported() -> None:
+    """A closing quote is not a word with a space after it, any more than a
+    digit is: 「ありがとう」と言った carries no gap, so the field should not
+    either."""
+    assert stray_furigana_spaces('"ありがとう" と 言[い]った') == ("と",)
+
+
+@pytest.mark.parametrize(
+    ("written", "expected"),
+    [
+        ("9 時に 起[お]きます。", ("時に",)),
+        ("いい 天気[てんき]ですね! 散歩しましょう。", ("散歩しましょう。",)),
+    ],
+    ids=["after-a-digit", "after-a-mark"],
+)
+def test_a_single_space_after_a_digit_or_a_mark_is_still_reported(
+    written: str, expected: tuple[str, ...]
+) -> None:
+    """The carve-out is for Latin *text* with a space in it. A digit and a
+    punctuation mark are not words with a space after them, and testing "any
+    ASCII" silenced exactly the cases the doubled-space branch had already been
+    repaired for."""
+    assert stray_furigana_spaces(written) == expected
+
+
+@pytest.mark.parametrize(
+    "written",
+    ["iPhone を 使[つか]う", "と Twitter"],
+    ids=["latin-then-kana", "kana-then-latin"],
+)
+def test_a_single_space_beside_a_latin_word_stays_quiet(written: str) -> None:
+    assert stray_furigana_spaces(written) == ()
+
+
+@pytest.mark.parametrize(
+    ("written", "expected"),
+    [
+        (" Netflix を 見[み]る", ("Netflix",)),
+        ("週末[しゅうまつ]は Netflix ", ("(end of field)",)),
+    ],
+    ids=["leading", "trailing"],
+)
+def test_a_space_at_the_field_edge_is_reported_whatever_is_beside_it(
+    written: str, expected: tuple[str, ...]
+) -> None:
+    """No sentence begins or ends with a space, so the "the sentence may carry
+    it too" reason cannot apply — and the comment above the code said as much
+    while the ASCII neighbour silenced it anyway."""
+    assert stray_furigana_spaces(written) == expected
