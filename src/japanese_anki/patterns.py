@@ -55,6 +55,7 @@ __all__ = [
     "PatternError",
     "PatternSet",
     "chart_verbs",
+    "LIST_SEPARATORS",
     "extract_patterns",
     "load_store",
     "save_store",
@@ -293,7 +294,7 @@ _PAIR = re.compile(rf"({_WORD})\s*(?:⇨|→|->|=>)\s*({_WORD})")
 #: which result belongs to which verb, and `_PAIR` would pair the last item
 #: before the arrow with the first after it (とる ⇨ かって). Skipped, for the
 #: same reason rule shapes are.
-_LIST_SEPARATORS = frozenset("・、,，/／")
+LIST_SEPARATORS = frozenset("・、,，/／")
 
 #: Groups `conjugate` knows. Tried in turn because the chart states its rule in
 #: prose ("godan verbs ending in う, つ, or る"), and parsing that prose to pick
@@ -426,7 +427,7 @@ def _pairs_in(text: str) -> list[tuple[str, str]]:
     """
     segments = [
         segment
-        for segment in re.split(f"[{re.escape(''.join(_LIST_SEPARATORS))}]", text)
+        for segment in re.split(f"[{re.escape(''.join(LIST_SEPARATORS))}]", text)
         if segment.strip()
     ]
     found: list[tuple[str, str]] = []

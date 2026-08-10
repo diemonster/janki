@@ -37,7 +37,12 @@ except ImportError:  # pragma: no cover
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.io import DataError, load_structured
-from japanese_anki.patterns import CHECKABLE_KINDS, PatternSet, check_pattern_rules
+from japanese_anki.patterns import (
+    CHECKABLE_KINDS,
+    LIST_SEPARATORS,
+    PatternSet,
+    check_pattern_rules,
+)
 
 __all__ = [
     "PatternCard",
@@ -51,12 +56,15 @@ class PatternDeckError(JankiError):
     """A pattern deck could not be built."""
 
 
-#: The arrows a chart writes a rule with, and the separators between rules on
-#: one line. Both are the same sets `patterns._PAIR` and `_LIST_SEPARATORS` use,
-#: restated narrowly here because this splits a *template* rather than scanning
-#: for verb pairs.
+#: The arrows a chart writes a rule with.
 _ARROW = re.compile(r"\s*(?:⇨|→|->|=>)\s*")
-_RULE_SEPARATOR = re.compile(r"\s*[/／]\s*")
+
+#: Every separator a chart puts between items, from `patterns` so the two cannot
+#: drift. Whether a given one divides *rules* or lists the triggers of one rule
+#: is decided per template — see `_split_rules`.
+_SEPARATOR = re.compile(
+    f"\\s*[{re.escape(''.join(LIST_SEPARATORS))}]\\s*"
+)
 
 #: Field order. Appended-only, like the vocabulary notetype's, for the same
 #: reason: a note's values are positional.
@@ -148,18 +156,29 @@ def cards_for(
 
 
 def _split_rules(template: str) -> list[tuple[str, str]]:
-    """``う・つ・る → って`` into one pair, ``A → B / C → D`` into two.
+    """``A → B / C → D`` into two pairs, ``う/つ/る → って`` into one.
+
+    The same character does both jobs. `patterns.INSTRUCTIONS` asks the model to
+    write a rule's triggers as ``う/つ/る → って``, and a chart also puts two
+    whole rules on one line as ``くる → きて / する → して`` — so a separator
+    divides *rules* only when every piece it produces carries an arrow of its
+    own. Splitting unconditionally turned the first into three cards, one of
+    them drilling ``る → って``, which is the ichidan ending and takes て. A card
+    teaching an error is the thing this module exists not to ship.
 
     A template with no arrow is a rule stated in prose rather than as a
     transformation, and becomes a single card with no answer half — the gloss is
     the answer. Guessing where to cut it would invent a question the document
     does not ask.
     """
+    pieces = [piece.strip() for piece in _SEPARATOR.split(template) if piece.strip()]
+    if len(pieces) > 1 and all(_ARROW.search(piece) for piece in pieces):
+        parts_of = pieces
+    else:
+        parts_of = [template.strip()]
+
     found: list[tuple[str, str]] = []
-    for piece in _RULE_SEPARATOR.split(template):
-        piece = piece.strip()
-        if not piece:
-            continue
+    for piece in parts_of:
         parts = _ARROW.split(piece)
         if len(parts) == 2 and all(part.strip() for part in parts):
             found.append((parts[0].strip(), parts[1].strip()))

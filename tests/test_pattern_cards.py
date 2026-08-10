@@ -214,3 +214,27 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
 
     assert first[0].identity == fixed[0].identity
     assert first[0].result != fixed[0].result
+
+
+@pytest.mark.parametrize(
+    ("template", "expected"),
+    [
+        ("う/つ/る → って", [("う/つ/る", "って")]),
+        ("う・つ・る → って", [("う・つ・る", "って")]),
+        ("くる → きて / する → して", [("くる", "きて"), ("する", "して")]),
+        ("くる → きて、する → して", [("くる", "きて"), ("する", "して")]),
+    ],
+    ids=["slashed-triggers", "dotted-triggers", "two-rules-slash", "two-rules-comma"],
+)
+def test_a_separator_divides_rules_only_when_every_piece_has_an_arrow(
+    template: str, expected: list[tuple[str, str]]
+) -> None:
+    """The same character does both jobs. `patterns.INSTRUCTIONS` asks the model
+    to write a rule's triggers as `う/つ/る → って`, and a chart also puts two
+    whole rules on one line. Splitting unconditionally turned the first into
+    three cards — one of them drilling `る → って`, which is the *ichidan*
+    ending and takes て. A card teaching an error is what this module exists
+    not to ship."""
+    cards = cards_for(chart(Pattern(template)), CLASSES)
+
+    assert [(c.trigger, c.result) for c in cards] == expected
