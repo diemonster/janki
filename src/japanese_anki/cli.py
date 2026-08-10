@@ -2717,6 +2717,32 @@ def _collection_lines(config: ProjectConfig) -> list[str]:
     return lines
 
 
+def _classes_for(
+    entries: Sequence[patterns.PatternSet], config: ProjectConfig, ask_jpdb: bool
+) -> dict[str, str]:
+    """Every verb class available for checking these documents.
+
+    The collection first, because it is free and offline and `enrich --jpdb`
+    already put jpdb's own answer there. Then jpdb itself for what is left, on
+    request — one `/parse` call for every remaining verb, which is how a word
+    the collection has never held (おきる, まつ) gets checked at all rather than
+    held back.
+    """
+    known = _verb_groups(config)
+    if not ask_jpdb:
+        return known
+    missing = [
+        verb
+        for entry in entries
+        for verb in patterns.chart_verbs(entry)
+        if verb not in known
+    ]
+    if not missing:
+        return known
+    client = jpdb.JpdbClient(jpdb.api_key_from_env())
+    return {**patterns.verb_groups_from_jpdb(missing, client), **known}
+
+
 def _verb_groups(config: ProjectConfig) -> dict[str, str]:
     """Every verb class the collection already knows, by spelling and reading.
 
@@ -2764,13 +2790,9 @@ def _rule_check_lines(
     # naming the form, the most likely garble on such a chart reads as a pass.
     for check in examined:
         if check.agrees:
-            # `assumed` is said out loud: with no class on record every group
-            # was tried, and a form wrong for the verb's real class can be right
-            # for another, so the pass is weaker than the others on the list.
-            assumed = " (class assumed)" if check.assumed_group else ""
             lines.append(
                 f"        {check.verb} ⇨ {check.claimed} matched "
-                f"{check.form.replace('_', ' ')}{assumed}"
+                f"{check.form.replace('_', ' ')}"
             )
     # Named, not dropped. A row found and not examined used to disappear
     # entirely, so a chart with one readable row and one janki has no opinion
@@ -2857,7 +2879,7 @@ def command_patterns(args: argparse.Namespace) -> int:
         if not store:
             print("No documents read yet. Pass a PDF or image to read one.")
             return 0
-        groups = _verb_groups(config)
+        groups = _classes_for(list(store.values()), config, args.ask_jpdb)
         disagreed = checked = 0
         skipped_names: list[str] = []
         for name, entry in sorted(store.items()):
@@ -2909,7 +2931,6 @@ def command_patterns(args: argparse.Namespace) -> int:
             print("No documents read yet. Pass a PDF or image to read one.")
         return 0
 
-    verb_groups = _verb_groups(config)
     prepared_inputs = prepare_inputs(args.files, config.scan_inbox)
     failures: list[str] = []
     skipped: list[str] = []
@@ -2953,7 +2974,11 @@ def command_patterns(args: argparse.Namespace) -> int:
         # the rules are checked rather than believed, which is the same shape
         # the furigana path uses against jpdb. Automatic rather than a flag: a
         # check nobody runs catches nothing.
-        for line in _rule_check_lines(found, verb_groups):
+        # After the read, so the verbs are known: a document janki has not
+        # seen yet cannot say which words it will name.
+        for line in _rule_check_lines(
+            found, _classes_for([found], config, args.ask_jpdb)
+        ):
             print(line)
     patterns.save_store(config.patterns_file, store)
     # Deliberately skipping a document janki already has is not a problem, so it
@@ -3709,6 +3734,16 @@ def build_parser() -> argparse.ArgumentParser:
             "use them, if it is a lesson document — a conjugation chart is "
             "reviewed for its own sake and steers no sentences. Repeat for "
             "several."
+        ),
+    )
+    patterns_parser.add_argument(
+        "--ask-jpdb",
+        dest="ask_jpdb",
+        action="store_true",
+        help=(
+            "Look up the verb class of any word the collection does not hold, "
+            "so its rows can be checked instead of held back. One jpdb request; "
+            "without it this command touches no network."
         ),
     )
     patterns_parser.add_argument(

@@ -808,6 +808,53 @@ enrich_model = "claude-opus-5"
 one run. A batch is fetched with the model it was **submitted** under, whatever
 the config says by the time you collect it, because that is what answered it.
 
+## What a handout teaches: `janki patterns`
+
+`janki extract` asks a page "which vocabulary is here". That is the wrong
+question for half of what a class hands you: a te-form chart contains almost no
+vocabulary and is entirely about a *form*, and a week's slides contain sixty
+unglossed words while really being about 〜んだ and つもり.
+
+```bash
+janki patterns data/inbox/scans/*.pdf     # read them
+janki patterns                            # list what has been read
+janki patterns --review '104 Week 11 Slide.pdf'
+```
+
+Nothing is used until you mark it reviewed — it is a model's reading of a slide
+deck, and letting that steer every card would spread one bad inference across
+the collection. A reviewed **lesson** document then steers `enrich --ai`, so the
+examples it writes use the grammar you are being taught this week. A **pattern**
+document (a conjugation chart) steers nothing; it is reviewed for its own sake.
+
+### A chart is checked, not believed
+
+Where the chart shows its work — `かう ⇨ かって`, `くる ⇨ きて` — janki checks it
+against `conjugation.conjugate`, the same rules it uses to build every card:
+
+```text
+teform_song.pdf — pattern
+    checked 6/6 worked example(s) against janki's conjugation rules
+        いく ⇨ いって matched te form
+```
+
+**A verb with no class on record is held back, not guessed at.** This matters
+more than it sounds: a conjugation chart exists *because* Japanese verbs have
+outliers, and する, くる and 行く are why anyone prints one. Running an unknown
+verb through every class to see if something fits gets both directions wrong —
+it contradicts a correct chart wherever janki has no override for the exception
+being taught, and it agrees with a garble whenever the garble is some other
+class's regular form (`食べる ⇨ 食べれる` is ら抜き, and godan-regular).
+
+The class comes from your collection, where `enrich --jpdb` has already recorded
+one per verb. For a word the collection has never held, ask the dictionary:
+
+```bash
+janki patterns --check --ask-jpdb    # one request for every unknown verb
+```
+
+Without that flag the command touches no network.
+
 ## The last gate: `janki review`
 
 Every other check in janki is a rule. `validate` knows the shape a record must

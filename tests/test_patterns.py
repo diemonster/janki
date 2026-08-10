@@ -26,13 +26,38 @@ from japanese_anki.patterns import (
     Pattern,
     PatternError,
     PatternSet,
-    check_pattern_rules,
     extract_patterns,
     format_patterns,
     load_store,
     reviewed_patterns,
     save_store,
 )
+from japanese_anki.patterns import (
+    check_pattern_rules as _check_pattern_rules,
+)
+
+#: The verb classes a real collection would hold for the words these tests use.
+#: `check_pattern_rules` refuses to guess a class — a conjugation chart teaches
+#: the outliers — so a test that supplies none is testing the hold-back path.
+CLASSES: dict[str, str] = {
+    "かう": "godan", "買う": "godan", "いく": "godan", "行く": "godan",
+    "まつ": "godan", "とる": "godan", "のむ": "godan", "飲む": "godan",
+    "およぐ": "godan", "泳ぐ": "godan", "はなす": "godan", "話す": "godan",
+    "書く": "godan", "帰る": "godan", "だます": "godan", "済ます": "godan",
+    "𠮟る": "godan", "ゆく": "godan",
+    "たべる": "ichidan", "食べる": "ichidan", "おきる": "ichidan",
+    "みる": "ichidan", "きる": "ichidan",
+    "くる": "kuru", "来る": "kuru",
+    "する": "suru", "勉強する": "suru",
+}
+
+
+def check_pattern_rules(entry: PatternSet, groups: dict[str, str] | None = None):
+    """The real check, with a collection that knows these tests' verbs.
+
+    Pass `{}` to exercise the no-class-on-record path deliberately.
+    """
+    return _check_pattern_rules(entry, CLASSES if groups is None else groups)
 
 
 class FakeInput:
@@ -583,7 +608,7 @@ def test_prose_or_a_gloss_beside_a_pair_does_not_discard_the_line() -> None:
     checks = check_pattern_rules(chart(
         Pattern("う・つ・る → って", examples=("う, つ, る verbs: かう ⇨ かいて",)),
         Pattern("て", examples=("買う ⇨ 買って, to buy",)),
-    ))
+    ), {"かう": "godan", "買う": "godan"})
 
     assert [(c.verb, c.claimed, c.agrees) for c in checks] == [
         ("かう", "かいて", False),
@@ -618,12 +643,16 @@ def test_a_potential_claim_is_checked_rather_than_excused() -> None:
     """`CONJUGATION_FORMS` has seven entries and the ending table covered five,
     so a claim janki *could* judge was reported as one it had no opinion about —
     a false statement, reading as reassurance on a row it could have failed."""
-    checks = check_pattern_rules(chart(
-        Pattern("potential", examples=("書く ⇨ 書けれる",)),
-    ))
+    checks = check_pattern_rules(
+        chart(Pattern("potential", examples=("書く ⇨ 書けれる",))), {"書く": "godan"}
+    )
 
     assert len(checks) == 1
     assert checks[0].examined, "janki computes a potential; it has an opinion"
+    # And names the potential, not the passive. Both 書ける and 書かれる end in
+    # れる, so picking by suffix told the reader to write a passive onto a
+    # potential row.
+    assert checks[0].computed == ("godan: 書ける",)
 
 
 def test_the_verbs_real_class_is_used_when_anything_knows_it() -> None:
@@ -636,16 +665,26 @@ def test_the_verbs_real_class_is_used_when_anything_knows_it() -> None:
     )
 
     assert len(checks) == 1
-    assert not checks[0].agrees and not checks[0].assumed_group
+    assert checks[0].examined and not checks[0].agrees
+    # And names the potential it was reaching for. 食べる, 食べられる and 食べない
+    # all share the prefix 食べ, so the dictionary form wins on prefix alone —
+    # and "not what janki computes (ichidan: 食べる)" answers nothing.
+    assert checks[0].computed == ("ichidan: 食べられる",)
 
 
-def test_the_same_row_passes_when_no_class_is_known_and_says_so() -> None:
-    """Because 食べる run through the *godan* rules gives 食べれる. The verdict
-    is genuinely weaker, so it is marked rather than presented as a clean pass —
-    this is the blind spot, and it is now confined to verbs nothing knows."""
-    checks = check_pattern_rules(chart(Pattern("potential", examples=("食べる ⇨ 食べれる",))))
+def test_a_verb_with_no_class_on_record_is_held_back_not_guessed_at() -> None:
+    """Trying every class to see if one fits gets both directions wrong. 食べる
+    run through the *godan* rules gives 食べれる, so the ら抜き row would pass;
+    and where janki has no override for an exception a chart is teaching, the
+    regular rules would contradict a correct row. A conjugation chart exists
+    because of those outliers, so an unknown class is no opinion."""
+    checks = check_pattern_rules(
+        chart(Pattern("potential", examples=("食べる ⇨ 食べれる",))), {}
+    )
 
-    assert checks[0].agrees and checks[0].assumed_group
+    assert len(checks) == 1
+    assert not checks[0].examined and not checks[0].agrees
+    assert "no verb class on record" in checks[0].held_back
 
 
 def test_a_class_is_found_by_reading_as_well_as_spelling() -> None:
@@ -656,7 +695,7 @@ def test_a_class_is_found_by_reading_as_well_as_spelling() -> None:
         {"買う": "godan", "かう": "godan"},
     )
 
-    assert checks[0].agrees and not checks[0].assumed_group
+    assert checks[0].agrees and checks[0].examined
 
 
 def test_a_wrong_class_on_record_makes_the_row_fail_rather_than_pass() -> None:
@@ -669,3 +708,91 @@ def test_a_wrong_class_on_record_makes_the_row_fail_rather_than_pass() -> None:
     )
 
     assert not checks[0].agrees
+
+
+@pytest.mark.parametrize(
+    "example",
+    ["勉強する ⇨ 勉強しました", "くる ⇨ きました", "する ⇨ しました"],
+    ids=["a-compound", "kuru", "suru"],
+)
+def test_a_polite_row_on_an_irregular_verb_is_held_back(example: str) -> None:
+    """する's ます-stem is し, not す, so a claim testing against the dictionary
+    stem shared no prefix and the guard silently did not apply — reporting the
+    irregular rows of the commonest polite chart there is as wrong. Every
+    Genki-style chart lists all three classes."""
+    checks = check_pattern_rules(
+        chart(Pattern("ます form", examples=(example,))),
+        {"勉強する": "suru", "する": "suru", "くる": "kuru"},
+    )
+
+    assert len(checks) == 1 and not checks[0].examined
+
+
+@pytest.mark.parametrize(
+    "example",
+    ["飲む ⇨ 飲まされる", "食べる ⇨ 食べさせられる", "食べる ⇨ 食べさせる"],
+    ids=["causative-passive-godan", "causative-passive-ichidan", "causative"],
+)
+def test_a_causative_row_is_held_back_not_contradicted(example: str) -> None:
+    """`CONJUGATION_FORMS` has neither causative nor causative-passive, but
+    adding られる/れる to the ending table gave `_claimed_form` an opinion about
+    them anyway — so a correct 使役受身 chart was reported wrong on every row."""
+    checks = check_pattern_rules(
+        chart(Pattern("使役受身", examples=(example,))),
+        {"飲む": "godan", "食べる": "ichidan"},
+    )
+
+    assert len(checks) == 1 and not checks[0].examined
+
+
+def test_a_disagreement_names_the_form_the_row_was_reaching_for() -> None:
+    """Not the dictionary form, which answers a question nobody asked, and not
+    whichever form shares the claim's last two kana."""
+    checks = check_pattern_rules(
+        chart(Pattern("て", examples=("帰る ⇨ 帰えて",))), {"帰る": "godan"}
+    )
+
+    assert checks[0].computed == ("godan: 帰って",)
+
+
+def test_the_verbs_a_chart_names_can_be_listed_for_looking_up() -> None:
+    """So a caller can fetch the classes before checking, using the same scan
+    the check itself runs — two scans would disagree about which words matter."""
+    from japanese_anki.patterns import chart_verbs
+
+    verbs = chart_verbs(chart(
+        Pattern("う・つ・る → って", examples=("かう ⇨ かって",)),
+        Pattern("くる ⇨ きて / する ⇨ して"),
+        Pattern("く → いて"),
+    ))
+
+    assert verbs == ["かう", "くる", "する"], "rule shapes name no verb"
+
+
+def test_jpdb_answers_the_class_the_chart_states_in_prose() -> None:
+    """One `/parse` call: its vocabulary entries already carry part_of_speech,
+    and `pos_to_verb_group` already reads those codes."""
+    from japanese_anki.patterns import verb_groups_from_jpdb
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.asked = ""
+
+        def parse(self, text: str):
+            self.asked = text
+
+            class Result:
+                vocabulary = [
+                    {"spelling": "おきる", "part_of_speech": ["vi", "v1"]},
+                    {"spelling": "およぐ", "part_of_speech": ["vi", "v5", "v5g"]},
+                    {"spelling": "あれ", "part_of_speech": ["pn"]},
+                ]
+
+            return Result()
+
+    client = FakeClient()
+
+    found = verb_groups_from_jpdb(["おきる", "およぐ", "あれ"], client)
+
+    assert found == {"おきる": "ichidan", "およぐ": "godan"}, "no class, no entry"
+    assert client.asked.count("。") == 3, "one call for the lot"

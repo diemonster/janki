@@ -389,7 +389,7 @@ def test_a_project_that_turns_the_gate_off_builds_unreviewed(
 
 def test_the_store_round_trips(tmp_path: Path) -> None:
     entry = CardReview(
-        "word:話す:はなす", "abc123", "2026-08-09",
+        "word:話す:はなす", "abc123def456", "2026-08-09",
         findings=(Finding("meanings", "wrong", "error", "fix it"),),
         accepted=True, accepted_because="checked",
     )
@@ -848,3 +848,28 @@ def test_the_ready_to_ship_count_counts_cards_not_ids(
     cli.main(["--root", str(root), "review"])
 
     assert "2 card(s): 0 ready to ship, 2 error(s)" in capsys.readouterr().out
+
+
+def test_a_store_whose_fingerprints_are_gone_is_refused_by_name(tmp_path: Path) -> None:
+    """Two old shapes existed. The first kept `content_fp` in the value and is
+    rekeyed; the second was written by the reader that had already misread the
+    first, so its values carry `record_id: ""` and no fingerprint at all.
+    Nothing on disk says which card version that describes, and loading it
+    anyway meant every card read as unreviewed, the build refused the deck, and
+    `save_store` wrote the dead entries back forever with no diagnostic."""
+    path = tmp_path / "review.json"
+    path.write_text(
+        json.dumps({
+            "word:なる:なる": {
+                "record_id": "",
+                "accepted": True,
+                "accepted_because": "checked against jpdb",
+                "findings": [{"where": "Pitch accent", "problem": "wrong",
+                              "severity": "error", "suggestion": ""}],
+            }
+        }),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ReviewError, match="cannot be recovered"):
+        load_store(path)

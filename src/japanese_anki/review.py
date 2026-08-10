@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import functools
 import json
+import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -440,6 +441,12 @@ def accept(
         if entry.record_id == record_id and (not current or fingerprint in current)
     ]
     if not matching:
+        if any(entry.record_id == record_id for entry in store.values()):
+            raise ReviewError(
+                f"{record_id} has changed since it was last read, so there is "
+                f"nothing to accept on the version the decks now ship. Run "
+                f"`janki review` first."
+            )
         raise ReviewError(f"No review on record for {record_id}")
     updated = dict(store)
     for fingerprint in matching:
@@ -474,29 +481,46 @@ def load_store(path: Path) -> dict[str, CardReview]:
     return {
         str(fingerprint): entry
         for fingerprint, entry in (
-            _entry_from(str(name), value) for name, value in raw.items()
+            _entry_from(file, str(name), value) for name, value in raw.items()
         )
     }
 
 
-def _entry_from(key: str, raw: dict[str, Any]) -> tuple[str, CardReview]:
-    """One store entry, migrating the record-id-keyed shape if it is that.
+#: A store key is a `short_fingerprint`, which is twelve hex digits. A record id
+#: is not, which is what tells an old file from a current one — the *key* says
+#: it, and looking inside the value only recognised one of the two old shapes.
+_FINGERPRINT = re.compile(r"^[0-9a-f]{12}$")
+
+
+def _entry_from(file: Path, key: str, raw: dict[str, Any]) -> tuple[str, CardReview]:
+    """One store entry, migrating a record-id-keyed one where that is possible.
 
     The store was keyed by record id before a review became a review of a card
-    *version*. Read under the current schema, such a file loads every entry with
-    ``content_fp`` set to a record id and ``record_id`` empty — which matches no
-    card, so every card reads as unreviewed, and the next `save_store` writes
-    the mistake back and drops the real fingerprint on the floor. That is the
-    same silent erasure the non-object check above exists to stop, arriving
-    through the key instead of the value.
+    *version*. Read under the current schema such a file loads every entry with
+    ``content_fp`` set to a record id and ``record_id`` empty — matching no card,
+    so every card reads as unreviewed, the build refuses the deck, and the next
+    `save_store` writes the mistake back. That is the silent erasure the
+    non-object check above exists to stop, arriving through the key.
 
-    The old shape is unambiguous: it carries ``content_fp`` inside the value,
-    which the current one never writes.
+    Two old shapes existed and only one is recoverable. The first kept
+    ``content_fp`` in the value, so the real key is right there and the entry is
+    rekeyed. The second was written by the reader that had *already* misread the
+    first: its values carry ``record_id: ""`` and no fingerprint at all, so
+    nothing on disk says which card version it describes. That one is refused by
+    name rather than loaded as garbage and rewritten forever — the same
+    "refused, not skipped" rule, for the same reason.
     """
+    if _FINGERPRINT.match(key):
+        return key, CardReview.from_dict(key, raw)
     stored = str(raw.get("content_fp") or "")
     if stored:
         return stored, CardReview.from_dict(stored, {**raw, "record_id": key})
-    return key, CardReview.from_dict(key, raw)
+    raise ReviewError(
+        f"{file}: the entry for {key!r} is keyed by record id and carries no "
+        f"content_fp, so which version of the card it describes cannot be "
+        f"recovered. Delete it and re-run `janki review`; an acceptance on it "
+        f"has to be made again."
+    )
 
 
 def save_store(path: Path, store: dict[str, CardReview]) -> None:

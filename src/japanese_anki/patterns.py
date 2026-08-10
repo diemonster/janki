@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import functools
 import json
+import os.path
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -53,9 +54,11 @@ __all__ = [
     "Pattern",
     "PatternError",
     "PatternSet",
+    "chart_verbs",
     "extract_patterns",
     "load_store",
     "save_store",
+    "verb_groups_from_jpdb",
 ]
 
 
@@ -318,6 +321,75 @@ _FORM_BY_ENDING: tuple[tuple[str, str], ...] = (
 )
 
 
+def chart_verbs(entry: PatternSet) -> list[str]:
+    """Every dictionary form a document's worked examples name.
+
+    So a caller can look their classes up before checking. Same scan the check
+    itself runs, so the two cannot disagree about which words matter.
+    """
+    seen: list[str] = []
+    for pattern in entry.patterns:
+        for text in (pattern.template, *pattern.examples):
+            stripped = re.sub(r"[(（][^)）]*[)）]", " ", text)
+            stripped = normalize_identity_part(stripped) or stripped
+            for verb, _claimed in _pairs_in(stripped):
+                if verb[-1] in _DICTIONARY_ENDINGS and verb not in seen:
+                    seen.append(verb)
+    return seen
+
+
+def verb_groups_from_jpdb(verbs: Sequence[str], client: Any) -> dict[str, str]:
+    """Ask jpdb which class each verb belongs to.
+
+    One `/parse` call for the lot: its vocabulary entries already carry
+    ``part_of_speech``, and `pos_to_verb_group` already reads those codes, so
+    this is the dictionary answering the question the chart states in prose.
+
+    A verb jpdb cannot place is simply absent, which leaves the row held back —
+    the same as before asking. Nothing here guesses.
+    """
+    from japanese_anki import jpdb
+
+    wanted = [verb for verb in verbs if verb]
+    if not wanted:
+        return {}
+    result = client.parse("。".join(wanted) + "。")
+    found: dict[str, str] = {}
+    for entry in result.vocabulary or []:
+        spelling = str(entry.get("spelling") or "")
+        group = jpdb.pos_to_verb_group(entry.get("part_of_speech"))
+        if spelling and group:
+            found[spelling] = group
+    return found
+
+
+def _nearest_form(claimed: str, table: Mapping[str, str]) -> str:
+    """The computed form sharing the longest prefix with the claim.
+
+    What a reader needs when a row is wrong is the form the row was *trying* to
+    write. Naming one by the claim's suffix got that backwards for every godan
+    potential, since 書ける and 書かれる both end in れる.
+    """
+    # `plain` is excluded: the dictionary form is the *input* of the row, so
+    # "not what janki computes (ichidan: 食べる)" answers a question nobody
+    # asked. Ranked by shared prefix first, then by whether the inflection ends
+    # the same way — 食べれる, 食べない and 食べた all share 食べ, and only the
+    # final kana says which one the row was reaching for.
+    candidates = [
+        value for name, value in table.items() if value and name != "plain"
+    ]
+    if not candidates:
+        return ""
+    def rank(value: str) -> tuple[int, int, int]:
+        return (
+            len(os.path.commonprefix([claimed, value])),
+            int(bool(claimed) and bool(value) and claimed[-1] == value[-1]),
+            -abs(len(value) - len(claimed)),
+        )
+    best = max(candidates, key=rank)
+    return best if rank(best)[0] else ""
+
+
 def _pairs_in(text: str) -> list[tuple[str, str]]:
     """Every complete ``verb ⇨ form`` claim on one line, or nothing.
 
@@ -367,27 +439,44 @@ def _pairs_in(text: str) -> list[tuple[str, str]]:
 #: commonest polite chart there is as wrong. Checked before `_FORM_BY_ENDING`,
 #: longest first, so ませんでした is not read as ました.
 _NO_TABLE_ENDINGS: tuple[str, ...] = (
+    # Polite. Attaches to the ます-stem, which is why the guard below tests
+    # `polite_stem` rather than the dictionary stem: する's is し, not す.
     "ませんでした", "ましょう", "ませんか", "ましたら",
     "ません", "ました", "ます", "まして",
+    # Desiderative.
     "たかった", "たくない", "たい",
+    # Causative and causative-passive. `CONJUGATION_FORMS` has neither, and
+    # without them `_FORM_BY_ENDING` read 飲まされる as a *passive* and reported
+    # a correct 使役受身 chart as wrong on every row.
+    "させられる", "せられる", "される", "させる", "せる",
+    # Conditional and provisional.
     "れば", "けれ", "たら", "なら",
 )
 
 
-def _claimed_form(claimed: str, verb: str = "") -> str:
+def _claimed_form(claimed: str, verb: str = "", stems: Sequence[str] = ()) -> str:
     """Which form a claim is about, or ``""`` when janki computes no such form.
 
-    The polite endings are matched against the claim's tail *beyond the verb's
-    own stem*, not against the whole string. Matched against the whole string
-    they collided with verbs whose stem ends the same way: `だます ⇨ だしまして`
-    — a plausible transcription garble of だまして, which janki can disprove —
-    ends in まして and was excused, and so was every ます-verb's past against
-    ました (済ます, 冷ます, 覚ます, 励ます).
+    The no-table endings are matched against the claim's tail *beyond a stem the
+    verb really has*, never against the whole string. Against the whole string
+    they collided with verbs whose spelling ends the same way: `だます ⇨
+    だしまして` — a plausible garble of だまして, which janki can disprove — ends
+    in まして and was excused, as was every ます-verb's past against ました.
+
+    ``stems`` carries the ます-stems `conjugation.polite_stem` derives for the
+    candidate classes, because the polite family attaches to those and not to
+    the dictionary stem: する's is し, so `勉強する ⇨ 勉強しました` shares no
+    prefix with 勉強す and the guard silently did not apply — reporting the
+    commonest polite chart there is as wrong on its irregular rows, which is the
+    exact regression the guard was written to stop.
     """
-    stem = verb[:-1] if verb else ""
-    tail = claimed[len(stem):] if stem and claimed.startswith(stem) else ""
-    if tail and any(tail.endswith(ending) for ending in _NO_TABLE_ENDINGS):
-        return ""
+    candidates = [stem for stem in (verb[:-1], *stems) if stem]
+    for stem in candidates:
+        if not claimed.startswith(stem):
+            continue
+        tail = claimed[len(stem):]
+        if tail and any(tail.endswith(ending) for ending in _NO_TABLE_ENDINGS):
+            return ""
     for ending, form in _FORM_BY_ENDING:
         if claimed.endswith(ending):
             return form
@@ -412,10 +501,6 @@ class RuleCheck:
     group: str = ""
     #: Which form it turned out to be — ``te_form``, ``past``, … — when agreed.
     form: str = ""
-    #: True when nothing knew this verb's class, so every group was tried. The
-    #: verdict is then weaker: a form wrong for the verb's real class can be
-    #: right for another, and this cannot tell them apart.
-    assumed_group: bool = False
     #: What `conjugate` produces instead, per group, when nothing agreed.
     computed: tuple[str, ...] = ()
     #: Why this row was found but not examined, or ``""`` if it was. A row janki
@@ -464,19 +549,21 @@ def check_pattern_rules(
       is right.
     ``groups`` maps a verb — by spelling or by reading — to its class, and the
     caller builds it from the collection, where `enrich --jpdb` has already
-    recorded a `verb_group` for every verb janki holds. Where it answers, only
-    that class is tried, and the check is exact: 食べる is ichidan, so its
-    potential is 食べられる and the ら抜き ``食べる ⇨ 食べれる`` is a
-    disagreement.
+    recorded a `verb_group` for every verb janki holds. With it the check is
+    exact: 食べる is ichidan, so its potential is 食べられる and the ら抜き
+    ``食べる ⇨ 食べれる`` is a disagreement.
 
-    Where nothing knows the verb, every class is tried and the result is marked
-    ``assumed_group``. That verdict is genuinely weaker and says so, because a
-    form wrong for a verb's real class can be right for another — 食べる run
-    through the *godan* rules gives 食べれる, which is exactly how the ら抜き row
-    passed before the class was looked up. The chart states the class in English
-    prose, which is why it is read from the dictionary rather than the page.
+    **A verb with no class on record is held back, not guessed at.** This is a
+    conjugation chart: it exists because Japanese verbs have outliers, and する,
+    くる and 行く are the reason anyone prints one. Running an unknown verb
+    through every class to see if anything fits gets both directions wrong — it
+    contradicts a correct chart wherever janki has no override for the exception
+    the chart is teaching, and it agrees with a garble whenever the garble is
+    some other class's regular form. 食べる ⇨ 食べれる is exactly that: ら抜き,
+    and godan-regular. Neither failure is acceptable in a checker, and the fix
+    for coverage is to record the class, not to infer it.
     """
-    from japanese_anki.conjugation import conjugate
+    from japanese_anki.conjugation import conjugate, polite_stem
 
     if entry.kind not in CHECKABLE_KINDS:
         return ()
@@ -499,13 +586,28 @@ def check_pattern_rules(
                 if (verb, claimed) in seen:
                     continue
                 seen.add((verb, claimed))
-                # The verb's real class where anything knows it, every class
-                # where nothing does.
+                # The verb's real class, or nothing. Trying every class where
+                # none is known was the wrong instinct: a conjugation chart
+                # exists to teach the *outliers*, and running an irregular verb
+                # through the regular rules produces a plausible wrong answer —
+                # so the check would contradict a correct chart exactly on the
+                # rows it was written for, or agree with a garble that happens
+                # to be some other class's regular form (食べる ⇨ 食べれる is
+                # godan-regular). Without the class janki has no opinion.
                 known = (groups or {}).get(verb, "")
-                candidates = (known,) if known else _GROUPS
+                if not known:
+                    checks.append(RuleCheck(
+                        template=pattern.template, verb=verb, claimed=claimed,
+                        held_back=(
+                            "no verb class on record for this word — "
+                            "`janki enrich --jpdb` records one for every verb "
+                            "in the collection"
+                        ),
+                    ))
+                    continue
                 tables = [
                     (group, table)
-                    for group in candidates
+                    for group in (known,)
                     if (table := conjugate(verb, verb, group))
                 ]
                 if not tables:
@@ -525,7 +627,12 @@ def check_pattern_rules(
                             break
                     if agreed:
                         break
-                wanted = _claimed_form(claimed, verb)
+                stems = [
+                    stem
+                    for group, _ in tables
+                    if (stem := polite_stem(verb, group))
+                ]
+                wanted = _claimed_form(claimed, verb, stems)
                 # A claim about a form janki has no table for is no opinion, the
                 # same as a word `conjugate` refuses. `CONJUGATION_FORMS` stops
                 # at seven, so a ます / たい / ば / volitional chart — a `pattern`
@@ -545,11 +652,15 @@ def check_pattern_rules(
                         claimed=claimed,
                         group=agreed,
                         form=form,
-                        assumed_group=not known,
+                        # The form the claim is *nearest* to, not the one its
+                        # suffix names: `書く ⇨ 書けれる` ends in れる, so a
+                        # suffix rule called it a passive and told the reader to
+                        # write 書かれる — a passive onto a potential row. The
+                        # longest shared prefix picks 書ける.
                         computed=() if agreed else tuple(
-                            f"{group}: {table[wanted]}"
+                            f"{group}: {nearest}"
                             for group, table in tables
-                            if wanted in table
+                            if (nearest := _nearest_form(claimed, table))
                         ),
                     )
                 )

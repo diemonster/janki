@@ -19,8 +19,22 @@ from japanese_anki import patterns as patterns_module
 from japanese_anki.claude_client import CallResult
 from japanese_anki.errors import JankiError
 
+#: A small collection, so a chart's verbs have a class on record. Without one
+#: every row is held back — a conjugation chart teaches the outliers, so janki
+#: will not guess a class to check one against.
+COLLECTION = [
+    {"id": "word:買う:かう", "expression": "買う", "reading": "かう",
+     "meanings": ["to buy"], "verb_group": "godan"},
+    {"id": "word:飲む:のむ", "expression": "飲む", "reading": "のむ",
+     "meanings": ["to drink"], "verb_group": "godan"},
+    {"id": "word:来る:くる", "expression": "来る", "reading": "くる",
+     "meanings": ["to come"], "verb_group": "kuru"},
+    {"id": "word:する:する", "expression": "する", "reading": "する",
+     "meanings": ["to do"], "verb_group": "suru"},
+]
 
-def project(tmp_path: Path) -> Path:
+
+def project(tmp_path: Path, records: list[dict] | None = None) -> Path:
     (tmp_path / "janki.toml").write_text(
         "[paths]\n"
         'normalized_file = "vocabulary.json"\n'
@@ -28,7 +42,10 @@ def project(tmp_path: Path) -> Path:
         'scan_inbox = "inbox"\n',
         encoding="utf-8",
     )
-    (tmp_path / "vocabulary.json").write_text("[]", encoding="utf-8")
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps(COLLECTION if records is None else records, ensure_ascii=False),
+        encoding="utf-8",
+    )
     return tmp_path
 
 
@@ -532,17 +549,13 @@ def test_the_form_each_row_matched_is_printed(
 def test_the_check_uses_the_collections_verb_classes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """And says when it could not: a pass with the class assumed is weaker than
-    one checked against the verb's real class, and the line distinguishes
-    them."""
-    root = project(tmp_path)
-    (root / "vocabulary.json").write_text(
-        json.dumps([{
-            "id": "word:食べる:たべる", "expression": "食べる", "reading": "たべる",
-            "meanings": ["to eat"], "verb_group": "ichidan",
-        }], ensure_ascii=False),
-        encoding="utf-8",
-    )
+    """And holds back the verb it has no class for, rather than trying every
+    class to see if one fits — a chart teaches the outliers, so a guessed class
+    would contradict it exactly where it matters."""
+    root = project(tmp_path, [{
+        "id": "word:食べる:たべる", "expression": "食べる", "reading": "たべる",
+        "meanings": ["to eat"], "verb_group": "ichidan",
+    }])
     parsed = Parsed("pattern", "Chart", [])
     parsed.patterns = [Item("potential")]
     parsed.patterns[0].examples = ["食べる ⇨ 食べれる", "およぐ ⇨ およいで"]
@@ -554,4 +567,4 @@ def test_the_check_uses_the_collections_verb_classes(
 
     out = capsys.readouterr().out
     assert "食べる ⇨ 食べれる is not what janki computes" in out
-    assert "およぐ ⇨ およいで matched te form (class assumed)" in out
+    assert "およぐ ⇨ およいで not checked — no verb class on record" in out
