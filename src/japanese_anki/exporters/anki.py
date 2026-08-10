@@ -620,6 +620,48 @@ def _resolve_card_types(
     return card_types
 
 
+#: Every `kind:` a deck file may state. `vocabulary` is the name of the default
+#: for anyone who prefers writing it down; the other two are the card kinds with
+#: their own builders. Anything else is a typo, and a typo is refused rather
+#: than run as an ordinary word deck.
+KNOWN_DECK_KINDS = ("", "vocabulary", "pattern", "conjugation")
+
+
+def deck_kind(deck_path: Path) -> str:
+    """What kind of deck a file describes, or ``""`` for the ordinary sort.
+
+    Read on its own rather than through `resolve_deck_records`, which validates
+    a *vocabulary* deck: a pattern deck has no `source:` and no records, and
+    would be refused before anything could dispatch on it.
+
+    Lives here, beside `deck_notetype`, because every reader must agree: a typo
+    answered as an ordinary word deck by `status` alone still produced a phantom
+    "has 6 fields where this deck writes 27" against the rule deck's pinned
+    `model_id`, advising a Merge Notetypes re-import that fixes nothing.
+    """
+    raw = load_structured(deck_path)
+    if not isinstance(raw, dict):
+        raise DataError(f"Deck file must contain a mapping: {deck_path}")
+    section = raw.get("deck") or {}
+    if not isinstance(section, dict):
+        raise DataError(f"The deck section must be a mapping: {deck_path}")
+    kind = str(section.get("kind") or "").strip().lower()
+    # Refused once, here, because this is the only place that decides. A typo —
+    # `kind: patern` — used to fall through to the vocabulary path everywhere:
+    # `validate` found no records and warned, `build` wrote an *empty* package
+    # over the deck's own output and printed "0 notes" on exit 0, and `status`
+    # reported the drift above. Every rule in the file gone, and nothing naming
+    # the file.
+    if kind not in KNOWN_DECK_KINDS:
+        raise DataError(
+            f"{deck_path}: unknown deck kind {kind!r}. Valid kinds: "
+            + ", ".join(
+                k or "(omitted — an ordinary word deck)" for k in KNOWN_DECK_KINDS
+            )
+        )
+    return kind
+
+
 def deck_notetype(deck_path: Path, project_config: ProjectConfig) -> tuple[int, str, int]:
     """``(model_id, model_name, field count)`` a build of this deck would use.
 
@@ -628,13 +670,11 @@ def deck_notetype(deck_path: Path, project_config: ProjectConfig) -> tuple[int, 
     pin either — a detector that recomputed them would misreport any deck that
     does, which is the one case the M5.5 spike singled out.
     """
+    # Through `deck_kind`, so a typo is refused here as everywhere else rather
+    # than answered as a word deck.
+    kind = deck_kind(deck_path)
     raw = load_structured(deck_path)
     section = raw.get("deck") or {} if isinstance(raw, dict) else {}
-    kind = (
-        str(section.get("kind") or "").strip().lower()
-        if isinstance(section, dict)
-        else ""
-    )
     if kind in ("pattern", "conjugation"):
         # A rule deck writes its own, much smaller notetype. Answering 27 here
         # made `janki status` report "has 5 fields where this deck writes 27" on

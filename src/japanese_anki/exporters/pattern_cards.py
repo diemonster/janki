@@ -456,14 +456,22 @@ def deck_problems(
 def _drill_set_problems(deck_path: Path, collection: Path, form: str) -> list[str]:
     """The build's own emptiness refusal, asked of the same inputs.
 
-    A read error is not reported here: `validate` reads the deck file, and a
-    collection janki cannot parse is that file's problem, raised by the command
-    that reads it rather than pinned on whichever deck happens to name it.
+    A collection this deck names and janki cannot read *is* this deck's problem.
+    Nothing else in a `validate` sweep opens it — a drill deck's `source:` may
+    name a file no other deck references — so swallowing that error left the one
+    command whose job is catching a broken deck first saying "0 error(s)" over a
+    file the next build refuses.
+
+    A filter error is swallowed, because the `include_ids`/`exclude_ids` loop
+    above has already reported it and saying it twice helps nobody.
     """
     if form not in CONJUGATION_FORMS:
         return []
     try:
         records = load_records(collection)
+    except JankiError as exc:
+        return [str(exc)]
+    try:
         cards = drill_cards(shipping_records(deck_path, records, form), form)
     except JankiError:
         return []

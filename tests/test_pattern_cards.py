@@ -1175,6 +1175,96 @@ def test_a_pattern_deck_with_a_bad_model_id_still_warns_in_status(tmp_path: Path
         deck_notetype(path, ProjectConfig.load(tmp_path))
 
 
+def test_status_refuses_a_typoed_kind_rather_than_measuring_it_as_a_word_deck(
+    tmp_path: Path,
+) -> None:
+    """`status` asks `deck_notetype`, which read `kind:` itself. A typo answered
+    as an ordinary word deck reported "has 6 fields where this deck writes 27"
+    against the rule deck's pinned `model_id` — drift that is not there,
+    advising a Merge Notetypes re-import that fixes nothing. A false warning
+    that never clears is how the detector guarding the real notetype-append
+    invariant gets ignored. `_collection_lines` turns this into a named warning
+    and a skipped deck, like any other deck it cannot read."""
+    from japanese_anki.exporters.anki import deck_notetype
+
+    project(tmp_path)
+    path = tmp_path / "decks" / "typo.yaml"
+    path.write_text(
+        "deck:\n  kind: patern\n  name: R\n  deck_id: 1\n  model_id: 1607392351\n"
+        '  document: "x.pdf"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(DataError, match="unknown deck kind 'patern'"):
+        deck_notetype(path, ProjectConfig.load(tmp_path))
+
+
+def test_validate_reports_a_collection_a_drill_deck_cannot_read(
+    tmp_path: Path, capsys
+) -> None:
+    """Nothing else in a sweep opens it: a drill deck's `source:` may name a
+    file no other deck references. Swallowed, `validate` said "0 error(s)" over
+    the file the next build refuses — the drift this function exists to close,
+    with no filename for the user."""
+    import json
+
+    from japanese_anki import cli
+
+    project(tmp_path)
+    (tmp_path / "other.json").write_text(
+        json.dumps([{"id": "word:x:x", "expression": "x", "reading": "x",
+                     "examples": 3}]),
+        encoding="utf-8",
+    )
+    deck = tmp_path / "decks" / "drill.yaml"
+    deck.write_text(
+        "deck:\n  kind: conjugation\n  name: D\n  deck_id: 1\n  model_id: 2\n"
+        '  source: "../other.json"\n',
+        encoding="utf-8",
+    )
+
+    assert cli.main(["--root", str(tmp_path), "validate", str(deck)]) == 1
+    assert "other.json" in capsys.readouterr().out, "which file"
+
+
+def test_a_sweep_builds_the_decks_after_a_broken_one(tmp_path: Path, capsys) -> None:
+    """A deck sorting first by name used to cancel the lot — including the build
+    stage `janki refresh` reaches only after paying for the jpdb, `--ai` and
+    audio stages. `validate` follows the opposite rule for the same error. Still
+    a non-zero exit: nothing about the broken deck is fine."""
+    import json
+
+    from japanese_anki import cli
+
+    project(tmp_path)
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps(
+            [verb("買う", "かう", "godan", part_of_speech="verb").to_dict()],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "decks" / "a-typo.yaml").write_text(
+        "deck:\n  kind: patern\n  name: T\n  deck_id: 1\n  model_id: 2\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "decks" / "words.yaml").write_text(
+        'name: W\ndeck:\n  source: "../vocabulary.json"\n  output: "words.apkg"\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "janki.toml").write_text(
+        (tmp_path / "janki.toml").read_text(encoding="utf-8")
+        + "\n[review]\nrequire = false\n",
+        encoding="utf-8",
+    )
+
+    code = cli.main(["--root", str(tmp_path), "build", "--all", "--yes"])
+
+    assert code == 1, "the broken deck still failed the run"
+    assert "unknown deck kind 'patern'" in capsys.readouterr().err
+    assert (tmp_path / "dist" / "words.apkg").exists(), "the other deck built"
+
+
 def test_a_pattern_build_stops_on_an_unreadable_collection(tmp_path: Path, capsys) -> None:
     """The worked examples on a rule card come from checking the chart against
     the collection's own `verb_group` values. When the collection could not be

@@ -31,6 +31,7 @@ from japanese_anki.exporters import pattern_cards
 from japanese_anki.exporters.anki import (
     AnkiBuildError,
     build_deck,
+    deck_kind,
     deck_notetype,
     resolve_deck_records,
 )
@@ -2280,7 +2281,7 @@ def _validate_path(
     # is a real error.
     if isinstance(raw, dict):
         try:
-            kind = _deck_kind(path)
+            kind = deck_kind(path)
         except DataError as exc:
             # Reported as this file's error rather than raised, so a sweep still
             # validates every other deck — the rule this command follows for a
@@ -2434,42 +2435,6 @@ def _confirm_gaps(
     return answer.strip().lower() in {"y", "yes"}
 
 
-#: Every `kind:` a deck file may state. `vocabulary` is the name of the default
-#: for anyone who prefers writing it down; the other two are the card kinds with
-#: their own builders. Anything else is a typo, and a typo is refused rather
-#: than run as an ordinary word deck.
-KNOWN_DECK_KINDS = ("", "vocabulary", "pattern", "conjugation")
-
-
-def _deck_kind(deck_path: Path) -> str:
-    """What kind of deck a file describes, or ``""`` for the ordinary sort.
-
-    Read on its own rather than through `resolve_deck_records`, which validates
-    a *vocabulary* deck: a pattern deck has no `source:` and no records, and
-    would be refused before anything could dispatch on it.
-    """
-    raw = load_structured(deck_path)
-    if not isinstance(raw, dict):
-        raise DataError(f"Deck file must contain a mapping: {deck_path}")
-    section = raw.get("deck") or {}
-    if not isinstance(section, dict):
-        raise DataError(f"The deck section must be a mapping: {deck_path}")
-    kind = str(section.get("kind") or "").strip().lower()
-    # Refused here, once, because this is the only place that decides. A typo —
-    # `kind: patern` — used to fall through to the vocabulary path everywhere:
-    # `validate` found no records and warned, `build` wrote an *empty* package
-    # over the deck's own output and printed "0 notes" on exit 0, and `status`
-    # measured a 27-field word notetype against the deck's pinned pattern
-    # `model_id` and reported drift that is not there. Every rule in the file
-    # gone, and nothing naming the file.
-    if kind not in KNOWN_DECK_KINDS:
-        raise DataError(
-            f"{deck_path}: unknown deck kind {kind!r}. Valid kinds: "
-            + ", ".join(k or "(omitted — an ordinary word deck)" for k in KNOWN_DECK_KINDS)
-        )
-    return kind
-
-
 def _refuse_unreviewed(
     records: Sequence[Any], config: ProjectConfig, deck_path: Path
 ) -> None:
@@ -2537,7 +2502,7 @@ def _build_one(
     recorded = False
     # A pattern deck is a different shape entirely — rules, not records — so it
     # is dispatched before the vocabulary path reads the file as a word list.
-    kind = _deck_kind(deck_path)
+    kind = deck_kind(deck_path)
     if kind == "conjugation":
         if only_new:
             # On a sweep the flag is a *mode* applied to every deck, not an
@@ -2699,12 +2664,25 @@ def command_build(args: argparse.Namespace) -> int:
             raise AnkiBuildError(f"No deck files found under {config.deck_dir}")
         built = False
         code = 0
+        refused = False
         try:
             for deck_path in deck_paths:
-                built = _build_one(
-                    deck_path, config, book=book,
-                    only_new=args.only_new, assume_yes=args.yes, sweep=True,
-                ) or built
+                try:
+                    built = _build_one(
+                        deck_path, config, book=book,
+                        only_new=args.only_new, assume_yes=args.yes, sweep=True,
+                    ) or built
+                except JankiError as exc:
+                    # Per deck, so one broken file does not hide every other
+                    # deck's build — the rule `validate` follows for the same
+                    # error, and the reason the drill deck's `--only-new`
+                    # refusal became a note on a sweep. A deck sorting first by
+                    # name used to cancel the lot, including the build stage
+                    # `janki refresh` reaches only after paying for jpdb, `--ai`
+                    # and audio. Still a non-zero exit: nothing about this is
+                    # fine.
+                    print(f"error: {deck_path.name}: {exc}", file=sys.stderr)
+                    refused = True
         finally:
             # In a `finally` because a later deck refusing must not discard
             # what earlier decks already recorded in memory. Export state is
@@ -2715,7 +2693,7 @@ def command_build(args: argparse.Namespace) -> int:
             # `finally` exists to report, and returning 0 anyway told `refresh`
             # — and any cron gating on the exit code — that the build was clean.
             code = _finish_build(book, built)
-        return code
+        return code or (1 if refused else 0)
 
     if not args.deck:
         raise AnkiBuildError("Provide a deck YAML path or use --all")
