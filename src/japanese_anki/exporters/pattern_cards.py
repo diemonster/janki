@@ -175,6 +175,30 @@ def cards_for(
     return cards
 
 
+#: Stands in for a parenthetical while the line's shape is read. One character
+#: per character, so every offset still points at the same place in the template
+#: — the text itself is never rewritten, only made invisible to the parser.
+_MASK = "\uf8ff"
+
+
+#: How readily each separator divides two whole statements rather than joining
+#: the items of one, most-dividing first. Only consulted when two of them both
+#: fit the line, which is a coincidence of counts rather than a real ambiguity.
+#: The union is last: it is the answer only when no single character fits.
+_DIVIDER_RANK = ("／", "/", "；", ";", "，", ",", "、", "･", "・", _SEPARATOR_CHARS)
+
+
+def _masked(template: str) -> str:
+    """The template with parentheticals blanked out, character for character.
+
+    `ぐ → いで (voiced → で)` carries an arrow inside a gloss, and counting it
+    made the whole line look like a multi-rule row.
+    """
+    return re.sub(
+        r"[(（][^)）]*[)）]", lambda m: _MASK * len(m.group(0)), template
+    )
+
+
 def _split_rules(template: str) -> list[tuple[str, str]]:
     """``A → B / C → D`` into two pairs, ``う/つ/る → って`` into one.
 
@@ -196,7 +220,14 @@ def _split_rules(template: str) -> list[tuple[str, str]]:
     advance. Two dividers on one line (``… / … 、 …``) are found by cutting on
     every separator at once, which is the same test applied to their union.
 
-    When no cut satisfies that test, the line uses one character for both jobs.
+    More than one cut can fit by coincidence: in ``くる → きて・きた / する → して``
+    both `・` and `/` yield two one-arrow pieces, and cutting at `・` drops きた
+    from the first answer and asks ``きた / する``. They are told apart by how the
+    characters are used rather than by where they appear — `・` joins the items
+    of a list and never divides two statements, a solidus divides, and the
+    commas fall in between.
+
+    When no cut fits at all, the line uses one character for both jobs.
     Arrow-less pieces before the first rule are its trigger list and are rejoined
     to it — ``う/つ/る → って / く → いて``. Arrow-less pieces *after* a rule are
     genuinely undecidable, since ``って/った / く → いて`` reads equally as a
@@ -207,70 +238,91 @@ def _split_rules(template: str) -> list[tuple[str, str]]:
     A template with no arrow is a rule stated in prose and becomes a single card
     with no answer half; the gloss is the answer. Guessing where to cut it would
     invent a question the document does not ask.
+
+    Throughout, a parenthetical is invisible to the parser and untouched in the
+    output: it is masked to read the line's shape, and every card is sliced out
+    of the original text. Cutting it away instead emptied `（〜てもいい）` into a
+    blank card with the guid `pattern:<document>:`, and shortened
+    `行く (exception)` — a trigger that is also the GUID, so the next build of a
+    shipped deck adds a second note and strands the first one's review history.
     """
-    # Parentheticals are removed to read the line's *shape*: `ぐ → いで (voiced →
-    # で)` carries an arrow inside a gloss, and counting it made the whole line
-    # look like a multi-rule row.
-    body = re.sub(r"[(（][^)）]*[)）]", " ", template)
-    arrows = len(_ARROW.findall(body))
+    masked = _masked(template)
+    arrows = len(_ARROW.findall(masked))
     if not arrows:
-        # No rule here, so nothing was a gloss: the whole template is what the
-        # card says. `body` reaching the output turned `（〜てもいい）` into a
-        # blank card with the guid `pattern:<document>:`, shortened
-        # `〜てもいいですか (asking permission)` — a trigger that is also the
-        # GUID — and split `〜たら (condition → result)` on an arrow the rule
-        # does not state, asking `〜たら (condition`.
         return [(_tidy(template), "")]
     if arrows == 1:
-        # One rule however many separators it lists, and read from `body`, so a
-        # trailing `(godan)` does not become part of the answer — the same card
-        # this rule produces when it shares a line with another.
-        return [_rule_pair(body)]
-    pieces = _rule_pieces(body, arrows)
-    if pieces is None:
+        return [_rule_pair(template, masked)]
+    spans = _rule_spans(masked, arrows)
+    if spans is None:
         return [(_tidy(template), "")]
-    return [_rule_pair(piece) for piece in pieces]
+    return [_rule_pair(template[a:b], masked[a:b]) for a, b in spans]
 
 
-def _rule_pieces(body: str, arrows: int) -> list[str] | None:
-    """One piece per rule, or ``None`` when the line cannot be cut safely."""
-    # Each separator the line uses, in the order it first appears, so the choice
-    # does not depend on a set's iteration order.
+def _cut_at(masked: str, cuts: Sequence[int]) -> list[tuple[int, int]]:
+    """The spans between the given separator positions, blank ones dropped."""
+    spans: list[tuple[int, int]] = []
+    start = 0
+    for cut in (*cuts, len(masked)):
+        if masked[start:cut].strip(_SEPARATOR_CHARS + " "):
+            spans.append((start, cut))
+        start = cut + 1
+    return spans
+
+
+def _rule_spans(masked: str, arrows: int) -> list[tuple[int, int]] | None:
+    """One span per rule, or ``None`` when the line cannot be cut safely."""
+    # Each separator the line uses, in the order it first appears, plus their
+    # union — so the choice never depends on a set's iteration order.
     candidates: list[str] = []
-    for char in body:
+    for char in masked:
         if char in _SEPARATOR_CHARS and char not in candidates:
             candidates.append(char)
-    for candidate in (*candidates, _SEPARATOR_CLASS):
-        parts = [
-            part
-            for part in re.split(re.escape(candidate) if len(candidate) == 1 else candidate, body)
-            if part.strip()
-        ]
-        if len(parts) == arrows and all(len(_ARROW.findall(p)) == 1 for p in parts):
-            return parts
+
+    fitting: list[tuple[str, list[tuple[int, int]]]] = []
+    # Every candidate is tried, not just the first that fits — see the ranking
+    # below.
+    for candidate in (*candidates, _SEPARATOR_CHARS):
+        cuts = [i for i, char in enumerate(masked) if char in candidate]
+        spans = _cut_at(masked, cuts)
+        if len(spans) == arrows and all(
+            len(_ARROW.findall(masked[a:b])) == 1 for a, b in spans
+        ):
+            fitting.append((candidate, spans))
+    if fitting:
+        # More than one can fit by coincidence: in `くる → きて・きた / する → して`
+        # both `・` and `/` cut two one-arrow pieces, and cutting at `・` drops
+        # きた from the first answer and asks `きた / する`. Ranked by how the
+        # characters are actually used rather than by where they appear —
+        # `・` joins the items of a list and never divides two statements, a
+        # solidus divides, and the commas fall in between. Taking whichever came
+        # first in the line let a lister win by being written earlier.
+        fitting.sort(key=lambda pair: _DIVIDER_RANK.index(pair[0]))
+        return fitting[0][1]
 
     # One character doing both jobs. Arrow-less pieces before the first rule are
     # its trigger list; one after a rule has ended could be that rule's result
     # list or the next rule's triggers, and nothing in the line says which.
-    groups: list[str] = []
-    current = ""
-    for piece in re.split(f"({_SEPARATOR_CLASS})", body):
-        if not piece:
-            continue
-        if groups and not _ARROW.search(piece) and piece.strip(_SEPARATOR_CHARS + " "):
+    spans = []
+    cuts = [i for i, char in enumerate(masked) if char in _SEPARATOR_CHARS]
+    start: int | None = None
+    for a, b in _cut_at(masked, cuts):
+        if start is None:
+            start = a
+        if _ARROW.search(masked[a:b]):
+            spans.append((start, b))
+            start = None
+        elif spans:
             return None
-        current += piece
-        if _ARROW.search(piece):
-            groups.append(current)
-            current = ""
-    return groups if len(groups) == arrows else None
+    return spans if len(spans) == arrows else None
 
 
-def _rule_pair(piece: str) -> tuple[str, str]:
-    parts = _ARROW.split(piece)
-    if len(parts) == 2 and all(_tidy(part) for part in parts):
-        return (_tidy(parts[0]), _tidy(parts[1]))
-    return (_tidy(piece), "")
+def _rule_pair(text: str, masked: str) -> tuple[str, str]:
+    arrow = _ARROW.search(masked)
+    if arrow:
+        trigger, result = text[: arrow.start()], text[arrow.end():]
+        if _tidy(trigger) and _tidy(result):
+            return (_tidy(trigger), _tidy(result))
+    return (_tidy(text), "")
 
 
 def _tidy(text: str) -> str:

@@ -243,8 +243,13 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
             [("くる", "きて"), ("する", "して"), ("いく", "いって")],
         ),
         # A parenthetical carrying an arrow of its own, which `patterns.py`
-        # documents as ordinary chart content.
-        ("く → いて / ぐ → いで (voiced → で)", [("く", "いて"), ("ぐ", "いで")]),
+        # documents as ordinary chart content. Masked while the line is read,
+        # and kept in what the card says — the text is the document's, and the
+        # trigger half of it is the note's GUID.
+        (
+            "く → いて / ぐ → いで (voiced → で)",
+            [("く", "いて"), ("ぐ", "いで (voiced → で)")],
+        ),
         # A rule whose *result* is a list, followed by a second rule. An
         # arrow-less run was always attached forward, so `った` left the first
         # answer and became the second card's question: `った / く`. Which
@@ -301,12 +306,31 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
         # `〜たら (condition` — a truncated fragment that is also the GUID.
         ("〜たら (condition → result)", [("〜たら (condition → result)", "")]),
         # The same rule with and without a sibling on the line, which used to
-        # give two different answers.
-        ("う・つ・る → って (godan)", [("う・つ・る", "って")]),
+        # give two different answers — one path built the card from the stripped
+        # text and the other from the original.
+        ("う・つ・る → って (godan)", [("う・つ・る", "って (godan)")]),
         (
             "う・つ・る → って (godan) / く → いて",
-            [("う・つ・る", "って"), ("く", "いて")],
+            [("う・つ・る", "って (godan)"), ("く", "いて")],
         ),
+        # A parenthetical in the *trigger* half, which is the note's GUID: cut
+        # away, the next build of a shipped deck emits `pattern:<doc>:行く`
+        # where the collection holds `pattern:<doc>:行く (exception)`, so genanki
+        # adds a second note and strands the first one's review history.
+        ("行く (exception) → いって", [("行く (exception)", "いって")]),
+        # Two separators that both cut this line into two one-arrow pieces. `・`
+        # is scanned first and would drop きた from the first answer and ask
+        # `きた / する`; the trigger halves say which cut is real — `/` leaves
+        # くる and する, `・` leaves a trigger carrying a `/` it never cut on.
+        ("くる → きて・きた / する → して", [("くる", "きて・きた"), ("する", "して")]),
+        (
+            "く → いて・いた / ぐ → いで・いだ / す → して",
+            [("く", "いて・いた"), ("ぐ", "いで・いだ"), ("す", "して")],
+        ),
+        ("する → して, した / くる → きて", [("する", "して, した"), ("くる", "きて")]),
+        # The mirror: a two-item trigger list on the *second* rule, where `・`
+        # also cuts two one-arrow pieces — `く → いて / う` and `つ → って`.
+        ("く → いて / う・つ → って", [("く", "いて"), ("う・つ", "って")]),
     ],
     ids=[
         "slashed-triggers", "dotted-triggers", "two-rules-slash", "two-rules-comma",
@@ -318,6 +342,9 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
         "the-whole-te-form-row", "a-trigger-list-on-the-second-rule",
         "trigger-and-result-lists-on-both", "an-arrow-inside-a-prose-gloss",
         "a-gloss-on-a-lone-rule", "a-gloss-on-a-rule-with-a-sibling",
+        "a-parenthetical-in-the-trigger", "a-two-item-result-list",
+        "two-item-result-lists-throughout", "a-comma-separated-result-list",
+        "a-two-item-trigger-list-on-the-second-rule",
     ],
 )
 def test_a_separator_divides_rules_only_when_every_piece_has_an_arrow(
