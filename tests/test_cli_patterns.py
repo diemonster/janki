@@ -794,3 +794,63 @@ def test_each_documents_check_is_printed_under_its_own_name(
 
     out = capsys.readouterr().out
     assert out.count("a.pdf — pattern") >= 1 and out.count("b.pdf — pattern") >= 1
+
+
+def test_two_inputs_that_would_share_a_store_key_are_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The store is keyed by basename, so `scans/a/chart.pdf` and
+    `scans/b/chart.pdf` claim one entry — the first read, paid for and printed
+    as read, then overwritten when the store is saved. An input silently lost on
+    a zero exit."""
+    root = project(tmp_path)
+    for folder in ("a", "b"):
+        (root / folder).mkdir()
+        (root / folder / "chart.pdf").write_bytes(b"%PDF-1.4\n%fake\n")
+    calls: list[str] = []
+    monkeypatch.setattr(
+        patterns_module.claude_client,
+        "parse_call",
+        lambda *a, **k: calls.append("read") or (_ for _ in ()).throw(AssertionError),
+    )
+
+    code = cli.main([
+        "--root", str(root), "patterns",
+        str(root / "a" / "chart.pdf"), str(root / "b" / "chart.pdf"),
+    ])
+
+    assert code == 1
+    assert calls == [], "refused before paying for a read"
+    assert "would be stored under one name" in capsys.readouterr().err
+
+
+def test_an_unreadable_collection_warns_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`_verb_groups` parses the collection and warns when it cannot, so
+    recomputing it on the jpdb recovery path printed the same warning twice and
+    read the file twice."""
+    root = project(tmp_path)
+    (root / "vocabulary.json").write_text(
+        '[{"id": "word:x:x", "expression": "x", "reading": "x", "examples": 3}]',
+        encoding="utf-8",
+    )
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("く → いて")]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+
+    def refuse(*_args, **_kwargs):
+        raise JankiError("jpdb said 429")
+
+    monkeypatch.setattr(cli.patterns, "verb_groups_from_jpdb", refuse)
+    monkeypatch.setattr(cli.jpdb, "api_key_from_env", lambda: "k")
+    monkeypatch.setattr(cli.jpdb, "JpdbClient", lambda _key: object())
+
+    cli.main([
+        "--root", str(root), "patterns", "--ask-jpdb",
+        str(document(root, "chart.pdf")),
+    ])
+
+    assert capsys.readouterr().err.count("no verb classes available") == 1

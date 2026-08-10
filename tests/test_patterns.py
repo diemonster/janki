@@ -826,7 +826,7 @@ def test_a_claim_sharing_nothing_with_the_verb_is_left_unjudged(example: str) ->
 
     assert len(checks) == 1
     assert not checks[0].examined and checks[0].computed == ()
-    assert "shares nothing with this verb" in checks[0].held_back
+    assert "shares nothing with any form janki computes" in checks[0].held_back
 
 
 def test_a_lesson_decks_verbs_are_not_scraped_for_looking_up() -> None:
@@ -877,3 +877,29 @@ def test_the_correction_names_the_form_the_ending_asks_for_on_a_tie() -> None:
 
     assert tie[0].computed == ("godan: およいで",)
     assert decisive[0].computed == ("godan: 書ける",), "prefix still wins when it can"
+
+
+@pytest.mark.parametrize(
+    ("example", "expected"),
+    [
+        ("する ⇨ しって", "suru: して"),
+        ("くる ⇨ きって", "kuru: きて"),
+    ],
+    ids=["suru", "kuru"],
+)
+def test_a_garbled_irregular_is_caught_not_held_back(
+    example: str, expected: str
+) -> None:
+    """The verbs a conjugation chart exists to teach. する's table is
+    しない/した/して and くる's is こない/きた/きて, so judging the claim against
+    the *dictionary* form's first character — す, く — held both back and let
+    `--check` exit 0 on a chart that mis-transcribes them. Neither row is
+    ambiguous: both halves are kana, so "another spelling" cannot apply."""
+    checks = check_pattern_rules(
+        chart(Pattern("irregulars", examples=(example,))),
+        {"する": "suru", "くる": "kuru"},
+    )
+
+    assert len(checks) == 1
+    assert checks[0].examined and not checks[0].agrees
+    assert checks[0].computed == (expected,)

@@ -77,9 +77,8 @@ _ARROW = re.compile(r"\s*(?:⇨|→|->|=>)\s*")
 #: Every separator a chart puts between items, from `patterns` so the two cannot
 #: drift. Whether a given one divides *rules* or lists the triggers of one rule
 #: is decided per template — see `_split_rules`.
-_SEPARATOR = re.compile(
-    f"\\s*[{re.escape(''.join(LIST_SEPARATORS))}]\\s*"
-)
+_SEPARATOR_CHARS = "".join(sorted(LIST_SEPARATORS))
+_SEPARATOR_CLASS = f"[{re.escape(_SEPARATOR_CHARS)}]"
 
 #: Field order. Appended-only, like the vocabulary notetype's, for the same
 #: reason: a note's values are positional.
@@ -179,32 +178,46 @@ def cards_for(
 def _split_rules(template: str) -> list[tuple[str, str]]:
     """``A → B / C → D`` into two pairs, ``う/つ/る → って`` into one.
 
-    The same character does both jobs. `patterns.INSTRUCTIONS` asks the model to
-    write a rule's triggers as ``う/つ/る → って``, and a chart also puts two
-    whole rules on one line as ``くる → きて / する → して`` — so a separator
-    divides *rules* only when every piece it produces carries an arrow of its
-    own. Splitting unconditionally turned the first into three cards, one of
-    them drilling ``る → って``, which is the ichidan ending and takes て. A card
-    teaching an error is the thing this module exists not to ship.
+    The same characters do both jobs: `patterns.INSTRUCTIONS` asks for a rule's
+    triggers as ``う/つ/る → って``, and a chart also puts two whole rules on one
+    line as ``くる → きて / する → して`` — sometimes with different separators
+    for each job, since the model is told to write it the way the page does.
 
-    A template with no arrow is a rule stated in prose rather than as a
-    transformation, and becomes a single card with no answer half — the gloss is
-    the answer. Guessing where to cut it would invent a question the document
-    does not ask.
+    What actually distinguishes them is the **arrows**. Split on every separator
+    at once and count the pieces that carry one:
+
+    * one — the separators are listing triggers or results, so the line is a
+      single rule (``う/つ/る → って``, ``かう・まつ・とる ⇨ かって・まって・とって``);
+    * several — each arrow-bearing piece ends a rule, and any arrow-less pieces
+      before it are that rule's own trigger list, rejoined to it. So
+      ``う/つ/る → って / く → いて`` gives back both rules with the trigger list
+      intact, which no per-separator test could manage.
+
+    A template with no arrow is a rule stated in prose and becomes a single card
+    with no answer half; the gloss is the answer. Guessing where to cut it would
+    invent a question the document does not ask.
     """
-    parts_of = [_tidy(template)]
-    # One separator at a time. Testing the whole set at once had no branch for a
-    # line that mixes both roles — `う・つ・る → って / く → いて`, which is how a
-    # chart cell compresses two rows — and sent it down the *prose* path: one
-    # card whose question was the entire line, both answers included, with an
-    # empty back, and the second rule never made a card at all.
-    for separator in sorted(LIST_SEPARATORS):
-        pieces = [
-            _tidy(piece) for piece in template.split(separator) if _tidy(piece)
-        ]
-        if len(pieces) > 1 and all(len(_ARROW.split(piece)) == 2 for piece in pieces):
-            parts_of = pieces
-            break
+    # Parentheticals first: `ぐ → いで (voiced → で)` carries an arrow inside a
+    # gloss, and counting it made the whole line look like a multi-rule row.
+    body = re.sub(r"[(（][^)）]*[)）]", " ", template)
+    pieces = [piece for piece in re.split(f"({_SEPARATOR_CLASS})", body) if piece]
+
+    groups: list[str] = []
+    current = ""
+    for piece in pieces:
+        current += piece
+        if _ARROW.search(piece):
+            groups.append(current)
+            current = ""
+    if current.strip(_SEPARATOR_CHARS + " ") and groups:
+        # A trailing run with no arrow — the result list of the last rule.
+        groups[-1] += current
+    elif current.strip():
+        groups.append(current)
+
+    parts_of = [_tidy(group) for group in groups if _tidy(group)]
+    if len(parts_of) < 2:
+        parts_of = [_tidy(body)]
 
     found: list[tuple[str, str]] = []
     for piece in parts_of:
@@ -222,7 +235,7 @@ def _tidy(text: str) -> str:
     `str.strip()` alone left the `/` on a truncated row like `く → いて /`, so a
     card's answer read "いて /".
     """
-    return text.strip().strip("".join(LIST_SEPARATORS)).strip()
+    return text.strip().strip(_SEPARATOR_CHARS).strip()
 
 
 def _notetype(model_id: int, model_name: str, template_dir: Path) -> Any:

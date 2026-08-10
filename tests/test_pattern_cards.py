@@ -232,10 +232,24 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
         # A row the model truncated, or a cell copied with its divider. `strip()`
         # removes whitespace only, so the answer read "いて /".
         ("く → いて /", [("く", "いて")]),
+        # The trigger list and the rule divider using the *same* character —
+        # which is the style INSTRUCTIONS actually asks for. No per-separator
+        # test can split this; counting arrows can.
+        ("う/つ/る → って / く → いて", [("う/つ/る", "って"), ("く", "いて")]),
+        # Two different separators dividing rules on one line, because the model
+        # is told to write it the way the page does.
+        (
+            "くる → きて / する → して、いく → いって",
+            [("くる", "きて"), ("する", "して"), ("いく", "いって")],
+        ),
+        # A parenthetical carrying an arrow of its own, which `patterns.py`
+        # documents as ordinary chart content.
+        ("く → いて / ぐ → いで (voiced → で)", [("く", "いて"), ("ぐ", "いで")]),
     ],
     ids=[
         "slashed-triggers", "dotted-triggers", "two-rules-slash", "two-rules-comma",
-        "mixed-roles", "a-trailing-separator",
+        "mixed-roles", "a-trailing-separator", "same-character-both-jobs",
+        "two-different-dividers", "a-parenthetical-arrow",
     ],
 )
 def test_a_separator_divides_rules_only_when_every_piece_has_an_arrow(

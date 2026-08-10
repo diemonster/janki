@@ -2804,7 +2804,10 @@ def _collection_lines(config: ProjectConfig) -> list[str]:
 
 
 def _classes_for(
-    entries: Sequence[patterns.PatternSet], config: ProjectConfig, ask_jpdb: bool
+    entries: Sequence[patterns.PatternSet],
+    config: ProjectConfig,
+    ask_jpdb: bool,
+    known: dict[str, str] | None = None,
 ) -> dict[str, str]:
     """Every verb class available for checking these documents.
 
@@ -2814,7 +2817,10 @@ def _classes_for(
     the collection has never held (おきる, まつ) gets checked at all rather than
     held back.
     """
-    known = _verb_groups(config)
+    # Taken from the caller when it has one: `_verb_groups` parses the whole
+    # collection and *warns* when it cannot, so recomputing it on the recovery
+    # path printed the same warning twice and read the file twice.
+    known = _verb_groups(config) if known is None else known
     if not ask_jpdb:
         return known
     missing = [
@@ -3037,6 +3043,25 @@ def command_patterns(args: argparse.Namespace) -> int:
         return 0
 
     prepared_inputs = prepare_inputs(args.files, config.scan_inbox)
+    # The store is keyed by basename, so two inputs named chart.pdf in different
+    # directories claim one entry: the first is read, paid for, printed as read
+    # — and then overwritten by the second when the store is saved. Refused by
+    # name rather than silently keeping one of them.
+    by_name: dict[str, list[str]] = {}
+    for prepared in prepared_inputs:
+        by_name.setdefault(prepared.origin_path.name, []).append(
+            str(prepared.origin_path)
+        )
+    clashing = {name: paths for name, paths in by_name.items() if len(paths) > 1}
+    if clashing:
+        detail = "; ".join(
+            f"{name}: {', '.join(paths)}" for name, paths in sorted(clashing.items())
+        )
+        raise JankiError(
+            f"Two inputs would be stored under one name, and the second would "
+            f"replace the first: {detail}. Rename one, or read them in separate "
+            f"runs."
+        )
     failures: list[str] = []
     skipped: list[str] = []
     read: list[str] = []
@@ -3094,15 +3119,16 @@ def command_patterns(args: argparse.Namespace) -> int:
     # One lookup for the whole run, after the reads: the collection is parsed
     # once instead of once per document, and `--ask-jpdb` makes the single
     # request its help text promises rather than one per file.
+    offline = _verb_groups(config)
     try:
-        classes = _classes_for(fresh, config, args.ask_jpdb)
+        classes = _classes_for(fresh, config, args.ask_jpdb, offline)
     except JankiError as exc:
         # The offline map, not nothing. `_classes_for` reads the collection's
         # own `verb_group` values first and only then asks jpdb for what is
         # missing, so discarding both on a 429 held back every row — reporting
         # "no verb class on record" for verbs that are on record, and losing the
         # garbled row the offline check would have caught.
-        classes = _verb_groups(config)
+        classes = offline
         # Kept out of `failures`, which means "a document was lost" and decides
         # the exit code. Nothing was lost: every document was read and saved,
         # and failing the run here breaks the very

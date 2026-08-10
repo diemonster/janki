@@ -369,9 +369,7 @@ def verb_groups_from_jpdb(verbs: Sequence[str], client: Any) -> dict[str, str]:
     return found
 
 
-def _nearest_form(
-    claimed: str, table: Mapping[str, str], wanted: str = "", verb: str = ""
-) -> str:
+def _nearest_form(claimed: str, table: Mapping[str, str], wanted: str = "") -> str:
     """The computed form sharing the longest prefix with the claim.
 
     What a reader needs when a row is wrong is the form the row was *trying* to
@@ -409,21 +407,10 @@ def _nearest_form(
     best = max(candidates, key=rank)
     if rank(best)[0]:
         return best
-    # Nothing shares even a first character. Two very different rows look like
-    # this, and only one of them wants a correction:
-    #
-    # * an OCR misread — `帰る ⇨ 反って`, where 反 is a mistake for 帰 and the
-    #   reader needs to be told 帰って;
-    # * the same form in another orthography — `かう ⇨ 買って`, which is
-    #   *correct*, and where "not what janki computes (godan: かって)" tells
-    #   someone to rewrite a right answer.
-    #
-    # janki cannot tell them apart without knowing that かう is written 買う,
-    # which the chart does not say and this function is not given. So a
-    # correction is offered only when the claim is plausibly the same word —
-    # sharing the verb's stem — and otherwise the caller holds the row back.
-    if verb and claimed and claimed[0] == verb[0]:
-        return table.get(wanted, "")
+    # Nothing here shares even a first character with the claim, so janki has no
+    # form to offer as the correction, and the caller turns that into a
+    # held-back row. Guessing from the claim's ending instead named a form for
+    # text that may not be this word at all.
     return ""
 
 
@@ -692,22 +679,33 @@ def check_pattern_rules(
                     if (stem := polite_stem(verb, group))
                 ]
                 wanted = _claimed_form(claimed, verb, stems)
-                # A claim sharing nothing with the verb is one of two rows janki
-                # cannot tell apart: an OCR misread (帰る ⇨ 反って) and the same
-                # form in another orthography (かう ⇨ 買って, which is *right*).
-                # Calling either one wrong tells someone to rewrite a correct
-                # answer, so the row is named and left unjudged.
-                # The *first* character, not the whole stem. だます ⇨ だしまして
-                # is a transcription slip janki can and should call — it opens
-                # the same way — while かう ⇨ 買って and 帰る ⇨ 反って share
-                # nothing at all, which is where the two unjudgeable rows live.
-                shares = bool(verb) and bool(claimed) and claimed[0] == verb[0]
-                if not agreed and not shares:
+                # Which form the claim is nearest to, per class. Computed
+                # before the hold-back decision, because that decision is about
+                # whether janki has anything to point at.
+                computed = tuple(
+                    f"{group}: {nearest}"
+                    for group, table in tables
+                    if (nearest := _nearest_form(claimed, table, wanted))
+                )
+                # Judged against the *computed* forms, never the dictionary
+                # form. する's table is しない/した/して and くる's is こない/きた/
+                # きて, so testing the claim's first character against す or く
+                # held back `する ⇨ しって` — a plain garble, both halves kana —
+                # and let `--check` exit 0 on a chart that mis-transcribes
+                # exactly the irregulars a chart exists to teach.
+                #
+                # Sharing nothing with any computed form is the genuinely
+                # unjudgeable row: an OCR misread (帰る ⇨ 反って) and the same
+                # form in another orthography (かう ⇨ 買って, which is *right*)
+                # look identical from here, and calling either one wrong tells
+                # someone to rewrite a correct answer.
+                if not agreed and not computed:
                     checks.append(RuleCheck(
                         template=pattern.template, verb=verb, claimed=claimed,
                         held_back=(
-                            "the claimed form shares nothing with this verb, so "
-                            "janki cannot tell a misreading from another spelling"
+                            "the claimed form shares nothing with any form janki "
+                            "computes, so a misreading and another spelling look "
+                            "the same from here"
                         ),
                     ))
                     continue
@@ -735,11 +733,7 @@ def check_pattern_rules(
                         # suffix rule called it a passive and told the reader to
                         # write 書かれる — a passive onto a potential row. The
                         # longest shared prefix picks 書ける.
-                        computed=() if agreed else tuple(
-                            f"{group}: {nearest}"
-                            for group, table in tables
-                            if (nearest := _nearest_form(claimed, table, wanted, verb))
-                        ),
+                        computed=() if agreed else computed,
                     )
                 )
     return tuple(checks)
