@@ -365,3 +365,22 @@
 .kanji-example .kanji-gloss {
   opacity: 0.7;
 }
+
+/* Pattern cards: a rule, not a word. Sized like the expression on a
+   vocabulary card, since it is the thing being recalled. */
+.pattern-trigger {
+  font-size: 2em;
+  margin: 0.4em 0 0.2em;
+}
+.pattern-ask,
+.pattern-result {
+  font-size: 1.6em;
+  margin-bottom: 0.3em;
+}
+.pattern-gloss {
+  margin: 0.6em 0;
+}
+.pattern-examples {
+  margin: 0.6em 0;
+  line-height: 1.9;
+}

@@ -827,6 +827,34 @@ the collection. A reviewed **lesson** document then steers `enrich --ai`, so the
 examples it writes use the grammar you are being taught this week. A **pattern**
 document (a conjugation chart) steers nothing; it is reviewed for its own sake.
 
+### A chart becomes its own deck
+
+A conjugation chart is a deck in itself. A deck file with `kind: pattern` turns
+the rules it teaches into cards — one per rule, and a row stating two
+(`くる → きて / する → して`) into one card each, which is how they are drilled:
+
+```yaml
+deck:
+  kind: pattern
+  name: "Brandon Japanese::Te-form Rules"
+  deck_id: 2059400113
+  model_id: 1607392351
+  document: "teform_song.pdf"
+```
+
+**It ships only what the check below passed.** Everything on these cards is
+either transcribed from the page by a model or computed by janki, so a worked
+example janki disagrees with is one it has reason to think was mis-transcribed —
+drilling it would teach the error. A rule with nothing checkable (`く → いて`
+names an ending, not a verb) still ships: there is nothing to disagree with, and
+the rule is the thing being taught. An unreviewed document builds nothing.
+
+Pattern cards get **their own notetype**, which costs no forced sync. Measured
+against `anki` 26.8.1: adding a notetype leaves the collection's `scm` mark
+alone, while appending a field to an existing one bumps it — so unlike a new
+field on the word notetype, this does not force the one-directional AnkiWeb
+sync described above.
+
 ### A chart is checked, not believed
 
 Where the chart shows its work — `かう ⇨ かって`, `くる ⇨ きて` — janki checks it

@@ -1,0 +1,9 @@
+deck:
+  kind: pattern
+  name: "Brandon Japanese::Te-form Rules"
+  deck_id: 2059400113
+  model_id: 1607392351
+  model_name: "Japanese Pattern"
+  description: "The te-form rules, from the class handout. Every worked example checked against janki's own conjugation."
+  output: "teform-rules.apkg"
+  document: "teform_song.pdf"

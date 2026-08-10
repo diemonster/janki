@@ -5,13 +5,19 @@ from __future__ import annotations
 from pathlib import Path
 
 TEMPLATES = Path(__file__).parents[1] / "templates" / "japanese-study"
-BACKS = tuple(sorted(TEMPLATES.glob("*-back.html")))
-#: Every card face, not only the backs. The no-JavaScript rule is about what
-#: AnkiWeb will strip, and it strips a script on a front just as silently.
+#: The *word* card backs. A pattern card is a rule with no word on it, so it
+#: carries no dictionary lookup and is not held to that contract.
+BACKS = tuple(
+    path for path in sorted(TEMPLATES.glob("*-back.html"))
+    if not path.name.startswith("pattern-")
+)
+#: Every card face, not only the backs, and pattern faces included. The
+#: no-JavaScript rule is about what AnkiWeb will strip, and it strips a script
+#: on a rule card just as silently.
 ALL_FACES = tuple(sorted(TEMPLATES.glob("*.html")))
 
 
-def test_there_are_three_back_templates() -> None:
+def test_there_are_three_word_card_backs() -> None:
     """Pinned, because every test below loops over this glob: rename the
     directory or the suffix and they all pass green having checked nothing,
     each one's name left standing for a thing no longer verified."""
@@ -37,9 +43,11 @@ def test_every_lookup_back_takes_its_query_already_encoded() -> None:
         assert "?w={{Expression}}" not in template, path.name
 
 
-def test_there_are_six_card_faces() -> None:
+def test_every_card_face_is_accounted_for() -> None:
     """Same reason as above, for the wider glob the no-JavaScript rule uses."""
     assert [path.name for path in ALL_FACES] == [
+        "pattern-back.html",
+        "pattern-front.html",
         "production-back.html",
         "production-front.html",
         "reading-back.html",

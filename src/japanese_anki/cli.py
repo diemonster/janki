@@ -27,6 +27,7 @@ from japanese_anki import (
 from japanese_anki.audio_cmd import AudioError
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
+from japanese_anki.exporters import pattern_cards
 from japanese_anki.exporters.anki import (
     AnkiBuildError,
     build_deck,
@@ -2388,6 +2389,22 @@ def _confirm_gaps(
     return answer.strip().lower() in {"y", "yes"}
 
 
+def _deck_kind(deck_path: Path) -> str:
+    """What kind of deck a file describes, or ``""`` for the ordinary sort.
+
+    Read on its own rather than through `resolve_deck_records`, which validates
+    a *vocabulary* deck: a pattern deck has no `source:` and no records, and
+    would be refused before anything could dispatch on it.
+    """
+    raw = load_structured(deck_path)
+    if not isinstance(raw, dict):
+        raise DataError(f"Deck file must contain a mapping: {deck_path}")
+    section = raw.get("deck") or {}
+    if not isinstance(section, dict):
+        raise DataError(f"The deck section must be a mapping: {deck_path}")
+    return str(section.get("kind") or "").strip().lower()
+
+
 def _refuse_unreviewed(
     records: Sequence[Any], config: ProjectConfig, deck_path: Path
 ) -> None:
@@ -2452,6 +2469,20 @@ def _build_one(
     stem = deck_path.stem
     include_ids: set[str] | None = None
     recorded = False
+    # A pattern deck is a different shape entirely — rules, not records — so it
+    # is dispatched before the vocabulary path reads the file as a word list.
+    if _deck_kind(deck_path) == "pattern":
+        target, count = pattern_cards.build_pattern_deck(
+            deck_path,
+            config,
+            patterns.load_store(config.patterns_file),
+            output,
+            _verb_groups(config),
+        )
+        print(f"Built {target} — {count} rule card(s)")
+        # Nothing to record: exports track which *records* a deck has shipped,
+        # and a pattern deck ships none.
+        return False
     _, records = resolve_deck_records(deck_path)
     # The last gate, and only on a build that ships. A `--output` build is a
     # throwaway that records nothing — `make gates` builds one on every run —
