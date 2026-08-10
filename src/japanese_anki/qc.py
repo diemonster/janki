@@ -368,10 +368,20 @@ def stray_furigana_spaces(furigana: str) -> tuple[str, ...]:
         # one ASCII neighbour silenced `ですね!  散歩[さんぽ]`, `iPhone  を` and
         # `9  時[じ]に`, where the ASCII is punctuation or a digit and the run is
         # a real defect.
-        between_content = _ascii_content(before) and _ascii_content(after)
-        # At most one space can ever be notation, so a run of two is wrong
-        # wherever it is not inside Latin text — whether or not a group follows.
-        if not between_content and (run > 1 or _GROUP.match(rest) is None):
+        # The two run lengths take different rules, because the evidence is
+        # different. At most one space can ever be notation, so a run of two is
+        # wrong wherever it is not inside Latin text, group following or not.
+        # A *single* space beside ASCII on either side is the Latin↔Japanese
+        # boundary — `iPhone を`, `と Twitter` — where the space may well be in
+        # the sentence too, and the warning would tell a reader to delete
+        # something the card really does contain.
+        if run > 1:
+            reportable = not (_ascii_content(before) and _ascii_content(after))
+        else:
+            reportable = not (
+                _ascii_content(before) or _ascii_content(after)
+            ) and _GROUP.match(rest) is None
+        if reportable:
             stray.append(rest.split(" ", 1)[0] or "(end of field)")
         index = end
     return tuple(stray)

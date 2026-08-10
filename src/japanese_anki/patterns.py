@@ -485,9 +485,8 @@ def check_pattern_rules(entry: PatternSet) -> tuple[RuleCheck, ...]:
                 # same as a word `conjugate` refuses. `CONJUGATION_FORMS` stops
                 # at seven, so a ます / たい / ば / volitional chart — a `pattern`
                 # document by the extractor's own definition — matched nothing
-                # and was reported as *wrong*, with a te-form offered as the
-                # correction. Widening the word class to kanji is what exposed
-                # this: before it, `食べる ⇨ 食べます` could not match at all.
+                # in the table and was reported as *wrong*, with a te-form
+                # offered as the correction.
                 if not agreed and not wanted:
                     checks.append(RuleCheck(
                         template=pattern.template, verb=verb, claimed=claimed,

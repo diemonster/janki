@@ -701,7 +701,14 @@ def test_a_doubled_space_beside_ascii_that_is_not_a_word_is_still_reported(
     assert stray_furigana_spaces(written) == (expected,)
 
 
-def test_a_doubled_space_inside_latin_text_is_still_quiet() -> None:
-    """ASCII on *both* sides is the one shape where the space belongs to the
-    sentence, and deleting it is the harm this carve-out exists for."""
-    assert stray_furigana_spaces("「Hello  World」と 言[い]った。") == ()
+@pytest.mark.parametrize(
+    "written",
+    ["iPhone を 使[つか]う", "と Twitter", '"ありがとう" と 言[い]った'],
+    ids=["latin-then-japanese", "japanese-then-latin", "after-a-quote"],
+)
+def test_a_single_space_at_a_latin_boundary_stays_quiet(written: str) -> None:
+    """A single space with ASCII on one side is the Latin↔Japanese boundary,
+    where the sentence may well carry the space too — so the warning would tell
+    a reader to delete something the card really does contain. Only a *run* uses
+    the both-sides rule, because at most one space can ever be notation."""
+    assert stray_furigana_spaces(written) == ()

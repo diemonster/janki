@@ -449,9 +449,9 @@ def test_a_word_janki_declines_to_conjugate_is_not_a_disagreement() -> None:
 def test_a_form_janki_has_no_table_for_is_not_a_disagreement() -> None:
     """`CONJUGATION_FORMS` stops at seven, so a ます / たい / ば chart — a
     `pattern` document by the extractor's own definition — matched nothing and
-    was reported as *wrong*, offering a て-form as the correction. Widening the
-    word class to kanji is what exposed it: before that, 食べる ⇨ 食べます could
-    not match at all, so the chart was silently skipped instead."""
+    was reported as *wrong*, offering a て-form as the correction — 食 and 買 are
+    both inside the old hand-written kanji range, so this was reachable for
+    every kana and BMP-kanji chart, not only since the class was widened."""
     checks = check_pattern_rules(chart(
         Pattern("ます form", examples=("食べる ⇨ 食べます",)),
         Pattern("たい form", examples=("買う ⇨ 買いたい",)),
@@ -495,14 +495,14 @@ def test_which_form_a_row_matched_is_recorded() -> None:
     assert checks[0].agrees and checks[0].form == "past"
 
 
-def test_a_decomposed_chart_is_normalized_before_matching() -> None:
-    """A decomposed ぐ is く plus U+3099, which is outside the word class, so
-    およぐ ⇨ およいで matched nothing at all. Every other Japanese-text path here
-    normalizes first."""
+def test_a_decomposed_kanji_chart_is_normalized_before_matching() -> None:
+    """Both halves at once: a decomposed ぐ is く plus U+3099, outside the word
+    class, and the row is written in kanji, which the class only covers since it
+    was taken from `identifiers`. Either gap alone drops the row."""
     import unicodedata
 
     checks = check_pattern_rules(chart(
-        Pattern("ぐ → いで", examples=(unicodedata.normalize("NFD", "およぐ ⇨ およいで"),)),
+        Pattern("ぐ → いで", examples=(unicodedata.normalize("NFD", "泳ぐ ⇨ 泳いで"),)),
     ))
 
     assert len(checks) == 1 and checks[0].agrees
