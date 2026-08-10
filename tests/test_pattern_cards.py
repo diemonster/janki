@@ -255,15 +255,23 @@ def test_a_separator_divides_rules_only_when_every_piece_has_an_arrow(
 # --- the drill deck ------------------------------------------------------------
 
 
-def verb(expression: str, reading: str, group: str, meanings: list[str] | None = None):
+def verb(
+    expression: str,
+    reading: str,
+    group: str,
+    meanings: list[str] | None = None,
+    record_id: str = "",
+    part_of_speech: str = "",
+):
     from japanese_anki.models import VocabularyRecord
 
     return VocabularyRecord(
-        id=f"word:{expression}:{reading}",
+        id=record_id or f"word:{expression}:{reading}",
         expression=expression,
         reading=reading,
         meanings=meanings or ["to do something"],
         verb_group=group,
+        part_of_speech=part_of_speech,
     )
 
 
@@ -330,30 +338,64 @@ def test_a_form_janki_does_not_compute_is_refused(tmp_path: Path) -> None:
         )
 
 
-def test_the_drill_guid_survives_a_corrected_reading(tmp_path: Path) -> None:
-    """Correcting a reading rewrites the front of the card. A GUID that moved
-    with it would orphan the review history on the day the deck got better."""
-    project(tmp_path)
+def guids_in(package: Path) -> list[str]:
+    """The GUIDs a built package actually carries."""
+    import json
+    import sqlite3
+    import tempfile
+    from zipfile import ZipFile
+
+    with ZipFile(package) as archive:
+        name = (
+            "collection.anki21"
+            if "collection.anki21" in archive.namelist()
+            else "collection.anki2"
+        )
+        db = Path(tempfile.mkdtemp()) / "c.db"
+        db.write_bytes(archive.read(name))
+    con = sqlite3.connect(db)
+    guids = [row[0] for row in con.execute("select guid from notes order by id")]
+    con.close()
+    assert json  # keeps the import honest for readers of this helper
+    return guids
+
+
+def build_drill(tmp_path: Path, records: list, name: str) -> Path:
+    if not (tmp_path / "janki.toml").exists():
+        project(tmp_path)
     path = tmp_path / "decks" / "drill.yaml"
     path.write_text(
         "deck:\n  kind: conjugation\n  name: D\n  deck_id: 1\n  model_id: 2\n",
         encoding="utf-8",
     )
-    import genanki
-
-    first = drill_guid(tmp_path, path, verb("買う", "かう", "godan"))
-    fixed = drill_guid(tmp_path, path, verb("買う", "かう", "godan", ["to buy"]))
-
-    assert first == fixed == genanki.guid_for("drill:te_form:word:買う:かう")
+    target = tmp_path / name
+    build_conjugation_deck(path, ProjectConfig.load(tmp_path), records, target)
+    return target
 
 
-def drill_guid(root: Path, deck: Path, record) -> str:
-    import genanki
+def test_the_drill_guid_survives_a_corrected_reading(tmp_path: Path) -> None:
+    """Correcting a reading rewrites the front of the card. A GUID that moved
+    with it would orphan the review history on the day the deck got better.
 
-    from japanese_anki.exporters.pattern_cards import drill_cards
+    Read off the built notes, not recomputed from the production f-string: the
+    helper this replaces re-typed that string, so mutating it left the test
+    green. And the id is held fixed while the *reading* changes, which is the
+    case the name describes — both calls used to pass the same reading."""
+    # The id is the record's durable identity and does not move when a reading
+    # is corrected — that is what `stable_record_id` is for — so the card built
+    # from it must not move either.
+    fixed = "word:買う:かう"
+    before = verb("買う", "かう", "godan", record_id=fixed)
+    # A *different reading*, so the front of the card really moves — こう rather
+    # than かう. Holding the reading constant and changing only the meanings, as
+    # this test first did, pinned gloss-independence and left the case in its
+    # own name untested.
+    after = verb("買う", "こう", "godan", record_id=fixed)
 
-    _card, record_id = drill_cards([record], "te_form")[0]
-    return genanki.guid_for(f"drill:te_form:{record_id}")
+    first = guids_in(build_drill(tmp_path, [before], "a.apkg"))
+    corrected = guids_in(build_drill(tmp_path, [after], "b.apkg"))
+
+    assert first == corrected, "the reading moved; the identity did not"
 
 
 def test_a_collection_with_no_conjugable_verb_says_so(tmp_path: Path) -> None:
@@ -465,3 +507,174 @@ def test_two_rules_sharing_a_trigger_are_refused(tmp_path: Path) -> None:
             deck_file(tmp_path), ProjectConfig.load(tmp_path), store,
             tmp_path / "o.apkg", CLASSES,
         )
+
+
+def test_the_guid_moves_when_the_record_does_not_match() -> None:
+    """The other half, so the test above cannot pass by every card sharing one
+    GUID: a different record is a different card."""
+    from japanese_anki.exporters.pattern_cards import drill_cards
+
+    a = drill_cards([verb("買う", "かう", "godan")], "te_form")[0][1]
+    b = drill_cards([verb("待つ", "まつ", "godan")], "te_form")[0][1]
+
+    assert a != b
+
+
+def test_an_i_adjective_gets_a_drill_card() -> None:
+    """jpdb has no verb class for one, so 高い carries its class in
+    `part_of_speech` — which every other `conjugate` caller passes as a
+    fallback. Without it 高い got no card while its word card rendered 高くて,
+    the two disagreeing by omission."""
+    from japanese_anki.exporters.pattern_cards import drill_cards
+
+    cards = drill_cards(
+        [verb("高い", "たかい", "", ["expensive"], part_of_speech="i-adjective")],
+        "te_form",
+    )
+
+    assert [c.result for c, _ in cards] == ["高くて"]
+
+
+@pytest.mark.parametrize(
+    ("key", "written"),
+    [("exclude_ids", '"word:買う:かう"'), ("include_ids", "3")],
+    ids=["a-bare-string", "a-bare-number"],
+)
+def test_a_malformed_filter_is_refused_like_any_other_deck(
+    tmp_path: Path, key: str, written: str
+) -> None:
+    """Written by hand, `exclude_ids:` as a bare string became a set of single
+    characters and excluded nothing — so the record the user held back shipped
+    onto a card, where a vocabulary deck with the identical typo is refused."""
+    project(tmp_path)
+    path = tmp_path / "decks" / "drill.yaml"
+    path.write_text(
+        f"deck:\n  kind: conjugation\n  name: D\n  deck_id: 1\n  model_id: 2\n"
+        f"  {key}: {written}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(DataError, match=f"deck.{key} must be a list"):
+        build_conjugation_deck(
+            path, ProjectConfig.load(tmp_path), [verb("買う", "かう", "godan")],
+            tmp_path / "o.apkg",
+        )
+
+
+def test_an_empty_include_list_means_no_filter(tmp_path: Path) -> None:
+    """The vocabulary path's semantics. Treating it as "include nothing" filtered
+    every record out and blamed a missing verb_group."""
+    project(tmp_path)
+    path = tmp_path / "decks" / "drill.yaml"
+    path.write_text(
+        "deck:\n  kind: conjugation\n  name: D\n  deck_id: 1\n  model_id: 2\n"
+        "  include_ids: []\n",
+        encoding="utf-8",
+    )
+
+    _target, count = build_conjugation_deck(
+        path, ProjectConfig.load(tmp_path), [verb("買う", "かう", "godan")],
+        tmp_path / "o.apkg",
+    )
+
+    assert count == 1
+
+
+# --- through the CLI ------------------------------------------------------------
+
+
+def cli_project(tmp_path: Path, records: list) -> Path:
+    import json
+
+    project(tmp_path)
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps([r.to_dict() for r in records], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (tmp_path / "decks" / "drill.yaml").write_text(
+        "deck:\n  kind: conjugation\n  name: D\n  deck_id: 1\n  model_id: 2\n",
+        encoding="utf-8",
+    )
+    return tmp_path / "decks" / "drill.yaml"
+
+
+def test_the_build_command_dispatches_on_the_new_kind(tmp_path: Path) -> None:
+    """A new deck `kind:` is a new supported input format, and nothing reached
+    the dispatch: every test called the builder directly, and `make gates`
+    builds one vocabulary deck with `--output`."""
+    from japanese_anki import cli
+
+    deck = cli_project(tmp_path, [verb("買う", "かう", "godan")])
+
+    code = cli.main([
+        "--root", str(tmp_path), "build", str(deck),
+        "--output", str(tmp_path / "out.apkg"),
+    ])
+
+    assert code == 0
+    assert guids_in(tmp_path / "out.apkg"), "the package carries notes"
+
+
+def test_a_drill_deck_refuses_only_new(tmp_path: Path, capsys) -> None:
+    """It records no exports, so the flag cannot mean anything — and accepting
+    it while doing a full rebuild reports a flag as honoured that never was."""
+    from japanese_anki import cli
+
+    deck = cli_project(tmp_path, [verb("買う", "かう", "godan")])
+
+    assert cli.main(["--root", str(tmp_path), "build", str(deck), "--only-new"]) == 1
+    assert "--only-new needs export history" in capsys.readouterr().err
+
+
+def test_a_missing_collection_says_so(tmp_path: Path, capsys) -> None:
+    """Not "a verb needs a verb_group janki knows", which sent the user to
+    enrich a collection that is not there."""
+    from japanese_anki import cli
+
+    deck = cli_project(tmp_path, [])
+    (tmp_path / "vocabulary.json").unlink()
+
+    assert cli.main(["--root", str(tmp_path), "build", str(deck)]) == 1
+    assert "no collection at" in capsys.readouterr().err
+
+
+def test_a_drill_deck_honours_its_own_source(tmp_path: Path) -> None:
+    """Every vocabulary deck resolves `source:` against its own directory, and
+    this path read the project's collection and ignored the key — so a deck
+    naming another collection silently drilled the wrong one."""
+    import json
+
+    from japanese_anki.config import ProjectConfig
+    from japanese_anki.exporters.pattern_cards import collection_for
+
+    project(tmp_path)
+    (tmp_path / "other.json").write_text(
+        json.dumps([verb("待つ", "まつ", "godan").to_dict()], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    deck = tmp_path / "decks" / "drill.yaml"
+    deck.write_text(
+        "deck:\n  kind: conjugation\n  name: D\n  deck_id: 1\n  model_id: 2\n"
+        '  source: "../other.json"\n',
+        encoding="utf-8",
+    )
+
+    assert collection_for(deck, ProjectConfig.load(tmp_path)).name == "other.json"
+
+
+def test_a_drill_deck_passes_the_same_review_gate_a_word_deck_does(
+    tmp_path: Path, capsys
+) -> None:
+    """A drill card carries the expression, the reading and a meaning straight
+    off the record, so shipping one janki has not read is the thing the gate
+    exists to stop. The `pattern` branch skips it because it ships no record
+    content; this branch had no such excuse and returned before reaching it."""
+    from japanese_anki import cli
+
+    deck = cli_project(tmp_path, [verb("買う", "かう", "godan")])
+
+    assert cli.main(["--root", str(tmp_path), "build", str(deck)]) == 1
+
+    err = capsys.readouterr().err
+    assert "not ready to ship" in err
+    assert "janki review" in err

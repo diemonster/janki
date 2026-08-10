@@ -44,6 +44,7 @@ except ImportError:  # pragma: no cover
 from japanese_anki.config import ProjectConfig
 from japanese_anki.conjugation import CONJUGATION_FORMS
 from japanese_anki.errors import JankiError
+from japanese_anki.exporters.anki import _deck_string_set
 from japanese_anki.io import DataError, load_structured
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.patterns import (
@@ -59,6 +60,7 @@ __all__ = [
     "build_conjugation_deck",
     "build_pattern_deck",
     "cards_for",
+    "collection_for",
     "deck_problems",
     "drill_cards",
 ]
@@ -263,6 +265,33 @@ def _read(path: Path) -> str:
         raise PatternDeckError(f"Missing template file: {path}") from exc
 
 
+def collection_for(deck_path: Path, project_config: ProjectConfig) -> Path:
+    """The records file a conjugation deck drills, honouring its own ``source:``.
+
+    A vocabulary deck resolves `source:` against its own directory and both
+    shipped ones use it; this path read `config.normalized_file` and ignored the
+    key entirely, so a drill deck naming another collection silently drilled the
+    wrong one. Missing is reported here rather than as an empty record list,
+    which `build_conjugation_deck` could only describe as a missing verb class.
+    """
+    section = _deck_section(deck_path)
+    source = section.get("source")
+    if source is None:
+        path = project_config.normalized_file.resolve()
+    else:
+        if not isinstance(source, str):
+            raise DataError(
+                f"deck.source must be a path, got {type(source).__name__}: {deck_path}"
+            )
+        path = (deck_path.parent / source).resolve()
+    if not path.exists():
+        raise PatternDeckError(
+            f"{deck_path.name}: no collection at {path}. A conjugation deck "
+            f"drills the records janki holds; import some first."
+        )
+    return path
+
+
 def deck_problems(
     deck_path: Path, store: Mapping[str, PatternSet] | None = None
 ) -> list[str]:
@@ -407,9 +436,16 @@ def drill_cards(
 
     drilled: list[tuple[PatternCard, str]] = []
     for record in records:
-        answer = conjugate(record.expression, record.reading, record.verb_group).get(
-            form, ""
-        )
+        # `verb_group or part_of_speech`, like every other `conjugate` caller:
+        # jpdb has no verb class for an い-adjective, so 高い carries its class
+        # in `part_of_speech` and `conjugate` resolves that alias. Without the
+        # fallback 高い got no drill card while its word card rendered 高くて —
+        # the two disagreeing by omission, which this module says cannot happen.
+        answer = conjugate(
+            record.expression,
+            record.reading,
+            record.verb_group or record.part_of_speech,
+        ).get(form, "")
         if not answer:
             continue
         # The reading rides along on the front when it adds something: a kanji
@@ -453,12 +489,17 @@ def build_conjugation_deck(
             f"got {form!r}"
         )
 
-    include = deck_config.get("include_ids")
-    exclude = set(deck_config.get("exclude_ids") or [])
+    # The vocabulary path's own reader, so a drill deck cannot disagree with a
+    # word deck about what a filter means. Written by hand, `exclude_ids:` as a
+    # bare string became a set of single characters and excluded nothing — the
+    # record the user held back shipped — while `include_ids: []` filtered
+    # everything out and blamed a missing verb_group.
+    include = _deck_string_set(deck_config, "include_ids", deck_path)
+    exclude = _deck_string_set(deck_config, "exclude_ids", deck_path)
     chosen = [
         record
         for record in records
-        if (include is None or record.id in set(include)) and record.id not in exclude
+        if (not include or record.id in include) and record.id not in exclude
     ]
     cards = drill_cards(chosen, form)
     if not cards:

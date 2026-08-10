@@ -875,6 +875,13 @@ FRONT: te form  買う（かう） → ?
 BACK :          買って      to use   godan
 ```
 
+If you imported `teform-rules.apkg` before the drill deck existed, re-import it
+with **Merge Notetypes** ticked: the shared notetype gained a `Kind` field, and
+appending one is the schema change that forces a one-directional AnkiWeb sync
+(see "Importing into Anki Desktop"). Without the re-import the existing cards
+still read correctly — the template falls back to "Rule" for an empty field —
+but they will not pick up the label.
+
 **Every answer is computed, never transcribed** — the same rules that build the
 conjugation table on the word card, so a drill card and its word card cannot
 disagree, and 行く → 行って comes out right because `conjugate` knows the

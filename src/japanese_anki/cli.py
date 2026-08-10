@@ -2490,12 +2490,25 @@ def _build_one(
     # is dispatched before the vocabulary path reads the file as a word list.
     kind = _deck_kind(deck_path)
     if kind == "conjugation":
-        normalized = config.normalized_file.resolve()
+        if only_new:
+            # Refused rather than ignored. A drill deck records no exports, so
+            # `--only-new` cannot mean anything here — and accepting it while
+            # doing a full rebuild reports a flag as honoured that never was.
+            raise AnkiBuildError(
+                f"{deck_path.name}: --only-new needs export history, and a "
+                f"conjugation deck records none. Build it without the flag."
+            )
+        normalized = pattern_cards.collection_for(deck_path, config)
+        records = load_records(normalized)
+        # The same gate a word deck passes, on the same records. A drill card
+        # carries the expression, the reading and a meaning straight off the
+        # record, so shipping one janki has not read is the very thing the gate
+        # exists to stop — the `pattern` branch skips it because it ships no
+        # record content, and this branch has no such excuse.
+        if output is None:
+            _refuse_unreviewed(records, config, deck_path)
         target, count = pattern_cards.build_conjugation_deck(
-            deck_path,
-            config,
-            load_records(normalized) if normalized.exists() else [],
-            output,
+            deck_path, config, records, output
         )
         print(f"Built {target} — {count} drill card(s)")
         return False
