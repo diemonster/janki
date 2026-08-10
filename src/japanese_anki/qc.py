@@ -289,12 +289,18 @@ def repair_spilled_punctuation(furigana: str) -> str:
                 break
             leading += 1
         rest = raw[leading:]
-        # Only when what remains can legitimately start a run. `、、` alone, or
-        # punctuation followed by kana, is not something to repair silently.
         if not leading or not rest:
             return match.group(0)
-        head = normalize_identity_part(rest[0]) or rest[0]
-        if _KANA.match(head):
+        # Only when the remainder is provably the annotated word *alone*, which
+        # means no kana anywhere in it. Testing the first character only was not
+        # enough: `、妻と日本語[にほんご]` starts with a Han character, so the
+        # repair fired and produced `、 妻と日本語[にほんご]` — asserting that
+        # にほんご annotates 妻と日本語, which is the segmentation guess this
+        # function exists not to make. Worse, it erased the evidence: the run
+        # then starts with a Han character, which `spilled_furigana_groups`
+        # documents as never flagged, so `janki validate` stopped reporting a
+        # defect it had reported before, and 妻と vanished from the reading.
+        if any(_KANA.match(char) for char in rest):
             return match.group(0)
         return f"{raw[:leading]} {rest}[{reading}]"
 
@@ -316,14 +322,33 @@ def stray_furigana_spaces(furigana: str) -> tuple[str, ...]:
     gap at all, and the romaji carries the space too.
     """
     stray: list[str] = []
-    for index, char in enumerate(furigana):
-        if char != " ":
+    index = 0
+    while index < len(furigana):
+        if furigana[index] != " ":
+            index += 1
             continue
-        rest = furigana[index + 1 :]
-        match = _GROUP.match(rest)
-        if match is None:
-            following = rest.split(" ", 1)[0]
-            stray.append(following or "(end of field)")
+        # A run, not a character. Two spaces in a row is a plausible typo and
+        # exactly what this exists to catch, but reading them one at a time made
+        # the first one's "following word" the empty string, which was then
+        # reported as "(end of field)" for a space nowhere near the end.
+        end = index
+        while end < len(furigana) and furigana[end] == " ":
+            end += 1
+        run, rest = end - index, furigana[end:]
+        before = furigana[index - 1] if index else ""
+        after = rest[0] if rest else ""
+        # Reported only where a space is *provably* not content. Japanese text
+        # carries no ASCII spaces, so one between two non-ASCII characters is
+        # notation in the wrong place — but `「Hello World」と 言[い]った。` has
+        # a space the sentence itself contains, which `furigana_reading` keeps
+        # on purpose. Warning about that one sends a reader to delete it, and
+        # the romaji becomes HelloWorld.
+        provable = run > 1 or (
+            bool(before) and bool(after) and not before.isascii() and not after.isascii()
+        )
+        if provable and (run > 1 or _GROUP.match(rest) is None):
+            stray.append(rest.split(" ", 1)[0] or "(end of field)")
+        index = end
     return tuple(stray)
 
 

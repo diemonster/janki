@@ -186,10 +186,13 @@ def test_a_reviewed_document_is_skipped_rather_than_re_read(
 
 
 def test_a_skip_does_not_mask_a_real_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The two categories are kept apart, so a genuine extraction failure in the
-    same run still exits non-zero."""
+    same run still exits non-zero — and each lands in its own stream. Asserting
+    only the exit code pinned nothing: the 1 comes entirely from the failure, so
+    the test passed both before the split and against a version counting skips
+    as failures."""
     root = project(tmp_path)
     monkeypatch.setattr(
         patterns_module.claude_client,
@@ -208,6 +211,10 @@ def test_a_skip_does_not_mask_a_real_failure(
     ])
 
     assert code == 1
+    out = capsys.readouterr()
+    assert "already read and marked reviewed" in out.out, "the skip is a notice"
+    assert "the model declined" in out.err, "the failure is a warning"
+    assert store_of(root)["week11.pdf"]["reviewed"] is True
 
 
 def test_force_re_reads_it_and_says_it_is_unreviewed_again(
@@ -295,7 +302,10 @@ def test_reviewing_a_chart_says_it_steers_no_sentences(
         reader({"teform.pdf": Parsed("pattern", "Te-form Song", ["く → いて"])}),
     )
     cli.main(["--root", str(root), "patterns", str(document(root, "teform.pdf"))])
-    capsys.readouterr()
+    # Asserted before clearing: the read-time parenthetical is its own branch,
+    # and inverting its condition left the whole suite green while the CLI told
+    # you a lesson steers nothing and said nothing about a chart.
+    assert "teform.pdf is a pattern document" in capsys.readouterr().out
 
     cli.main(["--root", str(root), "patterns", "--review", "teform.pdf"])
 
@@ -417,3 +427,20 @@ def test_check_exits_non_zero_on_a_disagreement(
     cli.main(["--root", str(root), "patterns", str(document(root, "teform.pdf"))])
 
     assert cli.main(["--root", str(root), "patterns", "--check"]) == 1
+
+
+def test_reading_a_lesson_says_nothing_about_steering(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The negative half of the read-time parenthetical, so the condition is
+    pinned in both directions rather than only where it fires."""
+    root = project(tmp_path)
+    monkeypatch.setattr(
+        patterns_module.claude_client,
+        "parse_call",
+        reader({"week11.pdf": Parsed("lesson", "Week 11", ["〜んだ"])}),
+    )
+
+    cli.main(["--root", str(root), "patterns", str(document(root, "week11.pdf"))])
+
+    assert "steered only by" not in capsys.readouterr().out

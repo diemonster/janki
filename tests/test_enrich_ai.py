@@ -980,7 +980,9 @@ def test_a_swallowed_comma_is_repaired_before_anything_reads_the_furigana() -> N
 def test_a_spill_needing_a_guess_is_kept_as_written() -> None:
     """`、妻と日本語[にほんご]` needs someone to decide where the word starts.
     It stays exactly as the model wrote it, for `janki validate` to report."""
-    written = "毎日[まいにち]、妻と 日本語[にほんご]を 話[はな]す"
+    # No space before 日本語: with one there is no spill, and the test passed
+    # for a reason unrelated to the behaviour it names.
+    written = "毎日[まいにち]、妻と日本語[にほんご]を 話[はな]す"
     outcome = apply_ai_result(
         record(), answer(generated("毎日、妻と日本語を話す", furigana=written))
     )

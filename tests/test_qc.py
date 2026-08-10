@@ -553,10 +553,20 @@ def test_punctuation_a_group_swallowed_gets_the_separator_back(
 def test_a_spill_that_would_need_a_guess_is_left_alone() -> None:
     """`、妻と日本語[にほんご]` has swallowed a noun and a particle too. Deciding
     that にほんご annotates 日本語 rather than 妻と日本語 is choosing where the
-    word begins, and this project does not guess a segmentation."""
-    written = "毎日[まいにち]、妻と 日本語[にほんご]を 話[はな]す"
+    word begins, and this project does not guess a segmentation.
+
+    Repairing it would also destroy the evidence: the run would then start with
+    a Han character, which `spilled_furigana_groups` never flags, so a reported
+    defect would become an unreportable one in a field that now looks tidy."""
+    from japanese_anki.qc import spilled_furigana_groups
+
+    # No space before 日本語 — that is the whole point. With one, `_GROUP` gives
+    # the group the run 日本語 and there is no spill to leave alone, so the test
+    # passed without ever reaching the guard it names.
+    written = "毎日[まいにち]、妻と日本語[にほんご]を 話[はな]す"
 
     assert repair_spilled_punctuation(written) == written
+    assert spilled_furigana_groups(written), "and it is still reported"
 
 
 @pytest.mark.parametrize(
@@ -621,3 +631,22 @@ def test_punctuation_followed_by_a_swallowed_particle_is_left_alone() -> None:
 
     assert repair_spilled_punctuation(written) == written
     assert spilled_furigana_groups(written), "and it stays flagged"
+
+
+def test_a_space_the_sentence_itself_contains_is_not_reported() -> None:
+    """`furigana_reading` keeps non-notation spaces on purpose, and this one is
+    part of the text. Warning about it sends a reader to delete it, and the
+    romaji becomes HelloWorld."""
+    assert stray_furigana_spaces("「Hello World」と 言[い]った。") == ()
+
+
+def test_two_spaces_in_a_row_name_the_word_after_them() -> None:
+    """A doubled space is a plausible typo and exactly what this catches, but
+    read one character at a time the first one's "following word" was the empty
+    string — reported as '(end of field)' for a space nowhere near the end."""
+    assert stray_furigana_spaces("日本語[にほんご]の  ニュースが 少[すこ]し") == ("ニュースが",)
+
+
+def test_two_spaces_before_a_group_are_still_notation_gone_wrong() -> None:
+    """One space before a group is the notation; two is not."""
+    assert stray_furigana_spaces("毎晩[まいばん]、  音楽[おんがく]を") == ("音楽[おんがく]を",)

@@ -204,8 +204,8 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
                 + ", ".join(repr(text) for text in stray)
                 + ", which no reading annotates — in a furigana field a space "
                 "means 'the next group starts here', so this one survives into "
-                "the reading, the romaji and the audio, and shows on the card "
-                "as a gap the sentence itself does not have",
+                "the reading and the romaji, and shows on the card as a gap "
+                "the sentence itself does not have",
             )
     return issues
 
