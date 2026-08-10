@@ -3059,24 +3059,29 @@ def command_patterns(args: argparse.Namespace) -> int:
             # cannot read is the limit case — aborting here never asked, and a
             # store of lesson decks or bare-ending charts needed no class at
             # all. Refused below only for a verb nothing could answer for.
-            print(
-                f"warning: could not read the collection for verb classes: {exc}",
-                file=sys.stderr,
-            )
             known = {}
-            collection_error = str(exc)
+            collection_error = f"could not read the collection for verb classes: {exc}"
         groups = _classes_for(entries, config, args.ask_jpdb, known)
-        # A verb the store names that nothing could answer for. Only then is the
-        # unreadable collection this command's failure — `--check`'s exit code
-        # is its entire product, and reporting "nothing could be checked" on
-        # exit 0 is a pass over a run that verified nothing.
-        stranded = collection_error and any(
-            verb not in groups for entry in entries for verb in patterns.chart_verbs(entry)
-        )
-        if stranded:
+        # The verbs the store names that nothing could answer for. Only those
+        # make the unreadable collection this command's failure — `--check`'s
+        # exit code is its entire product, and reporting "nothing could be
+        # checked" on exit 0 is a pass over a run that verified nothing.
+        unresolved = sorted({
+            verb
+            for entry in entries
+            for verb in patterns.chart_verbs(entry)
+            if verb not in groups
+        }) if collection_error else []
+        stranded = bool(unresolved)
+        if collection_error:
+            # Once, at the severity the outcome earned. Printing eagerly *and*
+            # again after the lookup said the same sentence twice, as a warning
+            # and as an error, and the second carried less than the first.
             print(
-                f"error: could not read the collection for verb classes: "
-                f"{collection_error}",
+                f"error: {collection_error} — no class for "
+                f"{', '.join(unresolved)}"
+                if stranded
+                else f"warning: {collection_error}",
                 file=sys.stderr,
             )
         disagreed = checked = 0
@@ -3121,9 +3126,19 @@ def command_patterns(args: argparse.Namespace) -> int:
                 print("Nothing in the store could be checked against those rules.")
             return 1 if stranded else 0
         if not disagreed:
+            # Qualified when something was stranded. An unqualified all-clear
+            # over a run that could not read the collection is the false
+            # reassurance this block is written against — and the held-back rows
+            # above blame "no verb class on record", sending the user to
+            # `janki enrich --jpdb`, which reads the very file this run could
+            # not read.
             print(
                 f"All {checked} worked example(s) agree with janki's "
                 f"conjugation rules."
+                if not stranded
+                else f"{checked} worked example(s) agree with janki's conjugation "
+                f"rules; the collection could not be read, so "
+                f"{', '.join(unresolved)} went unchecked."
             )
         return 1 if disagreed or stranded else 0
 

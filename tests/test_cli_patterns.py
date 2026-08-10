@@ -962,7 +962,45 @@ def test_check_over_a_store_that_needs_no_class_is_not_a_failure(
     code = cli.main(["--root", str(root), "patterns", "--check"])
 
     assert code == 0
-    assert "Nothing in the store could be checked" in capsys.readouterr().out
+    out = capsys.readouterr()
+    assert "Nothing in the store could be checked" in out.out
+    # Still said out loud, because the next document might need it — and this
+    # is the only line that mentions the collection on a run that exits 0.
+    assert "could not read the collection for verb classes" in out.err
+
+
+def test_check_does_not_call_a_partly_stranded_run_all_clear(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """jpdb places one of the two verbs, which is the ordinary outcome rather
+    than a corner one — it answers for what it can place and omits the rest. The
+    guard only covered a run where *nothing* was checked, so a mixed run printed
+    an unqualified all-clear, and the row it held back blamed "no verb class on
+    record" and pointed at `janki enrich --jpdb`, which reads the very file this
+    run could not read."""
+    root = project(tmp_path)
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("う・つ・る → って")]
+    parsed.patterns[0].examples = ["かう ⇨ かって", "まつ ⇨ まって"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+    cli.main(["--root", str(root), "patterns", str(document(root, "chart.pdf"))])
+    (root / "vocabulary.json").unlink()
+    monkeypatch.setattr(
+        cli.patterns, "verb_groups_from_jpdb", lambda *_a, **_k: {"かう": "godan"}
+    )
+    monkeypatch.setattr(cli.jpdb, "api_key_from_env", lambda: "k")
+    monkeypatch.setattr(cli.jpdb, "JpdbClient", lambda _key: object())
+    capsys.readouterr()
+
+    code = cli.main(["--root", str(root), "patterns", "--check", "--ask-jpdb"])
+
+    out = capsys.readouterr()
+    assert code == 1
+    assert "All 1 worked example(s) agree" not in out.out, "not an all-clear"
+    assert "まつ went unchecked" in out.out
+    assert out.err.count("could not read the collection") == 1, "said once"
 
 
 def test_a_failed_lookup_keeps_the_offline_classes(
