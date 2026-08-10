@@ -37,7 +37,7 @@ from __future__ import annotations
 import functools
 import json
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -412,6 +412,10 @@ class RuleCheck:
     group: str = ""
     #: Which form it turned out to be — ``te_form``, ``past``, … — when agreed.
     form: str = ""
+    #: True when nothing knew this verb's class, so every group was tried. The
+    #: verdict is then weaker: a form wrong for the verb's real class can be
+    #: right for another, and this cannot tell them apart.
+    assumed_group: bool = False
     #: What `conjugate` produces instead, per group, when nothing agreed.
     computed: tuple[str, ...] = ()
     #: Why this row was found but not examined, or ``""`` if it was. A row janki
@@ -428,7 +432,9 @@ class RuleCheck:
         return not self.held_back
 
 
-def check_pattern_rules(entry: PatternSet) -> tuple[RuleCheck, ...]:
+def check_pattern_rules(
+    entry: PatternSet, groups: Mapping[str, str] | None = None
+) -> tuple[RuleCheck, ...]:
     """Check a document's worked examples against :func:`conjugation.conjugate`.
 
     A pattern document is inference like everything else here, so its rules are
@@ -456,18 +462,19 @@ def check_pattern_rules(entry: PatternSet) -> tuple[RuleCheck, ...]:
       both ゆいて and 行って are attested — janki has no opinion, which is not
       the same as disagreeing, and reporting it as one would fail a chart that
       is right.
-    * **The verb group.** The chart states it in English prose; reading that
-      would be a guess. Every group is tried, and agreement under any of them is
-      the claim — weaker than "and it is godan", on purpose.
+    ``groups`` maps a verb — by spelling or by reading — to its class, and the
+    caller builds it from the collection, where `enrich --jpdb` has already
+    recorded a `verb_group` for every verb janki holds. Where it answers, only
+    that class is tried, and the check is exact: 食べる is ichidan, so its
+    potential is 食べられる and the ら抜き ``食べる ⇨ 食べれる`` is a
+    disagreement.
 
-    That last one has a cost worth naming, because it looks like a bug from the
-    outside: a form that is wrong *for the verb's real group* can be right for
-    another, and this agrees with it. ``食べる ⇨ 食べれる`` is ら抜き and janki
-    computes 食べられる — but 食べる run through the godan rules gives 食べれる,
-    so it passes. Narrowing that needs the group, which only the collection
-    knows and the chart does not say; the alternative is guessing which class a
-    chart's example verb belongs to, and a checker that guesses is worse than
-    one with a stated blind spot.
+    Where nothing knows the verb, every class is tried and the result is marked
+    ``assumed_group``. That verdict is genuinely weaker and says so, because a
+    form wrong for a verb's real class can be right for another — 食べる run
+    through the *godan* rules gives 食べれる, which is exactly how the ら抜き row
+    passed before the class was looked up. The chart states the class in English
+    prose, which is why it is read from the dictionary rather than the page.
     """
     from japanese_anki.conjugation import conjugate
 
@@ -492,9 +499,13 @@ def check_pattern_rules(entry: PatternSet) -> tuple[RuleCheck, ...]:
                 if (verb, claimed) in seen:
                     continue
                 seen.add((verb, claimed))
+                # The verb's real class where anything knows it, every class
+                # where nothing does.
+                known = (groups or {}).get(verb, "")
+                candidates = (known,) if known else _GROUPS
                 tables = [
                     (group, table)
-                    for group in _GROUPS
+                    for group in candidates
                     if (table := conjugate(verb, verb, group))
                 ]
                 if not tables:
@@ -534,6 +545,7 @@ def check_pattern_rules(entry: PatternSet) -> tuple[RuleCheck, ...]:
                         claimed=claimed,
                         group=agreed,
                         form=form,
+                        assumed_group=not known,
                         computed=() if agreed else tuple(
                             f"{group}: {table[wanted]}"
                             for group, table in tables

@@ -624,3 +624,48 @@ def test_a_potential_claim_is_checked_rather_than_excused() -> None:
 
     assert len(checks) == 1
     assert checks[0].examined, "janki computes a potential; it has an opinion"
+
+
+def test_the_verbs_real_class_is_used_when_anything_knows_it() -> None:
+    """`enrich --jpdb` records a verb_group from jpdb's own codes, so the class
+    a chart states in English prose is already on disk. With it, the check is
+    exact: 食べる is ichidan, its potential is 食べられる, and ら抜き is wrong."""
+    checks = check_pattern_rules(
+        chart(Pattern("potential", examples=("食べる ⇨ 食べれる",))),
+        {"食べる": "ichidan"},
+    )
+
+    assert len(checks) == 1
+    assert not checks[0].agrees and not checks[0].assumed_group
+
+
+def test_the_same_row_passes_when_no_class_is_known_and_says_so() -> None:
+    """Because 食べる run through the *godan* rules gives 食べれる. The verdict
+    is genuinely weaker, so it is marked rather than presented as a clean pass —
+    this is the blind spot, and it is now confined to verbs nothing knows."""
+    checks = check_pattern_rules(chart(Pattern("potential", examples=("食べる ⇨ 食べれる",))))
+
+    assert checks[0].agrees and checks[0].assumed_group
+
+
+def test_a_class_is_found_by_reading_as_well_as_spelling() -> None:
+    """A chart writes its examples in kana — かう ⇨ かって — while the record is
+    買う with reading かう."""
+    checks = check_pattern_rules(
+        chart(Pattern("う・つ・る → って", examples=("かう ⇨ かって",))),
+        {"買う": "godan", "かう": "godan"},
+    )
+
+    assert checks[0].agrees and not checks[0].assumed_group
+
+
+def test_a_wrong_class_on_record_makes_the_row_fail_rather_than_pass() -> None:
+    """The cost of trusting the collection, stated: if the record is wrong the
+    check inherits it. That is the right trade — the collection's verb_group is
+    already what `conjugate` runs for every card janki builds, so a chart and a
+    card now disagree loudly instead of the chart quietly agreeing with itself."""
+    checks = check_pattern_rules(
+        chart(Pattern("て", examples=("たべる ⇨ たべて",))), {"たべる": "godan"}
+    )
+
+    assert not checks[0].agrees

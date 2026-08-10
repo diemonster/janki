@@ -2717,7 +2717,30 @@ def _collection_lines(config: ProjectConfig) -> list[str]:
     return lines
 
 
-def _rule_check_lines(entry: patterns.PatternSet) -> list[str]:
+def _verb_groups(config: ProjectConfig) -> dict[str, str]:
+    """Every verb class the collection already knows, by spelling and reading.
+
+    `enrich --jpdb` records a `verb_group` per record from jpdb's own codes, so
+    the class a conjugation chart states in English prose is already on disk in
+    a form janki can use. Keyed both ways because a chart writes its examples in
+    kana (かう ⇨ かって) while the record is 買う with reading かう.
+    """
+    normalized = config.normalized_file.resolve()
+    if not normalized.exists():
+        return {}
+    known: dict[str, str] = {}
+    for record in load_records(normalized):
+        if not record.verb_group:
+            continue
+        for key in (record.expression, record.reading):
+            if key:
+                known.setdefault(key, record.verb_group)
+    return known
+
+
+def _rule_check_lines(
+    entry: patterns.PatternSet, groups: Mapping[str, str] | None = None
+) -> list[str]:
     """What janki's own conjugation rules say about a chart's worked examples.
 
     Empty for a document with nothing checkable — a lesson deck states no
@@ -2725,7 +2748,7 @@ def _rule_check_lines(entry: patterns.PatternSet) -> list[str]:
     nothing to compute against. Silence there is correct: reporting "0 checked"
     on every slide deck would train the eye to skip the line that matters.
     """
-    checks = patterns.check_pattern_rules(entry)
+    checks = patterns.check_pattern_rules(entry, groups)
     if not checks:
         return []
     examined = [check for check in checks if check.examined]
@@ -2741,9 +2764,13 @@ def _rule_check_lines(entry: patterns.PatternSet) -> list[str]:
     # naming the form, the most likely garble on such a chart reads as a pass.
     for check in examined:
         if check.agrees:
+            # `assumed` is said out loud: with no class on record every group
+            # was tried, and a form wrong for the verb's real class can be right
+            # for another, so the pass is weaker than the others on the list.
+            assumed = " (class assumed)" if check.assumed_group else ""
             lines.append(
                 f"        {check.verb} ⇨ {check.claimed} matched "
-                f"{check.form.replace('_', ' ')}"
+                f"{check.form.replace('_', ' ')}{assumed}"
             )
     # Named, not dropped. A row found and not examined used to disappear
     # entirely, so a chart with one readable row and one janki has no opinion
@@ -2830,16 +2857,17 @@ def command_patterns(args: argparse.Namespace) -> int:
         if not store:
             print("No documents read yet. Pass a PDF or image to read one.")
             return 0
+        groups = _verb_groups(config)
         disagreed = checked = 0
         skipped_names: list[str] = []
         for name, entry in sorted(store.items()):
-            found = patterns.check_pattern_rules(entry)
+            found = patterns.check_pattern_rules(entry, groups)
             examined = [check for check in found if check.examined]
             if not found:
                 skipped_names.append(f"{name} ({entry.kind})")
                 continue
             print(f"{name} — {entry.kind}")
-            for line in _rule_check_lines(entry):
+            for line in _rule_check_lines(entry, groups):
                 print(line)
             # Held-back rows are named by `_rule_check_lines` and count toward
             # neither the total nor the exit code: janki having no opinion is
@@ -2881,6 +2909,7 @@ def command_patterns(args: argparse.Namespace) -> int:
             print("No documents read yet. Pass a PDF or image to read one.")
         return 0
 
+    verb_groups = _verb_groups(config)
     prepared_inputs = prepare_inputs(args.files, config.scan_inbox)
     failures: list[str] = []
     skipped: list[str] = []
@@ -2924,7 +2953,7 @@ def command_patterns(args: argparse.Namespace) -> int:
         # the rules are checked rather than believed, which is the same shape
         # the furigana path uses against jpdb. Automatic rather than a flag: a
         # check nobody runs catches nothing.
-        for line in _rule_check_lines(found):
+        for line in _rule_check_lines(found, verb_groups):
             print(line)
     patterns.save_store(config.patterns_file, store)
     # Deliberately skipping a document janki already has is not a problem, so it

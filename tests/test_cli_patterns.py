@@ -527,3 +527,31 @@ def test_the_form_each_row_matched_is_printed(
     cli.main(["--root", str(root), "patterns", str(document(root, "teform.pdf"))])
 
     assert "のむ ⇨ のんだ matched past" in capsys.readouterr().out
+
+
+def test_the_check_uses_the_collections_verb_classes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """And says when it could not: a pass with the class assumed is weaker than
+    one checked against the verb's real class, and the line distinguishes
+    them."""
+    root = project(tmp_path)
+    (root / "vocabulary.json").write_text(
+        json.dumps([{
+            "id": "word:食べる:たべる", "expression": "食べる", "reading": "たべる",
+            "meanings": ["to eat"], "verb_group": "ichidan",
+        }], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("potential")]
+    parsed.patterns[0].examples = ["食べる ⇨ 食べれる", "およぐ ⇨ およいで"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+
+    cli.main(["--root", str(root), "patterns", str(document(root, "chart.pdf"))])
+
+    out = capsys.readouterr().out
+    assert "食べる ⇨ 食べれる is not what janki computes" in out
+    assert "およぐ ⇨ およいで matched te form (class assumed)" in out
