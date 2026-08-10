@@ -386,9 +386,21 @@ def _nearest_form(claimed: str, table: Mapping[str, str], wanted: str = "") -> s
     ]
     if not candidates:
         return ""
-    def rank(value: str) -> tuple[int, int, int]:
+    # The form the claim's *ending* names outranks a shared prefix. およいて and
+    # およいだ share およい and differ in their last character either way, so
+    # prefix alone offered the past as the correction for a row plainly about
+    # the て-form.
+    intended = table.get(wanted, "")
+
+    def rank(value: str) -> tuple[int, int, int, int]:
         return (
+            # Shared prefix first, and it decides whenever it can: 書けれる
+            # shares 書け with the potential 書ける and only 書 with the passive
+            # 書かれる, so the row is plainly a garbled potential however it
+            # ends. The intended form only breaks a *tie* — およいて shares およい
+            # with both およいで and およいだ, and its ending is what says which.
             len(os.path.commonprefix([claimed, value])),
+            int(bool(intended) and value == intended),
             int(bool(claimed) and bool(value) and claimed[-1] == value[-1]),
             -abs(len(value) - len(claimed)),
         )
@@ -401,6 +413,18 @@ def _nearest_form(claimed: str, table: Mapping[str, str], wanted: str = "") -> s
     # names rather than printing "no group applies", which is false whenever a
     # class was known and produced a table.
     return table.get(wanted, "")
+
+
+def _normalize_group_name(group: str) -> str:
+    """The class name `conjugate` would accept, or ``""``.
+
+    Asked so a hold-back can say *which* of the two refusals happened: an
+    unusable class name is a data problem someone can fix, and reporting it as
+    "no conjugation for this word" points at the word instead.
+    """
+    from japanese_anki.conjugation import _VERB_GROUP_ALIASES, _normalize_group
+
+    return _VERB_GROUP_ALIASES.get(_normalize_group(group)) or ""
 
 
 def _pairs_in(text: str) -> list[tuple[str, str]]:
@@ -624,12 +648,22 @@ def check_pattern_rules(
                     if (table := conjugate(verb, verb, group))
                 ]
                 if not tables:
-                    # janki declines this word entirely — ゆく, or a compound of
-                    # an irregular. Recorded rather than dropped: a row nobody
-                    # examined must not vanish under an all-clear.
+                    # Two different situations, and saying the wrong one sends
+                    # someone to fix the wrong thing. `conjugate` declines ゆく
+                    # and irregular compounds outright; it also declines a class
+                    # *name* it does not know, and `verb_group` is free text —
+                    # a CSV column may carry 一段活用 or "Group 3", and jpdb
+                    # writes `suru` onto nouns like 勉強 that `_suru` refuses.
+                    known_class = _normalize_group_name(known)
+                    reason = (
+                        f"janki does not recognise the verb class {known!r} "
+                        f"recorded for this word"
+                        if not known_class
+                        else "janki has no conjugation for this word"
+                    )
                     checks.append(RuleCheck(
                         template=pattern.template, verb=verb, claimed=claimed,
-                        held_back="janki has no conjugation for this word",
+                        held_back=reason,
                     ))
                     continue
                 agreed = form = ""

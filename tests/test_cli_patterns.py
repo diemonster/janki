@@ -597,3 +597,106 @@ def test_a_failed_class_lookup_does_not_discard_the_document_just_read(
 
     assert "chart.pdf" in store_of(root), "the read survived the lookup failure"
     assert "could not look up verb classes" in capsys.readouterr().err
+
+
+def test_a_reading_key_finds_the_class_a_chart_writes_in_kana(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The reason `_verb_groups` keys on both spelling and reading: a chart
+    writes かう while the record is 買う. Nothing pinned it — the module-level
+    test hands `check_pattern_rules` a dict that already has both keys, so it
+    never builds the map."""
+    root = project(tmp_path, [{
+        "id": "word:買う:かう", "expression": "買う", "reading": "かう",
+        "meanings": ["to buy"], "verb_group": "godan",
+    }])
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("う・つ・る → って")]
+    parsed.patterns[0].examples = ["かう ⇨ かいて"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+
+    cli.main(["--root", str(root), "patterns", str(document(root, "chart.pdf"))])
+
+    out = capsys.readouterr().out
+    assert "かう ⇨ かいて is not what janki computes" in out, "checked, not held back"
+    assert "godan: かって" in out
+
+
+def test_a_kana_two_records_disagree_about_is_not_knowledge(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """かえる is 変える (ichidan) and 帰る (godan). Taking whichever loaded first
+    turned the correct row `かえる ⇨ かえって` into a confident failure against
+    the wrong class."""
+    root = project(tmp_path, [
+        {"id": "word:変える:かえる", "expression": "変える", "reading": "かえる",
+         "meanings": ["to change"], "verb_group": "ichidan"},
+        {"id": "word:帰る:かえる", "expression": "帰る", "reading": "かえる",
+         "meanings": ["to return"], "verb_group": "godan"},
+    ])
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("う・つ・る → って")]
+    parsed.patterns[0].examples = ["かえる ⇨ かえって"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+
+    cli.main(["--root", str(root), "patterns", str(document(root, "chart.pdf"))])
+
+    out = capsys.readouterr().out
+    assert "is not what janki computes" not in out, "no verdict on an ambiguous class"
+    assert "no verb class on record" in out
+
+
+def test_an_unreadable_collection_does_not_cancel_the_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`janki patterns handout.pdf` does not otherwise touch the collection, and
+    aborting before reading the PDF suppresses the output the command exists to
+    produce."""
+    root = project(tmp_path)
+    (root / "vocabulary.json").write_text(
+        '[{"id": "word:x:x", "expression": "x", "reading": "x", "examples": 3}]',
+        encoding="utf-8",
+    )
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("く → いて")]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+
+    cli.main(["--root", str(root), "patterns", str(document(root, "chart.pdf"))])
+
+    assert "chart.pdf" in store_of(root), "the document was still read"
+    assert "no verb classes available" in capsys.readouterr().err
+
+
+def test_a_decomposed_record_still_matches_a_composed_chart(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Records are stored as imported — `models.py` only strips — so a Shirabe
+    export carrying decomposed dakuten writes およ + く + U+3099, while the
+    chart's およぐ arrives composed. Keyed raw, the lookup missed and the row
+    was held back as though the collection had never heard of the verb."""
+    import unicodedata
+
+    decomposed = unicodedata.normalize("NFD", "泳ぐ")
+    root = project(tmp_path, [{
+        "id": "word:泳ぐ:およぐ", "expression": decomposed,
+        "reading": unicodedata.normalize("NFD", "およぐ"),
+        "meanings": ["to swim"], "verb_group": "godan",
+    }])
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("ぐ → いで")]
+    parsed.patterns[0].examples = ["およぐ ⇨ およいで"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+
+    cli.main(["--root", str(root), "patterns", str(document(root, "chart.pdf"))])
+
+    out = capsys.readouterr().out
+    assert "checked 1/1 worked example(s)" in out, "the class was found"
+    assert "no verb class on record" not in out

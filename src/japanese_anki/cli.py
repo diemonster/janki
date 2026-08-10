@@ -34,7 +34,7 @@ from japanese_anki.exporters.anki import (
     deck_notetype,
     resolve_deck_records,
 )
-from japanese_anki.identifiers import short_fingerprint
+from japanese_anki.identifiers import normalize_identity_part, short_fingerprint
 from japanese_anki.importers import jpdb_import, jpdb_reviews
 from japanese_anki.importers.shirabe import import_file, inspect_file
 from japanese_anki.inputs import prepare_inputs
@@ -2785,14 +2785,33 @@ def _verb_groups(config: ProjectConfig) -> dict[str, str]:
     normalized = config.normalized_file.resolve()
     if not normalized.exists():
         return {}
-    known: dict[str, str] = {}
-    for record in load_records(normalized):
+    try:
+        records = load_records(normalized)
+    except JankiError as exc:
+        # A collection janki cannot read must not cancel a command that does not
+        # otherwise touch it: `janki patterns handout.pdf` would abort before
+        # reading the PDF. Every verb then has no class on record, which is the
+        # honest verdict when the collection is unreadable.
+        print(f"warning: no verb classes available: {exc}", file=sys.stderr)
+        return {}
+
+    # Accumulated per key, then narrowed to the keys exactly one class claims.
+    # A kana key is where the class is *ambiguous* — かえる is 変える (ichidan)
+    # and 帰る (godan), きる is 切る and 着る — and taking whichever record loaded
+    # first turned a correct chart row into a confident failure. A key two
+    # records disagree about is not knowledge.
+    seen: dict[str, set[str]] = {}
+    for record in records:
         if not record.verb_group:
             continue
         for key in (record.expression, record.reading):
-            if key:
-                known.setdefault(key, record.verb_group)
-    return known
+            # Normalized like `conjugate`'s own arguments and like the verb the
+            # chart is scanned for: records are stored as imported, so a
+            # decomposed dakuten (く + U+3099) would never match a composed ぐ.
+            folded = normalize_identity_part(key or "")
+            if folded:
+                seen.setdefault(folded, set()).add(record.verb_group)
+    return {key: next(iter(classes)) for key, classes in seen.items() if len(classes) == 1}
 
 
 def _rule_check_lines(

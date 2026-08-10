@@ -836,3 +836,40 @@ def test_a_lesson_decks_verbs_are_not_scraped_for_looking_up() -> None:
 
     assert chart_verbs(lesson) == []
     assert chart_verbs(replace(lesson, kind="pattern")) == ["かう"]
+
+
+def test_a_class_name_janki_cannot_use_says_so() -> None:
+    """`verb_group` is free text — a CSV column may carry 一段活用 or "Group 3",
+    and jpdb writes `suru` onto nouns like 勉強 that `_suru` refuses. Reporting
+    that as "janki has no conjugation for this word" points at the word, when
+    the fixable thing is the recorded class."""
+    checks = check_pattern_rules(
+        chart(Pattern("て", examples=("たべる ⇨ たべて",))), {"たべる": "一段活用"}
+    )
+
+    assert len(checks) == 1 and not checks[0].examined
+    assert "does not recognise the verb class" in checks[0].held_back
+
+
+def test_a_word_janki_declines_keeps_its_own_reason() -> None:
+    checks = check_pattern_rules(
+        chart(Pattern("く → いて", examples=("ゆく ⇨ ゆいて",))), {"ゆく": "godan"}
+    )
+
+    assert "no conjugation for this word" in checks[0].held_back
+
+
+def test_the_correction_names_the_form_the_ending_asks_for_on_a_tie() -> None:
+    """およいて shares およい with both およいで and およいだ, so a prefix alone
+    offered the *past* as the correction for a row plainly about the て-form.
+    The ending breaks that tie — but only a tie: 書けれる shares 書け with the
+    potential and only 書 with the passive, so the prefix still decides there."""
+    tie = check_pattern_rules(
+        chart(Pattern("ぐ → いで", examples=("およぐ ⇨ およいて",))), {"およぐ": "godan"}
+    )
+    decisive = check_pattern_rules(
+        chart(Pattern("potential", examples=("書く ⇨ 書けれる",))), {"書く": "godan"}
+    )
+
+    assert tie[0].computed == ("godan: およいで",)
+    assert decisive[0].computed == ("godan: 書ける",), "prefix still wins when it can"
