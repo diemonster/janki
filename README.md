@@ -855,6 +855,32 @@ janki patterns --check --ask-jpdb    # one request for every unknown verb
 
 Without that flag the command touches no network.
 
+### What Anki actually draws
+
+`tests/test_rendered_cards.py` builds a package, imports it into a scratch
+collection, and asks **Anki** to render the cards — the same path the desktop
+reviewer uses. Every other template test reads the HTML off disk, and that is
+blind to everything which only exists after Anki has processed it:
+
+```bash
+# delete `{{furigana:...}}` from every card back:
+#   52 source-level template and build tests → still green
+#   3 rendered-card tests                    → fail
+```
+
+So it pins the things a source test cannot see: that `{{furigana:話[はな]す}}`
+puts はな over 話 and not over 話す, that a `{{#CasualJapanese}}` section stays
+shut when there is no casual sentence, that no `{{Field}}` survives unresolved,
+that `[sound:...]` is consumed rather than shown, and that both lookup links
+carry a percent-encoded query.
+
+It also demonstrates, against Anki rather than in a comment, the failure
+`qc.spilled_furigana_groups` exists for: with the separator missing, Anki really
+does draw つま across `、妻`.
+
+**It is not a device test.** AnkiMobile and AnkiDroid rendering, CSS and layout,
+and whether the Shirabe app answers its URL scheme are all still manual.
+
 ## The last gate: `janki review`
 
 Every other check in janki is a rule. `validate` knows the shape a record must

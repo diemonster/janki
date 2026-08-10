@@ -45,6 +45,19 @@ dev = [
   "pytest>=8,<9",
   "ruff>=0.6,<1",
   "japanese-anki[ai]",
+  # Anki itself, so `tests/test_rendered_cards.py` can ask *Anki* what the
+  # templates draw instead of reading their HTML off disk. Nothing in janki
+  # imports it at runtime — `collection.py` reads a collection through plain
+  # sqlite precisely so a build needs no Anki install — but a furigana filter
+  # that puts the reading over the wrong characters, a `{{Field}}` that no
+  # longer resolves, and a `[sound:]` Anki does not recognise are all invisible
+  # to a test that reads the template source, and all visible on the card.
+  #
+  # In `dev` rather than its own extra for the reason stated above: a suite that
+  # skips this reports green for the one thing no other test can see. It is
+  # still `importorskip`ed, so a platform with no wheel degrades to a skip
+  # instead of failing collection.
+  "anki>=25.2",
 ]
 
 [project.scripts]
