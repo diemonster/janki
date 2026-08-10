@@ -1263,17 +1263,21 @@ def test_a_scalar_accepted_marks_is_refused(tmp_path: Path) -> None:
     assert "abc123def456" in str(raised.value)
 
 
-def test_a_mark_that_is_not_a_string_is_refused(tmp_path: Path) -> None:
+@pytest.mark.parametrize("mark", [1, True, ["meanings|error"], {"a": 1}, None])
+def test_a_mark_that_is_not_a_string_is_refused(tmp_path: Path, mark: object) -> None:
     """The container was checked and its elements were not, which is the same
-    bug one level down: `str(None)` is "None" — truthy, so it survives the
-    filter, and non-empty, so it suppresses the migration this entry needs. The
-    acceptance is then unrecoverable, because `carry_acceptances` writes
-    `accepted: false` back and the migration only runs while it is true."""
+    bug one level down. A *truthy* non-string is the one that hurts: it survives
+    the filter, so `stored` is non-empty and suppresses the migration this entry
+    needs; it matches no `finding_mark`, so the card's error blocks the build;
+    and `carry_acceptances` then writes `accepted: false` back, after which the
+    acceptance cannot be recovered — the migration only runs while that flag is
+    true. `None` is listed last and is the easy case: it is falsy, so the filter
+    alone already drops it."""
     path = tmp_path / "review.json"
     path.write_text(
         json.dumps({"abc123def456": {
             "record_id": "word:なる:なる", "accepted": True,
-            "accepted_marks": [None],
+            "accepted_marks": [mark],
             "findings": [
                 {"where": "meanings", "problem": "wrong gloss", "severity": "error"}
             ],
@@ -1281,5 +1285,10 @@ def test_a_mark_that_is_not_a_string_is_refused(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    with pytest.raises(ReviewError, match="each accepted mark must be a string"):
+    with pytest.raises(ReviewError, match="each accepted mark must be a string") as raised:
         load_store(path)
+
+    # Which entry, for the same reason as the sibling above: `load_store`
+    # refuses rather than skips, so this prefix is the only thing pointing at
+    # which of a few hundred entries to open.
+    assert "abc123def456" in str(raised.value)

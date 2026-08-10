@@ -142,11 +142,13 @@ def _marks_of(
             f"{type(listed).__name__}"
         )
     for mark in listed:
-        # The elements too, as `findings` checks its own. `str(None)` is
-        # `"None"` — truthy, so it survives the filter below, and non-empty, so
-        # it suppresses the migration. The acceptance is then unrecoverable:
-        # `carry_acceptances` writes `accepted: false` back, and the migration
-        # it needs runs only while `accepted` is still true.
+        # The elements too, as `findings` checks its own. A truthy non-string —
+        # `1`, `true`, a nested list — is kept by the filter below, so `stored`
+        # is non-empty and suppresses the migration this entry needs; it then
+        # matches no `finding_mark`, so the card's own error blocks the build,
+        # `carry_acceptances` writes `accepted: false` back, and `to_dict`
+        # returns the junk to the store. The acceptance is unrecoverable at that
+        # point, because the migration only runs while `accepted` is true.
         if not isinstance(mark, str):
             raise ReviewError(
                 f"{content_fp}: each accepted mark must be a string, got "
