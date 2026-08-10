@@ -442,3 +442,71 @@ def test_a_word_janki_declines_to_conjugate_is_not_a_disagreement() -> None:
     checks = check_pattern_rules(chart(Pattern("く → いて", examples=("ゆく ⇨ ゆいて",))))
 
     assert checks == ()
+
+
+def test_a_form_janki_has_no_table_for_is_not_a_disagreement() -> None:
+    """`CONJUGATION_FORMS` stops at seven, so a ます / たい / ば chart — a
+    `pattern` document by the extractor's own definition — matched nothing and
+    was reported as *wrong*, offering a て-form as the correction. Widening the
+    word class to kanji is what exposed it: before that, 食べる ⇨ 食べます could
+    not match at all, so the chart was silently skipped instead."""
+    checks = check_pattern_rules(chart(
+        Pattern("ます form", examples=("食べる ⇨ 食べます",)),
+        Pattern("たい form", examples=("買う ⇨ 買いたい",)),
+    ))
+
+    assert checks == ()
+
+
+def test_several_complete_pairs_on_one_line_are_all_checked() -> None:
+    """`かう ⇨ かって、まつ ⇨ まって` is two unambiguous claims. Requiring a
+    separator on only one side discarded both, with no message — and if the
+    document had one other row, --check then said "all 1 agree"."""
+    checks = check_pattern_rules(chart(
+        Pattern("かう ⇨ かって、まつ ⇨ まって"),
+        Pattern("irregulars", examples=("くる ⇨ きて / する ⇨ して",)),
+    ))
+
+    assert {(c.verb, c.claimed) for c in checks} == {
+        ("かう", "かって"), ("まつ", "まって"), ("くる", "きて"), ("する", "して"),
+    }
+    assert all(c.agrees for c in checks)
+
+
+def test_a_spaced_out_list_row_is_still_not_paired_positionally() -> None:
+    """The same row as the compact spelling. Looking at the immediately adjacent
+    character saw a space and let まつ ⇨ かって through as a disagreement."""
+    assert check_pattern_rules(chart(Pattern("かう ・ まつ ⇨ かって ・ まって"))) == ()
+
+
+def test_which_form_a_row_matched_is_recorded() -> None:
+    """This declines to parse which form a chart teaches, so it has to report
+    what it found: `のむ ⇨ のんだ` on a て-form chart agrees — as a *past* — and
+    without naming the form, the likeliest garble reads as a pass."""
+    checks = check_pattern_rules(chart(
+        Pattern("む・ぶ・ぬ → んで", examples=("のむ ⇨ のんだ",)),
+    ))
+
+    assert checks[0].agrees and checks[0].form == "past"
+
+
+def test_a_decomposed_chart_is_normalized_before_matching() -> None:
+    """A decomposed ぐ is く plus U+3099, which is outside the word class, so
+    およぐ ⇨ およいで matched nothing at all. Every other Japanese-text path here
+    normalizes first."""
+    import unicodedata
+
+    checks = check_pattern_rules(chart(
+        Pattern("ぐ → いで", examples=(unicodedata.normalize("NFD", "およぐ ⇨ およいで"),)),
+    ))
+
+    assert len(checks) == 1 and checks[0].agrees
+
+
+def test_a_supplementary_plane_kanji_row_is_checked() -> None:
+    """`_WORD` had `一-龥` written out by hand, which misses 𠮟 — a word real
+    exports carry, and one `identifiers` names for exactly this reason — so the
+    row matched nothing and was silently uncounted."""
+    checks = check_pattern_rules(chart(Pattern("𠮟る ⇨ 𠮟って")))
+
+    assert len(checks) == 1 and checks[0].agrees

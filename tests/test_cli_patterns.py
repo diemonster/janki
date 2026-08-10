@@ -483,3 +483,47 @@ def test_check_will_not_silently_ignore_files_passed_with_it(
 
     assert code == 1
     assert "cannot be combined with" in capsys.readouterr().err
+
+
+def test_check_names_the_documents_it_could_not_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """One readable chart beside a document this cannot read printed an
+    unqualified all-clear and never mentioned the other — the same false
+    reassurance at document granularity."""
+    root = project(tmp_path)
+    chart = Parsed("pattern", "Te-form", [])
+    chart.patterns = [Item("う・つ・る → って")]
+    chart.patterns[0].examples = ["かう ⇨ かって"]
+    monkeypatch.setattr(
+        patterns_module.claude_client,
+        "parse_call",
+        reader({"teform.pdf": chart, "week11.pdf": Parsed("lesson", "Week 11", ["〜んだ"])}),
+    )
+    cli.main(["--root", str(root), "patterns", str(document(root, "teform.pdf"))])
+    cli.main(["--root", str(root), "patterns", str(document(root, "week11.pdf"))])
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "patterns", "--check"]) == 0
+
+    out = capsys.readouterr().out
+    assert "Not checked" in out and "week11.pdf (lesson)" in out
+    assert "All 1 worked example(s) agree" in out
+
+
+def test_the_form_each_row_matched_is_printed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`のむ ⇨ のんだ` on a て-form chart agrees, as a past. Without naming the
+    form, the likeliest garble on such a chart reads as a clean pass."""
+    root = project(tmp_path)
+    chart = Parsed("pattern", "Te-form", [])
+    chart.patterns = [Item("む・ぶ・ぬ → んで")]
+    chart.patterns[0].examples = ["のむ ⇨ のんだ"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"teform.pdf": chart})
+    )
+
+    cli.main(["--root", str(root), "patterns", str(document(root, "teform.pdf"))])
+
+    assert "のむ ⇨ のんだ matched past" in capsys.readouterr().out

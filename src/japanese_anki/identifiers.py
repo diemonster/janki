@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import unicodedata
 
 
@@ -32,6 +33,25 @@ _HAN_RANGES: tuple[tuple[int, int], ...] = (
     (0x2F800, 0x2FA1F),  # CJK Compatibility Ideographs Supplement
     (0x30000, 0x3347F),  # CJK Unified Ideographs Extensions G, H and J (plane 3)
 )
+
+
+def han_character_class() -> str:
+    """The Han ranges as a regex character-class body, without the brackets.
+
+    So a caller that needs to *match* kanji inside a larger pattern gets the
+    same definition :func:`contains_kanji` decides with, instead of restating a
+    narrower one. `patterns._WORD` had `一-龥` (U+4E00–U+9FA5) written out by
+    hand, which misses 𠮟 — named in the note above as a word real exports
+    carry — and every Extension-A ideograph.
+
+    Callers matching raw document text should normalize it first, as
+    `contains_kanji` does: these ranges are ideographs only, and the 450 code
+    points that merely *spell* an ideograph fold into them under NFKC.
+    """
+    return "".join(
+        re.escape(chr(low)) if low == high else f"{re.escape(chr(low))}-{re.escape(chr(high))}"
+        for low, high in _HAN_RANGES
+    )
 
 
 def contains_kanji(value: str) -> bool:

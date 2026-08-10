@@ -362,8 +362,16 @@ def stray_furigana_spaces(furigana: str) -> tuple[str, ...]:
         # space at either end of the field is the case that is *most* provably
         # notation gone wrong — there is no next group for it to start — so an
         # absent neighbour must not read as content either.
-        provable = not (_ascii_content(before) or _ascii_content(after))
-        if provable and (run > 1 or _GROUP.match(rest) is None):
+        #
+        # ASCII on *both* sides, though, is Latin text with a space inside it —
+        # the one shape where the space belongs to the sentence. Requiring only
+        # one ASCII neighbour silenced `ですね!  散歩[さんぽ]`, `iPhone  を` and
+        # `9  時[じ]に`, where the ASCII is punctuation or a digit and the run is
+        # a real defect.
+        between_content = _ascii_content(before) and _ascii_content(after)
+        # At most one space can ever be notation, so a run of two is wrong
+        # wherever it is not inside Latin text — whether or not a group follows.
+        if not between_content and (run > 1 or _GROUP.match(rest) is None):
             stray.append(rest.split(" ", 1)[0] or "(end of field)")
         index = end
     return tuple(stray)

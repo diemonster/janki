@@ -681,3 +681,27 @@ def test_doubled_spaces_inside_latin_content_stay_unreported() -> None:
     and acting on it makes the romaji HelloWorld, the harm the single-space
     branch exists to avoid."""
     assert stray_furigana_spaces("「Hello  World」と 言[い]った。") == ()
+
+
+@pytest.mark.parametrize(
+    ("written", "expected"),
+    [
+        ("いい 天気[てんき]ですね!  散歩[さんぽ]しましょう。", "散歩[さんぽ]しましょう。"),
+        ("9  時[じ]に 起[お]きます。", "時[じ]に"),
+    ],
+    ids=["after-punctuation", "after-a-digit"],
+)
+def test_a_doubled_space_beside_ascii_that_is_not_a_word_is_still_reported(
+    written: str, expected: str
+) -> None:
+    """At most one space can ever be notation, so a run of two is wrong wherever
+    it is not inside Latin text. Requiring only one ASCII neighbour to suppress
+    it silenced ASCII punctuation and digits, which a model writes as readily as
+    it writes letters — and those runs are real defects."""
+    assert stray_furigana_spaces(written) == (expected,)
+
+
+def test_a_doubled_space_inside_latin_text_is_still_quiet() -> None:
+    """ASCII on *both* sides is the one shape where the space belongs to the
+    sentence, and deleting it is the harm this carve-out exists for."""
+    assert stray_furigana_spaces("「Hello  World」と 言[い]った。") == ()

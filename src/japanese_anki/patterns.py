@@ -44,7 +44,7 @@ from typing import Any
 
 from japanese_anki import claude_client
 from japanese_anki.errors import JankiError
-from japanese_anki.identifiers import normalize_identity_part
+from japanese_anki.identifiers import han_character_class, normalize_identity_part
 from japanese_anki.inputs import PreparedInput
 from japanese_anki.io import atomic_write_text
 
@@ -279,7 +279,10 @@ _DICTIONARY_ENDINGS = frozenset("うくぐすつぬぶむる")
 #: kana: a chart is written 買う ⇨ 買って far more often than かう ⇨ かって, and
 #: a hiragana-only class made the feature a no-op on its ordinary input — 行く,
 #: the row a reader is most likely to have copied down wrong, included.
-_WORD = r"[ぁ-ゖーァ-ヺ一-龥々]{2,}"
+#: The kanji half comes from `identifiers.han_character_class`, which owns that
+#: definition. A hand-written `一-龥` here missed 𠮟 — a word real exports carry
+#: — and every Extension-A ideograph, so those rows matched nothing at all.
+_WORD = rf"[ぁ-ゖーァ-ヺ{han_character_class()}]{{2,}}"
 _PAIR = re.compile(rf"({_WORD})\s*(?:⇨|→|->|=>)\s*({_WORD})")
 
 #: A row listing several verbs against several results — ``かう・まつ・とる ⇨
@@ -393,9 +396,19 @@ def check_pattern_rules(entry: PatternSet) -> tuple[RuleCheck, ...]:
                 verb, claimed = match.group(1), match.group(2)
                 if verb[-1] not in _DICTIONARY_ENDINGS:
                     continue
-                before = stripped[match.start(1) - 1] if match.start(1) else ""
-                after = stripped[match.end(2)] if match.end(2) < len(stripped) else ""
-                if before in _LIST_SEPARATORS or after in _LIST_SEPARATORS:
+                # Whitespace skipped on both sides: `かう ・ まつ ⇨ かって ・
+                # まって` is the same list row as the compact spelling, and
+                # looking at the immediately adjacent character saw a space and
+                # let the mis-pairing まつ ⇨ かって through as a disagreement.
+                before = stripped[: match.start(1)].rstrip()[-1:]
+                after = stripped[match.end(2) :].lstrip()[:1]
+                # Both sides, not either. A separator on one side alone is how a
+                # chart writes several *complete* pairs on one line —
+                # `かう ⇨ かって、まつ ⇨ まって` — and requiring only one side
+                # discarded both of them silently. The mis-pairing this guards
+                # against (`かう・まつ・とる ⇨ かって・まって・とって` matching
+                # とる against かって) has a separator on each side of the match.
+                if before in _LIST_SEPARATORS and after in _LIST_SEPARATORS:
                     continue
                 if (verb, claimed) in seen:
                     continue
@@ -415,7 +428,16 @@ def check_pattern_rules(entry: PatternSet) -> tuple[RuleCheck, ...]:
                             break
                     if agreed:
                         break
-                wanted = _claimed_form(claimed) or "te_form"
+                wanted = _claimed_form(claimed)
+                # A claim about a form janki has no table for is no opinion, the
+                # same as a word `conjugate` refuses. `CONJUGATION_FORMS` stops
+                # at seven, so a ます / たい / ば / volitional chart — a `pattern`
+                # document by the extractor's own definition — matched nothing
+                # and was reported as *wrong*, with a te-form offered as the
+                # correction. Widening the word class to kanji is what exposed
+                # this: before it, `食べる ⇨ 食べます` could not match at all.
+                if not agreed and not wanted:
+                    continue
                 checks.append(
                     RuleCheck(
                         template=pattern.template,

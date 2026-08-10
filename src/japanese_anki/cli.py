@@ -2671,6 +2671,16 @@ def _rule_check_lines(entry: patterns.PatternSet) -> list[str]:
         f"    checked {len(checks) - len(disagreed)}/{len(checks)} worked "
         f"example(s) against janki's conjugation rules"
     ]
+    # Which column each row matched. This code deliberately declines to parse
+    # which form the chart teaches, so it has to say what it found instead:
+    # `のむ ⇨ のんだ` on a て-form chart agrees — as a *past* — and without
+    # naming the form, the most likely garble on such a chart reads as a pass.
+    for check in checks:
+        if check.agrees:
+            lines.append(
+                f"        {check.verb} ⇨ {check.claimed} matched "
+                f"{check.form.replace('_', ' ')}"
+            )
     for check in disagreed:
         lines.append(
             f"    warning: {check.verb} ⇨ {check.claimed} is not what janki "
@@ -2764,11 +2774,16 @@ def command_patterns(args: argparse.Namespace) -> int:
         # it over a store of lesson decks — or a chart whose rows this cannot
         # read — is false reassurance from the one command whose entire job is
         # reassurance.
-        if not checked:
+        # Named whenever there are any, not only when *nothing* was checkable:
+        # one readable chart beside nine documents this cannot read printed an
+        # unqualified all-clear and never mentioned the nine.
+        if skipped_names:
             print(
-                "Nothing in the store could be checked against janki's "
-                "conjugation rules: " + ", ".join(skipped_names)
+                "Not checked against janki's conjugation rules: "
+                + ", ".join(skipped_names)
             )
+        if not checked:
+            print("Nothing in the store could be checked against those rules.")
             return 0
         if not disagreed:
             print(
