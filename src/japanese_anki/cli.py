@@ -3013,6 +3013,7 @@ def command_patterns(args: argparse.Namespace) -> int:
     failures: list[str] = []
     skipped: list[str] = []
     read: list[str] = []
+    fresh: list[patterns.PatternSet] = []
     for prepared in prepared_inputs:
         # Before the read, not after it. `reviewed` is the one piece of
         # human-entered state in this file and `extract_patterns` always returns
@@ -3041,6 +3042,10 @@ def command_patterns(args: argparse.Namespace) -> int:
             continue
         store[found.source] = found
         read.append(found.source)
+        # The object, not a second lookup by key. The key is a bare basename, so
+        # two inputs named chart.pdf in different directories resolved to one
+        # entry — the second checked twice and the first never.
+        fresh.append(found)
         print(
             f"{found.source}: {found.kind}, {len(found.patterns)} pattern(s) "
             f"— {found.title or '(untitled)'}"
@@ -3062,13 +3067,27 @@ def command_patterns(args: argparse.Namespace) -> int:
     # One lookup for the whole run, after the reads: the collection is parsed
     # once instead of once per document, and `--ask-jpdb` makes the single
     # request its help text promises rather than one per file.
-    fresh = [store[name] for name in read]
     try:
         classes = _classes_for(fresh, config, args.ask_jpdb)
     except JankiError as exc:
-        classes = {}
-        failures.append(f"could not look up verb classes: {exc}")
+        # The offline map, not nothing. `_classes_for` reads the collection's
+        # own `verb_group` values first and only then asks jpdb for what is
+        # missing, so discarding both on a 429 held back every row — reporting
+        # "no verb class on record" for verbs that are on record, and losing the
+        # garbled row the offline check would have caught.
+        classes = _verb_groups(config)
+        # Kept out of `failures`, which means "a document was lost" and decides
+        # the exit code. Nothing was lost: every document was read and saved,
+        # and failing the run here breaks the very
+        # `janki patterns *.pdf && janki patterns --review …` chain the non-zero
+        # exit exists to protect.
+        print(f"warning: could not look up verb classes: {exc}", file=sys.stderr)
     for entry in fresh:
+        # Named, because these lines carry no filename of their own and two
+        # charts can share a template string. Checking inside the read loop used
+        # to put them under the document's own header; the whole run's output
+        # was one undifferentiated block without this.
+        print(f"{entry.source} — {entry.kind}")
         for line in _rule_check_lines(entry, classes):
             print(line)
     # Deliberately skipping a document janki already has is not a problem, so it

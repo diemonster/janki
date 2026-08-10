@@ -189,20 +189,37 @@ def _split_rules(template: str) -> list[tuple[str, str]]:
     the answer. Guessing where to cut it would invent a question the document
     does not ask.
     """
-    pieces = [piece.strip() for piece in _SEPARATOR.split(template) if piece.strip()]
-    if len(pieces) > 1 and all(_ARROW.search(piece) for piece in pieces):
-        parts_of = pieces
-    else:
-        parts_of = [template.strip()]
+    parts_of = [_tidy(template)]
+    # One separator at a time. Testing the whole set at once had no branch for a
+    # line that mixes both roles — `う・つ・る → って / く → いて`, which is how a
+    # chart cell compresses two rows — and sent it down the *prose* path: one
+    # card whose question was the entire line, both answers included, with an
+    # empty back, and the second rule never made a card at all.
+    for separator in sorted(LIST_SEPARATORS):
+        pieces = [
+            _tidy(piece) for piece in template.split(separator) if _tidy(piece)
+        ]
+        if len(pieces) > 1 and all(len(_ARROW.split(piece)) == 2 for piece in pieces):
+            parts_of = pieces
+            break
 
     found: list[tuple[str, str]] = []
     for piece in parts_of:
         parts = _ARROW.split(piece)
-        if len(parts) == 2 and all(part.strip() for part in parts):
-            found.append((parts[0].strip(), parts[1].strip()))
+        if len(parts) == 2 and all(_tidy(part) for part in parts):
+            found.append((_tidy(parts[0]), _tidy(parts[1])))
         else:
             found.append((piece, ""))
-    return found or [(template.strip(), "")]
+    return found or [(_tidy(template), "")]
+
+
+def _tidy(text: str) -> str:
+    """Trim whitespace *and* a dangling separator.
+
+    `str.strip()` alone left the `/` on a truncated row like `く → いて /`, so a
+    card's answer read "いて /".
+    """
+    return text.strip().strip("".join(LIST_SEPARATORS)).strip()
 
 
 def _notetype(model_id: int, model_name: str, template_dir: Path) -> Any:

@@ -700,3 +700,97 @@ def test_a_decomposed_record_still_matches_a_composed_chart(
     out = capsys.readouterr().out
     assert "checked 1/1 worked example(s)" in out, "the class was found"
     assert "no verb class on record" not in out
+
+
+def test_one_jpdb_request_covers_every_document_in_the_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """What `--ask-jpdb`'s help text promises. The lookup used to sit inside the
+    read loop, so N files meant N requests, and moving it out was pinned by
+    nothing."""
+    root = project(tmp_path)
+    a = Parsed("pattern", "A", [])
+    a.patterns = [Item("う → って")]
+    a.patterns[0].examples = ["まつ ⇨ まって"]
+    b = Parsed("pattern", "B", [])
+    b.patterns = [Item("ぐ → いで")]
+    b.patterns[0].examples = ["およぐ ⇨ およいで"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"a.pdf": a, "b.pdf": b})
+    )
+    calls: list[list[str]] = []
+
+    def one_lookup(verbs, _client):
+        calls.append(list(verbs))
+        return {"まつ": "godan", "およぐ": "godan"}
+
+    monkeypatch.setattr(cli.patterns, "verb_groups_from_jpdb", one_lookup)
+    monkeypatch.setattr(cli.jpdb, "api_key_from_env", lambda: "k")
+    monkeypatch.setattr(cli.jpdb, "JpdbClient", lambda _key: object())
+
+    cli.main([
+        "--root", str(root), "patterns", "--ask-jpdb",
+        str(document(root, "a.pdf")), str(document(root, "b.pdf")),
+    ])
+
+    assert len(calls) == 1, "one request for the run, not one per file"
+    assert sorted(calls[0]) == ["および", "まつ"] or sorted(calls[0]) == ["およぐ", "まつ"]
+
+
+def test_a_failed_lookup_keeps_the_offline_classes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`_classes_for` reads the collection first and only then asks jpdb, so
+    discarding both on a 429 held back rows whose class *is* on record — and
+    lost the garbled row the offline check would have caught."""
+    root = project(tmp_path, [{
+        "id": "word:買う:かう", "expression": "買う", "reading": "かう",
+        "meanings": ["to buy"], "verb_group": "godan",
+    }])
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("う → って")]
+    parsed.patterns[0].examples = ["かう ⇨ かいて", "およぐ ⇨ およいで"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+
+    def refuse(*_args, **_kwargs):
+        raise JankiError("jpdb said 429")
+
+    monkeypatch.setattr(cli.patterns, "verb_groups_from_jpdb", refuse)
+    monkeypatch.setattr(cli.jpdb, "api_key_from_env", lambda: "k")
+    monkeypatch.setattr(cli.jpdb, "JpdbClient", lambda _key: object())
+
+    code = cli.main([
+        "--root", str(root), "patterns", "--ask-jpdb",
+        str(document(root, "chart.pdf")),
+    ])
+
+    out = capsys.readouterr()
+    assert "かう ⇨ かいて is not what janki computes" in out.out, "offline class kept"
+    assert "could not look up verb classes" in out.err
+    assert code == 0, "nothing was lost, so the && chain still runs"
+
+
+def test_each_documents_check_is_printed_under_its_own_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The check lines carry no filename, and two charts can share a template
+    string — so one undifferentiated block at the end of the run says nothing
+    about which chart holds the bad row."""
+    root = project(tmp_path)
+    a = Parsed("pattern", "A", [])
+    a.patterns = [Item("く → いて")]
+    b = Parsed("pattern", "B", [])
+    b.patterns = [Item("ぐ → いで")]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"a.pdf": a, "b.pdf": b})
+    )
+
+    cli.main([
+        "--root", str(root), "patterns",
+        str(document(root, "a.pdf")), str(document(root, "b.pdf")),
+    ])
+
+    out = capsys.readouterr().out
+    assert out.count("a.pdf — pattern") >= 1 and out.count("b.pdf — pattern") >= 1

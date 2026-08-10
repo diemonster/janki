@@ -224,8 +224,19 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
         ("う・つ・る → って", [("う・つ・る", "って")]),
         ("くる → きて / する → して", [("くる", "きて"), ("する", "して")]),
         ("くる → きて、する → して", [("くる", "きて"), ("する", "して")]),
+        # A chart cell that compresses two rows, mixing both roles on one line.
+        # Testing the whole separator set at once had no branch for it and sent
+        # it down the *prose* path: one card whose question was the entire line
+        # with an empty back, and the second rule never made a card at all.
+        ("う・つ・る → って / く → いて", [("う・つ・る", "って"), ("く", "いて")]),
+        # A row the model truncated, or a cell copied with its divider. `strip()`
+        # removes whitespace only, so the answer read "いて /".
+        ("く → いて /", [("く", "いて")]),
     ],
-    ids=["slashed-triggers", "dotted-triggers", "two-rules-slash", "two-rules-comma"],
+    ids=[
+        "slashed-triggers", "dotted-triggers", "two-rules-slash", "two-rules-comma",
+        "mixed-roles", "a-trailing-separator",
+    ],
 )
 def test_a_separator_divides_rules_only_when_every_piece_has_an_arrow(
     template: str, expected: list[tuple[str, str]]

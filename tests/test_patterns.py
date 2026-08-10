@@ -807,22 +807,26 @@ def test_jpdb_answers_the_class_the_chart_states_in_prose() -> None:
 
 
 @pytest.mark.parametrize(
-    ("example", "expected"),
-    [("帰る ⇨ 反って", "godan: 帰って"), ("かう ⇨ 買って", "godan: かって")],
-    ids=["an-ocr-misread", "mixed-orthography"],
+    "example",
+    ["帰る ⇨ 反って", "かう ⇨ 買って"],
+    ids=["an-ocr-misread", "another-orthography"],
 )
-def test_a_claim_sharing_no_prefix_still_gets_its_correction(
-    example: str, expected: str
-) -> None:
-    """These are the garbles the checker exists for. Ranking candidates by
-    shared prefix scored every form at zero and discarded the winner, so the
-    correction vanished and the message read "no group applies" — false, since
-    the class was known and produced a full table."""
+def test_a_claim_sharing_nothing_with_the_verb_is_left_unjudged(example: str) -> None:
+    """These two look identical to janki and only one is wrong. 反 is a
+    misreading of 帰; 買って is the *correct* te-form of かう written in kanji,
+    and telling someone "not what janki computes (godan: かって)" sends them to
+    rewrite a right answer. Distinguishing them needs to know that かう is
+    written 買う, which the chart does not say.
+
+    So the row is named and left unjudged — reported, excluded from the counts
+    and from the exit code — rather than given a verdict janki cannot support."""
     checks = check_pattern_rules(
         chart(Pattern("て", examples=(example,))), {"帰る": "godan", "かう": "godan"}
     )
 
-    assert checks[0].computed == (expected,)
+    assert len(checks) == 1
+    assert not checks[0].examined and checks[0].computed == ()
+    assert "shares nothing with this verb" in checks[0].held_back
 
 
 def test_a_lesson_decks_verbs_are_not_scraped_for_looking_up() -> None:
