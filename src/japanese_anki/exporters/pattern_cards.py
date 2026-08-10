@@ -59,6 +59,7 @@ __all__ = [
     "build_conjugation_deck",
     "build_pattern_deck",
     "cards_for",
+    "deck_problems",
     "drill_cards",
 ]
 
@@ -100,13 +101,17 @@ class PatternCard:
 
     @property
     def identity(self) -> str:
-        """What the note's GUID is derived from.
+        """What the note's GUID is derived from: the trigger, and nothing else.
 
-        The trigger and the source document, not the result: a chart corrected
-        from って to んで is the *same card* with a fixed answer, and a GUID that
-        moved would orphan its review history.
+        The caller scopes it by document, so the trigger is enough to name a
+        rule. Neither the result nor the gloss belongs here — a chart corrected
+        from って to んで is the *same card* with a fixed answer, and the gloss
+        is model-extracted prose that any re-extraction rewrites and a reviewer
+        routinely shortens by hand. Either in the identity means a rebuild
+        duplicates the card and strands its review history, which is the failure
+        AGENTS.md's deterministic-GUID rule exists to prevent.
         """
-        return f"{self.trigger}\x1f{self.gloss}"
+        return self.trigger
 
 
 def cards_for(
@@ -241,6 +246,54 @@ def _read(path: Path) -> str:
         raise PatternDeckError(f"Missing template file: {path}") from exc
 
 
+def deck_problems(
+    deck_path: Path, store: Mapping[str, PatternSet] | None = None
+) -> list[str]:
+    """What is wrong with a pattern or conjugation deck file, for `validate`.
+
+    The build refuses all of these, but `janki validate` is the command whose
+    job is catching a broken deck *before* a build — and it read a pattern deck
+    as an ordinary one, found no records, and called it clean.
+    """
+    problems: list[str] = []
+    try:
+        deck_config = _deck_section(deck_path)
+    except DataError as exc:
+        return [str(exc)]
+
+    for key in ("deck_id", "model_id"):
+        try:
+            _identifier(deck_config, key, deck_path)
+        except DataError as exc:
+            problems.append(str(exc))
+
+    kind = str(deck_config.get("kind") or "").strip().lower()
+    if kind == "conjugation":
+        form = str(deck_config.get("form") or "te_form").strip()
+        if form not in CONJUGATION_FORMS:
+            problems.append(
+                f"deck.form must be one of {', '.join(CONJUGATION_FORMS)}, "
+                f"got {form!r}"
+            )
+        return problems
+
+    document = str(deck_config.get("document") or "").strip()
+    if not document:
+        problems.append("a pattern deck needs 'document:' naming a document janki has read")
+        return problems
+    if store is None:
+        return problems
+    entry = store.get(document)
+    if entry is None:
+        known = ", ".join(sorted(store)) or "none"
+        problems.append(f"no document has been read under {document!r}. Known: {known}")
+    elif entry.kind not in CHECKABLE_KINDS:
+        problems.append(f"{document} is a {entry.kind} document, which states no rules")
+    elif not entry.reviewed:
+        problems.append(f"{document} has not been reviewed")
+    return problems
+
+
 def build_pattern_deck(
     deck_path: Path,
     project_config: ProjectConfig,
@@ -272,6 +325,19 @@ def build_pattern_deck(
     cards = cards_for(entry, groups)
     if not cards:
         raise PatternDeckError(f"{document} states no rules to make cards from.")
+    # Raised rather than absorbed into the identity. Two rules sharing a trigger
+    # inside one document would otherwise collide on a GUID and silently drop a
+    # card, and adding prose to tell them apart is what made the GUID unstable.
+    seen: dict[str, int] = {}
+    for card, *_ in ((card,) for card in cards):
+        seen[card.identity] = seen.get(card.identity, 0) + 1
+    clashing = sorted(name for name, count in seen.items() if count > 1)
+    if clashing:
+        raise PatternDeckError(
+            f"{document} states more than one rule for {', '.join(clashing)}. "
+            f"Each rule needs its own trigger; give them distinct templates in "
+            f"data/patterns.json."
+        )
 
     deck_id = _identifier(deck_config, "deck_id", deck_path)
     model_id = _identifier(deck_config, "model_id", deck_path)

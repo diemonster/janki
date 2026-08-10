@@ -358,3 +358,99 @@ def test_a_collection_with_no_conjugable_verb_says_so(tmp_path: Path) -> None:
             path, ProjectConfig.load(tmp_path), [verb("ゆく", "ゆく", "godan")],
             tmp_path / "o.apkg",
         )
+
+
+# --- what the rest of janki sees ----------------------------------------------
+
+
+def test_the_notetype_check_asks_what_a_pattern_build_writes(tmp_path: Path) -> None:
+    """`deck_notetype` exists so the collection check asks the same question a
+    build answers. Answering 27 for a deck that writes 6 made `janki status`
+    warn "has 6 fields where this deck writes 27" on every run, advising a Merge
+    Notetypes re-import that would fix nothing — and a false warning that never
+    clears is how the detector guarding the real notetype-append invariant gets
+    ignored."""
+    from japanese_anki.exporters.anki import deck_notetype
+    from japanese_anki.exporters.pattern_cards import FIELDS
+
+    project(tmp_path)
+    path = deck_file(tmp_path)
+
+    model_id, name, fields = deck_notetype(path, ProjectConfig.load(tmp_path))
+
+    assert (model_id, name, fields) == (1607392351, "Japanese Pattern", len(FIELDS))
+
+
+def test_validate_refuses_a_pattern_deck_the_build_would(tmp_path: Path) -> None:
+    """`janki validate` is the command whose job is catching a broken deck
+    before a build, and it read a pattern deck as an ordinary one, found no
+    records and called it clean."""
+    from japanese_anki.exporters.pattern_cards import deck_problems
+
+    project(tmp_path)
+    store = {"teform.pdf": chart(Pattern("う・つ・る → って"))}
+
+    assert deck_problems(deck_file(tmp_path), store) == []
+    assert deck_problems(deck_file(tmp_path, document="typo.pdf"), store) == [
+        "no document has been read under 'typo.pdf'. Known: teform.pdf"
+    ]
+    assert deck_problems(deck_file(tmp_path, deck_id=True), store)[0].startswith(
+        "deck.deck_id must be an integer"
+    )
+
+
+def test_validate_refuses_an_unreviewed_document(tmp_path: Path) -> None:
+    from japanese_anki.exporters.pattern_cards import deck_problems
+
+    project(tmp_path)
+    store = {"teform.pdf": chart(Pattern("う・つ・る → って"), reviewed=False)}
+
+    assert deck_problems(deck_file(tmp_path), store) == [
+        "teform.pdf has not been reviewed"
+    ]
+
+
+def test_validate_checks_a_drill_decks_form(tmp_path: Path) -> None:
+    from japanese_anki.exporters.pattern_cards import deck_problems
+
+    project(tmp_path)
+    path = tmp_path / "decks" / "drill.yaml"
+    path.write_text(
+        "deck:\n  kind: conjugation\n  form: polite\n  name: D\n"
+        "  deck_id: 1\n  model_id: 2\n",
+        encoding="utf-8",
+    )
+
+    assert deck_problems(path, {})[0].startswith("deck.form must be one of")
+
+
+# --- the GUID -------------------------------------------------------------------
+
+
+def test_the_guid_ignores_the_gloss() -> None:
+    """The gloss is model-extracted prose — rewritten by any re-extraction and
+    routinely shortened by hand during `janki patterns --review`. In the
+    identity it made a rebuild duplicate the card and strand its history, which
+    is the failure the deterministic-GUID rule exists to prevent."""
+    long_gloss = cards_for(
+        chart(Pattern("う・つ・る → って", "godan verbs ending in う, つ, or る take って")),
+        CLASSES,
+    )
+    shortened = cards_for(chart(Pattern("う・つ・る → って", "godan う/つ/る → って")), CLASSES)
+
+    assert long_gloss[0].identity == shortened[0].identity
+
+
+def test_two_rules_sharing_a_trigger_are_refused(tmp_path: Path) -> None:
+    """They would collide on a GUID and silently drop a card. Adding prose to
+    tell them apart is exactly what made the GUID unstable."""
+    project(tmp_path)
+    store = {"teform.pdf": chart(
+        Pattern("く → いて", "godan"), Pattern("く → いた", "past")
+    )}
+
+    with pytest.raises(PatternDeckError, match="more than one rule for く"):
+        build_pattern_deck(
+            deck_file(tmp_path), ProjectConfig.load(tmp_path), store,
+            tmp_path / "o.apkg", CLASSES,
+        )

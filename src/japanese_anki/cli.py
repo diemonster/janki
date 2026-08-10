@@ -62,7 +62,7 @@ from japanese_anki.staging import (
     write_staging,
 )
 from japanese_anki.tts import openai_tts, voicevox
-from japanese_anki.validation import has_errors, validate_records
+from japanese_anki.validation import ValidationIssue, has_errors, validate_records
 
 
 def _path(value: str) -> Path:
@@ -2264,8 +2264,22 @@ def command_promote(args: argparse.Namespace) -> int:
     return 0
 
 
-def _validate_path(path: Path) -> tuple[list, int]:
+def _validate_path(
+    path: Path, store: Mapping[str, patterns.PatternSet] | None = None
+) -> tuple[list, int]:
     raw = load_structured(path)
+    section = raw.get("deck") or {} if isinstance(raw, dict) else {}
+    kind = str(section.get("kind") or "").strip() if isinstance(section, dict) else ""
+    if kind:
+        # A pattern or conjugation deck holds no records, so the ordinary path
+        # found none and called the file clean — leaving every defect the build
+        # refuses invisible to the command whose job is catching one first.
+        issues = [
+            ValidationIssue("error", problem, source=str(path))
+            for problem in pattern_cards.deck_problems(path, store)
+        ]
+        return issues, 0
+
     if isinstance(raw, dict) and "deck" in raw:
         _, records = resolve_deck_records(path)
     else:
@@ -2276,6 +2290,9 @@ def _validate_path(path: Path) -> tuple[list, int]:
 
 def command_validate(args: argparse.Namespace) -> int:
     config = _load_config(args)
+    # Read once. A pattern deck names a document, and whether that document has
+    # been read is one of the things a broken deck file gets wrong.
+    deck_store = patterns.load_store(config.patterns_file)
     paths: list[Path]
     if args.path:
         paths = [args.path.resolve()]
@@ -2290,7 +2307,7 @@ def command_validate(args: argparse.Namespace) -> int:
     all_issues = []
     total_records = 0
     for path in paths:
-        issues, count = _validate_path(path)
+        issues, count = _validate_path(path, deck_store)
         all_issues.extend(issues)
         total_records += count
 

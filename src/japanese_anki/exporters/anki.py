@@ -620,6 +620,17 @@ def _resolve_card_types(
     return card_types
 
 
+def _identifier_or_zero(section: dict[str, Any], key: str) -> int:
+    """A pinned id, or 0 when the file does not carry a usable one.
+
+    `deck_notetype` answers what a build *would* write, and a deck whose id is
+    missing or malformed cannot be matched against a collection at all — 0 is
+    the honest answer, and `build` refuses the file separately.
+    """
+    value = section.get(key)
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
 def deck_notetype(deck_path: Path, project_config: ProjectConfig) -> tuple[int, str, int]:
     """``(model_id, model_name, field count)`` a build of this deck would use.
 
@@ -628,6 +639,27 @@ def deck_notetype(deck_path: Path, project_config: ProjectConfig) -> tuple[int, 
     pin either — a detector that recomputed them would misreport any deck that
     does, which is the one case the M5.5 spike singled out.
     """
+    raw = load_structured(deck_path)
+    section = raw.get("deck") or {} if isinstance(raw, dict) else {}
+    kind = (
+        str(section.get("kind") or "").strip().lower()
+        if isinstance(section, dict)
+        else ""
+    )
+    if kind in ("pattern", "conjugation"):
+        # A rule deck writes its own, much smaller notetype. Answering 27 here
+        # made `janki status` report "has 5 fields where this deck writes 27" on
+        # every run, advising a Merge Notetypes re-import that would fix
+        # nothing — and a false warning that never clears is how the detector
+        # guarding the real notetype-append invariant gets ignored.
+        from japanese_anki.exporters.pattern_cards import FIELDS as PATTERN_FIELDS
+
+        return (
+            _identifier_or_zero(section, "model_id"),
+            str(section.get("model_name") or "Japanese Pattern"),
+            len(PATTERN_FIELDS),
+        )
+
     deck_config, _ = resolve_deck_records(deck_path)
     card_types = _resolve_card_types(deck_config, project_config)
     # Both already refused by `resolve_deck_records`, so this and `build_deck`
