@@ -3086,11 +3086,9 @@ def command_review(args: argparse.Namespace) -> int:
         model=model,
         style_guide=claude_client.read_style_guide(config.root),
         card_design=_card_design_text(config.root),
+        max_meanings=config.max_meanings,
     )
-    # An entry is replaced wholesale, which drops any prior acceptance with it:
-    # the acceptance was of a finding against a card that has since changed, and
-    # carrying it forward would wave through text nobody agreed to.
-    store.update(fresh)
+    store.update(review.carry_acceptances(store, fresh))
     review.save_store(config.review_file, store)
 
     # Reported by record id, never by the store's key. The key is a content

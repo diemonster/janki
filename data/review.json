@@ -7,15 +7,15 @@
     "findings": [
       {
         "where": "usage_notes",
-        "problem": "The note says 思っている is used \"for present-moment thoughts about oneself,\" but the example given (ずっとそう思っています, \"I've thought so all along\") illustrates a held, ongoing opinion over time rather than a present-moment thought — the label and the illustration pull in opposite directions.",
+        "problem": "The note says 思っている is common \"for present-moment thoughts about oneself,\" but the example it gives (ずっとそう思っています, glossed \"I've thought so all along\") illustrates a continuing state, not a present-moment thought — the claim and its evidence contradict each other. For one's own opinion at the moment of speaking, plain 思う/思います is the normal choice; 思っている signals an ongoing or long-held thought (and is also the usual form for reporting someone else's thoughts).",
         "severity": "note",
-        "suggestion": "Reword to something like: \"〜と思っています is used for an opinion or intention held over time (ずっとそう思っています, 'I've thought so all along'), and is common in polite speech for stating one's own view.\""
+        "suggestion": "Reword to something like: \"思っている is used for a thought held over time (ずっとそう思っています, 'I've thought so all along') and for describing what someone else thinks; for your own opinion right now, 思います is normal.\""
       },
       {
-        "where": "meanings",
-        "problem": "Seven sense groups with roughly twenty glosses (including peripheral senses like \"to expect, to look forward to\" and \"to recall, to remember\") is a dictionary dump rather than the compact meaning list a beginner recognition card can be graded against; only the \"to think/believe\" sense is exemplified.",
+        "where": "usage_notes",
+        "problem": "何を思っていますか is offered as the model for the を-object pattern, but this is not how one asks \"what are you thinking?\" in Japanese — that is 何を考えていますか. を思う normally carries the \"think of / long for\" sense (故郷を思う, 家族を思う), so the illustration points the learner at an unnatural sentence.",
         "severity": "note",
-        "suggestion": "Trim to the senses the learner needs now, e.g. \"to think\", \"to believe\", \"to feel\", and move the rest to source data or usage notes."
+        "suggestion": "Replace the parenthetical with a natural を example such as 故郷を思う or 家族を思う."
       }
     ]
   },
@@ -24,21 +24,21 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
-    "findings": []
+    "findings": [
+      {
+        "where": "meanings",
+        "problem": "The meaning field is a verbatim JMdict dump: fourteen glosses across three sense groups, including the redundant pair \"to be realized\"/\"to be realised\" and the colloquial interjection sense \"I know!, I think so too!\", which is far past what a beginner production card can cue.",
+        "severity": "note",
+        "suggestion": "Trim to a compact set such as \"to understand\", \"to know\", \"to become clear\", and move the colloquial \"I know, right!\" use to usage_notes if it is worth keeping."
+      }
+    ]
   },
   "043c530294f1": {
     "record_id": "word:飲む:のむ",
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
-    "findings": [
-      {
-        "where": "meanings",
-        "problem": "The meaning field is an unpruned dictionary sense list; senses like \"to engulf, to overwhelm\", \"to keep down, to suppress\", \"to accept (e.g. demand, condition)\" and \"to make light of, to conceal\" belong largely to 呑む and are far beyond the beginner target, and none of them are exercised by the two examples.",
-        "severity": "note",
-        "suggestion": "Trim to the core senses actually taught here — \"to drink\", \"to swallow\", \"to take (medicine)\", optionally \"to smoke (tobacco)\" — and leave the figurative senses out or mention them in usage_notes."
-      }
-    ]
+    "findings": []
   },
   "094be9aa53a4": {
     "record_id": "word:行く:いく",
@@ -52,28 +52,14 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
-    "findings": [
-      {
-        "where": "meanings",
-        "problem": "Fifteen glosses across seven senses (down to \"to cognise\" and \"to concern\") is far more than a beginner card needs, and the production card's English cue becomes hard to read; the card's own usage notes already carry the nuance.",
-        "severity": "note",
-        "suggestion": "Trim to the core senses on the card — e.g. \"to know\", \"to find out\", \"to get to know (a person)\" — and leave the remaining JMdict senses in source data or usage_notes."
-      }
-    ]
+    "findings": []
   },
   "2c28231d0441": {
     "record_id": "word:来る:くる",
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
-    "findings": [
-      {
-        "where": "meanings",
-        "problem": "The gloss list is copied wholesale from a dictionary and the fifth sense, \"to come to (i.e. \\\"when it comes to spinach ...\\\")\", is opaque on its own — a beginner reading the recognition card cannot tell what construction it refers to, and neither example illustrates it.",
-        "severity": "note",
-        "suggestion": "Trim to the core senses for this level (\"to come\", \"to arrive\"; optionally the て-form auxiliary sense already explained in the usage notes) and drop or relocate the abstract senses to usage_notes."
-      }
-    ]
+    "findings": []
   },
   "317f118e653b": {
     "record_id": "word:食べる:たべる",
@@ -146,9 +132,15 @@
     "findings": [
       {
         "where": "usage_notes",
-        "problem": "ありません is a polite negative, but the note lists it as one of the \"plain negative\" forms (\"The plain negative is irregular: ない / ありません\"), which could teach a beginner that ありません is a plain form.",
+        "problem": "ありません is the polite negative, not a plain form; grouping it under \"The plain negative is irregular: ない / ありません\" mislabels its register.",
         "severity": "note",
-        "suggestion": "Split the registers, e.g. \"The negative is irregular: plain ない, polite ありません — never あらない/ありません から あらない.\" or simply \"The negative is irregular: ない (plain) / ありません (polite), never あらない.\""
+        "suggestion": "Split by register: \"The negative is irregular: plain ない, polite ありません — never あらない.\""
+      },
+      {
+        "where": "meanings",
+        "problem": "The gloss \"to live\" contradicts the card's own usage note that いる is used for people and animals; a learner could produce 母がある for \"my mother lives (here)\".",
+        "severity": "note",
+        "suggestion": "Drop \"to live\" and keep \"to be, to exist, to have, to be located\"."
       }
     ]
   },
@@ -157,14 +149,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
-    "findings": [
-      {
-        "where": "meanings",
-        "problem": "The meaning field is an unfiltered JMdict sense dump (nine glosses including \"to become intimate, to take up (with somebody)\" and \"to become pregnant\"), which is far beyond what a Genki-level learner needs and buries the three senses the card actually teaches and exemplifies (ability, completion/readiness, being built).",
-        "severity": "note",
-        "suggestion": "Trim to something like \"to be able to do\", \"to be finished, to be ready\", \"to be made, to be built\", and move the peripheral senses to usage_notes or drop them."
-      }
-    ]
+    "findings": []
   },
   "5805315cb4d7": {
     "record_id": "word:話す:はなす",
@@ -231,22 +216,9 @@
   "77af723df6e8": {
     "record_id": "word:なる:なる",
     "at": "2026-08-10",
-    "accepted": true,
-    "accepted_because": "jpdb's API returns HLL for なる and the deck owner confirmed it against jpdb; jpdb is this deck's authority for accents. The heiban reading is the dictionary's, not the one this deck follows.",
-    "findings": [
-      {
-        "where": "pitch_accent",
-        "problem": "なる (成る) is heiban (accent 0) in standard Tokyo Japanese — LH with the following particle staying high. \"HLL\" (a drop after the first mora, plus a low particle slot) marks it as atamadaka, な↓る, which is the wrong pattern for this verb and would be drilled into the learner on every review of a very high-frequency word.",
-        "severity": "error",
-        "suggestion": "Use the heiban pattern (no drop): LH with a high particle slot, e.g. \"LHH\" in this card's notation."
-      },
-      {
-        "where": "meanings",
-        "problem": "The meaning field dumps eleven JMdict senses, ending in a truncated fragment (\"to do ...\"), which is neither compact nor readable on a beginner card and leaves a dangling gloss with no content.",
-        "severity": "note",
-        "suggestion": "Trim to the senses the examples teach, e.g. \"to become\", \"to turn into\", \"to get (to be)\", and move the rarer senses to usage_notes or drop them."
-      }
-    ]
+    "accepted": false,
+    "accepted_because": "",
+    "findings": []
   },
   "821147473e9c": {
     "record_id": "word:使う:つかう",
@@ -335,14 +307,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
-    "findings": [
-      {
-        "where": "meanings",
-        "problem": "\"to draw, to paint\" is a sense of the かく entry written 描く/画く, not of the spelling 書く on the front of this card; a beginner reading the meanings list alone would produce 絵を書く, which is normally counted as a misspelling.",
-        "severity": "note",
-        "suggestion": "Limit the meanings to \"to write\", \"to compose\", \"to pen\" and leave the drawing sense to the usage note (where it is already correctly attributed to 描く), or tag the sense explicitly as \"(as 描く) to draw, to paint\"."
-      }
-    ]
+    "findings": []
   },
   "b679c074c9ad": {
     "record_id": "word:読む:よむ",
@@ -411,34 +376,14 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
-    "findings": [
-      {
-        "where": "meanings",
-        "problem": "The meaning field is a full JMdict sense dump (19 senses, including grammatical labels like \"verbalizing suffix\" and \"creates a humble verb\"), which is not the compact dictionary-style gloss a beginner card needs — on the production card the English prompt becomes an unparsable wall of senses.",
-        "severity": "note",
-        "suggestion": "Trim to the senses the card actually teaches, e.g. \"to do\", \"to perform\", \"to make (into)\", and move the suffix/humble-verb and idiomatic A-to-B senses into usage_notes or drop them."
-      },
-      {
-        "where": "usage_notes",
-        "problem": "The note asserts that \"何をする takes を\" while the card's own casual example writes 何するの with no を; a learner comparing the two will read the sentence as breaking the stated rule rather than as ordinary colloquial particle dropping.",
-        "severity": "note",
-        "suggestion": "Rephrase to contrast the particles for the two senses without implying を is obligatory, e.g. \"the 'do' sense marks its object with を (何をする, often dropped in casual speech), while the 'make into' sense uses に …\""
-      }
-    ]
+    "findings": []
   },
   "df225de2cca9": {
     "record_id": "word:聞く:きく",
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
-    "findings": [
-      {
-        "where": "meanings",
-        "problem": "The meaning field reproduces all eight JMdict senses, including specialist ones (\"to smell (esp. incense)\", \"to taste (alcohol)\"), which is far beyond what a Genki-level learner needs and clutters both the recognition back and the English→Japanese production cue.",
-        "severity": "note",
-        "suggestion": "Trim to the core senses the examples actually teach — e.g. \"to hear\", \"to listen\", \"to ask\", \"to obey\" — and leave the rare incense/alcohol senses to a dictionary lookup or usage_notes."
-      }
-    ]
+    "findings": []
   },
   "e277a3fd9cb7": {
     "record_id": "word:行く:いく",

@@ -43,7 +43,7 @@ from __future__ import annotations
 import functools
 import json
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -61,6 +61,7 @@ __all__ = [
     "ReviewError",
     "SEVERITIES",
     "card_fingerprint",
+    "carry_acceptances",
     "load_store",
     "open_findings",
     "review_records",
@@ -265,15 +266,29 @@ def review_schema() -> Any:
     return CardVerdict
 
 
-def card_prompt(record: VocabularyRecord) -> str:
-    """The card as a reader sees it."""
+def card_prompt(record: VocabularyRecord, max_meanings: int = 0) -> str:
+    """The card as a reader sees it.
+
+    ``max_meanings`` is the deck's cap, and the meanings are shown capped —
+    with the same "+N more senses" note the card carries — because that is what
+    a learner is looking at. Sending the whole stored list made the reader
+    object, correctly, that nineteen senses of する including JMdict's own
+    metalanguage are unreadable on a card; but the card shows four. Every one of
+    those findings was about text that never ships, which is the one thing a
+    gate must not spend a person's attention on.
+    """
     lines = [
         f"Expression: {record.expression}",
         f"Reading: {record.reading}",
     ]
     if record.furigana:
         lines.append(f"Furigana: {record.furigana}")
-    lines.append(f"Meanings: {'; '.join(record.meanings)}")
+    shown = [value for value in record.meanings if value]
+    hidden = 0
+    if 0 < max_meanings < len(shown):
+        hidden, shown = len(shown) - max_meanings, shown[:max_meanings]
+    more = f" (+{hidden} more senses, not shown on the card)" if hidden else ""
+    lines.append(f"Meanings: {'; '.join(shown)}{more}")
     if record.part_of_speech:
         lines.append(f"Part of speech: {record.part_of_speech}")
     if record.transitivity:
@@ -300,6 +315,7 @@ def review_records(
     model: str,
     style_guide: str,
     card_design: str = "",
+    max_meanings: int = 0,
     client: Any | None = None,
 ) -> tuple[dict[str, CardReview], list[str]]:
     """Read each card, and say what is wrong with it.
@@ -331,7 +347,7 @@ def review_records(
             call = claude_client.parse_call(
                 model,
                 blocks,
-                [{"type": "text", "text": card_prompt(record)}],
+                [{"type": "text", "text": card_prompt(record, max_meanings)}],
                 review_schema(),
                 client,
                 # Generous, because the model reasons before answering and the
@@ -380,6 +396,41 @@ def review_records(
             ),
         )
     return reviewed, failures
+
+
+def carry_acceptances(
+    store: Mapping[str, CardReview], fresh: Mapping[str, CardReview]
+) -> dict[str, CardReview]:
+    """Fresh reviews, keeping an acceptance that still answers what was found.
+
+    An acceptance is of a *card version*, and a re-read under `--force` produces
+    the same version — so dropping it made someone re-type a reason they had
+    already given, about text that had not changed. But it is also of the
+    findings that were *there*: a re-read that turns up something different is
+    new information, and clearing that with a sentence written about the old
+    finding is the silent pass this module exists to prevent.
+
+    So the acceptance carries over only when the same version comes back with
+    the same findings. Anything else has to be answered again.
+    """
+    carried: dict[str, CardReview] = {}
+    for fingerprint, entry in fresh.items():
+        previous = store.get(fingerprint)
+        same = (
+            previous is not None
+            and previous.accepted
+            and previous.findings == entry.findings
+        )
+        carried[fingerprint] = (
+            replace(
+                entry,
+                accepted=True,
+                accepted_because=previous.accepted_because,  # type: ignore[union-attr]
+            )
+            if same
+            else entry
+        )
+    return carried
 
 
 def unreviewed(

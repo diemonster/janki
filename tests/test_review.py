@@ -893,3 +893,69 @@ def test_accepting_an_id_nothing_has_read_still_says_that(tmp_path: Path) -> Non
 
     with pytest.raises(ReviewError, match="No review on record"):
         review_module.accept({}, card.id, "checked", {card_fingerprint(card)})
+
+
+def test_the_reader_is_shown_the_meanings_the_card_shows() -> None:
+    """Not the stored list. Sending all nineteen senses of する — including
+    JMdict's own metalanguage, "applies to nouns noted in this dictionary" —
+    had the reader object that the card is unreadable, when the card shows four.
+    Every one of those findings was about text that never ships, which is the
+    one thing a gate must not spend a person's attention on."""
+    from japanese_anki.review import card_prompt
+
+    card = record(meanings=[f"sense {n}" for n in range(1, 18)])
+
+    text = card_prompt(card, max_meanings=4)
+
+    assert "sense 4" in text and "sense 5" not in text
+    assert "+13 more senses, not shown on the card" in text
+
+
+def test_no_cap_shows_everything() -> None:
+    """`max_meanings = 0` means the card shows them all, so the reader must."""
+    from japanese_anki.review import card_prompt
+
+    card = record(meanings=[f"sense {n}" for n in range(1, 18)])
+
+    assert "sense 17" in card_prompt(card, max_meanings=0)
+
+
+def test_a_force_re_read_of_the_same_card_keeps_its_acceptance() -> None:
+    """`--force` produces the same version, so dropping the acceptance made
+    someone re-type a reason they had already given about text that had not
+    changed."""
+    card = record()
+    finding = Finding("pitch_accent", "heiban", "error")
+    before = {card_fingerprint(card): CardReview(
+        card.id, card_fingerprint(card), findings=(finding,),
+        accepted=True, accepted_because="jpdb is this deck's authority",
+    )}
+    again = {card_fingerprint(card): CardReview(
+        card.id, card_fingerprint(card), findings=(finding,)
+    )}
+
+    carried = review_module.carry_acceptances(before, again)
+
+    assert carried[card_fingerprint(card)].accepted
+    assert carried[card_fingerprint(card)].accepted_because == (
+        "jpdb is this deck's authority"
+    )
+
+
+def test_a_re_read_that_finds_something_else_must_be_answered_again() -> None:
+    """The acceptance is of the findings that were there. Carrying it onto a
+    different finding clears it with a sentence written about another one."""
+    card = record()
+    before = {card_fingerprint(card): CardReview(
+        card.id, card_fingerprint(card),
+        findings=(Finding("pitch_accent", "heiban", "error"),),
+        accepted=True, accepted_because="checked",
+    )}
+    again = {card_fingerprint(card): CardReview(
+        card.id, card_fingerprint(card),
+        findings=(Finding("meanings", "glossed as intransitive", "error"),),
+    )}
+
+    carried = review_module.carry_acceptances(before, again)
+
+    assert not carried[card_fingerprint(card)].accepted
