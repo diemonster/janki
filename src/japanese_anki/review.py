@@ -114,6 +114,18 @@ class Finding:
         )
 
 
+def finding_mark(finding: Finding) -> str:
+    """A finding's identity for the purpose of "has this been answered".
+
+    Where it is and how bad it is, never the model's prose: a re-read of an
+    unchanged card rewrites its sentences freely. Underscores, spacing and case
+    are folded because the same field comes back as ``pitch_accent``,
+    ``Pitch accent`` and ``Meanings`` across runs.
+    """
+    place = " ".join(finding.where.replace("_", " ").split()).lower()
+    return f"{place}|{finding.severity}"
+
+
 @dataclass(frozen=True, slots=True)
 class CardReview:
     """What the reader said about one card, and which version of it."""
@@ -128,6 +140,12 @@ class CardReview:
     #: Why they overruled it. Required — an acceptance with no reason is
     #: indistinguishable next month from one nobody thought about.
     accepted_because: str = ""
+    #: Which findings the acceptance answers, as `finding_mark` strings. Held
+    #: separately from `findings` because a re-read replaces those: an entry
+    #: carrying `accepted` with an empty finding list had forgotten what was
+    #: agreed, so the next run that resurfaced the same error demanded a fresh
+    #: answer to a question already settled.
+    accepted_marks: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -135,6 +153,7 @@ class CardReview:
             "at": self.at,
             "accepted": self.accepted,
             "accepted_because": self.accepted_because,
+            "accepted_marks": list(self.accepted_marks),
             "findings": [finding.to_dict() for finding in self.findings],
         }
 
@@ -158,13 +177,27 @@ class CardReview:
             findings=tuple(Finding.from_dict(item) for item in listed),
             accepted=bool(raw.get("accepted", False)),
             accepted_because=str(raw.get("accepted_because") or ""),
+            accepted_marks=tuple(
+                str(mark) for mark in (raw.get("accepted_marks") or []) if str(mark)
+            ),
         )
 
     def blocking(self) -> tuple[Finding, ...]:
-        """Findings that stop a build: errors nobody has accepted."""
-        if self.accepted:
-            return ()
-        return tuple(f for f in self.findings if f.severity == "error")
+        """Findings that stop a build: errors nobody has accepted.
+
+        Per finding rather than per entry. A re-read of the same card version
+        can surface an error the acceptance never covered, and an all-or-nothing
+        flag would wave that through on the strength of an answer to a different
+        question.
+        """
+        if not self.accepted:
+            return tuple(f for f in self.findings if f.severity == "error")
+        answered = set(self.accepted_marks)
+        return tuple(
+            f
+            for f in self.findings
+            if f.severity == "error" and finding_mark(f) not in answered
+        )
 
 
 def card_fingerprint(record: VocabularyRecord) -> str:
@@ -425,29 +458,25 @@ def carry_acceptances(
     finding set carries too — there is nothing left to answer.
     """
 
-    def place(where: str) -> str:
-        # The model names the same field as `pitch_accent`, `Pitch accent` and
-        # `Meanings` across runs, so underscores, spacing and case are folded.
-        return " ".join(where.replace("_", " ").split()).lower()
-
-    def blocking_marks(entry: CardReview) -> set[tuple[str, str]]:
-        return {
-            (place(finding.where), finding.severity)
-            for finding in entry.findings
-            if finding.severity == "error"
-        }
-
     carried: dict[str, CardReview] = {}
     for fingerprint, entry in fresh.items():
         previous = store.get(fingerprint)
         if previous is None or not previous.accepted:
             carried[fingerprint] = entry
             continue
-        answered = blocking_marks(entry) <= blocking_marks(previous)
+        # Against what was *accepted*, not against whatever the last read
+        # happened to return. Comparing findings meant a clean re-read wrote an
+        # accepted entry with none, and the run after that — when the model
+        # resurfaced the error, as it does — found an empty set to check against
+        # and demanded the answer again.
+        answered = {
+            finding_mark(f) for f in entry.findings if f.severity == "error"
+        } <= set(previous.accepted_marks)
         carried[fingerprint] = replace(
             entry,
             accepted=answered,
             accepted_because=previous.accepted_because,
+            accepted_marks=previous.accepted_marks,
         )
     return carried
 
@@ -520,8 +549,21 @@ def accept(
         raise ReviewError(f"No review on record for {record_id}")
     updated = dict(store)
     for fingerprint in matching:
+        entry = updated[fingerprint]
+        # What is being answered, recorded now. A later re-read replaces
+        # `findings`, so an acceptance that only pointed at them forgot what it
+        # had agreed to the first time the model returned a clean read.
+        marks = tuple(
+            dict.fromkeys(
+                [*entry.accepted_marks]
+                + [finding_mark(f) for f in entry.findings if f.severity == "error"]
+            )
+        )
         updated[fingerprint] = replace(
-            updated[fingerprint], accepted=True, accepted_because=because.strip()
+            entry,
+            accepted=True,
+            accepted_because=because.strip(),
+            accepted_marks=marks,
         )
     return updated
 

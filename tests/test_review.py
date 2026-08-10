@@ -9,6 +9,7 @@ that no longer applies to the text it was given for.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -926,10 +927,13 @@ def test_a_force_re_read_of_the_same_card_keeps_its_acceptance() -> None:
     changed."""
     card = record()
     finding = Finding("pitch_accent", "heiban", "error")
-    before = {card_fingerprint(card): CardReview(
-        card.id, card_fingerprint(card), findings=(finding,),
-        accepted=True, accepted_because="jpdb is this deck's authority",
-    )}
+    before = review_module.accept(
+        {card_fingerprint(card): CardReview(
+            card.id, card_fingerprint(card), findings=(finding,)
+        )},
+        card.id,
+        "jpdb is this deck's authority",
+    )
     again = {card_fingerprint(card): CardReview(
         card.id, card_fingerprint(card), findings=(finding,)
     )}
@@ -988,11 +992,14 @@ def test_an_acceptance_survives_the_model_rewording_its_finding() -> None:
     card rewrites its sentences freely, so the carry branch almost never held
     and the destructive one is what ran. `where` and `severity` are stable."""
     card = record()
-    before = {card_fingerprint(card): CardReview(
-        card.id, card_fingerprint(card),
-        findings=(Finding("pitch_accent", "なる is heiban (accent 0)", "error"),),
-        accepted=True, accepted_because="checked against jpdb",
-    )}
+    before = review_module.accept(
+        {card_fingerprint(card): CardReview(
+            card.id, card_fingerprint(card),
+            findings=(Finding("pitch_accent", "なる is heiban (accent 0)", "error"),),
+        )},
+        card.id,
+        "checked against jpdb",
+    )
     reworded = {card_fingerprint(card): CardReview(
         card.id, card_fingerprint(card),
         findings=(Finding("Pitch accent", "the pattern marks it atamadaka", "error"),),
@@ -1007,11 +1014,14 @@ def test_a_new_problem_still_has_to_be_answered() -> None:
     """And the old reason is kept beside it, so whoever answers can see what was
     decided last time rather than a blank."""
     card = record()
-    before = {card_fingerprint(card): CardReview(
-        card.id, card_fingerprint(card),
-        findings=(Finding("pitch_accent", "heiban", "error"),),
-        accepted=True, accepted_because="checked against jpdb",
-    )}
+    before = review_module.accept(
+        {card_fingerprint(card): CardReview(
+            card.id, card_fingerprint(card),
+            findings=(Finding("pitch_accent", "heiban", "error"),),
+        )},
+        card.id,
+        "checked against jpdb",
+    )
     something_else = {card_fingerprint(card): CardReview(
         card.id, card_fingerprint(card),
         findings=(Finding("meanings", "glossed as intransitive", "error"),),
@@ -1021,3 +1031,57 @@ def test_a_new_problem_still_has_to_be_answered() -> None:
 
     assert not carried[card_fingerprint(card)].accepted
     assert carried[card_fingerprint(card)].accepted_because == "checked against jpdb"
+
+
+def test_a_clean_re_read_does_not_forget_what_was_accepted() -> None:
+    """The hole in the first attempt. Carrying `accepted` with the *fresh*
+    findings meant a re-read that found nothing wrote an accepted entry with an
+    empty list — so the next run, when the model resurfaced the same error as it
+    does, had nothing to check against and demanded the answer again."""
+    card = record()
+    accepted = review_module.accept(
+        {card_fingerprint(card): CardReview(
+            card.id, card_fingerprint(card),
+            findings=(Finding("pitch_accent", "heiban", "error"),),
+        )},
+        card.id,
+        "jpdb is this deck's authority",
+    )
+
+    clean = review_module.carry_acceptances(
+        accepted,
+        {card_fingerprint(card): CardReview(card.id, card_fingerprint(card))},
+    )
+    resurfaced = review_module.carry_acceptances(
+        clean,
+        {card_fingerprint(card): CardReview(
+            card.id, card_fingerprint(card),
+            findings=(Finding("Pitch accent", "worded differently", "error"),),
+        )},
+    )
+
+    entry = resurfaced[card_fingerprint(card)]
+    assert entry.accepted, "the same question, already answered"
+    assert entry.blocking() == (), "so it does not stop a build"
+
+
+def test_an_unanswered_error_still_blocks_on_an_accepted_card() -> None:
+    """Per finding, not per entry: a re-read can surface an error the
+    acceptance never covered, and an all-or-nothing flag would wave it through
+    on the strength of an answer to a different question."""
+    card = record()
+    accepted = review_module.accept(
+        {card_fingerprint(card): CardReview(
+            card.id, card_fingerprint(card),
+            findings=(Finding("pitch_accent", "heiban", "error"),),
+        )},
+        card.id,
+        "checked",
+    )
+    entry = accepted[card_fingerprint(card)]
+    both = replace(
+        entry,
+        findings=(*entry.findings, Finding("meanings", "wrong gloss", "error")),
+    )
+
+    assert [f.where for f in both.blocking()] == ["meanings"]

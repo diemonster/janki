@@ -218,7 +218,10 @@
     "at": "2026-08-10",
     "accepted": true,
     "accepted_because": "jpdb's API returns HLL for なる and the deck owner confirmed it against jpdb; jpdb is this deck's authority for accents. The heiban reading is the dictionary's, not the one this deck follows.",
-    "findings": []
+    "findings": [],
+    "accepted_marks": [
+      "pitch accent|error"
+    ]
   },
   "821147473e9c": {
     "record_id": "word:使う:つかう",
@@ -334,6 +337,9 @@
         "severity": "note",
         "suggestion": "Trim to the senses the card actually teaches, e.g. \"to become\", \"to turn into\", \"to get (to be)\", and move the rarer senses to usage_notes or drop them."
       }
+    ],
+    "accepted_marks": [
+      "pitch accent|error"
     ]
   },
   "c4b39126e8e9": {
