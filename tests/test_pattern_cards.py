@@ -755,6 +755,58 @@ def test_a_sweep_builds_a_drill_deck_that_cannot_narrow(tmp_path: Path, capsys) 
     assert "cannot narrow it" in capsys.readouterr().out
 
 
+def test_refresh_builds_one_named_drill_deck(tmp_path: Path, capsys) -> None:
+    """The other half of the same rule. `refresh --deck drill` injects
+    `--only-new` too, so a drill deck hit the refusal on the *last* stage of a
+    run that had already spent its jpdb, `--ai` and audio calls — and the remedy
+    the message offers, dropping the flag, is one no `janki refresh` invocation
+    can follow, because refresh always adds it."""
+    import json
+
+    from japanese_anki import cli
+
+    project(tmp_path)
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps(
+            [verb("買う", "かう", "godan", part_of_speech="verb").to_dict()],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "decks" / "drill.yaml").write_text(
+        "deck:\n  kind: conjugation\n  name: D\n  deck_id: 1\n  model_id: 2\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "janki.toml").write_text(
+        (tmp_path / "janki.toml").read_text(encoding="utf-8")
+        + "\n[review]\nrequire = false\n",
+        encoding="utf-8",
+    )
+
+    code = cli.main([
+        "--root", str(tmp_path), "refresh", "--deck", "drill",
+        "--no-jpdb", "--no-ai", "--no-recheck", "--no-audio", "--no-review",
+    ])
+
+    assert code == 0, "the stage refresh always injects the flag for"
+    assert "cannot narrow it" in capsys.readouterr().out
+
+
+def test_a_hand_typed_only_new_still_refuses_on_a_drill_deck(
+    tmp_path: Path, capsys
+) -> None:
+    """The flag means two different things on the two paths, and the refusal is
+    the point of the hand-typed one: it is an assertion about *this* deck, and
+    quietly building everything instead reports a flag as honoured that never
+    was."""
+    from japanese_anki import cli
+
+    deck = cli_project(tmp_path, [verb("買う", "かう", "godan")])
+
+    assert cli.main(["--root", str(tmp_path), "build", str(deck), "--only-new"]) == 1
+    assert "--only-new needs export history" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize(
     ("line", "expected"),
     [

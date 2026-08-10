@@ -2693,6 +2693,11 @@ def command_build(args: argparse.Namespace) -> int:
     built = _build_one(
         resolve_deck_path(args.deck, config), config, output,
         book=book, only_new=args.only_new, assume_yes=args.yes,
+        # `--all` is a sweep; so is the single-deck build refresh runs. Only the
+        # first was taught that, so `janki refresh --deck <conjugation deck>`
+        # hit a refusal whose remedy — drop `--only-new` — refresh gives nobody
+        # a way to follow, after every earlier stage had already paid for itself.
+        sweep=args.swept,
     )
     return _finish_build(book, built)
 
@@ -2763,7 +2768,7 @@ def command_refresh(args: argparse.Namespace) -> int:
             # because shipping bare cards *and marking them exported* hides
             # them from every later `--only-new`. A non-TTY still proceeds, so
             # scripted runs are unaffected.
-            argv += [*deck, "--only-new"]
+            argv += [*deck, "--only-new", "--swept"]
         stage = parser.parse_args(argv)
         print(f"— {name}: janki {' '.join(argv[len(root):])}")
         code = stage.handler(stage)
@@ -3893,6 +3898,18 @@ def build_parser() -> argparse.ArgumentParser:
             "Include only records this deck has never been built with, per the "
             "ledger's export history."
         ),
+    )
+    build_command.add_argument(
+        "--swept",
+        action="store_true",
+        # Hidden: refresh's own flag, not a user's. `refresh` injects
+        # `--only-new` into every build it runs, so on that path the flag is a
+        # mode applied to whatever deck was named rather than an assertion the
+        # user made about it — and a deck that records no exports must note that
+        # and build fully instead of failing the last stage of a run that has
+        # already spent its jpdb, --ai and audio calls. A person who types
+        # `janki build drill --only-new` by hand still gets the refusal.
+        help=argparse.SUPPRESS,
     )
     build_command.add_argument(
         "--yes",
