@@ -650,3 +650,34 @@ def test_two_spaces_in_a_row_name_the_word_after_them() -> None:
 def test_two_spaces_before_a_group_are_still_notation_gone_wrong() -> None:
     """One space before a group is the notation; two is not."""
     assert stray_furigana_spaces("毎晩[まいばん]、  音楽[おんがく]を") == ("音楽[おんがく]を",)
+
+
+def test_a_stray_space_right_after_a_group_is_reported() -> None:
+    """`語[ご] を` is the ordinary way a model mis-spaces the notation, and so
+    the check's most common trigger. Classifying `]` as ASCII *content* silenced
+    it for exactly the field the check was written for, and no test noticed:
+    the existing cases put their stray space after a kana, or before a real
+    group."""
+    assert stray_furigana_spaces("私[わたし] は 学生[がくせい]です") == ("は",)
+
+
+@pytest.mark.parametrize(
+    ("written", "expected"),
+    [("日本語[にほんご]の ", ("(end of field)",)), (" を 話[はな]す", ("を",))],
+    ids=["trailing", "leading"],
+)
+def test_a_space_at_either_edge_of_the_field_is_reported(
+    written: str, expected: tuple[str, ...]
+) -> None:
+    """The case that is *most* provably notation gone wrong: there is no next
+    group for it to start. Treating an absent neighbour as content read that
+    backwards and reported nothing."""
+    assert stray_furigana_spaces(written) == expected
+
+
+def test_doubled_spaces_inside_latin_content_stay_unreported() -> None:
+    """`run > 1` used to short-circuit the content test, so the doubled-space
+    typo inside quoted Latin was reported with a message that is false for it —
+    and acting on it makes the romaji HelloWorld, the harm the single-space
+    branch exists to avoid."""
+    assert stray_furigana_spaces("「Hello  World」と 言[い]った。") == ()

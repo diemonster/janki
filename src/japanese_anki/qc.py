@@ -307,14 +307,26 @@ def repair_spilled_punctuation(furigana: str) -> str:
     return _GROUP.sub(separate, furigana)
 
 
+def _ascii_content(char: str) -> bool:
+    """Whether a character is ASCII *text*, as opposed to ruby notation.
+
+    ``[`` and ``]`` are the notation itself, and an absent neighbour is the edge
+    of the field. Neither is evidence that a space beside it belongs to the
+    sentence.
+    """
+    return bool(char) and char.isascii() and char not in "[]"
+
+
 def stray_furigana_spaces(furigana: str) -> tuple[str, ...]:
     """Spaces that are content rather than notation, with the word after each.
 
     In a furigana field an ASCII space means one thing: "the next group's text
     run starts here". :func:`furigana_reading` removes a space only when a
     bracketed group follows it, so a space anywhere else survives into the
-    reading, into the regenerated romaji, and into the sentence audio — and Anki
-    renders it as a gap the plain sentence field does not have.
+    reading and into the regenerated romaji, and Anki renders it as a gap the
+    plain sentence field does not have. Not into the audio: clips are
+    synthesized from ``example.japanese`` and fingerprinted on it, and no audio
+    path reads a furigana field.
 
     ``日本語[にほんご]の ニュースが 少[すこ]し 分[わ]かります。`` has one before
     ニュース, which no group annotates. The card then reads
@@ -338,14 +350,19 @@ def stray_furigana_spaces(furigana: str) -> tuple[str, ...]:
         before = furigana[index - 1] if index else ""
         after = rest[0] if rest else ""
         # Reported only where a space is *provably* not content. Japanese text
-        # carries no ASCII spaces, so one between two non-ASCII characters is
-        # notation in the wrong place — but `「Hello World」と 言[い]った。` has
-        # a space the sentence itself contains, which `furigana_reading` keeps
-        # on purpose. Warning about that one sends a reader to delete it, and
-        # the romaji becomes HelloWorld.
-        provable = run > 1 or (
-            bool(before) and bool(after) and not before.isascii() and not after.isascii()
-        )
+        # carries no ASCII spaces, so one with no ASCII *content* on either side
+        # is notation in the wrong place — but `「Hello World」と 言[い]った。`
+        # has a space the sentence itself contains, which `furigana_reading`
+        # keeps on purpose. Warning about that one sends a reader to delete it,
+        # and the romaji becomes HelloWorld.
+        #
+        # A neighbour that is a bracket, or absent, is not content:
+        # `語[ご] を` is the ordinary way a model mis-spaces the notation and was
+        # the check's most common trigger, and `]` being ASCII silenced it. A
+        # space at either end of the field is the case that is *most* provably
+        # notation gone wrong — there is no next group for it to start — so an
+        # absent neighbour must not read as content either.
+        provable = not (_ascii_content(before) or _ascii_content(after))
         if provable and (run > 1 or _GROUP.match(rest) is None):
             stray.append(rest.split(" ", 1)[0] or "(end of field)")
         index = end
