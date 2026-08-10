@@ -5,7 +5,7 @@ import dataclasses
 import json
 import sys
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -2266,19 +2266,27 @@ def command_promote(args: argparse.Namespace) -> int:
 
 def _validate_path(
     path: Path,
-    store: Mapping[str, patterns.PatternSet] | None = None,
+    store: Callable[[], Mapping[str, patterns.PatternSet]] | None = None,
     config: ProjectConfig | None = None,
 ) -> tuple[list, int]:
     raw = load_structured(path)
-    section = raw.get("deck") or {} if isinstance(raw, dict) else {}
-    kind = str(section.get("kind") or "").strip() if isinstance(section, dict) else ""
-    if kind:
+    # `_deck_kind`, so this and the build cannot drift about what a kind is. On
+    # truthiness alone a typo — or a deliberate `kind: vocabulary` — sent an
+    # ordinary deck down the pattern path, which invented two errors that are
+    # false for it and skipped every record the file actually holds.
+    #
+    # Guarded on the shape first: `validate` also takes a records file, which is
+    # a list, and `_deck_kind` refuses a non-mapping because for a *deck* that
+    # is a real error.
+    if isinstance(raw, dict) and _deck_kind(path) in ("pattern", "conjugation"):
         # A pattern or conjugation deck holds no records, so the ordinary path
         # found none and called the file clean — leaving every defect the build
         # refuses invisible to the command whose job is catching one first.
         issues = [
             ValidationIssue("error", problem, source=str(path))
-            for problem in pattern_cards.deck_problems(path, store, config)
+            for problem in pattern_cards.deck_problems(
+                path, store() if store else None, config
+            )
         ]
         return issues, 0
 
@@ -2292,9 +2300,17 @@ def _validate_path(
 
 def command_validate(args: argparse.Namespace) -> int:
     config = _load_config(args)
-    # Read once. A pattern deck names a document, and whether that document has
-    # been read is one of the things a broken deck file gets wrong.
-    deck_store = patterns.load_store(config.patterns_file)
+    # Read lazily. `patterns.json` is machine-written and committed, so it can
+    # carry a merge marker — and reading it up front made that failure cancel
+    # `janki validate data/staging/…yaml`, a command with nothing to do with it.
+    deck_store: dict[str, patterns.PatternSet] | None = None
+
+    def store() -> dict[str, patterns.PatternSet]:
+        nonlocal deck_store
+        if deck_store is None:
+            deck_store = patterns.load_store(config.patterns_file)
+        return deck_store
+
     paths: list[Path]
     if args.path:
         paths = [args.path.resolve()]
@@ -2309,7 +2325,7 @@ def command_validate(args: argparse.Namespace) -> int:
     all_issues = []
     total_records = 0
     for path in paths:
-        issues, count = _validate_path(path, deck_store, config)
+        issues, count = _validate_path(path, store, config)
         all_issues.extend(issues)
         total_records += count
 

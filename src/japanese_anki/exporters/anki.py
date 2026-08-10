@@ -620,17 +620,6 @@ def _resolve_card_types(
     return card_types
 
 
-def _identifier_or_zero(section: dict[str, Any], key: str) -> int:
-    """A pinned id, or 0 when the file does not carry a usable one.
-
-    `deck_notetype` answers what a build *would* write, and a deck whose id is
-    missing or malformed cannot be matched against a collection at all — 0 is
-    the honest answer, and `build` refuses the file separately.
-    """
-    value = section.get(key)
-    return value if isinstance(value, int) and not isinstance(value, bool) else 0
-
-
 def deck_notetype(deck_path: Path, project_config: ProjectConfig) -> tuple[int, str, int]:
     """``(model_id, model_name, field count)`` a build of this deck would use.
 
@@ -652,10 +641,17 @@ def deck_notetype(deck_path: Path, project_config: ProjectConfig) -> tuple[int, 
         # every run, advising a Merge Notetypes re-import that would fix
         # nothing — and a false warning that never clears is how the detector
         # guarding the real notetype-append invariant gets ignored.
-        from japanese_anki.exporters.pattern_cards import FIELDS as PATTERN_FIELDS
+        from japanese_anki.exporters.pattern_cards import (
+            FIELDS as PATTERN_FIELDS,
+        )
+        from japanese_anki.exporters.pattern_cards import _identifier
 
+        # Raised, not zeroed. A `model_id` of 0 matched no notetype, so
+        # `status.check_collection` skipped the deck in silence — where before
+        # this branch existed the `DataError` reached `_collection_lines` and
+        # printed "could not read <deck>: deck.model_id must be an integer".
         return (
-            _identifier_or_zero(section, "model_id"),
+            _identifier(section, "model_id", deck_path),
             str(section.get("model_name") or "Japanese Pattern"),
             len(PATTERN_FIELDS),
         )

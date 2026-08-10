@@ -733,7 +733,10 @@ def test_a_sweep_builds_a_drill_deck_that_cannot_narrow(tmp_path: Path, capsys) 
 
     project(tmp_path)
     (tmp_path / "vocabulary.json").write_text(
-        json.dumps([verb("買う", "かう", "godan").to_dict()], ensure_ascii=False),
+        json.dumps(
+            [verb("買う", "かう", "godan", part_of_speech="verb").to_dict()],
+            ensure_ascii=False,
+        ),
         encoding="utf-8",
     )
     (tmp_path / "decks" / "drill.yaml").write_text(
@@ -812,3 +815,138 @@ def test_an_unreviewed_noun_does_not_block_the_drill_build(tmp_path: Path) -> No
     )
 
     assert cli.main(["--root", str(tmp_path), "build", str(tmp_path / "decks" / "drill.yaml")]) == 0
+
+
+def test_validate_reports_a_pattern_deck_without_swallowing_the_records(
+    tmp_path: Path, capsys
+) -> None:
+    """Through the CLI. Every `validate` test called `deck_problems` directly, so
+    the routing itself — which decides whether a file's records are validated at
+    all — went unexercised, and a dispatch on truthiness passed the suite."""
+    import json
+
+    from japanese_anki import cli
+
+    project(tmp_path)
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps(
+            [verb("買う", "かう", "godan", part_of_speech="verb").to_dict()],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "decks" / "words.yaml").write_text(
+        'name: W\ndeck:\n  source: "../vocabulary.json"\n', encoding="utf-8"
+    )
+    (tmp_path / "decks" / "rules.yaml").write_text(
+        "deck:\n  kind: pattern\n  name: R\n  deck_id: 1\n  model_id: 2\n"
+        '  document: "unread.pdf"\n',
+        encoding="utf-8",
+    )
+
+    assert cli.main(["--root", str(tmp_path), "validate"]) == 1
+
+    out = capsys.readouterr().out
+    assert "no document has been read under 'unread.pdf'" in out
+    assert "Validated 1 records" in out, "the word deck was still checked"
+
+
+def test_a_deck_kind_janki_does_not_know_is_left_to_the_ordinary_path(
+    tmp_path: Path, capsys
+) -> None:
+    """A typo, or a deliberate `kind: vocabulary`. Dispatching on truthiness
+    invented two errors that are false for a word deck — a missing `model_id`
+    an ordinary deck never pins, and a missing `document:` — and skipped every
+    record the file holds, while `janki build` built them all."""
+    import json
+
+    from japanese_anki import cli
+
+    project(tmp_path)
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps(
+            [verb("買う", "かう", "godan", part_of_speech="verb").to_dict()],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    deck = tmp_path / "decks" / "words.yaml"
+    deck.write_text(
+        'name: W\ndeck:\n  kind: vocabulary\n  source: "../vocabulary.json"\n',
+        encoding="utf-8",
+    )
+
+    assert cli.main(["--root", str(tmp_path), "validate", str(deck)]) == 0
+    assert "Validated 1 records" in capsys.readouterr().out
+
+
+def test_validate_does_not_read_the_pattern_store_for_a_staging_file(
+    tmp_path: Path, capsys
+) -> None:
+    """`patterns.json` is machine-written and committed, so it can carry a merge
+    marker — and reading it up front made that cancel a command with nothing to
+    do with it."""
+    import json
+
+    from japanese_anki import cli
+
+    project(tmp_path)
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps(
+            [verb("買う", "かう", "godan", part_of_speech="verb").to_dict()],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "patterns.json").write_text("<<<<<<< HEAD\n", encoding="utf-8")
+    (tmp_path / "janki.toml").write_text(
+        (tmp_path / "janki.toml").read_text(encoding="utf-8")
+        + 'patterns_file = "patterns.json"\n',
+        encoding="utf-8",
+    )
+
+    code = cli.main([
+        "--root", str(tmp_path), "validate", str(tmp_path / "vocabulary.json")
+    ])
+
+    assert code == 0, "the unreadable pattern store was never touched"
+
+
+@pytest.mark.parametrize(
+    ("patterns_in", "expected"),
+    [
+        ([], "states no rules"),
+        ([Pattern("く → いて"), Pattern("く → いた")], "more than one rule for く"),
+    ],
+    ids=["no-rules", "a-duplicate-trigger"],
+)
+def test_validate_refuses_a_well_formed_deck_the_build_cannot_use(
+    tmp_path: Path, patterns_in: list, expected: str
+) -> None:
+    """Both refusals live past the document checks, so a deck naming a reviewed
+    document passed validate and failed the build."""
+    from japanese_anki.exporters.pattern_cards import deck_problems
+
+    project(tmp_path)
+    store = {"teform.pdf": chart(*patterns_in)}
+
+    problems = deck_problems(deck_file(tmp_path), store, ProjectConfig.load(tmp_path))
+
+    assert any(expected in problem for problem in problems), problems
+
+
+def test_a_pattern_deck_with_a_bad_model_id_still_warns_in_status(tmp_path: Path) -> None:
+    """Zeroing it matched no notetype, so `status` skipped the deck in silence
+    where it used to print "could not read <deck>: model_id must be an integer"."""
+    from japanese_anki.exporters.anki import deck_notetype
+
+    project(tmp_path)
+    path = tmp_path / "decks" / "bad.yaml"
+    path.write_text(
+        "deck:\n  kind: pattern\n  name: R\n  deck_id: 1\n  model_id: yes\n"
+        '  document: "x.pdf"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(DataError, match="model_id must be an integer"):
+        deck_notetype(path, ProjectConfig.load(tmp_path))

@@ -389,7 +389,32 @@ def deck_problems(
         problems.append(f"{document} is a {entry.kind} document, which states no rules")
     elif not entry.reviewed:
         problems.append(f"{document} has not been reviewed")
+    else:
+        # The two refusals a *well-formed* deck can still hit. `groups` only
+        # filters examples, never triggers, so the card set here is the one the
+        # build produces and validate can answer for it.
+        try:
+            cards_for(entry)
+        except PatternDeckError as exc:
+            problems.append(str(exc))
+        else:
+            problems.extend(_card_set_problems(entry, document))
     return problems
+
+
+def _card_set_problems(entry: PatternSet, document: str) -> list[str]:
+    cards = cards_for(entry)
+    if not cards:
+        return [f"{document} states no rules to make cards from"]
+    seen: dict[str, int] = {}
+    for card in cards:
+        seen[card.identity] = seen.get(card.identity, 0) + 1
+    clashing = sorted(name for name, count in seen.items() if count > 1)
+    if clashing:
+        return [
+            f"{document} states more than one rule for {', '.join(clashing)}"
+        ]
+    return []
 
 
 def build_pattern_deck(
