@@ -61,6 +61,7 @@ __all__ = [
     "build_pattern_deck",
     "cards_for",
     "collection_for",
+    "shipping_records",
     "deck_problems",
     "drill_cards",
 ]
@@ -265,6 +266,29 @@ def _read(path: Path) -> str:
         raise PatternDeckError(f"Missing template file: {path}") from exc
 
 
+def shipping_records(
+    deck_path: Path, records: Sequence[VocabularyRecord], form: str = ""
+) -> list[VocabularyRecord]:
+    """The records this deck will put on a card: filtered, and conjugable.
+
+    What the review gate has to ask about. Gating the whole collection instead
+    refused a build over records the deck structurally cannot ship — a noun has
+    no verb class, so no drill card could ever carry it — and over records the
+    deck's own `exclude_ids` had deliberately held back.
+    """
+    section = _deck_section(deck_path)
+    wanted = str(form or section.get("form") or "te_form").strip()
+    include = _deck_string_set(section, "include_ids", deck_path)
+    exclude = _deck_string_set(section, "exclude_ids", deck_path)
+    chosen = [
+        record
+        for record in records
+        if (not include or record.id in include) and record.id not in exclude
+    ]
+    keep = {record_id for _card, record_id in drill_cards(chosen, wanted)}
+    return [record for record in chosen if record.id in keep]
+
+
 def collection_for(deck_path: Path, project_config: ProjectConfig) -> Path:
     """The records file a conjugation deck drills, honouring its own ``source:``.
 
@@ -293,7 +317,9 @@ def collection_for(deck_path: Path, project_config: ProjectConfig) -> Path:
 
 
 def deck_problems(
-    deck_path: Path, store: Mapping[str, PatternSet] | None = None
+    deck_path: Path,
+    store: Mapping[str, PatternSet] | None = None,
+    project_config: ProjectConfig | None = None,
 ) -> list[str]:
     """What is wrong with a pattern or conjugation deck file, for `validate`.
 
@@ -321,6 +347,19 @@ def deck_problems(
                 f"deck.form must be one of {', '.join(CONJUGATION_FORMS)}, "
                 f"got {form!r}"
             )
+        # The refusals the build gained. Without these `janki validate` passed a
+        # deck `janki build` then rejected, which is the one thing this function
+        # exists to prevent.
+        for key in ("include_ids", "exclude_ids"):
+            try:
+                _deck_string_set(deck_config, key, deck_path)
+            except DataError as exc:
+                problems.append(str(exc))
+        if project_config is not None:
+            try:
+                collection_for(deck_path, project_config)
+            except JankiError as exc:
+                problems.append(str(exc))
         return problems
 
     document = str(deck_config.get("document") or "").strip()
@@ -494,14 +533,7 @@ def build_conjugation_deck(
     # bare string became a set of single characters and excluded nothing — the
     # record the user held back shipped — while `include_ids: []` filtered
     # everything out and blamed a missing verb_group.
-    include = _deck_string_set(deck_config, "include_ids", deck_path)
-    exclude = _deck_string_set(deck_config, "exclude_ids", deck_path)
-    chosen = [
-        record
-        for record in records
-        if (not include or record.id in include) and record.id not in exclude
-    ]
-    cards = drill_cards(chosen, form)
+    cards = drill_cards(shipping_records(deck_path, records, form), form)
     if not cards:
         raise PatternDeckError(
             f"{deck_path}: no record janki can conjugate into a {form}. A verb "

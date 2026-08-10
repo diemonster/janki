@@ -509,15 +509,21 @@ def test_two_rules_sharing_a_trigger_are_refused(tmp_path: Path) -> None:
         )
 
 
-def test_the_guid_moves_when_the_record_does_not_match() -> None:
+def test_every_card_in_a_drill_deck_gets_its_own_guid(tmp_path: Path) -> None:
     """The other half, so the test above cannot pass by every card sharing one
-    GUID: a different record is a different card."""
-    from japanese_anki.exporters.pattern_cards import drill_cards
+    constant. Read off the built notes: comparing the `record_id` this helper
+    returns compared two strings the *test* had just constructed, exercised no
+    production identity logic at all, and left GUID uniqueness unpinned on a
+    commit about note identity."""
+    guids = guids_in(build_drill(
+        tmp_path,
+        [verb("買う", "かう", "godan"), verb("待つ", "まつ", "godan"),
+         verb("読む", "よむ", "godan")],
+        "many.apkg",
+    ))
 
-    a = drill_cards([verb("買う", "かう", "godan")], "te_form")[0][1]
-    b = drill_cards([verb("待つ", "まつ", "godan")], "te_form")[0][1]
-
-    assert a != b
+    assert len(guids) == 3
+    assert len(set(guids)) == 3, "three cards, three identities"
 
 
 def test_an_i_adjective_gets_a_drill_card() -> None:
@@ -678,3 +684,117 @@ def test_a_drill_deck_passes_the_same_review_gate_a_word_deck_does(
     err = capsys.readouterr().err
     assert "not ready to ship" in err
     assert "janki review" in err
+
+
+def test_the_gate_asks_only_about_records_the_deck_can_ship(tmp_path: Path) -> None:
+    """A noun has no verb class, so no drill card could ever carry it, and a
+    record `exclude_ids` holds back is one the deck has already declined.
+    Gating the whole collection refused a valid build over both."""
+    from japanese_anki.exporters.pattern_cards import shipping_records
+
+    project(tmp_path)
+    deck = tmp_path / "decks" / "drill.yaml"
+    deck.write_text(
+        "deck:\n  kind: conjugation\n  name: D\n  deck_id: 1\n  model_id: 2\n"
+        '  exclude_ids:\n  - "word:待つ:まつ"\n',
+        encoding="utf-8",
+    )
+    noun = verb("猫", "ねこ", "")
+    held_back = verb("待つ", "まつ", "godan")
+    shipped = verb("買う", "かう", "godan")
+
+    kept = shipping_records(deck, [noun, held_back, shipped])
+
+    assert [r.id for r in kept] == ["word:買う:かう"]
+
+
+def test_a_sweep_builds_a_drill_deck_that_cannot_narrow(tmp_path: Path, capsys) -> None:
+    """`janki refresh` runs `build --all --only-new`, so refusing the flag
+    outright stopped the documented pipeline at the first drill deck and the
+    decks after it never built. On a sweep the flag is a mode, not an assertion
+    about each deck."""
+    import json
+
+    from japanese_anki import cli
+
+    project(tmp_path)
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps([verb("買う", "かう", "godan").to_dict()], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (tmp_path / "decks" / "drill.yaml").write_text(
+        "deck:\n  kind: conjugation\n  name: D\n  deck_id: 1\n  model_id: 2\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "janki.toml").write_text(
+        (tmp_path / "janki.toml").read_text(encoding="utf-8")
+        + "\n[review]\nrequire = false\n",
+        encoding="utf-8",
+    )
+
+    code = cli.main(["--root", str(tmp_path), "build", "--all", "--only-new"])
+
+    assert code == 0
+    assert "cannot narrow it" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        ('  exclude_ids: "word:買う:かう"', "deck.exclude_ids must be a list"),
+        ('  source: "../nope.json"', "no collection at"),
+    ],
+    ids=["a-bare-string-filter", "a-missing-collection"],
+)
+def test_validate_catches_what_the_build_would_refuse(
+    tmp_path: Path, line: str, expected: str
+) -> None:
+    """`janki validate && janki build` passing the first and failing the second
+    is the failure `deck_problems` exists to prevent."""
+    from japanese_anki.exporters.pattern_cards import deck_problems
+
+    project(tmp_path)
+    deck = tmp_path / "decks" / "drill.yaml"
+    deck.write_text(
+        "deck:\n  kind: conjugation\n  name: D\n  deck_id: 1\n  model_id: 2\n"
+        + line + "\n",
+        encoding="utf-8",
+    )
+
+    problems = deck_problems(deck, {}, ProjectConfig.load(tmp_path))
+
+    assert any(expected in problem for problem in problems), problems
+
+
+def test_an_unreviewed_noun_does_not_block_the_drill_build(tmp_path: Path) -> None:
+    """Through the CLI, with the gate on. A noun has no verb class so no drill
+    card could carry it — refusing the build over one is a false refusal, and
+    the collection a real learner has is mostly nouns."""
+    import json
+
+    from japanese_anki import cli
+    from japanese_anki.review import CardReview, card_fingerprint, save_store
+
+    project(tmp_path)
+    drilled = verb("買う", "かう", "godan")
+    noun = verb("猫", "ねこ", "")
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps([drilled.to_dict(), noun.to_dict()], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (tmp_path / "decks" / "drill.yaml").write_text(
+        "deck:\n  kind: conjugation\n  name: D\n  deck_id: 1\n  model_id: 2\n",
+        encoding="utf-8",
+    )
+    # Only the verb has been read. The noun has not, and must not matter.
+    save_store(
+        tmp_path / "review.json",
+        {card_fingerprint(drilled): CardReview(drilled.id, card_fingerprint(drilled))},
+    )
+    (tmp_path / "janki.toml").write_text(
+        (tmp_path / "janki.toml").read_text(encoding="utf-8")
+        + '\nreview_file = "review.json"\n',
+        encoding="utf-8",
+    )
+
+    assert cli.main(["--root", str(tmp_path), "build", str(tmp_path / "decks" / "drill.yaml")]) == 0

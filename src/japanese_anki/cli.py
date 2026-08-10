@@ -2265,7 +2265,9 @@ def command_promote(args: argparse.Namespace) -> int:
 
 
 def _validate_path(
-    path: Path, store: Mapping[str, patterns.PatternSet] | None = None
+    path: Path,
+    store: Mapping[str, patterns.PatternSet] | None = None,
+    config: ProjectConfig | None = None,
 ) -> tuple[list, int]:
     raw = load_structured(path)
     section = raw.get("deck") or {} if isinstance(raw, dict) else {}
@@ -2276,7 +2278,7 @@ def _validate_path(
         # refuses invisible to the command whose job is catching one first.
         issues = [
             ValidationIssue("error", problem, source=str(path))
-            for problem in pattern_cards.deck_problems(path, store)
+            for problem in pattern_cards.deck_problems(path, store, config)
         ]
         return issues, 0
 
@@ -2307,7 +2309,7 @@ def command_validate(args: argparse.Namespace) -> int:
     all_issues = []
     total_records = 0
     for path in paths:
-        issues, count = _validate_path(path, deck_store)
+        issues, count = _validate_path(path, deck_store, config)
         all_issues.extend(issues)
         total_records += count
 
@@ -2470,6 +2472,7 @@ def _build_one(
     book: ledger.Ledger | None = None,
     only_new: bool = False,
     assume_yes: bool = False,
+    sweep: bool = False,
 ) -> bool:
     """Build one deck. Returns whether any export entry is now pending.
 
@@ -2491,22 +2494,33 @@ def _build_one(
     kind = _deck_kind(deck_path)
     if kind == "conjugation":
         if only_new:
-            # Refused rather than ignored. A drill deck records no exports, so
-            # `--only-new` cannot mean anything here — and accepting it while
-            # doing a full rebuild reports a flag as honoured that never was.
-            raise AnkiBuildError(
-                f"{deck_path.name}: --only-new needs export history, and a "
-                f"conjugation deck records none. Build it without the flag."
-            )
+            # On a sweep the flag is a *mode* applied to every deck, not an
+            # assertion about each one, so a deck that cannot honour it says so
+            # and builds fully. Refusing outright stopped `--all` at the first
+            # drill deck — and `janki refresh` runs `build --all --only-new`, so
+            # the documented pipeline broke the moment one existed.
+            if sweep:
+                print(
+                    f"note: {deck_path.name} records no exports, so --only-new "
+                    f"cannot narrow it; building all of it."
+                )
+            else:
+                raise AnkiBuildError(
+                    f"{deck_path.name}: --only-new needs export history, and a "
+                    f"conjugation deck records none. Build it without the flag."
+                )
         normalized = pattern_cards.collection_for(deck_path, config)
         records = load_records(normalized)
-        # The same gate a word deck passes, on the same records. A drill card
-        # carries the expression, the reading and a meaning straight off the
-        # record, so shipping one janki has not read is the very thing the gate
-        # exists to stop — the `pattern` branch skips it because it ships no
-        # record content, and this branch has no such excuse.
+        # The same gate a word deck passes, on the records this deck will
+        # actually ship — filtered, and conjugable. A drill card carries the
+        # expression, the reading and a meaning straight off the record, so
+        # shipping one janki has not read is the thing the gate exists to stop;
+        # but gating the whole collection refused the build over nouns no drill
+        # card could carry, and over records `exclude_ids` had held back.
         if output is None:
-            _refuse_unreviewed(records, config, deck_path)
+            _refuse_unreviewed(
+                pattern_cards.shipping_records(deck_path, records), config, deck_path
+            )
         target, count = pattern_cards.build_conjugation_deck(
             deck_path, config, records, output
         )
@@ -2643,7 +2657,7 @@ def command_build(args: argparse.Namespace) -> int:
             for deck_path in deck_paths:
                 built = _build_one(
                     deck_path, config, book=book,
-                    only_new=args.only_new, assume_yes=args.yes,
+                    only_new=args.only_new, assume_yes=args.yes, sweep=True,
                 ) or built
         finally:
             # In a `finally` because a later deck refusing must not discard
