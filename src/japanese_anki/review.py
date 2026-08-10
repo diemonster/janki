@@ -124,9 +124,16 @@ def _marks_of(raw: dict[str, Any], findings: tuple[Finding, ...]) -> tuple[str, 
     marks existed the acceptance covered whatever errors the entry held, so that
     is what it is read as.
     """
-    stored = tuple(
-        str(mark) for mark in (raw.get("accepted_marks") or []) if str(mark)
-    )
+    listed = raw.get("accepted_marks") or []
+    if not isinstance(listed, list):
+        # Refused, not skipped — the rule `load_store` states and the sibling
+        # `findings` field already follows. A scalar iterated into seventeen
+        # single-character marks, which matched nothing, suppressed the
+        # migration below by being truthy, and was written back to the store.
+        raise ReviewError(
+            f"accepted_marks must be a list, got {type(listed).__name__}"
+        )
+    stored = tuple(str(mark) for mark in listed if str(mark))
     if stored or not raw.get("accepted"):
         return stored
     return tuple(
@@ -219,8 +226,12 @@ class CardReview:
         flag would wave that through on the strength of an answer to a different
         question.
         """
-        if not self.accepted:
-            return tuple(f for f in self.findings if f.severity == "error")
+        # The marks are consulted whatever `accepted` says. They outlive a
+        # lapse now, so an entry that went un-accepted because a re-read raised
+        # something *new* still holds the record that the old finding was
+        # answered — and re-listing it under "overrule it: janki review
+        # --accept" asks again for a decision the same entry proves was made.
+        # `accepted` is a summary of the marks, not a gate on them.
         answered = set(self.accepted_marks)
         return tuple(
             f
@@ -504,7 +515,14 @@ def carry_acceptances(
         # raised something new, nobody has answered it yet — comes back when the
         # new finding goes away, instead of starting from nothing.
         marks = set(previous.accepted_marks)
-        answered = bool(marks) and {
+        # `previous.accepted` counts as well as the marks. An entry written
+        # before marks existed has none to migrate from when its findings are
+        # empty, and so does an acceptance made on a card whose findings were
+        # all notes — and withdrawing those on the next clean re-read erased a
+        # person's decision from the file this repo treats as source of truth,
+        # leaving their reason orphaned beside it. A card nobody accepted still
+        # does not become accepted by being clean.
+        answered = (bool(marks) or previous.accepted) and {
             finding_mark(f) for f in entry.findings if f.severity == "error"
         } <= marks
         carried[fingerprint] = replace(

@@ -1184,3 +1184,75 @@ def test_a_card_nobody_accepted_does_not_become_accepted_by_being_clean() -> Non
     )
 
     assert not carried[card_fingerprint(card)].accepted
+
+
+def test_an_acceptance_with_no_derivable_marks_is_not_withdrawn(tmp_path: Path) -> None:
+    """A store written before marks existed has none to migrate from when its
+    findings are empty — the exact state the committed file was in. Withdrawing
+    it on the next clean re-read erased a person's decision and left their
+    reason orphaned beside it, with nothing printed."""
+    path = tmp_path / "review.json"
+    path.write_text(
+        json.dumps({"abc123def456": {
+            "record_id": "word:なる:なる",
+            "accepted": True,
+            "accepted_because": "jpdb is this deck's authority",
+            "findings": [],
+        }}),
+        encoding="utf-8",
+    )
+    store = load_store(path)
+    assert store["abc123def456"].accepted_marks == (), "nothing to migrate from"
+
+    carried = review_module.carry_acceptances(store, {
+        "abc123def456": CardReview("word:なる:なる", "abc123def456")
+    })
+
+    assert carried["abc123def456"].accepted
+    assert carried["abc123def456"].accepted_because == "jpdb is this deck's authority"
+
+
+def test_a_lapsed_entry_does_not_re_ask_about_what_was_answered() -> None:
+    """The marks outlive a lapse, so an entry that went un-accepted because a
+    re-read raised something *new* still knows the old finding was answered.
+    Re-listing it under "overrule it: janki review --accept" asks again for a
+    decision the same entry proves was made."""
+    card = record()
+    accepted = review_module.accept(
+        {card_fingerprint(card): CardReview(
+            card.id, card_fingerprint(card),
+            findings=(Finding("pitch_accent", "heiban", "error"),),
+        )},
+        card.id,
+        "checked",
+    )
+    lapsed = review_module.carry_acceptances(accepted, {
+        card_fingerprint(card): CardReview(
+            card.id, card_fingerprint(card),
+            findings=(
+                Finding("pitch_accent", "heiban", "error"),
+                Finding("meanings", "wrong gloss", "error"),
+            ),
+        )
+    })
+
+    entry = lapsed[card_fingerprint(card)]
+    assert not entry.accepted, "the new finding is unanswered"
+    assert [f.where for f in entry.blocking()] == ["meanings"], "and only that one"
+
+
+def test_a_scalar_accepted_marks_is_refused(tmp_path: Path) -> None:
+    """Iterated, a string became seventeen single-character marks — which
+    matched nothing, suppressed the migration by being truthy, and was written
+    back to the store. The sibling `findings` field is refused for exactly this."""
+    path = tmp_path / "review.json"
+    path.write_text(
+        json.dumps({"abc123def456": {
+            "record_id": "word:なる:なる", "accepted": True,
+            "accepted_marks": "pitch accent|error", "findings": [],
+        }}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ReviewError, match="accepted_marks must be a list"):
+        load_store(path)
