@@ -2278,7 +2278,17 @@ def _validate_path(
     # Guarded on the shape first: `validate` also takes a records file, which is
     # a list, and `_deck_kind` refuses a non-mapping because for a *deck* that
     # is a real error.
-    if isinstance(raw, dict) and _deck_kind(path) in ("pattern", "conjugation"):
+    if isinstance(raw, dict):
+        try:
+            kind = _deck_kind(path)
+        except DataError as exc:
+            # Reported as this file's error rather than raised, so a sweep still
+            # validates every other deck — the rule this command follows for a
+            # deck it cannot read.
+            return [ValidationIssue("error", str(exc), source=str(path))], 0
+    else:
+        kind = ""
+    if kind in ("pattern", "conjugation"):
         # A pattern or conjugation deck holds no records, so the ordinary path
         # found none and called the file clean — leaving every defect the build
         # refuses invisible to the command whose job is catching one first.
@@ -2424,6 +2434,13 @@ def _confirm_gaps(
     return answer.strip().lower() in {"y", "yes"}
 
 
+#: Every `kind:` a deck file may state. `vocabulary` is the name of the default
+#: for anyone who prefers writing it down; the other two are the card kinds with
+#: their own builders. Anything else is a typo, and a typo is refused rather
+#: than run as an ordinary word deck.
+KNOWN_DECK_KINDS = ("", "vocabulary", "pattern", "conjugation")
+
+
 def _deck_kind(deck_path: Path) -> str:
     """What kind of deck a file describes, or ``""`` for the ordinary sort.
 
@@ -2437,7 +2454,20 @@ def _deck_kind(deck_path: Path) -> str:
     section = raw.get("deck") or {}
     if not isinstance(section, dict):
         raise DataError(f"The deck section must be a mapping: {deck_path}")
-    return str(section.get("kind") or "").strip().lower()
+    kind = str(section.get("kind") or "").strip().lower()
+    # Refused here, once, because this is the only place that decides. A typo —
+    # `kind: patern` — used to fall through to the vocabulary path everywhere:
+    # `validate` found no records and warned, `build` wrote an *empty* package
+    # over the deck's own output and printed "0 notes" on exit 0, and `status`
+    # measured a 27-field word notetype against the deck's pinned pattern
+    # `model_id` and reported drift that is not there. Every rule in the file
+    # gone, and nothing naming the file.
+    if kind not in KNOWN_DECK_KINDS:
+        raise DataError(
+            f"{deck_path}: unknown deck kind {kind!r}. Valid kinds: "
+            + ", ".join(k or "(omitted — an ordinary word deck)" for k in KNOWN_DECK_KINDS)
+        )
+    return kind
 
 
 def _refuse_unreviewed(

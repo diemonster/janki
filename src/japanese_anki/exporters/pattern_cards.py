@@ -45,7 +45,7 @@ from japanese_anki.config import ProjectConfig
 from japanese_anki.conjugation import CONJUGATION_FORMS
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import _deck_string_set
-from japanese_anki.io import DataError, load_structured
+from japanese_anki.io import DataError, load_records, load_structured
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.patterns import (
     CHECKABLE_KINDS,
@@ -410,9 +410,16 @@ def deck_problems(
                 problems.append(str(exc))
         if project_config is not None:
             try:
-                collection_for(deck_path, project_config)
+                path = collection_for(deck_path, project_config)
             except JankiError as exc:
                 problems.append(str(exc))
+            else:
+                # Whether the deck makes a card at all — the same question the
+                # pattern branch asks below. Right after a plain Shirabe import
+                # and before `janki enrich --jpdb` no record carries a
+                # `verb_group`, so `validate` passed a deck the very next
+                # `build` refused: the one drift this function exists to close.
+                problems.extend(_drill_set_problems(deck_path, path, form))
         return problems
 
     document = str(deck_config.get("document") or "").strip()
@@ -440,6 +447,28 @@ def deck_problems(
         else:
             problems.extend(_card_set_problems(entry, document))
     return problems
+
+
+def _drill_set_problems(deck_path: Path, collection: Path, form: str) -> list[str]:
+    """The build's own emptiness refusal, asked of the same inputs.
+
+    A read error is not reported here: `validate` reads the deck file, and a
+    collection janki cannot parse is that file's problem, raised by the command
+    that reads it rather than pinned on whichever deck happens to name it.
+    """
+    if form not in CONJUGATION_FORMS:
+        return []
+    try:
+        records = load_records(collection)
+        cards = drill_cards(shipping_records(deck_path, records, form), form)
+    except JankiError:
+        return []
+    if not cards:
+        return [
+            f"no record janki can conjugate into a {form}. A verb needs a "
+            f"verb_group janki knows — `janki enrich --jpdb` records one."
+        ]
+    return []
 
 
 def _card_set_problems(entry: PatternSet, document: str) -> list[str]:

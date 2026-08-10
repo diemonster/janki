@@ -922,8 +922,12 @@ def test_validate_reports_a_pattern_deck_without_swallowing_the_records(
         ),
         encoding="utf-8",
     )
+    # `kind: vocabulary` written out, not omitted: a deck with no `kind:` key
+    # takes the ordinary path under a truthiness dispatch too, so a file set
+    # without this one cannot fail if the routing regresses to it.
     (tmp_path / "decks" / "words.yaml").write_text(
-        'name: W\ndeck:\n  source: "../vocabulary.json"\n', encoding="utf-8"
+        'name: W\ndeck:\n  kind: vocabulary\n  source: "../vocabulary.json"\n',
+        encoding="utf-8",
     )
     (tmp_path / "decks" / "rules.yaml").write_text(
         "deck:\n  kind: pattern\n  name: R\n  deck_id: 1\n  model_id: 2\n"
@@ -936,15 +940,80 @@ def test_validate_reports_a_pattern_deck_without_swallowing_the_records(
     out = capsys.readouterr().out
     assert "no document has been read under 'unread.pdf'" in out
     assert "Validated 1 records" in out, "the word deck was still checked"
+    assert "a pattern deck needs 'document:'" not in out, "and not as a pattern deck"
 
 
-def test_a_deck_kind_janki_does_not_know_is_left_to_the_ordinary_path(
+def test_a_deck_kind_janki_does_not_know_is_refused_by_name(
     tmp_path: Path, capsys
 ) -> None:
-    """A typo, or a deliberate `kind: vocabulary`. Dispatching on truthiness
-    invented two errors that are false for a word deck — a missing `model_id`
-    an ordinary deck never pins, and a missing `document:` — and skipped every
-    record the file holds, while `janki build` built them all."""
+    """`kind: patern`. Left to the ordinary path it was accepted in silence
+    everywhere: `validate` found no records and only warned, `build` wrote an
+    *empty* package over the deck's own output and printed "0 notes" on exit 0,
+    and `status` measured a word notetype against the deck's pinned pattern
+    `model_id` and reported drift that is not there. Every rule in the file
+    gone, and nothing naming it."""
+    import json
+
+    from japanese_anki import cli
+
+    project(tmp_path)
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps(
+            [verb("買う", "かう", "godan", part_of_speech="verb").to_dict()],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    deck = tmp_path / "decks" / "typo.yaml"
+    deck.write_text(
+        "deck:\n  kind: patern\n  name: T\n  deck_id: 1\n  model_id: 2\n"
+        '  document: "teform.pdf"\n',
+        encoding="utf-8",
+    )
+
+    assert cli.main(["--root", str(tmp_path), "validate", str(deck)]) == 1
+    assert "unknown deck kind 'patern'" in capsys.readouterr().out
+    assert cli.main(["--root", str(tmp_path), "build", str(deck)]) == 1
+    assert not (tmp_path / "dist").exists(), "and nothing was written over"
+
+
+def test_an_unknown_kind_does_not_cancel_the_rest_of_a_sweep(
+    tmp_path: Path, capsys
+) -> None:
+    """The rule `validate` follows for any deck it cannot read: report it
+    against that file and keep checking the others, or one typo hides every
+    other deck's real problems."""
+    import json
+
+    from japanese_anki import cli
+
+    project(tmp_path)
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps(
+            [verb("買う", "かう", "godan", part_of_speech="verb").to_dict()],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "decks" / "a-typo.yaml").write_text(
+        "deck:\n  kind: patern\n  name: T\n  deck_id: 1\n  model_id: 2\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "decks" / "words.yaml").write_text(
+        'name: W\ndeck:\n  source: "../vocabulary.json"\n', encoding="utf-8"
+    )
+
+    assert cli.main(["--root", str(tmp_path), "validate"]) == 1
+    assert "Validated 1 records" in capsys.readouterr().out
+
+
+def test_a_deck_kind_janki_does_know_is_left_to_the_ordinary_path(
+    tmp_path: Path, capsys
+) -> None:
+    """A deliberate `kind: vocabulary` — the default, written down. Dispatching
+    on truthiness invented two errors that are false for a word deck — a missing
+    `model_id` an ordinary deck never pins, and a missing `document:` — and
+    skipped every record the file holds, while `janki build` built them all."""
     import json
 
     from japanese_anki import cli
@@ -965,6 +1034,55 @@ def test_a_deck_kind_janki_does_not_know_is_left_to_the_ordinary_path(
 
     assert cli.main(["--root", str(tmp_path), "validate", str(deck)]) == 0
     assert "Validated 1 records" in capsys.readouterr().out
+
+
+def test_validate_refuses_a_drill_deck_that_makes_no_card(
+    tmp_path: Path, capsys
+) -> None:
+    """The state right after a plain Shirabe import and before
+    `janki enrich --jpdb`: no record carries a `verb_group`, so the deck makes
+    no card and `build` refuses it. `validate` said "0 error(s)" over the same
+    files — the drift this function exists to close, and which the pattern
+    branch already closed for rule decks."""
+    import json
+
+    from japanese_anki import cli
+
+    project(tmp_path)
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps([verb("買う", "かう", "").to_dict()], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    deck = tmp_path / "decks" / "drill.yaml"
+    deck.write_text(
+        "deck:\n  kind: conjugation\n  name: D\n  deck_id: 1\n  model_id: 2\n",
+        encoding="utf-8",
+    )
+
+    assert cli.main(["--root", str(tmp_path), "validate", str(deck)]) == 1
+    assert "no record janki can conjugate into a te_form" in capsys.readouterr().out
+    assert cli.main(["--root", str(tmp_path), "build", str(deck)]) == 1, "as the build does"
+
+
+def test_validate_passes_a_drill_deck_that_does_make_a_card(tmp_path: Path) -> None:
+    """The other direction, so the refusal above cannot pass by the check being
+    broken for every drill deck."""
+    import json
+
+    from japanese_anki import cli
+
+    project(tmp_path)
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps([verb("買う", "かう", "godan").to_dict()], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    deck = tmp_path / "decks" / "drill.yaml"
+    deck.write_text(
+        "deck:\n  kind: conjugation\n  name: D\n  deck_id: 1\n  model_id: 2\n",
+        encoding="utf-8",
+    )
+
+    assert cli.main(["--root", str(tmp_path), "validate", str(deck)]) == 0
 
 
 def test_validate_does_not_read_the_pattern_store_for_a_staging_file(
