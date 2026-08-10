@@ -873,3 +873,23 @@ def test_a_store_whose_fingerprints_are_gone_is_refused_by_name(tmp_path: Path) 
 
     with pytest.raises(ReviewError, match="cannot be recovered"):
         load_store(path)
+
+
+def test_accepting_a_card_that_has_changed_says_so(tmp_path: Path) -> None:
+    """Not "No review on record", which reads as "you mistyped the id" and sends
+    the user hunting for the right one. The state is "the card changed since it
+    was read", and the remedy is `janki review`, not a different id."""
+    card = record()
+    stale = record(usage_notes="the version that was read")
+    store = {card_fingerprint(stale): CardReview(stale.id, card_fingerprint(stale))}
+
+    with pytest.raises(ReviewError, match="has changed since it was last read"):
+        review_module.accept(store, card.id, "checked", {card_fingerprint(card)})
+
+
+def test_accepting_an_id_nothing_has_read_still_says_that(tmp_path: Path) -> None:
+    """The sibling case has to keep its own message, or the new one swallows it."""
+    card = record()
+
+    with pytest.raises(ReviewError, match="No review on record"):
+        review_module.accept({}, card.id, "checked", {card_fingerprint(card)})

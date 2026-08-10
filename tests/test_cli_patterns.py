@@ -568,3 +568,32 @@ def test_the_check_uses_the_collections_verb_classes(
     out = capsys.readouterr().out
     assert "食べる ⇨ 食べれる is not what janki computes" in out
     assert "およぐ ⇨ およいで not checked — no verb class on record" in out
+
+
+def test_a_failed_class_lookup_does_not_discard_the_document_just_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The lookup used to sit inside the read loop, outside its try, and before
+    the save — so an unset key, a timeout or a 429 threw away every document
+    already read and paid for in the same run, and the model calls had to be
+    made again."""
+    root = project(tmp_path)
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("て")]
+    parsed.patterns[0].examples = ["およぐ ⇨ およいで"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+
+    def refuse(*_args: Any, **_kwargs: Any) -> dict[str, str]:
+        raise JankiError("JPDB_API_KEY is not set")
+
+    monkeypatch.setattr(cli.patterns, "verb_groups_from_jpdb", refuse)
+
+    cli.main([
+        "--root", str(root), "patterns", "--ask-jpdb",
+        str(document(root, "chart.pdf")),
+    ])
+
+    assert "chart.pdf" in store_of(root), "the read survived the lookup failure"
+    assert "could not look up verb classes" in capsys.readouterr().err

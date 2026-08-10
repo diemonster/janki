@@ -2970,17 +2970,29 @@ def command_patterns(args: argparse.Namespace) -> int:
         for pattern in found.patterns:
             gloss = f" — {pattern.gloss}" if pattern.gloss else ""
             print(f"    {pattern.template}{gloss}")
-        # A conjugation chart shows its work, and janki computes te-forms — so
-        # the rules are checked rather than believed, which is the same shape
-        # the furigana path uses against jpdb. Automatic rather than a flag: a
-        # check nobody runs catches nothing.
-        # After the read, so the verbs are known: a document janki has not
-        # seen yet cannot say which words it will name.
-        for line in _rule_check_lines(
-            found, _classes_for([found], config, args.ask_jpdb)
-        ):
-            print(line)
+    # Saved before anything else can fail. The class lookup below can raise —
+    # an unset key, a timeout, a 429 — and it used to sit inside this loop,
+    # outside the try, so one bad request discarded every document already read
+    # and paid for in the same run.
     patterns.save_store(config.patterns_file, store)
+
+    # A conjugation chart shows its work, and janki computes te-forms — so the
+    # rules are checked rather than believed, which is the same shape the
+    # furigana path uses against jpdb. Automatic rather than a flag: a check
+    # nobody runs catches nothing.
+    #
+    # One lookup for the whole run, after the reads: the collection is parsed
+    # once instead of once per document, and `--ask-jpdb` makes the single
+    # request its help text promises rather than one per file.
+    fresh = [store[name] for name in read]
+    try:
+        classes = _classes_for(fresh, config, args.ask_jpdb)
+    except JankiError as exc:
+        classes = {}
+        failures.append(f"could not look up verb classes: {exc}")
+    for entry in fresh:
+        for line in _rule_check_lines(entry, classes):
+            print(line)
     # Deliberately skipping a document janki already has is not a problem, so it
     # is a notice on stdout rather than a warning — and it must not reach the
     # exit code, or the very idiom the non-zero exit protects

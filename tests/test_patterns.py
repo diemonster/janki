@@ -730,19 +730,27 @@ def test_a_polite_row_on_an_irregular_verb_is_held_back(example: str) -> None:
 
 @pytest.mark.parametrize(
     "example",
-    ["飲む ⇨ 飲まされる", "食べる ⇨ 食べさせられる", "食べる ⇨ 食べさせる"],
-    ids=["causative-passive-godan", "causative-passive-ichidan", "causative"],
+    ["飲む ⇨ 飲まされる", "食べる ⇨ 食べさせられる", "書く ⇨ 書かせられる"],
+    ids=["godan-causative-passive", "ichidan-causative-passive", "godan-rareru"],
 )
 def test_a_causative_row_is_held_back_not_contradicted(example: str) -> None:
     """`CONJUGATION_FORMS` has neither causative nor causative-passive, but
     adding られる/れる to the ending table gave `_claimed_form` an opinion about
-    them anyway — so a correct 使役受身 chart was reported wrong on every row."""
+    them anyway — so a correct 使役受身 chart was reported wrong on every row.
+
+    Every case here ends in an ending `_FORM_BY_ENDING` *does* match, so each
+    fails against the old code. `食べる ⇨ 食べさせる` was dropped from this list:
+    せる matches nothing in that table either way, so it was already held back
+    and pinned nothing."""
     checks = check_pattern_rules(
         chart(Pattern("使役受身", examples=(example,))),
-        {"飲む": "godan", "食べる": "ichidan"},
+        {"飲む": "godan", "食べる": "ichidan", "書く": "godan"},
     )
 
     assert len(checks) == 1 and not checks[0].examined
+    # The reason, not just the absence of a verdict: three different paths set
+    # `held_back`, and asserting only `not examined` cannot tell them apart.
+    assert "no form with this ending" in checks[0].held_back
 
 
 def test_a_disagreement_names_the_form_the_row_was_reaching_for() -> None:
@@ -796,3 +804,35 @@ def test_jpdb_answers_the_class_the_chart_states_in_prose() -> None:
 
     assert found == {"おきる": "ichidan", "およぐ": "godan"}, "no class, no entry"
     assert client.asked.count("。") == 3, "one call for the lot"
+
+
+@pytest.mark.parametrize(
+    ("example", "expected"),
+    [("帰る ⇨ 反って", "godan: 帰って"), ("かう ⇨ 買って", "godan: かって")],
+    ids=["an-ocr-misread", "mixed-orthography"],
+)
+def test_a_claim_sharing_no_prefix_still_gets_its_correction(
+    example: str, expected: str
+) -> None:
+    """These are the garbles the checker exists for. Ranking candidates by
+    shared prefix scored every form at zero and discarded the winner, so the
+    correction vanished and the message read "no group applies" — false, since
+    the class was known and produced a full table."""
+    checks = check_pattern_rules(
+        chart(Pattern("て", examples=(example,))), {"帰る": "godan", "かう": "godan"}
+    )
+
+    assert checks[0].computed == (expected,)
+
+
+def test_a_lesson_decks_verbs_are_not_scraped_for_looking_up() -> None:
+    """`check_pattern_rules` returns nothing for a lesson deck, so sending its
+    words to the dictionary buys classes nothing will ever consult."""
+    from japanese_anki.patterns import chart_verbs
+
+    lesson = PatternSet(
+        "week11.pdf", "lesson", patterns=(Pattern("〜んだ", examples=("かう ⇨ かって",)),)
+    )
+
+    assert chart_verbs(lesson) == []
+    assert chart_verbs(replace(lesson, kind="pattern")) == ["かう"]

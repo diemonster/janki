@@ -327,6 +327,11 @@ def chart_verbs(entry: PatternSet) -> list[str]:
     So a caller can look their classes up before checking. Same scan the check
     itself runs, so the two cannot disagree about which words matter.
     """
+    # Kind too, not only words: `check_pattern_rules` returns nothing for a
+    # lesson deck, so scraping one's verbs sent words to the dictionary that
+    # nothing would ever consult.
+    if entry.kind not in CHECKABLE_KINDS:
+        return []
     seen: list[str] = []
     for pattern in entry.patterns:
         for text in (pattern.template, *pattern.examples):
@@ -363,7 +368,7 @@ def verb_groups_from_jpdb(verbs: Sequence[str], client: Any) -> dict[str, str]:
     return found
 
 
-def _nearest_form(claimed: str, table: Mapping[str, str]) -> str:
+def _nearest_form(claimed: str, table: Mapping[str, str], wanted: str = "") -> str:
     """The computed form sharing the longest prefix with the claim.
 
     What a reader needs when a row is wrong is the form the row was *trying* to
@@ -387,7 +392,14 @@ def _nearest_form(claimed: str, table: Mapping[str, str]) -> str:
             -abs(len(value) - len(claimed)),
         )
     best = max(candidates, key=rank)
-    return best if rank(best)[0] else ""
+    if rank(best)[0]:
+        return best
+    # Nothing shares even a first character — an OCR misread (帰る ⇨ 反って) or a
+    # row written in mixed orthography (かう ⇨ 買って). The correction is exactly
+    # what a reader needs there, so fall back to the form the claim's ending
+    # names rather than printing "no group applies", which is false whenever a
+    # class was known and produced a table.
+    return table.get(wanted, "")
 
 
 def _pairs_in(text: str) -> list[tuple[str, str]]:
@@ -660,7 +672,7 @@ def check_pattern_rules(
                         computed=() if agreed else tuple(
                             f"{group}: {nearest}"
                             for group, table in tables
-                            if (nearest := _nearest_form(claimed, table))
+                            if (nearest := _nearest_form(claimed, table, wanted))
                         ),
                     )
                 )
