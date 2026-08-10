@@ -668,7 +668,11 @@ def test_an_unreadable_collection_is_reported_rather_than_cancelling_the_read(
         encoding="utf-8",
     )
     parsed = Parsed("pattern", "Chart", [])
-    parsed.patterns = [Item("く → いて")]
+    parsed.patterns = [Item("う・つ・る → って")]
+    # A worked example, so the class map really would have been consulted. A
+    # chart of bare endings names no verb, and reporting *that* run as failed
+    # would be a claim about a check it never needed.
+    parsed.patterns[0].examples = ["かう ⇨ かって"]
     monkeypatch.setattr(
         patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
     )
@@ -678,6 +682,54 @@ def test_an_unreadable_collection_is_reported_rather_than_cancelling_the_read(
     assert "chart.pdf" in store_of(root), "the document was still read"
     assert code == 1, "and the check that did not happen reached the exit code"
     assert "could not read the collection for verb classes" in capsys.readouterr().err
+
+
+def test_a_document_with_no_verbs_does_not_fail_over_the_collection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`く → いて` names an ending, not a verb, so nothing in this run would have
+    consulted the class map. Failing here breaks
+    `janki patterns *.pdf && janki patterns --review …` over a file the run
+    never needed — the same reason the jpdb failure is kept out of `failures`.
+    Still said out loud, because the next document might need it."""
+    root = project(tmp_path)
+    (root / "vocabulary.json").write_text(
+        '[{"id": "word:x:x", "expression": "x", "reading": "x", "examples": 3}]',
+        encoding="utf-8",
+    )
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("く → いて")]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+
+    code = cli.main(["--root", str(root), "patterns", str(document(root, "chart.pdf"))])
+
+    assert code == 0
+    assert "could not read the collection for verb classes" in capsys.readouterr().err
+
+
+def test_a_missing_collection_is_refused_like_an_unreadable_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A renamed file or a typo'd `[paths]` entry. Returning an empty class map
+    for it reached the same loss by the neighbouring branch: every row held back
+    for want of a class, a pattern deck built with blank `Examples`, reported as
+    built — and its GUIDs blank the examples of the rule cards already in
+    Anki."""
+    root = project(tmp_path)
+    (root / "vocabulary.json").unlink()
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("う・つ・る → って")]
+    parsed.patterns[0].examples = ["かう ⇨ かって"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+
+    code = cli.main(["--root", str(root), "patterns", str(document(root, "chart.pdf"))])
+
+    assert code == 1
+    assert "vocabulary.json" in capsys.readouterr().err, "which file is missing"
 
 
 def test_check_does_not_call_an_unreadable_collection_all_clear(
@@ -734,6 +786,35 @@ def test_two_spellings_of_one_class_are_not_a_disagreement(
     out = capsys.readouterr().out
     assert "no verb class on record" not in out, "both records say godan"
     assert "checked 1/1 worked example(s)" in out
+
+
+def test_two_spellings_of_one_unrecognised_class_are_not_a_disagreement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`Group 3` and `group-3` are one class `conjugate` does not know, and the
+    fold only covered names it does. Read as two, the word looked ambiguous and
+    the reply blamed a missing class — sending someone to `enrich --jpdb`, which
+    will not overwrite a non-empty `verb_group`. The right complaint names the
+    class actually on the record."""
+    root = project(tmp_path, [
+        {"id": "word:買う:かう", "expression": "買う", "reading": "かう",
+         "meanings": ["to buy"], "verb_group": "Group 3"},
+        {"id": "word:飼う:かう", "expression": "飼う", "reading": "かう",
+         "meanings": ["to keep an animal"], "verb_group": "group-3"},
+    ])
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("う・つ・る → って")]
+    parsed.patterns[0].examples = ["かう ⇨ かって"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+
+    cli.main(["--root", str(root), "patterns", str(document(root, "chart.pdf"))])
+
+    out = capsys.readouterr().out
+    assert "no verb class on record" not in out
+    assert "does not recognise the verb class" in out
+    assert "Group 3" in out or "group-3" in out, "quoted from the record"
 
 
 def test_a_decomposed_record_still_matches_a_composed_chart(

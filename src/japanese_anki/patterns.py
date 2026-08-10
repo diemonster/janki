@@ -437,6 +437,20 @@ def normalized_group_name(group: str) -> str:
     return _VERB_GROUP_ALIASES.get(_normalize_group(group)) or ""
 
 
+def group_identity(group: str) -> str:
+    """One key per verb class, whether or not `conjugate` recognises the name.
+
+    `normalized_group_name` answers only for names `conjugate` knows, so two
+    spellings of an *unrecognised* class — `Group 3` and `group-3`, both of
+    which a CSV column may carry — still read as two classes and made the word
+    look ambiguous. The reply then blamed a missing class and sent someone to
+    `enrich --jpdb`, which will not overwrite a non-empty `verb_group`.
+    """
+    from japanese_anki.conjugation import _normalize_group
+
+    return normalized_group_name(group) or _normalize_group(group)
+
+
 def _pairs_in(text: str) -> list[tuple[str, str]]:
     """Every complete ``verb ⇨ form`` claim on one line, or nothing.
 

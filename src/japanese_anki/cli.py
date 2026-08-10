@@ -2894,9 +2894,14 @@ def _verb_groups(config: ProjectConfig) -> dict[str, str]:
     a form janki can use. Keyed both ways because a chart writes its examples in
     kana (かう ⇨ かって) while the record is 買う with reading かう.
     """
+    # No `exists()` shortcut. A collection that is *missing* — a renamed file, a
+    # typo in `[paths]` — is as unreadable as one that will not parse, and
+    # returning an empty map for it reached the same loss by the neighbouring
+    # branch: a pattern deck built with every `Examples` field blank, reported
+    # as built, whose GUIDs then blank the examples of the rule cards already in
+    # the user's Anki. `collection_for` refuses a missing collection for a drill
+    # deck already. `load_records` names the file it could not find.
     normalized = config.normalized_file.resolve()
-    if not normalized.exists():
-        return {}
     # Raised, not swallowed. "No class on record" and "janki could not read the
     # collection" are different verdicts, and turning the second into the first
     # made `janki build` of a pattern deck strip every worked example while
@@ -2912,7 +2917,7 @@ def _verb_groups(config: ProjectConfig) -> dict[str, str]:
     # and 帰る (godan), きる is 切る and 着る — and taking whichever record loaded
     # first turned a correct chart row into a confident failure. A key two
     # records disagree about is not knowledge.
-    seen: dict[str, set[str]] = {}
+    seen: dict[str, dict[str, str]] = {}
     for record in records:
         if not record.verb_group:
             continue
@@ -2924,15 +2929,23 @@ def _verb_groups(config: ProjectConfig) -> dict[str, str]:
         # back saying no class was on record, when two were and both agreed.
         # Two genuinely unrecognized names stay distinct and still reach the
         # "does not recognise the verb class" branch.
-        group = patterns.normalized_group_name(record.verb_group) or record.verb_group
+        group = patterns.group_identity(record.verb_group) or record.verb_group
         for key in (record.expression, record.reading):
             # Normalized like `conjugate`'s own arguments and like the verb the
             # chart is scanned for: records are stored as imported, so a
             # decomposed dakuten (く + U+3099) would never match a composed ぐ.
             folded = normalize_identity_part(key or "")
             if folded:
-                seen.setdefault(folded, set()).add(group)
-    return {key: next(iter(classes)) for key, classes in seen.items() if len(classes) == 1}
+                # Keyed by the folded class, valued by a raw spelling: the fold
+                # decides whether two records agree, and the raw spelling is
+                # what `check_pattern_rules` quotes back when `conjugate` does
+                # not recognise the name.
+                seen.setdefault(folded, {}).setdefault(group, record.verb_group)
+    return {
+        key: next(iter(spellings.values()))
+        for key, spellings in seen.items()
+        if len(spellings) == 1
+    }
 
 
 def _rule_check_lines(
@@ -3209,10 +3222,19 @@ def command_patterns(args: argparse.Namespace) -> int:
         # happen. Silently exiting 0 here let `janki patterns *.pdf && …` run on
         # from a run that verified nothing.
         offline = {}
-        failures.append(
-            f"could not read the collection for verb classes: {exc} — the "
-            "worked examples in these documents were not checked"
-        )
+        note = f"could not read the collection for verb classes: {exc}"
+        if any(patterns.chart_verbs(entry) for entry in fresh):
+            failures.append(
+                f"{note} — the worked examples in these documents were not checked"
+            )
+        else:
+            # Nothing in this run would have consulted the map: a chart of bare
+            # endings (`く → いて`) names no verb, and a run whose every input
+            # was already reviewed reads none. Failing there would break the
+            # `janki patterns *.pdf && janki patterns --review …` chain over a
+            # file this run never needed — the same reason the jpdb failure
+            # below is kept out of `failures`.
+            print(f"warning: {note}", file=sys.stderr)
     try:
         classes = _classes_for(fresh, config, args.ask_jpdb, offline)
     except JankiError as exc:

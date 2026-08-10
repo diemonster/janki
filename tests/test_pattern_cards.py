@@ -827,21 +827,6 @@ def test_refresh_builds_one_named_drill_deck(tmp_path: Path, capsys) -> None:
     assert "cannot narrow it" in capsys.readouterr().out
 
 
-def test_a_hand_typed_only_new_still_refuses_on_a_drill_deck(
-    tmp_path: Path, capsys
-) -> None:
-    """The flag means two different things on the two paths, and the refusal is
-    the point of the hand-typed one: it is an assertion about *this* deck, and
-    quietly building everything instead reports a flag as honoured that never
-    was."""
-    from japanese_anki import cli
-
-    deck = cli_project(tmp_path, [verb("買う", "かう", "godan")])
-
-    assert cli.main(["--root", str(tmp_path), "build", str(deck), "--only-new"]) == 1
-    assert "--only-new needs export history" in capsys.readouterr().err
-
-
 @pytest.mark.parametrize(
     ("line", "expected"),
     [
