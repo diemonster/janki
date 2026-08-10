@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import functools
 import json
+import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -266,6 +267,97 @@ def extract_patterns(
         title=str(getattr(call.parsed, "title", "") or "").strip(),
         patterns=tuple(p for p in patterns if p.template),
     )
+
+
+#: The kana a dictionary-form verb can end in. Used only to tell a verb pair
+#: (``かう ⇨ かって``) from a rule shape (``う・つ・る → って``), never to decide
+#: a conjugation — that is `conjugation.conjugate`'s job and it needs the group.
+_DICTIONARY_ENDINGS = frozenset("うくぐすつぬぶむる")
+
+#: ``A ⇨ B``, ``A → B``, ``A -> B``. The chart uses all three.
+_PAIR = re.compile(r"([ぁ-ゖー]{2,})\s*(?:⇨|→|->|=>)\s*([ぁ-ゖー]{2,})")
+
+#: Groups `conjugate` knows. Tried in turn because the chart states its rule in
+#: prose ("godan verbs ending in う, つ, or る"), and parsing that prose to pick
+#: a group would be a guess about what the model wrote.
+_GROUPS: tuple[str, ...] = ("godan", "ichidan", "kuru", "suru")
+
+
+@dataclass(frozen=True, slots=True)
+class RuleCheck:
+    """One ``verb ⇨ て-form`` claim from a document, against janki's own rules."""
+
+    template: str
+    #: The dictionary form the document gave.
+    verb: str
+    #: The て-form the document claims for it.
+    claimed: str
+    #: The verb group under which `conjugate` agrees, or ``""`` if none does.
+    group: str = ""
+    #: What `conjugate` produces instead, per group, when nothing agreed.
+    computed: tuple[str, ...] = ()
+
+    @property
+    def agrees(self) -> bool:
+        return bool(self.group)
+
+
+def check_pattern_rules(entry: PatternSet) -> tuple[RuleCheck, ...]:
+    """Check a document's worked examples against :func:`conjugation.conjugate`.
+
+    A pattern document is inference like everything else here, so its rules are
+    *checked* rather than believed — the same dictionary-checks-writer shape the
+    furigana path uses. janki already computes て-forms, so where the chart shows
+    its work (``かう ⇨ かって``, ``くる ⇨ きて``) there is something to check it
+    against, and a rule the model garbled shows up as a disagreement instead of
+    becoming a card.
+
+    Only worked examples are checked. ``う・つ・る → って`` is the shape of a rule
+    rather than a verb, and ``く → いて`` names an ending; neither is something
+    `conjugate` can be asked about, and inventing a verb to test them with would
+    be checking janki against itself.
+
+    The group is not parsed out of the document's prose — it is stated there in
+    English, and reading it would be a guess. Every group is tried instead, and
+    a pair agreeing under any of them is consistent with janki's rules. That is
+    a weaker claim than "and it is a godan verb", deliberately: this is checking
+    the chart, not classifying its vocabulary.
+    """
+    from japanese_anki.conjugation import conjugate
+
+    checks: list[RuleCheck] = []
+    for pattern in entry.patterns:
+        seen: set[tuple[str, str]] = set()
+        for text in (pattern.template, *pattern.examples):
+            # Parentheticals carry the English gloss — "(to buy)", "(う ending
+            # changes to って)" — and the second of those holds a → of its own.
+            stripped = re.sub(r"[(（][^)）]*[)）]", " ", text)
+            for verb, claimed in _PAIR.findall(stripped):
+                if verb[-1] not in _DICTIONARY_ENDINGS:
+                    continue
+                if (verb, claimed) in seen:
+                    continue
+                seen.add((verb, claimed))
+                computed: list[str] = []
+                agreed = ""
+                for group in _GROUPS:
+                    form = conjugate(verb, verb, group).get("te_form", "")
+                    if not form:
+                        continue
+                    if form == claimed:
+                        agreed = group
+                        break
+                    computed.append(f"{group}: {form}")
+                checks.append(
+                    RuleCheck(
+                        template=pattern.template,
+                        verb=verb,
+                        claimed=claimed,
+                        group=agreed,
+                        computed=() if agreed else tuple(computed),
+                    )
+                )
+    return tuple(checks)
 
 
 def load_store(path: Path) -> dict[str, PatternSet]:

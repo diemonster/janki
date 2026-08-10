@@ -25,6 +25,7 @@ from japanese_anki.patterns import (
     Pattern,
     PatternError,
     PatternSet,
+    check_pattern_rules,
     extract_patterns,
     format_patterns,
     load_store,
@@ -288,3 +289,94 @@ def test_the_store_is_written_sorted(tmp_path: Path) -> None:
     })
 
     assert list(json.loads(path.read_text(encoding="utf-8"))) == ["a.pdf", "b.pdf"]
+
+
+# --- a chart is checked, not believed ----------------------------------------
+
+
+def chart(*patterns_in: Pattern) -> PatternSet:
+    return PatternSet("teform.pdf", "pattern", patterns=tuple(patterns_in))
+
+
+def test_a_worked_example_is_checked_against_janki_s_own_rules() -> None:
+    """The chart shows its work and janki computes て-forms, so there is
+    something to check against — the same dictionary-checks-writer shape the
+    furigana path uses against jpdb."""
+    checks = check_pattern_rules(chart(
+        Pattern("う・つ・る → って", examples=("かう ⇨ かって (to buy)",)),
+    ))
+
+    assert len(checks) == 1
+    assert checks[0].verb == "かう" and checks[0].claimed == "かって"
+    assert checks[0].agrees and checks[0].group == "godan"
+
+
+def test_a_rule_the_model_garbled_is_reported() -> None:
+    """The point of checking. Nothing conjugates かう to かいて, so a chart
+    claiming it disagrees with janki under every group."""
+    checks = check_pattern_rules(chart(
+        Pattern("う・つ・る → いて", examples=("かう ⇨ かいて",)),
+    ))
+
+    assert not checks[0].agrees
+    assert any("godan: かって" in text for text in checks[0].computed)
+
+
+def test_the_irregulars_and_the_iku_exception_are_checked_too() -> None:
+    """いく ends in く but takes って, and it is the one thing on the page a
+    reader is most likely to have copied down wrong."""
+    checks = check_pattern_rules(chart(
+        Pattern("いく → いって", examples=("いく is an exception, te-form いって",)),
+        Pattern("くる → きて / する → して", examples=("くる ⇨ きて", "する ⇨ して")),
+        Pattern("る-verb: 〜る → 〜て", examples=("ex. たべる ⇨ たべて (to eat)",)),
+    ))
+
+    assert {(c.verb, c.claimed, c.group) for c in checks} == {
+        ("いく", "いって", "godan"),
+        ("くる", "きて", "kuru"),
+        ("する", "して", "suru"),
+        ("たべる", "たべて", "ichidan"),
+    }
+
+
+def test_a_rule_shape_is_not_something_to_check() -> None:
+    """`う・つ・る → って` is the shape of a rule, and `く → いて` names an
+    ending. Neither is a verb `conjugate` can be asked about, and inventing one
+    to test them with would be checking janki against itself."""
+    checks = check_pattern_rules(chart(
+        Pattern("う・つ・る → って"),
+        Pattern("く → いて"),
+        Pattern("る-verb: 〜る → 〜て"),
+    ))
+
+    assert checks == ()
+
+
+def test_a_lesson_deck_has_nothing_to_check() -> None:
+    """Silence rather than "0 checked": a line printed under every slide deck
+    trains the eye to skip the one that matters."""
+    lesson = PatternSet("week11.pdf", "lesson", patterns=(Pattern("〜んだ", "explains"),))
+
+    assert check_pattern_rules(lesson) == ()
+
+
+def test_the_same_pair_written_twice_is_checked_once() -> None:
+    """The chart repeats itself between its template and its examples."""
+    checks = check_pattern_rules(chart(
+        Pattern("かう ⇨ かって", examples=("かう ⇨ かって", "かう ⇨ かって (to buy)")),
+    ))
+
+    assert len(checks) == 1
+
+
+def test_a_pair_that_is_not_a_dictionary_form_is_not_checked() -> None:
+    """`って ⇨ んで` contrasts two endings; `かって ⇨ かった` relates two
+    inflected forms. Neither is a "this verb's て-form is X" claim, and asking
+    `conjugate` about かって — treating an inflected form as a dictionary form —
+    would invent a disagreement out of a line the chart got right."""
+    checks = check_pattern_rules(chart(
+        Pattern("って ⇨ んで"),
+        Pattern("past tense", examples=("かって ⇨ かった",)),
+    ))
+
+    assert checks == ()

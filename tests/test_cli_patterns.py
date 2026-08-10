@@ -342,3 +342,78 @@ def test_a_reviewed_lesson_is_marked_plainly(
     out = capsys.readouterr().out
     assert "[reviewed]" in out
     assert "not used for sentences" not in out
+
+
+def test_reading_a_chart_checks_its_rules_against_janki(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Automatic rather than a flag: a check nobody runs catches nothing."""
+    root = project(tmp_path)
+    parsed = Parsed("pattern", "Te-form Song", [])
+    parsed.patterns = [Item("う・つ・る → って")]
+    parsed.patterns[0].examples = ["かう ⇨ かって (to buy)"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"teform.pdf": parsed})
+    )
+
+    cli.main(["--root", str(root), "patterns", str(document(root, "teform.pdf"))])
+
+    assert "checked 1/1 worked example(s)" in capsys.readouterr().out
+
+
+def test_a_garbled_rule_is_named_when_the_chart_is_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = project(tmp_path)
+    parsed = Parsed("pattern", "Te-form Song", [])
+    parsed.patterns = [Item("う・つ・る → いて")]
+    parsed.patterns[0].examples = ["かう ⇨ かいて"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"teform.pdf": parsed})
+    )
+
+    cli.main(["--root", str(root), "patterns", str(document(root, "teform.pdf"))])
+
+    out = capsys.readouterr().out
+    assert "checked 0/1" in out
+    assert "かう ⇨ かいて is not what janki computes" in out
+    assert "godan: かって" in out
+
+
+def test_check_re_runs_over_the_store_without_reading_anything(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = project(tmp_path)
+    parsed = Parsed("pattern", "Te-form Song", [])
+    parsed.patterns = [Item("う・つ・る → って")]
+    parsed.patterns[0].examples = ["かう ⇨ かって"]
+    calls: list[str] = []
+    inner = reader({"teform.pdf": parsed})
+
+    def counting(*args: Any, **kwargs: Any):
+        calls.append("read")
+        return inner(*args, **kwargs)
+
+    monkeypatch.setattr(patterns_module.claude_client, "parse_call", counting)
+    cli.main(["--root", str(root), "patterns", str(document(root, "teform.pdf"))])
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "patterns", "--check"]) == 0
+
+    assert len(calls) == 1, "the store already holds what --check reads"
+    assert "agrees with janki" in capsys.readouterr().out
+
+
+def test_check_exits_non_zero_on_a_disagreement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = project(tmp_path)
+    parsed = Parsed("pattern", "Te-form Song", [])
+    parsed.patterns = [Item("う・つ・る → いて")]
+    parsed.patterns[0].examples = ["かう ⇨ かいて"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"teform.pdf": parsed})
+    )
+    cli.main(["--root", str(root), "patterns", str(document(root, "teform.pdf"))])
+
+    assert cli.main(["--root", str(root), "patterns", "--check"]) == 1

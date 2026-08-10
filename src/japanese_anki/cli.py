@@ -2655,6 +2655,31 @@ def _collection_lines(config: ProjectConfig) -> list[str]:
     return lines
 
 
+def _rule_check_lines(entry: patterns.PatternSet) -> list[str]:
+    """What janki's own conjugation rules say about a chart's worked examples.
+
+    Empty for a document with nothing checkable — a lesson deck states no
+    conjugations, and a chart that gives only rule shapes (``く → いて``) offers
+    nothing to compute against. Silence there is correct: reporting "0 checked"
+    on every slide deck would train the eye to skip the line that matters.
+    """
+    checks = patterns.check_pattern_rules(entry)
+    if not checks:
+        return []
+    disagreed = [check for check in checks if not check.agrees]
+    lines = [
+        f"    checked {len(checks) - len(disagreed)}/{len(checks)} worked "
+        f"example(s) against janki's conjugation rules"
+    ]
+    for check in disagreed:
+        lines.append(
+            f"    warning: {check.verb} ⇨ {check.claimed} is not what janki "
+            f"computes ({', '.join(check.computed) or 'no group applies'}) "
+            f"— for {check.template!r}"
+        )
+    return lines
+
+
 def command_patterns(args: argparse.Namespace) -> int:
     """Read documents for what they teach.
 
@@ -2709,6 +2734,24 @@ def command_patterns(args: argparse.Namespace) -> int:
                 )
         return 0
 
+    if args.check:
+        if not store:
+            print("No documents read yet. Pass a PDF or image to read one.")
+            return 0
+        disagreed = 0
+        for name, entry in sorted(store.items()):
+            lines = _rule_check_lines(entry)
+            if not lines:
+                continue
+            print(f"{name} — {entry.kind}")
+            for line in lines:
+                print(line)
+            disagreed += sum(1 for check in patterns.check_pattern_rules(entry)
+                             if not check.agrees)
+        if not disagreed:
+            print("Every worked example agrees with janki's conjugation rules.")
+        return 1 if disagreed else 0
+
     if not args.files:
         for name, entry in sorted(store.items()):
             mark = "reviewed" if entry.reviewed else "UNREVIEWED"
@@ -2761,6 +2804,12 @@ def command_patterns(args: argparse.Namespace) -> int:
         for pattern in found.patterns:
             gloss = f" — {pattern.gloss}" if pattern.gloss else ""
             print(f"    {pattern.template}{gloss}")
+        # A conjugation chart shows its work, and janki computes te-forms — so
+        # the rules are checked rather than believed, which is the same shape
+        # the furigana path uses against jpdb. Automatic rather than a flag: a
+        # check nobody runs catches nothing.
+        for line in _rule_check_lines(found):
+            print(line)
     patterns.save_store(config.patterns_file, store)
     # Deliberately skipping a document janki already has is not a problem, so it
     # is a notice on stdout rather than a warning — and it must not reach the
@@ -3348,6 +3397,15 @@ def build_parser() -> argparse.ArgumentParser:
             "use them, if it is a lesson document — a conjugation chart is "
             "reviewed for its own sake and steers no sentences. Repeat for "
             "several."
+        ),
+    )
+    patterns_parser.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            "Check every stored document's worked examples against janki's own "
+            "conjugation rules, without re-reading anything. Exits non-zero on "
+            "a disagreement."
         ),
     )
     patterns_parser.add_argument(
