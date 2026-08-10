@@ -979,7 +979,7 @@ def test_two_inputs_that_would_share_a_store_key_are_refused(
 
 
 def test_one_file_named_twice_is_read_once_rather_than_refused(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """`janki patterns data/inbox/scans/chart.pdf ~/Downloads/chart.pdf` where
     the second is the copy the first came from — or one path caught by two
@@ -1009,6 +1009,34 @@ def test_one_file_named_twice_is_read_once_rather_than_refused(
     assert code == 0
     assert calls == ["read"], "one document, one read"
     assert "chart.pdf" in store_of(root)
+    assert "named more than once" in capsys.readouterr().out, "and said so"
+
+
+def test_two_spellings_of_one_inbox_path_are_the_same_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A file already under the inbox is returned verbatim, so `scans/../scans/
+    chart.pdf` is the same file under a second string. Keyed by spelling, both
+    survived to the basename guard, which aborted the batch and offered "rename
+    one" — i.e. edit a file under `data/inbox/`, which this project does not do
+    to its own committed inputs."""
+    root = project(tmp_path)
+    scans = root / "inbox" / "scans"
+    scans.mkdir(parents=True)
+    (scans / "chart.pdf").write_bytes(b"%PDF-1.4\n%fake\n")
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("く → いて")]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+
+    code = cli.main([
+        "--root", str(root), "patterns",
+        str(scans / "chart.pdf"), str(scans / ".." / "scans" / "chart.pdf"),
+    ])
+
+    assert code == 0
+    assert "would be stored under one name" not in capsys.readouterr().err
 
 
 def test_an_unreadable_collection_warns_once(

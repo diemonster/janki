@@ -277,6 +277,36 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
             "〜てもいいですか (asking permission)",
             [("〜てもいいですか (asking permission)", "")],
         ),
+        # The whole te-form row as a chart writes it. Five rules, four of them
+        # after the first — the position an "attach the run forward" rule had no
+        # answer for, which collapsed the entire line to one prose card and lost
+        # every rule on it.
+        (
+            "う・つ・る → って / む・ぶ・ぬ → んで / く → いて / ぐ → いで / す → して",
+            [("う・つ・る", "って"), ("む・ぶ・ぬ", "んで"), ("く", "いて"),
+             ("ぐ", "いで"), ("す", "して")],
+        ),
+        # A trigger list on the *second* rule, which is where attaching a run
+        # backward glued く onto the first answer and dropped it from its own
+        # card — and the trigger is the GUID, so the note moves on the next
+        # build.
+        ("く → いて / う・つ・る → って", [("く", "いて"), ("う・つ・る", "って")]),
+        (
+            "う・つ・る → って・った / く・ぐ → いて",
+            [("う・つ・る", "って・った"), ("く・ぐ", "いて")],
+        ),
+        # A prose rule whose gloss contains an arrow. The parenthetical is
+        # removed to read the line's shape, and counting arrows in the raw text
+        # instead split this on an arrow the rule does not state, asking
+        # `〜たら (condition` — a truncated fragment that is also the GUID.
+        ("〜たら (condition → result)", [("〜たら (condition → result)", "")]),
+        # The same rule with and without a sibling on the line, which used to
+        # give two different answers.
+        ("う・つ・る → って (godan)", [("う・つ・る", "って")]),
+        (
+            "う・つ・る → って (godan) / く → いて",
+            [("う・つ・る", "って"), ("く", "いて")],
+        ),
     ],
     ids=[
         "slashed-triggers", "dotted-triggers", "two-rules-slash", "two-rules-comma",
@@ -285,6 +315,9 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
         "a-result-list-before-a-second-rule", "a-kana-result-list-before-a-rule",
         "an-ambiguous-result-list", "a-parenthesised-cell",
         "a-parenthetical-on-a-prose-rule",
+        "the-whole-te-form-row", "a-trigger-list-on-the-second-rule",
+        "trigger-and-result-lists-on-both", "an-arrow-inside-a-prose-gloss",
+        "a-gloss-on-a-lone-rule", "a-gloss-on-a-rule-with-a-sibling",
     ],
 )
 def test_a_separator_divides_rules_only_when_every_piece_has_an_arrow(

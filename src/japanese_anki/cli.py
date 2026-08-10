@@ -3126,12 +3126,23 @@ def command_patterns(args: argparse.Namespace) -> int:
     # as two `PreparedInput`s with the same `origin_path`. Reading it twice
     # bills twice for one document, and refusing the batch over it lost every
     # other document in the run for a duplicate that costs nothing.
-    seen_paths: set[str] = set()
+    # Keyed by the real path, not the spelling: a file already under the inbox
+    # is returned verbatim, so `data/inbox/scans/../scans/chart.pdf` and a
+    # symlinked inbox are the same file under two strings — and two strings
+    # survive to the basename guard below, which aborts the batch and offers
+    # "rename one", i.e. edit a file under `data/inbox/`.
+    seen_paths: set[Path] = set()
     deduped = []
     for prepared in prepared_inputs:
-        if str(prepared.origin_path) in seen_paths:
+        real = prepared.origin_path.resolve()
+        if real in seen_paths:
+            # Said out loud. `prepare_inputs` keeps duplicates on purpose, so
+            # collapsing them here without a word would be the quiet discard
+            # this project refuses everywhere else — even when what is dropped
+            # costs nothing.
+            print(f"note: {prepared.origin_path} was named more than once; read once")
             continue
-        seen_paths.add(str(prepared.origin_path))
+        seen_paths.add(real)
         deduped.append(prepared)
     prepared_inputs = deduped
 

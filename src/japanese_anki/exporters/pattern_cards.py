@@ -183,90 +183,94 @@ def _split_rules(template: str) -> list[tuple[str, str]]:
     line as ``くる → きて / する → して`` — sometimes with different separators
     for each job, since the model is told to write it the way the page does.
 
-    What actually distinguishes them is the **arrows**. Split on every separator
-    at once and count the pieces that carry one:
+    The arrows say how many rules the line states; the question is only where to
+    cut. So the divider is *found* rather than assumed: a separator that divides
+    rules cuts the line into exactly that many pieces with exactly one arrow
+    each, and a separator that lists triggers or results does not. On the
+    canonical row
 
-    * one — the separators are listing triggers or results, so the line is a
-      single rule (``う/つ/る → って``, ``かう・まつ・とる ⇨ かって・まって・とって``);
-    * several — each arrow-bearing piece ends a rule, and any arrow-less pieces
-      before it are that rule's own trigger list, rejoined to it. So
-      ``う/つ/る → って / く → いて`` gives back both rules with the trigger list
-      intact, which no per-separator test could manage.
+        う・つ・る → って / む・ぶ・ぬ → んで / く → いて / ぐ → いで / す → して
+
+    `/` cuts five one-arrow pieces and `・` cuts fifteen pieces, most with no
+    arrow at all — so `/` divides and `・` lists, without either being named in
+    advance. Two dividers on one line (``… / … 、 …``) are found by cutting on
+    every separator at once, which is the same test applied to their union.
+
+    When no cut satisfies that test, the line uses one character for both jobs.
+    Arrow-less pieces before the first rule are its trigger list and are rejoined
+    to it — ``う/つ/る → って / く → いて``. Arrow-less pieces *after* a rule are
+    genuinely undecidable, since ``って/った / く → いて`` reads equally as a
+    two-item result list or as the next rule's trigger, and the line ships as one
+    prose card rather than as a rule teaching the wrong trigger — which is also
+    the note's GUID.
 
     A template with no arrow is a rule stated in prose and becomes a single card
     with no answer half; the gloss is the answer. Guessing where to cut it would
     invent a question the document does not ask.
     """
-    # Parentheticals first: `ぐ → いで (voiced → で)` carries an arrow inside a
-    # gloss, and counting it made the whole line look like a multi-rule row.
+    # Parentheticals are removed to read the line's *shape*: `ぐ → いで (voiced →
+    # で)` carries an arrow inside a gloss, and counting it made the whole line
+    # look like a multi-rule row.
     body = re.sub(r"[(（][^)）]*[)）]", " ", template)
-    pieces = [piece for piece in re.split(f"({_SEPARATOR_CLASS})", body) if piece]
-    # Each run of text with the separator that introduced it, because *which*
-    # separator introduced it is what says where a run belongs.
-    chunks: list[tuple[str, str]] = []
-    lead = ""
-    for piece in pieces:
-        if re.fullmatch(_SEPARATOR_CLASS, piece):
-            lead = piece
-        else:
-            chunks.append((lead, piece))
-            lead = ""
-
-    groups: list[str] = []
-    pending: list[tuple[str, str]] = []
-    for separator, text in chunks:
-        if not _ARROW.search(text):
-            pending.append((separator, text))
-            continue
-        # An arrow-less run before an arrow-bearing piece is usually that
-        # rule's own trigger list (`う・つ・る → って`). But in
-        # `う・つ・る → って・った / く → いて` the run `った` is the *previous*
-        # rule's result list: it is introduced by `・` while the new rule is
-        # introduced by `/`. Attaching it forward regardless dropped half of
-        # one answer and made a card whose question read `った / く`.
-        back = []
-        while pending and groups and separator and pending[0][0] and pending[0][0] != separator:
-            back.append(pending.pop(0))
-        if back:
-            groups[-1] += "".join(sep + text_ for sep, text_ in back)
-        if pending and groups:
-            # Same separator on both sides: the line gives no way to tell a
-            # result list from the start of the next rule. Better one prose
-            # card carrying the whole line than a confident rule that teaches
-            # the wrong trigger — and the trigger is also the note's GUID.
-            return [(_tidy(template), "")]
-        groups.append("".join(sep + text_ for sep, text_ in pending) + separator + text)
-        pending = []
-    trailing = "".join(sep + text for sep, text in pending)
-    if trailing.strip(_SEPARATOR_CHARS + " ") and groups:
-        # A trailing run with no arrow — the result list of the last rule.
-        groups[-1] += trailing
-    elif trailing.strip():
-        groups.append(trailing)
-
-    parts_of = [_tidy(group) for group in groups if _tidy(group)]
-    if len(parts_of) < 2:
-        # The parenthetical is removed to *count* arrows, never to decide what a
+    arrows = len(_ARROW.findall(body))
+    if not arrows:
+        # No rule here, so nothing was a gloss: the whole template is what the
         # card says. `body` reaching the output turned `（〜てもいい）` into a
-        # blank card with the guid `pattern:<document>:`, and shortened
+        # blank card with the guid `pattern:<document>:`, shortened
         # `〜てもいいですか (asking permission)` — a trigger that is also the
-        # GUID, so the next build of an already-shipped deck would add a
-        # duplicate note and strand the original's review history.
-        whole = _tidy(template)
-        # Unless the parenthetical is what made the line unsplittable:
-        # `ぐ → いで (voiced → で)` carries a second arrow inside a gloss, and
-        # keeping it would cost the pair the card is actually about.
-        parts_of = [whole] if len(_ARROW.split(whole)) <= 2 else [_tidy(body)]
-    parts_of = [piece for piece in parts_of if piece]
+        # GUID — and split `〜たら (condition → result)` on an arrow the rule
+        # does not state, asking `〜たら (condition`.
+        return [(_tidy(template), "")]
+    if arrows == 1:
+        # One rule however many separators it lists, and read from `body`, so a
+        # trailing `(godan)` does not become part of the answer — the same card
+        # this rule produces when it shares a line with another.
+        return [_rule_pair(body)]
+    pieces = _rule_pieces(body, arrows)
+    if pieces is None:
+        return [(_tidy(template), "")]
+    return [_rule_pair(piece) for piece in pieces]
 
-    found: list[tuple[str, str]] = []
-    for piece in parts_of:
-        parts = _ARROW.split(piece)
-        if len(parts) == 2 and all(_tidy(part) for part in parts):
-            found.append((_tidy(parts[0]), _tidy(parts[1])))
-        else:
-            found.append((piece, ""))
-    return found or [(_tidy(template), "")]
+
+def _rule_pieces(body: str, arrows: int) -> list[str] | None:
+    """One piece per rule, or ``None`` when the line cannot be cut safely."""
+    # Each separator the line uses, in the order it first appears, so the choice
+    # does not depend on a set's iteration order.
+    candidates: list[str] = []
+    for char in body:
+        if char in _SEPARATOR_CHARS and char not in candidates:
+            candidates.append(char)
+    for candidate in (*candidates, _SEPARATOR_CLASS):
+        parts = [
+            part
+            for part in re.split(re.escape(candidate) if len(candidate) == 1 else candidate, body)
+            if part.strip()
+        ]
+        if len(parts) == arrows and all(len(_ARROW.findall(p)) == 1 for p in parts):
+            return parts
+
+    # One character doing both jobs. Arrow-less pieces before the first rule are
+    # its trigger list; one after a rule has ended could be that rule's result
+    # list or the next rule's triggers, and nothing in the line says which.
+    groups: list[str] = []
+    current = ""
+    for piece in re.split(f"({_SEPARATOR_CLASS})", body):
+        if not piece:
+            continue
+        if groups and not _ARROW.search(piece) and piece.strip(_SEPARATOR_CHARS + " "):
+            return None
+        current += piece
+        if _ARROW.search(piece):
+            groups.append(current)
+            current = ""
+    return groups if len(groups) == arrows else None
+
+
+def _rule_pair(piece: str) -> tuple[str, str]:
+    parts = _ARROW.split(piece)
+    if len(parts) == 2 and all(_tidy(part) for part in parts):
+        return (_tidy(parts[0]), _tidy(parts[1]))
+    return (_tidy(piece), "")
 
 
 def _tidy(text: str) -> str:
