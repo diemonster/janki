@@ -2471,7 +2471,18 @@ def _build_one(
     recorded = False
     # A pattern deck is a different shape entirely — rules, not records — so it
     # is dispatched before the vocabulary path reads the file as a word list.
-    if _deck_kind(deck_path) == "pattern":
+    kind = _deck_kind(deck_path)
+    if kind == "conjugation":
+        normalized = config.normalized_file.resolve()
+        target, count = pattern_cards.build_conjugation_deck(
+            deck_path,
+            config,
+            load_records(normalized) if normalized.exists() else [],
+            output,
+        )
+        print(f"Built {target} — {count} drill card(s)")
+        return False
+    if kind == "pattern":
         target, count = pattern_cards.build_pattern_deck(
             deck_path,
             config,

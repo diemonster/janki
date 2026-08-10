@@ -855,6 +855,38 @@ alone, while appending a field to an existing one bumps it — so unlike a new
 field on the word notetype, this does not force the one-directional AnkiWeb
 sync described above.
 
+### And a deck that practises it
+
+The rules are the mnemonic; the drill is what you need in conversation. A deck
+file with `kind: conjugation` runs every verb in the collection through
+`conjugation.conjugate` and asks for one form:
+
+```yaml
+deck:
+  kind: conjugation
+  form: te_form          # any of janki's computed forms
+  name: "Brandon Japanese::Te-form Practice"
+  deck_id: 2059400114
+  model_id: 1607392351
+```
+
+```text
+FRONT: te form  買う（かう） → ?
+BACK :          買って      to use   godan
+```
+
+**Every answer is computed, never transcribed** — the same rules that build the
+conjugation table on the word card, so a drill card and its word card cannot
+disagree, and 行く → 行って comes out right because `conjugate` knows the
+exception. A verb janki declines (ゆく, whose て-form is genuinely contested, or
+a record whose `verb_group` is a class name janki does not know) produces **no
+card** rather than a guess.
+
+The reading rides along on the front where it adds something: a kanji verb
+cannot be conjugated without it, and hiding it would test the reading instead of
+the form. GUIDs key on the record and the form, so correcting a reading rewrites
+the card rather than orphaning its history.
+
 ### A chart is checked, not believed
 
 Where the chart shows its work — `かう ⇨ かって`, `くる ⇨ きて` — janki checks it

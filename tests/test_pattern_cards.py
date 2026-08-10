@@ -18,6 +18,7 @@ pytest.importorskip("genanki")
 from japanese_anki.config import ProjectConfig
 from japanese_anki.exporters.pattern_cards import (
     PatternDeckError,
+    build_conjugation_deck,
     build_pattern_deck,
     cards_for,
 )
@@ -238,3 +239,122 @@ def test_a_separator_divides_rules_only_when_every_piece_has_an_arrow(
     cards = cards_for(chart(Pattern(template)), CLASSES)
 
     assert [(c.trigger, c.result) for c in cards] == expected
+
+
+# --- the drill deck ------------------------------------------------------------
+
+
+def verb(expression: str, reading: str, group: str, meanings: list[str] | None = None):
+    from japanese_anki.models import VocabularyRecord
+
+    return VocabularyRecord(
+        id=f"word:{expression}:{reading}",
+        expression=expression,
+        reading=reading,
+        meanings=meanings or ["to do something"],
+        verb_group=group,
+    )
+
+
+def test_the_answer_is_computed_never_transcribed() -> None:
+    """The same rules every vocabulary card is built with, so a drill card and
+    its word card can never disagree — including on the exceptions, which is
+    the whole reason a te-form deck exists."""
+    from japanese_anki.exporters.pattern_cards import drill_cards
+
+    cards = drill_cards(
+        [verb("行く", "いく", "godan"), verb("来る", "くる", "kuru"),
+         verb("食べる", "たべる", "ichidan")],
+        "te_form",
+    )
+
+    assert [c.result for c, _ in cards] == ["行って", "来て", "食べて"]
+
+
+def test_a_verb_janki_declines_produces_no_card() -> None:
+    """ゆく's て-form is genuinely contested and `conjugate` refuses it; a class
+    name janki does not know is refused too. This deck's whole value is that
+    its answers are right, so a verb it cannot compute is left out rather than
+    guessed at."""
+    from japanese_anki.exporters.pattern_cards import drill_cards
+
+    assert drill_cards([verb("ゆく", "ゆく", "godan")], "te_form") == []
+    assert drill_cards([verb("食べる", "たべる", "一段活用")], "te_form") == []
+
+
+def test_the_reading_rides_along_when_it_adds_something() -> None:
+    """A kanji verb cannot be conjugated without its reading, and hiding it
+    would make the card test the reading instead of the form. A kana verb
+    already shows it."""
+    from japanese_anki.exporters.pattern_cards import drill_cards
+
+    kanji, _ = drill_cards([verb("買う", "かう", "godan")], "te_form")[0]
+    kana, _ = drill_cards([verb("ある", "ある", "godan")], "te_form")[0]
+
+    assert kanji.trigger == "買う（かう）"
+    assert kana.trigger == "ある"
+
+
+def test_another_form_can_be_drilled(tmp_path: Path) -> None:
+    from japanese_anki.exporters.pattern_cards import drill_cards
+
+    cards = drill_cards([verb("買う", "かう", "godan")], "past")
+
+    assert cards[0][0].result == "買った"
+
+
+def test_a_form_janki_does_not_compute_is_refused(tmp_path: Path) -> None:
+    project(tmp_path)
+    path = tmp_path / "decks" / "drill.yaml"
+    path.write_text(
+        "deck:\n  kind: conjugation\n  form: polite\n  name: D\n"
+        "  deck_id: 1\n  model_id: 2\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(PatternDeckError, match="form must be one of"):
+        build_conjugation_deck(
+            path, ProjectConfig.load(tmp_path), [verb("買う", "かう", "godan")],
+            tmp_path / "o.apkg",
+        )
+
+
+def test_the_drill_guid_survives_a_corrected_reading(tmp_path: Path) -> None:
+    """Correcting a reading rewrites the front of the card. A GUID that moved
+    with it would orphan the review history on the day the deck got better."""
+    project(tmp_path)
+    path = tmp_path / "decks" / "drill.yaml"
+    path.write_text(
+        "deck:\n  kind: conjugation\n  name: D\n  deck_id: 1\n  model_id: 2\n",
+        encoding="utf-8",
+    )
+    import genanki
+
+    first = drill_guid(tmp_path, path, verb("買う", "かう", "godan"))
+    fixed = drill_guid(tmp_path, path, verb("買う", "かう", "godan", ["to buy"]))
+
+    assert first == fixed == genanki.guid_for("drill:te_form:word:買う:かう")
+
+
+def drill_guid(root: Path, deck: Path, record) -> str:
+    import genanki
+
+    from japanese_anki.exporters.pattern_cards import drill_cards
+
+    _card, record_id = drill_cards([record], "te_form")[0]
+    return genanki.guid_for(f"drill:te_form:{record_id}")
+
+
+def test_a_collection_with_no_conjugable_verb_says_so(tmp_path: Path) -> None:
+    project(tmp_path)
+    path = tmp_path / "decks" / "drill.yaml"
+    path.write_text(
+        "deck:\n  kind: conjugation\n  name: D\n  deck_id: 1\n  model_id: 2\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(PatternDeckError, match="no record janki can conjugate"):
+        build_conjugation_deck(
+            path, ProjectConfig.load(tmp_path), [verb("ゆく", "ゆく", "godan")],
+            tmp_path / "o.apkg",
+        )

@@ -1,4 +1,11 @@
-"""Cards for a rule, from a document that teaches one.
+"""Cards for a rule, and cards for practising it.
+
+Two decks, one notetype, because both ask the same shape of question: here is a
+trigger, what does it become. A chart states the rules (`build_pattern_deck`);
+the collection supplies verbs to run them on (`build_conjugation_deck`).
+
+The rule deck:
+
 
 A conjugation chart is a deck in itself. `janki patterns` already reads one and
 checks its worked examples against `conjugation.conjugate`; this turns the rules
@@ -24,7 +31,7 @@ from __future__ import annotations
 
 import html
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -35,8 +42,10 @@ except ImportError:  # pragma: no cover
     genanki = None  # type: ignore[assignment]
 
 from japanese_anki.config import ProjectConfig
+from japanese_anki.conjugation import CONJUGATION_FORMS
 from japanese_anki.errors import JankiError
 from japanese_anki.io import DataError, load_structured
+from japanese_anki.models import VocabularyRecord
 from japanese_anki.patterns import (
     CHECKABLE_KINDS,
     LIST_SEPARATORS,
@@ -47,8 +56,10 @@ from japanese_anki.patterns import (
 __all__ = [
     "PatternCard",
     "PatternDeckError",
+    "build_conjugation_deck",
     "build_pattern_deck",
     "cards_for",
+    "drill_cards",
 ]
 
 
@@ -68,7 +79,9 @@ _SEPARATOR = re.compile(
 
 #: Field order. Appended-only, like the vocabulary notetype's, for the same
 #: reason: a note's values are positional.
-FIELDS: tuple[str, ...] = ("Trigger", "Result", "Gloss", "Examples", "Source")
+FIELDS: tuple[str, ...] = (
+    "Trigger", "Result", "Gloss", "Examples", "Source", "Kind",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,6 +212,28 @@ def _notetype(model_id: int, model_name: str, template_dir: Path) -> Any:
     )
 
 
+def _deck_section(deck_path: Path) -> dict[str, Any]:
+    raw = load_structured(deck_path)
+    if not isinstance(raw, dict):
+        raise DataError(f"Deck file must contain a mapping: {deck_path}")
+    section = raw.get("deck") or {}
+    if not isinstance(section, dict):
+        raise DataError(f"The deck section must be a mapping: {deck_path}")
+    return section
+
+
+def _identifier(deck_config: dict[str, Any], key: str, deck_path: Path) -> int:
+    """A deck or model id, refusing anything that only looks like one.
+
+    YAML 1.1 again: `deck_id: yes` is `True` and `int(True)` is 1 — a deck that
+    quietly merges into whatever owns deck 1.
+    """
+    value = deck_config.get(key)
+    if value is None or isinstance(value, bool) or not isinstance(value, int):
+        raise DataError(f"deck.{key} must be an integer, got {value!r}: {deck_path}")
+    return value
+
+
 def _read(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8")
@@ -218,12 +253,7 @@ def build_pattern_deck(
         raise PatternDeckError(
             "genanki is not installed. Run: python -m pip install -e '.[dev]'"
         )
-    raw = load_structured(deck_path)
-    if not isinstance(raw, dict):
-        raise DataError(f"Deck file must contain a mapping: {deck_path}")
-    deck_config = raw.get("deck") or {}
-    if not isinstance(deck_config, dict):
-        raise DataError(f"The deck section must be a mapping: {deck_path}")
+    deck_config = _deck_section(deck_path)
 
     document = str(deck_config.get("document") or "").strip()
     if not document:
@@ -243,16 +273,8 @@ def build_pattern_deck(
     if not cards:
         raise PatternDeckError(f"{document} states no rules to make cards from.")
 
-    deck_id = deck_config.get("deck_id")
-    if deck_id is None or isinstance(deck_id, bool) or not isinstance(deck_id, int):
-        raise DataError(
-            f"deck.deck_id must be an integer, got {deck_id!r}: {deck_path}"
-        )
-    model_id = deck_config.get("model_id")
-    if model_id is None or isinstance(model_id, bool) or not isinstance(model_id, int):
-        raise DataError(
-            f"deck.model_id must be an integer, got {model_id!r}: {deck_path}"
-        )
+    deck_id = _identifier(deck_config, "deck_id", deck_path)
+    model_id = _identifier(deck_config, "model_id", deck_path)
 
     model = _notetype(
         model_id,
@@ -270,8 +292,123 @@ def build_pattern_deck(
                     html.escape(card.gloss),
                     "<br>".join(html.escape(item) for item in card.examples),
                     html.escape(document),
+                    "Rule",
                 ],
                 guid=genanki.guid_for(f"pattern:{document}:{card.identity}"),
+            )
+        )
+
+    filename = str(deck_config.get("output", f"{deck_path.stem}.apkg"))
+    target = output_path or (project_config.dist_dir / filename)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    genanki.Package(deck).write_to_file(str(target))
+    return target, len(cards)
+
+
+def drill_cards(
+    records: Sequence[VocabularyRecord], form: str
+) -> list[tuple[PatternCard, str]]:
+    """One card per verb janki can conjugate, with the answer it computes.
+
+    Returns ``(card, record id)`` pairs so the caller can key a GUID on the
+    record rather than on the text, which moves when a reading is corrected.
+
+    **Nothing here is inferred.** The answer comes from
+    `conjugation.conjugate`, the same rules every vocabulary card is built with,
+    so a drill card and its word card can never disagree. A verb janki declines
+    — ゆく, whose て-form is genuinely contested, or a record whose `verb_group`
+    is a class name janki does not know — produces no card at all rather than a
+    guess: this deck's whole value is that its answers are right.
+    """
+    from japanese_anki.conjugation import conjugate
+
+    drilled: list[tuple[PatternCard, str]] = []
+    for record in records:
+        answer = conjugate(record.expression, record.reading, record.verb_group).get(
+            form, ""
+        )
+        if not answer:
+            continue
+        # The reading rides along on the front when it adds something: a kanji
+        # verb cannot be conjugated without it, and hiding it would make the
+        # card test the reading instead of the form.
+        shown = record.expression
+        if record.reading and record.reading != record.expression:
+            shown = f"{record.expression}（{record.reading}）"
+        drilled.append((
+            PatternCard(
+                trigger=shown,
+                result=answer,
+                # One sense. A drill card tests the form, and the meaning is
+            # there so you know which word it is — nineteen senses of する is
+            # the wall this project already caps on a vocabulary card.
+            gloss=record.meanings[0] if record.meanings else "",
+                examples=(record.verb_group,) if record.verb_group else (),
+            ),
+            record.id,
+        ))
+    return drilled
+
+
+def build_conjugation_deck(
+    deck_path: Path,
+    project_config: ProjectConfig,
+    records: Sequence[VocabularyRecord],
+    output_path: Path | None = None,
+) -> tuple[Path, int]:
+    """Build one conjugation drill deck. Returns ``(package path, card count)``."""
+    if genanki is None:
+        raise PatternDeckError(
+            "genanki is not installed. Run: python -m pip install -e '.[dev]'"
+        )
+    deck_config = _deck_section(deck_path)
+
+    form = str(deck_config.get("form") or "te_form").strip()
+    if form not in CONJUGATION_FORMS:
+        raise PatternDeckError(
+            f"{deck_path}: form must be one of {', '.join(CONJUGATION_FORMS)}, "
+            f"got {form!r}"
+        )
+
+    include = deck_config.get("include_ids")
+    exclude = set(deck_config.get("exclude_ids") or [])
+    chosen = [
+        record
+        for record in records
+        if (include is None or record.id in set(include)) and record.id not in exclude
+    ]
+    cards = drill_cards(chosen, form)
+    if not cards:
+        raise PatternDeckError(
+            f"{deck_path}: no record janki can conjugate into a {form}. A verb "
+            f"needs a verb_group janki knows — `janki enrich --jpdb` records one."
+        )
+
+    deck_id = _identifier(deck_config, "deck_id", deck_path)
+    model_id = _identifier(deck_config, "model_id", deck_path)
+    model = _notetype(
+        model_id,
+        str(deck_config.get("model_name") or "Japanese Pattern"),
+        project_config.template_dir,
+    )
+    deck = genanki.Deck(deck_id, str(deck_config.get("name") or deck_path.stem))
+    label = form.replace("_", " ")
+    for card, record_id in cards:
+        deck.add_note(
+            genanki.Note(
+                model=model,
+                fields=[
+                    html.escape(card.trigger),
+                    html.escape(card.result),
+                    html.escape(card.gloss),
+                    html.escape(", ".join(card.examples)),
+                    html.escape("computed by janki"),
+                    html.escape(label),
+                ],
+                # Keyed on the record and the form, never the text: correcting a
+                # reading rewrites the front, and a GUID that moved with it would
+                # orphan the card's review history.
+                guid=genanki.guid_for(f"drill:{form}:{record_id}"),
             )
         )
 

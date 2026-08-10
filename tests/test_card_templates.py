@@ -94,7 +94,12 @@ def test_every_field_a_template_names_exists_on_the_notetype() -> None:
 
     # `FrontSide` is Anki's own, and `type:`/`furigana:`/`hint:` are filters
     # applied to a field named after the colon.
-    known = {*FIELD_NAMES, "FrontSide", "Trigger", "Result", "Gloss", "Examples", "Source"}
+    from japanese_anki.exporters.pattern_cards import FIELDS as PATTERN_FIELDS
+
+    # Two notetypes share this directory: the word cards' and the rule/drill
+    # cards'. Taken from the exporters rather than restated, so a field added to
+    # either is known here without an edit.
+    known = {*FIELD_NAMES, *PATTERN_FIELDS, "FrontSide"}
     referenced: set[str] = set()
     for path in ALL_FACES:
         for raw in re.findall(r"\{\{([^}]+)\}\}", path.read_text(encoding="utf-8")):
