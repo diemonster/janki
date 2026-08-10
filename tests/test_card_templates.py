@@ -87,7 +87,12 @@ def test_every_field_a_template_names_exists_on_the_notetype() -> None:
     diminished.
 
     Checked at source level because the rendered harness can only cover the
-    fields its fixtures happen to populate."""
+    fields its fixtures happen to populate.
+
+    Each face is held to *its own* notetype, not to the union of both. A union
+    is satisfied by `{{Trigger}}` typed into a word-card back, or `{{KanjiInfo}}`
+    into a rule card — each a field the notetype that template belongs to does
+    not have, and so each one card-wide breakage the check would wave through."""
     import re
 
     from japanese_anki.exporters.anki import FIELD_NAMES
@@ -96,15 +101,16 @@ def test_every_field_a_template_names_exists_on_the_notetype() -> None:
     # applied to a field named after the colon.
     from japanese_anki.exporters.pattern_cards import FIELDS as PATTERN_FIELDS
 
-    # Two notetypes share this directory: the word cards' and the rule/drill
-    # cards'. Taken from the exporters rather than restated, so a field added to
-    # either is known here without an edit.
-    known = {*FIELD_NAMES, *PATTERN_FIELDS, "FrontSide"}
-    referenced: set[str] = set()
+    # Taken from the exporters rather than restated, so a rename in either one
+    # fails here instead of being blessed by a matching literal.
     for path in ALL_FACES:
+        pattern_face = path.name.startswith("pattern-")
+        known = {*(PATTERN_FIELDS if pattern_face else FIELD_NAMES), "FrontSide"}
+        referenced: set[str] = set()
         for raw in re.findall(r"\{\{([^}]+)\}\}", path.read_text(encoding="utf-8")):
             name = raw.strip().lstrip("#^/").split(":")[-1].strip()
             if name:
                 referenced.add(name)
 
-    assert referenced <= known, f"unknown field(s): {sorted(referenced - known)}"
+        unknown = sorted(referenced - known)
+        assert not unknown, f"{path.name} names field(s) its notetype lacks: {unknown}"

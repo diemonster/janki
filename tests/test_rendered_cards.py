@@ -36,7 +36,7 @@ anki_collection = pytest.importorskip(
 from anki.import_export_pb2 import ImportAnkiPackageRequest  # noqa: E402
 
 from japanese_anki.config import ProjectConfig  # noqa: E402
-from japanese_anki.exporters.anki import build_deck  # noqa: E402
+from japanese_anki.exporters.anki import AnkiBuildError, build_deck  # noqa: E402
 from japanese_anki.models import ExampleSentence, VocabularyRecord  # noqa: E402
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -97,7 +97,7 @@ def kanji_data(root: Path) -> None:
 
 def render(
     records: list[VocabularyRecord], media: dict[str, bytes] | None = None
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     """Build these records into a package and render every card Anki makes.
 
     Returns one ``{"question", "answer", "expression"}`` per card, in Anki's
@@ -105,42 +105,48 @@ def render(
     real one, which `tests/conftest.py` also guards globally.
     """
     root = Path(tempfile.mkdtemp())
-    _project(root)
-    kanji_data(root)
-    for name, payload in (media or {}).items():
-        path = root / "media" / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(payload)
-    (root / "vocabulary.json").write_text(
-        json.dumps([record.to_dict() for record in records], ensure_ascii=False),
-        encoding="utf-8",
-    )
-    package = root / "out.apkg"
-    build_deck(root / "decks" / "d.yaml", ProjectConfig.load(root), package)
-
-    collection = anki_collection.Collection(str(root / "scratch.anki2"))
+    # Opened around the *whole* body, not only the render. The build is what
+    # raises here — a record that fails validation, or a missing template
+    # directory — and a `finally` starting after it left the leak in place for
+    # exactly the red-test loop that re-runs `render()` most.
     try:
-        collection.import_anki_package(
-            ImportAnkiPackageRequest(package_path=str(package))
+        _project(root)
+        kanji_data(root)
+        for name, payload in (media or {}).items():
+            path = root / "media" / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(payload)
+        (root / "vocabulary.json").write_text(
+            json.dumps([record.to_dict() for record in records], ensure_ascii=False),
+            encoding="utf-8",
         )
-        drawn: list[dict[str, str]] = []
-        for card_id in collection.find_cards(""):
-            card = collection.get_card(card_id)
-            output = card.render_output()
-            drawn.append(
-                {
-                    "question": output.question_text,
-                    "answer": output.answer_text,
-                    "expression": card.note().fields[1],
-                    # What Anki pulled *out* of the HTML to play. A negative
-                    # assertion on "[sound:" is satisfied by losing the audio
-                    # entirely, which is the failure worth catching.
-                    "sounds": [tag.filename for tag in output.answer_av_tags],
-                }
+        package = root / "out.apkg"
+        build_deck(root / "decks" / "d.yaml", ProjectConfig.load(root), package)
+
+        collection = anki_collection.Collection(str(root / "scratch.anki2"))
+        try:
+            collection.import_anki_package(
+                ImportAnkiPackageRequest(package_path=str(package))
             )
-        return drawn
+            drawn: list[dict[str, Any]] = []
+            for card_id in collection.find_cards(""):
+                card = collection.get_card(card_id)
+                output = card.render_output()
+                drawn.append(
+                    {
+                        "question": output.question_text,
+                        "answer": output.answer_text,
+                        "expression": card.note().fields[1],
+                        # What Anki pulled *out* of the HTML to play. A negative
+                        # assertion on "[sound:" is satisfied by losing the audio
+                        # entirely, which is the failure worth catching.
+                        "sounds": [tag.filename for tag in output.answer_av_tags],
+                    }
+                )
+            return drawn
+        finally:
+            collection.close()
     finally:
-        collection.close()
         # Actually thrown away. These live outside pytest's `tmp_path`, so its
         # retention policy never reaches them and every run left a copy of the
         # templates, a package and a collection behind for good.
@@ -161,7 +167,7 @@ def record(**overrides: Any) -> VocabularyRecord:
 
 
 @pytest.fixture(scope="module")
-def drawn() -> list[dict[str, str]]:
+def drawn() -> list[dict[str, Any]]:
     """One build and one import for the whole file — both are slow."""
     return render([
         record(
@@ -179,7 +185,7 @@ def drawn() -> list[dict[str, str]]:
     ])
 
 
-def backs(drawn: list[dict[str, str]]) -> list[str]:
+def backs(drawn: list[dict[str, Any]]) -> list[str]:
     return [card["answer"] for card in drawn]
 
 
@@ -187,7 +193,7 @@ def backs(drawn: list[dict[str, str]]) -> list[str]:
 
 
 def test_a_reading_is_drawn_over_its_own_kanji_and_no_further(
-    drawn: list[dict[str, str]],
+    drawn: list[dict[str, Any]],
 ) -> None:
     """The premise every furigana check in `qc.py` reasons from, verified
     against Anki rather than assumed: a correctly spaced field puts はな over
@@ -199,7 +205,7 @@ def test_a_reading_is_drawn_over_its_own_kanji_and_no_further(
 
 
 def test_each_group_in_a_sentence_gets_its_own_ruby(
-    drawn: list[dict[str, str]],
+    drawn: list[dict[str, Any]],
 ) -> None:
     answer = backs(drawn)[0]
 
@@ -233,7 +239,7 @@ def test_a_missing_separator_really_does_spill_the_reading() -> None:
 
 
 def test_both_lookup_queries_render_percent_encoded(
-    drawn: list[dict[str, str]],
+    drawn: list[dict[str, Any]],
 ) -> None:
     """The encoding change nobody had tapped. 話す is three bytes per character,
     and both links have to carry it as a query rather than as raw text."""
@@ -247,7 +253,7 @@ def test_both_lookup_queries_render_percent_encoded(
 # --- what a template must not leave behind ------------------------------------
 
 
-def test_no_field_reference_survives_rendering(drawn: list[dict[str, str]]) -> None:
+def test_no_field_reference_survives_rendering(drawn: list[dict[str, Any]]) -> None:
     """A renamed or mistyped field renders as literal `{{Whatever}}` — visible
     on the card, invisible to a test that reads the template source, and
     invisible to the build, which never resolves a field name."""
@@ -303,7 +309,7 @@ def test_a_casual_sentence_draws_its_section() -> None:
 
 
 def test_the_pitch_diagram_and_kanji_block_reach_the_drawn_card(
-    drawn: list[dict[str, str]],
+    drawn: list[dict[str, Any]],
 ) -> None:
     answer = backs(drawn)[0]
 
@@ -314,3 +320,27 @@ def test_the_pitch_diagram_and_kanji_block_reach_the_drawn_card(
     assert 'class="kanji-info"' in answer
     assert "会話" in answer, "the reading's example word"
     assert answer.count('class="stroke-cell"') == 2, "one cell per stroke"
+
+
+def test_a_failed_build_leaves_no_scratch_tree(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The build is what raises in this helper — a record that fails validation,
+    a missing audio file — and it runs *before* the collection exists. A cleanup
+    that only covers the render leaves behind a copy of the templates, a deck
+    and a `kanji.json` per attempt, in a bare `mkdtemp` that pytest's retention
+    policy never reaps. It leaks worst in the red-test loop, which re-runs this
+    most."""
+    made: list[Path] = []
+    real_mkdtemp = tempfile.mkdtemp
+
+    def spy(*args: Any, **kwargs: Any) -> str:
+        path = real_mkdtemp(*args, **kwargs)
+        made.append(Path(path))
+        return path
+
+    monkeypatch.setattr(tempfile, "mkdtemp", spy)
+
+    with pytest.raises(AnkiBuildError):
+        render([record(meanings=[])])
+
+    assert made, "the helper did make a scratch tree"
+    assert not made[0].exists(), f"and left {made[0]} behind"
