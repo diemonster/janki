@@ -3041,7 +3041,36 @@ def command_patterns(args: argparse.Namespace) -> int:
         if not store:
             print("No documents read yet. Pass a PDF or image to read one.")
             return 0
-        groups = _classes_for(list(store.values()), config, args.ask_jpdb)
+        entries = list(store.values())
+        collection_error = ""
+        try:
+            known = _verb_groups(config)
+        except JankiError as exc:
+            # Not fatal on its own. `--ask-jpdb` is documented as the way to
+            # check verbs the collection does not hold, and a collection janki
+            # cannot read is the limit case — aborting here never asked, and a
+            # store of lesson decks or bare-ending charts needed no class at
+            # all. Refused below only for a verb nothing could answer for.
+            print(
+                f"warning: could not read the collection for verb classes: {exc}",
+                file=sys.stderr,
+            )
+            known = {}
+            collection_error = str(exc)
+        groups = _classes_for(entries, config, args.ask_jpdb, known)
+        # A verb the store names that nothing could answer for. Only then is the
+        # unreadable collection this command's failure — `--check`'s exit code
+        # is its entire product, and reporting "nothing could be checked" on
+        # exit 0 is a pass over a run that verified nothing.
+        stranded = collection_error and any(
+            verb not in groups for entry in entries for verb in patterns.chart_verbs(entry)
+        )
+        if stranded:
+            print(
+                f"error: could not read the collection for verb classes: "
+                f"{collection_error}",
+                file=sys.stderr,
+            )
         disagreed = checked = 0
         skipped_names: list[str] = []
         for name, entry in sorted(store.items()):
@@ -3071,14 +3100,24 @@ def command_patterns(args: argparse.Namespace) -> int:
                 + ", ".join(skipped_names)
             )
         if not checked:
-            print("Nothing in the store could be checked against those rules.")
-            return 0
+            if stranded:
+                # Not the ordinary "janki has no opinion about these rows": the
+                # command could not read the file it needed. Saying the first
+                # over the second is the false reassurance this whole block
+                # exists to avoid.
+                print(
+                    "The collection could not be read, so these rules were "
+                    "checked against nothing."
+                )
+            else:
+                print("Nothing in the store could be checked against those rules.")
+            return 1 if stranded else 0
         if not disagreed:
             print(
                 f"All {checked} worked example(s) agree with janki's "
                 f"conjugation rules."
             )
-        return 1 if disagreed else 0
+        return 1 if disagreed or stranded else 0
 
     if not args.files:
         for name, entry in sorted(store.items()):
@@ -3202,6 +3241,7 @@ def command_patterns(args: argparse.Namespace) -> int:
     # One lookup for the whole run, after the reads: the collection is parsed
     # once instead of once per document, and `--ask-jpdb` makes the single
     # request its help text promises rather than one per file.
+    offline_error = ""
     try:
         offline = _verb_groups(config)
     except JankiError as exc:
@@ -3211,19 +3251,7 @@ def command_patterns(args: argparse.Namespace) -> int:
         # happen. Silently exiting 0 here let `janki patterns *.pdf && …` run on
         # from a run that verified nothing.
         offline = {}
-        note = f"could not read the collection for verb classes: {exc}"
-        if any(patterns.chart_verbs(entry) for entry in fresh):
-            failures.append(
-                f"{note} — the worked examples in these documents were not checked"
-            )
-        else:
-            # Nothing in this run would have consulted the map: a chart of bare
-            # endings (`く → いて`) names no verb, and a run whose every input
-            # was already reviewed reads none. Failing there would break the
-            # `janki patterns *.pdf && janki patterns --review …` chain over a
-            # file this run never needed — the same reason the jpdb failure
-            # below is kept out of `failures`.
-            print(f"warning: {note}", file=sys.stderr)
+        offline_error = f"could not read the collection for verb classes: {exc}"
     try:
         classes = _classes_for(fresh, config, args.ask_jpdb, offline)
     except JankiError as exc:
@@ -3239,6 +3267,30 @@ def command_patterns(args: argparse.Namespace) -> int:
         # `janki patterns *.pdf && janki patterns --review …` chain the non-zero
         # exit exists to protect.
         print(f"warning: could not look up verb classes: {exc}", file=sys.stderr)
+    if offline_error:
+        # Decided *after* jpdb, and on what is still missing rather than on what
+        # the documents named. `--ask-jpdb` exists precisely to answer for verbs
+        # the collection does not hold, and a missing collection is the limit
+        # case of that — so a run whose every verb jpdb resolved was reported as
+        # unchecked while stdout said `checked 1/1`, and exited 1 into the
+        # `janki patterns *.pdf && janki patterns --review …` chain. A chart of
+        # bare endings (`く → いて`) names no verb and resolves the same way.
+        unresolved = sorted({
+            verb
+            for entry in fresh
+            for verb in patterns.chart_verbs(entry)
+            if verb not in classes
+        })
+        if unresolved:
+            failures.append(
+                f"{offline_error} — no class for {', '.join(unresolved)}, so "
+                "those worked examples were not checked"
+            )
+        else:
+            # Said, but not counted: nothing in this run needed the map, and
+            # failing here would break the `janki patterns *.pdf && janki
+            # patterns --review …` chain over a file the run never consulted.
+            print(f"warning: {offline_error}", file=sys.stderr)
     for entry in fresh:
         # Named, because these lines carry no filename of their own and two
         # charts can share a template string. Checking inside the read loop used

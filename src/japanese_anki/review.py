@@ -142,13 +142,21 @@ def _marks_of(
             f"{type(listed).__name__}"
         )
     for mark in listed:
-        # The elements too, as `findings` checks its own. A truthy non-string —
-        # `1`, `true`, a nested list — is kept by the filter below, so `stored`
-        # is non-empty and suppresses the migration this entry needs; it then
-        # matches no `finding_mark`, so the card's own error blocks the build,
-        # `carry_acceptances` writes `accepted: false` back, and `to_dict`
-        # returns the junk to the store. The acceptance is unrecoverable at that
-        # point, because the migration only runs while `accepted` is true.
+        # The elements too, as `findings` checks its own. Two different
+        # failures, both silent about their real cause:
+        #
+        # A truthy scalar — `1`, `true` — is kept by the filter below, so
+        # `stored` is non-empty and suppresses the migration this entry needs;
+        # it then matches no `finding_mark`, so the card's own error blocks the
+        # build, `carry_acceptances` writes `accepted: false` back, and
+        # `to_dict` returns the junk to the store. The acceptance is
+        # unrecoverable at that point, because the migration only runs while
+        # `accepted` is true.
+        #
+        # An unhashable one — a nested list, an object — never gets that far:
+        # `set(accepted_marks)` in `blocking` and `carry_acceptances` raises
+        # `TypeError`, which `cli.main` does not catch, so the review gate exits
+        # on a raw traceback rather than a named error.
         if not isinstance(mark, str):
             raise ReviewError(
                 f"{content_fp}: each accepted mark must be a string, got "

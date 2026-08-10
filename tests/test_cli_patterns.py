@@ -756,7 +756,9 @@ def test_check_does_not_call_an_unreadable_collection_all_clear(
     code = cli.main(["--root", str(root), "patterns", "--check"])
 
     assert code != 0
-    assert "Nothing in the store could be checked" not in capsys.readouterr().out
+    out = capsys.readouterr()
+    assert "could not read the collection" in out.err, "and says why"
+    assert "Nothing in the store could be checked" not in out.out
 
 
 def test_two_spellings_of_one_class_are_not_a_disagreement(
@@ -879,6 +881,88 @@ def test_one_jpdb_request_covers_every_document_in_the_run(
 
     assert len(calls) == 1, "one request for the run, not one per file"
     assert sorted(calls[0]) == ["および", "まつ"] or sorted(calls[0]) == ["およぐ", "まつ"]
+
+
+def test_jpdb_answering_for_every_verb_is_not_a_failed_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--ask-jpdb` is documented as the way to check verbs the collection does
+    not hold, and a collection that cannot be read is the limit case. Deciding
+    the verdict before asking reported a run whose every verb jpdb resolved as
+    unchecked — while stdout said `checked 1/1` — and exited 1 into the
+    `janki patterns *.pdf && janki patterns --review …` chain."""
+    root = project(tmp_path)
+    (root / "vocabulary.json").unlink()
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("う・つ・る → って")]
+    parsed.patterns[0].examples = ["かう ⇨ かって"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+    monkeypatch.setattr(
+        cli.patterns, "verb_groups_from_jpdb", lambda *_a, **_k: {"かう": "godan"}
+    )
+    monkeypatch.setattr(cli.jpdb, "api_key_from_env", lambda: "k")
+    monkeypatch.setattr(cli.jpdb, "JpdbClient", lambda _key: object())
+
+    code = cli.main([
+        "--root", str(root), "patterns", "--ask-jpdb",
+        str(document(root, "chart.pdf")),
+    ])
+
+    out = capsys.readouterr()
+    assert "checked 1/1 worked example(s)" in out.out
+    assert code == 0, "every verb was answered for"
+
+
+def test_check_asks_jpdb_before_failing_over_the_collection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`janki patterns --check --ask-jpdb` — the command the README gives. It
+    aborted before jpdb was asked, so it never discovered it needed nothing from
+    the file it could not read."""
+    root = project(tmp_path)
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("う・つ・る → って")]
+    parsed.patterns[0].examples = ["かう ⇨ かって"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+    cli.main(["--root", str(root), "patterns", str(document(root, "chart.pdf"))])
+    (root / "vocabulary.json").unlink()
+    monkeypatch.setattr(
+        cli.patterns, "verb_groups_from_jpdb", lambda *_a, **_k: {"かう": "godan"}
+    )
+    monkeypatch.setattr(cli.jpdb, "api_key_from_env", lambda: "k")
+    monkeypatch.setattr(cli.jpdb, "JpdbClient", lambda _key: object())
+    capsys.readouterr()
+
+    code = cli.main(["--root", str(root), "patterns", "--check", "--ask-jpdb"])
+
+    assert code == 0
+    assert "All 1 worked example(s) agree" in capsys.readouterr().out
+
+
+def test_check_over_a_store_that_needs_no_class_is_not_a_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A store of bare-ending charts consults the class map for nothing, so an
+    unreadable collection is not this run's problem — the same rule the read
+    path follows."""
+    root = project(tmp_path)
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("く → いて")]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+    cli.main(["--root", str(root), "patterns", str(document(root, "chart.pdf"))])
+    (root / "vocabulary.json").unlink()
+    capsys.readouterr()
+
+    code = cli.main(["--root", str(root), "patterns", "--check"])
+
+    assert code == 0
+    assert "Nothing in the store could be checked" in capsys.readouterr().out
 
 
 def test_a_failed_lookup_keeps_the_offline_classes(

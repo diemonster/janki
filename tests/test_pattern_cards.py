@@ -1265,6 +1265,34 @@ def test_a_sweep_builds_the_decks_after_a_broken_one(tmp_path: Path, capsys) -> 
     assert (tmp_path / "dist" / "words.apkg").exists(), "the other deck built"
 
 
+def test_a_pattern_build_stops_on_a_missing_collection(tmp_path: Path, capsys) -> None:
+    """The same loss by the neighbouring branch — a renamed file or a typo'd
+    `[paths]`, rather than a file that will not parse. The class lookup returned
+    an empty map, every chart row was held back for want of a class, and the
+    deck shipped with every `Examples` field blank on exit 0. The GUID excludes
+    the examples on purpose, so importing that package blanks the examples of
+    the rule cards already in Anki."""
+    from japanese_anki import cli
+    from japanese_anki import patterns as patterns_module
+
+    project(tmp_path)
+    patterns_module.save_store(
+        ProjectConfig.load(tmp_path).patterns_file,
+        {"teform.pdf": chart(Pattern("う・つ・る → って", "godan て-form", ("かう ⇨ かって",)))},
+    )
+    deck = deck_file(tmp_path)
+    (tmp_path / "vocabulary.json").unlink()
+
+    code = cli.main([
+        "--root", str(tmp_path), "build", str(deck),
+        "--output", str(tmp_path / "out.apkg"),
+    ])
+
+    assert code == 1
+    assert not (tmp_path / "out.apkg").exists(), "and shipped nothing"
+    assert "rule card(s)" not in capsys.readouterr().out
+
+
 def test_a_pattern_build_stops_on_an_unreadable_collection(tmp_path: Path, capsys) -> None:
     """The worked examples on a rule card come from checking the chart against
     the collection's own `verb_group` values. When the collection could not be

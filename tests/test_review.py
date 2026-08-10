@@ -1266,13 +1266,21 @@ def test_a_scalar_accepted_marks_is_refused(tmp_path: Path) -> None:
 @pytest.mark.parametrize("mark", [1, True, ["meanings|error"], {"a": 1}, None])
 def test_a_mark_that_is_not_a_string_is_refused(tmp_path: Path, mark: object) -> None:
     """The container was checked and its elements were not, which is the same
-    bug one level down. A *truthy* non-string is the one that hurts: it survives
-    the filter, so `stored` is non-empty and suppresses the migration this entry
-    needs; it matches no `finding_mark`, so the card's error blocks the build;
-    and `carry_acceptances` then writes `accepted: false` back, after which the
+    bug one level down — and it fails two different ways.
+
+    A truthy *scalar* (`1`, `true`) survives the filter, so `stored` is
+    non-empty and suppresses the migration this entry needs; it matches no
+    `finding_mark`, so the card's error blocks the build; and
+    `carry_acceptances` then writes `accepted: false` back, after which the
     acceptance cannot be recovered — the migration only runs while that flag is
-    true. `None` is listed last and is the easy case: it is falsy, so the filter
-    alone already drops it."""
+    true.
+
+    An *unhashable* one (a nested list, an object) never gets that far:
+    `set(accepted_marks)` raises `TypeError`, which `cli.main` does not catch,
+    so the gate exits on a traceback instead of a named error.
+
+    `None` is listed last and is the easy case: it is falsy, so the filter alone
+    already drops it."""
     path = tmp_path / "review.json"
     path.write_text(
         json.dumps({"abc123def456": {
