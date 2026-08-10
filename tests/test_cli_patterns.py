@@ -411,7 +411,7 @@ def test_check_re_runs_over_the_store_without_reading_anything(
     assert cli.main(["--root", str(root), "patterns", "--check"]) == 0
 
     assert len(calls) == 1, "the store already holds what --check reads"
-    assert "agrees with janki" in capsys.readouterr().out
+    assert "agree with janki" in capsys.readouterr().out
 
 
 def test_check_exits_non_zero_on_a_disagreement(
@@ -444,3 +444,42 @@ def test_reading_a_lesson_says_nothing_about_steering(
     cli.main(["--root", str(root), "patterns", str(document(root, "week11.pdf"))])
 
     assert "steered only by" not in capsys.readouterr().out
+
+
+def test_check_says_so_when_nothing_could_be_checked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The all-clear used to print whenever nothing disagreed, including when
+    nothing was examined — false reassurance from the one command whose entire
+    job is reassurance."""
+    root = project(tmp_path)
+    monkeypatch.setattr(
+        patterns_module.claude_client,
+        "parse_call",
+        reader({"week11.pdf": Parsed("lesson", "Week 11", ["〜んだ"])}),
+    )
+    cli.main(["--root", str(root), "patterns", str(document(root, "week11.pdf"))])
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "patterns", "--check"]) == 0
+
+    out = capsys.readouterr().out
+    assert "Nothing in the store could be checked" in out
+    assert "week11.pdf (lesson)" in out
+    assert "agree with janki" not in out
+
+
+def test_check_will_not_silently_ignore_files_passed_with_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--check` returns before the read loop, so a file passed alongside it was
+    never read, never stored and never mentioned — on a zero exit. The same trap
+    the --review guard exists for."""
+    root = project(tmp_path)
+
+    code = cli.main([
+        "--root", str(root), "patterns", "--check", str(document(root, "teform.pdf"))
+    ])
+
+    assert code == 1
+    assert "cannot be combined with" in capsys.readouterr().err

@@ -9,6 +9,7 @@ vocabulary slide anywhere in it.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -353,11 +354,18 @@ def test_a_rule_shape_is_not_something_to_check() -> None:
 
 
 def test_a_lesson_deck_has_nothing_to_check() -> None:
-    """Silence rather than "0 checked": a line printed under every slide deck
-    trains the eye to skip the one that matters."""
-    lesson = PatternSet("week11.pdf", "lesson", patterns=(Pattern("〜んだ", "explains"),))
+    """A lesson deck's "examples" are sentences from a slide, not conjugation
+    claims — so the kind is what decides, not whether a sentence happens to
+    contain an arrow. The fixture carries a pair that *would* be checked on a
+    chart, because with a pattern that has no arrow the test passed without the
+    kind gate existing at all."""
+    lesson = PatternSet(
+        "week11.pdf", "lesson",
+        patterns=(Pattern("〜んだ", "explains", examples=("たべる ⇨ たべて",)),),
+    )
 
     assert check_pattern_rules(lesson) == ()
+    assert check_pattern_rules(replace(lesson, kind="pattern")), "the same rows on a chart"
 
 
 def test_the_same_pair_written_twice_is_checked_once() -> None:
@@ -378,5 +386,59 @@ def test_a_pair_that_is_not_a_dictionary_form_is_not_checked() -> None:
         Pattern("って ⇨ んで"),
         Pattern("past tense", examples=("かって ⇨ かった",)),
     ))
+
+    assert checks == ()
+
+
+def test_a_chart_written_in_kanji_is_checked() -> None:
+    """Which is how a chart is actually written. A hiragana-only match made the
+    whole feature a no-op on its ordinary input, and reported that as success —
+    including 行く, the row a reader is most likely to have copied down wrong."""
+    checks = check_pattern_rules(chart(
+        Pattern("う・つ・る → って", examples=("買う ⇨ 買って",)),
+        Pattern("行く ⇨ 行って"),
+    ))
+
+    assert {(c.verb, c.claimed, c.agrees) for c in checks} == {
+        ("買う", "買って", True),
+        ("行く", "行って", True),
+    }
+
+
+def test_a_ta_form_chart_is_checked_against_the_past_not_the_te_form() -> None:
+    """Genki's た-form table repeats the て-form chart's rule shapes verbatim.
+    A checker that only ever consulted `te_form` contradicted every correct row
+    of it and exited non-zero — false alarms on right input, which is the one
+    thing a checker must not do."""
+    checks = check_pattern_rules(chart(
+        Pattern("う・つ・る → った", examples=("かう ⇨ かった (to buy)",)),
+    ))
+
+    assert checks[0].agrees and checks[0].form == "past"
+
+
+def test_a_nai_form_row_is_checked_too() -> None:
+    checks = check_pattern_rules(chart(Pattern("ない form", examples=("かう ⇨ かわない",))))
+
+    assert checks[0].agrees and checks[0].form == "negative"
+
+
+def test_a_row_listing_several_verbs_is_not_paired_positionally() -> None:
+    """`かう・まつ・とる ⇨ かって・まって・とって` is a correct row. The pattern
+    matched the last verb against the first result — とる ⇨ かって — and reported
+    the row as wrong. Deciding which result belongs to which verb is a guess."""
+    checks = check_pattern_rules(chart(
+        Pattern("かう・まつ・とる ⇨ かって・まって・とって"),
+        Pattern("みる・きる → みて・きて"),
+    ))
+
+    assert checks == ()
+
+
+def test_a_word_janki_declines_to_conjugate_is_not_a_disagreement() -> None:
+    """`conjugate` refuses ゆく because both ゆいて and 行って are attested. janki
+    having no opinion is not the chart being wrong, and reporting it as one
+    failed a document that is right."""
+    checks = check_pattern_rules(chart(Pattern("く → いて", examples=("ゆく ⇨ ゆいて",))))
 
     assert checks == ()

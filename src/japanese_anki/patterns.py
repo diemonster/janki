@@ -44,6 +44,7 @@ from typing import Any
 
 from japanese_anki import claude_client
 from japanese_anki.errors import JankiError
+from japanese_anki.identifiers import normalize_identity_part
 from japanese_anki.inputs import PreparedInput
 from japanese_anki.io import atomic_write_text
 
@@ -274,26 +275,64 @@ def extract_patterns(
 #: a conjugation — that is `conjugation.conjugate`'s job and it needs the group.
 _DICTIONARY_ENDINGS = frozenset("うくぐすつぬぶむる")
 
-#: ``A ⇨ B``, ``A → B``, ``A -> B``. The chart uses all three.
-_PAIR = re.compile(r"([ぁ-ゖー]{2,})\s*(?:⇨|→|->|=>)\s*([ぁ-ゖー]{2,})")
+#: ``A ⇨ B``, ``A → B``, ``A -> B``. The chart uses all three. Kanji as well as
+#: kana: a chart is written 買う ⇨ 買って far more often than かう ⇨ かって, and
+#: a hiragana-only class made the feature a no-op on its ordinary input — 行く,
+#: the row a reader is most likely to have copied down wrong, included.
+_WORD = r"[ぁ-ゖーァ-ヺ一-龥々]{2,}"
+_PAIR = re.compile(rf"({_WORD})\s*(?:⇨|→|->|=>)\s*({_WORD})")
+
+#: A row listing several verbs against several results — ``かう・まつ・とる ⇨
+#: かって・まって・とって`` — cannot be paired positionally without guessing
+#: which result belongs to which verb, and `_PAIR` would pair the last item
+#: before the arrow with the first after it (とる ⇨ かって). Skipped, for the
+#: same reason rule shapes are.
+_LIST_SEPARATORS = frozenset("・、,，/／")
 
 #: Groups `conjugate` knows. Tried in turn because the chart states its rule in
 #: prose ("godan verbs ending in う, つ, or る"), and parsing that prose to pick
 #: a group would be a guess about what the model wrote.
 _GROUPS: tuple[str, ...] = ("godan", "ichidan", "kuru", "suru")
 
+#: Which form a claim is *about*, read from how it ends, longest suffix first.
+#: Only to make a disagreement message name the form the chart meant; agreement
+#: is decided against the whole table, so a chart teaching た-forms, ない-forms
+#: or anything else is checked rather than contradicted on every correct row.
+_FORM_BY_ENDING: tuple[tuple[str, str], ...] = (
+    ("なかった", "past_negative"),
+    ("ない", "negative"),
+    ("て", "te_form"),
+    ("で", "te_form"),
+    ("た", "past"),
+    ("だ", "past"),
+)
+
+
+def _claimed_form(claimed: str) -> str:
+    for ending, form in _FORM_BY_ENDING:
+        if claimed.endswith(ending):
+            return form
+    return ""
+
+
+#: The kinds whose worked examples are checked. A lesson deck's "examples" are
+#: sentences from a slide, not conjugation claims.
+CHECKABLE_KINDS: tuple[str, ...] = ("pattern",)
+
 
 @dataclass(frozen=True, slots=True)
 class RuleCheck:
-    """One ``verb ⇨ て-form`` claim from a document, against janki's own rules."""
+    """One ``verb ⇨ inflected form`` claim from a document, against janki."""
 
     template: str
     #: The dictionary form the document gave.
     verb: str
-    #: The て-form the document claims for it.
+    #: The inflected form the document claims for it.
     claimed: str
     #: The verb group under which `conjugate` agrees, or ``""`` if none does.
     group: str = ""
+    #: Which form it turned out to be — ``te_form``, ``past``, … — when agreed.
+    form: str = ""
     #: What `conjugate` produces instead, per group, when nothing agreed.
     computed: tuple[str, ...] = ()
 
@@ -307,23 +346,37 @@ def check_pattern_rules(entry: PatternSet) -> tuple[RuleCheck, ...]:
 
     A pattern document is inference like everything else here, so its rules are
     *checked* rather than believed — the same dictionary-checks-writer shape the
-    furigana path uses. janki already computes て-forms, so where the chart shows
-    its work (``かう ⇨ かって``, ``くる ⇨ きて``) there is something to check it
+    furigana path uses. janki already conjugates, so where the chart shows its
+    work (``買う ⇨ 買って``, ``くる ⇨ きて``) there is something to check it
     against, and a rule the model garbled shows up as a disagreement instead of
     becoming a card.
 
-    Only worked examples are checked. ``う・つ・る → って`` is the shape of a rule
-    rather than a verb, and ``く → いて`` names an ending; neither is something
-    `conjugate` can be asked about, and inventing a verb to test them with would
-    be checking janki against itself.
+    The claim is checked against the **whole** conjugation table, not against
+    ``te_form``. A chart teaching the た-form repeats the て-form chart's rule
+    shapes verbatim (``う・つ・る → った``), so a checker that assumed て would
+    have contradicted every correct row of it and exited non-zero.
 
-    The group is not parsed out of the document's prose — it is stated there in
-    English, and reading it would be a guess. Every group is tried instead, and
-    a pair agreeing under any of them is consistent with janki's rules. That is
-    a weaker claim than "and it is a godan verb", deliberately: this is checking
-    the chart, not classifying its vocabulary.
+    Four things are deliberately not checked, each because checking would mean
+    guessing:
+
+    * **Rule shapes.** ``う・つ・る → って`` is the shape of a rule and
+      ``く → いて`` names an ending; inventing a verb to test them with would be
+      checking janki against itself.
+    * **Multi-verb rows.** ``かう・まつ・とる ⇨ かって・まって・とって`` cannot
+      be paired positionally without deciding which result belongs to which
+      verb.
+    * **Words janki refuses.** ``conjugate`` returns nothing for ゆく because
+      both ゆいて and 行って are attested — janki has no opinion, which is not
+      the same as disagreeing, and reporting it as one would fail a chart that
+      is right.
+    * **The verb group.** The chart states it in English prose; reading that
+      would be a guess. Every group is tried, and agreement under any of them is
+      the claim — weaker than "and it is godan", on purpose.
     """
     from japanese_anki.conjugation import conjugate
+
+    if entry.kind not in CHECKABLE_KINDS:
+        return ()
 
     checks: list[RuleCheck] = []
     for pattern in entry.patterns:
@@ -332,29 +385,49 @@ def check_pattern_rules(entry: PatternSet) -> tuple[RuleCheck, ...]:
             # Parentheticals carry the English gloss — "(to buy)", "(う ending
             # changes to って)" — and the second of those holds a → of its own.
             stripped = re.sub(r"[(（][^)）]*[)）]", " ", text)
-            for verb, claimed in _PAIR.findall(stripped):
+            # Normalized like every other Japanese-text path here. A decomposed
+            # ぐ is く plus U+3099, which is outside the word class, so
+            # およぐ ⇨ およいで matched nothing at all.
+            stripped = normalize_identity_part(stripped) or stripped
+            for match in _PAIR.finditer(stripped):
+                verb, claimed = match.group(1), match.group(2)
                 if verb[-1] not in _DICTIONARY_ENDINGS:
+                    continue
+                before = stripped[match.start(1) - 1] if match.start(1) else ""
+                after = stripped[match.end(2)] if match.end(2) < len(stripped) else ""
+                if before in _LIST_SEPARATORS or after in _LIST_SEPARATORS:
                     continue
                 if (verb, claimed) in seen:
                     continue
                 seen.add((verb, claimed))
-                computed: list[str] = []
-                agreed = ""
-                for group in _GROUPS:
-                    form = conjugate(verb, verb, group).get("te_form", "")
-                    if not form:
-                        continue
-                    if form == claimed:
-                        agreed = group
+                tables = [
+                    (group, table)
+                    for group in _GROUPS
+                    if (table := conjugate(verb, verb, group))
+                ]
+                if not tables:
+                    continue
+                agreed = form = ""
+                for group, table in tables:
+                    for name, value in table.items():
+                        if value == claimed:
+                            agreed, form = group, name
+                            break
+                    if agreed:
                         break
-                    computed.append(f"{group}: {form}")
+                wanted = _claimed_form(claimed) or "te_form"
                 checks.append(
                     RuleCheck(
                         template=pattern.template,
                         verb=verb,
                         claimed=claimed,
                         group=agreed,
-                        computed=() if agreed else tuple(computed),
+                        form=form,
+                        computed=() if agreed else tuple(
+                            f"{group}: {table[wanted]}"
+                            for group, table in tables
+                            if wanted in table
+                        ),
                     )
                 )
     return tuple(checks)

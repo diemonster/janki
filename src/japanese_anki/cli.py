@@ -2695,6 +2695,16 @@ def command_patterns(args: argparse.Namespace) -> int:
     config = _load_config(args)
     store = patterns.load_store(config.patterns_file)
 
+    # Same trap the --review guard below exists for, reintroduced for a new
+    # flag: `--check` returns before the read loop, so files passed alongside it
+    # were never read, never stored, and never mentioned — on a zero exit.
+    if args.check and (args.files or args.review):
+        given = [str(path) for path in args.files] + list(args.review)
+        raise JankiError(
+            "--check reads nothing and only re-checks the store, so it cannot "
+            f"be combined with {', '.join(given)}. Run them separately."
+        )
+
     if args.review and args.files:
         # `files` is nargs="*" and `--review` appends, so
         # `janki patterns --review a.pdf b.pdf` binds b.pdf to `files` — a
@@ -2738,18 +2748,33 @@ def command_patterns(args: argparse.Namespace) -> int:
         if not store:
             print("No documents read yet. Pass a PDF or image to read one.")
             return 0
-        disagreed = 0
+        disagreed = checked = 0
+        skipped_names: list[str] = []
         for name, entry in sorted(store.items()):
-            lines = _rule_check_lines(entry)
-            if not lines:
+            found = patterns.check_pattern_rules(entry)
+            if not found:
+                skipped_names.append(f"{name} ({entry.kind})")
                 continue
             print(f"{name} — {entry.kind}")
-            for line in lines:
+            for line in _rule_check_lines(entry):
                 print(line)
-            disagreed += sum(1 for check in patterns.check_pattern_rules(entry)
-                             if not check.agrees)
+            checked += len(found)
+            disagreed += sum(1 for check in found if not check.agrees)
+        # The all-clear is only said when something was actually checked. Saying
+        # it over a store of lesson decks — or a chart whose rows this cannot
+        # read — is false reassurance from the one command whose entire job is
+        # reassurance.
+        if not checked:
+            print(
+                "Nothing in the store could be checked against janki's "
+                "conjugation rules: " + ", ".join(skipped_names)
+            )
+            return 0
         if not disagreed:
-            print("Every worked example agrees with janki's conjugation rules.")
+            print(
+                f"All {checked} worked example(s) agree with janki's "
+                f"conjugation rules."
+            )
         return 1 if disagreed else 0
 
     if not args.files:
