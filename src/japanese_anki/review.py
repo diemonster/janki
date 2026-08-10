@@ -27,6 +27,15 @@ every inferred thing:
 * **An accepted finding is accepted for that version of the card.** The
   fingerprint covers the acceptance too, so editing the card afterwards brings
   the question back rather than carrying an old judgement forward onto new text.
+
+The store is keyed by that fingerprint rather than by record id, because a
+review is of a *card version* and one record can ship as more than one card: a
+deck may carry an inline `notes:` entry overriding a field, or read a different
+`source:` entirely, so `janki build` and `janki review` were looking at
+different text under the same id. Keyed by id, that was an unbreakable deadlock
+— the build refused a card the review said was clean, and no flag reached it.
+Keyed by version, both sides ask the same question, and reverting an edit
+restores its review for free instead of buying it again.
 """
 
 from __future__ import annotations
@@ -120,7 +129,7 @@ class CardReview:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "content_fp": self.content_fp,
+            "record_id": self.record_id,
             "at": self.at,
             "accepted": self.accepted,
             "accepted_because": self.accepted_because,
@@ -128,21 +137,21 @@ class CardReview:
         }
 
     @classmethod
-    def from_dict(cls, record_id: str, raw: dict[str, Any]) -> CardReview:
+    def from_dict(cls, content_fp: str, raw: dict[str, Any]) -> CardReview:
         listed = raw.get("findings") or []
         if not isinstance(listed, list):
             raise ReviewError(
-                f"{record_id}: findings must be a list, got {type(listed).__name__}"
+                f"{content_fp}: findings must be a list, got {type(listed).__name__}"
             )
         for item in listed:
             if not isinstance(item, dict):
                 raise ReviewError(
-                    f"{record_id}: each finding must be an object, got "
+                    f"{content_fp}: each finding must be an object, got "
                     f"{type(item).__name__}"
                 )
         return cls(
-            record_id=record_id,
-            content_fp=str(raw.get("content_fp") or ""),
+            record_id=str(raw.get("record_id") or ""),
+            content_fp=content_fp,
             at=str(raw.get("at") or ""),
             findings=tuple(Finding.from_dict(item) for item in listed),
             accepted=bool(raw.get("accepted", False)),
@@ -174,6 +183,10 @@ def card_fingerprint(record: VocabularyRecord) -> str:
         record.furigana,
         "|".join(record.meanings),
         record.part_of_speech,
+        # Transitivity is exactly the kind of claim only a reader can check —
+        # the gate's first real run flagged a verb "glossed as intransitive" —
+        # so a card whose transitivity changed must be read again.
+        record.transitivity,
         record.verb_group,
         record.usage_notes,
         "|".join(record.pitch_accent),
@@ -262,6 +275,8 @@ def card_prompt(record: VocabularyRecord) -> str:
     lines.append(f"Meanings: {'; '.join(record.meanings)}")
     if record.part_of_speech:
         lines.append(f"Part of speech: {record.part_of_speech}")
+    if record.transitivity:
+        lines.append(f"Transitivity: {record.transitivity}")
     if record.verb_group:
         lines.append(f"Verb group: {record.verb_group}")
     if record.pitch_accent:
@@ -348,11 +363,20 @@ def review_records(
             )
             for item in (getattr(call.parsed, "findings", []) or [])
         )
-        reviewed[record.id] = CardReview(
+        reviewed[card_fingerprint(record)] = CardReview(
             record_id=record.id,
             content_fp=card_fingerprint(record),
             at=now,
-            findings=tuple(f for f in findings if f.problem),
+            # Kept even with no text. Dropping it recorded the card as read
+            # and shipped it, which is the opposite of what this module does
+            # with a finding it cannot classify two screens up.
+            findings=tuple(
+                f if f.problem else replace(
+                    f, problem=f.suggestion or "(the reader gave no reason)"
+                )
+                for f in findings
+                if f.problem or f.suggestion or f.severity == "error"
+            ),
         )
     return reviewed, failures
 
@@ -362,15 +386,13 @@ def unreviewed(
 ) -> list[VocabularyRecord]:
     """Records whose current content nobody has read.
 
-    A record whose fingerprint has moved counts as unreviewed even though an
-    entry exists: the entry describes a card that no longer exists.
+    Looked up by fingerprint, so a record that has been edited is unreviewed
+    even though an entry under its id exists: that entry describes a card which
+    no longer exists.
     """
-    stale: list[VocabularyRecord] = []
-    for record in records:
-        entry = store.get(record.id)
-        if entry is None or entry.content_fp != card_fingerprint(record):
-            stale.append(record)
-    return stale
+    return [
+        record for record in records if card_fingerprint(record) not in store
+    ]
 
 
 def open_findings(
@@ -379,8 +401,8 @@ def open_findings(
     """Blocking findings against the current version of each record."""
     blocking: list[tuple[str, Finding]] = []
     for record in records:
-        entry = store.get(record.id)
-        if entry is None or entry.content_fp != card_fingerprint(record):
+        entry = store.get(card_fingerprint(record))
+        if entry is None:
             continue
         blocking.extend((record.id, finding) for finding in entry.blocking())
     return blocking
@@ -389,24 +411,35 @@ def open_findings(
 def accept(
     store: dict[str, CardReview], record_id: str, because: str
 ) -> dict[str, CardReview]:
-    """Record that a human overruled this card's findings, and why."""
-    entry = store.get(record_id)
-    if entry is None:
-        raise ReviewError(f"No review on record for {record_id}")
+    """Record that a human overruled a card's findings, and why.
+
+    Named by record id rather than by fingerprint, because that is what a person
+    has in front of them — the id is what the refusal printed. Every version of
+    that card currently carrying a finding is accepted: they were all read, and
+    someone saying "this word is fine" means the word, not one hash of it.
+    """
     if not because.strip():
         raise ReviewError(
             "An acceptance needs a reason: next month it is indistinguishable "
             "from one nobody thought about."
         )
+    matching = [
+        fingerprint
+        for fingerprint, entry in store.items()
+        if entry.record_id == record_id
+    ]
+    if not matching:
+        raise ReviewError(f"No review on record for {record_id}")
     updated = dict(store)
-    updated[record_id] = replace(
-        entry, accepted=True, accepted_because=because.strip()
-    )
+    for fingerprint in matching:
+        updated[fingerprint] = replace(
+            updated[fingerprint], accepted=True, accepted_because=because.strip()
+        )
     return updated
 
 
 def load_store(path: Path) -> dict[str, CardReview]:
-    """Every card janki has read, keyed by record id."""
+    """Every card version janki has read, keyed by its content fingerprint."""
     file = Path(path)
     if not file.exists():
         return {}
@@ -415,7 +448,9 @@ def load_store(path: Path) -> dict[str, CardReview]:
     except (OSError, ValueError) as exc:
         raise ReviewError(f"Could not read {file}: {exc}") from exc
     if not isinstance(raw, dict):
-        raise ReviewError(f"{file} must hold a JSON object keyed by record id")
+        raise ReviewError(
+            f"{file} must hold a JSON object keyed by content fingerprint"
+        )
     # Refused, not skipped: `save_store` rewrites the whole file from what was
     # loaded, so an entry the loader dropped would be erased from the committed
     # store on the next write, and its card would silently become unreviewed.
@@ -426,7 +461,8 @@ def load_store(path: Path) -> dict[str, CardReview]:
                 f"{type(value).__name__}"
             )
     return {
-        str(name): CardReview.from_dict(str(name), value) for name, value in raw.items()
+        str(name): CardReview.from_dict(str(name), value)
+        for name, value in raw.items()
     }
 
 

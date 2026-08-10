@@ -785,3 +785,40 @@ def test_a_label_with_no_verb_code_behind_it_stands(codes: list[str], label: str
     suffix, and a noun that takes する is still a noun — that ordering is jpdb
     saying which word it is, not which sense came first."""
     assert pos_to_part_of_speech(codes) == label
+
+
+@pytest.mark.parametrize(
+    ("codes", "label"),
+    [
+        (["suf", "n"], "suffix"),
+        (["int", "n"], "interjection"),
+        (["aux-adj", "adj-i"], "auxiliary adjective"),
+    ],
+    ids=["suffix-then-noun", "interjection-then-noun", "aux-adj-then-i-adj"],
+)
+def test_only_a_verb_code_outranks_a_secondary_label(codes: list[str], label: str) -> None:
+    """The rule is "a *verb* code outranks", not "anything later outranks".
+    Returning the later label made 〜的 a noun and turned ["aux-adj", "adj-i"]
+    into an い-adjective — which reaches `conjugate` through
+    `verb_group or part_of_speech` and writes a whole paradigm for ない."""
+    assert pos_to_part_of_speech(codes) == label
+
+
+@pytest.mark.parametrize(
+    ("codes", "expected"),
+    [
+        (["v5s", "vt"], "transitive"),
+        (["v5r", "vi"], "intransitive"),
+        (["aux-v", "vi", "suf", "vt", "vs"], ""),
+        (["vt", "vi"], ""),
+        (["v1"], ""),
+    ],
+    ids=["transitive", "intransitive", "suru", "both", "neither"],
+)
+def test_a_word_tagged_both_transitive_and_intransitive_claims_neither(
+    codes: list[str], expected: str
+) -> None:
+    """する really is tagged both, and which one holds depends on the sense.
+    Taking the first match called it intransitive on a card whose own example is
+    仕事をします — a guess about the word, dressed as a fact from the dictionary."""
+    assert pos_to_transitivity(codes) == expected

@@ -890,7 +890,12 @@ def pos_to_part_of_speech(codes: Any) -> str:
         label = _PARTS_OF_SPEECH.get(code)
         if label:
             if label not in _SECONDARY_TO_A_VERB:
-                return label
+                # `first or label`, not `label`: only a *verb* code outranks a
+                # secondary one, which is what the rule above says. Returning
+                # the later label demoted 〜的 to a noun for ["suf", "n"] and
+                # turned ["aux-adj", "adj-i"] into an い-adjective — which then
+                # reached `conjugate` and wrote a whole paradigm for ない.
+                return first or label
             first = first or label
             continue
         if _VERB_CODE.match(code):
@@ -899,12 +904,24 @@ def pos_to_part_of_speech(codes: Any) -> str:
 
 
 def pos_to_transitivity(codes: Any) -> str:
-    """``"transitive"``/``"intransitive"`` from ``vt``/``vi``, or ``""``."""
-    for code in _codes(codes):
-        transitivity = _TRANSITIVITY.get(code)
-        if transitivity:
-            return transitivity
-    return ""
+    """``"transitive"``/``"intransitive"`` from ``vt``/``vi``, or ``""``.
+
+    **A word tagged both gets neither.** する comes back as
+    ``["aux-v", "vi", "suf", "vt", "vs"]`` — measured, not guessed — and taking
+    the first match called it intransitive, on a card whose own example is
+    仕事をします. Which one is true depends on the sense, so there is no single
+    answer to state, and stating one anyway is exactly the guess this project
+    does not make. The card then shows no transitivity rather than a wrong one,
+    and `usage_notes` is where a real distinction belongs.
+    """
+    found = {
+        transitivity
+        for code in _codes(codes)
+        if (transitivity := _TRANSITIVITY.get(code))
+    }
+    if len(found) != 1:
+        return ""
+    return found.pop()
 
 
 # The remaining wire-value normalizers live here for the same reason the POS

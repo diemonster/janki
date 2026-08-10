@@ -123,7 +123,9 @@ def test_editing_a_card_makes_it_unreviewed_again() -> None:
     forward would pass text nobody read."""
     original = record()
     store = {
-        original.id: CardReview(original.id, card_fingerprint(original), "2026-08-09")
+        card_fingerprint(original): CardReview(
+            original.id, card_fingerprint(original), "2026-08-09"
+        )
     }
     assert unreviewed([original], store) == []
 
@@ -137,7 +139,9 @@ def test_a_field_the_card_does_not_show_does_not_invalidate_a_review() -> None:
     and re-reviewing twenty cards to reach the same answer is a request each."""
     original = record()
     store = {
-        original.id: CardReview(original.id, card_fingerprint(original), "2026-08-09")
+        card_fingerprint(original): CardReview(
+            original.id, card_fingerprint(original), "2026-08-09"
+        )
     }
     same_card = record(
         source=SourceReference(type="jpdb", imported_from="deck-4"),
@@ -155,9 +159,10 @@ def test_only_an_error_blocks() -> None:
     """A model asked to find fault will always find some. A gate that stops on
     "could be more natural" is one people learn to bypass."""
     card = record()
-    store = {card.id: CardReview(card.id, card_fingerprint(card), findings=(
-        Finding("examples[0]", "could be more natural", "note"),
-    ))}
+    store = {card_fingerprint(card): CardReview(
+        card.id, card_fingerprint(card),
+        findings=(Finding("examples[0]", "could be more natural", "note"),),
+    )}
 
     assert open_findings([card], store) == []
 
@@ -168,9 +173,11 @@ def test_an_error_blocks_until_accepted() -> None:
         Finding("meanings", "glossed as intransitive", "error"),
     ))
 
-    assert len(open_findings([card], {card.id: entry})) == 1
+    assert len(open_findings([card], {card_fingerprint(card): entry})) == 1
 
-    accepted = review_module.accept({card.id: entry}, card.id, "the gloss is right")
+    accepted = review_module.accept(
+        {card_fingerprint(card): entry}, card.id, "the gloss is right"
+    )
 
     assert open_findings([card], accepted) == []
 
@@ -180,9 +187,10 @@ def test_an_acceptance_does_not_survive_an_edit() -> None:
     carrying it forward would wave through words nobody agreed to."""
     card = record()
     accepted = review_module.accept(
-        {card.id: CardReview(card.id, card_fingerprint(card), accepted=False, findings=(
-            Finding("meanings", "wrong", "error"),
-        ))},
+        {card_fingerprint(card): CardReview(
+            card.id, card_fingerprint(card), accepted=False,
+            findings=(Finding("meanings", "wrong", "error"),),
+        )},
         card.id,
         "checked it",
     )
@@ -194,7 +202,7 @@ def test_an_acceptance_does_not_survive_an_edit() -> None:
 
 def test_an_acceptance_needs_a_reason() -> None:
     card = record()
-    store = {card.id: CardReview(card.id, card_fingerprint(card))}
+    store = {card_fingerprint(card): CardReview(card.id, card_fingerprint(card))}
 
     with pytest.raises(ReviewError, match="needs a reason"):
         review_module.accept(store, card.id, "   ")
@@ -217,7 +225,7 @@ def test_a_clean_card_is_recorded_and_the_build_proceeds(
     monkeypatch.setattr(review_module.claude_client, "parse_call", reader(Verdict()))
 
     assert cli.main(["--root", str(root), "review"]) == 0
-    assert store_of(root)["word:話す:はなす"]["findings"] == []
+    assert [e["findings"] for e in store_of(root).values()] == [[]]
 
     assert cli.main(["--root", str(root), "build", "verbs"]) == 0
 
@@ -232,6 +240,10 @@ def test_an_error_stops_the_build_and_says_what_and_why(
         reader(Verdict(Item("meanings", "glossed as intransitive", "error", "to speak (vt)"))),
     )
     assert cli.main(["--root", str(root), "review"]) == 1
+    # Discarded, so the assertions below are about the *build's* output. The
+    # review prints the same finding, so without this the test passed whether
+    # or not the build said anything at all.
+    capsys.readouterr()
 
     assert cli.main(["--root", str(root), "build", "verbs"]) == 1
 
@@ -272,7 +284,9 @@ def test_accepting_lets_the_build_through(
     ]) == 0
 
     assert cli.main(["--root", str(root), "build", "verbs"]) == 0
-    assert store_of(root)["word:話す:はなす"]["accepted_because"] == "the gloss matches jpdb"
+    assert [e["accepted_because"] for e in store_of(root).values()] == [
+        "the gloss matches jpdb"
+    ]
 
 
 def test_a_second_run_reads_nothing_that_has_not_changed(
@@ -381,9 +395,9 @@ def test_the_store_round_trips(tmp_path: Path) -> None:
     )
     path = tmp_path / "review.json"
 
-    save_store(path, {entry.record_id: entry})
+    save_store(path, {entry.content_fp: entry})
 
-    assert load_store(path)[entry.record_id] == entry
+    assert load_store(path)[entry.content_fp] == entry
 
 
 def test_a_missing_store_is_empty_not_an_error(tmp_path: Path) -> None:
@@ -395,7 +409,7 @@ def test_an_entry_that_is_not_an_object_is_refused(tmp_path: Path) -> None:
     the loader dropped would be erased on the next write and its card would
     silently become unreviewed."""
     path = tmp_path / "review.json"
-    path.write_text(json.dumps({"word:話す:はなす": None}), encoding="utf-8")
+    path.write_text(json.dumps({"abc123": None}), encoding="utf-8")
 
     with pytest.raises(ReviewError, match="must be an object"):
         load_store(path)
@@ -406,9 +420,10 @@ def test_a_finding_about_text_that_has_changed_is_not_reported_against_the_new_t
     refuse for the true reason. Reporting the old finding would send someone to
     fix a sentence that is no longer on the card."""
     card = record(examples=[ExampleSentence(japanese="毎日話します。")])
-    store = {card.id: CardReview(card.id, card_fingerprint(card), findings=(
-        Finding("examples[0]", "毎日話します。 is unnatural", "error"),
-    ))}
+    store = {card_fingerprint(card): CardReview(
+        card.id, card_fingerprint(card),
+        findings=(Finding("examples[0]", "毎日話します。 is unnatural", "error"),),
+    )}
     assert len(open_findings([card], store)) == 1
 
     edited = record(examples=[ExampleSentence(japanese="友だちと話しました。")])
@@ -441,7 +456,9 @@ def test_one_card_that_cannot_be_read_does_not_discard_the_others(
     assert cli.main(["--root", str(root), "review"]) == 1
 
     stored = store_of(root)
-    assert list(stored) == ["word:話す:はなす"], "the one that worked was kept"
+    assert [e["record_id"] for e in stored.values()] == ["word:話す:はなす"], (
+        "the one that worked was kept"
+    )
     assert "could not read word:食べる:たべる" in capsys.readouterr().err
 
 
@@ -459,3 +476,231 @@ def test_a_card_that_could_not_be_read_still_stops_the_build(
     cli.main(["--root", str(root), "review"])
 
     assert cli.main(["--root", str(root), "build", "verbs"]) == 1
+
+
+# --- what the build actually ships --------------------------------------------
+
+
+def test_a_deck_local_override_is_reviewed_as_its_own_card(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`janki build` resolves a deck's inline `notes:` over the normalized
+    record; `janki review` used to read the normalized file. The two saw
+    different text under the same id, so the build refused a card the review had
+    just called clean — and no flag reached it. Not `--force`, which rewrote the
+    normalized fingerprint; not `--accept`, which `unreviewed` ignores. The deck
+    could never be built again."""
+    root = project(tmp_path, [record()])
+    (root / "decks" / "verbs.yaml").write_text(
+        "deck:\n  name: Test\n  source: ../vocabulary.json\n"
+        'notes:\n  - id: "word:話す:はなす"\n    usage_notes: "Deck-local note."\n',
+        encoding="utf-8",
+    )
+    calls: list[str] = []
+    monkeypatch.setattr(
+        review_module.claude_client, "parse_call", reader(Verdict(), calls=calls)
+    )
+
+    assert cli.main(["--root", str(root), "review"]) == 0
+
+    assert "Deck-local note." in calls[0], "the card the build will ship"
+    assert cli.main(["--root", str(root), "build", "verbs"]) == 0
+
+
+def test_two_decks_shipping_one_record_differently_are_both_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keyed by record id, one deck's version overwrote the other's and the
+    loser was refused forever. A review is of a card *version*."""
+    root = project(tmp_path, [record()])
+    (root / "decks" / "other.yaml").write_text(
+        "deck:\n  name: Other\n  source: ../vocabulary.json\n"
+        'notes:\n  - id: "word:話す:はなす"\n    usage_notes: "Other deck."\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        review_module.claude_client, "parse_call", reader(Verdict(), Verdict())
+    )
+
+    assert cli.main(["--root", str(root), "review"]) == 0
+
+    assert len(store_of(root)) == 2, "one entry per version"
+    assert cli.main(["--root", str(root), "build", "--all"]) == 0
+
+
+def test_reverting_an_edit_restores_its_review_for_free(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A pleasant consequence of keying by version: the old answer is still
+    there, so undoing a change costs no request."""
+    calls: list[str] = []
+    root = project(tmp_path, [record()])
+    monkeypatch.setattr(
+        review_module.claude_client,
+        "parse_call",
+        reader(Verdict(), Verdict(), calls=calls),
+    )
+    cli.main(["--root", str(root), "review"])
+    (root / "vocabulary.json").write_text(
+        json.dumps([record(usage_notes="edited").to_dict()], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    cli.main(["--root", str(root), "review"])
+    assert len(calls) == 2
+
+    (root / "vocabulary.json").write_text(
+        json.dumps([record().to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+
+    assert cli.main(["--root", str(root), "review"]) == 0
+    assert len(calls) == 2, "the first version's answer was still on record"
+
+
+def test_transitivity_is_part_of_the_card_that_was_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The gate's first real run flagged a verb "glossed as intransitive", so it
+    is exactly the kind of claim only a reader checks — and a card whose
+    transitivity changed has not been read."""
+    original = record(transitivity="transitive")
+    store = {card_fingerprint(original): CardReview(
+        original.id, card_fingerprint(original)
+    )}
+
+    assert unreviewed([original], store) == []
+    assert [r.id for r in unreviewed([record(transitivity="intransitive")], store)] == [
+        original.id
+    ]
+
+
+def test_an_accept_naming_an_unknown_id_records_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """It printed "Accepted …" for the first id, then raised on the second
+    before saving — so the card the user was just told was cleared was refused
+    by the very next build."""
+    root = project(tmp_path, [record()])
+    monkeypatch.setattr(
+        review_module.claude_client,
+        "parse_call",
+        reader(Verdict(Item("meanings", "wrong", "error"))),
+    )
+    cli.main(["--root", str(root), "review"])
+    capsys.readouterr()
+
+    assert cli.main([
+        "--root", str(root), "review",
+        "--accept", "word:話す:はなす", "--accept", "word:nope:nope",
+        "--because", "checked",
+    ]) == 1
+
+    out = capsys.readouterr()
+    assert "Accepted" not in out.out, "nothing was announced"
+    assert cli.main(["--root", str(root), "build", "verbs"]) == 1, "and nothing saved"
+
+
+def test_a_finding_with_no_text_is_not_dropped() -> None:
+    """It was dropped *and* the card recorded as read, so the build shipped it —
+    the opposite of what this module does with a severity it cannot classify."""
+    from japanese_anki.review import Finding as F
+
+    assert F.from_dict({"where": "meanings", "problem": "", "severity": "error"}).severity == (
+        "error"
+    )
+
+
+# --- the refresh pipeline ------------------------------------------------------
+
+
+def test_refresh_reads_the_cards_between_voicing_and_building(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Last before the build, because it reads the *finished* card: the
+    sentences `--ai` wrote and the readings `--jpdb` filled. Reviewing earlier
+    would read a card that does not exist yet and pass it."""
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
+    root = project(tmp_path, [record()])
+    called: list[str] = []
+
+    monkeypatch.setattr(cli, "command_enrich", lambda a: called.append("enrich") or 0)
+    monkeypatch.setattr(cli, "command_audio", lambda a: called.append("audio") or 0)
+    monkeypatch.setattr(cli, "command_review", lambda a: called.append("review") or 0)
+    monkeypatch.setattr(cli, "command_build", lambda a: called.append("build") or 0)
+
+    assert cli.main(["--root", str(root), "refresh"]) == 0
+
+    assert called.index("review") > called.index("audio")
+    assert called.index("review") < called.index("build")
+
+
+def test_a_refusal_from_the_review_stage_stops_refresh_before_it_builds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Otherwise the package is written *and marked exported*, and the next
+    --only-new never revisits the card the gate objected to."""
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
+    root = project(tmp_path, [record()])
+    built: list[str] = []
+
+    monkeypatch.setattr(cli, "command_enrich", lambda a: 0)
+    monkeypatch.setattr(cli, "command_audio", lambda a: 0)
+    monkeypatch.setattr(cli, "command_review", lambda a: 1)
+    monkeypatch.setattr(cli, "command_build", lambda a: built.append("built") or 0)
+
+    assert cli.main(["--root", str(root), "refresh"]) != 0
+
+    assert built == [], "nothing was packaged"
+
+
+def test_no_review_skips_the_stage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
+    root = project(tmp_path, [record()])
+    called: list[str] = []
+    monkeypatch.setattr(cli, "command_enrich", lambda a: 0)
+    monkeypatch.setattr(cli, "command_audio", lambda a: 0)
+    monkeypatch.setattr(cli, "command_review", lambda a: called.append("review") or 0)
+    monkeypatch.setattr(cli, "command_build", lambda a: 0)
+
+    cli.main(["--root", str(root), "refresh", "--no-review"])
+
+    assert called == []
+    assert "--no-review" in capsys.readouterr().out
+
+
+def test_a_project_with_the_gate_off_does_not_pay_for_the_stage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
+    root = project(tmp_path, [record()], require=False)
+    called: list[str] = []
+    monkeypatch.setattr(cli, "command_enrich", lambda a: 0)
+    monkeypatch.setattr(cli, "command_audio", lambda a: 0)
+    monkeypatch.setattr(cli, "command_review", lambda a: called.append("review") or 0)
+    monkeypatch.setattr(cli, "command_build", lambda a: 0)
+
+    cli.main(["--root", str(root), "refresh"])
+
+    assert called == []
+    assert "[review] require = false" in capsys.readouterr().out
+
+
+def test_the_model_reported_is_the_model_billed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """It printed the configured model and called the overridden one, with
+    nothing on record saying which had actually read the card."""
+    root = project(tmp_path, [record()])
+    used: list[str] = []
+
+    def note_model(model, *_args: Any, **_kwargs: Any) -> CallResult:
+        used.append(model)
+        return CallResult(parsed=Verdict(), stop_reason="end_turn", refusal=None)
+
+    monkeypatch.setattr(review_module.claude_client, "parse_call", note_model)
+
+    cli.main(["--root", str(root), "review", "--model", "claude-haiku-4-5-20251001"])
+
+    assert used == ["claude-haiku-4-5-20251001"]
+    assert "with claude-haiku-4-5-20251001" in capsys.readouterr().out

@@ -2966,8 +2966,7 @@ def command_review(args: argparse.Namespace) -> int:
     build until a person fixes the card or overrules the finding by name.
     """
     config = _load_config(args)
-    output_path = config.normalized_file.resolve()
-    records = load_records(output_path) if output_path.exists() else []
+    records = _shipping_records(config)
     store = review.load_store(config.review_file)
 
     if args.accept:
@@ -2976,10 +2975,15 @@ def command_review(args: argparse.Namespace) -> int:
                 "--accept needs --because: an acceptance with no reason is "
                 "indistinguishable next month from one nobody thought about."
             )
+        # Every id applied before anything is announced. Printing inside the
+        # loop told the user an acceptance was recorded, then raised on the next
+        # id before `save_store` — so the card they had just been told was clear
+        # was refused by the very next build.
         for record_id in args.accept:
             store = review.accept(store, record_id, args.because)
-            print(f"Accepted the findings on {record_id}: {args.because}")
         review.save_store(config.review_file, store)
+        for record_id in args.accept:
+            print(f"Accepted the findings on {record_id}: {args.because}")
         return 0
 
     known = {record.id for record in records}
@@ -2987,8 +2991,7 @@ def command_review(args: argparse.Namespace) -> int:
         unknown = [record_id for record_id in args.ids if record_id not in known]
         if unknown:
             raise JankiError(
-                "No record with id " + ", ".join(sorted(unknown)) + " in "
-                f"{output_path}."
+                "No record with id " + ", ".join(sorted(unknown)) + " in any deck."
             )
         records = [record for record in records if record.id in set(args.ids)]
 
@@ -3007,10 +3010,13 @@ def command_review(args: argparse.Namespace) -> int:
         print(f"All {len(records)} card(s) already read at their current content.")
         return 0
 
-    print(f"Reading {len(todo)} card(s) with {config.enrich_model}...")
+    # The model that will actually read them, not the configured one:
+    # `--model haiku` printed "with claude-opus-5" and billed the other.
+    model = args.model or config.enrich_model
+    print(f"Reading {len(todo)} card(s) with {model}...")
     fresh, failures = review.review_records(
         todo,
-        model=args.model or config.enrich_model,
+        model=model,
         style_guide=claude_client.read_style_guide(config.root),
         card_design=_card_design_text(config.root),
     )
@@ -3020,15 +3026,19 @@ def command_review(args: argparse.Namespace) -> int:
     store.update(fresh)
     review.save_store(config.review_file, store)
 
+    # Reported by record id, never by the store's key. The key is a content
+    # fingerprint — `72e046d7c08d — meanings: ...` names nothing a person can
+    # look up or pass to `--accept`.
+    by_record = sorted(fresh.values(), key=lambda entry: entry.record_id)
     errors = [
-        (record_id, finding)
-        for record_id, entry in sorted(fresh.items())
+        (entry.record_id, finding)
+        for entry in by_record
         for finding in entry.findings
         if finding.severity == "error"
     ]
     notes = [
-        (record_id, finding)
-        for record_id, entry in sorted(fresh.items())
+        (entry.record_id, finding)
+        for entry in by_record
         for finding in entry.findings
         if finding.severity == "note"
     ]
@@ -3057,6 +3067,42 @@ def command_review(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
     return 1 if errors or failures else 0
+
+
+def _shipping_records(config: ProjectConfig) -> list[VocabularyRecord]:
+    """Every card version any deck would ship, deduped by content.
+
+    The records the *build* resolves, not the normalized file. A deck may carry
+    an inline ``notes:`` entry overriding a field, or read a different
+    ``source:`` entirely, and reading the normalized file meant `janki review`
+    and `janki build` were looking at different text under the same id — the
+    build refusing a card the review had just called clean, with no flag that
+    reached it.
+
+    A record shipping identically from two decks is one card to read. One
+    shipping *differently* is two, and both are reviewed: the store is keyed by
+    content, so each deck's version is answered on its own terms.
+    """
+    deck_paths = sorted(
+        [*config.deck_dir.glob("*.yaml"), *config.deck_dir.glob("*.yml")]
+    )
+    if not deck_paths:
+        # No decks yet — review the collection, so a project can be checked
+        # before its first deck file exists.
+        normalized = config.normalized_file.resolve()
+        return load_records(normalized) if normalized.exists() else []
+
+    seen: set[str] = set()
+    records: list[VocabularyRecord] = []
+    for deck_path in deck_paths:
+        _, deck_records = resolve_deck_records(deck_path)
+        for record in deck_records:
+            fingerprint = review.card_fingerprint(record)
+            if fingerprint in seen:
+                continue
+            seen.add(fingerprint)
+            records.append(record)
+    return records
 
 
 def _card_design_text(root: Path) -> str:
