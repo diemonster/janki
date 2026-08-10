@@ -114,7 +114,9 @@ class Finding:
         )
 
 
-def _marks_of(raw: dict[str, Any], findings: tuple[Finding, ...]) -> tuple[str, ...]:
+def _marks_of(
+    content_fp: str, raw: dict[str, Any], findings: tuple[Finding, ...]
+) -> tuple[str, ...]:
     """The marks an entry's acceptance answers, migrating one written before them.
 
     A store written by any earlier janki carries `accepted: true` with no
@@ -130,10 +132,27 @@ def _marks_of(raw: dict[str, Any], findings: tuple[Finding, ...]) -> tuple[str, 
         # `findings` field already follows. A scalar iterated into seventeen
         # single-character marks, which matched nothing, suppressed the
         # migration below by being truthy, and was written back to the store.
+        #
+        # Named, like every other error on this load path: `load_store` refuses
+        # rather than skips, so one bad entry takes the review gate down for the
+        # whole repository, and "accepted_marks must be a list" alone left
+        # someone bisecting a few hundred entries of JSON by hand.
         raise ReviewError(
-            f"accepted_marks must be a list, got {type(listed).__name__}"
+            f"{content_fp}: accepted_marks must be a list, got "
+            f"{type(listed).__name__}"
         )
-    stored = tuple(str(mark) for mark in listed if str(mark))
+    for mark in listed:
+        # The elements too, as `findings` checks its own. `str(None)` is
+        # `"None"` — truthy, so it survives the filter below, and non-empty, so
+        # it suppresses the migration. The acceptance is then unrecoverable:
+        # `carry_acceptances` writes `accepted: false` back, and the migration
+        # it needs runs only while `accepted` is still true.
+        if not isinstance(mark, str):
+            raise ReviewError(
+                f"{content_fp}: each accepted mark must be a string, got "
+                f"{type(mark).__name__}"
+            )
+    stored = tuple(mark for mark in listed if mark)
     if stored or not raw.get("accepted"):
         return stored
     return tuple(
@@ -215,7 +234,7 @@ class CardReview:
             findings=findings,
             accepted=bool(raw.get("accepted", False)),
             accepted_because=str(raw.get("accepted_because") or ""),
-            accepted_marks=_marks_of(raw, findings),
+            accepted_marks=_marks_of(content_fp, raw, findings),
         )
 
     def blocking(self) -> tuple[Finding, ...]:
