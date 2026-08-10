@@ -216,8 +216,8 @@
   "77af723df6e8": {
     "record_id": "word:なる:なる",
     "at": "2026-08-10",
-    "accepted": false,
-    "accepted_because": "",
+    "accepted": true,
+    "accepted_because": "jpdb's API returns HLL for なる and the deck owner confirmed it against jpdb; jpdb is this deck's authority for accents. The heiban reading is the dictionary's, not the one this deck follows.",
     "findings": []
   },
   "821147473e9c": {

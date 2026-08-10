@@ -405,30 +405,49 @@ def carry_acceptances(
 
     An acceptance is of a *card version*, and a re-read under `--force` produces
     the same version — so dropping it made someone re-type a reason they had
-    already given, about text that had not changed. But it is also of the
-    findings that were *there*: a re-read that turns up something different is
-    new information, and clearing that with a sentence written about the old
-    finding is the silent pass this module exists to prevent.
+    already given about text that had not changed. It is also of the findings
+    that were *there*: a re-read turning up a new problem is new information,
+    and clearing that with a sentence written about the old one is the silent
+    pass this module exists to prevent.
 
-    So the acceptance carries over only when the same version comes back with
-    the same findings. Anything else has to be answered again.
+    Two things follow, and the first is absolute.
+
+    **The reason is never destroyed.** It is the only human-written sentence in
+    this file and nothing can reconstruct it. It carries over even when the
+    acceptance does not, so someone answering a new finding can see what was
+    decided last time instead of a blank.
+
+    **The acceptance carries when every blocking finding was already accepted**,
+    compared by *where* and *severity* rather than by the model's prose. Prose
+    was the first attempt and it was the wrong key: a re-read of an unchanged
+    card rewrites its sentences freely, so the comparison almost never held, and
+    the branch that ran was the one that threw the acceptance away. An empty
+    finding set carries too — there is nothing left to answer.
     """
+
+    def place(where: str) -> str:
+        # The model names the same field as `pitch_accent`, `Pitch accent` and
+        # `Meanings` across runs, so underscores, spacing and case are folded.
+        return " ".join(where.replace("_", " ").split()).lower()
+
+    def blocking_marks(entry: CardReview) -> set[tuple[str, str]]:
+        return {
+            (place(finding.where), finding.severity)
+            for finding in entry.findings
+            if finding.severity == "error"
+        }
+
     carried: dict[str, CardReview] = {}
     for fingerprint, entry in fresh.items():
         previous = store.get(fingerprint)
-        same = (
-            previous is not None
-            and previous.accepted
-            and previous.findings == entry.findings
-        )
-        carried[fingerprint] = (
-            replace(
-                entry,
-                accepted=True,
-                accepted_because=previous.accepted_because,  # type: ignore[union-attr]
-            )
-            if same
-            else entry
+        if previous is None or not previous.accepted:
+            carried[fingerprint] = entry
+            continue
+        answered = blocking_marks(entry) <= blocking_marks(previous)
+        carried[fingerprint] = replace(
+            entry,
+            accepted=answered,
+            accepted_because=previous.accepted_because,
         )
     return carried
 

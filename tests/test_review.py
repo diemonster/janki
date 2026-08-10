@@ -959,3 +959,65 @@ def test_a_re_read_that_finds_something_else_must_be_answered_again() -> None:
     carried = review_module.carry_acceptances(before, again)
 
     assert not carried[card_fingerprint(card)].accepted
+
+
+def test_the_reason_a_person_wrote_is_never_destroyed() -> None:
+    """It is the only human-written sentence in the store and nothing can
+    reconstruct it. It survived a re-read that found *nothing* — the fresh entry
+    simply replaced the accepted one — and the sentence README quotes as its
+    worked example was lost that way."""
+    card = record()
+    before = {card_fingerprint(card): CardReview(
+        card.id, card_fingerprint(card),
+        findings=(Finding("pitch_accent", "heiban", "error"),),
+        accepted=True, accepted_because="jpdb is this deck's authority",
+    )}
+    found_nothing = {card_fingerprint(card): CardReview(
+        card.id, card_fingerprint(card), findings=()
+    )}
+
+    carried = review_module.carry_acceptances(before, found_nothing)
+
+    assert carried[card_fingerprint(card)].accepted_because == (
+        "jpdb is this deck's authority"
+    )
+
+
+def test_an_acceptance_survives_the_model_rewording_its_finding() -> None:
+    """Comparing the model's prose was the wrong key: a re-read of an unchanged
+    card rewrites its sentences freely, so the carry branch almost never held
+    and the destructive one is what ran. `where` and `severity` are stable."""
+    card = record()
+    before = {card_fingerprint(card): CardReview(
+        card.id, card_fingerprint(card),
+        findings=(Finding("pitch_accent", "なる is heiban (accent 0)", "error"),),
+        accepted=True, accepted_because="checked against jpdb",
+    )}
+    reworded = {card_fingerprint(card): CardReview(
+        card.id, card_fingerprint(card),
+        findings=(Finding("Pitch accent", "the pattern marks it atamadaka", "error"),),
+    )}
+
+    carried = review_module.carry_acceptances(before, reworded)
+
+    assert carried[card_fingerprint(card)].accepted, "same place, same severity"
+
+
+def test_a_new_problem_still_has_to_be_answered() -> None:
+    """And the old reason is kept beside it, so whoever answers can see what was
+    decided last time rather than a blank."""
+    card = record()
+    before = {card_fingerprint(card): CardReview(
+        card.id, card_fingerprint(card),
+        findings=(Finding("pitch_accent", "heiban", "error"),),
+        accepted=True, accepted_because="checked against jpdb",
+    )}
+    something_else = {card_fingerprint(card): CardReview(
+        card.id, card_fingerprint(card),
+        findings=(Finding("meanings", "glossed as intransitive", "error"),),
+    )}
+
+    carried = review_module.carry_acceptances(before, something_else)
+
+    assert not carried[card_fingerprint(card)].accepted
+    assert carried[card_fingerprint(card)].accepted_because == "checked against jpdb"
