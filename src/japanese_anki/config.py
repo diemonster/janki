@@ -32,8 +32,10 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "media_dir",
         "kanji_file",
         "patterns_file",
+        "review_file",
         "scan_inbox",
     ),
+    "review": ("require",),
     "anki": (
         "default_deck_name",
         "default_deck_id",
@@ -274,6 +276,9 @@ class ProjectConfig:
     kanji_file: Path
     #: What documents teach, inferred and reviewed before anything uses it.
     patterns_file: Path
+    review_file: Path
+    #: Whether a recorded build refuses cards `janki review` has not passed.
+    require_review: bool
     scan_inbox: Path
     default_deck_name: str
     default_deck_id: int
@@ -363,6 +368,14 @@ class ProjectConfig:
             staging_dir=project_path(_str(data, "paths", "staging_dir", "data/staging")),
             media_dir=project_path(_str(data, "paths", "media_dir", "data/media")),
             kanji_file=project_path(_str(data, "paths", "kanji_file", "data/kanji.json")),
+            review_file=project_path(
+                _str(data, "paths", "review_file", "data/review.json")
+            ),
+            # On by default: a gate you have to remember to switch on is a
+            # gate that is off on the day it would have mattered. A project
+            # that does not want a model reading its cards sets this false,
+            # and says so in its own janki.toml rather than by omission.
+            require_review=_bool(data, "review", "require", True),
             patterns_file=project_path(
                 _str(data, "paths", "patterns_file", "data/patterns.json")
             ),

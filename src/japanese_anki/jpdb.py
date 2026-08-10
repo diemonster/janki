@@ -846,20 +846,56 @@ def pos_to_verb_group(codes: Any) -> str:
     return ""
 
 
+#: Labels that describe a *secondary* use of a word that is otherwise a verb.
+#: jpdb puts these first often enough to matter: 見る comes back as
+#: ``["aux-v", "vt", "v1"]`` and 分かる as ``["int", "vi", "v5", "v5r"]``, both
+#: measured against the live API. Taking the first recognized code labelled six
+#: of twenty ordinary verbs "auxiliary verb" or "interjection" on real cards,
+#: each one contradicting the verb group on the same card.
+_SECONDARY_TO_A_VERB = frozenset(
+    {
+        "auxiliary",
+        "auxiliary verb",
+        "auxiliary adjective",
+        "interjection",
+        # する arrives as ["aux-v", "vi", "suf", "vt", "vs"]: "suffix" is its
+        # 勉強する use, not what the word is. A word that really is only a suffix
+        # (〜的, 〜家) carries no verb code, so it keeps the label.
+        "suffix",
+    }
+)
+
+
 def pos_to_part_of_speech(codes: Any) -> str:
     """A human-readable part of speech for a JMDict code list, or ``""``.
 
-    First recognized code wins, and jpdb lists them most-significant first — so
-    a noun that takes する (``["n", "vs"]``) is a noun here, while its verb
-    group is still ``suru``.
+    First recognized code wins, *except* that a verb code outranks the
+    auxiliary and interjection labels wherever both appear. jpdb does not order
+    these by significance the way the rest of this function assumes: 〜ている and
+    分かる! are real but secondary uses, and they arrive ahead of the codes for
+    the ordinary verb the card is about.
+
+    Only that family is outranked. A noun that takes する (``["n", "vs"]``) is
+    still a noun here, with a ``suru`` verb group — that ordering is jpdb saying
+    something true about which word it is, not about which sense came first.
+
+    A word that genuinely *is* primarily an auxiliary — た, られる — is labelled
+    "verb" by this rule. That is the accepted cost: those are not words a
+    vocabulary deck teaches as entries, while 見る, する, なる, いる, 来る and
+    分かる are, and mislabelling those teaches a beginner the wrong category for
+    six of the commonest verbs in the language.
     """
+    first = ""
     for code in _codes(codes):
         label = _PARTS_OF_SPEECH.get(code)
         if label:
-            return label
+            if label not in _SECONDARY_TO_A_VERB:
+                return label
+            first = first or label
+            continue
         if _VERB_CODE.match(code):
             return "verb"
-    return ""
+    return first
 
 
 def pos_to_transitivity(codes: Any) -> str:

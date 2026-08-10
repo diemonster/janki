@@ -75,7 +75,7 @@
       "to stay",
       "to be ...-ing, to have been ...-ing"
     ],
-    "part_of_speech": "auxiliary verb",
+    "part_of_speech": "verb",
     "verb_group": "ichidan",
     "transitivity": "intransitive",
     "examples": [
@@ -154,7 +154,7 @@
       "creates a humble verb (after a noun prefixed with \"o\" or \"go\")",
       "to be just about to, to be just starting to, to try to, to attempt to"
     ],
-    "part_of_speech": "auxiliary verb",
+    "part_of_speech": "verb",
     "verb_group": "suru",
     "transitivity": "intransitive",
     "examples": [
@@ -188,7 +188,7 @@
       "jpdb",
       "jpdb:anki-test-top-20-verbs"
     ],
-    "usage_notes": "Irregular verb: します／しない／した／して, potential できる. It attaches to many nouns to make verbs (勉強する, 練習する, コピーする); with those, you can often say either 勉強します or 勉強をします, the version with を feeling slightly more like 'do some studying'. Note that 何をする uses を, while 'become' senses use に (医者にする).",
+    "usage_notes": "Irregular verb: します／しない／した／して, potential できる. It attaches to many nouns to make verbs (勉強する, 練習する, コピーする); with those, you can often say either 勉強します or 勉強をします, the version with を feeling slightly more like 'do some studying'. Note that 何をする takes を, while the 'make into / decide on' sense takes に (息子を医者にする 'make my son a doctor') — contrast 医者になる 'become a doctor'.",
     "audio": "audio/janki-e0446a52d4d9.wav",
     "image": "",
     "pitch_accent": [
@@ -294,7 +294,7 @@
       "to be promoted",
       "to do ..."
     ],
-    "part_of_speech": "auxiliary verb",
+    "part_of_speech": "verb",
     "verb_group": "godan",
     "transitivity": "intransitive",
     "examples": [
@@ -425,7 +425,7 @@
       "to become clear, to be known, to be discovered, to be realized, to be realised, to be found out",
       "I know!, I think so too!"
     ],
-    "part_of_speech": "interjection",
+    "part_of_speech": "verb",
     "verb_group": "godan",
     "transitivity": "intransitive",
     "examples": [
@@ -623,7 +623,7 @@
       "to come from, to be caused by, to derive from",
       "to come to (i.e. \"when it comes to spinach ...\")"
     ],
-    "part_of_speech": "auxiliary verb",
+    "part_of_speech": "verb",
     "verb_group": "kuru",
     "transitivity": "intransitive",
     "examples": [
@@ -891,7 +891,7 @@
       "to try ..., to have a go at ..., to give ... a try",
       "to see (that) ..., to find (that) ..."
     ],
-    "part_of_speech": "auxiliary verb",
+    "part_of_speech": "verb",
     "verb_group": "ichidan",
     "transitivity": "transitive",
     "examples": [

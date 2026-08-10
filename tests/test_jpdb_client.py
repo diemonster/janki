@@ -742,3 +742,46 @@ def test_a_peer_that_hangs_up_is_a_jpdb_error(monkeypatch: pytest.MonkeyPatch) -
 
     with pytest.raises(jpdb.JpdbError):
         jpdb.urllib_transport("https://jpdb.io/api/v1/ping", {}, {})
+
+
+@pytest.mark.parametrize(
+    ("word", "codes"),
+    [
+        ("いる", ["aux-v", "vi", "v1"]),
+        ("する", ["aux-v", "vi", "suf", "vt", "vs"]),
+        ("なる", ["aux-v", "vi", "v5", "v5r"]),
+        ("来る", ["aux-v", "vi", "vk"]),
+        ("見る", ["aux-v", "vt", "v1"]),
+        ("行く", ["aux-v", "vi", "v5", "v5k-s"]),
+        ("分かる", ["int", "vi", "v5", "v5r"]),
+    ],
+)
+def test_a_verb_code_outranks_an_auxiliary_or_interjection_label(
+    word: str, codes: list[str]
+) -> None:
+    """These are the code lists jpdb really returns for these words, measured
+    against the live API. It does not order them by significance: 〜ている and
+    分かる! are real but secondary uses, and they arrive ahead of the verb code
+    for the word the card is about. Taking the first recognized code labelled
+    six of twenty ordinary verbs "auxiliary verb" or "interjection", each one
+    contradicting the verb group on its own card."""
+    assert pos_to_part_of_speech(codes) == "verb", word
+
+
+@pytest.mark.parametrize(
+    ("codes", "label"),
+    [
+        (["aux-v"], "auxiliary verb"),
+        (["int"], "interjection"),
+        (["suf"], "suffix"),
+        (["n", "vs"], "noun"),
+        (["adj-na", "n"], "na-adjective"),
+    ],
+    ids=["a-real-auxiliary", "a-real-interjection", "a-real-suffix", "suru-noun", "na-adj"],
+)
+def test_a_label_with_no_verb_code_behind_it_stands(codes: list[str], label: str) -> None:
+    """Only the auxiliary/interjection/suffix family is outranked, and only when
+    a verb code follows it. た really is an auxiliary verb, 〜的 really is a
+    suffix, and a noun that takes する is still a noun — that ordering is jpdb
+    saying which word it is, not which sense came first."""
+    assert pos_to_part_of_speech(codes) == label

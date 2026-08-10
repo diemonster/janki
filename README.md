@@ -808,6 +808,54 @@ enrich_model = "claude-opus-5"
 one run. A batch is fetched with the model it was **submitted** under, whatever
 the config says by the time you collect it, because that is what answered it.
 
+## The last gate: `janki review`
+
+Every other check in janki is a rule. `validate` knows the shape a record must
+have, `qc` knows what Anki will draw from a furigana field, `conjugation` knows
+which forms exist. Between them they catch everything that can be *stated* — but
+not a card that is well-formed and wrong: an example using the word in a sense
+the meanings do not list, a "casual" sentence written in 〜ます, a usage note that
+contradicts the sentence beside it.
+
+`janki review` reads the finished cards and reports those. **A recorded build
+refuses to ship a card it has not passed:**
+
+```text
+$ janki build verbs
+error: verbs.yaml is not ready to ship.
+  3 card(s) have not been read since they last changed: word:行く:いく, ...
+  Run: janki review
+```
+
+It never has the last word. Only an `error` blocks — a model asked to find fault
+will always find some, and a gate that stops on "could be more natural" is one
+you learn to wave through. An error is cleared by fixing the card, or by
+overruling it *by name*:
+
+```bash
+janki review --accept word:なる:なる --because "jpdb's accent is this deck's authority"
+```
+
+The reason is recorded beside the acceptance, and the acceptance covers **that
+version of the card only**: edit the text afterwards and the question comes back
+rather than an old judgement carrying forward onto new words.
+
+It is fingerprinted, so it is affordable. `data/review.json` records what the
+card said when it was read, so a re-run costs one request per *changed* card and
+nothing at all for a deck you have not touched — the same shape the audio ledger
+uses. The file is committed, so a fresh clone builds offline.
+
+`janki refresh` runs it as the stage before `build`. A project that does not want
+a model reading its cards sets `[review] require = false`, and says so in its own
+`janki.toml` rather than by omission.
+
+**What it found on this repository's own deck.** Six of twenty cards carried a
+part of speech that contradicted their own verb group — jpdb returns
+`["aux-v", "vi", "v1"]` for 見る and `["int", "vi", "v5", "v5r"]` for 分かる, and
+janki was taking the first recognized code, so 分かる shipped as an
+"interjection". That is now a deterministic rule in `pos_to_part_of_speech`
+rather than something the gate has to catch twice.
+
 ## The ledger and `janki status`
 
 `data/ledger.json` is machine-written, git-committed, and deliberately

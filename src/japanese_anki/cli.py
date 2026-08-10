@@ -21,6 +21,7 @@ from japanese_anki import (
     migrate,
     patterns,
     promote,
+    review,
     status,
 )
 from japanese_anki.audio_cmd import AudioError
@@ -2387,6 +2388,46 @@ def _confirm_gaps(
     return answer.strip().lower() in {"y", "yes"}
 
 
+def _refuse_unreviewed(
+    records: Sequence[Any], config: ProjectConfig, deck_path: Path
+) -> None:
+    """Stop a shipping build on a card nobody has read, or one still flagged.
+
+    Both halves matter. An unreviewed card has not been through the gate at all;
+    a card with an open error has been through it and failed. Neither is
+    something to ship, and the message says which of the two it is because the
+    remedies are different — one is `janki review`, the other is a fix or an
+    `--accept`.
+    """
+    if not config.require_review:
+        return
+    store = review.load_store(config.review_file)
+    stale = review.unreviewed(records, store)
+    blocking = review.open_findings(records, store)
+    if not stale and not blocking:
+        return
+
+    lines: list[str] = [f"{deck_path.name} is not ready to ship."]
+    if stale:
+        shown = ", ".join(record.id for record in stale[:5])
+        more = f" and {len(stale) - 5} more" if len(stale) > 5 else ""
+        lines.append(
+            f"  {len(stale)} card(s) have not been read since they last "
+            f"changed: {shown}{more}"
+        )
+        lines.append("  Run: janki review")
+    for record_id, finding in blocking:
+        lines.append(f"  {record_id} — {finding.where}: {finding.problem}")
+        if finding.suggestion:
+            lines.append(f"      suggested: {finding.suggestion}")
+    if blocking:
+        lines.append(
+            "  Fix the card and re-run janki review, or overrule it: "
+            "janki review --accept <id> --because '<why>'"
+        )
+    raise AnkiBuildError("\n".join(lines))
+
+
 def _build_one(
     deck_path: Path,
     config: ProjectConfig,
@@ -2412,6 +2453,12 @@ def _build_one(
     include_ids: set[str] | None = None
     recorded = False
     _, records = resolve_deck_records(deck_path)
+    # The last gate, and only on a build that ships. A `--output` build is a
+    # throwaway that records nothing — `make gates` builds one on every run —
+    # so holding it to a review nobody asked for would make the gate something
+    # to work around rather than something to pass.
+    if output is None:
+        _refuse_unreviewed(records, config, deck_path)
     if only_new:
         # Validated before the "nothing new" shortcut, not after it. A deck
         # whose already-shipped records are broken is a broken deck, and an
@@ -2561,6 +2608,13 @@ _REFRESH_STAGES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     # seconds leaves the sentence silent until someone notices.
     ("recheck", "--no-recheck", ("enrich", "--recheck-furigana")),
     ("audio", "--no-audio", ("audio", "--words", "--examples")),
+    # Last before the build, because it reads the finished card: the sentences
+    # `--ai` wrote, the readings `--jpdb` filled, the register each example
+    # claims. Reviewing before those stages would read a card that does not
+    # exist yet and pass it. `build` refuses on an open finding anyway, so a
+    # refresh that skipped this would simply fail one stage later with less to
+    # say about why.
+    ("review", "--no-review", ("review",)),
     ("build", "--no-build", ("build",)),
 )
 
@@ -2587,10 +2641,18 @@ def command_refresh(args: argparse.Namespace) -> int:
     root = ["--root", str(args.root)] if args.root else []
     deck = [str(args.deck)] if args.deck else ["--all"]
 
+    # Read once, to decide whether the review stage belongs in this run at all.
+    # A project that has turned the gate off should not have refresh spend a
+    # request per card on a check `build` will not consult.
+    requires_review = _load_config(args).require_review
+
     ran: list[str] = []
     for name, flag, command in _REFRESH_STAGES:
         if getattr(args, f"no_{name}"):
             print(f"— {name}: skipped ({flag})")
+            continue
+        if name == "review" and not requires_review:
+            print(f"— {name}: skipped ([review] require = false)")
             continue
         argv = [*root, *command]
         if name == "build":
@@ -2894,6 +2956,122 @@ def command_patterns(args: argparse.Namespace) -> int:
     # below: `janki patterns *.pdf && janki patterns --review …` must not run on
     # from a document that was never read.
     return 1 if failures else 0
+
+
+def command_review(args: argparse.Namespace) -> int:
+    """Read the finished cards, and say which ones are not fit to ship.
+
+    The last gate: every other check in janki is a rule, and this is the only
+    one that reads the card. It never has the last word — a finding blocks a
+    build until a person fixes the card or overrules the finding by name.
+    """
+    config = _load_config(args)
+    output_path = config.normalized_file.resolve()
+    records = load_records(output_path) if output_path.exists() else []
+    store = review.load_store(config.review_file)
+
+    if args.accept:
+        if not args.because:
+            raise JankiError(
+                "--accept needs --because: an acceptance with no reason is "
+                "indistinguishable next month from one nobody thought about."
+            )
+        for record_id in args.accept:
+            store = review.accept(store, record_id, args.because)
+            print(f"Accepted the findings on {record_id}: {args.because}")
+        review.save_store(config.review_file, store)
+        return 0
+
+    known = {record.id for record in records}
+    if args.ids:
+        unknown = [record_id for record_id in args.ids if record_id not in known]
+        if unknown:
+            raise JankiError(
+                "No record with id " + ", ".join(sorted(unknown)) + " in "
+                f"{output_path}."
+            )
+        records = [record for record in records if record.id in set(args.ids)]
+
+    todo = records if args.force else review.unreviewed(records, store)
+    if not todo:
+        blocking = review.open_findings(records, store)
+        if blocking:
+            for record_id, finding in blocking:
+                print(f"{record_id} — {finding.where}: {finding.problem}", file=sys.stderr)
+            print(
+                f"{len(blocking)} finding(s) still open. Fix the card and re-run, "
+                "or: janki review --accept <id> --because '<why>'",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"All {len(records)} card(s) already read at their current content.")
+        return 0
+
+    print(f"Reading {len(todo)} card(s) with {config.enrich_model}...")
+    fresh, failures = review.review_records(
+        todo,
+        model=args.model or config.enrich_model,
+        style_guide=claude_client.read_style_guide(config.root),
+        card_design=_card_design_text(config.root),
+    )
+    # An entry is replaced wholesale, which drops any prior acceptance with it:
+    # the acceptance was of a finding against a card that has since changed, and
+    # carrying it forward would wave through text nobody agreed to.
+    store.update(fresh)
+    review.save_store(config.review_file, store)
+
+    errors = [
+        (record_id, finding)
+        for record_id, entry in sorted(fresh.items())
+        for finding in entry.findings
+        if finding.severity == "error"
+    ]
+    notes = [
+        (record_id, finding)
+        for record_id, entry in sorted(fresh.items())
+        for finding in entry.findings
+        if finding.severity == "note"
+    ]
+    for record_id, finding in notes:
+        print(f"note: {record_id} — {finding.where}: {finding.problem}")
+    for record_id, finding in errors:
+        print(f"error: {record_id} — {finding.where}: {finding.problem}", file=sys.stderr)
+        if finding.suggestion:
+            print(f"       suggested: {finding.suggestion}", file=sys.stderr)
+
+    for failure in failures:
+        print(f"warning: could not read {failure}", file=sys.stderr)
+    clean = len(fresh) - len({record_id for record_id, _ in errors})
+    print(
+        f"Read {len(fresh)} of {len(todo)} card(s): {clean} ready to ship, "
+        f"{len(errors)} error(s)."
+        + (f" {len(failures)} could not be read." if failures else "")
+    )
+    # A card that could not be read stays absent from the store, so it is still
+    # unreviewed and the build still refuses it — but the run says so rather
+    # than reporting a clean pass over cards it never saw.
+    if errors or failures:
+        print(
+            "Fix those cards and re-run, or overrule one: "
+            "janki review --accept <id> --because '<why>'",
+            file=sys.stderr,
+        )
+    return 1 if errors or failures else 0
+
+
+def _card_design_text(root: Path) -> str:
+    """The card guidelines, as system context for the reader.
+
+    Missing is not an error, unlike the style guide: `docs/CARD_DESIGN.md`
+    describes fields and templates rather than the language rules every AI pass
+    needs, so a project without it can still be reviewed against the style guide
+    alone.
+    """
+    path = Path(root) / "docs" / "CARD_DESIGN.md"
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
 
 
 def command_kanji(args: argparse.Namespace) -> int:
@@ -3471,6 +3649,39 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     patterns_parser.set_defaults(handler=command_patterns)
+
+    review_parser = subparsers.add_parser(
+        "review",
+        help="Read the finished cards for correctness — the last gate before a build.",
+    )
+    review_parser.add_argument("ids", nargs="*", metavar="ID")
+    review_parser.add_argument(
+        "--accept",
+        action="append",
+        default=[],
+        metavar="ID",
+        help=(
+            "Overrule the findings on a card on your authority. Needs --because. "
+            "The acceptance covers this version of the card only: edit it and "
+            "the question comes back."
+        ),
+    )
+    review_parser.add_argument(
+        "--because",
+        default="",
+        metavar="REASON",
+        help="Why the findings were overruled. Recorded beside the acceptance.",
+    )
+    review_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-read every card, not only the ones that changed since last time.",
+    )
+    review_parser.add_argument(
+        "--model", dest="model", default="", metavar="ID",
+        help="Override the configured model for this run.",
+    )
+    review_parser.set_defaults(handler=command_review)
 
     kanji_parser = subparsers.add_parser(
         "kanji",

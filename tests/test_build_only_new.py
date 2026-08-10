@@ -25,6 +25,14 @@ media_dir = "media"
 template_dir = "templates/japanese-study"
 dist_dir = "dist"
 ledger_file = "ledger.json"
+
+# These tests are about export bookkeeping — which records a build ships and
+# what the ledger remembers — not about the correctness gate. Leaving it on
+# would make every one of them fail at "no card has been read yet", testing
+# `janki review` over and over instead of the thing each name claims.
+# `tests/test_review.py` covers the gate itself, on both settings.
+[review]
+require = false
 """
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
