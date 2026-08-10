@@ -369,7 +369,9 @@ def verb_groups_from_jpdb(verbs: Sequence[str], client: Any) -> dict[str, str]:
     return found
 
 
-def _nearest_form(claimed: str, table: Mapping[str, str], wanted: str = "") -> str:
+def _nearest_form(
+    claimed: str, table: Mapping[str, str], wanted: str = "", dictionary_match: bool = False
+) -> str:
     """The computed form sharing the longest prefix with the claim.
 
     What a reader needs when a row is wrong is the form the row was *trying* to
@@ -407,11 +409,16 @@ def _nearest_form(claimed: str, table: Mapping[str, str], wanted: str = "") -> s
     best = max(candidates, key=rank)
     if rank(best)[0]:
         return best
-    # Nothing here shares even a first character with the claim, so janki has no
-    # form to offer as the correction, and the caller turns that into a
-    # held-back row. Guessing from the claim's ending instead named a form for
+    # Nothing here shares even a first character with the claim. If the claim
+    # starts like the *dictionary* form, it is still plainly about this word and
+    # the form its ending names is the correction: くる's computed forms are
+    # こない/きた/きて, so `くる ⇨ くって` shares no prefix with any of them while
+    # being an obvious garble of きて. Without that, the row was held back and
+    # `--check` exited 0 on exactly the irregulars a chart exists to teach.
+    #
+    # Off by default: guessing from the claim's ending alone named a form for
     # text that may not be this word at all.
-    return ""
+    return table.get(wanted, "") if dictionary_match else ""
 
 
 def normalized_group_name(group: str) -> str:
@@ -683,13 +690,18 @@ def check_pattern_rules(
                     if (stem := polite_stem(verb, group))
                 ]
                 wanted = _claimed_form(claimed, verb, stems)
+                # Two independent signals that the claim is about this word: it
+                # shares a prefix with a form janki computes, or it starts like
+                # the dictionary form. Either one rules out the かう ⇨ 買って /
+                # 帰る ⇨ 反って ambiguity the hold-back exists for.
+                shares = bool(verb) and bool(claimed) and claimed[0] == verb[0]
                 # Which form the claim is nearest to, per class. Computed
                 # before the hold-back decision, because that decision is about
                 # whether janki has anything to point at.
                 computed = tuple(
                     f"{group}: {nearest}"
                     for group, table in tables
-                    if (nearest := _nearest_form(claimed, table, wanted))
+                    if (nearest := _nearest_form(claimed, table, wanted, shares))
                 )
                 # Judged against the *computed* forms, never the dictionary
                 # form. する's table is しない/した/して and くる's is こない/きた/
@@ -698,12 +710,15 @@ def check_pattern_rules(
                 # and let `--check` exit 0 on a chart that mis-transcribes
                 # exactly the irregulars a chart exists to teach.
                 #
-                # Sharing nothing with any computed form is the genuinely
-                # unjudgeable row: an OCR misread (帰る ⇨ 反って) and the same
-                # form in another orthography (かう ⇨ 買って, which is *right*)
-                # look identical from here, and calling either one wrong tells
-                # someone to rewrite a correct answer.
-                if not agreed and not computed:
+                # Sharing nothing with any computed form *and* nothing with
+                # the dictionary form is the genuinely unjudgeable row: an OCR
+                # misread (帰る ⇨ 反って) and the same form in another
+                # orthography (かう ⇨ 買って, which is *right*) look identical
+                # from here, and calling either one wrong tells someone to
+                # rewrite a correct answer. Dropping the second signal took
+                # `くる ⇨ くって` and `する ⇨ すって` with it — kana on both
+                # sides, so "another spelling" cannot apply.
+                if not agreed and not computed and not shares:
                     checks.append(RuleCheck(
                         template=pattern.template, verb=verb, claimed=claimed,
                         held_back=(

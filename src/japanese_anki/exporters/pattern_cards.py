@@ -201,23 +201,63 @@ def _split_rules(template: str) -> list[tuple[str, str]]:
     # gloss, and counting it made the whole line look like a multi-rule row.
     body = re.sub(r"[(（][^)）]*[)）]", " ", template)
     pieces = [piece for piece in re.split(f"({_SEPARATOR_CLASS})", body) if piece]
+    # Each run of text with the separator that introduced it, because *which*
+    # separator introduced it is what says where a run belongs.
+    chunks: list[tuple[str, str]] = []
+    lead = ""
+    for piece in pieces:
+        if re.fullmatch(_SEPARATOR_CLASS, piece):
+            lead = piece
+        else:
+            chunks.append((lead, piece))
+            lead = ""
 
     groups: list[str] = []
-    current = ""
-    for piece in pieces:
-        current += piece
-        if _ARROW.search(piece):
-            groups.append(current)
-            current = ""
-    if current.strip(_SEPARATOR_CHARS + " ") and groups:
+    pending: list[tuple[str, str]] = []
+    for separator, text in chunks:
+        if not _ARROW.search(text):
+            pending.append((separator, text))
+            continue
+        # An arrow-less run before an arrow-bearing piece is usually that
+        # rule's own trigger list (`う・つ・る → って`). But in
+        # `う・つ・る → って・った / く → いて` the run `った` is the *previous*
+        # rule's result list: it is introduced by `・` while the new rule is
+        # introduced by `/`. Attaching it forward regardless dropped half of
+        # one answer and made a card whose question read `った / く`.
+        back = []
+        while pending and groups and separator and pending[0][0] and pending[0][0] != separator:
+            back.append(pending.pop(0))
+        if back:
+            groups[-1] += "".join(sep + text_ for sep, text_ in back)
+        if pending and groups:
+            # Same separator on both sides: the line gives no way to tell a
+            # result list from the start of the next rule. Better one prose
+            # card carrying the whole line than a confident rule that teaches
+            # the wrong trigger — and the trigger is also the note's GUID.
+            return [(_tidy(template), "")]
+        groups.append("".join(sep + text_ for sep, text_ in pending) + separator + text)
+        pending = []
+    trailing = "".join(sep + text for sep, text in pending)
+    if trailing.strip(_SEPARATOR_CHARS + " ") and groups:
         # A trailing run with no arrow — the result list of the last rule.
-        groups[-1] += current
-    elif current.strip():
-        groups.append(current)
+        groups[-1] += trailing
+    elif trailing.strip():
+        groups.append(trailing)
 
     parts_of = [_tidy(group) for group in groups if _tidy(group)]
     if len(parts_of) < 2:
-        parts_of = [_tidy(body)]
+        # The parenthetical is removed to *count* arrows, never to decide what a
+        # card says. `body` reaching the output turned `（〜てもいい）` into a
+        # blank card with the guid `pattern:<document>:`, and shortened
+        # `〜てもいいですか (asking permission)` — a trigger that is also the
+        # GUID, so the next build of an already-shipped deck would add a
+        # duplicate note and strand the original's review history.
+        whole = _tidy(template)
+        # Unless the parenthetical is what made the line unsplittable:
+        # `ぐ → いで (voiced → で)` carries a second arrow inside a gloss, and
+        # keeping it would cost the pair the card is actually about.
+        parts_of = [whole] if len(_ARROW.split(whole)) <= 2 else [_tidy(body)]
+    parts_of = [piece for piece in parts_of if piece]
 
     found: list[tuple[str, str]] = []
     for piece in parts_of:

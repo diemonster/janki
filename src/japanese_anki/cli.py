@@ -3077,20 +3077,41 @@ def command_patterns(args: argparse.Namespace) -> int:
     # directories claim one entry: the first is read, paid for, printed as read
     # — and then overwritten by the second when the store is saved. Refused by
     # name rather than silently keeping one of them.
-    by_name: dict[str, list[str]] = {}
+    # One file named twice is one document. `prepare_inputs` content-addresses
+    # the inbox, so naming the copy in ~/Downloads beside the original it was
+    # copied from — or one path caught by two overlapping globs — arrives here
+    # as two `PreparedInput`s with the same `origin_path`. Reading it twice
+    # bills twice for one document, and refusing the batch over it lost every
+    # other document in the run for a duplicate that costs nothing.
+    seen_paths: set[str] = set()
+    deduped = []
     for prepared in prepared_inputs:
-        by_name.setdefault(prepared.origin_path.name, []).append(
+        if str(prepared.origin_path) in seen_paths:
+            continue
+        seen_paths.add(str(prepared.origin_path))
+        deduped.append(prepared)
+    prepared_inputs = deduped
+
+    by_name: dict[str, set[str]] = {}
+    for prepared in prepared_inputs:
+        by_name.setdefault(prepared.origin_path.name, set()).add(
             str(prepared.origin_path)
         )
-    clashing = {name: paths for name, paths in by_name.items() if len(paths) > 1}
+    clashing = {
+        name: sorted(paths) for name, paths in by_name.items() if len(paths) > 1
+    }
     if clashing:
         detail = "; ".join(
             f"{name}: {', '.join(paths)}" for name, paths in sorted(clashing.items())
         )
+        # No "read them in separate runs": that performs the loss this refuses.
+        # The second run finds the first's entry unreviewed and replaces it with
+        # nothing on stdout saying a document was displaced — or, if the first
+        # was reviewed, skips the second entirely as "already read and marked
+        # reviewed", reporting a document that has never been read, on exit 0.
         raise JankiError(
             f"Two inputs would be stored under one name, and the second would "
-            f"replace the first: {detail}. Rename one, or read them in separate "
-            f"runs."
+            f"replace the first: {detail}. Rename one so the store keys differ."
         )
     failures: list[str] = []
     skipped: list[str] = []

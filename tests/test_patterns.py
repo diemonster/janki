@@ -884,8 +884,16 @@ def test_the_correction_names_the_form_the_ending_asks_for_on_a_tie() -> None:
     [
         ("する ⇨ しって", "suru: して"),
         ("くる ⇨ きって", "kuru: きて"),
+        # The mirror cases: garbles that keep the *dictionary* stem instead of
+        # the inflected one. No computed form of くる begins with く, and none of
+        # する begins with す, so judging on the computed forms alone held these
+        # back — the same silent exit-0 the two above were fixed for, on the
+        # same two verbs. する ⇨ すて is a plain OCR misread of して.
+        ("くる ⇨ くって", "kuru: きて"),
+        ("する ⇨ すって", "suru: して"),
+        ("する ⇨ すて", "suru: して"),
     ],
-    ids=["suru", "kuru"],
+    ids=["suru", "kuru", "kuru-dictionary-stem", "suru-dictionary-stem", "suru-misread"],
 )
 def test_a_garbled_irregular_is_caught_not_held_back(
     example: str, expected: str

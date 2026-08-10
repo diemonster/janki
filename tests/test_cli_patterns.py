@@ -865,11 +865,16 @@ def test_two_inputs_that_would_share_a_store_key_are_refused(
     """The store is keyed by basename, so `scans/a/chart.pdf` and
     `scans/b/chart.pdf` claim one entry — the first read, paid for and printed
     as read, then overwritten when the store is saved. An input silently lost on
-    a zero exit."""
+    a zero exit.
+
+    Both already under `scan_inbox`, and with different bytes: that is the shape
+    that reaches the guard as two paths. Two files *outside* the inbox are
+    content-addressed on the way in, so different content already gets
+    different inbox names and identical content is one document."""
     root = project(tmp_path)
-    for folder in ("a", "b"):
-        (root / folder).mkdir()
-        (root / folder / "chart.pdf").write_bytes(b"%PDF-1.4\n%fake\n")
+    for folder, body in (("a", b"%PDF-1.4\n%one\n"), ("b", b"%PDF-1.4\n%two\n")):
+        (root / "inbox" / folder).mkdir(parents=True)
+        (root / "inbox" / folder / "chart.pdf").write_bytes(body)
     calls: list[str] = []
     monkeypatch.setattr(
         patterns_module.claude_client,
@@ -879,12 +884,50 @@ def test_two_inputs_that_would_share_a_store_key_are_refused(
 
     code = cli.main([
         "--root", str(root), "patterns",
-        str(root / "a" / "chart.pdf"), str(root / "b" / "chart.pdf"),
+        str(root / "inbox" / "a" / "chart.pdf"), str(root / "inbox" / "b" / "chart.pdf"),
     ])
 
     assert code == 1
     assert calls == [], "refused before paying for a read"
-    assert "would be stored under one name" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "would be stored under one name" in err
+    # Not "read them in separate runs", which performs the loss it just refused:
+    # run two replaces run one's entry with nothing said, or skips the second
+    # document as "already read and marked reviewed" on exit 0.
+    assert "separate runs" not in err
+
+
+def test_one_file_named_twice_is_read_once_rather_than_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`janki patterns data/inbox/scans/chart.pdf ~/Downloads/chart.pdf` where
+    the second is the copy the first came from — or one path caught by two
+    overlapping globs. `prepare_inputs` content-addresses the inbox, so both
+    resolve to one file: nothing can be lost, and refusing the batch threw away
+    every other document in the run over it. Reading it twice would bill twice
+    for one document."""
+    root = project(tmp_path)
+    inside = root / "inbox" / "chart.pdf"
+    inside.parent.mkdir(parents=True, exist_ok=True)
+    inside.write_bytes(b"%PDF-1.4\n%fake\n")
+    outside = root / "chart.pdf"
+    outside.write_bytes(inside.read_bytes())
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("く → いて")]
+    calls: list[str] = []
+    real = reader({"chart.pdf": parsed})
+
+    def counted(*args, **kwargs):
+        calls.append("read")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(patterns_module.claude_client, "parse_call", counted)
+
+    code = cli.main(["--root", str(root), "patterns", str(inside), str(outside)])
+
+    assert code == 0
+    assert calls == ["read"], "one document, one read"
+    assert "chart.pdf" in store_of(root)
 
 
 def test_an_unreadable_collection_warns_once(

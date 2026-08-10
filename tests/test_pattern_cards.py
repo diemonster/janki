@@ -245,11 +245,46 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
         # A parenthetical carrying an arrow of its own, which `patterns.py`
         # documents as ordinary chart content.
         ("く → いて / ぐ → いで (voiced → で)", [("く", "いて"), ("ぐ", "いで")]),
+        # A rule whose *result* is a list, followed by a second rule. An
+        # arrow-less run was always attached forward, so `った` left the first
+        # answer and became the second card's question: `った / く`. Which
+        # separator introduced the run is what says where it belongs — `・` here
+        # ties it back, `/` opens the next rule.
+        (
+            "う・つ・る → って・った / く → いて",
+            [("う・つ・る", "って・った"), ("く", "いて")],
+        ),
+        (
+            "かう・まつ ⇨ かって・まって / く → いて",
+            [("かう・まつ", "かって・まって"), ("く", "いて")],
+        ),
+        # The same character on both sides of that run: the line gives no way to
+        # tell a result list from the next rule's trigger list. One prose card
+        # carrying the whole line, rather than a confident rule teaching the
+        # wrong trigger — which is also the note's GUID.
+        (
+            "う/つ/る → って/った / く → いて",
+            [("う/つ/る → って/った / く → いて", "")],
+        ),
+        # A quoted chart cell. The parenthetical is stripped to *count* arrows,
+        # and letting the stripped text reach the output made an empty trigger —
+        # a blank card, with the guid `pattern:<document>:`.
+        ("（〜てもいい）", [("（〜てもいい）", "")]),
+        # Same rule, for a trigger that is also the GUID: shortening it would
+        # add a duplicate note on the next build of an already-shipped deck and
+        # strand the original's review history.
+        (
+            "〜てもいいですか (asking permission)",
+            [("〜てもいいですか (asking permission)", "")],
+        ),
     ],
     ids=[
         "slashed-triggers", "dotted-triggers", "two-rules-slash", "two-rules-comma",
         "mixed-roles", "a-trailing-separator", "same-character-both-jobs",
         "two-different-dividers", "a-parenthetical-arrow",
+        "a-result-list-before-a-second-rule", "a-kana-result-list-before-a-rule",
+        "an-ambiguous-result-list", "a-parenthesised-cell",
+        "a-parenthetical-on-a-prose-rule",
     ],
 )
 def test_a_separator_divides_rules_only_when_every_piece_has_an_arrow(
