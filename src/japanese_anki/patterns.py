@@ -311,7 +311,58 @@ _FORM_BY_ENDING: tuple[tuple[str, str], ...] = (
 )
 
 
+def _pairs_in(text: str) -> list[tuple[str, str]]:
+    """Every complete ``verb ⇨ form`` claim on one line, or nothing.
+
+    Split on list separators first, then match inside a segment, so a match can
+    never span a separator. The rule is then simply **every segment must carry
+    an arrow**:
+
+    * ``くる ⇨ きて / する ⇨ して / いく ⇨ いって`` — three segments, three
+      arrows. Three complete claims, all checkable.
+    * ``かう・まつ・とる ⇨ かって・まって・とって`` — six segments, one arrow.
+      The arrow-bearing segment spans a list boundary, so which result belongs
+      to which verb is a guess. Nothing here is checkable.
+    * ``かう・まつ ⇨ かって`` — the asymmetric row a model produces when it drops
+      a result or a line breaks. Two segments, one arrow: also a guess, and
+      pairing まつ with かって would be janki's error, not the chart's.
+
+    Written as a segment rule after two attempts at looking only at the
+    characters adjacent to a match. Requiring a separator on *either* side threw
+    away complete pairs written `A ⇨ B、C ⇨ D`; requiring one on *both* sides
+    threw away every interior pair of a three-pair line, and let the asymmetric
+    row through as a false disagreement. Neither is a property of one character.
+    """
+    segments = [
+        segment
+        for segment in re.split(f"[{re.escape(''.join(_LIST_SEPARATORS))}]", text)
+        if segment.strip()
+    ]
+    found: list[tuple[str, str]] = []
+    for segment in segments:
+        matches = _PAIR.findall(segment)
+        if not matches:
+            return []
+        found.extend(matches)
+    return found
+
+
+#: Endings janki computes no form for. `CONJUGATION_FORMS` has no polite family
+#: at all, and reading `食べました` as a *past* because it ends in た reported the
+#: commonest polite chart there is as wrong. Checked before `_FORM_BY_ENDING`,
+#: longest first, so ませんでした is not read as ました.
+_NO_TABLE_ENDINGS: tuple[str, ...] = (
+    "ませんでした", "ましょう", "ませんか", "ましたら",
+    "ません", "ました", "ます", "まして",
+    "たかった", "たくない", "たい",
+    "れば", "けれ", "たら", "なら",
+)
+
+
 def _claimed_form(claimed: str) -> str:
+    """Which form a claim is about, or ``""`` when janki computes no such form."""
+    if any(claimed.endswith(ending) for ending in _NO_TABLE_ENDINGS):
+        return ""
     for ending, form in _FORM_BY_ENDING:
         if claimed.endswith(ending):
             return form
@@ -338,10 +389,18 @@ class RuleCheck:
     form: str = ""
     #: What `conjugate` produces instead, per group, when nothing agreed.
     computed: tuple[str, ...] = ()
+    #: Why this row was found but not examined, or ``""`` if it was. A row janki
+    #: has no opinion about is neither agreement nor disagreement, and dropping
+    #: it silently let a claim disappear under an all-clear.
+    held_back: str = ""
 
     @property
     def agrees(self) -> bool:
         return bool(self.group)
+
+    @property
+    def examined(self) -> bool:
+        return not self.held_back
 
 
 def check_pattern_rules(entry: PatternSet) -> tuple[RuleCheck, ...]:
@@ -392,23 +451,9 @@ def check_pattern_rules(entry: PatternSet) -> tuple[RuleCheck, ...]:
             # ぐ is く plus U+3099, which is outside the word class, so
             # およぐ ⇨ およいで matched nothing at all.
             stripped = normalize_identity_part(stripped) or stripped
-            for match in _PAIR.finditer(stripped):
-                verb, claimed = match.group(1), match.group(2)
+            for match in _pairs_in(stripped):
+                verb, claimed = match
                 if verb[-1] not in _DICTIONARY_ENDINGS:
-                    continue
-                # Whitespace skipped on both sides: `かう ・ まつ ⇨ かって ・
-                # まって` is the same list row as the compact spelling, and
-                # looking at the immediately adjacent character saw a space and
-                # let the mis-pairing まつ ⇨ かって through as a disagreement.
-                before = stripped[: match.start(1)].rstrip()[-1:]
-                after = stripped[match.end(2) :].lstrip()[:1]
-                # Both sides, not either. A separator on one side alone is how a
-                # chart writes several *complete* pairs on one line —
-                # `かう ⇨ かって、まつ ⇨ まって` — and requiring only one side
-                # discarded both of them silently. The mis-pairing this guards
-                # against (`かう・まつ・とる ⇨ かって・まって・とって` matching
-                # とる against かって) has a separator on each side of the match.
-                if before in _LIST_SEPARATORS and after in _LIST_SEPARATORS:
                     continue
                 if (verb, claimed) in seen:
                     continue
@@ -419,6 +464,13 @@ def check_pattern_rules(entry: PatternSet) -> tuple[RuleCheck, ...]:
                     if (table := conjugate(verb, verb, group))
                 ]
                 if not tables:
+                    # janki declines this word entirely — ゆく, or a compound of
+                    # an irregular. Recorded rather than dropped: a row nobody
+                    # examined must not vanish under an all-clear.
+                    checks.append(RuleCheck(
+                        template=pattern.template, verb=verb, claimed=claimed,
+                        held_back="janki has no conjugation for this word",
+                    ))
                     continue
                 agreed = form = ""
                 for group, table in tables:
@@ -437,6 +489,10 @@ def check_pattern_rules(entry: PatternSet) -> tuple[RuleCheck, ...]:
                 # correction. Widening the word class to kanji is what exposed
                 # this: before it, `食べる ⇨ 食べます` could not match at all.
                 if not agreed and not wanted:
+                    checks.append(RuleCheck(
+                        template=pattern.template, verb=verb, claimed=claimed,
+                        held_back="janki computes no form with this ending",
+                    ))
                     continue
                 checks.append(
                     RuleCheck(

@@ -441,7 +441,9 @@ def test_a_word_janki_declines_to_conjugate_is_not_a_disagreement() -> None:
     failed a document that is right."""
     checks = check_pattern_rules(chart(Pattern("く → いて", examples=("ゆく ⇨ ゆいて",))))
 
-    assert checks == ()
+    assert len(checks) == 1
+    assert not checks[0].examined and not checks[0].agrees
+    assert "no conjugation for this word" in checks[0].held_back
 
 
 def test_a_form_janki_has_no_table_for_is_not_a_disagreement() -> None:
@@ -455,7 +457,10 @@ def test_a_form_janki_has_no_table_for_is_not_a_disagreement() -> None:
         Pattern("たい form", examples=("買う ⇨ 買いたい",)),
     ))
 
-    assert checks == ()
+    # Held back, not dropped: neither agreement nor disagreement, and named in
+    # the report so the row does not vanish under an all-clear.
+    assert [c.examined for c in checks] == [False, False]
+    assert not any(c.agrees for c in checks)
 
 
 def test_several_complete_pairs_on_one_line_are_all_checked() -> None:
@@ -510,3 +515,57 @@ def test_a_supplementary_plane_kanji_row_is_checked() -> None:
     checks = check_pattern_rules(chart(Pattern("𠮟る ⇨ 𠮟って")))
 
     assert len(checks) == 1 and checks[0].agrees
+
+
+def test_three_complete_pairs_on_one_line_are_all_checked() -> None:
+    """The interior pair of an N≥3 line had a separator on both sides, so the
+    both-sides guard dropped it — uncounted, unwarned, and not in the skipped
+    list either, so a garbled middle row vanished under "all 2 agree"."""
+    checks = check_pattern_rules(chart(
+        Pattern("くる ⇨ きて / する ⇨ して / いく ⇨ いって"),
+    ))
+
+    assert {(c.verb, c.claimed) for c in checks} == {
+        ("くる", "きて"), ("する", "して"), ("いく", "いって"),
+    }
+    assert all(c.agrees for c in checks)
+
+
+@pytest.mark.parametrize(
+    "written",
+    ["かう・まつ ⇨ かって", "かう・まつ・とる ⇨ って"],
+    ids=["a-dropped-result", "a-truncated-result"],
+)
+def test_an_asymmetric_list_row_is_still_not_paired(written: str) -> None:
+    """What a model produces when it drops a result or a line breaks. The
+    both-sides rule let まつ ⇨ かって through as a disagreement — janki's wrong
+    pairing reported as the chart's error, which is a false alarm on right
+    input."""
+    assert check_pattern_rules(chart(Pattern(written))) == ()
+
+
+def test_a_polite_past_chart_is_held_back_not_failed() -> None:
+    """`食べました` ends in た, so reading the ending alone called it a *past* and
+    the commonest polite chart there is was reported wrong. janki computes no
+    polite form at all."""
+    checks = check_pattern_rules(chart(
+        Pattern("ます form", examples=("食べる ⇨ 食べました",)),
+    ))
+
+    assert len(checks) == 1
+    assert not checks[0].examined and not checks[0].agrees
+
+
+def test_a_row_janki_has_no_opinion_about_is_recorded_not_dropped() -> None:
+    """A found-but-unexamined row used to disappear, so a chart with one
+    readable row beside it reported "all 1 agree" and mentioned nothing else.
+    Held back is a third outcome, and it has to reach the report."""
+    checks = check_pattern_rules(chart(
+        Pattern("て form", examples=("買う ⇨ 買って", "買う ⇨ 買います")),
+    ))
+
+    assert [(c.verb, c.claimed, c.examined) for c in checks] == [
+        ("買う", "買って", True),
+        ("買う", "買います", False),
+    ]
+    assert checks[1].held_back

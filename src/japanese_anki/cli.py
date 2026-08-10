@@ -2666,21 +2666,31 @@ def _rule_check_lines(entry: patterns.PatternSet) -> list[str]:
     checks = patterns.check_pattern_rules(entry)
     if not checks:
         return []
-    disagreed = [check for check in checks if not check.agrees]
+    examined = [check for check in checks if check.examined]
+    held = [check for check in checks if not check.examined]
+    disagreed = [check for check in examined if not check.agrees]
     lines = [
-        f"    checked {len(checks) - len(disagreed)}/{len(checks)} worked "
+        f"    checked {len(examined) - len(disagreed)}/{len(examined)} worked "
         f"example(s) against janki's conjugation rules"
     ]
     # Which column each row matched. This code deliberately declines to parse
     # which form the chart teaches, so it has to say what it found instead:
     # `のむ ⇨ のんだ` on a て-form chart agrees — as a *past* — and without
     # naming the form, the most likely garble on such a chart reads as a pass.
-    for check in checks:
+    for check in examined:
         if check.agrees:
             lines.append(
                 f"        {check.verb} ⇨ {check.claimed} matched "
                 f"{check.form.replace('_', ' ')}"
             )
+    # Named, not dropped. A row found and not examined used to disappear
+    # entirely, so a chart with one readable row and one janki has no opinion
+    # about reported "all 1 agree" and said nothing about the other.
+    for check in held:
+        lines.append(
+            f"    note: {check.verb} ⇨ {check.claimed} not checked — "
+            f"{check.held_back}"
+        )
     for check in disagreed:
         lines.append(
             f"    warning: {check.verb} ⇨ {check.claimed} is not what janki "
@@ -2762,14 +2772,18 @@ def command_patterns(args: argparse.Namespace) -> int:
         skipped_names: list[str] = []
         for name, entry in sorted(store.items()):
             found = patterns.check_pattern_rules(entry)
+            examined = [check for check in found if check.examined]
             if not found:
                 skipped_names.append(f"{name} ({entry.kind})")
                 continue
             print(f"{name} — {entry.kind}")
             for line in _rule_check_lines(entry):
                 print(line)
-            checked += len(found)
-            disagreed += sum(1 for check in found if not check.agrees)
+            # Held-back rows are named by `_rule_check_lines` and count toward
+            # neither the total nor the exit code: janki having no opinion is
+            # not the chart being wrong.
+            checked += len(examined)
+            disagreed += sum(1 for check in examined if not check.agrees)
         # The all-clear is only said when something was actually checked. Saying
         # it over a store of lesson decks — or a chart whose rows this cannot
         # read — is false reassurance from the one command whose entire job is
