@@ -2979,8 +2979,9 @@ def command_review(args: argparse.Namespace) -> int:
         # loop told the user an acceptance was recorded, then raised on the next
         # id before `save_store` — so the card they had just been told was clear
         # was refused by the very next build.
+        shipping = {review.card_fingerprint(record) for record in records}
         for record_id in args.accept:
-            store = review.accept(store, record_id, args.because)
+            store = review.accept(store, record_id, args.because, shipping)
         review.save_store(config.review_file, store)
         for record_id in args.accept:
             print(f"Accepted the findings on {record_id}: {args.because}")
@@ -3051,7 +3052,11 @@ def command_review(args: argparse.Namespace) -> int:
 
     for failure in failures:
         print(f"warning: could not read {failure}", file=sys.stderr)
-    clean = len(fresh) - len({record_id for record_id, _ in errors})
+    clean = sum(
+        1
+        for entry in fresh.values()
+        if not any(f.severity == "error" for f in entry.findings)
+    )
     print(
         f"Read {len(fresh)} of {len(todo)} card(s): {clean} ready to ship, "
         f"{len(errors)} error(s)."

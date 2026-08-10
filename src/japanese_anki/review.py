@@ -409,24 +409,35 @@ def open_findings(
 
 
 def accept(
-    store: dict[str, CardReview], record_id: str, because: str
+    store: dict[str, CardReview],
+    record_id: str,
+    because: str,
+    shipping: Iterable[str] = (),
 ) -> dict[str, CardReview]:
     """Record that a human overruled a card's findings, and why.
 
     Named by record id rather than by fingerprint, because that is what a person
-    has in front of them — the id is what the refusal printed. Every version of
-    that card currently carrying a finding is accepted: they were all read, and
-    someone saying "this word is fine" means the word, not one hash of it.
+    has in front of them — the id is what the refusal printed.
+
+    ``shipping`` is the fingerprints the decks currently resolve, and the
+    acceptance is scoped to those. The store keeps every version ever reviewed,
+    so without it a reason written about today's text also cleared a finding on
+    a version no deck ships — and anything that brought that text back (a
+    revert, a re-import, a merge) shipped a card carrying a finding nobody read,
+    annotated with a reason about different words. It also crossed decks: two
+    decks shipping one record differently are two cards, and clearing one is not
+    an answer about the other.
     """
     if not because.strip():
         raise ReviewError(
             "An acceptance needs a reason: next month it is indistinguishable "
             "from one nobody thought about."
         )
+    current = {str(fingerprint) for fingerprint in shipping}
     matching = [
         fingerprint
         for fingerprint, entry in store.items()
-        if entry.record_id == record_id
+        if entry.record_id == record_id and (not current or fingerprint in current)
     ]
     if not matching:
         raise ReviewError(f"No review on record for {record_id}")
@@ -461,9 +472,31 @@ def load_store(path: Path) -> dict[str, CardReview]:
                 f"{type(value).__name__}"
             )
     return {
-        str(name): CardReview.from_dict(str(name), value)
-        for name, value in raw.items()
+        str(fingerprint): entry
+        for fingerprint, entry in (
+            _entry_from(str(name), value) for name, value in raw.items()
+        )
     }
+
+
+def _entry_from(key: str, raw: dict[str, Any]) -> tuple[str, CardReview]:
+    """One store entry, migrating the record-id-keyed shape if it is that.
+
+    The store was keyed by record id before a review became a review of a card
+    *version*. Read under the current schema, such a file loads every entry with
+    ``content_fp`` set to a record id and ``record_id`` empty — which matches no
+    card, so every card reads as unreviewed, and the next `save_store` writes
+    the mistake back and drops the real fingerprint on the floor. That is the
+    same silent erasure the non-object check above exists to stop, arriving
+    through the key instead of the value.
+
+    The old shape is unambiguous: it carries ``content_fp`` inside the value,
+    which the current one never writes.
+    """
+    stored = str(raw.get("content_fp") or "")
+    if stored:
+        return stored, CardReview.from_dict(stored, {**raw, "record_id": key})
+    return key, CardReview.from_dict(key, raw)
 
 
 def save_store(path: Path, store: dict[str, CardReview]) -> None:

@@ -599,14 +599,28 @@ def test_an_accept_naming_an_unknown_id_records_nothing(
     assert cli.main(["--root", str(root), "build", "verbs"]) == 1, "and nothing saved"
 
 
-def test_a_finding_with_no_text_is_not_dropped() -> None:
+def test_a_finding_with_no_text_is_kept_and_given_some(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """It was dropped *and* the card recorded as read, so the build shipped it —
-    the opposite of what this module does with a severity it cannot classify."""
-    from japanese_anki.review import Finding as F
-
-    assert F.from_dict({"where": "meanings", "problem": "", "severity": "error"}).severity == (
-        "error"
+    the opposite of what this module does with a severity it cannot classify.
+    Asserted through `review_records`, which is where the dropping happened;
+    `Finding.from_dict` never did it, so testing that pinned nothing."""
+    monkeypatch.setattr(
+        review_module.claude_client,
+        "parse_call",
+        reader(Verdict(Item("meanings", "", "error", "gloss it as transitive"))),
     )
+
+    kept, failures = review_module.review_records(
+        [record()], model="m", style_guide="guide"
+    )
+    entry = next(iter(kept.values()))
+
+    assert failures == []
+    assert [(f.severity, f.problem) for f in entry.findings] == [
+        ("error", "gloss it as transitive"),
+    ], "the suggestion stands in for the missing prose"
 
 
 # --- the refresh pipeline ------------------------------------------------------
@@ -704,3 +718,133 @@ def test_the_model_reported_is_the_model_billed(
 
     assert used == ["claude-haiku-4-5-20251001"]
     assert "with claude-haiku-4-5-20251001" in capsys.readouterr().out
+
+
+def test_an_old_store_keyed_by_record_id_is_migrated_not_misread(tmp_path: Path) -> None:
+    """The store was keyed by record id before a review became a review of a
+    card *version*. Read under the current schema every entry loaded with
+    `content_fp` set to a record id and `record_id` empty — matching no card, so
+    every card read as unreviewed, and the next save wrote the mistake back and
+    dropped the real fingerprint. That is the erasure the non-object check
+    exists to stop, arriving through the key instead of the value."""
+    path = tmp_path / "review.json"
+    path.write_text(
+        json.dumps({
+            "word:話す:はなす": {
+                "content_fp": "abc123def456",
+                "at": "2026-08-09",
+                "accepted": True,
+                "accepted_because": "checked by hand",
+                "findings": [{"where": "meanings", "problem": "wrong",
+                              "severity": "error", "suggestion": ""}],
+            }
+        }),
+        encoding="utf-8",
+    )
+
+    store = load_store(path)
+
+    assert list(store) == ["abc123def456"], "keyed by the fingerprint it really had"
+    assert store["abc123def456"].record_id == "word:話す:はなす"
+    assert store["abc123def456"].accepted, "and the human's acceptance survived"
+
+
+def test_a_migrated_store_survives_a_round_trip(tmp_path: Path) -> None:
+    """Because `save_store` rewrites from what was loaded: a migration that only
+    half worked would be committed as the new truth."""
+    path = tmp_path / "review.json"
+    path.write_text(
+        json.dumps({"word:話す:はなす": {"content_fp": "abc123def456", "findings": []}}),
+        encoding="utf-8",
+    )
+
+    save_store(path, load_store(path))
+
+    again = load_store(path)
+    assert list(again) == ["abc123def456"]
+    assert again["abc123def456"].record_id == "word:話す:はなす"
+
+
+def test_an_acceptance_does_not_reach_a_version_no_deck_ships() -> None:
+    """The store keeps every version ever read. Accepting by record id alone
+    cleared findings on versions nothing ships, so a revert or a re-import
+    brought back a card carrying a finding nobody read — annotated with a reason
+    written about different words."""
+    shipping = record()
+    stale = record(usage_notes="an older version")
+    store = {
+        card_fingerprint(shipping): CardReview(
+            shipping.id, card_fingerprint(shipping),
+            findings=(Finding("meanings", "today's problem", "error"),),
+        ),
+        card_fingerprint(stale): CardReview(
+            stale.id, card_fingerprint(stale),
+            findings=(Finding("examples[0]", "an older problem", "error"),),
+        ),
+    }
+
+    accepted = review_module.accept(
+        store, shipping.id, "checked", {card_fingerprint(shipping)}
+    )
+
+    assert accepted[card_fingerprint(shipping)].accepted
+    assert not accepted[card_fingerprint(stale)].accepted, "still unanswered"
+    assert len(open_findings([stale], accepted)) == 1
+
+
+def test_accepting_one_decks_version_does_not_clear_the_others(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two decks shipping one record differently are two cards — that is what
+    `_shipping_records` promises — so clearing one is not an answer about the
+    other."""
+    root = project(tmp_path, [record()])
+    (root / "decks" / "other.yaml").write_text(
+        "deck:\n  name: Other\n  source: ../vocabulary.json\n"
+        'notes:\n  - id: "word:話す:はなす"\n    usage_notes: "Other deck."\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        review_module.claude_client,
+        "parse_call",
+        reader(
+            Verdict(Item("meanings", "problem A", "error")),
+            Verdict(Item("meanings", "problem B", "error")),
+        ),
+    )
+    cli.main(["--root", str(root), "review"])
+
+    cli.main([
+        "--root", str(root), "review", "--accept", "word:話す:はなす",
+        "--because", "checked",
+    ])
+
+    accepted = [v["accepted"] for v in store_of(root).values()]
+    assert sorted(accepted) == [True, True], (
+        "both versions ship, so both are answered"
+    )
+
+
+def test_the_ready_to_ship_count_counts_cards_not_ids(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`len(fresh) - len({ids with errors})` mixed two units: two versions of
+    one record, both flagged, subtracted one from a total of two."""
+    root = project(tmp_path, [record()])
+    (root / "decks" / "other.yaml").write_text(
+        "deck:\n  name: Other\n  source: ../vocabulary.json\n"
+        'notes:\n  - id: "word:話す:はなす"\n    usage_notes: "Other deck."\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        review_module.claude_client,
+        "parse_call",
+        reader(
+            Verdict(Item("meanings", "problem A", "error")),
+            Verdict(Item("meanings", "problem B", "error")),
+        ),
+    )
+
+    cli.main(["--root", str(root), "review"])
+
+    assert "2 card(s): 0 ready to ship, 2 error(s)" in capsys.readouterr().out
