@@ -114,6 +114,28 @@ class Finding:
         )
 
 
+def _marks_of(raw: dict[str, Any], findings: tuple[Finding, ...]) -> tuple[str, ...]:
+    """The marks an entry's acceptance answers, migrating one written before them.
+
+    A store written by any earlier janki carries `accepted: true` with no
+    `accepted_marks`, and reading that as "answers nothing" would silently stop
+    a human's acceptance working the moment the code was upgraded — the build
+    refusing a card they had already cleared, with nothing saying why. Before
+    marks existed the acceptance covered whatever errors the entry held, so that
+    is what it is read as.
+    """
+    stored = tuple(
+        str(mark) for mark in (raw.get("accepted_marks") or []) if str(mark)
+    )
+    if stored or not raw.get("accepted"):
+        return stored
+    return tuple(
+        dict.fromkeys(
+            finding_mark(f) for f in findings if f.severity == "error"
+        )
+    )
+
+
 def finding_mark(finding: Finding) -> str:
     """A finding's identity for the purpose of "has this been answered".
 
@@ -121,6 +143,14 @@ def finding_mark(finding: Finding) -> str:
     unchanged card rewrites its sentences freely. Underscores, spacing and case
     are folded because the same field comes back as ``pitch_accent``,
     ``Pitch accent`` and ``Meanings`` across runs.
+
+    Severity is pinned to ``error`` by every caller, so in practice a mark *is*
+    the field name — an acceptance says "this field is right on this card",
+    which is what a person overruling a finding means. The cost, stated: a
+    genuinely different objection to the same field is covered by it. Including
+    the prose to separate them was the first attempt and it did not work at all,
+    since the model rewrites its sentences on every read; a field is the
+    coarsest key that is stable, and a stable key is what an acceptance needs.
     """
     place = " ".join(finding.where.replace("_", " ").split()).lower()
     return f"{place}|{finding.severity}"
@@ -170,16 +200,15 @@ class CardReview:
                     f"{content_fp}: each finding must be an object, got "
                     f"{type(item).__name__}"
                 )
+        findings = tuple(Finding.from_dict(item) for item in listed)
         return cls(
             record_id=str(raw.get("record_id") or ""),
             content_fp=content_fp,
             at=str(raw.get("at") or ""),
-            findings=tuple(Finding.from_dict(item) for item in listed),
+            findings=findings,
             accepted=bool(raw.get("accepted", False)),
             accepted_because=str(raw.get("accepted_because") or ""),
-            accepted_marks=tuple(
-                str(mark) for mark in (raw.get("accepted_marks") or []) if str(mark)
-            ),
+            accepted_marks=_marks_of(raw, findings),
         )
 
     def blocking(self) -> tuple[Finding, ...]:
@@ -461,7 +490,7 @@ def carry_acceptances(
     carried: dict[str, CardReview] = {}
     for fingerprint, entry in fresh.items():
         previous = store.get(fingerprint)
-        if previous is None or not previous.accepted:
+        if previous is None:
             carried[fingerprint] = entry
             continue
         # Against what was *accepted*, not against whatever the last read
@@ -469,9 +498,15 @@ def carry_acceptances(
         # accepted entry with none, and the run after that — when the model
         # resurfaced the error, as it does — found an empty set to check against
         # and demanded the answer again.
-        answered = {
+        #
+        # The marks and the reason carry whether or not the entry is currently
+        # accepted, so an acceptance that lapsed for one generation — a re-read
+        # raised something new, nobody has answered it yet — comes back when the
+        # new finding goes away, instead of starting from nothing.
+        marks = set(previous.accepted_marks)
+        answered = bool(marks) and {
             finding_mark(f) for f in entry.findings if f.severity == "error"
-        } <= set(previous.accepted_marks)
+        } <= marks
         carried[fingerprint] = replace(
             entry,
             accepted=answered,

@@ -393,6 +393,7 @@ def test_the_store_round_trips(tmp_path: Path) -> None:
         "word:話す:はなす", "abc123def456", "2026-08-09",
         findings=(Finding("meanings", "wrong", "error", "fix it"),),
         accepted=True, accepted_because="checked",
+        accepted_marks=("meanings|error",),
     )
     path = tmp_path / "review.json"
 
@@ -950,11 +951,14 @@ def test_a_re_read_that_finds_something_else_must_be_answered_again() -> None:
     """The acceptance is of the findings that were there. Carrying it onto a
     different finding clears it with a sentence written about another one."""
     card = record()
-    before = {card_fingerprint(card): CardReview(
-        card.id, card_fingerprint(card),
-        findings=(Finding("pitch_accent", "heiban", "error"),),
-        accepted=True, accepted_because="checked",
-    )}
+    before = review_module.accept(
+        {card_fingerprint(card): CardReview(
+            card.id, card_fingerprint(card),
+            findings=(Finding("pitch_accent", "heiban", "error"),),
+        )},
+        card.id,
+        "checked",
+    )
     again = {card_fingerprint(card): CardReview(
         card.id, card_fingerprint(card),
         findings=(Finding("meanings", "glossed as intransitive", "error"),),
@@ -971,11 +975,14 @@ def test_the_reason_a_person_wrote_is_never_destroyed() -> None:
     simply replaced the accepted one — and the sentence README quotes as its
     worked example was lost that way."""
     card = record()
-    before = {card_fingerprint(card): CardReview(
-        card.id, card_fingerprint(card),
-        findings=(Finding("pitch_accent", "heiban", "error"),),
-        accepted=True, accepted_because="jpdb is this deck's authority",
-    )}
+    before = review_module.accept(
+        {card_fingerprint(card): CardReview(
+            card.id, card_fingerprint(card),
+            findings=(Finding("pitch_accent", "heiban", "error"),),
+        )},
+        card.id,
+        "jpdb is this deck's authority",
+    )
     found_nothing = {card_fingerprint(card): CardReview(
         card.id, card_fingerprint(card), findings=()
     )}
@@ -1085,3 +1092,95 @@ def test_an_unanswered_error_still_blocks_on_an_accepted_card() -> None:
     )
 
     assert [f.where for f in both.blocking()] == ["meanings"]
+
+
+def test_an_acceptance_written_before_marks_existed_keeps_working(tmp_path: Path) -> None:
+    """Every store any earlier janki wrote carries `accepted: true` with no
+    `accepted_marks`. Reading that as "answers nothing" would stop a human's
+    acceptance working the moment the code was upgraded — the build refusing a
+    card they had already cleared, with nothing on stderr saying why."""
+    path = tmp_path / "review.json"
+    path.write_text(
+        json.dumps({"abc123def456": {
+            "record_id": "word:なる:なる",
+            "accepted": True,
+            "accepted_because": "jpdb is this deck's authority",
+            "findings": [{"where": "Pitch accent", "problem": "heiban",
+                          "severity": "error", "suggestion": ""}],
+        }}),
+        encoding="utf-8",
+    )
+
+    entry = load_store(path)["abc123def456"]
+
+    assert entry.accepted_marks == ("pitch accent|error",)
+    assert entry.blocking() == (), "so it still clears the build"
+
+
+def test_a_lapsed_acceptance_still_remembers_what_was_decided() -> None:
+    """An entry that lapsed once — a re-read raised something new, nobody has
+    answered it yet — must not lose the record of what *was* decided, or the run
+    after that starts from nothing."""
+    card = record()
+    accepted = review_module.accept(
+        {card_fingerprint(card): CardReview(
+            card.id, card_fingerprint(card),
+            findings=(Finding("pitch_accent", "heiban", "error"),),
+        )},
+        card.id,
+        "jpdb is this deck's authority",
+    )
+    lapsed = review_module.carry_acceptances(accepted, {
+        card_fingerprint(card): CardReview(
+            card.id, card_fingerprint(card),
+            findings=(Finding("meanings", "wrong gloss", "error"),),
+        )
+    })
+    assert not lapsed[card_fingerprint(card)].accepted
+
+    back_again = review_module.carry_acceptances(lapsed, {
+        card_fingerprint(card): CardReview(
+            card.id, card_fingerprint(card),
+            findings=(Finding("pitch_accent", "heiban", "error"),),
+        )
+    })
+
+    entry = back_again[card_fingerprint(card)]
+    assert entry.accepted, "the pitch finding was answered two runs ago"
+    assert entry.accepted_because == "jpdb is this deck's authority"
+
+
+def test_a_clean_re_read_leaves_the_entry_accepted() -> None:
+    """The value that path produces was pinned by nothing, and it is the state
+    the whole `accepted_marks` design exists to make safe."""
+    card = record()
+    accepted = review_module.accept(
+        {card_fingerprint(card): CardReview(
+            card.id, card_fingerprint(card),
+            findings=(Finding("pitch_accent", "heiban", "error"),),
+        )},
+        card.id,
+        "checked",
+    )
+
+    clean = review_module.carry_acceptances(
+        accepted, {card_fingerprint(card): CardReview(card.id, card_fingerprint(card))}
+    )
+
+    entry = clean[card_fingerprint(card)]
+    assert entry.accepted and entry.findings == ()
+    assert entry.accepted_marks == ("pitch accent|error",), "and remembers why"
+
+
+def test_a_card_nobody_accepted_does_not_become_accepted_by_being_clean() -> None:
+    """`accepted` means a person overruled something. A card with no findings
+    has nothing to overrule, and marking it accepted would put a human's word on
+    a decision nobody made — and then carry it forward as one."""
+    card = record()
+    never = {card_fingerprint(card): CardReview(card.id, card_fingerprint(card))}
+
+    carried = review_module.carry_acceptances(
+        never, {card_fingerprint(card): CardReview(card.id, card_fingerprint(card))}
+    )
+
+    assert not carried[card_fingerprint(card)].accepted
