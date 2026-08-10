@@ -950,3 +950,38 @@ def test_a_pattern_deck_with_a_bad_model_id_still_warns_in_status(tmp_path: Path
 
     with pytest.raises(DataError, match="model_id must be an integer"):
         deck_notetype(path, ProjectConfig.load(tmp_path))
+
+
+def test_a_pattern_build_stops_on_an_unreadable_collection(tmp_path: Path, capsys) -> None:
+    """The worked examples on a rule card come from checking the chart against
+    the collection's own `verb_group` values. When the collection could not be
+    read that lookup returned nothing, every row was held back for want of a
+    class, and the deck shipped with every `Examples` field empty — while the
+    command printed an unchanged rule-card count and exited 0.
+
+    Worse than an empty deck: the note GUID is `trigger\x1fgloss` and
+    deliberately excludes the examples, so importing that package *updates* the
+    rule cards already in Anki and blanks their examples. A transient bad
+    `vocabulary.json` erases verified content on a run that reported success."""
+    from japanese_anki import cli
+    from japanese_anki import patterns as patterns_module
+
+    project(tmp_path)
+    patterns_module.save_store(
+        ProjectConfig.load(tmp_path).patterns_file,
+        {"teform.pdf": chart(Pattern("う・つ・る → って", "godan て-form", ("かう ⇨ かって",)))},
+    )
+    deck = deck_file(tmp_path)
+    (tmp_path / "vocabulary.json").write_text(
+        '[{"id": "word:x:x", "expression": "x", "reading": "x", "examples": 3}]',
+        encoding="utf-8",
+    )
+
+    code = cli.main([
+        "--root", str(tmp_path), "build", str(deck),
+        "--output", str(tmp_path / "out.apkg"),
+    ])
+
+    assert code == 1, "the build stopped"
+    assert not (tmp_path / "out.apkg").exists(), "and shipped nothing"
+    assert "rule card(s)" not in capsys.readouterr().out

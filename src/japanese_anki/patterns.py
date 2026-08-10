@@ -414,12 +414,16 @@ def _nearest_form(claimed: str, table: Mapping[str, str], wanted: str = "") -> s
     return ""
 
 
-def _normalize_group_name(group: str) -> str:
+def normalized_group_name(group: str) -> str:
     """The class name `conjugate` would accept, or ``""``.
 
     Asked so a hold-back can say *which* of the two refusals happened: an
     unusable class name is a data problem someone can fix, and reporting it as
     "no conjugation for this word" points at the word instead.
+
+    Public because the CLI folds through it too: `verb_group` is free text, so
+    `五段` and `godan` are one class to `conjugate` and must be one class to
+    anything deciding whether two records disagree.
     """
     from japanese_anki.conjugation import _VERB_GROUP_ALIASES, _normalize_group
 
@@ -653,7 +657,7 @@ def check_pattern_rules(
                     # *name* it does not know, and `verb_group` is free text —
                     # a CSV column may carry 一段活用 or "Group 3", and jpdb
                     # writes `suru` onto nouns like 勉強 that `_suru` refuses.
-                    known_class = _normalize_group_name(known)
+                    known_class = normalized_group_name(known)
                     reason = (
                         f"janki does not recognise the verb class {known!r} "
                         f"recorded for this word"

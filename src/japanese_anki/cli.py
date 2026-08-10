@@ -2862,15 +2862,15 @@ def _verb_groups(config: ProjectConfig) -> dict[str, str]:
     normalized = config.normalized_file.resolve()
     if not normalized.exists():
         return {}
-    try:
-        records = load_records(normalized)
-    except JankiError as exc:
-        # A collection janki cannot read must not cancel a command that does not
-        # otherwise touch it: `janki patterns handout.pdf` would abort before
-        # reading the PDF. Every verb then has no class on record, which is the
-        # honest verdict when the collection is unreadable.
-        print(f"warning: no verb classes available: {exc}", file=sys.stderr)
-        return {}
+    # Raised, not swallowed. "No class on record" and "janki could not read the
+    # collection" are different verdicts, and turning the second into the first
+    # made `janki build` of a pattern deck strip every worked example while
+    # printing an unchanged card count and exiting 0 — and, because the note
+    # GUID deliberately excludes the examples, importing that package *blanks*
+    # the Examples field of rule cards already in the user's Anki. It also made
+    # `janki patterns --check` report an all-clear over a run in which nothing
+    # was checked. A caller that means to continue anyway says so.
+    records = load_records(normalized)
 
     # Accumulated per key, then narrowed to the keys exactly one class claims.
     # A kana key is where the class is *ambiguous* — かえる is 変える (ichidan)
@@ -2881,13 +2881,22 @@ def _verb_groups(config: ProjectConfig) -> dict[str, str]:
     for record in records:
         if not record.verb_group:
             continue
+        # Folded to the name `conjugate` would accept, so two spellings of one
+        # class do not read as a disagreement. A CSV import writes the column
+        # through verbatim, so `五段` sits beside another record's jpdb-written
+        # `godan` — `enrich --jpdb` only fills a field that is empty, so it
+        # never repairs one. Unfolded, that pair dropped かう and held the row
+        # back saying no class was on record, when two were and both agreed.
+        # Two genuinely unrecognized names stay distinct and still reach the
+        # "does not recognise the verb class" branch.
+        group = patterns.normalized_group_name(record.verb_group) or record.verb_group
         for key in (record.expression, record.reading):
             # Normalized like `conjugate`'s own arguments and like the verb the
             # chart is scanned for: records are stored as imported, so a
             # decomposed dakuten (く + U+3099) would never match a composed ぐ.
             folded = normalize_identity_part(key or "")
             if folded:
-                seen.setdefault(folded, set()).add(record.verb_group)
+                seen.setdefault(folded, set()).add(group)
     return {key: next(iter(classes)) for key, classes in seen.items() if len(classes) == 1}
 
 
@@ -3135,7 +3144,19 @@ def command_patterns(args: argparse.Namespace) -> int:
     # One lookup for the whole run, after the reads: the collection is parsed
     # once instead of once per document, and `--ask-jpdb` makes the single
     # request its help text promises rather than one per file.
-    offline = _verb_groups(config)
+    try:
+        offline = _verb_groups(config)
+    except JankiError as exc:
+        # Continued, because every document was read and saved above and losing
+        # those to an unrelated file would be the worse outcome — but recorded
+        # in `failures`, so the exit code still says the rule check did not
+        # happen. Silently exiting 0 here let `janki patterns *.pdf && …` run on
+        # from a run that verified nothing.
+        offline = {}
+        failures.append(
+            f"could not read the collection for verb classes: {exc} — the "
+            "worked examples in these documents were not checked"
+        )
     try:
         classes = _classes_for(fresh, config, args.ask_jpdb, offline)
     except JankiError as exc:

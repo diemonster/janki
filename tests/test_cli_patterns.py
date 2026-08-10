@@ -650,12 +650,18 @@ def test_a_kana_two_records_disagree_about_is_not_knowledge(
     assert "no verb class on record" in out
 
 
-def test_an_unreadable_collection_does_not_cancel_the_read(
+def test_an_unreadable_collection_is_reported_rather_than_cancelling_the_read(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """`janki patterns handout.pdf` does not otherwise touch the collection, and
-    aborting before reading the PDF suppresses the output the command exists to
-    produce."""
+    """Two things at once, and the second is what a warning alone lost.
+
+    `janki patterns handout.pdf` does not otherwise touch the collection, so
+    aborting before the PDF is read would suppress the output the command exists
+    to produce — the document is still read, stored and reported.
+
+    But the rule check *did not happen*, and exiting 0 says it did. The exit
+    code is what `janki patterns *.pdf && janki patterns --review …` runs on.
+    """
     root = project(tmp_path)
     (root / "vocabulary.json").write_text(
         '[{"id": "word:x:x", "expression": "x", "reading": "x", "examples": 3}]',
@@ -667,10 +673,67 @@ def test_an_unreadable_collection_does_not_cancel_the_read(
         patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
     )
 
-    cli.main(["--root", str(root), "patterns", str(document(root, "chart.pdf"))])
+    code = cli.main(["--root", str(root), "patterns", str(document(root, "chart.pdf"))])
 
     assert "chart.pdf" in store_of(root), "the document was still read"
-    assert "no verb classes available" in capsys.readouterr().err
+    assert code == 1, "and the check that did not happen reached the exit code"
+    assert "could not read the collection for verb classes" in capsys.readouterr().err
+
+
+def test_check_does_not_call_an_unreadable_collection_all_clear(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--check` is a command whose exit code is its entire product. Swallowing
+    the read error held every row back for want of a class, left `checked` at 0,
+    printed "nothing could be checked" and returned 0 — a pass over a run that
+    verified nothing, blaming the words instead of the file."""
+    root = project(tmp_path)
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("う → って")]
+    parsed.patterns[0].examples = ["かう ⇨ かって"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+    cli.main(["--root", str(root), "patterns", str(document(root, "chart.pdf"))])
+    (root / "vocabulary.json").write_text(
+        '[{"id": "word:x:x", "expression": "x", "reading": "x", "examples": 3}]',
+        encoding="utf-8",
+    )
+    capsys.readouterr()
+
+    code = cli.main(["--root", str(root), "patterns", "--check"])
+
+    assert code != 0
+    assert "Nothing in the store could be checked" not in capsys.readouterr().out
+
+
+def test_two_spellings_of_one_class_are_not_a_disagreement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`verb_group` is free text. A CSV import writes its column through
+    verbatim, so `五段` sits beside another record's jpdb-written `godan`, and
+    `enrich --jpdb` never repairs it because it only fills a field that is
+    empty. Compared raw those two read as an ambiguous kana key, かう was
+    dropped, and a correct row was held back saying no class was on record —
+    when two were and both said godan. `conjugate` accepts either spelling."""
+    root = project(tmp_path, [
+        {"id": "word:買う:かう", "expression": "買う", "reading": "かう",
+         "meanings": ["to buy"], "verb_group": "五段"},
+        {"id": "word:飼う:かう", "expression": "飼う", "reading": "かう",
+         "meanings": ["to keep an animal"], "verb_group": "godan"},
+    ])
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("う・つ・る → って")]
+    parsed.patterns[0].examples = ["かう ⇨ かって"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+
+    cli.main(["--root", str(root), "patterns", str(document(root, "chart.pdf"))])
+
+    out = capsys.readouterr().out
+    assert "no verb class on record" not in out, "both records say godan"
+    assert "checked 1/1 worked example(s)" in out
 
 
 def test_a_decomposed_record_still_matches_a_composed_chart(
@@ -827,16 +890,19 @@ def test_two_inputs_that_would_share_a_store_key_are_refused(
 def test_an_unreadable_collection_warns_once(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """`_verb_groups` parses the collection and warns when it cannot, so
-    recomputing it on the jpdb recovery path printed the same warning twice and
-    read the file twice."""
+    """`_verb_groups` parses the whole collection, so recomputing it on the jpdb
+    recovery path read the file twice and said the same thing twice. The jpdb
+    failure is its own separate line — the two are different problems."""
     root = project(tmp_path)
     (root / "vocabulary.json").write_text(
         '[{"id": "word:x:x", "expression": "x", "reading": "x", "examples": 3}]',
         encoding="utf-8",
     )
     parsed = Parsed("pattern", "Chart", [])
-    parsed.patterns = [Item("く → いて")]
+    parsed.patterns = [Item("う・つ・る → って")]
+    # A verb to look up: with no class on record, `--ask-jpdb` asks about かう,
+    # which is what puts the second, separate failure on stderr.
+    parsed.patterns[0].examples = ["かう ⇨ かって"]
     monkeypatch.setattr(
         patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
     )
@@ -853,4 +919,6 @@ def test_an_unreadable_collection_warns_once(
         str(document(root, "chart.pdf")),
     ])
 
-    assert capsys.readouterr().err.count("no verb classes available") == 1
+    err = capsys.readouterr().err
+    assert err.count("could not read the collection for verb classes") == 1
+    assert "could not look up verb classes: jpdb said 429" in err
