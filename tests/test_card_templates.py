@@ -77,3 +77,29 @@ def test_the_empty_pitch_particle_has_a_line_box() -> None:
 
     assert ".pitch-accent .mora.particle::before" in css
     assert 'content: "\\200B"' in css
+
+
+def test_every_field_a_template_names_exists_on_the_notetype() -> None:
+    """A `{{Field}}` Anki cannot resolve does not degrade — it replaces *both
+    sides of the whole card* with an error string. So a rename inside a
+    `{{#Section}}` that a test fixture never fills is invisible until a learner
+    meets a record that fills it, and then the card is gone rather than
+    diminished.
+
+    Checked at source level because the rendered harness can only cover the
+    fields its fixtures happen to populate."""
+    import re
+
+    from japanese_anki.exporters.anki import FIELD_NAMES
+
+    # `FrontSide` is Anki's own, and `type:`/`furigana:`/`hint:` are filters
+    # applied to a field named after the colon.
+    known = {*FIELD_NAMES, "FrontSide", "Trigger", "Result", "Gloss", "Examples", "Source"}
+    referenced: set[str] = set()
+    for path in ALL_FACES:
+        for raw in re.findall(r"\{\{([^}]+)\}\}", path.read_text(encoding="utf-8")):
+            name = raw.strip().lstrip("#^/").split(":")[-1].strip()
+            if name:
+                referenced.add(name)
+
+    assert referenced <= known, f"unknown field(s): {sorted(referenced - known)}"

@@ -62,6 +62,39 @@ def _project(root: Path) -> None:
     )
 
 
+def kanji_data(root: Path) -> None:
+    """A kanji entry for 話, so `{{#KanjiInfo}}` can fire.
+
+    Without one `kanji.load_store` returns an empty store for a missing file and
+    the block never renders — so the largest thing janki generates, a `<details>`
+    with inline stroke SVG, went unchecked by the file whose whole subject is
+    what Anki draws.
+    """
+    (root / "janki.toml").write_text(
+        (root / "janki.toml").read_text(encoding="utf-8")
+        + 'kanji_file = "kanji.json"\n',
+        encoding="utf-8",
+    )
+    (root / "kanji.json").write_text(
+        json.dumps({
+            "話": {
+                "stroke_count": 13,
+                "meanings": ["talk", "speak"],
+                "readings": [
+                    {"kind": "on", "reading": "ワ", "examples": [
+                        {"written": "会話", "pronounced": "かいわ", "gloss": "conversation"}
+                    ]},
+                    {"kind": "kun", "reading": "はな.す", "examples": [
+                        {"written": "話す", "pronounced": "はなす", "gloss": "to speak"}
+                    ]},
+                ],
+                "strokes": ["M1,1L2,2", "M3,3L4,4"],
+            }
+        }, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
 def render(
     records: list[VocabularyRecord], media: dict[str, bytes] | None = None
 ) -> list[dict[str, str]]:
@@ -73,6 +106,7 @@ def render(
     """
     root = Path(tempfile.mkdtemp())
     _project(root)
+    kanji_data(root)
     for name, payload in (media or {}).items():
         path = root / "media" / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -98,11 +132,19 @@ def render(
                     "question": output.question_text,
                     "answer": output.answer_text,
                     "expression": card.note().fields[1],
+                    # What Anki pulled *out* of the HTML to play. A negative
+                    # assertion on "[sound:" is satisfied by losing the audio
+                    # entirely, which is the failure worth catching.
+                    "sounds": [tag.filename for tag in output.answer_av_tags],
                 }
             )
         return drawn
     finally:
         collection.close()
+        # Actually thrown away. These live outside pytest's `tmp_path`, so its
+        # retention policy never reaches them and every run left a copy of the
+        # templates, a package and a collection behind for good.
+        shutil.rmtree(root, ignore_errors=True)
 
 
 def record(**overrides: Any) -> VocabularyRecord:
@@ -167,11 +209,13 @@ def test_each_group_in_a_sentence_gets_its_own_ruby(
 
 def test_a_missing_separator_really_does_spill_the_reading() -> None:
     """The failure `spilled_furigana_groups` exists to catch, demonstrated
-    against Anki itself rather than described. Without the space before 妻,
-    Anki draws つま across everything back to the previous one — so the reading
-    lands on 、妻 instead of 妻, and the comma disappears from the sentence.
+    against Anki itself rather than described. Without the space before 妻, the
+    ruby base becomes `、妻` — つま is drawn over the comma as well as the word.
 
-    This is why the repair in `qc.repair_spilled_punctuation` is not cosmetic.
+    The comma is still *on* the card, under the reading; what loses it is
+    `qc.furigana_reading`, which drops the swallowed run and so feeds a romaji
+    field and a sentence audio missing it. This is why the repair in
+    `qc.repair_spilled_punctuation` is not cosmetic.
     """
     spilled = render([
         record(examples=[ExampleSentence(
@@ -221,7 +265,8 @@ def test_a_sound_tag_is_consumed_rather_than_shown() -> None:
         {"audio/janki-abc.mp3": b"ID3fake"},
     )
 
-    assert "[sound:" not in drawn[0]["answer"]
+    assert drawn[0]["sounds"] == ["janki-abc.mp3"], "Anki took it to play"
+    assert "[sound:" not in drawn[0]["answer"], "and left no tag behind"
 
 
 # --- conditional sections ------------------------------------------------------
@@ -264,3 +309,8 @@ def test_the_pitch_diagram_and_kanji_block_reach_the_drawn_card(
 
     assert 'class="pitch"' in answer
     assert re.search(r'class="mora [^"]*drop', answer), "the fall is drawn"
+    # The largest block janki generates, and the one most able to break a card:
+    # a `<details>` carrying inline SVG per stroke.
+    assert 'class="kanji-info"' in answer
+    assert "会話" in answer, "the reading's example word"
+    assert answer.count('class="stroke-cell"') == 2, "one cell per stroke"

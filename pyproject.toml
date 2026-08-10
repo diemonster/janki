@@ -54,9 +54,13 @@ dev = [
   # to a test that reads the template source, and all visible on the card.
   #
   # In `dev` rather than its own extra for the reason stated above: a suite that
-  # skips this reports green for the one thing no other test can see. It is
-  # still `importorskip`ed, so a platform with no wheel degrades to a skip
-  # instead of failing collection.
+  # skips this reports green for the one thing no other test can see.
+  #
+  # It is a *hard* requirement of the extra, and `scripts/bootstrap.sh` installs
+  # `.[dev]` under `set -e`: on a platform with no anki wheel, bootstrap fails at
+  # the install rather than skipping a test. The `importorskip` in
+  # tests/test_rendered_cards.py covers the other case — a checkout that
+  # installed the project without `[dev]` and runs pytest anyway.
   "anki>=25.2",
 ]
 
