@@ -336,3 +336,36 @@ def test_an_agreeing_example_is_never_adjudicated(
     )
 
     assert result.cleared and judge.asked == []
+
+
+@pytest.mark.parametrize(
+    ("failure", "label"),
+    [
+        (ModuleNotFoundError("No module named 'pydantic'"), "no-ai-extra"),
+        (TypeError("Could not resolve authentication method"), "no-anthropic-key"),
+    ],
+    ids=["no-ai-extra", "no-anthropic-key"],
+)
+def test_the_adjudicator_never_takes_the_run_down(
+    monkeypatch: pytest.MonkeyPatch, failure: Exception, label: str
+) -> None:
+    """Its docstring promises "Never raises", and two documented installs broke
+    it: without the `[ai]` extra `adjudication_schema()` raised
+    `ModuleNotFoundError` from the *argument list*, outside the guard; with the
+    extra but no key the SDK raises a bare `TypeError`. Neither is a
+    `JankiError`, so both escaped `cli.main` as a traceback — and because the
+    records are saved only after the whole pass returns, every flag jpdb had
+    already cleared in that run was discarded with it."""
+
+    def explode(*_args, **_kwargs):
+        raise failure
+
+    monkeypatch.setattr(enrich, "adjudication_schema", explode)
+    monkeypatch.setattr(enrich.claude_client, "parse_call", explode)
+
+    verdict, why = enrich.adjudicate_reading(
+        "毎日日本語を話します。", "にっぽんご", "にほんご", model="claude-haiku-4-5"
+    )
+
+    assert verdict == "unsure", "an adjudicator that cannot answer leaves the flag"
+    assert "could not be reached" in why

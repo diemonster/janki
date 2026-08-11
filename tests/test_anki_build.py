@@ -999,3 +999,50 @@ def test_an_example_with_no_register_stays_the_polite_one(tmp_path: Path) -> Non
     names, values = _fields(tmp_path / "o.apkg")
     assert values[names.index("ExampleJapanese")] == "使います。"
     assert values[names.index("CasualJapanese")] == ""
+
+
+def test_two_casual_examples_leave_the_main_slot_empty(tmp_path: Path) -> None:
+    """Excluding the one object `example_in("casual")` returned had the same
+    shape of bug one step along: with two casual sentences the *second* landed
+    in the main slot, which the template renders with no register heading — so
+    the card presents a casual sentence as the neutral form of the word. Chosen
+    by register now, not by identity."""
+    _project(tmp_path)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:使う:つかう", expression="使う", reading="つかう", meanings=["to use"],
+        examples=[
+            ExampleSentence(japanese="使う？", english="casual", register="casual"),
+            ExampleSentence(japanese="使うの？", english="also casual", register="casual"),
+        ],
+    )])
+
+    build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
+
+    names, values = _fields(tmp_path / "o.apkg")
+    assert values[names.index("ExampleJapanese")] == ""
+    assert values[names.index("CasualJapanese")] == "使う？"
+
+
+def test_the_preview_shows_the_sentence_the_deck_will(tmp_path: Path) -> None:
+    """`janki preview` is billed as a stand-in for the card. It read
+    `first_example` while the exporter had moved on, so for a record whose
+    casual example comes first the two showed different sentences."""
+    from japanese_anki.preview import build_preview
+
+    _project(tmp_path)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:使う:つかう", expression="使う", reading="つかう", meanings=["to use"],
+        examples=[
+            ExampleSentence(japanese="使う？", english="casual", register="casual"),
+            ExampleSentence(japanese="使います。", english="polite", register="polite"),
+        ],
+    )])
+
+    build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
+    names, values = _fields(tmp_path / "o.apkg")
+    page = build_preview(tmp_path / "decks" / "d.yaml", tmp_path / "p.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert values[names.index("ExampleJapanese")] == "使います。"
+    assert "使います。" in page and "使う？" not in page

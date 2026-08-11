@@ -20,7 +20,7 @@ from japanese_anki.errors import JankiError
 from japanese_anki.io import DataError, load_records, load_structured
 from japanese_anki.kanji import load_store as load_kanji_store
 from japanese_anki.kanji import render_kanji_html
-from japanese_anki.models import ExampleSentence, ModelError, VocabularyRecord
+from japanese_anki.models import ModelError, VocabularyRecord
 from japanese_anki.pitch import PitchError, render_pitch_html
 from japanese_anki.validation import has_errors, validate_records
 
@@ -337,16 +337,7 @@ def _field_values(
     for a file that lives in ``data/media/audio/``.
     """
     casual = record.example_in("casual")
-    # The first example that is not the casual one, rather than examples[0] with
-    # the casual case blanked out. Nothing orders this list — `enrich --ai`
-    # appends in whatever order the model answered — and taking index 0 meant a
-    # record whose casual sentence happened to come first showed *no* main
-    # example: the polite sentence was on the record, paid for, and read by no
-    # field. A record whose only example is casual still fills the casual slot
-    # and leaves the main one empty, rather than showing one sentence twice.
-    example = next(
-        (item for item in record.examples if item is not casual), ExampleSentence()
-    )
+    example = record.main_example()
     audio_field = ""
     if record.audio:
         found = _resolve_media(

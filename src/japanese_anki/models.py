@@ -248,6 +248,31 @@ class VocabularyRecord:
     def first_example(self) -> ExampleSentence:
         return self.examples[0] if self.examples else ExampleSentence()
 
+    def main_example(self) -> ExampleSentence:
+        """The example the card shows unlabelled, or an empty one.
+
+        The first that is not casual — by *register*, not by identity. Nothing
+        orders `examples`: `enrich --ai` appends them as the model answered, so
+        `examples[0]` is not the polite one just because it is first, and a
+        record whose casual sentence leads used to show no main example at all.
+        Excluding only the object `example_in("casual")` returned had the same
+        shape of bug one step along: a record with two casual sentences put the
+        second in the unlabelled slot, where the card presents it as the neutral
+        form of the word.
+
+        Empty when every example is casual, so the casual slot holds it and the
+        card does not claim a contrast it does not have.
+
+        Lives here because both readers must agree: `exporters.anki` builds the
+        note and `preview` renders the same record for the browser, and a
+        preview showing a different sentence than the deck it previews is not a
+        preview.
+        """
+        for example in self.examples:
+            if example.register.strip().lower() != "casual":
+                return example
+        return ExampleSentence()
+
     def example_in(self, register: str) -> ExampleSentence:
         """The first example written in this register, or an empty one.
 

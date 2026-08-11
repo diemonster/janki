@@ -11,7 +11,9 @@ def build_preview(deck_path: Path, output_path: Path) -> Path:
     title = str(deck_config.get("name", deck_path.stem))
     cards = []
     for record in records:
-        example = record.first_example
+        # The same rule the exporter uses, so a preview shows the sentence
+        # the built deck will.
+        example = record.main_example()
         meanings = "<br>".join(html.escape(item) for item in record.meanings)
         tags = " ".join(f"<span>{html.escape(tag)}</span>" for tag in record.tags)
         cards.append(

@@ -985,10 +985,19 @@ def adjudicate_reading(
         "Which is how this sentence is normally read?"
     )
     try:
+        # `adjudication_schema()` is *inside* the guard: it imports pydantic,
+        # which ships in the `[ai]` extra, so on a plain `pip install -e .` it
+        # raised `ModuleNotFoundError` from the argument list — outside any
+        # except, and not a `JankiError`, so it left the interpreter with a
+        # traceback. `parse_call` can do the same: with no `ANTHROPIC_API_KEY`
+        # the SDK raises a bare `TypeError`. Either way `recheck_furigana` never
+        # returned, so `save_records_json` was never reached and every flag jpdb
+        # had already cleared in that run — and the calls paid for — was thrown
+        # away on the way out.
         call = claude_client.parse_call(
             model, blocks, prompt, adjudication_schema(), client, max_tokens=200
         )
-    except JankiError as exc:
+    except Exception as exc:  # noqa: BLE001 — the docstring's contract
         return "unsure", f"the adjudicator could not be reached: {exc}"
     if call.parsed is None:
         return "unsure", f"the adjudicator did not answer ({call.stop_reason})"

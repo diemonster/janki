@@ -24,18 +24,18 @@ source .venv/bin/activate
 That installs janki and its `[dev]` extra into `.venv` — which includes the AI
 support, so the whole command set works — runs the tests, and builds a sample
 deck into `dist/`. Installing without bootstrap, add the extra you need:
-`pip install -e '.[ai]'` for `extract`, `patterns`, `review`, `enrich --ai` and
-`enrich --polish-meanings`. (`--recheck-furigana` runs without it; it then leaves
-a jpdb disagreement flagged instead of adjudicating it.)
+`pip install -e '.[ai]'` for `extract`, `patterns`, `review` and every `enrich`
+pass but `--jpdb`. Both keys matter to `--recheck-furigana`: jpdb re-reads the
+sentence, and the adjudicator settles a disagreement between them. Without the
+Anthropic key it carries on and leaves the disagreement flagged.
 
 What is left is two keys:
 
 ```bash
-export ANTHROPIC_API_KEY='...'   # extract, patterns, review, enrich --ai and
-                                 # --polish-meanings
-export JPDB_API_KEY='...'        # dictionary lookups, and enrich --jpdb and
-                                 # --recheck-furigana; from the jpdb.io settings
-                                 # page
+export ANTHROPIC_API_KEY='...'   # extract, patterns, review, and enrich --ai,
+                                 # --polish-meanings and --recheck-furigana
+export JPDB_API_KEY='...'        # from the jpdb.io settings page. enrich --jpdb,
+                                 # --recheck-furigana and --ai all need it
 ```
 
 They are read from the environment only — never from `janki.toml`, never from a
