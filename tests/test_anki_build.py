@@ -1055,9 +1055,14 @@ def test_the_preview_shows_the_sentence_the_deck_will(tmp_path: Path) -> None:
 def test_an_example_that_reaches_no_slot_is_reported(tmp_path: Path) -> None:
     """A card has one example slot and one casual slot. A record carrying a
     third sentence has one that reaches no field on any card type — and
-    `janki audio --examples` has already voiced it and committed the clip to
-    `data/media/`, so the build ships a file no note references. Said out loud,
-    the way a pitch pattern with no reading to draw it over is."""
+    `janki audio --examples` has already voiced it and committed the clip.
+
+    The clip is not shipped: `_resolve_media` only ever sees the two slots, so
+    it never enters the package. It is worse than that — it sits in
+    `data/media/` referenced by no card, and `janki audio --prune` will not
+    reclaim it either, because prune walks `record.examples` and the record
+    still names it. Said out loud at build time, the way a pitch pattern with
+    no reading to draw it over is."""
     _project(tmp_path)
     _write_records(tmp_path, [VocabularyRecord(
         id="word:使う:つかう", expression="使う", reading="つかう", meanings=["to use"],

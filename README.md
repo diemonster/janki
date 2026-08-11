@@ -38,7 +38,7 @@ export ANTHROPIC_API_KEY='...'   # anything that asks a model: extract,
                                  # --polish-meanings
 export JPDB_API_KEY='...'        # every jpdb lookup — import-jpdb, promote's
                                  # reading check, patterns, jpdb ping, and
-                                 # enrich --jpdb/--ai/--recheck-furigana
+                                 # enrich --jpdb/--ai/--staging/--recheck-furigana
 ```
 
 They are read from the environment only — never from `janki.toml`, never from a
