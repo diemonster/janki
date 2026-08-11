@@ -144,18 +144,6 @@ is what makes `build --only-new` correct. An export entry also records what the
 record was *missing* when it shipped, so a word that went out silent and has a
 clip now can be reported rather than silently left behind.
 
-### What `--only-new` promises
-
-Three things worth knowing before scripting a build:
-
-- When there is nothing new it writes **no package at all**, rather than
-  replacing your last good one with an empty deck.
-- Before building it reports what the new records are still missing —
-  `warning: verbs: 2 of 3 new records have no word audio` — and asks
-  `Build them anyway? [y/N]`.
-- `--yes` answers that prompt. A non-interactive run proceeds and prints the
-  counts rather than blocking on a question nobody is there to answer.
-
 `enriched` *is* written, by the passes that write records directly:
 `janki enrich --jpdb`, `--ai` and `--polish-meanings` each leave their own
 entry, and they accumulate rather than replace, because a dictionary pass and a
@@ -173,6 +161,18 @@ an entry and a sighting here. So the model that wrote them survives in the stagi
 `model:` metadata and not in the ledger. If you care which model wrote a batch
 of examples, keep the promoted staging file (`janki promote` archives it under
 `data/staging/done/`).
+
+## What `--only-new` promises
+
+Three things worth knowing before scripting a build:
+
+- When there is nothing new it writes **no package at all**, rather than
+  replacing your last good one with an empty deck.
+- Before building it reports what the new records are still missing —
+  `warning: verbs: 2 of 3 new records have no word audio` — and asks
+  `Build them anyway? [y/N]`.
+- `--yes` answers that prompt. A non-interactive run proceeds and prints the
+  counts rather than blocking on a question nobody is there to answer.
 
 ## Checking that an import actually landed
 

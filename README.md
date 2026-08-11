@@ -24,12 +24,13 @@ source .venv/bin/activate
 That installs janki and its `[dev]` extra into `.venv` — which includes the AI
 support, so the whole command set works — runs the tests, and builds a sample
 deck into `dist/`. Installing without bootstrap, add the extra you need:
-`pip install -e '.[ai]'` for `extract`, `patterns`, `enrich --ai` and `review`.
+`pip install -e '.[ai]'` for `extract`, `patterns`, `review`, and every `enrich`
+pass except `--jpdb`.
 
 What is left is two keys:
 
 ```bash
-export ANTHROPIC_API_KEY='...'   # extract, patterns, enrich --ai, review
+export ANTHROPIC_API_KEY='...'   # extract, patterns, review, every enrich but --jpdb
 export JPDB_API_KEY='...'        # dictionary lookups; from the jpdb.io settings page
 ```
 
@@ -164,12 +165,13 @@ own collection is the newer side. Details and the measurements behind them:
 
 Every command takes `--help`. `janki build` (and so `refresh --deck`) accepts a
 bare deck name as well as a path — `janki build verbs` finds
-`data/decks/verbs.yaml`. `preview` and `migrate-inline` want the path.
+`data/decks/verbs.yaml`. `validate`, `preview` and `migrate-inline` want the path.
 
-`refresh` runs six of these; the importers, `promote`, `kanji`,
-`enrich --polish-meanings`, `validate` and `status` are yours to run when they
-apply. Run `janki kanji` after words with new characters arrive — a character
-nobody looked up simply has no stroke-order block on the card.
+`refresh` runs five of these, plus `enrich --recheck-furigana`. Everything else
+— the importers, `extract`, `patterns`, `promote`, `kanji`,
+`enrich --polish-meanings`, `validate`, `preview` and `status` — is yours to run
+when it applies. Run `janki kanji` after words with new characters arrive: a
+character nobody looked up simply has no stroke-order block on the card.
 
 ## Configuration
 
