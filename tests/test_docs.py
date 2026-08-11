@@ -16,15 +16,10 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml
 
-yaml = pytest.importorskip("yaml")
-
-from japanese_anki.models import (  # noqa: E402
-    ExampleSentence,
-    SourceReference,
-    VocabularyRecord,
-)
-from japanese_anki.validation import has_errors, validate_records  # noqa: E402
+from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
+from japanese_anki.validation import has_errors, validate_records
 
 DOC = Path(__file__).parents[1] / "docs" / "DATA_MODEL.md"
 

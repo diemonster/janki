@@ -339,15 +339,20 @@ def test_an_agreeing_example_is_never_adjudicated(
 
 
 @pytest.mark.parametrize(
-    ("failure", "label"),
+    ("target", "failure"),
     [
-        (ModuleNotFoundError("No module named 'pydantic'"), "no-ai-extra"),
-        (TypeError("Could not resolve authentication method"), "no-anthropic-key"),
+        # The schema import, which lives in the `[ai]` extra…
+        ("adjudication_schema", ModuleNotFoundError("No module named 'pydantic'")),
+        # …and the call itself, which needs the key. Patched separately: the
+        # schema is evaluated as an *argument*, so patching it for both rows
+        # meant both raised from the same line and the second row proved
+        # nothing about the path it is named for.
+        ("parse_call", TypeError("Could not resolve authentication method")),
     ],
     ids=["no-ai-extra", "no-anthropic-key"],
 )
 def test_the_adjudicator_never_takes_the_run_down(
-    monkeypatch: pytest.MonkeyPatch, failure: Exception, label: str
+    monkeypatch: pytest.MonkeyPatch, target: str, failure: Exception
 ) -> None:
     """Its docstring promises "Never raises", and two documented installs broke
     it: without the `[ai]` extra `adjudication_schema()` raised
@@ -360,8 +365,10 @@ def test_the_adjudicator_never_takes_the_run_down(
     def explode(*_args, **_kwargs):
         raise failure
 
-    monkeypatch.setattr(enrich, "adjudication_schema", explode)
-    monkeypatch.setattr(enrich.claude_client, "parse_call", explode)
+    if target == "adjudication_schema":
+        monkeypatch.setattr(enrich, "adjudication_schema", explode)
+    else:
+        monkeypatch.setattr(enrich.claude_client, "parse_call", explode)
 
     verdict, why = enrich.adjudicate_reading(
         "毎日日本語を話します。", "にっぽんご", "にほんご", model="claude-haiku-4-5"

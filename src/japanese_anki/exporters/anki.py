@@ -338,6 +338,17 @@ def _field_values(
     """
     casual = record.example_in("casual")
     example = record.main_example()
+    # A card has two example slots. A record carrying more — two casual
+    # sentences, say — has one that reaches no field on any card type, and it
+    # was still voiced by `janki audio --examples` and its clip committed to
+    # `data/media/`. Said out loud rather than dropped, the way a pitch pattern
+    # with no reading to draw it over is.
+    for extra in record.examples:
+        if extra.japanese and extra is not casual and extra is not example:
+            warnings.append(
+                f"{record.id}: a card has room for one example and one casual "
+                f"example, so {extra.japanese!r} reaches no field"
+            )
     audio_field = ""
     if record.audio:
         found = _resolve_media(

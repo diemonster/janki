@@ -11,11 +11,25 @@ def build_preview(deck_path: Path, output_path: Path) -> Path:
     title = str(deck_config.get("name", deck_path.stem))
     cards = []
     for record in records:
-        # The same rule the exporter uses, so a preview shows the sentence
-        # the built deck will.
+        # The same two slots the card has, filled by the same rules. With one
+        # slot and the exporter's rule, a record whose examples are all casual
+        # previewed blank while the built card showed the sentence under
+        # "Casually" — a preview that disagrees with the deck it previews.
         example = record.main_example()
+        casual = record.example_in("casual")
         meanings = "<br>".join(html.escape(item) for item in record.meanings)
         tags = " ".join(f"<span>{html.escape(tag)}</span>" for tag in record.tags)
+        casual_block = (
+            f"""
+              <div class="example-casual">
+                <span class="register">Casually</span>
+                <div class="example-ja">{html.escape(casual.japanese)}</div>
+                <div class="example-en">{html.escape(casual.english)}</div>
+              </div>
+            """
+            if casual.japanese
+            else ""
+        )
         cards.append(
             f"""
             <article class="note">
@@ -24,6 +38,7 @@ def build_preview(deck_path: Path, output_path: Path) -> Path:
               <div class="meanings">{meanings}</div>
               <div class="example-ja">{html.escape(example.japanese)}</div>
               <div class="example-en">{html.escape(example.english)}</div>
+              {casual_block}
               <div class="tags">{tags}</div>
             </article>
             """

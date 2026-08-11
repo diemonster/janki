@@ -1044,5 +1044,54 @@ def test_the_preview_shows_the_sentence_the_deck_will(tmp_path: Path) -> None:
         encoding="utf-8"
     )
 
+    # Both slots, in the same places the card puts them.
     assert values[names.index("ExampleJapanese")] == "使います。"
-    assert "使います。" in page and "使う？" not in page
+    assert values[names.index("CasualJapanese")] == "使う？"
+    main, _, casual_block = page.partition('class="example-casual"')
+    assert "使います。" in main, "the main slot holds the polite sentence"
+    assert "使う？" in casual_block, "and the casual one is labelled as casual"
+
+
+def test_an_example_that_reaches_no_slot_is_reported(tmp_path: Path) -> None:
+    """A card has one example slot and one casual slot. A record carrying a
+    third sentence has one that reaches no field on any card type — and
+    `janki audio --examples` has already voiced it and committed the clip to
+    `data/media/`, so the build ships a file no note references. Said out loud,
+    the way a pitch pattern with no reading to draw it over is."""
+    _project(tmp_path)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:使う:つかう", expression="使う", reading="つかう", meanings=["to use"],
+        examples=[
+            ExampleSentence(japanese="使う？", english="casual", register="casual"),
+            ExampleSentence(japanese="使うの？", english="also casual", register="casual"),
+        ],
+    )])
+
+    result = build_deck(
+        tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg"
+    )
+
+    assert any(
+        "使うの？" in warning and "reaches no field" in warning
+        for warning in result.warnings
+    ), result.warnings
+
+
+def test_the_preview_shows_a_casual_only_record(tmp_path: Path) -> None:
+    """`enrich --ai` returns a polite and a casual sentence, and the polite one
+    can fail `qc.example_contains_target` and be dropped — leaving a record
+    whose only example is casual. The card shows it under "Casually"; a preview
+    built on the main slot alone showed nothing at all."""
+    from japanese_anki.preview import build_preview
+
+    _project(tmp_path)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:使う:つかう", expression="使う", reading="つかう", meanings=["to use"],
+        examples=[ExampleSentence(japanese="使う？", english="casual", register="casual")],
+    )])
+
+    page = build_preview(tmp_path / "decks" / "d.yaml", tmp_path / "p.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "使う？" in page
