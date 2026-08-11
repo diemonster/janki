@@ -46,8 +46,8 @@ the rule is the thing being taught. An unreviewed document builds nothing.
 Pattern cards get **their own notetype**, which costs no forced sync. Measured
 against `anki` 26.8.1: adding a notetype leaves the collection's `scm` mark
 alone, while appending a field to an existing one bumps it — so unlike a new
-field on the word notetype, this does not force the one-directional AnkiWeb
-sync described above.
+field on the word notetype, this does not force the one-directional AnkiWeb sync
+described in [NOTETYPE_UPGRADE.md](NOTETYPE_UPGRADE.md).
 
 ## And a deck that practises it
 
@@ -72,7 +72,7 @@ BACK :          買って      to use   godan
 If you imported `teform-rules.apkg` before the drill deck existed, re-import it
 with **Merge Notetypes** ticked: the shared notetype gained a `Kind` field, and
 appending one is the schema change that forces a one-directional AnkiWeb sync
-(see "Importing into Anki Desktop"). Without the re-import the existing cards
+(see [NOTETYPE_UPGRADE.md](NOTETYPE_UPGRADE.md), and sync before you import). Without the re-import the existing cards
 still read correctly — the template falls back to "Rule" for an empty field —
 but they will not pick up the label.
 

@@ -144,6 +144,18 @@ is what makes `build --only-new` correct. An export entry also records what the
 record was *missing* when it shipped, so a word that went out silent and has a
 clip now can be reported rather than silently left behind.
 
+### What `--only-new` promises
+
+Three things worth knowing before scripting a build:
+
+- When there is nothing new it writes **no package at all**, rather than
+  replacing your last good one with an empty deck.
+- Before building it reports what the new records are still missing —
+  `warning: verbs: 2 of 3 new records have no word audio` — and asks
+  `Build them anyway? [y/N]`.
+- `--yes` answers that prompt. A non-interactive run proceeds and prints the
+  counts rather than blocking on a question nobody is there to answer.
+
 `enriched` *is* written, by the passes that write records directly:
 `janki enrich --jpdb`, `--ai` and `--polish-meanings` each leave their own
 entry, and they accumulate rather than replace, because a dictionary pass and a
@@ -165,7 +177,8 @@ of examples, keep the promoted staging file (`janki promote` archives it under
 ## Checking that an import actually landed
 
 `janki status` reads your Anki collection and says when a deck's notetype is not
-what a build would write — the **Merge Notetypes** failure above, after the fact:
+what a build would write — the **Merge Notetypes** failure described in
+[NOTETYPE_UPGRADE.md](NOTETYPE_UPGRADE.md), after the fact:
 
 ```
 warning: Anki: verbs: 'Japanese Study (recognition+production)+' sits beside
@@ -216,7 +229,7 @@ you have accumulated real review history. See `CARD_DESIGN.md`.
 - Pitch accent and frequency rank are filled by `janki enrich --jpdb` from
   jpdb's dictionary data. Neither is ever guessed: an empty field means the
   dictionary did not say, and `janki status` counts it as missing rather than
-  inventing a value. See `docs/DESIGN_V2.md`.
+  inventing a value. See [DESIGN_V2.md](DESIGN_V2.md).
 - Word audio needs a pitch accent, so a record without one is skipped and
   reported rather than voiced with the engine's guess — the guess is wrong on
   exactly the homographs a pitch card exists for. `--allow-default-accent` opts
@@ -224,4 +237,4 @@ you have accumulated real review history. See `CARD_DESIGN.md`.
 - `janki status` reads your Anki collection to report an import that silently
   failed to upgrade the notetype, but only after the fact — nothing can stop the
   bad import while it is happening. Tick **Merge Notetypes** — see
-  [Importing into Anki Desktop](NOTETYPE_UPGRADE.md).
+  [NOTETYPE_UPGRADE.md](NOTETYPE_UPGRADE.md).

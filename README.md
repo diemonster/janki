@@ -21,17 +21,20 @@ janki refresh                            # enrich, voice, build what is new
 source .venv/bin/activate
 ```
 
-That installs janki into `.venv`, runs the tests, and builds a sample deck into
-`dist/`. Two optional pieces:
+That installs janki and its `[dev]` extra into `.venv` — which includes the AI
+support, so the whole command set works — runs the tests, and builds a sample
+deck into `dist/`. Installing without bootstrap, add the extra you need:
+`pip install -e '.[ai]'` for `extract`, `patterns`, `enrich --ai` and `review`.
+
+What is left is two keys:
 
 ```bash
-python -m pip install -e '.[ai]'   # needed by extract, patterns, enrich --ai, review
-export ANTHROPIC_API_KEY='...'
-export JPDB_API_KEY='...'          # dictionary lookups; get it from jpdb.io settings
+export ANTHROPIC_API_KEY='...'   # extract, patterns, enrich --ai, review
+export JPDB_API_KEY='...'        # dictionary lookups; from the jpdb.io settings page
 ```
 
-Keys are read from the environment only — never from `janki.toml`, never from a
-`.env` file, and none is ever written into the repository.
+They are read from the environment only — never from `janki.toml`, never from a
+`.env` file, and neither is ever written into the repository.
 
 ## Getting material in
 
@@ -100,6 +103,11 @@ janki refresh                # every deck
 janki refresh --deck verbs   # build only this one
 ```
 
+`--deck` scopes the **build** stage only. Enrichment and audio still run over
+every record in the collection, because a word's reading and its clip belong to
+the word rather than to whichever deck carries it — worth knowing before running
+it against a few thousand records.
+
 It runs `enrich --jpdb` → `enrich --ai` → `enrich --recheck-furigana` →
 `audio --words --examples` → `review` → `build --only-new`, in that order,
 because each stage needs what the one before it produced: jpdb fills the accents
@@ -110,7 +118,11 @@ stage with `--no-jpdb`, `--no-ai`, `--no-recheck`, `--no-audio`, `--no-review`,
 built from half-enriched records.
 
 `build --only-new` ships only the records a deck has never been built with, so a
-deck that has shipped 400 records and gained 3 produces a 3-note package.
+deck that has shipped 400 records and gained 3 produces a 3-note package. When
+there is nothing new it writes no package at all, rather than replacing your last
+good one with an empty deck. Before building it reports what the new records are
+still missing and asks; `--yes` answers that prompt, and a non-interactive run
+proceeds and prints the counts.
 
 ## Loading a deck into Anki
 
@@ -120,8 +132,14 @@ your existing notes stay on the old notetype, and
 a new one is filed beside it with a `+` appended and zero notes in it. No error,
 no duplicates, review history intact — the new fields simply never reach a card.
 You need it whenever a janki release adds a field. `janki status` reports that
-failure after the fact; nothing can stop it while it is happening. Details and
-the measurements behind them: [docs/NOTETYPE_UPGRADE.md](docs/NOTETYPE_UPGRADE.md).
+failure after the fact; nothing can stop it while it is happening.
+
+**Sync before you import.** Adding a field is a schema change, so the next
+AnkiWeb sync asks you to choose a direction rather than merging — and if you
+import first and sync second, "download" loses the import while "upload" loses
+whatever you reviewed on the phone. Sync first and the choice is trivial: your
+own collection is the newer side. Details and the measurements behind them:
+[docs/NOTETYPE_UPGRADE.md](docs/NOTETYPE_UPGRADE.md).
 
 ## Commands
 
@@ -142,10 +160,16 @@ the measurements behind them: [docs/NOTETYPE_UPGRADE.md](docs/NOTETYPE_UPGRADE.m
 | `janki build [DECK]` | Build one deck, or `--all` |
 | `janki preview DECK` | A browser preview, no Anki needed |
 | `janki status` | Records, ledger, what is missing |
-| `janki refresh` | All of the above, in order |
+| `janki refresh` | enrich → recheck → audio → review → build, in order |
 
-Every command takes `--help`. A deck argument may be a path or a bare name:
-`janki build verbs` finds `data/decks/verbs.yaml`.
+Every command takes `--help`. `janki build` (and so `refresh --deck`) accepts a
+bare deck name as well as a path — `janki build verbs` finds
+`data/decks/verbs.yaml`. `preview` and `migrate-inline` want the path.
+
+`refresh` runs six of these; the importers, `promote`, `kanji`,
+`enrich --polish-meanings`, `validate` and `status` are yours to run when they
+apply. Run `janki kanji` after words with new characters arrive — a character
+nobody looked up simply has no stroke-order block on the card.
 
 ## Configuration
 
@@ -153,7 +177,8 @@ Every command takes `--help`. A deck argument may be a path or a bare name:
 
 ```toml
 [cards]
-max_meanings = 4              # senses per card; 0 shows them all
+max_meanings = 4              # senses per card; 0 shows them all, a deck may
+                              # set its own. The record keeps every sense
 
 [ai]
 enrich_model = "claude-opus-5"
@@ -173,7 +198,7 @@ profile = "User 1"            # only needed with several Anki profiles
 
 | Path | What is in it |
 | --- | --- |
-| `data/normalized/vocabulary.json` | The records. The source of truth |
+| `data/normalized/vocabulary.json` | The records. The source of truth — [schema](docs/DATA_MODEL.md) |
 | `data/decks/*.yaml` | One file per deck: what it contains, its Anki ids |
 | `data/staging/` | Waiting for you to review — extractions, held-back rows |
 | `data/inbox/` | The originals every record cites |
@@ -193,6 +218,7 @@ recoverable and a build reproducible.
 | [docs/PATTERNS.md](docs/PATTERNS.md) | Grammar handouts, rule decks, drill decks, how a chart is checked |
 | [docs/AUDIO.md](docs/AUDIO.md) | VOICEVOX and OpenAI, choosing a voice, re-voicing |
 | [docs/QUALITY.md](docs/QUALITY.md) | The review gate, the ledger and `janki status`, known limits |
+| [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | Every field a record can carry |
 | [docs/CARD_DESIGN.md](docs/CARD_DESIGN.md) | What a card shows and why |
 | [docs/NOTETYPE_UPGRADE.md](docs/NOTETYPE_UPGRADE.md) | Adding a field to a notetype already in Anki |
 | [docs/SHIRABE_WORKFLOW.md](docs/SHIRABE_WORKFLOW.md) | Capturing words on the phone, end to end |

@@ -123,6 +123,20 @@ A pattern that does not fit its reading is left out rather than drawn wrong.
 `render_pitch_html` refuses it, and a card is the last place to start guessing
 at an alignment janki declined to guess at anywhere else.
 
+## How many meanings a card shows
+
+jpdb hands back every sense a word has — する has 17 — and a recognition card is
+not a dictionary entry. Cards show the first few, in jpdb's own
+roughly-commonest-first order, and say how many they left:
+
+```toml
+[cards]
+max_meanings = 4    # 0 shows them all; a deck may set its own
+```
+
+The record keeps all of them. The cap is a card decision, so `janki status`, a
+search, and a human choosing which sense matters all still see the full list.
+
 ## Fields are append-only
 
 `FIELD_NAMES` may be **appended to, never inserted into or reordered**. A note's
