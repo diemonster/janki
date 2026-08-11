@@ -3104,6 +3104,18 @@ def command_patterns(args: argparse.Namespace) -> int:
             if verb not in groups
         }) if failed_reads else []
         stranded = bool(unresolved)
+        # What to blame, from what actually failed. Hard-coding the collection
+        # was safe only while it was the sole cause: a 429 then reported a
+        # healthy `vocabulary.json` as unreadable and sent the user to
+        # `[paths]` over a transient network error they need only re-run.
+        cause = " and ".join(
+            phrase
+            for phrase, failed in (
+                ("the collection could not be read", bool(collection_error)),
+                ("the verb-class lookup failed", bool(lookup_error)),
+            )
+            if failed
+        )
         for note in failed_reads:
             # Once each, at the severity the outcome earned. Printing eagerly
             # *and* again after the lookup said the same sentence twice, as a
@@ -3146,27 +3158,24 @@ def command_patterns(args: argparse.Namespace) -> int:
                 # command could not read the file it needed. Saying the first
                 # over the second is the false reassurance this whole block
                 # exists to avoid.
-                print(
-                    "The collection could not be read, so these rules were "
-                    "checked against nothing."
-                )
+                print(f"{cause[0].upper()}{cause[1:]}, so these rules were "
+                      "checked against nothing.")
             else:
                 print("Nothing in the store could be checked against those rules.")
             return 1 if stranded else 0
         if not disagreed:
-            # Qualified when something was stranded. An unqualified all-clear
-            # over a run that could not read the collection is the false
-            # reassurance this block is written against — and the held-back rows
-            # above blame "no verb class on record", sending the user to
-            # `janki enrich --jpdb`, which reads the very file this run could
-            # not read.
+            # Qualified when something was stranded, and blamed on whatever
+            # actually failed. An unqualified all-clear over a run that could
+            # not read what it needed is the false reassurance this block is
+            # written against — and the held-back rows above blame "no verb
+            # class on record", sending the user to `janki enrich --jpdb`, which
+            # is the very read that just failed.
             print(
                 f"All {checked} worked example(s) agree with janki's "
                 f"conjugation rules."
                 if not stranded
                 else f"{checked} worked example(s) agree with janki's conjugation "
-                f"rules; the collection could not be read, so "
-                f"{', '.join(unresolved)} went unchecked."
+                f"rules; {cause}, so {', '.join(unresolved)} went unchecked."
             )
         return 1 if disagreed or stranded else 0
 
@@ -4131,7 +4140,9 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Check every stored document's worked examples against janki's own "
             "conjugation rules, without re-reading anything. Exits non-zero on "
-            "a disagreement."
+            "a disagreement, and on a verb it needed a class for that no read "
+            "could answer for — an unreadable collection, or a failed "
+            "--ask-jpdb lookup."
         ),
     )
     patterns_parser.add_argument(

@@ -1070,6 +1070,40 @@ def test_check_does_not_pass_when_the_lookup_it_needed_failed(
     assert "All 1 worked example(s) agree" not in out.out, "not an all-clear"
     assert "no class for まつ" in out.err
     assert "could not look up verb classes: jpdb said 429" in out.err
+    # Blamed on the lookup, not on the collection. This one read fine, and
+    # naming it sent the user to `[paths]` over a transient network error.
+    assert "the verb-class lookup failed" in out.out
+    assert "the collection could not be read" not in out.out
+
+
+def test_check_blames_both_reads_when_both_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Nothing was checked, so the summary is the only line carrying a cause."""
+    root = project(tmp_path)
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("う・つ・る → って")]
+    parsed.patterns[0].examples = ["まつ ⇨ まって"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+    cli.main(["--root", str(root), "patterns", str(document(root, "chart.pdf"))])
+    (root / "vocabulary.json").unlink()
+
+    def refuse(*_args, **_kwargs):
+        raise JankiError("jpdb said 429")
+
+    monkeypatch.setattr(cli.patterns, "verb_groups_from_jpdb", refuse)
+    monkeypatch.setattr(cli.jpdb, "api_key_from_env", lambda: "k")
+    monkeypatch.setattr(cli.jpdb, "JpdbClient", lambda _key: object())
+    capsys.readouterr()
+
+    code = cli.main(["--root", str(root), "patterns", "--check", "--ask-jpdb"])
+
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "The collection could not be read and the verb-class lookup failed" in out
+    assert "checked against nothing" in out
 
 
 def test_check_says_the_collection_failed_even_when_jpdb_does_too(
