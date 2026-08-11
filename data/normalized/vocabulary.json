@@ -147,7 +147,7 @@
         "furigana": "父[ちち]の 日[ひ]にお 父[とう]さんにネクタイをあげるつもりです。",
         "romaji": "chichinohiniotousanninekutaioagerutsumoridesu.",
         "english": "I'm planning to give my dad a necktie on Father's Day.",
-        "audio": "",
+        "audio": "audio/janki-0b38ac010bea.mp3",
         "register": "polite"
       },
       {
@@ -155,7 +155,7 @@
         "furigana": "明日[あした]、お 父[とう]さんと 山[やま]に 登[のぼ]るんだ。",
         "romaji": "ashita, otousantoyamaninoborunda.",
         "english": "Tomorrow I'm going hiking with my dad, you see.",
-        "audio": "",
+        "audio": "audio/janki-46b7a5bdc856.mp3",
         "register": "casual"
       }
     ],
@@ -164,7 +164,7 @@
       "anki"
     ],
     "usage_notes": "Colloquial form: 「とーちゃん」.",
-    "audio": "",
+    "audio": "audio/janki-7b5e5a4dc8a9.wav",
     "image": "",
     "pitch_accent": [
       "LHLLLL"
@@ -204,7 +204,7 @@
         "furigana": "ここで 昼[ひる]ご 飯[はん]を 食[た]べるつもりです。",
         "romaji": "kokodehirugohan'otaberutsumoridesu.",
         "english": "I'm planning to eat lunch here.",
-        "audio": "",
+        "audio": "audio/janki-f5172fdbdfc8.mp3",
         "register": "polite"
       },
       {
@@ -212,7 +212,7 @@
         "furigana": "ここが 新[あたら]しいカフェなの？",
         "romaji": "kokogaatarashiikafenano?",
         "english": "Is this the new café?",
-        "audio": "",
+        "audio": "audio/janki-82078522717d.mp3",
         "register": "casual"
       }
     ],
@@ -221,7 +221,7 @@
       "anki"
     ],
     "usage_notes": "ここ is the place near the speaker ('here'), contrasting with そこ (near the listener) and あそこ (far from both). It is a pronoun, so it takes particles directly: ここで (action location), ここに (existence/destination), ここは (topic). Don't say ここの前に for 'in front of me' — use ここ only for places. In polite or business speech, こちら is often used instead of ここ.",
-    "audio": "",
+    "audio": "audio/janki-e77c383856c0.wav",
     "image": "",
     "pitch_accent": [
       "LHH"
@@ -250,7 +250,8 @@
     "furigana": "",
     "romaji": "sugu",
     "meanings": [
-      "Soon, almost"
+      "Immediately, right away",
+      "Soon"
     ],
     "part_of_speech": "adverb",
     "verb_group": "",
@@ -261,7 +262,7 @@
         "furigana": "バスは すぐ 来[き]ますから、 大丈夫[だいじょうぶ]です。",
         "romaji": "basuha sugukidaijoubudesu.",
         "english": "The bus will come soon, so it's fine.",
-        "audio": "",
+        "audio": "audio/janki-0ef1b5e5e8d7.mp3",
         "register": "polite"
       },
       {
@@ -269,7 +270,7 @@
         "furigana": "ごめん、今[いま]から すぐ 行[い]くんだ。",
         "romaji": "imakara suguikunda.",
         "english": "Sorry — I'm heading over right now.",
-        "audio": "",
+        "audio": "audio/janki-e1f205c2fe96.mp3",
         "register": "casual"
       }
     ],
@@ -278,7 +279,7 @@
       "anki"
     ],
     "usage_notes": "Basic sense is \"right away, immediately\" in time; すぐに is an interchangeable variant that sounds a little more deliberate. すぐ also works for distance — すぐそこ \"right over there\", 駅のすぐ前 \"right in front of the station\". The \"almost/any minute now\" feeling usually comes with もう: もうすぐ着きます \"we'll arrive any minute\".",
-    "audio": "",
+    "audio": "audio/janki-dbf49e9b81e2.wav",
     "image": "",
     "pitch_accent": [
       "HLL"
@@ -397,7 +398,7 @@
         "furigana": "そう 言[い]えば、 来週[らいしゅう]の 休[やす]みに 京都[きょうと]へ 行[い]くつもりです。",
         "romaji": "souiraishuunoyasuminikyoutoheikutsumoridesu.",
         "english": "Speaking of which, I'm planning to go to Kyoto on next week's day off.",
-        "audio": "",
+        "audio": "audio/janki-41439a7faf2b.mp3",
         "register": "polite"
       },
       {
@@ -405,7 +406,7 @@
         "furigana": "そう 言[い]えば、あの 映画[えいが]まだ 見[み]てないんだ。",
         "romaji": "souieba, anoeigamadamitenainda.",
         "english": "Come to think of it, I still haven't seen that movie.",
-        "audio": "",
+        "audio": "audio/janki-50c976eb31d8.mp3",
         "register": "casual"
       }
     ],
@@ -414,7 +415,7 @@
       "anki"
     ],
     "usage_notes": "Colloquial form: 「そういや」.",
-    "audio": "",
+    "audio": "audio/janki-61bca5c71302.wav",
     "image": "",
     "pitch_accent": [
       "HLLHLL"
@@ -594,7 +595,7 @@
         "furigana": "映画[えいが]はもう 始[はじ]まります。",
         "romaji": "eigahamouhajimarimasu.",
         "english": "The movie is starting soon.",
-        "audio": "",
+        "audio": "audio/janki-cc4b74976a94.mp3",
         "register": "polite"
       },
       {
@@ -602,7 +603,7 @@
         "furigana": "もう 帰[かえ]るね。 明日[あした]は 朝[あさ]が 早[はや]いんだ。",
         "romaji": "moukaeashitahaasagahayainda.",
         "english": "I'm heading home soon. I have an early morning tomorrow, you see.",
-        "audio": "",
+        "audio": "audio/janki-cc665b5c2d69.mp3",
         "register": "casual"
       }
     ],
@@ -611,7 +612,7 @@
       "anki"
     ],
     "usage_notes": "With a non-past verb, もう means \"soon / any moment now\" (もう始まります = it's about to start); with a past verb it means \"already\" (もう食べました). もうすぐ is a common, slightly more emphatic way to say \"very soon.\" Note also もう〜ません/〜ない = \"not any more.\"",
-    "audio": "",
+    "audio": "audio/janki-1399d8f539c2.wav",
     "image": "",
     "pitch_accent": [
       "LHH",
@@ -643,7 +644,8 @@
     "furigana": "",
     "romaji": "yotsuba",
     "meanings": [
-      "Yotsuba (name)"
+      "Four-leaf (clover)",
+      "Yotsuba (given name)"
     ],
     "part_of_speech": "no-adjective",
     "verb_group": "",
@@ -654,7 +656,7 @@
         "furigana": "公園[こうえん]でよつばのクローバーを 見[み]つけました。",
         "romaji": "kouendeyotsubanokuroobaaomitsukemashita.",
         "english": "I found a four-leaf clover in the park.",
-        "audio": "",
+        "audio": "audio/janki-128e1844cb1e.mp3",
         "register": "polite"
       }
     ],
@@ -663,7 +665,7 @@
       "anki"
     ],
     "usage_notes": "Almost always seen in 四つ葉のクローバー (\"four-leaf clover\"), which is a symbol of good luck in Japan; the の comes from this noun-modifying use, which is why it is listed as a の-adjective. よつば is also used as a girl's given name.",
-    "audio": "",
+    "audio": "audio/janki-1dd3a6f5ad94.wav",
     "image": "",
     "pitch_accent": [
       "LHHH"
@@ -692,7 +694,8 @@
     "furigana": "一杯[いっぱい]",
     "romaji": "ippai",
     "meanings": [
-      "A lot, a full container"
+      "Full",
+      "A lot"
     ],
     "part_of_speech": "na-adjective",
     "verb_group": "",
@@ -703,7 +706,7 @@
         "furigana": "もうおなかが 一杯[いっぱい]です。デザートは 食[た]べません。",
         "romaji": "mouonakagaippaidesu. dezaatohatabemasen.",
         "english": "I'm already full. I won't have dessert.",
-        "audio": "",
+        "audio": "audio/janki-5ec38a79c4cb.mp3",
         "register": "polite"
       },
       {
@@ -711,7 +714,7 @@
         "furigana": "見[み]て、 空[そら]に 星[ほし]が 一杯[いっぱい]だよ。",
         "romaji": "misoranihoshigaippaidayo.",
         "english": "Look, the sky is full of stars.",
-        "audio": "",
+        "audio": "audio/janki-71d8d2c1c1cf.mp3",
         "register": "casual"
       }
     ],
@@ -720,7 +723,7 @@
       "anki"
     ],
     "usage_notes": "Very often written in kana as いっぱい. おなかがいっぱい is the standard way to say \"I'm full\" after eating. Note that the same reading いっぱい also works as a counter meaning \"one cup/glass\" (ビールを一杯 = one beer), so context decides which sense is meant.",
-    "audio": "",
+    "audio": "audio/janki-98a06b17b333.wav",
     "image": "",
     "pitch_accent": [
       "LHHHH",
@@ -761,7 +764,7 @@
         "furigana": "あの 人[ひと]は 妻[つま]の 友達[ともだち]です。",
         "romaji": "anohitohatsumanotomodachidesu.",
         "english": "That person is my wife's friend.",
-        "audio": "",
+        "audio": "audio/janki-41e57fe752a8.mp3",
         "register": "polite"
       },
       {
@@ -769,7 +772,7 @@
         "furigana": "あの 人[ひと]、 誰[だれ]なの？",
         "romaji": "anohito, darenano?",
         "english": "Who is that person?",
-        "audio": "",
+        "audio": "audio/janki-3594e6bf8dab.mp3",
         "register": "casual"
       }
     ],
@@ -778,7 +781,7 @@
       "anki"
     ],
     "usage_notes": "ひと is the standalone word for \"person\" and, in the plural sense, \"people.\" あの人 is a common way to refer to a third person you are talking about. Note that the same kanji is read differently inside compounds and counters: 一人 (ひとり), 三人 (さんにん), 日本人 (にほんじん).",
-    "audio": "",
+    "audio": "audio/janki-0652292c7ea3.wav",
     "image": "",
     "pitch_accent": [
       "LHH"
@@ -818,7 +821,7 @@
         "furigana": "今日[きょう]は 日本語[にほんご]を 勉強[べんきょう]するつもりです。",
         "romaji": "kyouhanihongoobenkyousurutsumoridesu.",
         "english": "I'm planning to study Japanese today.",
-        "audio": "",
+        "audio": "audio/janki-020704aeeedc.mp3",
         "register": "polite"
       },
       {
@@ -826,7 +829,7 @@
         "furigana": "今日[きょう]は 仕事[しごと]が 休[やす]みなんだ。",
         "romaji": "kyouhashigotogayasuminanda.",
         "english": "Today's my day off from work, you see.",
-        "audio": "",
+        "audio": "audio/janki-e32c84eb1caa.mp3",
         "register": "casual"
       }
     ],
@@ -835,7 +838,7 @@
       "anki"
     ],
     "usage_notes": "今日 uses an irregular reading (きょう, not こんじつ in everyday speech). Like 明日 and 毎日, it is a time word that works adverbially, so it takes no に: say 今日、映画を見ます, never 今日に. It can still take は or も as a topic marker (今日は…, 今日も…).",
-    "audio": "",
+    "audio": "audio/janki-607081f13282.wav",
     "image": "",
     "pitch_accent": [
       "HHLL"
@@ -941,7 +944,7 @@
         "furigana": "このゲームの 音楽[おんがく]は 凄[すご]いですね。",
         "romaji": "konogeemunoongakuhasugoidesune.",
         "english": "The music in this game is amazing, isn't it?",
-        "audio": "",
+        "audio": "audio/janki-10cee848158e.mp3",
         "register": "polite"
       },
       {
@@ -964,7 +967,7 @@
       "anki"
     ],
     "usage_notes": "Colloquial form: 「すげえ」.",
-    "audio": "",
+    "audio": "audio/janki-760f3d8d1459.wav",
     "image": "",
     "pitch_accent": [
       "LHLL"
@@ -1068,7 +1071,7 @@
         "furigana": "夏休[なつやす]みに 家族[かぞく]と 山[やま]に 登[のぼ]るつもりです。",
         "romaji": "natsuyasuminikazokutoyamaninoborutsumoridesu.",
         "english": "I'm planning to climb a mountain with my family over summer break.",
-        "audio": "",
+        "audio": "audio/janki-ef622e0a8a04.mp3",
         "register": "polite"
       },
       {
@@ -1076,7 +1079,7 @@
         "furigana": "夏休[なつやす]み、どこかに 行[い]くの？",
         "romaji": "natsuyasumi, dokokaniikuno?",
         "english": "Are you going anywhere for summer vacation?",
-        "audio": "",
+        "audio": "audio/janki-0eed238842a6.mp3",
         "register": "casual"
       }
     ],
@@ -1085,7 +1088,7 @@
       "anki"
     ],
     "usage_notes": "Everyday word for the school or company summer break, not just \"summer\" in general (that is 夏). To say what you do during it, mark it with に: 夏休みに旅行します。Compare 冬休み (winter break) and 春休み (spring break).",
-    "audio": "",
+    "audio": "audio/janki-78c91ccf19c5.wav",
     "image": "",
     "pitch_accent": [
       "LHHLLL"
@@ -1125,7 +1128,7 @@
         "furigana": "毎日[まいにち]、 自転車[じてんしゃ]で 学校[がっこう]に 行[い]きます。",
         "romaji": "mainichi, jitenshadegakkouniikimasu.",
         "english": "I go to school by bicycle every day.",
-        "audio": "",
+        "audio": "audio/janki-5902acaa7ca8.mp3",
         "register": "polite"
       },
       {
@@ -1133,7 +1136,7 @@
         "furigana": "学校[がっこう]まで 歩[ある]いて 行[い]くの？",
         "romaji": "gakkoumadearuiteikuno?",
         "english": "Do you walk to school?",
-        "audio": "",
+        "audio": "audio/janki-9dd97a8de20a.mp3",
         "register": "casual"
       }
     ],
@@ -1142,7 +1145,7 @@
       "anki"
     ],
     "usage_notes": "Use に (or へ) with 行く for school as a destination, but で when school is where an activity happens: 学校で日本語を勉強します。学校 covers elementary through high school and schools in general; a university is normally 大学, not 学校.",
-    "audio": "",
+    "audio": "audio/janki-ef5fce16aa3e.wav",
     "image": "",
     "pitch_accent": [
       "LHHHH"
@@ -1182,7 +1185,7 @@
         "furigana": "来年[らいねん]、 新[あたら]しい 家[いえ]を 買[か]うつもりです。",
         "romaji": "rainen, atarashiiieokautsumoridesu.",
         "english": "I'm planning to buy a new house next year.",
-        "audio": "",
+        "audio": "audio/janki-aa5b603aa7c5.mp3",
         "register": "polite"
       },
       {
@@ -1190,7 +1193,7 @@
         "furigana": "この 家[いえ]、ちょっと 古[ふる]いんだ。",
         "romaji": "konoie, chottofuruinda.",
         "english": "This house is a little old, you see.",
-        "audio": "",
+        "audio": "audio/janki-5af6a9fa54b4.mp3",
         "register": "casual"
       }
     ],
@@ -1199,7 +1202,7 @@
       "anki"
     ],
     "usage_notes": "いえ is the building itself — a house. When you mean \"home\" as in your own household (my place, at home), Japanese usually uses うち, and the same kanji 家 is often read うち in that sense. In compounds 家 is read か or け (作家 さっか \"author\", 家族 かぞく \"family\").",
-    "audio": "",
+    "audio": "audio/janki-219c2d630bf1.wav",
     "image": "",
     "pitch_accent": [
       "LHL"
@@ -1239,7 +1242,7 @@
         "furigana": "この 店[みせ]のラーメンはとてもおいしいです。",
         "romaji": "konomisenoraamenhatotemooishiidesu.",
         "english": "The ramen at this restaurant is very good.",
-        "audio": "",
+        "audio": "audio/janki-7e500fba6d47.mp3",
         "register": "polite"
       },
       {
@@ -1247,7 +1250,7 @@
         "furigana": "あの 店[みせ]、 日曜日[にちようび]は 休[やす]みなの？",
         "romaji": "anomise, nichiyoubihayasuminano?",
         "english": "Is that shop closed on Sundays?",
-        "audio": "",
+        "audio": "audio/janki-3a1e76d64300.mp3",
         "register": "casual"
       }
     ],
@@ -1256,7 +1259,7 @@
       "anki"
     ],
     "usage_notes": "General word for a shop or restaurant. In conversation お店 is very common and sounds a little softer or more polite. For a specific kind of shop, Japanese usually uses 〜屋（や）instead: 本屋, パン屋, 花屋.",
-    "audio": "",
+    "audio": "audio/janki-e5c1f46c1a0f.wav",
     "image": "",
     "pitch_accent": [
       "LHL"
@@ -1296,7 +1299,7 @@
         "furigana": "来月[らいげつ]、 東京[とうきょう]に 引[ひ]っ 越[こ]すつもりです。",
         "romaji": "raigetsu, toukyounihikkosutsumoridesu.",
         "english": "I'm planning to move to Tokyo next month.",
-        "audio": "",
+        "audio": "audio/janki-b3cc60960fb8.mp3",
         "register": "polite"
       },
       {
@@ -1304,7 +1307,7 @@
         "furigana": "え、もう 引[ひ]っ 越[こ]すの？",
         "romaji": "e, mouhikkosuno?",
         "english": "Huh, you're moving already?",
-        "audio": "",
+        "audio": "audio/janki-ea6082573c34.mp3",
         "register": "casual"
       }
     ],
@@ -1321,7 +1324,7 @@
       "anki"
     ],
     "usage_notes": "Intransitive: the new place takes に (or へ) — 大阪に引っ越す, and the old place takes から. The noun form 引っ越し is very common, often as 引っ越しをする ('to move house') or 引っ越しの準備 ('moving preparations'). Note the small っ in both the kanji spelling and the reading ひっこす.",
-    "audio": "",
+    "audio": "audio/janki-66f7c1683bea.wav",
     "image": "",
     "pitch_accent": [
       "LHHLL"
@@ -1430,7 +1433,7 @@
         "furigana": "明日[あした]、 友[とも]だちと 山[やま]に 登[のぼ]ります。",
         "romaji": "ashita, tomodachitoyamaninoborimasu.",
         "english": "Tomorrow I'm going to climb a mountain with a friend.",
-        "audio": "",
+        "audio": "audio/janki-677f7efd7ba5.mp3",
         "register": "polite"
       }
     ],
@@ -1439,7 +1442,7 @@
       "anki"
     ],
     "usage_notes": "明日 is a time word that works like an adverb, so it takes no に: 明日行きます (not ×明日に行きます). It can be marked with は or を-less topic は for contrast (明日は忙しいです). The same kanji can be read あす (a little more formal, common in news and announcements) or みょうにち (very formal, business); あした is the everyday spoken reading.",
-    "audio": "",
+    "audio": "audio/janki-3dfc4db3666b.wav",
     "image": "",
     "pitch_accent": [
       "LHHL",
@@ -1679,7 +1682,7 @@
         "furigana": "来週[らいしゅう]の 日曜日[にちようび]、 京都[きょうと]の 祭[まつ]りを 見[み]に 行[い]くつもりです。",
         "romaji": "raishuunonichiyoubi, kyoutonomatsuriominiikutsumoridesu.",
         "english": "Next Sunday, I'm planning to go see a festival in Kyoto.",
-        "audio": "",
+        "audio": "audio/janki-b47a202f7519.mp3",
         "register": "polite"
       },
       {
@@ -1687,7 +1690,7 @@
         "furigana": "ねえ、 明日[あした]の 祭[まつ]り、行[い]くの？",
         "romaji": "ashitanomatsuikuno?",
         "english": "Hey, are you going to tomorrow's festival?",
-        "audio": "",
+        "audio": "audio/janki-0f6dea7a580e.mp3",
         "register": "casual"
       }
     ],
@@ -1696,7 +1699,7 @@
       "anki"
     ],
     "usage_notes": "Very often said with the polite prefix お: お祭り. Appears in compounds such as 夏祭り (summer festival) and 花火祭り. When you talk about doing something at a festival, the festival is a place, so use で (祭りで焼きそばを食べました); use に with the verb 行く/来る for going to it.",
-    "audio": "",
+    "audio": "audio/janki-c4820250a45c.wav",
     "image": "",
     "pitch_accent": [
       "LHHH"
@@ -1736,7 +1739,7 @@
         "furigana": "この 漫画[まんが]の 第[だい]１[いち]話[わ]はとてもおもしろかったです。",
         "romaji": "konomanganodaiichiwahatotemoomoshirokattadesu.",
         "english": "Chapter 1 of this manga was very interesting.",
-        "audio": "",
+        "audio": "audio/janki-8ea94f994181.mp3",
         "register": "polite"
       },
       {
@@ -1744,7 +1747,7 @@
         "furigana": "昨日[きのう]、アニメの 第[だい]１[いち]話[わ]を 見[み]たんだ。すごくよかったよ。",
         "romaji": "kinou, animenodaiichiwaomitanda. sugokuyokattayo.",
         "english": "I watched episode 1 of the anime yesterday. It was really good.",
-        "audio": "",
+        "audio": "audio/janki-5720fdbcff46.mp3",
         "register": "casual"
       }
     ],

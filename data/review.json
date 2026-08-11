@@ -51,6 +51,14 @@
     "accepted_marks": [],
     "findings": []
   },
+  "09f2e491037b": {
+    "record_id": "word:お父さん:おとうさん",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "0da3e0688305": {
     "record_id": "word:知る:しる",
     "at": "2026-08-10",
@@ -58,6 +66,27 @@
     "accepted_because": "",
     "accepted_marks": [],
     "findings": []
+  },
+  "0f43a42c82f4": {
+    "record_id": "word:よつば:よつば",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0].japanese",
+        "problem": "The usage note says the word is almost always seen as 四つ葉のクローバー, but the example writes it in kana (よつばのクローバー), so the sentence contradicts the note and models a spelling the learner is unlikely to meet in print.",
+        "severity": "note",
+        "suggestion": "Write the example as 公園で四つ葉のクローバーを見つけました。with furigana 四[よ]つ 葉[ば], keeping the kana headword if the deck wants it."
+      },
+      {
+        "where": "usage_notes",
+        "problem": "The explanation that the の in 四つ葉のクローバー is the reason the word is a の-adjective states a rule that is not true — any noun takes の to modify a following noun, so this reasoning would make every noun a の-adjective; 四つ葉 is an ordinary noun here.",
+        "severity": "note",
+        "suggestion": "Drop the etymological justification and simply say that 四つ葉 is a noun used attributively with の, as in 四つ葉のクローバー."
+      }
+    ]
   },
   "0f9db0dccc41": {
     "record_id": "word:店:みせ",
@@ -148,6 +177,29 @@
     "accepted_because": "",
     "accepted_marks": [],
     "findings": []
+  },
+  "329a3b49591d": {
+    "record_id": "word:一杯:いっぱい",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "37040b2a9d9b": {
+    "record_id": "word:一杯:いっぱい",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "meanings",
+        "problem": "\"A full container\" is a noun gloss and misstates the na-adjective entry: as a na-adjective/adverb 一杯 means \"full\" or \"a lot\", and the container sense belongs to the counter usage the usage note itself separates out. As a result example[0] (おなかが一杯です = my stomach is full) uses a sense that no listed meaning covers.",
+        "severity": "error",
+        "suggestion": "Glosses along the lines of \"full\", \"filled with\", \"a lot\" — leave the \"one cupful\" container sense to the usage note about the counter."
+      }
+    ]
   },
   "38a4cf22a5cc": {
     "record_id": "word:人:ひと",
@@ -287,6 +339,36 @@
     "accepted_marks": [],
     "findings": []
   },
+  "6089834d6ff5": {
+    "record_id": "word:そう言えば:そういえば",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "Pitch accent",
+        "problem": "The pattern HLLHLL has six marks, but the reading そういえば has only five morae (そ/う/い/え/ば), and it encodes two separate rises inside a single diagram. For this phrase the expected shape is そう (H-L) followed by 言えば with its accent on い (い\\えば), i.e. HL-HLL over five morae, not HLLHLL.",
+        "severity": "note",
+        "suggestion": "Re-check the pattern against the reading; if そう and 言えば are treated as two accent phrases, draw them as the two accents the format supports rather than one six-mark string."
+      }
+    ]
+  },
+  "613541c17794": {
+    "record_id": "word:もう:もう",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "pitch accent",
+        "problem": "Four patterns are listed but only two are distinct (LHH, HLL, HLL, LHH), so the card would draw the same two diagrams twice; duplicates teach nothing and suggest a data-merge error rather than four accepted accents.",
+        "severity": "note",
+        "suggestion": "Deduplicate to the two distinct patterns, primary first (HLL, LHH — or LHH, HLL if heiban is primary for this sense)."
+      }
+    ]
+  },
   "6615a936ef8c": {
     "record_id": "word:使う:つかう",
     "at": "2026-08-10",
@@ -338,6 +420,14 @@
     "accepted_marks": [],
     "findings": []
   },
+  "6e4e31830df2": {
+    "record_id": "word:凄い:すごい",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "72e046d7c08d": {
     "record_id": "word:する:する",
     "at": "2026-08-10",
@@ -356,6 +446,21 @@
         "problem": "Eighteen senses, including metalinguistic ones ('verbalizing suffix', 'to place, or raise, person A to a post or status B'), are dumped into the meaning field; on a production card (English -> Japanese) this is unreadable and far past the beginner level the rest of the card targets.",
         "severity": "note",
         "suggestion": "Keep a handful of compact glosses ('to do', 'to make (into)', 'to cost', 'verb-forming suffix with nouns') and move the rest to usage_notes or leave them out."
+      }
+    ]
+  },
+  "75debbbfef74": {
+    "record_id": "word:明日:あした",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "usage_notes",
+        "problem": "The phrase \"It can be marked with は or を-less topic は for contrast\" is garbled — it repeats は and refers to a \"を-less topic は\" that means nothing to a beginner.",
+        "severity": "note",
+        "suggestion": "Simplify to something like: \"It can take は for contrast or topic: 明日は忙しいです ('Tomorrow I'm busy').\""
       }
     ]
   },
@@ -532,6 +637,21 @@
     "accepted_marks": [],
     "findings": []
   },
+  "a850ee2027d9": {
+    "record_id": "word:祭り:まつり",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "usage_notes",
+        "problem": "花火祭り is given as a common compound, but the ordinary Japanese word for a fireworks event is 花火大会; 花火祭り appears only in a few specific event names and is not a standard compound a beginner should learn alongside 夏祭り.",
+        "severity": "note",
+        "suggestion": "Replace 花火祭り with a genuinely common compound, e.g. 秋祭り (autumn festival) or 祭り日, or mention 花火大会 separately as the usual word for a fireworks display."
+      }
+    ]
+  },
   "ab79713fd3c2": {
     "record_id": "word:凄い:すごい",
     "at": "2026-08-11",
@@ -566,6 +686,21 @@
     "accepted_because": "",
     "accepted_marks": [],
     "findings": []
+  },
+  "b0984f305851": {
+    "record_id": "word:すぐ:すぐ",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "meanings",
+        "problem": "\"almost\" is not a meaning of すぐ — the card's own usage notes attribute that feeling to もうすぐ, not to すぐ alone, and the core sense (\"immediately / right away\") is absent from the gloss list while both example sentences use exactly that sense.",
+        "severity": "error",
+        "suggestion": "Gloss as \"soon\", \"immediately\", \"right away\" (and optionally \"right nearby\" for the spatial use); drop \"almost\"."
+      }
+    ]
   },
   "b679c074c9ad": {
     "record_id": "word:読む:よむ",
@@ -644,9 +779,25 @@
       }
     ]
   },
+  "ce73ce4220e3": {
+    "record_id": "word:今日:きょう",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "d46d79b97fa1": {
     "record_id": "word:する:する",
     "at": "2026-08-10",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "d74f67821344": {
+    "record_id": "word:すぐ:すぐ",
+    "at": "2026-08-11",
     "accepted": false,
     "accepted_because": "",
     "accepted_marks": [],
