@@ -122,6 +122,7 @@ def test_a_full_entry_round_trips(tmp_path: Path) -> None:
         of="word",
         provider="voicevox",
         voice=46,
+        speed=1.0,
         content_fp="1a2b3c",
         at="2026-08-11",
     )
@@ -497,6 +498,7 @@ def test_regenerated_audio_replaces_the_entry_for_that_file(tmp_path: Path) -> N
         of="word",
         provider="voicevox",
         voice=46,
+        speed=1.0,
         content_fp="1a2b3c",
         at="2026-08-11",
     )
@@ -507,6 +509,7 @@ def test_regenerated_audio_replaces_the_entry_for_that_file(tmp_path: Path) -> N
         of="word",
         provider="voicevox",
         voice=46,
+        speed=1.0,
         content_fp="1a2b3c",
         at="2026-08-11",
     )
@@ -516,6 +519,7 @@ def test_regenerated_audio_replaces_the_entry_for_that_file(tmp_path: Path) -> N
         of="word",
         provider="voicevox",
         voice=8,
+        speed=1.0,
         content_fp="1a2b3c",
         at="2026-09-01",
         accent_unverified=True,
@@ -540,9 +544,9 @@ def test_re_recording_identical_audio_months_later_reports_no_change(tmp_path: P
         "voice": 46,
         "content_fp": "1a2b3c",
     }
-    book.record_audio("word:話す:はなす", **arguments, at="2026-08-01")
+    book.record_audio("word:話す:はなす", **arguments, at="2026-08-01", speed=1.0)
 
-    assert book.record_audio("word:話す:はなす", **arguments, at="2026-09-01") is False
+    assert book.record_audio("word:話す:はなす", **arguments, at="2026-09-01", speed=1.0) is False
 
     entries = book.records["word:話す:はなす"]["audio"]
     assert len(entries) == 1
@@ -560,11 +564,41 @@ def test_audio_arguments_are_checked(tmp_path: Path) -> None:
     }
 
     with pytest.raises(LedgerError):
-        book.record_audio("word:話す:はなす", **{**arguments, "of": "sentence"})
+        book.record_audio("word:話す:はなす", **{**arguments, "of": "sentence"}, speed=1.0)
     with pytest.raises(LedgerError):
-        book.record_audio("word:話す:はなす", **{**arguments, "file": "  "})
+        book.record_audio("word:話す:はなす", **{**arguments, "file": "  "}, speed=1.0)
     with pytest.raises(LedgerError):
-        book.record_audio("word:話す:はなす", **{**arguments, "voice": "nanami"})
+        book.record_audio("word:話す:はなす", **{**arguments, "voice": "   "}, speed=1.0)
+    with pytest.raises(LedgerError):
+        book.record_audio("word:話す:はなす", **{**arguments, "voice": True}, speed=1.0)
+    # None and any other object: `str(voice)` for anything at all would write
+    # `"voice": "None"` — or `"{'id': 13}"` — into a committed file and report
+    # success, where the `int()` this replaced raised.
+    for bad in (None, {"id": 13}, 1.5):
+        with pytest.raises(LedgerError, match="must be an id or a name"):
+            book.record_audio("word:話す:はなす", **{**arguments, "voice": bad}, speed=1.0)
+
+
+def test_a_named_voice_is_stored_as_its_name(tmp_path: Path) -> None:
+    """Engines disagree about what a voice is: VOICEVOX numbers its speakers,
+    OpenAI names them. Mapping `onyx` onto an index would put a number in a
+    committed file that means nothing outside janki and would change meaning the
+    day the voice list grows."""
+    book = ledger_module.load(tmp_path / "ledger.json")
+
+    book.record_audio(
+        "word:話す:はなす", file="janki-abc.mp3", of="example", provider="openai",
+        voice="onyx", speed=1.0, content_fp="1a2b3c",
+    )
+
+    entry = book.records["word:話す:はなす"]["audio"][0]
+    assert entry["voice"] == "onyx"
+    assert book.audio_file_for(
+        "word:話す:はなす", of="example", content_fp="1a2b3c", voice="onyx", speed=1.0
+    ) == "janki-abc.mp3"
+    assert book.audio_file_for(
+        "word:話す:はなす", of="example", content_fp="1a2b3c", voice="ash", speed=1.0
+    ) is None, "a different voice is not current"
 
 
 def test_detail_the_ledger_could_not_write_is_refused_at_the_call_site(tmp_path: Path) -> None:
@@ -580,6 +614,7 @@ def test_detail_the_ledger_could_not_write_is_refused_at_the_call_site(tmp_path:
             of="word",
             provider="voicevox",
             voice=46,
+            speed=1.0,
             content_fp="1a2b3c",
             src=Path("/x/y.wav"),
         )
@@ -724,6 +759,7 @@ def test_missing_audio_is_about_word_audio(tmp_path: Path) -> None:
         of="word",
         provider="voicevox",
         voice=46,
+        speed=1.0,
         content_fp=word_audio_content_fingerprint(spoken),
         at="2026-08-11",
     )
@@ -733,6 +769,7 @@ def test_missing_audio_is_about_word_audio(tmp_path: Path) -> None:
         of="example",
         provider="azure",
         voice=0,
+        speed=1.0,
         content_fp=example_audio_content_fingerprint(example_only.examples[0]),
         at="2026-08-11",
     )
@@ -749,6 +786,7 @@ def test_stale_audio_catches_an_edited_reading_and_an_edited_example(tmp_path: P
         of="word",
         provider="voicevox",
         voice=46,
+        speed=1.0,
         content_fp=word_audio_content_fingerprint(record),
         at="2026-08-11",
     )
@@ -758,6 +796,7 @@ def test_stale_audio_catches_an_edited_reading_and_an_edited_example(tmp_path: P
         of="example",
         provider="azure",
         voice=0,
+        speed=1.0,
         content_fp=example_audio_content_fingerprint(record.examples[0]),
         at="2026-08-11",
     )
@@ -791,6 +830,7 @@ def test_word_audio_goes_stale_once_a_pitch_pattern_arrives(tmp_path: Path) -> N
         of="word",
         provider="voicevox",
         voice=46,
+        speed=1.0,
         content_fp=word_audio_content_fingerprint(record),
         at="2026-08-11",
     )

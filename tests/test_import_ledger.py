@@ -530,3 +530,162 @@ def test_another_importer_names_its_own_source_unit_and_staging_file(
         {"type": "jpdb", "ref": "deck:Mining", "seen_at": seen_at}
     ]
     assert "word:本:" not in _entries(root)
+
+
+# --- a misshapen ledger refuses before it costs anything ---------------------
+
+
+def _misshapen(root: Path, record_id: str = "word:話す:はなす", **keys: object) -> None:
+    """Write a ledger whose entry holds a structured key of the wrong type.
+
+    `load` accepts far looser input than the mutators do — it checks only that
+    each entry is an object — so a hand-edited or older ledger really can carry
+    `"audio": null`, and this module's own comments cite that as a real input.
+    """
+    payload = {"version": 1, "records": {record_id: {"added_at": "2026-08-01", **keys}}}
+    (root / "ledger.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
+def test_a_misshapen_ledger_stops_an_import_before_anything_is_written(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The ordering `_land_import` promises: everything that can refuse an import
+    happens before `vocabulary.json` is replaced. Refusing from a *mutator*
+    instead fires after the records are on disk and after rows have been staged,
+    so the command has done nearly all of its work and reports none of it — no
+    counts, no merge summary, no held-rows notice, just an error."""
+    root, source = _project(tmp_path)
+    _misshapen(root, audio=None)
+
+    assert _import(root, source) == 1
+
+    captured = capsys.readouterr()
+    assert "'audio' as NoneType, not a list" in captured.err
+    assert not (root / "vocabulary.json").exists(), "the records were never replaced"
+    assert not (root / "staging").exists(), "and nothing was staged"
+
+
+def test_the_error_names_a_repair_that_works(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--rebuild` must be able to do what the message tells the user to do.
+    While the refusal came from a mutator, `status --rebuild` hit the same raise
+    on the same entry, leaving "delete the ledger" as the only way out — and
+    that destroys `exports` and `enriched`, which no rebuild can reconstruct."""
+    root, source = _project(tmp_path)
+    _misshapen(
+        root,
+        audio=None,
+        exports={"verbs": "2026-07-01"},
+        enriched=[{"at": "2026-07-01", "kind": "jpdb", "model": "jpdb", "fields": ["reading"]}],
+    )
+    capsys.readouterr()  # drain the config banner
+    assert cli.main(["--root", str(root), "status"]) == 1
+    assert "'janki status --rebuild' repairs" in capsys.readouterr().err
+
+    assert cli.main(["--root", str(root), "status", "--rebuild"]) == 0
+
+    out = capsys.readouterr().out
+    assert "repaired: word:話す:はなす" in out and "'audio_unreadable'" in out
+    entry = _entries(root)["word:話す:はなす"]
+    assert entry["audio"] == [], "the bad key was reset"
+    assert entry["exports"] == {"verbs": "2026-07-01"}, "and the history kept"
+    assert entry["enriched"][0]["kind"] == "jpdb"
+    assert entry["added_at"] == "2026-08-01", "including the original date"
+
+    assert _import(root, source) == 0, "and the import the bad shape blocked now runs"
+
+
+def test_a_non_dict_exports_is_refused_rather_than_crashing(tmp_path: Path) -> None:
+    """`exports` was the one structured key left unchecked, and the only one
+    whose bad shape still produced a raw traceback: `setdefault` returns the
+    existing list and `[].get(stem)` is an AttributeError, which `main` does not
+    catch, so the user gets a stack trace instead of a clean error."""
+    root, _ = _project(tmp_path)
+    _misshapen(root, exports=[])
+
+    with pytest.raises(ledger.LedgerError, match="'exports' as list, not a dict"):
+        ledger.load(root / "ledger.json")
+
+    book = ledger.load(root / "ledger.json", repair=True)
+    assert book.repaired == {"word:話す:はなす": ["exports_unreadable"]}
+    assert book.record_export("word:話す:はなす", "verbs") is True
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [("enriched", {"jpdb": {"at": "2026-07-01"}}), ("exports", ["verbs"])],
+)
+def test_a_repair_never_discards_what_a_rebuild_cannot_put_back(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], key: str, value: object
+) -> None:
+    """Emptying `enriched` or `exports` destroys exactly the history the refusal
+    message promises to keep, and no later run can re-derive either.
+
+    `enriched` is provenance, not targeting: which pass ran, which model, which
+    fields it wrote, on what date. Enrichment targeting is content-defined —
+    `missing_enrichment` is a staticmethod that says outright it never consults
+    these entries — so nothing re-pays for the record, and nothing can ever say
+    again who filled a field, because a filled field does not carry that.
+    `exports` is worse: nothing outside the ledger records which build included
+    which note.
+
+    Nothing else is reconstructible either — see
+    `test_sources_are_parked_too_because_a_rebuild_cannot_restore_them`, which
+    is why the repair parks every key rather than a chosen few."""
+    root, _ = _project(tmp_path)
+    _misshapen(root, **{key: value})
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "status", "--rebuild"]) == 0
+
+    out = capsys.readouterr().out
+    assert f"kept as '{key}_unreadable'" in out, "and says where it went"
+    entry = _entries(root)["word:話す:はなす"]
+    assert entry[key] == ([] if key == "enriched" else {}), "the key is usable again"
+    assert entry[f"{key}_unreadable"] == value, "and the old value survived"
+
+
+def test_sources_are_parked_too_because_a_rebuild_cannot_restore_them(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`sources` looked reconstructible and is not. It is append-only by design:
+    a word imported from Shirabe and later mined from jpdb has two sightings
+    with two real dates, and `status.rebuild` writes back a *single* reference
+    dated today, from the record's own `source`. It also only visits records
+    still in the universe — this entry's record is in no `vocabulary.json` at
+    all, so the rebuild never touches it and "it will be filled back in" was
+    simply false."""
+    root, _ = _project(tmp_path)
+    _misshapen(root, sources={"type": "shirabe", "ref": "export.csv"})
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "status", "--rebuild"]) == 0
+
+    entry = _entries(root)["word:話す:はなす"]
+    assert entry["sources"] == []
+    assert entry["sources_unreadable"] == {"type": "shirabe", "ref": "export.csv"}
+
+
+def test_a_second_repair_does_not_overwrite_the_first_ones_rescue(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The quarantine is the only copy, so writing over it destroys exactly what
+    this mechanism exists to keep — and it is a plausible sequence: repair,
+    hand-edit the key wrongly a second time, repair again."""
+    root, _ = _project(tmp_path)
+    _misshapen(root, enriched={"jpdb": {"at": "2026-07-01"}})
+    capsys.readouterr()
+    assert cli.main(["--root", str(root), "status", "--rebuild"]) == 0
+
+    ledger_path = root / "ledger.json"
+    payload = json.loads(ledger_path.read_text(encoding="utf-8"))
+    payload["records"]["word:話す:はなす"]["enriched"] = {"ai": "a later bad edit"}
+    ledger_path.write_text(json.dumps(payload), encoding="utf-8")
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "status", "--rebuild"]) == 0
+
+    entry = _entries(root)["word:話す:はなす"]
+    assert entry["enriched_unreadable"] == {"jpdb": {"at": "2026-07-01"}}, "the first survives"
+    assert entry["enriched_unreadable_2"] == {"ai": "a later bad edit"}, "beside the second"

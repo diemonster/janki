@@ -401,3 +401,53 @@ def test_an_unreadable_config_file_is_a_clean_error(tmp_path: Path) -> None:
         config_path.chmod(0o644)
 
     assert "janki.toml" in str(excinfo.value)
+
+
+def test_voicevox_speed_defaults_to_normal(tmp_path: Path) -> None:
+    _write_config(tmp_path, '[tts]\nprovider = "voicevox"\n')
+
+    assert ProjectConfig.load(tmp_path).voicevox_speed == 1.0
+
+
+def test_voicevox_speed_is_read(tmp_path: Path) -> None:
+    _write_config(tmp_path, "[tts]\nvoicevox_speed = 0.85\n")
+
+    assert ProjectConfig.load(tmp_path).voicevox_speed == 0.85
+
+
+def test_a_whole_number_speed_is_accepted(tmp_path: Path) -> None:
+    # `voicevox_speed = 1` is a reasonable thing to write and means 1.0 exactly.
+    _write_config(tmp_path, "[tts]\nvoicevox_speed = 1\n")
+
+    assert ProjectConfig.load(tmp_path).voicevox_speed == 1.0
+
+
+@pytest.mark.parametrize(
+    "value", ["0", "-1.0", "nan", "inf", "-inf", "true", '"0.85"']
+)
+def test_a_speed_that_is_not_a_rate_is_refused(tmp_path: Path, value: str) -> None:
+    """Zero and below have no meaning as a multiplier, and VOICEVOX answers both
+    with a 500. A quoted number and a bool are the `_int` cases: both would read
+    as something plausible and sound like nothing was set.
+
+    `nan` and `inf` are ordinary TOML float literals, and every comparison
+    against NaN is False — so a bare `<= 0` accepts both, and the rate reaches
+    the engine as the bare token `NaN` in a request body, failing mid-run on the
+    first record instead of at load."""
+    _write_config(tmp_path, f"[tts]\nvoicevox_speed = {value}\n")
+
+    with pytest.raises(ConfigError):
+        ProjectConfig.load(tmp_path)
+
+
+@pytest.mark.parametrize("value", ["0.3", "4.0"])
+def test_a_rate_outside_the_sliders_range_is_accepted(tmp_path: Path, value: str) -> None:
+    """0.5-2.0 is the range of the VOICEVOX *editor's slider*, not a clamp: the
+    engine's schema leaves speedScale unconstrained and returns exactly the
+    durations 0.3 and 4.0 ask for (checked against a running engine 2026-08-08).
+    Enforcing the slider's range here refused audio the engine makes correctly,
+    and did it inside `ProjectConfig.load` — so it also took down `janki status`
+    and `janki build`, which synthesize nothing."""
+    _write_config(tmp_path, f"[tts]\nvoicevox_speed = {value}\n")
+
+    assert ProjectConfig.load(tmp_path).voicevox_speed == float(value)

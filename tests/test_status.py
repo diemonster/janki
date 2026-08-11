@@ -144,6 +144,7 @@ def test_summary_reports_exports_audio_enrichment_and_staleness(
         of="word",
         provider="voicevox",
         voice=46,
+        speed=1.0,
         content_fp="stale-fingerprint",
         at="2026-08-11",
     )
@@ -467,12 +468,16 @@ def test_build_and_validate_name_the_deck_file_for_a_malformed_filter(
     deck = str(root / "decks" / "broken.yaml")
 
     assert cli.main(["--root", str(root), "build", deck]) == 1
+    build = capsys.readouterr()
     assert cli.main(["--root", str(root), "validate", deck]) == 1
+    validate = capsys.readouterr()
 
-    err = capsys.readouterr().err
-    assert "Traceback" not in err
-    assert err.count("error:") == 2
-    assert err.count("broken.yaml") == 2
+    # The build refuses outright; `validate` reports it against the file and
+    # carries on, so that one deck cannot cancel a sweep of every other. Both
+    # name the deck, and neither shows a traceback.
+    assert "Traceback" not in build.err + validate.err + validate.out
+    assert "error:" in build.err and "broken.yaml" in build.err
+    assert "broken.yaml" in validate.out + validate.err
 
 
 def test_real_deck_filters_still_filter(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -534,6 +539,7 @@ def test_missing_audio_lists_records_without_word_audio(
         of="word",
         provider="voicevox",
         voice=46,
+        speed=1.0,
         content_fp=word_audio_content_fingerprint(_record("話す", "はなす")),
     )
     book.save()
@@ -576,6 +582,7 @@ def test_format_ids_narrows_to_the_flags_and_deduplicates(
         of="word",
         provider="voicevox",
         voice=46,
+        speed=1.0,
         content_fp=word_audio_content_fingerprint(_record("食べる", "たべる")),
     )
     book.save()
@@ -827,6 +834,11 @@ def test_rebuild_recovers_sources_and_audio_and_admits_what_it_cannot(
     audio = sorted(entry["audio"], key=lambda item: item["of"])
     assert [item["of"] for item in audio] == ["example", "word"]
     assert all(item["provider"] == "unknown" and item["rebuilt"] is True for item in audio)
+    # Negative sentinels, and load-bearing: a rebuilt entry knows neither the
+    # voice nor the rate, and `_is_current` compares both. A plausible 1.0 here
+    # would let `janki audio` call a clip current whose rate nothing knows.
+    assert all(item["voice"] == status_module.REBUILT_VOICE == -1 for item in audio)
+    assert all(item["speed"] == status_module.REBUILT_SPEED == -1.0 for item in audio)
     # Both filenames pin their content here: the word file's address embeds the
     # record id (and so the reading), the example file's embeds the sentence.
     assert audio[1]["content_fp"] == word_audio_content_fingerprint(record)
@@ -860,6 +872,7 @@ def test_rebuild_leaves_a_real_audio_entry_alone(
         of="word",
         provider="voicevox",
         voice=46,
+        speed=0.85,
         content_fp=word_audio_content_fingerprint(record),
         at="2026-08-11",
     )
@@ -869,14 +882,15 @@ def test_rebuild_leaves_a_real_audio_entry_alone(
 
     capsys.readouterr()
     entries = ledger.load(root / "ledger.json").records[record.id]["audio"]
-    # A rebuilt entry knows neither the engine nor the voice; it must never
-    # replace an entry that does.
+    # A rebuilt entry knows neither the engine, the voice, nor the rate; it must
+    # never replace an entry that does.
     assert entries == [
         {
             "file": filename,
             "of": "word",
             "provider": "voicevox",
             "voice": 46,
+            "speed": 0.85,
             "content_fp": word_audio_content_fingerprint(record),
             "at": "2026-08-11",
         }
@@ -1088,6 +1102,7 @@ def test_a_record_whose_example_was_edited_after_its_audio_reads_as_stale(
         of="example",
         provider="azure",
         voice=0,
+        speed=1.0,
         content_fp=example_audio_content_fingerprint(ExampleSentence(japanese="毎日話した。")),
     )
     book.save()
@@ -1098,3 +1113,48 @@ def test_a_record_whose_example_was_edited_after_its_audio_reads_as_stale(
     )
 
     assert report.stale_audio == [record.id]
+
+
+def test_rebuild_binds_the_file_the_record_actually_names(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Switching a sentence to OpenAI leaves `janki-<fp>.wav` beside the new
+    `janki-<fp>.mp3` until a prune. Ranking by extension bound the stale WAV —
+    then reported the mp3 the record actually plays as the ambiguous one,
+    telling the user to delete the file that is correct."""
+    record = _record("話す", "はなす")
+    fingerprint = word_audio_filename_fingerprint(record)
+    # The record plays the mp3 — the fact the rebuild has to defer to.
+    root = _project(
+        tmp_path, [record.to_dict() | {"audio": f"audio/janki-{fingerprint}.mp3"}]
+    )
+    media = root / "media" / "audio"
+    media.mkdir(parents=True, exist_ok=True)
+    (media / f"janki-{fingerprint}.wav").write_bytes(b"RIFF stale")
+    (media / f"janki-{fingerprint}.mp3").write_bytes(b"ID3 current")
+
+    assert _status(root, "--rebuild") == 0
+
+    capsys.readouterr()
+    entries = ledger.load(root / "ledger.json").records[record.id]["audio"]
+    assert [e["file"] for e in entries] == [f"janki-{fingerprint}.mp3"]
+
+
+def test_rebuild_falls_back_to_extension_when_the_record_names_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The old rule, kept for the case it was written for: no record preference
+    to defer to, so the ranking decides and stays reproducible."""
+    record = _record("話す", "はなす")
+    root = _project(tmp_path, [record.to_dict()])
+    fingerprint = word_audio_filename_fingerprint(record)
+    media = root / "media" / "audio"
+    media.mkdir(parents=True, exist_ok=True)
+    (media / f"janki-{fingerprint}.wav").write_bytes(b"RIFF")
+    (media / f"janki-{fingerprint}.mp3").write_bytes(b"ID3")
+
+    assert _status(root, "--rebuild") == 0
+
+    capsys.readouterr()
+    entries = ledger.load(root / "ledger.json").records[record.id]["audio"]
+    assert [e["file"] for e in entries] == [f"janki-{fingerprint}.wav"]

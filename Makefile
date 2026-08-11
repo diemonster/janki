@@ -32,7 +32,7 @@ bootstrap:
 
 ## gates: the definition of done. Run this, not its parts.
 gates: lint test
-	@$(JANKI) build data/decks/verbs.yaml >/dev/null
+	@$(JANKI) build data/decks/verbs.yaml --output dist/.gates-check.apkg >/dev/null
 	@echo "gates: ruff clean, pytest green, sample deck builds  [$(ROOT)]"
 
 lint:

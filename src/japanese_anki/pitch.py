@@ -207,9 +207,9 @@ def render_pitch_html(reading: str, patterns: Sequence[str]) -> str:
     """The pattern drawn over the reading, one ``<span>`` per mora.
 
     A high mora gets a line above it and the mora the pitch falls from gets one
-    down its right-hand side, which is the notation every Japanese dictionary
-    uses. Classes rather than inline styles, so the note template owns the look
-    and a card restyled later does not need every note regenerated.
+    down its right-hand side, matching the compact two-level diagram used by
+    jpdb. Classes rather than inline styles let the note template own the look,
+    so restyling a card later does not require every note to be regenerated.
 
     Every pattern is rendered, primary first, because a word with two accepted
     accents has two and showing only one would teach that the other is wrong.
@@ -238,12 +238,20 @@ def render_pitch_html(reading: str, patterns: Sequence[str]) -> str:
             classes = ["mora", "high" if per_mora[index] == "H" else "low"]
             if per_mora[index] == "H" and levels[index + 1] == "L":
                 classes.append("drop")
+            # A rise as well as a fall: jpdb's notation draws the vertical at
+            # both transitions, and without it a heiban word is a flat line a
+            # reader takes for "no accent recorded" rather than "no drop".
+            if index > 0 and per_mora[index] == "H" and per_mora[index - 1] == "L":
+                classes.append("rise")
             spans.append(
                 f'<span class="{" ".join(classes)}">{html.escape(mora)}</span>'
             )
         # The particle slot is drawn as an empty mora so odaka is visible: the
         # fall happens after the word, and a diagram that stops at the last kana
         # has nowhere to show it.
-        spans.append(f'<span class="mora particle {"high" if particle == "H" else "low"}"></span>')
+        particle_classes = ["mora", "particle", "high" if particle == "H" else "low"]
+        if particle == "H" and per_mora[-1] == "L":
+            particle_classes.append("rise")
+        spans.append(f'<span class="{" ".join(particle_classes)}"></span>')
         rendered.append(f'<span class="pitch">{"".join(spans)}</span>')
     return "".join(rendered)

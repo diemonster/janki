@@ -1,4 +1,9 @@
+/* Pitch colours, on `.card` rather than `:root`: Anki styles the card element,
+   and a custom property set on :root is not reliably inherited into the
+   reviewer's shadow tree. */
 .card {
+  --pitch-low: #4a6fb5;
+  --pitch-high: #c95f70;
   box-sizing: border-box;
   max-width: 760px;
   margin: 0 auto;
@@ -117,7 +122,14 @@
   cursor: pointer;
 }
 
+/* Two lookups, wrapped rather than squeezed: Shirabe is a deep link into the
+   iPhone app and does nothing on a desktop, jpdb is a web page and works
+   everywhere, so neither is the "real" one to make primary. */
 .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
   margin-top: 28px;
 }
 
@@ -144,7 +156,231 @@
 
 @media (prefers-color-scheme: dark) {
   .card {
+    /* Lifted, because the same blue and red go muddy on a dark ground. */
+    --pitch-low: #7fa3e0;
+    --pitch-high: #e8899a;
     color: #f2f2f2;
     background: #181818;
   }
+}
+
+/* Pitch accent, drawn the way jpdb draws it: a line *under* the low morae and
+   *over* the high ones, with a vertical connecting the two at every change.
+   One row per accepted pattern, primary first — a word with two accents has
+   two, and showing one would teach that the other is wrong.
+
+   The two-line form is not decoration. The traditional dictionary notation —
+   an overline on the high morae only — makes a heiban word look like a word
+   with nothing recorded, because "flat and high" and "no data" render the
+   same. Every mora carrying a line on one side or the other means the diagram
+   always says something.
+
+   The particle slot is the empty span at the end. It is what makes odaka
+   visible at all: the fall happens *after* the word, so a diagram stopping at
+   the last kana has nowhere to show it, and 橋 would look identical to 端. */
+.pitch-accent {
+  margin: .5rem 0 .2rem;
+  line-height: 2.4;
+}
+.pitch-accent .pitch {
+  display: inline-block;
+  margin-right: 1.1rem;
+  white-space: nowrap;
+}
+.pitch-accent .mora {
+  display: inline-block;
+  position: relative;
+  padding: 0 .15em;
+  font-size: 1.05rem;
+}
+/* Low: the line runs underneath. High: over the top. */
+.pitch-accent .mora.low {
+  box-shadow: inset 0 -2px 0 0 var(--pitch-low);
+}
+.pitch-accent .mora.high {
+  box-shadow: inset 0 2px 0 0 var(--pitch-high);
+}
+/* The verticals. `rise` climbs the left edge into a high run; `drop` falls
+   down the right edge of the mora the pitch falls from. */
+.pitch-accent .mora.rise {
+  box-shadow: inset 0 2px 0 0 var(--pitch-high), inset 2px 0 0 0 var(--pitch-high);
+}
+.pitch-accent .mora.drop {
+  box-shadow: inset 0 2px 0 0 var(--pitch-high), inset -2px 0 0 0 var(--pitch-high);
+}
+.pitch-accent .mora.rise.drop {
+  box-shadow:
+    inset 0 2px 0 0 var(--pitch-high),
+    inset 2px 0 0 0 var(--pitch-high),
+    inset -2px 0 0 0 var(--pitch-high);
+}
+/* The zero-width space gives the empty particle slot a line box for its inset
+   shadow; width alone leaves the padding box with zero height. */
+.pitch-accent .mora.particle {
+  width: .7em;
+}
+.pitch-accent .mora.particle::before {
+  content: "\200B";
+}
+
+.example-audio {
+  margin-top: .35rem;
+}
+
+.frequency {
+  margin-top: .75rem;
+  font-size: .8rem;
+  opacity: .65;
+}
+
+/* "+13 more senses": present, but not competing with the glosses themselves. */
+.more-senses {
+  opacity: 0.55;
+  font-size: 0.85em;
+}
+
+/* Kanji reference, one collapsed block per character in the word. Collapsed
+   because it is a reminder rather than the thing being tested: the card asks
+   for a word, and the strokes are there for the moment you cannot recall how
+   one is written. A two-kanji word gets two, so opening one does not open both.
+
+   Sources are KANJIDIC2 (CC BY-SA 4.0, EDRDG) and KanjiVG (CC BY-SA 3.0,
+   Ulrich Apel); a shared deck must credit both. */
+.kanji-info {
+  margin-top: 22px;
+  text-align: left;
+}
+
+.kanji-info details.kanji {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px solid rgba(128, 128, 128, 0.28);
+  border-radius: 10px;
+}
+
+.kanji-info details.kanji > summary {
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1.4;
+  list-style: none;
+}
+
+.kanji-info details.kanji > summary::-webkit-details-marker {
+  display: none;
+}
+
+.kanji-info details.kanji > summary::after {
+  content: " ▸";
+  font-size: 13px;
+  opacity: 0.5;
+}
+
+.kanji-info details.kanji[open] > summary::after {
+  content: " ▾";
+}
+
+.kanji-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  margin: 6px 0 10px;
+  font-size: 14px;
+}
+
+.kanji-head .kanji-tags {
+  opacity: 0.6;
+}
+
+/* The graph-paper strip: one cell per stroke, each showing every stroke drawn
+   so far with the newest one picked out. That progression is the whole point —
+   a single finished glyph says nothing about the order it is written in. */
+.stroke-order {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  margin-bottom: 10px;
+}
+
+.stroke-cell {
+  width: 42px;
+  height: 42px;
+  box-sizing: border-box;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  margin: -0.5px 0 0 -0.5px;
+  background-image:
+    linear-gradient(rgba(128, 128, 128, 0.18) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(128, 128, 128, 0.18) 1px, transparent 1px);
+  background-position: center center;
+  background-size: 50% 50%;
+}
+
+.stroke-cell svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.stroke-cell svg > use {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.45;
+}
+
+/* The stroke this cell adds, so the eye lands on what changed. */
+.stroke-cell svg > use.new {
+  stroke: var(--pitch-high);
+  opacity: 1;
+}
+
+.kanji-examples {
+  font-size: 14px;
+}
+
+.kanji-example {
+  display: grid;
+  grid-template-columns: 1.6em 4.5em auto auto 1fr;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 0;
+  border-top: 1px dotted rgba(128, 128, 128, 0.35);
+}
+
+.kanji-example .kanji-kind {
+  padding: 0 3px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.kanji-example .kanji-word {
+  font-size: 16px;
+}
+
+.kanji-example .kanji-kana,
+.kanji-example .kanji-gloss {
+  opacity: 0.7;
+}
+
+/* Pattern cards: a rule, not a word. Sized like the expression on a
+   vocabulary card, since it is the thing being recalled. */
+.pattern-trigger {
+  font-size: 2em;
+  margin: 0.4em 0 0.2em;
+}
+.pattern-ask,
+.pattern-result {
+  font-size: 1.6em;
+  margin-bottom: 0.3em;
+}
+.pattern-gloss {
+  margin: 0.6em 0;
+}
+.pattern-examples {
+  margin: 0.6em 0;
+  line-height: 1.9;
 }

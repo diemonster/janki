@@ -3,12 +3,17 @@
 <div class="expression">{{Expression}}</div>
 {{#Furigana}}<div class="reading">{{furigana:Furigana}}</div>{{/Furigana}}
 {{^Furigana}}{{#Reading}}<div class="reading">{{Reading}}</div>{{/Reading}}{{/Furigana}}
+{{#PitchAccent}}<div class="pitch-accent">{{PitchAccent}}</div>{{/PitchAccent}}
+{{#Audio}}<div class="audio">{{Audio}}</div>{{/Audio}}
 {{#ExampleJapanese}}
 <section class="example">
   <div class="example-japanese">{{ExampleJapanese}}</div>
   {{#ExampleEnglish}}<div class="example-english">{{ExampleEnglish}}</div>{{/ExampleEnglish}}
+  {{#ExampleAudio}}<div class="audio example-audio">{{ExampleAudio}}</div>{{/ExampleAudio}}
 </section>
 {{/ExampleJapanese}}
 {{#UsageNotes}}<section class="notes">{{UsageNotes}}</section>{{/UsageNotes}}
 {{#Romaji}}<details class="romaji"><summary>Romaji</summary>{{Romaji}}</details>{{/Romaji}}
-<div class="actions"><a href="shirabelookup://search?w={{ShirabeQuery}}">Open in Shirabe</a></div>
+{{#CasualJapanese}}<section class="example casual"><h3>Casually</h3><div class="example-japanese">{{CasualJapanese}}</div>{{#CasualFurigana}}<div class="example-furigana">{{furigana:CasualFurigana}}</div>{{/CasualFurigana}}{{#CasualEnglish}}<div class="example-english">{{CasualEnglish}}</div>{{/CasualEnglish}}{{#CasualAudio}}<div class="example-audio">{{CasualAudio}}</div>{{/CasualAudio}}</section>{{/CasualJapanese}}
+{{#KanjiInfo}}<section class="kanji-info">{{KanjiInfo}}</section>{{/KanjiInfo}}
+<div class="actions"><a href="shirabelookup://search?w={{ShirabeQuery}}">Open in Shirabe</a><a href="https://jpdb.io/search?q={{ShirabeQuery}}&amp;lang=english">Open in jpdb</a></div>

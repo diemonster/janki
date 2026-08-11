@@ -31,9 +31,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from japanese_anki.collection import (
+    CollectionError,
+    clone_suffix_of,
+    default_anki_root,
+    find_profiles,
+    read_notetypes,
+)
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
-from japanese_anki.exporters.anki import deck_declared_ids, resolve_deck_records
+from japanese_anki.exporters.anki import (
+    deck_declared_ids,
+    resolve_deck_records,
+)
 from japanese_anki.identifiers import normalize_identity_part
 from japanese_anki.io import load_records
 from japanese_anki.ledger import (
@@ -55,6 +65,10 @@ MEDIA_PREFIX = "janki-"
 # would put a plausible lie in the ledger.
 REBUILT_PROVIDER = "unknown"
 REBUILT_VOICE = -1
+# Same reasoning for the rate. Negative so it can never equal a configured
+# speed: a rebuilt entry must not let ``janki audio`` call the clip current,
+# because nothing knows how it was spoken.
+REBUILT_SPEED = -1.0
 
 
 def display_path(path: Path, root: Path) -> str:
@@ -319,6 +333,128 @@ def build_report(
         staging_dir=config.staging_dir,
         staged=list(staged),
     )
+
+
+def resolve_collection(config: ProjectConfig) -> tuple[Path | None, str]:
+    """Which collection to inspect, and why not, when there is none.
+
+    Returns ``(path, note)``. A ``note`` without a path is never an error: not
+    having Anki installed, or not having imported yet, is an ordinary state for
+    a tool that builds packages, and `janki status` must stay useful there.
+    """
+    if config.anki_collection.strip():
+        named = Path(config.anki_collection)   # already absolute, from the config
+        if named.is_file():
+            return named, ""
+        return None, f"[anki] collection is {named}, which does not exist"
+
+    profiles = find_profiles()
+    wanted = config.anki_profile.strip()
+    if wanted:
+        # Read before the empty check: a user who named a profile and got total
+        # silence has no way to tell janki looked somewhere else — an Anki
+        # started with `-b`, a portable install, a different XDG_DATA_HOME.
+        if wanted in profiles:
+            return profiles[wanted], ""
+        if not profiles:
+            root = default_anki_root()
+            where = f" under {root}" if root else " (no Anki directory found)"
+            return None, f"[anki] profile {wanted!r} not found{where}"
+        available = ", ".join(sorted(profiles))
+        return None, f"[anki] profile {wanted!r} not found. Available: {available}"
+    if not profiles:
+        return None, ""
+    if len(profiles) == 1:
+        return next(iter(profiles.values())), ""
+    # Guessing between profiles would report findings about a collection the
+    # user never meant, which is worse than reporting nothing.
+    return None, (
+        "several Anki profiles found (" + ", ".join(sorted(profiles)) + "); set "
+        "[anki] profile in janki.toml to check one"
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class NotetypeFinding:
+    """One thing wrong with how a deck landed in Anki."""
+
+    #: The deck stems that build this notetype, joined. Decks sharing a card set
+    #: share a notetype — this repo's own two do — so a finding reported per
+    #: deck printed the same problem and the same remedy twice.
+    where: str
+    message: str
+
+
+def check_collection(
+    collection: Path,
+    decks: Iterable[tuple[str, int, str, int]],
+) -> tuple[list[NotetypeFinding], list[str]]:
+    """Compare what a build would write against what the collection holds.
+
+    ``decks`` is ``(stem, model_id, model_name, field count)`` per deck — taken
+    from the exporter rather than recomputed, so a deck that pins ``model_id``
+    is read the way it is built.
+
+    Returns findings and warnings separately: a collection janki cannot read is
+    not a finding about the user's decks, and must not read like one.
+    """
+    try:
+        notetypes = read_notetypes(collection)
+    except CollectionError as exc:
+        return [], [str(exc)]
+
+    by_id = {notetype.id: notetype for notetype in notetypes}
+    # Grouped by notetype, because decks with the same card set derive the same
+    # model id — this repo's own two do — and one problem reported once per deck
+    # is the same actionable line buried under copies of itself.
+    # Keyed on the whole comparison, not the id: two decks may pin one id and
+    # different names, and keeping only the first deck's name dropped the
+    # collision finding for the second — the worst one to lose, since importing
+    # both in sequence renames the notetype in the live collection.
+    grouped: dict[tuple[int, str, int], list[str]] = {}
+    for stem, model_id, model_name, fields in decks:
+        grouped.setdefault((model_id, model_name, fields), []).append(stem)
+
+    findings: list[NotetypeFinding] = []
+    for (model_id, model_name, fields), stems in grouped.items():
+        landed = by_id.get(model_id)
+        if landed is None:
+            # Never imported, or imported under a different id. Not a failure —
+            # a deck built and not yet imported is the ordinary state.
+            continue
+        where = ", ".join(sorted(stems))
+        if landed.field_count < fields:
+            findings.append(NotetypeFinding(
+                where,
+                f"'{landed.name}' has {landed.field_count} fields where this "
+                f"deck writes {fields}. Re-import with 'Merge Notetypes' ticked; "
+                "without it the new fields never reach a note.",
+            ))
+        for clone in clone_suffix_of(landed.name, notetypes):
+            # The documented failure leaves the clone *empty* and the notes on
+            # the old notetype without the new fields. Saying "the notes on it
+            # are on the wrong notetype" of a clone holding zero notes sends the
+            # reader looking for cards that are not there.
+            fate = (
+                f"your {landed.note_count} note(s) stayed on '{landed.name}' "
+                "without the new fields"
+                if clone.note_count == 0
+                else f"{clone.note_count} note(s) ended up on it instead of "
+                f"'{landed.name}'"
+            )
+            findings.append(NotetypeFinding(
+                where,
+                f"'{clone.name}' sits beside '{landed.name}' — an import that "
+                f"left 'Merge Notetypes' unticked, and {fate}.",
+            ))
+        if model_name.strip() != landed.name.strip():
+            findings.append(NotetypeFinding(
+                where,
+                f"this deck builds notetype '{model_name}' but id {model_id} is "
+                f"named '{landed.name}' in Anki. A rename is harmless; a "
+                "collision is not.",
+            ))
+    return findings, []
 
 
 def format_report(report: StatusReport) -> list[str]:
@@ -612,10 +748,29 @@ class RebuildSummary:
     media_dir: Path
 
 
-# When several files claim one fingerprint, the rebuilt entry binds the first
-# by this order: .wav is what janki's own generators write, so it is the best
-# guess, and the order being documented makes the choice reproducible.
+# When several files claim one fingerprint and *the record names none of them*,
+# the rebuilt entry binds the first by this order. It is a last resort: janki
+# writes .wav for words and .mp3 for OpenAI sentences, so the extension alone
+# stopped being evidence the day a second engine arrived. When the record names
+# a file, that beats this outright — see `_claim_for`.
 _EXTENSION_PREFERENCE: tuple[str, ...] = (".wav", ".mp3", ".ogg", ".m4a")
+
+
+def _claim_for(candidates: list[Path], named: str) -> Path:
+    """Which file a rebuilt entry should bind, preferring the one named.
+
+    The record is the better evidence: a switch from VOICEVOX to OpenAI leaves
+    ``janki-<fp>.wav`` beside the new ``janki-<fp>.mp3`` until a prune, and
+    ranking by extension binds the stale WAV — then reports the mp3 the record
+    actually plays as the ambiguous one, telling the user to delete the file
+    that is correct.
+    """
+    if named:
+        wanted = Path(named).name
+        for candidate in candidates:
+            if candidate.name == wanted:
+                return candidate
+    return min(candidates, key=_media_rank)
 
 
 def _media_rank(path: Path) -> tuple[int, str]:
@@ -641,9 +796,16 @@ def _media_by_fingerprint(media_dir: Path) -> dict[str, list[Path]]:
     return found
 
 
-def _first(paths: list[Path] | None) -> Path | None:
-    """The preferred claimant of a fingerprint, if any file claims it."""
-    return paths[0] if paths else None
+def _first(paths: list[Path] | None, named: str = "") -> Path | None:
+    """The preferred claimant of a fingerprint, if any file claims it.
+
+    ``named`` is what the record itself plays. It wins over the extension
+    ranking, which is only a guess and became a bad one when a second engine
+    started writing a second format.
+    """
+    if not paths:
+        return None
+    return _claim_for(paths, named)
 
 
 def _has_audio_entry(book: Ledger, record_id: str, filename: str) -> bool:
@@ -709,7 +871,9 @@ def rebuild(
         if book.record_source_seen(record.id, source.type or "manual", source.imported_from):
             sources += 1
 
-        word_file = _first(media.get(word_audio_filename_fingerprint(record)))
+        word_file = _first(
+            media.get(word_audio_filename_fingerprint(record)), record.audio
+        )
         if word_file is not None:
             claimed.add(word_file)
             if not _has_audio_entry(book, record.id, word_file.name):
@@ -722,6 +886,7 @@ def rebuild(
                     of="word",
                     provider=REBUILT_PROVIDER,
                     voice=REBUILT_VOICE,
+                    speed=REBUILT_SPEED,
                     content_fp=content_fp,
                     rebuilt=True,
                 )
@@ -730,7 +895,10 @@ def rebuild(
         for example in record.examples:
             if not example.japanese:
                 continue
-            example_file = _first(media.get(example_audio_filename_fingerprint(record, example)))
+            example_file = _first(
+                media.get(example_audio_filename_fingerprint(record, example)),
+                example.audio,
+            )
             if example_file is None:
                 continue
             claimed.add(example_file)
@@ -744,6 +912,7 @@ def rebuild(
                 of="example",
                 provider=REBUILT_PROVIDER,
                 voice=REBUILT_VOICE,
+                speed=REBUILT_SPEED,
                 content_fp=example_audio_content_fingerprint(example),
                 rebuilt=True,
             )
@@ -787,9 +956,10 @@ def format_rebuild(summary: RebuildSummary, root: Path) -> list[str]:
     if summary.ambiguous_media:
         lines.append(
             f"  {summary.ambiguous_media} {MEDIA_PREFIX}* file(s) share a fingerprint "
-            "with a file a rebuilt entry claimed (extension preference: "
-            f"{', '.join(_EXTENSION_PREFERENCE)}) — check which file janki actually "
-            "generated and delete the other"
+            "with a file a rebuilt entry claimed. The entry binds the file the "
+            "record names; failing that, by extension "
+            f"({', '.join(_EXTENSION_PREFERENCE)}). Check which file janki "
+            "actually generated and delete the other"
         )
     if summary.unmatched_media:
         lines.append(

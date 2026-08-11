@@ -22,6 +22,7 @@ Pure functions, no CLI and no network: the caller supplies the parse.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, replace
 
 from japanese_anki import jpdb
@@ -162,6 +163,246 @@ def _segments(value: object) -> list[object]:
     return []
 
 
+#: The only kana that legitimately sit *under* their word's ruby: the honorific
+#: prefixes. ``お茶[おちゃ]`` and ``ご飯[ごはん]`` are written this way and are
+#: correct. Every other kana-leading run is a group that swallowed the sentence
+#: in front of it — including ``は花[はな]``, where the swallowed kana happens to
+#: match the reading's first character and a prefix test would wave it through
+#: while the は particle vanishes from the reconstructed reading.
+_HONORIFIC_PREFIXES = frozenset("おごみ")
+
+#: Kana a ruby group's text run can begin with. Latin and Han are excluded on
+#: purpose — ``ＡＴＭ[エーティーエム]`` and ``日[にっ]`` are never spills.
+_KANA = re.compile(r"[\u3041-\u309f\u30a0-\u30ff]")
+
+
+def spilled_furigana_groups(furigana: str) -> tuple[tuple[str, str], ...]:
+    """Ruby groups whose reading will be drawn over kana that are not theirs.
+
+    Anki resumes each group's text run where the last one ended, so a group with
+    no space before it swallows whatever sits between: ``毎日[まいにち]、妻と
+    日本語[にほんご]`` draws にほんご across 妻と日本語, and those particles then
+    vanish from :func:`furigana_reading` — which is what the romaji field and
+    M5.3's sentence audio are built from.
+
+    Position alone cannot decide this, which is the trap. ``日[にっ]本[ぽん]``
+    also abuts with no space and is perfectly correct: there is nothing between
+    the groups to spill onto. Nor can "the run starts with kana", which flags
+    ``お茶[おちゃ]`` — legitimate whole-word ruby — and following that warning
+    yields ``お 茶[おちゃ]``, whose reading is ``おおちゃ``: the check would
+    manufacture the defect it exists to catch.
+
+    So it looks at what the run *starts* with, and asks the reading when it has
+    to. Three ways a run legitimately begins:
+
+    * a Han character — ``日本語[にほんご]``, the ordinary case;
+    * a letter or digit — ``ＡＴＭ[エーティーエム]``, ruby over a loanword;
+    * an **honorific prefix** the reading also begins with — ``お茶[おちゃ]``,
+      ``ご飯[ごはん]``, which are written as whole-word ruby and are correct.
+
+    Anything else is text the group has swallowed: any other kana
+    (``と城崎温泉[きのさきおんせん]``, ``は花[はな]``), an honorific whose reading
+    disagrees (``お茶[ちゃ]``), or punctuation (``、妻と日本語[にほんご]``).
+
+    The exemption is a short list rather than "kana the reading starts with",
+    which is the tempting generalisation and lets ``は花[はな]`` through — the
+    swallowed は matches はな's first character, so a prefix test waves it by
+    while は disappears from the reconstructed reading and from the romaji and
+    audio built on it. ``お茶[おちゃ]`` and ``は花[はな]`` are structurally
+    identical, so only knowing which kana are prefixes separates them.
+
+    **Known gap: a run beginning with a Han character is never flagged.**
+    ``毎日[まいにち]妻と日本語[にほんご]`` is a real spill — にほんご is drawn
+    across 妻と日本語 — and this returns nothing for it. It cannot be told from
+    the legitimate ``日[にっ]本[ぽん]``, or from whole-word ruby over a compound
+    that contains kana (``取り引き[とりひき]``), without deciding where the word
+    boundary is — which is the segmentation this project refuses to guess at.
+    Flagging the class would tell someone to add a space that breaks a correct
+    field, which is the harm this function was rewritten to stop causing.
+
+    Returns ``(text run, reading)`` pairs so a message can name them.
+    """
+    spilled: list[tuple[str, str]] = []
+    for match in _GROUP.finditer(furigana):
+        raw = match.group(1)
+        # Compared normalized, so the verdict does not depend on Unicode
+        # composition — a decomposed ご is こ plus a combining mark, and an
+        # unnormalized honorific check reports a correct ご飯[ごはん] as a spill.
+        # Halfwidth katakana fold into range here too.
+        text = normalize_identity_part(raw)
+        reading = normalize_identity_part(match.group(2))
+        if not reading:
+            continue
+        # The *first character* comes from the raw run. `normalize_identity_part`
+        # strips, and NFKC turns a leading U+3000 into an ASCII space that the
+        # strip then removes — so normalizing first deletes exactly the evidence
+        # this is looking for. A full-width space where the separator belongs is
+        # ordinary in Japanese text (see `_GROUP`), and it does not separate:
+        # `furigana_reading` drops only a single ASCII space, so the run before
+        # it vanishes from the reading the romaji and audio are built on.
+        first = raw[0] if raw else ""
+        if not first or first.isspace():
+            spilled.append((raw, reading))
+        elif _KANA.match(normalize_identity_part(first) or first):
+            head = text[0] if text else first
+            if not (head in _HONORIFIC_PREFIXES and reading.startswith(head)):
+                spilled.append((raw, reading))
+        elif not first.isalnum():
+            # Punctuation cannot be part of the word the ruby annotates.
+            spilled.append((raw, reading))
+    # Reported verbatim: a message quoting the NFKC-folded run names a string
+    # the record does not contain, so nobody can find what to fix.
+    return tuple(spilled)
+
+
+def repair_spilled_punctuation(furigana: str) -> str:
+    """Insert the separator space a group is missing after leading punctuation.
+
+    The one spill whose repair is not a guess. A run beginning with punctuation
+    — ``週末[しゅうまつ]、何[なに]するの？`` — has swallowed characters that
+    *cannot* belong to the annotated word, and the word plainly starts after
+    them, so the space goes between: ``週末[しゅうまつ]、 何[なに]するの？``.
+    Nothing about the reading or the segmentation is inferred; only the notation
+    separator Anki needs is added, which is why this may run unattended.
+
+    Every other spill is left alone. ``、妻と日本語[にほんご]`` has swallowed a
+    noun and a particle as well, and deciding that にほんご annotates 日本語
+    rather than 妻と日本語 means choosing where the word begins — a guess about
+    segmentation, which this project does not make. Those stay reported by
+    :func:`spilled_furigana_groups` for a human.
+
+    Written because `enrich --ai` produced ten of these in one run and the cards
+    were built from them: Anki draws なに over ``、何``, and the comma then
+    disappears from :func:`furigana_reading`, so it is missing from the romaji
+    and from the sentence audio too.
+    """
+
+    def separate(match: re.Match[str]) -> str:
+        raw, reading = match.group(1), match.group(2)
+        leading = 0
+        for char in raw:
+            # `isalnum` and Han both say "not punctuation" here; the run start
+            # rules in `spilled_furigana_groups` are the mirror of this.
+            if char.isspace() or char.isalnum() or _KANA.match(char):
+                break
+            if not unicodedata.category(char).startswith("P"):
+                break
+            leading += 1
+        rest = raw[leading:]
+        if not leading or not rest:
+            return match.group(0)
+        # Only when the remainder is provably the annotated word *alone*, which
+        # means no kana anywhere in it. Testing the first character only was not
+        # enough: `、妻と日本語[にほんご]` starts with a Han character, so the
+        # repair fired and produced `、 妻と日本語[にほんご]` — asserting that
+        # にほんご annotates 妻と日本語, which is the segmentation guess this
+        # function exists not to make. Worse, it erased the evidence: the run
+        # then starts with a Han character, which `spilled_furigana_groups`
+        # documents as never flagged, so `janki validate` stopped reporting a
+        # defect it had reported before, and 妻と vanished from the reading.
+        if any(_KANA.match(char) for char in rest):
+            return match.group(0)
+        return f"{raw[:leading]} {rest}[{reading}]"
+
+    return _GROUP.sub(separate, furigana)
+
+
+def _latin_word_char(char: str) -> bool:
+    """Whether a character is a Latin letter — text a space could belong to.
+
+    Narrower than "ASCII": `9 時に` and `ですね! 散歩` carry a real stray space,
+    and the digit and the mark beside them are not words with a space after
+    them. `[` and `]` are the ruby notation itself, and an absent neighbour is
+    the edge of the field; neither is evidence a space belongs to the sentence.
+    """
+    return bool(char) and char.isascii() and char.isalpha()
+
+
+def _ascii_content(char: str) -> bool:
+    """Whether a character is ASCII *text*, as opposed to ruby notation.
+
+    ``[`` and ``]`` are the notation itself, and an absent neighbour is the edge
+    of the field. Neither is evidence that a space beside it belongs to the
+    sentence.
+    """
+    return bool(char) and char.isascii() and char not in "[]"
+
+
+def stray_furigana_spaces(furigana: str) -> tuple[str, ...]:
+    """Spaces that are content rather than notation, with the word after each.
+
+    In a furigana field an ASCII space means one thing: "the next group's text
+    run starts here". :func:`furigana_reading` removes a space only when a
+    bracketed group follows it, so a space anywhere else survives into the
+    reading and into the regenerated romaji, and Anki renders it as a gap the
+    plain sentence field does not have. Not into the audio: clips are
+    synthesized from ``example.japanese`` and fingerprinted on it, and no audio
+    path reads a furigana field.
+
+    ``日本語[にほんご]の ニュースが 少[すこ]し 分[わ]かります。`` has one before
+    ニュース, which no group annotates. The card then reads
+    ``日本語の ニュースが少し分かります。`` beside an `ExampleJapanese` with no
+    gap at all, and the romaji carries the space too.
+    """
+    stray: list[str] = []
+    index = 0
+    while index < len(furigana):
+        if furigana[index] != " ":
+            index += 1
+            continue
+        # A run, not a character. Two spaces in a row is a plausible typo and
+        # exactly what this exists to catch, but reading them one at a time made
+        # the first one's "following word" the empty string, which was then
+        # reported as "(end of field)" for a space nowhere near the end.
+        end = index
+        while end < len(furigana) and furigana[end] == " ":
+            end += 1
+        run, rest = end - index, furigana[end:]
+        before = furigana[index - 1] if index else ""
+        after = rest[0] if rest else ""
+        # Reported only where a space is *provably* not content. Japanese text
+        # carries no ASCII spaces, so one with no ASCII *content* on either side
+        # is notation in the wrong place — but `「Hello World」と 言[い]った。`
+        # has a space the sentence itself contains, which `furigana_reading`
+        # keeps on purpose. Warning about that one sends a reader to delete it,
+        # and the romaji becomes HelloWorld.
+        #
+        # A neighbour that is a bracket, or absent, is not content:
+        # `語[ご] を` is the ordinary way a model mis-spaces the notation and was
+        # the check's most common trigger, and `]` being ASCII silenced it.
+        #
+        # A space at either *end* of the field is reported whatever sits beside
+        # it. It is the case that is most provably notation gone wrong — there
+        # is no next group for it to start — and the carve-out's reason ("the
+        # sentence may carry the space too") cannot apply, because no sentence
+        # begins or ends with one.
+        #
+        # Otherwise the two run lengths take different rules, because the
+        # evidence differs. At most one space can ever be notation, so a run of
+        # two is wrong wherever it is not inside Latin text. A *single* space is
+        # the Latin↔Japanese boundary — `iPhone を`, `と Twitter` — where the
+        # space may well be in the sentence, so the warning would send a reader
+        # to delete something the card really contains.
+        #
+        # Latin *letters* on both counts, not any ASCII: a digit or a mark is
+        # not a word with a space after it. `9 時に` and `! 散歩` are real
+        # defects, and testing `_ascii_content` silenced them exactly as the
+        # doubled-space branch had been repaired for.
+        at_edge = not before or not after
+        if at_edge:
+            reportable = True
+        elif run > 1:
+            reportable = not (_latin_word_char(before) and _latin_word_char(after))
+        else:
+            reportable = not (
+                _latin_word_char(before) or _latin_word_char(after)
+            ) and _GROUP.match(rest) is None
+        if reportable:
+            stray.append(rest.split(" ", 1)[0] or "(end of field)")
+        index = end
+    return tuple(stray)
+
+
 def furigana_base(furigana: str) -> str:
     """The sentence a furigana field spells, with every reading removed.
 
@@ -243,6 +484,23 @@ class FuriganaVerdict:
         return self.verified
 
 
+def _comparable(reading: str) -> str:
+    """A reading reduced to the sounds, for comparing two of them.
+
+    jpdb does not tokenize punctuation, so its rendering of 話す。 has no full
+    stop while the example's does — comparing them raw reports a mismatch for a
+    character neither side disagrees about. Separators go for the same reason.
+
+    Normalized as well, because the two sides come from different places: a
+    decomposed dakuten would reject correct furigana, with a message showing two
+    strings that render identically, which is undiagnosable.
+    """
+    text = normalize_identity_part(reading)
+    return "".join(
+        ch for ch in text if not unicodedata.category(ch).startswith(("P", "Z", "C"))
+    )
+
+
 def verify_example_furigana(
     example: ExampleSentence, parse: jpdb.ParseResult
 ) -> FuriganaVerdict:
@@ -259,11 +517,55 @@ def verify_example_furigana(
     notation, but it is notation that decides which characters a reading
     belongs to.
 
+    **Granularity is not disagreement.** jpdb returns furigana per *character* —
+    週[しゅう] 末[まつ] — while an example is written per *word*, 週末[しゅうまつ],
+    which is how Anki decks are read and what belongs on a card. Comparing the
+    group sequences pairwise therefore failed on every multi-kanji compound:
+    仕事, 漢字, 意味, 明日, 毎日 all "differed" while saying exactly the same
+    thing. Measured against a real jpdb import, that flagged 12 of 17 correct
+    examples and passed only the sentences whose words happened to be single
+    kanji — so the check was mostly reporting its own segmentation, and the
+    audio it suppressed was audio of correct sentences.
+
+    Comparing the *joined group texts* fixed those and broke a worse set: jpdb
+    does not tokenize the leading kana of お茶, so its ruby covers 茶 while a
+    card's covers お茶. The correct ``お茶[おちゃ]`` failed while the wrong
+    ``お 茶[ちゃ]`` — which reads おおちゃ — passed. That is the defect
+    :func:`spilled_furigana_groups` names as the one a naive fix manufactures,
+    and it suppressed sentence audio permanently: ``janki audio`` skips a
+    flagged example and ``recheck_furigana`` can only clear what this verifies.
+
+    So the verdict is on **what the sentence sounds like**: the kana
+    :func:`furigana_reading` spells out of the example, against the kana it
+    spells out of jpdb's own rendering. That is what the consumers depend on —
+    sentence audio speaks it, romaji is transliterated from it — and it is blind
+    to both granularity and ruby extent while still catching:
+
+    * a wrong reading — jpdb reads 日本語 as にっぽんご where an example says
+      にほんご; and
+    * the ``お茶[ちゃ]`` spill, which reads ちゃ where jpdb reads おちゃ: the お
+      is simply gone, and that truncated reading is what would be spoken.
+
     A sentence with no kanji has no groups on either side, and verifies.
+
+    **Known limitation.** jpdb sends some tokens with ``furigana: null`` and
+    :func:`_render` falls back to the vocabulary entry, which is the *dictionary
+    form* — so できます renders as できる and a sentence using it is flagged for a
+    difference nobody made. Measured on a real 20-record import this cost one
+    example out of twenty, and that one also carried a genuine にっぽんご/にほんご
+    disagreement, so it was going to be flagged anyway. Closing it means asking
+    jpdb's parse for ``position``/``length`` and slicing the surface form out of
+    the sentence, which changes what every caller of ``_render`` sees; it is
+    worth doing when a flagged-but-correct example costs more than a re-check.
     """
-    expected_pairs = parse_pairs(parse)
-    found_pairs = furigana_pairs(example.furigana)
     expected = _render(parse)
+
+    expected_reading = _comparable(furigana_reading(expected))
+    # Falling back to the sentence when there is no furigana field at all: an
+    # all-kana sentence needs none, and its reading *is* its text. A sentence
+    # with kanji still fails, because the kanji pass through unread — 話す
+    # yields 話す, not はなす.
+    found_reading = _comparable(furigana_reading(example.furigana or example.japanese))
 
     differences: list[str] = []
 
@@ -285,24 +587,19 @@ def verify_example_furigana(
             f"the furigana spells {base}, but the sentence is {sentence}"
         )
 
-    if expected_pairs == found_pairs and not differences:
+    if expected_reading == found_reading and not differences:
         return FuriganaVerdict(True, expected, example.furigana)
 
-    for index in range(max(len(expected_pairs), len(found_pairs))):
-        theirs = expected_pairs[index] if index < len(expected_pairs) else None
-        ours = found_pairs[index] if index < len(found_pairs) else None
-        if theirs == ours:
-            continue
-        if theirs is None:
-            differences.append(f"{ours[0]}[{ours[1]}] is not in jpdb's reading")
-        elif ours is None:
-            differences.append(f"jpdb reads {theirs[0]} as {theirs[1]}; nothing here")
-        elif theirs[0] != ours[0]:
-            differences.append(
-                f"jpdb splits {theirs[0]} where this splits {ours[0]}"
-            )
-        else:
-            differences.append(f"jpdb reads {theirs[0]} as {theirs[1]}, not {ours[1]}")
+    if expected_reading != found_reading:
+        differences.append(
+            f"jpdb reads this as {expected_reading or '(nothing)'}; the furigana "
+            f"reads {found_reading or '(nothing)'}"
+        )
+
+    # No per-group differences appended: since the verdict stopped depending on
+    # grouping, "jpdb splits 来 where this splits 来週" describes something that
+    # is not a failure, and printing it beside the real reason invites the
+    # reader to fix the thing that was already fine.
     return FuriganaVerdict(False, expected, example.furigana, tuple(differences))
 
 

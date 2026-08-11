@@ -22,6 +22,8 @@ from japanese_anki.qc import (
     furigana_reading,
     parse_pairs,
     regenerate_example_romaji,
+    repair_spilled_punctuation,
+    stray_furigana_spaces,
     target_forms,
     verify_example_furigana,
 )
@@ -132,14 +134,29 @@ def test_a_wrong_reading_is_flagged_with_both_sides() -> None:
     verdict = verify_example_furigana(example(japanese="話す", furigana="話[か]す"), parse)
 
     assert not verdict
-    assert verdict.differences == ("jpdb reads 話 as はな, not か",)
+    assert verdict.differences[0] == "jpdb reads this as はなす; the furigana reads かす"
     assert verdict.expected == "話[はな]す"
     assert verdict.found == "話[か]す"
 
 
-def test_a_different_segmentation_is_flagged() -> None:
-    # Exactly what a model invents plausibly and wrongly, and what would go on
-    # to drive sentence audio.
+def test_a_finer_split_saying_the_same_thing_verifies() -> None:
+    """jpdb returns furigana per *character*; an example is written per *word*,
+    which is how a card is read. Comparing the group sequences pairwise failed
+    on every multi-kanji compound — measured against a real import, 12 of 17
+    correct examples were flagged and their audio suppressed, while the 5 that
+    passed did so only because their words happened to be single kanji."""
+    parse = parse_of([["週", "しゅう"], ["末", "まつ"]])
+
+    verdict = verify_example_furigana(
+        example(japanese="週末", furigana="週末[しゅうまつ]"), parse
+    )
+
+    assert verdict, verdict.differences
+
+
+def test_a_reading_that_actually_differs_is_still_flagged() -> None:
+    """The same split, a different reading: jpdb reads 日本語 as にっぽんご. Both
+    are real, but a disagreement about the *sound* is what this exists for."""
     parse = parse_of([["日", "にっ"], ["本", "ぽん"], ["語", "ご"]])
 
     verdict = verify_example_furigana(
@@ -147,7 +164,24 @@ def test_a_different_segmentation_is_flagged() -> None:
     )
 
     assert not verdict
-    assert "jpdb splits 日 where this splits 日本語" in verdict.differences[0]
+    assert verdict.differences[0] == (
+        "jpdb reads this as にっぽんご; the furigana reads にほんご"
+    )
+
+
+def test_a_missing_space_still_fails_though_the_split_is_free() -> None:
+    """The one grouping difference that is not free. `お茶[ちゃ]` puts ちゃ over
+    both characters, so Anki renders the wrong ruby and `furigana_reading`
+    yields ちゃ with the お gone — a difference in the *text* under the ruby,
+    which the joined comparison still sees."""
+    parse = parse_of(["お", ["茶", "ちゃ"]])
+
+    verdict = verify_example_furigana(
+        example(japanese="お茶", furigana="お茶[ちゃ]"), parse
+    )
+
+    assert not verdict
+    assert "the furigana reads ちゃ" in verdict.differences[0], "the お is gone"
 
 
 def test_missing_furigana_is_flagged_not_passed() -> None:
@@ -156,14 +190,18 @@ def test_missing_furigana_is_flagged_not_passed() -> None:
     verdict = verify_example_furigana(example(japanese="話す", furigana=""), parse)
 
     assert not verdict
-    assert "nothing here" in verdict.differences[0]
+    assert "the furigana reads 話す" in verdict.differences[0], (
+        "the kanji passes through unread, which is the missing reading"
+    )
 
 
-def test_furigana_the_parse_does_not_have_is_flagged() -> None:
+def test_furigana_matching_a_kana_parse_verifies() -> None:
+    """Kept as the inverse of its old self. The parse here is synthetic — a bare
+    kana token for the sentence 猫 — and under a reading comparison it *agrees*:
+    jpdb reads ねこ and the furigana says ねこ. There is nothing to flag."""
     verdict = verify_example_furigana(example(japanese="猫", furigana="猫[ねこ]"), parse_of("ねこ"))
 
-    assert not verdict
-    assert "is not in jpdb's reading" in verdict.differences[0]
+    assert verdict, verdict.differences
 
 
 def test_a_sentence_with_no_kanji_verifies_with_no_furigana() -> None:
@@ -485,3 +523,243 @@ def test_the_docstrings_romaji_examples_are_what_the_code_returns() -> None:
     # A typed space immediately before a ruby group is indistinguishable from
     # notation and goes with it.
     assert furigana_reading("本を 食[た]べる") == "本をたべる"
+
+
+# --- the separator space ------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("written", "expected"),
+    [
+        ("週末[しゅうまつ]、何[なに]するの？", "週末[しゅうまつ]、 何[なに]するの？"),
+        (
+            "風邪[かぜ]なの？ 薬[くすり]、飲[の]んだ？",
+            "風邪[かぜ]なの？ 薬[くすり]、 飲[の]んだ？",
+        ),
+        ("今[いま]、何[なん]て 言[い]ったの？", "今[いま]、 何[なん]て 言[い]ったの？"),
+    ],
+    ids=["a-comma", "after-a-question-mark", "twice-in-one-sentence"],
+)
+def test_punctuation_a_group_swallowed_gets_the_separator_back(
+    written: str, expected: str
+) -> None:
+    """Punctuation cannot belong to the annotated word and the word plainly
+    starts after it, so the space goes between. Nothing about the reading or the
+    segmentation is inferred — which is what makes this safe to run unattended
+    on model output."""
+    assert repair_spilled_punctuation(written) == expected
+
+
+def test_a_spill_that_would_need_a_guess_is_left_alone() -> None:
+    """`、妻と日本語[にほんご]` has swallowed a noun and a particle too. Deciding
+    that にほんご annotates 日本語 rather than 妻と日本語 is choosing where the
+    word begins, and this project does not guess a segmentation.
+
+    Repairing it would also destroy the evidence: the run would then start with
+    a Han character, which `spilled_furigana_groups` never flags, so a reported
+    defect would become an unreportable one in a field that now looks tidy."""
+    from japanese_anki.qc import spilled_furigana_groups
+
+    # No space before 日本語 — that is the whole point. With one, `_GROUP` gives
+    # the group the run 日本語 and there is no spill to leave alone, so the test
+    # passed without ever reaching the guard it names.
+    written = "毎日[まいにち]、妻と日本語[にほんご]を 話[はな]す"
+
+    assert repair_spilled_punctuation(written) == written
+    assert spilled_furigana_groups(written), "and it is still reported"
+
+
+@pytest.mark.parametrize(
+    "written",
+    ["お茶[おちゃ]を 飲[の]む", "日[にっ]本[ぽん]", "話[はな]す 人[ひと]", "ご飯[ごはん]"],
+    ids=["whole-word-ruby", "abutting-groups", "ordinary", "an-honorific"],
+)
+def test_correct_furigana_is_returned_unchanged(written: str) -> None:
+    """Whole-word ruby and legitimately abutting groups must survive: `お 茶[おちゃ]`
+    reads おおちゃ, so a repair that touched them would manufacture the defect."""
+    assert repair_spilled_punctuation(written) == written
+
+
+def test_the_repaired_field_no_longer_reports_a_spill() -> None:
+    """The two functions have to agree, or `enrich` repairs something `validate`
+    still condemns."""
+    from japanese_anki.qc import spilled_furigana_groups
+
+    repaired = repair_spilled_punctuation("週末[しゅうまつ]、何[なに]するの？")
+
+    assert spilled_furigana_groups(repaired) == ()
+
+
+def test_the_comma_survives_into_the_reading_once_repaired() -> None:
+    """Which is the point: `furigana_reading` drops the space before a group, so
+    an unrepaired field loses the comma from the romaji and the sentence audio
+    as well as drawing the ruby wrongly."""
+    repaired = repair_spilled_punctuation("週末[しゅうまつ]、何[なに]するの？")
+
+    assert "、" in furigana_reading(repaired)
+
+
+# --- spaces that are content --------------------------------------------------
+
+
+def test_a_space_no_group_follows_is_reported() -> None:
+    """In a furigana field a space means "the next group starts here".
+    `furigana_reading` removes it only when a group follows, so this one lives
+    on into the reading, the romaji and the audio, and draws on the card as a
+    gap the plain sentence does not have."""
+    assert stray_furigana_spaces("日本語[にほんご]の ニュースが 少[すこ]し 分[わ]かります。") == (
+        "ニュースが",
+    )
+
+
+def test_notation_spaces_are_not_reported() -> None:
+    assert stray_furigana_spaces("毎晩[まいばん]、 音楽[おんがく]を 聞[き]いて") == ()
+
+
+def test_a_field_with_no_spaces_at_all_is_quiet() -> None:
+    assert stray_furigana_spaces("日本語[にほんご]") == ()
+
+
+def test_punctuation_followed_by_a_swallowed_particle_is_left_alone() -> None:
+    """`、と日本語[にほんご]` has swallowed a particle as well as the comma.
+    Inserting the separator after the comma alone gives `、 と日本語[にほんご]`,
+    which is still a spill — it would rewrite the record without fixing it, and
+    make the field look attended to. Left for a human, and still reported."""
+    from japanese_anki.qc import spilled_furigana_groups
+
+    written = "毎日[まいにち]、と日本語[にほんご]を 話[はな]す"
+
+    assert repair_spilled_punctuation(written) == written
+    assert spilled_furigana_groups(written), "and it stays flagged"
+
+
+def test_a_space_the_sentence_itself_contains_is_not_reported() -> None:
+    """`furigana_reading` keeps non-notation spaces on purpose, and this one is
+    part of the text. Warning about it sends a reader to delete it, and the
+    romaji becomes HelloWorld."""
+    assert stray_furigana_spaces("「Hello World」と 言[い]った。") == ()
+
+
+def test_two_spaces_in_a_row_name_the_word_after_them() -> None:
+    """A doubled space is a plausible typo and exactly what this catches, but
+    read one character at a time the first one's "following word" was the empty
+    string — reported as '(end of field)' for a space nowhere near the end."""
+    assert stray_furigana_spaces("日本語[にほんご]の  ニュースが 少[すこ]し") == ("ニュースが",)
+
+
+def test_two_spaces_before_a_group_are_still_notation_gone_wrong() -> None:
+    """One space before a group is the notation; two is not."""
+    assert stray_furigana_spaces("毎晩[まいばん]、  音楽[おんがく]を") == ("音楽[おんがく]を",)
+
+
+def test_a_stray_space_right_after_a_group_is_reported() -> None:
+    """`語[ご] を` is the ordinary way a model mis-spaces the notation, and so
+    the check's most common trigger. Classifying `]` as ASCII *content* silenced
+    it for exactly the field the check was written for, and no test noticed:
+    the existing cases put their stray space after a kana, or before a real
+    group."""
+    assert stray_furigana_spaces("私[わたし] は 学生[がくせい]です") == ("は",)
+
+
+@pytest.mark.parametrize(
+    ("written", "expected"),
+    [("日本語[にほんご]の ", ("(end of field)",)), (" を 話[はな]す", ("を",))],
+    ids=["trailing", "leading"],
+)
+def test_a_space_at_either_edge_of_the_field_is_reported(
+    written: str, expected: tuple[str, ...]
+) -> None:
+    """The case that is *most* provably notation gone wrong: there is no next
+    group for it to start. Treating an absent neighbour as content read that
+    backwards and reported nothing."""
+    assert stray_furigana_spaces(written) == expected
+
+
+def test_doubled_spaces_inside_latin_content_stay_unreported() -> None:
+    """`run > 1` used to short-circuit the content test, so the doubled-space
+    typo inside quoted Latin was reported with a message that is false for it —
+    and acting on it makes the romaji HelloWorld, the harm the single-space
+    branch exists to avoid."""
+    assert stray_furigana_spaces("「Hello  World」と 言[い]った。") == ()
+
+
+@pytest.mark.parametrize(
+    ("written", "expected"),
+    [
+        ("いい 天気[てんき]ですね!  散歩[さんぽ]しましょう。", "散歩[さんぽ]しましょう。"),
+        ("9  時[じ]に 起[お]きます。", "時[じ]に"),
+    ],
+    ids=["after-punctuation", "after-a-digit"],
+)
+def test_a_doubled_space_beside_ascii_that_is_not_a_word_is_still_reported(
+    written: str, expected: str
+) -> None:
+    """At most one space can ever be notation, so a run of two is wrong wherever
+    it is not inside Latin text. Requiring only one ASCII neighbour to suppress
+    it silenced ASCII punctuation and digits, which a model writes as readily as
+    it writes letters — and those runs are real defects."""
+    assert stray_furigana_spaces(written) == (expected,)
+
+
+@pytest.mark.parametrize(
+    "written",
+    ["iPhone を 使[つか]う", "と Twitter"],
+    ids=["latin-then-japanese", "japanese-then-latin"],
+)
+def test_a_single_space_at_a_latin_word_boundary_stays_quiet(written: str) -> None:
+    """A single space beside a Latin *word* is the Latin↔Japanese boundary,
+    where the sentence may well carry the space too — so the warning would tell
+    a reader to delete something the card really does contain. Only a *run* uses
+    the both-sides rule, because at most one space can ever be notation."""
+    assert stray_furigana_spaces(written) == ()
+
+
+def test_a_space_after_a_quote_mark_is_reported() -> None:
+    """A closing quote is not a word with a space after it, any more than a
+    digit is: 「ありがとう」と言った carries no gap, so the field should not
+    either."""
+    assert stray_furigana_spaces('"ありがとう" と 言[い]った') == ("と",)
+
+
+@pytest.mark.parametrize(
+    ("written", "expected"),
+    [
+        ("9 時に 起[お]きます。", ("時に",)),
+        ("いい 天気[てんき]ですね! 散歩しましょう。", ("散歩しましょう。",)),
+    ],
+    ids=["after-a-digit", "after-a-mark"],
+)
+def test_a_single_space_after_a_digit_or_a_mark_is_still_reported(
+    written: str, expected: tuple[str, ...]
+) -> None:
+    """The carve-out is for Latin *text* with a space in it. A digit and a
+    punctuation mark are not words with a space after them, and testing "any
+    ASCII" silenced exactly the cases the doubled-space branch had already been
+    repaired for."""
+    assert stray_furigana_spaces(written) == expected
+
+
+@pytest.mark.parametrize(
+    "written",
+    ["iPhone を 使[つか]う", "と Twitter"],
+    ids=["latin-then-kana", "kana-then-latin"],
+)
+def test_a_single_space_beside_a_latin_word_stays_quiet(written: str) -> None:
+    assert stray_furigana_spaces(written) == ()
+
+
+@pytest.mark.parametrize(
+    ("written", "expected"),
+    [
+        (" Netflix を 見[み]る", ("Netflix",)),
+        ("週末[しゅうまつ]は Netflix ", ("(end of field)",)),
+    ],
+    ids=["leading", "trailing"],
+)
+def test_a_space_at_the_field_edge_is_reported_whatever_is_beside_it(
+    written: str, expected: tuple[str, ...]
+) -> None:
+    """No sentence begins or ends with a space, so the "the sentence may carry
+    it too" reason cannot apply — and the comment above the code said as much
+    while the ASCII neighbour silenced it anyway."""
+    assert stray_furigana_spaces(written) == expected

@@ -16,7 +16,8 @@ The repository is the source of truth. Anki packages are reproducible outputs.
 - A word ledger (`data/ledger.json`) and a `janki status` report over it.
 - Deterministic Anki note GUIDs.
 - Configurable recognition, production, and reading cards.
-- Mobile-friendly card templates with furigana, hidden romaji, and a Shirabe link.
+- Mobile-friendly card templates with furigana, hidden romaji, and Shirabe and
+  jpdb lookup links.
 - A static HTML preview command.
 - Tests, fixtures, project instructions, and workflow documentation.
 
@@ -88,8 +89,176 @@ them except the few its `exclude_ids` leaves to the starter deck):
 janki build data/decks/personal-vocabulary.yaml
 ```
 
-The package will appear under `dist/` and can be imported into Anki Desktop.
-Sync Anki normally to make it available in AnkiMobile.
+The package will appear under `dist/`.
+
+### Importing into Anki Desktop
+
+**File → Import, and tick "Merge Notetypes".** It is off by default, and with it
+off an import that adds a field does something else entirely and says nothing:
+every existing note stays on the old notetype, and the new one is filed beside
+it under the same name with a `+` appended and zero notes in it. No error, no
+duplicates, review history intact — the new fields simply never reach a card.
+With the box ticked the notetype upgrades in place, notes are matched by GUID,
+and scheduling survives. Verified in Anki Desktop 25.09; see
+[docs/NOTETYPE_UPGRADE.md](docs/NOTETYPE_UPGRADE.md).
+
+You need this whenever a janki release adds a field — the pitch diagram,
+frequency rank, example audio, the kanji reference block, and the casual
+example sentence all arrived that way. It is harmless otherwise.
+
+**A field append forces one full AnkiWeb sync.** Adding a field is a schema
+change (verified against the `anki` library, 2026-08-08: it bumps the
+collection's `scm` mark), so the next sync asks you to choose a direction
+rather than merging. Sync *before* importing, so the choice is trivial: upload
+your own collection and nothing is at stake. Then sync normally to make the
+deck available in AnkiMobile.
+
+### How much a card shows
+
+jpdb hands back every sense a word has — する has 17 — and a recognition card is
+not a dictionary entry. Cards show the first few, in jpdb's own
+roughly-commonest-first order, and say how many they left:
+
+```toml
+[cards]
+max_meanings = 4    # 0 shows them all; a deck may set its own
+```
+
+The record keeps all of them. The cap is a card decision, so `janki status`, a
+search, and a human choosing which sense matters all still see the full list.
+
+### Stroke order and kanji readings
+
+```bash
+janki kanji            # look up every character the collection uses
+janki kanji --refresh  # re-fetch, rather than only what is new
+```
+
+Each card back gains a collapsed block per kanji in the word: stroke order
+drawn one stroke at a time on graph paper, the 音/訓 readings, and a common word
+for each — 音 ゼン → 前線 ぜんせん "front line", 訓 まえ → 名前 なまえ "name".
+Collapsed because it is a reminder, not the thing being tested.
+
+The data is looked up per *character* and shared: 前 is the same 前 in 名前 and
+前線, so it is fetched once into `data/kanji.json` and read by every record that
+contains it. Re-running costs one request per new character. A build never
+needs the network — a character not looked up simply has no block.
+
+Example words are ranked by JMdict's frequency tags, which matters more than it
+sounds: the raw list for 前 is 740 entries opening on 前官礼遇 and 前駆体.
+Untagged entries are dropped rather than ranked last, so a rare character shows
+its readings with no example rather than an obscure one that looks endorsed.
+
+Sources are **KANJIDIC2** (CC BY-SA 4.0, EDRDG) via kanjiapi.dev and
+**KanjiVG** (CC BY-SA 3.0, Ulrich Apel). A personal deck is fine; a deck you
+share must credit both — the same footing as the VOICEVOX voice terms.
+
+### When jpdb and the sentence disagree
+
+`enrich --ai` writes a sentence and jpdb checks its furigana — two independent
+sources, which is the point. But jpdb is not always right: its parse reads
+日本語 as **にっぽんご**, and the language is にほんご. A disagreement it wins
+leaves a correct sentence unvoiced forever, since `janki audio` will not speak
+a flagged example.
+
+So a disagreement is *adjudicated*. A cheap model is shown both readings and
+asked which one a native speaker uses for that sentence — a much narrower
+question than "what is the reading", and one it never answers by proposing a
+third. `unsure` is an answer it is told to give, and it leaves the flag alone.
+
+```bash
+janki enrich --recheck-furigana                  # re-ask, adjudicating disputes
+janki enrich --recheck-furigana --no-adjudicate  # leave every dispute flagged
+janki enrich --recheck-furigana --accept IDS     # your call, not jpdb's
+```
+
+`janki refresh` runs this between writing and voicing, so a dispute is settled
+before it can silence a card. The ledger records **who vouched** — `jpdb`, `ai`
+with the adjudicating model, or `human` — because a reading a model judged is
+not the same evidence as one a dictionary confirmed, and months later that is
+the only thing explaining why a sentence was trusted.
+
+Set `[ai] adjudicate_model = ""` to turn it off entirely.
+
+### Checking that an import actually landed
+
+`janki status` reads your Anki collection and says when a deck's notetype is not
+what a build would write — the **Merge Notetypes** failure above, after the fact:
+
+```
+warning: Anki: verbs: 'Japanese Study (recognition+production)+' sits beside
+'Japanese Study (recognition+production)' with 0 note(s) — an import that left
+'Merge Notetypes' unticked. The notes on it are on the wrong notetype.
+```
+
+It is **read-only**: the collection is copied to a temporary directory and the
+copy is opened, so it works whether or not Anki is running and cannot touch what
+you are studying. janki never writes to your collection.
+
+Only your janki decks are inspected, by each deck's own model id. A collection
+full of downloaded shared decks with their own `+` notetypes is neither
+inspected nor mentioned — janki did not create those and cannot fix them.
+
+With one Anki profile it finds the collection itself. With several, name one:
+
+```toml
+[anki]
+profile = "User 1"
+# or point straight at it:
+# collection = "~/Library/Application Support/Anki2/User 1/collection.anki2"
+```
+
+Nothing here is ever an error. No Anki, no import yet, or a collection janki
+cannot read are all ordinary states, and `janki status` keeps working in each.
+
+### Building only what is new
+
+A deck that has shipped 400 records and gained 3 does not need a 400-note
+package:
+
+```bash
+janki build verbs --only-new
+```
+
+That includes only the records this deck has never been built with, per the
+ledger's export history, and records the rest as exported so the next run knows.
+A plain `janki build` records them too — the history is what makes `--only-new`
+correct, and a full build that stayed quiet would make every record it shipped
+look new forever. When there is nothing new it writes no package at all, rather
+than replacing your last good one with an empty deck.
+
+Before building it says what the new records are missing:
+
+```
+warning: verbs: 2 of 3 new records have no word audio
+warning: verbs: 3 of 3 new records have no example sentence
+Build them anyway? [y/N]
+```
+
+`--yes` skips the question; a non-interactive run proceeds and prints the
+counts. A deck name works as well as a path — `verbs` is looked up under
+`deck_dir`, and a real file at that path always wins.
+
+### The whole pipeline
+
+This is the command to run after adding words. It is the weekly workflow:
+
+```bash
+janki refresh                  # build every deck
+janki refresh --deck verbs     # build only this deck
+```
+
+Runs `enrich --jpdb` → `enrich --ai` → `audio --words --examples` →
+`build --only-new`, in that order, because each stage needs what the one before
+it produces: jpdb fills the readings and accents `audio` needs to force a pitch,
+`--ai` writes the examples `audio` then voices, and the build ships what they
+finished. Skip any stage with `--no-jpdb`, `--no-ai`, `--no-audio`, `--no-build`.
+A stage that fails stops the run rather than building a package from
+half-enriched records.
+
+`--deck` scopes the **build** stage only: enrichment and audio still run over
+every record in the normalized file, because a word's reading and its clip
+belong to the word rather than to whichever deck happens to carry it.
 
 ## Common commands
 
@@ -639,6 +808,194 @@ enrich_model = "claude-opus-5"
 one run. A batch is fetched with the model it was **submitted** under, whatever
 the config says by the time you collect it, because that is what answered it.
 
+## What a handout teaches: `janki patterns`
+
+`janki extract` asks a page "which vocabulary is here". That is the wrong
+question for half of what a class hands you: a te-form chart contains almost no
+vocabulary and is entirely about a *form*, and a week's slides contain sixty
+unglossed words while really being about 〜んだ and つもり.
+
+```bash
+janki patterns data/inbox/scans/*.pdf     # read them
+janki patterns                            # list what has been read
+janki patterns --review '104 Week 11 Slide.pdf'
+```
+
+Nothing is used until you mark it reviewed — it is a model's reading of a slide
+deck, and letting that steer every card would spread one bad inference across
+the collection. A reviewed **lesson** document then steers `enrich --ai`, so the
+examples it writes use the grammar you are being taught this week. A **pattern**
+document (a conjugation chart) steers nothing; it is reviewed for its own sake.
+
+### A chart becomes its own deck
+
+A conjugation chart is a deck in itself. A deck file with `kind: pattern` turns
+the rules it teaches into cards — one per rule, and a row stating two
+(`くる → きて / する → して`) into one card each, which is how they are drilled:
+
+```yaml
+deck:
+  kind: pattern
+  name: "Brandon Japanese::Te-form Rules"
+  deck_id: 2059400113
+  model_id: 1607392351
+  document: "teform_song.pdf"
+```
+
+**It ships only what the check below passed.** Everything on these cards is
+either transcribed from the page by a model or computed by janki, so a worked
+example janki disagrees with is one it has reason to think was mis-transcribed —
+drilling it would teach the error. A rule with nothing checkable (`く → いて`
+names an ending, not a verb) still ships: there is nothing to disagree with, and
+the rule is the thing being taught. An unreviewed document builds nothing.
+
+Pattern cards get **their own notetype**, which costs no forced sync. Measured
+against `anki` 26.8.1: adding a notetype leaves the collection's `scm` mark
+alone, while appending a field to an existing one bumps it — so unlike a new
+field on the word notetype, this does not force the one-directional AnkiWeb
+sync described above.
+
+### And a deck that practises it
+
+The rules are the mnemonic; the drill is what you need in conversation. A deck
+file with `kind: conjugation` runs every verb in the collection through
+`conjugation.conjugate` and asks for one form:
+
+```yaml
+deck:
+  kind: conjugation
+  form: te_form          # any of janki's computed forms
+  name: "Brandon Japanese::Te-form Practice"
+  deck_id: 2059400114
+  model_id: 1607392351
+```
+
+```text
+FRONT: te form  買う（かう） → ?
+BACK :          買って      to use   godan
+```
+
+If you imported `teform-rules.apkg` before the drill deck existed, re-import it
+with **Merge Notetypes** ticked: the shared notetype gained a `Kind` field, and
+appending one is the schema change that forces a one-directional AnkiWeb sync
+(see "Importing into Anki Desktop"). Without the re-import the existing cards
+still read correctly — the template falls back to "Rule" for an empty field —
+but they will not pick up the label.
+
+**Every answer is computed, never transcribed** — the same rules that build the
+conjugation table on the word card, so a drill card and its word card cannot
+disagree, and 行く → 行って comes out right because `conjugate` knows the
+exception. A verb janki declines (ゆく, whose て-form is genuinely contested, or
+a record whose `verb_group` is a class name janki does not know) produces **no
+card** rather than a guess.
+
+The reading rides along on the front where it adds something: a kanji verb
+cannot be conjugated without it, and hiding it would test the reading instead of
+the form. GUIDs key on the record and the form, so correcting a reading rewrites
+the card rather than orphaning its history.
+
+### A chart is checked, not believed
+
+Where the chart shows its work — `かう ⇨ かって`, `くる ⇨ きて` — janki checks it
+against `conjugation.conjugate`, the same rules it uses to build every card:
+
+```text
+teform_song.pdf — pattern
+    checked 6/6 worked example(s) against janki's conjugation rules
+        いく ⇨ いって matched te form
+```
+
+**A verb with no class on record is held back, not guessed at.** This matters
+more than it sounds: a conjugation chart exists *because* Japanese verbs have
+outliers, and する, くる and 行く are why anyone prints one. Running an unknown
+verb through every class to see if something fits gets both directions wrong —
+it contradicts a correct chart wherever janki has no override for the exception
+being taught, and it agrees with a garble whenever the garble is some other
+class's regular form (`食べる ⇨ 食べれる` is ら抜き, and godan-regular).
+
+The class comes from your collection, where `enrich --jpdb` has already recorded
+one per verb. For a word the collection has never held, ask the dictionary:
+
+```bash
+janki patterns --check --ask-jpdb    # one request for every unknown verb
+```
+
+Without that flag the command touches no network.
+
+### What Anki actually draws
+
+`tests/test_rendered_cards.py` builds a package, imports it into a scratch
+collection, and asks **Anki** to render the cards — the same path the desktop
+reviewer uses. Every other template test reads the HTML off disk, and that is
+blind to everything which only exists after Anki has processed it:
+
+```bash
+# delete `{{furigana:...}}` from every card back:
+#   52 source-level template and build tests → still green
+#   3 rendered-card tests                    → fail
+```
+
+So it pins the things a source test cannot see: that `{{furigana:話[はな]す}}`
+puts はな over 話 and not over 話す, that a `{{#CasualJapanese}}` section stays
+shut when there is no casual sentence, that no `{{Field}}` survives unresolved,
+that `[sound:...]` is consumed rather than shown, and that both lookup links
+carry a percent-encoded query.
+
+It also demonstrates, against Anki rather than in a comment, the failure
+`qc.spilled_furigana_groups` exists for: with the separator missing, Anki really
+does draw つま across `、妻`.
+
+**It is not a device test.** AnkiMobile and AnkiDroid rendering, CSS and layout,
+and whether the Shirabe app answers its URL scheme are all still manual.
+
+## The last gate: `janki review`
+
+Every other check in janki is a rule. `validate` knows the shape a record must
+have, `qc` knows what Anki will draw from a furigana field, `conjugation` knows
+which forms exist. Between them they catch everything that can be *stated* — but
+not a card that is well-formed and wrong: an example using the word in a sense
+the meanings do not list, a "casual" sentence written in 〜ます, a usage note that
+contradicts the sentence beside it.
+
+`janki review` reads the finished cards and reports those. **A recorded build
+refuses to ship a card it has not passed:**
+
+```text
+$ janki build verbs
+error: verbs.yaml is not ready to ship.
+  3 card(s) have not been read since they last changed: word:行く:いく, ...
+  Run: janki review
+```
+
+It never has the last word. Only an `error` blocks — a model asked to find fault
+will always find some, and a gate that stops on "could be more natural" is one
+you learn to wave through. An error is cleared by fixing the card, or by
+overruling it *by name*:
+
+```bash
+janki review --accept word:なる:なる --because "jpdb's accent is this deck's authority"
+```
+
+The reason is recorded beside the acceptance, and the acceptance covers **that
+version of the card only**: edit the text afterwards and the question comes back
+rather than an old judgement carrying forward onto new words.
+
+It is fingerprinted, so it is affordable. `data/review.json` records what the
+card said when it was read, so a re-run costs one request per *changed* card and
+nothing at all for a deck you have not touched — the same shape the audio ledger
+uses. The file is committed, so a fresh clone builds offline.
+
+`janki refresh` runs it as the stage before `build`. A project that does not want
+a model reading its cards sets `[review] require = false`, and says so in its own
+`janki.toml` rather than by omission.
+
+**What it found on this repository's own deck.** Six of twenty cards carried a
+part of speech that contradicted their own verb group — jpdb returns
+`["aux-v", "vi", "v1"]` for 見る and `["int", "vi", "v5", "v5r"]` for 分かる, and
+janki was taking the first recognized code, so 分かる shipped as an
+"interjection". That is now a deterministic rule in `pos_to_part_of_speech`
+rather than something the gate has to catch twice.
+
 ## The ledger and `janki status`
 
 `data/ledger.json` is machine-written, git-committed, and deliberately
@@ -697,11 +1054,14 @@ moved into `vocabulary.json` by hand, and running it when nothing is missing is
 a no-op: every writer records a source reference in the same shape `--rebuild`
 reconstructs, so it never grows the file.
 
-Two parts of the ledger are still unwritten while the rest of the pipeline is
-built. The only writer of `audio` is `--rebuild`, over files you placed under
-`data/media` yourself, until `janki audio` arrives in Milestone 5. And `janki
-build` does not yet mark records exported, so `--unexported` currently lists
-everything.
+`audio` is written by `janki audio`, one entry per clip, recording the engine,
+the voice, the rate and any style settings that decided how it sounds — so
+changing any of them makes exactly those clips stale. `exports` is written by
+every build to a deck's *own* package — a `--output` build is a throwaway and
+records nothing — so `--unexported` answers what a deck has never shipped, which
+is what makes `build --only-new` correct. An export entry also records what the
+record was *missing* when it shipped, so a word that went out silent and has a
+clip now can be reported rather than silently left behind.
 
 `enriched` *is* written, by the passes that write records directly:
 `janki enrich --jpdb`, `--ai` and `--polish-meanings` each leave their own
@@ -808,7 +1168,7 @@ verb_group: "godan"
 transitivity: "intransitive"
 examples:
   - japanese: "毎日、妻と日本語で話します。"
-    furigana: "毎日[まいにち]、妻[つま]と日本語[にほんご]で話[はな]します。"
+    furigana: "毎日[まいにち]、 妻[つま]と 日本語[にほんご]で 話[はな]します。"
     romaji: "Mainichi, tsuma to Nihongo de hanashimasu."
     english: "I speak Japanese with my wife every day."
 conjugations:
@@ -861,8 +1221,150 @@ requests include:
 - The Shirabe deep link currently uses `shirabelookup://search?w=...`. That URL
   scheme is unverified against a real installed app — test it on your iPhone
   before relying on it.
+- The desktop fallback currently searches
+  `https://jpdb.io/search?q=...&lang=english`. That URL is likewise unverified
+  against the live site and may change independently of janki.
 - Pitch accent and frequency rank are filled by `janki enrich --jpdb` from
-  jpdb's dictionary data. Generated audio arrives in Milestone 5. Neither is
-  ever guessed: an empty field means the dictionary did not say, and `janki
-  status` counts it as missing rather than inventing a value. See
-  `docs/DESIGN_V2.md`.
+  jpdb's dictionary data. Neither is ever guessed: an empty field means the
+  dictionary did not say, and `janki status` counts it as missing rather than
+  inventing a value. See `docs/DESIGN_V2.md`.
+- Word audio needs a pitch accent, so a record without one is skipped and
+  reported rather than voiced with the engine's guess — the guess is wrong on
+  exactly the homographs a pitch card exists for. `--allow-default-accent` opts
+  into it deliberately and marks those clips in the ledger.
+- `janki status` reads your Anki collection to report an import that silently
+  failed to upgrade the notetype, but only after the fact — nothing can stop the
+  bad import while it is happening. Tick **Merge Notetypes** — see
+  [Importing into Anki Desktop](#importing-into-anki-desktop).
+
+## Audio
+
+Two engines, because the two recordings do different jobs.
+
+**Words are spoken by VOICEVOX with their pitch accent forced.** That is the
+whole reason it is here: 橋 and 箸 are the pair a card exists to tell apart, and
+an engine left to guess renders them identically — measured, not assumed.
+Nothing else in this project can force an accent, so nothing else voices a word.
+
+**Sentences are read naturally**, by VOICEVOX or by OpenAI. Nothing is forced
+there — janki has no accent data for a whole sentence and does not pretend to —
+so the choice is about which reads Japanese better, and you should listen rather
+than take a recommendation.
+
+### Getting VOICEVOX running
+
+It is a local engine: no account, no key, no per-character cost, and it works
+offline. Either install the [VOICEVOX app](https://voicevox.hiroshiba.jp/) and
+leave it open, or run the engine on its own:
+
+```bash
+docker run --rm -p 50021:50021 --name janki-voicevox \
+  voicevox/voicevox_engine:cpu-latest
+```
+
+janki talks to `http://localhost:50021` by default; set `tts.voicevox_url` if
+yours listens elsewhere. `janki audio` checks the engine is answering *before*
+it synthesizes anything, because a run that voices forty clips and then fails on
+the forty-first has written forty files and half a ledger.
+
+If you run it in a container, note that it loads a model per speaker on demand
+and keeps them: a 2 GiB colima VM gets through about nine speakers before the
+container is OOM-killed. That only bites when auditioning many voices at once —
+`scripts/voice-samples.py` cycles the container itself to work around it.
+
+### Generating the audio
+
+```bash
+janki audio --words --examples
+```
+
+Both kinds are off unless asked for. It skips — and reports — anything it is not
+sure of: a record with no accent pattern is not voiced with a guess, and an
+example whose furigana nobody confirmed is not spoken at all. `--prune` removes
+clips no record references any more, taking their ledger entries with them.
+
+### Choosing a voice
+
+```toml
+[tts]
+voicevox_speaker = 13               # speaks the words, accent forced
+voicevox_speed = 0.7                # below 1 slows delivery; the engine's own
+                                    # time-stretch, so the pitch does not drop
+```
+
+VOICEVOX ships 40-odd speakers, most with several styles. To hear them rather
+than read a list:
+
+```bash
+python3 scripts/voice-samples.py            # every speaker, plus a page to compare them
+python3 scripts/voice-samples.py --male     # just the male voices
+```
+
+That writes clips and an `index.html` to `~/Desktop/janki-voice-samples`
+(`--out` to put them elsewhere). Each one runs through janki's own forced-accent
+path, so the sample word carries its real accent rather than the engine's guess
+— what you hear is what a card will sound like. Use `--word/--reading/--pattern`
+to audition with a word you care about.
+
+Sentences can take a different voice, or a different engine:
+
+```toml
+[tts]
+voicevox_sentence_speaker = 52      # another VOICEVOX voice for sentences
+```
+
+```toml
+[tts]
+sentence_provider = "openai"        # OpenAI reads the sentences instead
+openai_voice = "onyx"               # alloy, ash, ballad, cedar, coral, echo,
+                                    # fable, marin, nova, onyx, sage, shimmer,
+                                    # verse. (Cove and the other ChatGPT app
+                                    # voices are a different set — not this API's.)
+openai_model = "gpt-4o-mini-tts"    # or a pinned snapshot like
+                                    # gpt-4o-mini-tts-2025-12-15
+```
+
+OpenAI needs `OPENAI_API_KEY` in the environment — never in `janki.toml` — and
+bills per character. That model has no rate parameter, so pace is asked for in
+prose through `openai_instructions`; the shipped default asks for a noticeably
+slower delivery. Leave `sentence_provider` unset and one voice does everything.
+
+Only three model families on `/v1/audio/speech` work: `tts-1`, `tts-1-hd`, and
+`gpt-4o-mini-tts` with its dated snapshots. The conversational audio models
+(`gpt-audio`, `gpt-audio-1.5`, `gpt-audio-mini`) generate speech natively, which
+sounds like it should be better — but they *respond* to text rather than reading
+it. Asked to read 「日本語を話しますか。」 they answer it; the measurements are in
+M5.7 of `docs/IMPLEMENTATION_PLAN.md`. The realtime family (`gpt-realtime-*`)
+was not tested: it is a live speech-to-speech session, a different shape from
+writing a file to disk.
+
+### Changing a voice re-voices only what that voice said
+
+The ledger records which engine, which voice, which rate and which style
+settings made every clip, so changing any of them makes exactly those clips
+stale and leaves the rest alone:
+
+```bash
+janki audio --examples       # after changing the sentence voice; words untouched
+```
+
+No `--force` needed. That flag remains for rewriting audio the settings did not
+change.
+
+Within one engine, filenames are content-addressed and unchanged by a re-voice,
+so clips are rewritten in place and Anki's media sync picks up the new audio
+behind the same `[sound:]` references. **Switching engines changes the file
+extension** — VOICEVOX writes `.wav`, OpenAI `.mp3` — so the note's `[sound:]`
+reference is repointed and the old clip is left behind unreferenced. Follow that
+one with `janki audio --examples --prune`.
+
+This also means a re-voice interrupted part way — an OOM, a dropped connection —
+is finished simply by running the command again.
+
+### If you share a deck
+
+VOICEVOX voices are free to use, **but each character carries its own terms**,
+and most ask to be credited. That is a question for a deck you publish, not for
+one you study alone. Check the terms for the speaker you chose at
+[voicevox.hiroshiba.jp](https://voicevox.hiroshiba.jp/) and credit it in the
+deck description. OpenAI audio has no such attribution requirement.

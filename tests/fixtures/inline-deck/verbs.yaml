@@ -22,7 +22,7 @@ notes:
     usage_notes: "Use it for speaking or talking. The person spoken with is often marked by と."
     examples:
       - japanese: "毎日、妻と日本語で話します。"
-        furigana: "毎日[まいにち]、妻[つま]と日本語[にほんご]で話[はな]します。"
+        furigana: "毎日[まいにち]、 妻[つま]と 日本語[にほんご]で 話[はな]します。"
         romaji: "Mainichi, tsuma to Nihongo de hanashimasu."
         english: "I speak Japanese with my wife every day."
     conjugations:
@@ -53,7 +53,7 @@ notes:
     transitivity: "transitive"
     examples:
       - japanese: "クリスマスに家族と韓国料理を食べます。"
-        furigana: "クリスマスに家族[かぞく]と韓国料理[かんこくりょうり]を食[た]べます。"
+        furigana: "クリスマスに 家族[かぞく]と 韓国料理[かんこくりょうり]を 食[た]べます。"
         romaji: "Kurisumasu ni kazoku to Kankoku ryouri o tabemasu."
         english: "At Christmas, I eat Korean food with my family."
     conjugations:
@@ -84,7 +84,7 @@ notes:
     transitivity: "intransitive"
     examples:
       - japanese: "家族と城崎温泉に行きました。"
-        furigana: "家族[かぞく]と城崎温泉[きのさきおんせん]に行[い]きました。"
+        furigana: "家族[かぞく]と 城崎温泉[きのさきおんせん]に 行[い]きました。"
         romaji: "Kazoku to Kinosaki Onsen ni ikimashita."
         english: "I went to Kinosaki Onsen with my family."
     conjugations:

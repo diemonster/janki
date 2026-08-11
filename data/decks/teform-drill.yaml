@@ -1,0 +1,9 @@
+deck:
+  kind: conjugation
+  form: te_form
+  name: "Brandon Japanese::Te-form Practice"
+  deck_id: 2059400114
+  model_id: 1607392351
+  model_name: "Japanese Pattern"
+  description: "Every verb in the collection, drilled into its te-form. Answers computed by janki, never transcribed."
+  output: "teform-drill.apkg"

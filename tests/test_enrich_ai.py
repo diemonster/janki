@@ -176,6 +176,21 @@ def test_recent_sentences_ride_along_as_variety_pressure() -> None:
     assert "structurally different" in text
 
 
+def test_the_patterns_the_learner_is_studying_ride_along_too() -> None:
+    """The block reaching the prompt is the whole of what `janki patterns`
+    does for `enrich --ai`; without it the command reads documents nothing
+    consumes."""
+    from japanese_anki.patterns import Pattern, format_patterns
+
+    text = ai_prompt(record(), (), format_patterns([Pattern("〜んだ", "explains")]))
+
+    assert "〜んだ" in text and "explains" in text
+
+
+def test_no_reviewed_patterns_leaves_the_prompt_as_it_was() -> None:
+    assert "currently studying" not in ai_prompt(record())
+
+
 # --- the QC gate --------------------------------------------------------------
 
 
@@ -939,3 +954,37 @@ def test_a_failed_ledger_write_does_not_call_a_re_run_pointless(
     assert "not a free repair" in err
     assert "either skips these records" not in err
     assert stored(root)["word:話す:はなす"]["examples"]
+
+
+# --- the separator space, on the way in ---------------------------------------
+
+
+def test_a_swallowed_comma_is_repaired_before_anything_reads_the_furigana() -> None:
+    """A model writes `週末[しゅうまつ]、何[なに]` without the separator perhaps
+    half the time. Anki then draws なに over `、何`, and the comma disappears
+    from the reading the romaji and the sentence audio are built from — so the
+    repair has to happen before the example is kept, not in a later pass over
+    the file."""
+    outcome = apply_ai_result(
+        record(),
+        answer(generated(
+            "週末、何を話すの？", furigana="週末[しゅうまつ]、何[なに]を 話[はな]すの？"
+        )),
+    )
+
+    kept = outcome.record.examples[0]
+    assert kept.furigana == "週末[しゅうまつ]、 何[なに]を 話[はな]すの？"
+    assert kept.romaji == "shuumatsu, naniohanasuno?", "the comma survives into the romaji"
+
+
+def test_a_spill_needing_a_guess_is_kept_as_written() -> None:
+    """`、妻と日本語[にほんご]` needs someone to decide where the word starts.
+    It stays exactly as the model wrote it, for `janki validate` to report."""
+    # No space before 日本語: with one there is no spill, and the test passed
+    # for a reason unrelated to the behaviour it names.
+    written = "毎日[まいにち]、妻と日本語[にほんご]を 話[はな]す"
+    outcome = apply_ai_result(
+        record(), answer(generated("毎日、妻と日本語を話す", furigana=written))
+    )
+
+    assert outcome.record.examples[0].furigana == written

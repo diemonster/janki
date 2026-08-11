@@ -55,10 +55,13 @@ is the durable source of truth; generated `.apkg` files are build artifacts.
    have moved into `data/normalized/` and `janki status --rebuild` has run.
 5. `data/media/`: generated audio, content-addressed — **committed**, so a
    rebuild is free (`docs/PROJECT_PLAN.md` design principle 6).
-6. `data/ledger.json`: machine-written operational state — **committed**, never
+6. `data/kanji.json`: machine-written kanji reference data — **committed** and
+   replaced by `janki kanji --refresh`; do not add fields by hand because the
+   source schema does not preserve unknown keys.
+7. `data/ledger.json`: machine-written operational state — **committed**, never
    hand-edited. `janki status --rebuild` reconstructs what records and media
    still prove.
-7. `dist/`: generated `.apkg` and preview files — **not** committed.
+8. `dist/`: generated `.apkg` and preview files — **not** committed.
 
 Only `dist/` is disposable. Everything under `data/` is tracked, including the
 two directories that start empty (`.gitkeep`), because the repository — not

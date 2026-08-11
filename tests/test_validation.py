@@ -1,4 +1,5 @@
 import unicodedata
+from dataclasses import replace
 
 import pytest
 
@@ -235,3 +236,240 @@ def test_a_decomposed_reading_is_counted_in_kana_not_codepoints() -> None:
     assert len(decomposed) == 5, "four kana, five codepoints"
 
     assert _issue_messages(_accented("LHHHH", reading=decomposed)) == []
+
+
+_SENTENCE = "家族と城崎温泉に行きました。"
+
+
+def _with_example(furigana: str, japanese: str = _SENTENCE) -> VocabularyRecord:
+    from japanese_anki.models import ExampleSentence
+
+    return VocabularyRecord(
+        id="word:行く:いく",
+        expression="行く",
+        reading="いく",
+        meanings=["to go"],
+        examples=[ExampleSentence(japanese=japanese, furigana=furigana, english="x")],
+    )
+
+
+def test_furigana_missing_a_space_is_flagged() -> None:
+    """Anki splits the field on spaces and draws the reading over everything
+    back to the previous one — so an unspaced group spills onto the kana before
+    it. Found on a real card: きのさきおんせん rendered across と城崎温泉."""
+    record = _with_example("家族[かぞく]と城崎温泉[きのさきおんせん]に行[い]きました。")
+
+    messages = _issue_messages(record)
+
+    assert any("'と城崎温泉'" in m and "'に行'" in m for m in messages)
+    # A warning, not an error: `has_errors` is what `build` refuses on, and a
+    # renderable-but-wrong field must not stop a deck from building.
+    assert not has_errors(validate_records([record]))
+
+
+def test_correctly_spaced_furigana_is_not_flagged() -> None:
+    record = _with_example("家族[かぞく]と 城崎温泉[きのさきおんせん]に 行[い]きました。")
+
+    assert not any("missing a space" in m for m in _issue_messages(record))
+
+
+def test_the_classic_ocha_case_is_flagged() -> None:
+    """お茶[ちゃ] puts ちゃ over both characters; the correct form is お 茶[ちゃ].
+    Told apart from お茶[おちゃ] — correct whole-word ruby — by whether the
+    reading starts with the same kana the run does."""
+    record = VocabularyRecord(
+        id="word:お茶:おちゃ",
+        expression="お茶",
+        reading="おちゃ",
+        meanings=["tea"],
+        furigana="お茶[ちゃ]",
+    )
+
+    assert any("'お茶'" in m for m in _issue_messages(record))
+
+
+def test_a_group_at_the_very_start_needs_no_space() -> None:
+    record = VocabularyRecord(
+        id="word:行く:いく",
+        expression="行く",
+        reading="いく",
+        meanings=["to go"],
+        furigana="行[い]く",
+    )
+
+    assert not any("missing a space" in m for m in _issue_messages(record))
+
+
+def test_unbalanced_brackets_still_win_over_the_spacing_check() -> None:
+    # A field janki cannot parse gets the error it deserves, not a confusing
+    # second complaint derived from a broken parse. The input has to contain a
+    # group the spacing check *would* flag — `に行[い]` — or the test passes
+    # whether the branches are exclusive or not.
+    record = _with_example("家族[かぞく]と 城崎温泉[きのさきおんせん]に行[い]きました[。")
+
+    messages = _issue_messages(record)
+
+    assert any("unbalanced" in m for m in messages)
+    assert not any("missing a space" in m for m in messages)
+
+
+def test_whole_word_ruby_over_leading_kana_is_not_flagged() -> None:
+    """お茶[おちゃ] is correct: the ruby covers the word's own leading kana.
+    Flagging it would be worse than useless — acting on the advice gives
+    お 茶[おちゃ], whose reading is おおちゃ, which is the defect the check
+    exists to catch."""
+    record = _with_example(
+        "毎日[まいにち] お茶[おちゃ]を 飲[の]みます。", japanese="毎日お茶を飲みます。"
+    )
+
+    assert not any("missing a space" in m for m in _issue_messages(record))
+
+
+def test_a_spill_whose_run_starts_with_punctuation_is_caught() -> None:
+    """Punctuation cannot be part of the word a ruby annotates, so a run
+    beginning with one has swallowed the sentence in front of it."""
+    record = _with_example(
+        "毎日[まいにち]、妻と日本語[にほんご]で 話[はな]します。",
+        japanese="毎日、妻と日本語で話します。",
+    )
+
+    assert any("'、妻と日本語'" in m for m in _issue_messages(record))
+
+
+def test_per_kanji_furigana_without_spaces_is_not_flagged() -> None:
+    # 日[にっ]本[ぽん]語[ご] abuts with no spaces and is correct: there is
+    # nothing between the groups for a reading to spill onto.
+    record = _with_example("日[にっ]本[ぽん]語[ご]", japanese="日本語")
+
+    assert not any("missing a space" in m for m in _issue_messages(record))
+
+
+def test_ruby_over_a_loanword_is_not_flagged() -> None:
+    record = VocabularyRecord(
+        id="word:ATM:エーティーエム",
+        expression="ＡＴＭ",
+        reading="エーティーエム",
+        meanings=["ATM"],
+        furigana="ＡＴＭ[エーティーエム]",
+    )
+
+    assert not any("missing a space" in m for m in _issue_messages(record))
+
+
+def test_a_spill_whose_kana_matches_the_reading_is_still_caught() -> None:
+    """は花[はな] is structurally identical to お茶[おちゃ] — leading kana that
+    begins the reading — so a prefix test waves it through. It is a real spill:
+    は vanishes from the reconstructed reading, and from the romaji and audio
+    built on it."""
+    record = _with_example(
+        "庭[にわ]は花[はな]が きれいです。", japanese="庭は花がきれいです。"
+    )
+
+    assert any("'は花'" in m for m in _issue_messages(record))
+
+
+def test_an_honorific_prefix_under_its_ruby_is_not_flagged() -> None:
+    record = VocabularyRecord(
+        id="word:ご飯:ごはん",
+        expression="ご飯",
+        reading="ごはん",
+        meanings=["cooked rice"],
+        furigana="ご飯[ごはん]",
+    )
+
+    assert not any("missing a space" in m for m in _issue_messages(record))
+
+
+def test_a_correct_honorific_survives_decomposition() -> None:
+    """A decomposed ご is こ plus a combining mark, so the honorific check has to
+    look at the *normalized* head — `qc` takes the first character raw (to keep
+    a leading U+3000 that NFKC would delete) and normalizes it before asking
+    whether it is an honorific. Read raw, a decomposed ご is こ, which is not in
+    the allowlist, and a correct ご飯[ごはん] reports as a spill."""
+    composed = VocabularyRecord(
+        id="word:ご飯:ごはん", expression="ご飯", reading="ごはん",
+        meanings=["cooked rice"], furigana="ご飯[ごはん]",
+    )
+    decomposed = replace(
+        composed, furigana=unicodedata.normalize("NFD", "ご飯[ごはん]")
+    )
+
+    assert not any("missing a space" in m for m in _issue_messages(composed))
+    assert not any("missing a space" in m for m in _issue_messages(decomposed))
+
+
+def test_a_real_spill_is_still_caught_when_decomposed() -> None:
+    """The other direction, and the one the suite lost: a *detected* spill must
+    survive decomposition too. Without it every composition test asserted only
+    that nothing is flagged, which a checker that flags nothing at all passes.
+    が decomposes to か — still kana, still not an honorific — so 課長[かちょう]
+    with no space before it spills either way.
+
+    The message is compared *after* normalizing, because the run is reported
+    verbatim: in the decomposed field it really is か + U+3099 + 課長, and that
+    is what the reader has to search their file for."""
+    field = "彼[かれ]が課長[かちょう]です。"
+
+    for furigana in (field, unicodedata.normalize("NFD", field)):
+        messages = _issue_messages(_with_example(furigana))
+
+        assert len(messages) == 1
+        assert "missing a space before 'が課長'" in unicodedata.normalize(
+            "NFC", messages[0]
+        )
+
+
+def test_a_spill_whose_run_starts_with_kanji_is_a_known_gap() -> None:
+    """にほんご really is drawn across 妻と日本語 here, and this is not caught.
+
+    It cannot be told from a legitimate 日[にっ]本[ぽん], or from whole-word ruby
+    over a compound containing kana, without deciding where the word boundary
+    is — the segmentation janki refuses to guess. Flagging the class would tell
+    someone to add a space that breaks a correct field, which is the harm the
+    check was rewritten to stop causing. Pinned so the gap is visible rather
+    than mistaken for coverage."""
+    record = _with_example(
+        "毎日[まいにち]妻と日本語[にほんご]で 話[はな]します。",
+        japanese="毎日妻と日本語で話します。",
+    )
+
+    assert not any("missing a space" in m for m in _issue_messages(record))
+
+
+def test_a_full_width_space_does_not_separate_ruby_groups() -> None:
+    """Ordinary in Japanese text, and Anki does not read it as a separator:
+    `furigana_reading` drops only a single ASCII space, so the run before the
+    group vanishes from the reading the romaji and audio are built on."""
+    record = _with_example(
+        "毎日[まいにち]　妻と日本語[にほんご]で 話[はな]します。",
+        japanese="毎日　妻と日本語で話します。",
+    )
+
+    assert any("missing a space" in m for m in _issue_messages(record))
+
+
+def test_the_warning_quotes_the_run_as_it_appears_in_the_field() -> None:
+    """An NFKC-folded quote names a string the record does not contain, so
+    nobody can find what to fix."""
+    record = _with_example("毎日[まいにち]ﾆﾎﾝ語[にほんご]です。", japanese="毎日ﾆﾎﾝ語です。")
+
+    assert any("'ﾆﾎﾝ語'" in m for m in _issue_messages(record))
+
+
+def test_a_space_no_reading_annotates_is_reported() -> None:
+    """A space in a furigana field means "the next group's run starts here".
+    One before an unannotated katakana word survives into the reading, the
+    romaji and the sentence audio, and draws on the card as a gap that the
+    ExampleJapanese field beside it does not have. Nothing reported it: the
+    spill check only inspects characters inside a group's run, and the jpdb
+    comparison strips category-Z before comparing."""
+    messages = _issue_messages(
+        _with_example("日本語[にほんご]の ニュースが 少[すこ]し 分[わ]かります。")
+    )
+
+    assert len(messages) == 1
+    assert "space before 'ニュースが'" in messages[0]
+
+
+def test_the_notation_spaces_of_an_ordinary_field_are_not_reported() -> None:
+    assert _issue_messages(_with_example("毎晩[まいばん]、 音楽[おんがく]を 聞[き]いて")) == []

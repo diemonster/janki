@@ -1,5 +1,821 @@
 [
   {
+    "id": "word:ある:ある",
+    "expression": "ある",
+    "reading": "ある",
+    "furigana": "",
+    "romaji": "aru",
+    "meanings": [
+      "to be, to exist, to live",
+      "to have",
+      "to be located",
+      "to be equipped with",
+      "to happen, to come about"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "intransitive",
+    "examples": [
+      {
+        "japanese": "家の近くに新しいカフェがあります。",
+        "furigana": "家[いえ]の 近[ちか]くに 新[あたら]しいカフェがあります。",
+        "romaji": "ienochikakuniatarashiikafegaarimasu.",
+        "english": "There's a new café near my house.",
+        "audio": "audio/janki-09f5a7b8f24c.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "来週、日本語のテストがあるんだ。",
+        "furigana": "来週[らいしゅう]、 日本語[にほんご]のテストがあるんだ。",
+        "romaji": "raishuu, nihongonotesutogaarunda.",
+        "english": "You see, I have a Japanese test next week.",
+        "audio": "audio/janki-78343654a681.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "ある",
+      "negative": "ない",
+      "past": "あった",
+      "past_negative": "なかった",
+      "te_form": "あって"
+    },
+    "tags": [
+      "jpdb",
+      "jpdb:anki-test-top-20-verbs"
+    ],
+    "usage_notes": "Used for the existence of inanimate things, plants, and events (パーティーがある). For people and animals, use いる instead. The plain negative is irregular: ない / ありません, never あらない. The thing that exists is marked with が, and the place with に.",
+    "audio": "audio/janki-b00627d9e72d.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 100,
+    "source": {
+      "type": "jpdb",
+      "imported_from": "Anki Test - Top 20 Verbs",
+      "row": null,
+      "raw_fields": {
+        "vid": "1296400",
+        "sid": "2007970197",
+        "deck": "Anki Test - Top 20 Verbs",
+        "card_state": "new"
+      }
+    }
+  },
+  {
+    "id": "word:いる:いる",
+    "expression": "いる",
+    "reading": "いる",
+    "furigana": "",
+    "romaji": "iru",
+    "meanings": [
+      "to be (of animate objects), to exist",
+      "to stay",
+      "to be ...-ing, to have been ...-ing"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "ichidan",
+    "transitivity": "intransitive",
+    "examples": [
+      {
+        "japanese": "妻は今、リビングで本を読んでいます。",
+        "furigana": "妻[つま]は 今[いま]、リビングで 本[ほん]を 読[よ]んでいます。",
+        "romaji": "tsumahaima, ribingudehon'oyondeimasu.",
+        "english": "My wife is reading a book in the living room right now.",
+        "audio": "audio/janki-6d2e4865c7f6.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "ねえ、今どこにいるの？",
+        "furigana": "ねえ、 今[いま]どこにいるの？",
+        "romaji": "nee, imadokoniiruno?",
+        "english": "Hey, where are you right now?",
+        "audio": "audio/janki-573021a7773c.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "いる",
+      "negative": "いない",
+      "past": "いた",
+      "past_negative": "いなかった",
+      "te_form": "いて",
+      "potential": "いられる",
+      "passive": "いられる"
+    },
+    "tags": [
+      "jpdb",
+      "jpdb:anki-test-top-20-verbs"
+    ],
+    "usage_notes": "いる is used for people and animals; use ある for inanimate things (本があります). The polite forms are います／いません, and the past is いました／いませんでした. Attached to a て-form it makes the progressive: 食べています (is eating). Note it is a る-verb (ichidan), so the negative is いない, not いらない.",
+    "audio": "audio/janki-386c2ae02790.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 100,
+    "source": {
+      "type": "jpdb",
+      "imported_from": "Anki Test - Top 20 Verbs",
+      "row": null,
+      "raw_fields": {
+        "vid": "1577980",
+        "sid": "895877539",
+        "deck": "Anki Test - Top 20 Verbs",
+        "card_state": "new"
+      }
+    }
+  },
+  {
+    "id": "word:する:する",
+    "expression": "する",
+    "reading": "する",
+    "furigana": "",
+    "romaji": "suru",
+    "meanings": [
+      "to do, to carry out, to perform",
+      "to cause to become, to make (into), to turn (into)",
+      "to serve as, to act as, to work as",
+      "to wear (clothes, a facial expression, etc.)",
+      "to judge as being, to view as being, to think of as, to treat as, to use as",
+      "to decide on, to choose",
+      "to be sensed (of a smell, noise, etc.)",
+      "to be (in a state, condition, etc.)",
+      "to be worth, to cost",
+      "to pass (of time), to elapse",
+      "to place, or raise, person A to a post or status B",
+      "to transform A to B, to make A into B, to exchange A for B",
+      "to make use of A for B, to view A as B, to handle A as if it were B",
+      "to feel A about B",
+      "verbalizing suffix (applies to nouns noted in this dictionary with the part of speech \"vs\")",
+      "creates a humble verb (after a noun prefixed with \"o\" or \"go\")",
+      "to be just about to, to be just starting to, to try to, to attempt to"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "suru",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "明日は家で仕事をします。",
+        "furigana": "明日[あした]は 家[いえ]で 仕事[しごと]をします。",
+        "romaji": "ashitahaiedeshigotooshimasu.",
+        "english": "Tomorrow I'll work at home.",
+        "audio": "audio/janki-66b0fd5e71ac.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "週末、何するの？",
+        "furigana": "週末[しゅうまつ]、 何[なに]するの？",
+        "romaji": "shuumatsu, nanisuruno?",
+        "english": "What are you doing this weekend?",
+        "audio": "audio/janki-e49963fb019a.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "する",
+      "negative": "しない",
+      "past": "した",
+      "past_negative": "しなかった",
+      "te_form": "して",
+      "potential": "できる",
+      "passive": "される"
+    },
+    "tags": [
+      "jpdb",
+      "jpdb:anki-test-top-20-verbs"
+    ],
+    "usage_notes": "Irregular verb: します／しない／した／して, potential できる. It attaches to many nouns to make verbs (勉強する, 練習する, コピーする); with those, you can often say either 勉強します or 勉強をします, the version with を feeling slightly more like 'do some studying'. Note that 何をする takes を, while the 'make into / decide on' sense takes に (息子を医者にする 'make my son a doctor') — contrast 医者になる 'become a doctor'.",
+    "audio": "audio/janki-e0446a52d4d9.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 100,
+    "source": {
+      "type": "jpdb",
+      "imported_from": "Anki Test - Top 20 Verbs",
+      "row": null,
+      "raw_fields": {
+        "vid": "1157170",
+        "sid": "460825390",
+        "deck": "Anki Test - Top 20 Verbs",
+        "card_state": "new"
+      }
+    }
+  },
+  {
+    "id": "word:できる:できる",
+    "expression": "できる",
+    "reading": "できる",
+    "furigana": "",
+    "romaji": "dekiru",
+    "meanings": [
+      "to be able (in a position) to do, to be up to the task",
+      "to be ready, to be completed",
+      "to be made, to be built",
+      "to be good at, to be permitted (to do)",
+      "to become intimate, to take up (with somebody)",
+      "to grow, to be raised",
+      "to become pregnant"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "ichidan",
+    "transitivity": "intransitive",
+    "examples": [
+      {
+        "japanese": "妻はピアノができます。",
+        "furigana": "妻[つま]はピアノができます。",
+        "romaji": "tsumahapianogadekimasu.",
+        "english": "My wife can play the piano.",
+        "audio": "audio/janki-d021638874c8.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "駅の近くに新しいカフェができたんだ。",
+        "furigana": "駅[えき]の 近[ちか]くに 新[あたら]しいカフェができたんだ。",
+        "romaji": "ekinochikakuniatarashiikafegadekitanda.",
+        "english": "A new cafe has opened near the station, you see.",
+        "audio": "audio/janki-bf64f1fdae40.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "できる",
+      "negative": "できない",
+      "past": "できた",
+      "past_negative": "できなかった",
+      "te_form": "できて"
+    },
+    "tags": [
+      "jpdb",
+      "jpdb:anki-test-top-20-verbs"
+    ],
+    "usage_notes": "The thing you can do is marked with が, not を: 日本語ができる, 料理ができる. With a verb, use the pattern 〜ことができる (話すことができる = to be able to speak). It is intransitive, so there is no を before できる. Also very common in the sense \"to be finished/ready\" (ご飯ができました) and \"to be built\" (新しい駅ができた); the past できた often means \"it's done.\"",
+    "audio": "audio/janki-64e328bba286.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 100,
+    "source": {
+      "type": "jpdb",
+      "imported_from": "Anki Test - Top 20 Verbs",
+      "row": null,
+      "raw_fields": {
+        "vid": "1340450",
+        "sid": "450331373",
+        "deck": "Anki Test - Top 20 Verbs",
+        "card_state": "new"
+      }
+    }
+  },
+  {
+    "id": "word:なる:なる",
+    "expression": "なる",
+    "reading": "なる",
+    "furigana": "",
+    "romaji": "naru",
+    "meanings": [
+      "to become, to get, to grow, to turn, to reach, to attain",
+      "to result in, to turn out, to end up, to prove (to be)",
+      "to consist of, to be composed of, to be made up of",
+      "to be completed, to be realized, to succeed, to be attained, to be accomplished",
+      "to change (into), to turn (into), to transform",
+      "to come (to do), to begin (to do), to grow (to do)",
+      "to come to, to amount to, to add up to, to make",
+      "to play (the part of), to act as",
+      "to be used for, to be useful for, to serve as",
+      "to be promoted",
+      "to do ..."
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "intransitive",
+    "examples": [
+      {
+        "japanese": "来年、日本語の先生になります。",
+        "furigana": "来年[らいねん]、 日本[にほん] 語[ご]の 先生[せんせい]になります。",
+        "romaji": "rainen, nihongonosenseininarimasu.",
+        "english": "Next year I'm going to become a Japanese teacher.",
+        "audio": "audio/janki-5695efa42bdc.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "ぼくはエンジニアになるつもりなんだ。",
+        "furigana": "ぼくはエンジニアになるつもりなんだ。",
+        "romaji": "bokuhaenjinianinarutsumorinanda.",
+        "english": "I'm planning to become an engineer, you see.",
+        "audio": "audio/janki-4dc12b295f67.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "なる",
+      "negative": "ならない",
+      "past": "なった",
+      "past_negative": "ならなかった",
+      "te_form": "なって",
+      "potential": "なれる",
+      "passive": "なられる"
+    },
+    "tags": [
+      "jpdb",
+      "jpdb:anki-test-top-20-verbs"
+    ],
+    "usage_notes": "Nouns and な-adjectives take に before なる (エンジニアになる, 有名になる), while い-adjectives change to the く form instead (安くなる, 大きくなる). Learners often say ×大きいになる by mistake.",
+    "audio": "audio/janki-f31ba6e5b044.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 100,
+    "source": {
+      "type": "jpdb",
+      "imported_from": "Anki Test - Top 20 Verbs",
+      "row": null,
+      "raw_fields": {
+        "vid": "1375610",
+        "sid": "4283029021",
+        "deck": "Anki Test - Top 20 Verbs",
+        "card_state": "new"
+      }
+    }
+  },
+  {
+    "id": "word:使う:つかう",
+    "expression": "使う",
+    "reading": "つかう",
+    "furigana": "使[つか]う",
+    "romaji": "tsukau",
+    "meanings": [
+      "to use (a thing, method, etc.), to make use of, to put to use",
+      "to use (a person, animal, puppet, etc.), to employ, to handle, to manage, to manipulate",
+      "to use (time, money, etc.), to spend, to consume",
+      "to use (language), to speak"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "transitive",
+    "examples": [
+      {
+        "japanese": "仕事でこのソフトを使います。",
+        "furigana": "仕事[しごと]でこのソフトを 使[つか]います。",
+        "romaji": "shigotodekonosofutootsukaimasu.",
+        "english": "I use this software for work.",
+        "audio": "audio/janki-19ca6f82b17f.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "そのペン、ちょっと使ってもいい？",
+        "furigana": "そのペン、ちょっと 使[つか]ってもいい？",
+        "romaji": "sonopen, chottotsukattemoii?",
+        "english": "Can I use that pen for a sec?",
+        "audio": "audio/janki-90c2d4875647.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "使う",
+      "negative": "使わない",
+      "past": "使った",
+      "past_negative": "使わなかった",
+      "te_form": "使って",
+      "potential": "使える",
+      "passive": "使われる"
+    },
+    "tags": [
+      "jpdb",
+      "jpdb:anki-test-top-20-verbs"
+    ],
+    "usage_notes": "Transitive, so the thing used takes を: パソコンを使う. It covers tools, money, and time (お金を使う \"spend money\", 時間を使う \"spend time\"), and also languages (日本語を使う). Potential form is 使える (\"can use / usable\"), which is very common: このカードは使えますか。",
+    "audio": "audio/janki-9da29ec3f56e.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 200,
+    "source": {
+      "type": "jpdb",
+      "imported_from": "Anki Test - Top 20 Verbs",
+      "row": null,
+      "raw_fields": {
+        "vid": "1305990",
+        "sid": "44399515",
+        "deck": "Anki Test - Top 20 Verbs",
+        "card_state": "locked,new"
+      }
+    }
+  },
+  {
+    "id": "word:分かる:わかる",
+    "expression": "分かる",
+    "reading": "わかる",
+    "furigana": "分[わ]かる",
+    "romaji": "wakaru",
+    "meanings": [
+      "to understand, to comprehend, to grasp, to see, to get, to follow",
+      "to become clear, to be known, to be discovered, to be realized, to be realised, to be found out",
+      "I know!, I think so too!"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "intransitive",
+    "examples": [
+      {
+        "japanese": "日本語のニュースが少し分かります。",
+        "furigana": "日本語[にほんご]のニュースが 少[すこ]し 分[わ]かります。",
+        "romaji": "nihongononyuusugasukoshiwakarimasu.",
+        "english": "I understand a little of the Japanese news.",
+        "audio": "audio/janki-ff47181f4085.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "この漢字の読み方が分からないんだ。",
+        "furigana": "この 漢字[かんじ]の 読[よ]み 方[かた]が 分[わ]からないんだ。",
+        "romaji": "konokanjinoyomikatagawakaranainda.",
+        "english": "I don't know how to read this kanji, you see.",
+        "audio": "audio/janki-e1258968efa7.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "分かる",
+      "negative": "分からない",
+      "past": "分かった",
+      "past_negative": "分からなかった",
+      "te_form": "分かって"
+    },
+    "tags": [
+      "jpdb",
+      "jpdb:anki-test-top-20-verbs"
+    ],
+    "usage_notes": "The thing understood is marked with が, not を: 日本語が分かる. It is intransitive and describes a state, so 分かります often translates as \"I understand\" rather than an action. Alone, 分かった／分かりました means \"got it, understood.\"",
+    "audio": "audio/janki-17f3719438f1.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 500,
+    "source": {
+      "type": "jpdb",
+      "imported_from": "Anki Test - Top 20 Verbs",
+      "row": null,
+      "raw_fields": {
+        "vid": "1606560",
+        "sid": "2821891307",
+        "deck": "Anki Test - Top 20 Verbs",
+        "card_state": "locked,new"
+      }
+    }
+  },
+  {
+    "id": "word:思う:おもう",
+    "expression": "思う",
+    "reading": "おもう",
+    "furigana": "思[おも]う",
+    "romaji": "omou",
+    "meanings": [
+      "to think, to consider, to believe, to reckon",
+      "to think (of doing), to plan (to do)",
+      "to judge, to assess, to regard",
+      "to imagine, to suppose, to dream",
+      "to expect, to look forward to",
+      "to feel, to be (in a state of mind), to desire, to want",
+      "to recall, to remember"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "transitive",
+    "examples": [
+      {
+        "japanese": "この映画はおもしろいと思います。",
+        "furigana": "この 映画[えいが]はおもしろいと 思[おも]います。",
+        "romaji": "konoeigahaomoshiroitoomoimasu.",
+        "english": "I think this movie is interesting.",
+        "audio": "audio/janki-5891400dfdba.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "この店のラーメン、おいしいと思うよ。",
+        "furigana": "この 店[みせ]のラーメン、おいしいと 思[おも]うよ。",
+        "romaji": "konomisenoraamen, oishiitoomouyo.",
+        "english": "I think the ramen at this place is good.",
+        "audio": "audio/janki-710929eb6000.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "思う",
+      "negative": "思わない",
+      "past": "思った",
+      "past_negative": "思わなかった",
+      "te_form": "思って",
+      "potential": "思える",
+      "passive": "思われる"
+    },
+    "tags": [
+      "jpdb",
+      "jpdb:anki-test-top-20-verbs"
+    ],
+    "usage_notes": "Almost always used as ...と思う: the thought or opinion comes first in plain (short) form, followed by と思います, even when the rest of the sentence is polite. 思う is transitive and takes を with noun objects (何を思っていますか), but for stating opinions the と pattern is the normal one. For present-moment thoughts about oneself, 思っている is also common (ずっとそう思っています, \"I've thought so all along\").",
+    "audio": "audio/janki-ac2fd86f940c.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 100,
+    "source": {
+      "type": "jpdb",
+      "imported_from": "Anki Test - Top 20 Verbs",
+      "row": null,
+      "raw_fields": {
+        "vid": "1589350",
+        "sid": "3737793312",
+        "deck": "Anki Test - Top 20 Verbs",
+        "card_state": "locked,new"
+      }
+    }
+  },
+  {
+    "id": "word:書く:かく",
+    "expression": "書く",
+    "reading": "かく",
+    "furigana": "書[か]く",
+    "romaji": "kaku",
+    "meanings": [
+      "to write, to compose, to pen",
+      "to draw, to paint"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "transitive",
+    "examples": [
+      {
+        "japanese": "毎晩、日本語で日記を書きます。",
+        "furigana": "毎晩[まいばん]、 日本語[にほんご]で 日記[にっき]を 書[か]きます。",
+        "romaji": "maiban, nihongodenikkiokakimasu.",
+        "english": "I write in my diary in Japanese every night.",
+        "audio": "audio/janki-3dbc30623a5f.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "誕生日におばあちゃんに手紙を書くつもりなんだ。",
+        "furigana": "誕生日[たんじょうび]におばあちゃんに 手紙[てがみ]を 書[か]くつもりなんだ。",
+        "romaji": "tanjoubiniobaachannitegamiokakutsumorinanda.",
+        "english": "I'm planning to write my grandma a letter on her birthday.",
+        "audio": "audio/janki-01c1062a6278.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "書く",
+      "negative": "書かない",
+      "past": "書いた",
+      "past_negative": "書かなかった",
+      "te_form": "書いて",
+      "potential": "書ける",
+      "passive": "書かれる"
+    },
+    "tags": [
+      "jpdb",
+      "jpdb:anki-test-top-20-verbs"
+    ],
+    "usage_notes": "Everyday word for writing text: 手紙を書く, メールを書く, 名前を書く. As a godan verb the て-form is 書いて (not 書きて), and the past is 書いた. When you mean drawing a picture, the usual spelling is 描く (かく/えがく), though 絵をかく is often left in kana.",
+    "audio": "audio/janki-0113bbe0a2f7.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 300,
+    "source": {
+      "type": "jpdb",
+      "imported_from": "Anki Test - Top 20 Verbs",
+      "row": null,
+      "raw_fields": {
+        "vid": "1343950",
+        "sid": "1331899251",
+        "deck": "Anki Test - Top 20 Verbs",
+        "card_state": "locked,new"
+      }
+    }
+  },
+  {
+    "id": "word:来る:くる",
+    "expression": "来る",
+    "reading": "くる",
+    "furigana": "来[く]る",
+    "romaji": "kuru",
+    "meanings": [
+      "to come (spatially or temporally), to approach, to arrive",
+      "to come back, to do ... and come back",
+      "to come to be, to become, to get, to grow, to continue",
+      "to come from, to be caused by, to derive from",
+      "to come to (i.e. \"when it comes to spinach ...\")"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "kuru",
+    "transitivity": "intransitive",
+    "examples": [
+      {
+        "japanese": "土曜日に友だちがうちに来ます。",
+        "furigana": "土曜日[どようび]に 友[とも]だちがうちに 来[き]ます。",
+        "romaji": "doyoubinitomodachigauchinikimasu.",
+        "english": "My friend is coming to my house on Saturday.",
+        "audio": "audio/janki-e217ec611934.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "明日、パーティーに来るの？",
+        "furigana": "明日[あした]、パーティーに 来[く]るの？",
+        "romaji": "ashita, paatiinikuruno?",
+        "english": "Are you coming to the party tomorrow?",
+        "audio": "audio/janki-aa27376fd70a.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "来る",
+      "negative": "来ない",
+      "past": "来た",
+      "past_negative": "来なかった",
+      "te_form": "来て",
+      "potential": "来られる",
+      "passive": "来られる"
+    },
+    "tags": [
+      "jpdb",
+      "jpdb:anki-test-top-20-verbs"
+    ],
+    "usage_notes": "来る is one of the two irregular verbs (with する). Note the shifting stem readings: 来ます (きます), 来ない (こない), 来て (きて), 来た (きた), 来られる (こられる). It attaches to the て-form of other verbs to mean \"go and do something, then come back\": 買ってくる (buy it and come back), 行ってきます (I'm off / I'll be back).",
+    "audio": "audio/janki-55495561dd17.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 100,
+    "source": {
+      "type": "jpdb",
+      "imported_from": "Anki Test - Top 20 Verbs",
+      "row": null,
+      "raw_fields": {
+        "vid": "1547720",
+        "sid": "1154899103",
+        "deck": "Anki Test - Top 20 Verbs",
+        "card_state": "locked,new"
+      }
+    }
+  },
+  {
+    "id": "word:知る:しる",
+    "expression": "知る",
+    "reading": "しる",
+    "furigana": "知[し]る",
+    "romaji": "shiru",
+    "meanings": [
+      "to be aware of, to know, to be conscious of, to cognize, to cognise",
+      "to notice, to feel",
+      "to understand, to comprehend, to grasp",
+      "to remember, to be acquainted with (a procedure)",
+      "to experience, to go through, to learn",
+      "to be acquainted with (a person), to get to know",
+      "to concern"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "transitive",
+    "examples": [
+      {
+        "japanese": "田中さんの電話番号を知っていますか。",
+        "furigana": "田中[たなか]さんの 電話[でんわ] 番号[ばんごう]を 知[し]っていますか。",
+        "romaji": "tanakasannodenwabangouoshitteimasuka.",
+        "english": "Do you know Tanaka-san's phone number?",
+        "audio": "audio/janki-67b9e5dd94d0.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "ごめん、その店は知らないんだ。",
+        "furigana": "ごめん、その 店[みせ]は 知[し]らないんだ。",
+        "romaji": "gomen, sonomisehashiranainda.",
+        "english": "Sorry, I don't know that shop.",
+        "audio": "audio/janki-b3b43b15ac26.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "知る",
+      "negative": "知らない",
+      "past": "知った",
+      "past_negative": "知らなかった",
+      "te_form": "知って",
+      "passive": "知られる"
+    },
+    "tags": [
+      "jpdb",
+      "jpdb:anki-test-top-20-verbs"
+    ],
+    "usage_notes": "To say you currently know something, use the ている form 知っている(知っています) — plain 知る means \"to come to know, to find out\". The negative is irregular in practice: say 知らない/知りません, not 知っていない. Compare 分かる, which is about understanding or figuring something out rather than having the information.",
+    "audio": "audio/janki-071edb8b07e4.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 100,
+    "source": {
+      "type": "jpdb",
+      "imported_from": "Anki Test - Top 20 Verbs",
+      "row": null,
+      "raw_fields": {
+        "vid": "1420470",
+        "sid": "2987388496",
+        "deck": "Anki Test - Top 20 Verbs",
+        "card_state": "locked,new"
+      }
+    }
+  },
+  {
+    "id": "word:聞く:きく",
+    "expression": "聞く",
+    "reading": "きく",
+    "furigana": "聞[き]く",
+    "romaji": "kiku",
+    "meanings": [
+      "to hear",
+      "to listen (e.g. to music)",
+      "to ask, to enquire, to query",
+      "to hear about, to hear of, to learn of",
+      "to follow (advice, order, etc.), to obey, to listen to, to comply with",
+      "to hear (e.g. a plea), to grant (a request), to accept (e.g. an argument), to give consideration to",
+      "to smell (esp. incense), to sample (a fragrance)",
+      "to taste (alcohol), to try"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "transitive",
+    "examples": [
+      {
+        "japanese": "毎晩、音楽を聞いて宿題をします。",
+        "furigana": "毎晩[まいばん]、 音楽[おんがく]を 聞[き]いて 宿題[しゅくだい]をします。",
+        "romaji": "maiban, ongakuokiiteshukudaioshimasu.",
+        "english": "Every night I listen to music and do my homework.",
+        "audio": "audio/janki-2f6d04ff6693.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "その話、誰から聞いたの？",
+        "furigana": "その 話[はなし]、 誰[だれ]から 聞[き]いたの？",
+        "romaji": "sonohanashi, darekarakiitano?",
+        "english": "Who did you hear that from?",
+        "audio": "audio/janki-dd27a1a35619.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "聞く",
+      "negative": "聞かない",
+      "past": "聞いた",
+      "past_negative": "聞かなかった",
+      "te_form": "聞いて",
+      "potential": "聞ける",
+      "passive": "聞かれる"
+    },
+    "tags": [
+      "jpdb",
+      "jpdb:anki-test-top-20-verbs"
+    ],
+    "usage_notes": "Covers both \"listen/hear\" and \"ask\". When it means \"ask\", the person asked is marked with に: 先生に聞きます (I'll ask the teacher). The thing heard or asked about takes を. 聴く is a variant kanji used specifically for listening attentively (music, etc.), but 聞く is the safe default.",
+    "audio": "audio/janki-6595c0599576.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 100,
+    "source": {
+      "type": "jpdb",
+      "imported_from": "Anki Test - Top 20 Verbs",
+      "row": null,
+      "raw_fields": {
+        "vid": "1591110",
+        "sid": "3865890281",
+        "deck": "Anki Test - Top 20 Verbs",
+        "card_state": "locked,new"
+      }
+    }
+  },
+  {
     "id": "word:行く:いく",
     "expression": "行く",
     "reading": "いく",
@@ -13,10 +829,20 @@
     "transitivity": "intransitive",
     "examples": [
       {
-        "japanese": "家族と城崎温泉に行きました。",
-        "furigana": "家族[かぞく]と城崎温泉[きのさきおんせん]に行[い]きました。",
-        "romaji": "Kazoku to Kinosaki Onsen ni ikimashita.",
-        "english": "I went to Kinosaki Onsen with my family."
+        "japanese": "冬休みに日本へ行くつもりです。",
+        "furigana": "冬休[ふゆやす]みに 日本[にほん]へ 行[い]くつもりです。",
+        "romaji": "fuyuyasumininihonheikutsumoridesu.",
+        "english": "I'm planning to go to Japan over winter break.",
+        "audio": "audio/janki-a9787eb64b8f.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "週末、どこか行くの？",
+        "furigana": "週末[しゅうまつ]、どこか 行[い]くの？",
+        "romaji": "shuumatsu, dokokaikuno?",
+        "english": "Are you going anywhere this weekend?",
+        "audio": "audio/janki-0b2396adb3c2.mp3",
+        "register": "casual"
       }
     ],
     "conjugations": {
@@ -29,19 +855,159 @@
       "passive": "行かれる"
     },
     "tags": [
-      "verb",
       "godan",
+      "jpdb",
+      "jpdb:anki-test-top-20-verbs",
       "starter",
-      "topic::travel"
+      "topic::travel",
+      "verb"
     ],
-    "usage_notes": "",
-    "audio": "",
+    "usage_notes": "Godan verb, but its て-form and past are irregular: 行って / 行った (not 行いて). The place you go to is marked with に or へ; the purpose with に after a noun or verb stem (買い物に行く). Also read ゆく in more literary or set expressions.",
+    "audio": "audio/janki-eb61ba87f92e.wav",
     "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 100,
     "source": {
       "type": "manual",
       "imported_from": "",
       "row": null,
       "raw_fields": {}
+    }
+  },
+  {
+    "id": "word:見る:みる",
+    "expression": "見る",
+    "reading": "みる",
+    "furigana": "見[み]る",
+    "romaji": "miru",
+    "meanings": [
+      "to see, to look, to watch, to view, to observe",
+      "to examine, to look over, to assess, to check, to judge",
+      "to look after, to attend to, to take care of, to keep an eye on",
+      "to experience, to meet with (misfortune, success, etc.)",
+      "to try ..., to have a go at ..., to give ... a try",
+      "to see (that) ..., to find (that) ..."
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "ichidan",
+    "transitivity": "transitive",
+    "examples": [
+      {
+        "japanese": "日曜日に妻と映画を見るつもりです。",
+        "furigana": "日曜日[にちようび]に 妻[つま]と 映画[えいが]を 見[み]るつもりです。",
+        "romaji": "nichiyoubinitsumatoeigaomirutsumoridesu.",
+        "english": "I'm planning to watch a movie with my wife on Sunday.",
+        "audio": "audio/janki-8df046ba4e92.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "昨日、あのドラマ見たの？",
+        "furigana": "昨日[きのう]、あのドラマ 見[み]たの？",
+        "romaji": "kinou, anodoramamitano?",
+        "english": "Did you watch that drama yesterday?",
+        "audio": "audio/janki-9008ee73f196.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "見る",
+      "negative": "見ない",
+      "past": "見た",
+      "past_negative": "見なかった",
+      "te_form": "見て",
+      "potential": "見られる",
+      "passive": "見られる"
+    },
+    "tags": [
+      "jpdb",
+      "jpdb:anki-test-top-20-verbs"
+    ],
+    "usage_notes": "Ichidan verb: 見ます, 見て, 見た, 見ない. Use 見る for actively looking or watching (TV, movies, sights); 見える means something is visible without effort on your part. As an auxiliary after the て-form it means \"try doing\" (食べてみる = try eating) and is normally written in kana: 〜てみる.",
+    "audio": "audio/janki-68c2f78696b2.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 100,
+    "source": {
+      "type": "jpdb",
+      "imported_from": "Anki Test - Top 20 Verbs",
+      "row": null,
+      "raw_fields": {
+        "vid": "1259290",
+        "sid": "3110766742",
+        "deck": "Anki Test - Top 20 Verbs",
+        "card_state": "locked,new"
+      }
+    }
+  },
+  {
+    "id": "word:言う:いう",
+    "expression": "言う",
+    "reading": "いう",
+    "furigana": "言[い]う",
+    "romaji": "iu",
+    "meanings": [
+      "to say, to utter, to declare",
+      "to name, to call",
+      "to go (e.g. \"the alarm went ping\"), to make a noise"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "先生に「ありがとうございます」と言いました。",
+        "furigana": "先生[せんせい]に「ありがとうございます」と 言[い]いました。",
+        "romaji": "senseini\"arigatougozaimasu\"toiimashita.",
+        "english": "I said \"thank you\" to the teacher.",
+        "audio": "audio/janki-11b84e417faf.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "今、何て言ったの？",
+        "furigana": "今[いま]、 何[なん]て 言[い]ったの？",
+        "romaji": "ima, nanteittano?",
+        "english": "What did you just say?",
+        "audio": "audio/janki-24bbbf21cb40.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "言う",
+      "negative": "言わない",
+      "past": "言った",
+      "past_negative": "言わなかった",
+      "te_form": "言って",
+      "potential": "言える",
+      "passive": "言われる"
+    },
+    "tags": [
+      "jpdb",
+      "jpdb:anki-test-top-20-verbs"
+    ],
+    "usage_notes": "Although written 言う, the plain form is normally pronounced \"yū\" in speech (the past 言った is \"itta\"). Quoted or reported speech is marked with と before 言う: 「…」と言いました, or 明日行くと言いました (\"he said he would go tomorrow\"). Use 言う for the act of saying words; 話す is for talking/speaking with someone.",
+    "audio": "audio/janki-a932214a435d.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 100,
+    "source": {
+      "type": "jpdb",
+      "imported_from": "Anki Test - Top 20 Verbs",
+      "row": null,
+      "raw_fields": {
+        "vid": "1587040",
+        "sid": "1847411251",
+        "deck": "Anki Test - Top 20 Verbs",
+        "card_state": "locked,new"
+      }
     }
   },
   {
@@ -56,13 +1022,23 @@
     ],
     "part_of_speech": "verb",
     "verb_group": "godan",
-    "transitivity": "",
+    "transitivity": "transitive",
     "examples": [
       {
         "japanese": "毎日、妻と日本語で話します。",
-        "furigana": "毎日[まいにち]、妻[つま]と日本語[にほんご]で話[はな]します。",
-        "romaji": "Mainichi, tsuma to Nihongo de hanashimasu.",
-        "english": "I speak Japanese with my wife every day."
+        "furigana": "毎日[まいにち]、 妻[つま]と 日本語[にほんご]で 話[はな]します。",
+        "romaji": "mainichi, tsumatonihongodehanashimasu.",
+        "english": "I speak Japanese with my wife every day.",
+        "audio": "audio/janki-54f40032c3f7.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "昨日、田中さんと電話で話したんだ。",
+        "furigana": "昨日[きのう]、 田中[たなか]さんと 電話[でんわ]で 話[はな]したんだ。",
+        "romaji": "kinou, tanakasantodenwadehanashitanda.",
+        "english": "I talked with Tanaka on the phone yesterday.",
+        "audio": "audio/janki-778560810eb7.mp3",
+        "register": "casual"
       }
     ],
     "conjugations": {
@@ -75,19 +1051,159 @@
       "passive": "話される"
     },
     "tags": [
-      "verb",
       "godan",
+      "jpdb",
+      "jpdb:anki-test-top-20-verbs",
       "starter",
-      "topic::conversation"
+      "topic::conversation",
+      "verb"
     ],
     "usage_notes": "Use it for speaking or talking. The person spoken with is often marked by と.",
-    "audio": "",
+    "audio": "audio/janki-acd6838cb46b.wav",
     "image": "",
+    "pitch_accent": [
+      "LHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 200,
     "source": {
       "type": "manual",
       "imported_from": "",
       "row": null,
       "raw_fields": {}
+    }
+  },
+  {
+    "id": "word:読む:よむ",
+    "expression": "読む",
+    "reading": "よむ",
+    "furigana": "読[よ]む",
+    "romaji": "yomu",
+    "meanings": [
+      "to read",
+      "to recite (e.g. a sutra), to chant",
+      "to predict, to guess, to forecast, to read (someone's thoughts), to see (e.g. into someone's heart), to divine",
+      "to decipher",
+      "to count, to estimate",
+      "to read (a kanji) with its native Japanese reading"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "transitive",
+    "examples": [
+      {
+        "japanese": "毎晩、寝る前に日本語の本を読みます。",
+        "furigana": "毎晩[まいばん]、 寝[ね]る 前[まえ]に 日本語[にほんご]の 本[ほん]を 読[よ]みます。",
+        "romaji": "maiban, nerumaeninihongonohon'oyomimasu.",
+        "english": "Every night I read a Japanese book before going to bed.",
+        "audio": "audio/janki-84f645fe2ee8.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "今、おもしろい小説を読んでるんだ。",
+        "furigana": "今[いま]、おもしろい 小説[しょうせつ]を 読[よ]んでるんだ。",
+        "romaji": "ima, omoshiroishousetsuoyonderunda.",
+        "english": "I'm reading an interesting novel right now, you see.",
+        "audio": "audio/janki-3da12f727eff.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "読む",
+      "negative": "読まない",
+      "past": "読んだ",
+      "past_negative": "読まなかった",
+      "te_form": "読んで",
+      "potential": "読める",
+      "passive": "読まれる"
+    },
+    "tags": [
+      "jpdb",
+      "jpdb:anki-test-top-20-verbs"
+    ],
+    "usage_notes": "Everyday word for reading, whether aloud or silently; the thing read takes を (本を読む、新聞を読む). Godan, so the て-form is 読んで and the past is 読んだ. The potential 読める is very common for \"can read / is legible\".",
+    "audio": "audio/janki-89c3853b31d6.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 400,
+    "source": {
+      "type": "jpdb",
+      "imported_from": "Anki Test - Top 20 Verbs",
+      "row": null,
+      "raw_fields": {
+        "vid": "1456360",
+        "sid": "3629470669",
+        "deck": "Anki Test - Top 20 Verbs",
+        "card_state": "locked,new"
+      }
+    }
+  },
+  {
+    "id": "word:買う:かう",
+    "expression": "買う",
+    "reading": "かう",
+    "furigana": "買[か]う",
+    "romaji": "kau",
+    "meanings": [
+      "to buy, to purchase",
+      "to value, to have a high opinion",
+      "to stir, to provoke, to draw upon oneself"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "transitive",
+    "examples": [
+      {
+        "japanese": "誕生日に妻に花を買うつもりです。",
+        "furigana": "誕生日[たんじょうび]に 妻[つま]に 花[はな]を 買[か]うつもりです。",
+        "romaji": "tanjoubinitsumanihanaokautsumoridesu.",
+        "english": "I'm planning to buy flowers for my wife on her birthday.",
+        "audio": "audio/janki-e725424bb90c.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "新しいヘッドホン、買ったんだ。",
+        "furigana": "新[あたら]しいヘッドホン、 買[か]ったんだ。",
+        "romaji": "atarashiiheddohon, kattanda.",
+        "english": "I bought new headphones, you know.",
+        "audio": "audio/janki-043042bfce69.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "買う",
+      "negative": "買わない",
+      "past": "買った",
+      "past_negative": "買わなかった",
+      "te_form": "買って",
+      "potential": "買える",
+      "passive": "買われる"
+    },
+    "tags": [
+      "jpdb",
+      "jpdb:anki-test-top-20-verbs"
+    ],
+    "usage_notes": "Everyday word for buying: 〜を買う, with the place marked by で (スーパーで買う). As a godan verb: 買います / 買わない / 買った / 買って. Note the わ in the negative 買わない, not 買あない. The extra meanings ('to value highly', as in 高く買う, or 'to provoke', as in 恨みを買う) are set phrases you can leave for later.",
+    "audio": "audio/janki-31ac0dfcc1ed.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 400,
+    "source": {
+      "type": "jpdb",
+      "imported_from": "Anki Test - Top 20 Verbs",
+      "row": null,
+      "raw_fields": {
+        "vid": "1473740",
+        "sid": "2721851026",
+        "deck": "Anki Test - Top 20 Verbs",
+        "card_state": "locked,new"
+      }
     }
   },
   {
@@ -104,10 +1220,20 @@
     "transitivity": "transitive",
     "examples": [
       {
-        "japanese": "クリスマスに家族と韓国料理を食べます。",
-        "furigana": "クリスマスに家族[かぞく]と韓国料理[かんこくりょうり]を食[た]べます。",
-        "romaji": "Kurisumasu ni kazoku to Kankoku ryouri o tabemasu.",
-        "english": "At Christmas, I eat Korean food with my family."
+        "japanese": "クリスマスに妻とケーキを食べるつもりです。",
+        "furigana": "クリスマスに 妻[つま]とケーキを 食[た]べるつもりです。",
+        "romaji": "kurisumasunitsumatokeekiotaberutsumoridesu.",
+        "english": "I'm planning to eat cake with my wife on Christmas.",
+        "audio": "audio/janki-cb144cd2b359.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "お昼ごはん、まだ食べてないの？",
+        "furigana": "お 昼[ひる]ごはん、まだ 食[た]べてないの？",
+        "romaji": "ohirugohan, madatabetenaino?",
+        "english": "You haven't eaten lunch yet?",
+        "audio": "audio/janki-8000a13564ae.mp3",
+        "register": "casual"
       }
     ],
     "conjugations": {
@@ -120,19 +1246,94 @@
       "passive": "食べられる"
     },
     "tags": [
-      "verb",
       "ichidan",
+      "jpdb",
+      "jpdb:anki-test-top-20-verbs",
       "starter",
-      "topic::food"
+      "topic::food",
+      "verb"
     ],
-    "usage_notes": "",
-    "audio": "",
+    "usage_notes": "Regular ichidan verb: 食べる → 食べます、食べない、食べて. Takes を for the thing eaten. Note that Japanese uses 飲む (to drink) rather than 食べる for soup and similar liquids, e.g. スープを飲む.",
+    "audio": "audio/janki-d9debfd6e317.wav",
     "image": "",
+    "pitch_accent": [
+      "LHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 200,
     "source": {
       "type": "manual",
       "imported_from": "",
       "row": null,
       "raw_fields": {}
+    }
+  },
+  {
+    "id": "word:飲む:のむ",
+    "expression": "飲む",
+    "reading": "のむ",
+    "furigana": "飲[の]む",
+    "romaji": "nomu",
+    "meanings": [
+      "to drink, to gulp, to swallow, to take (medicine)",
+      "to smoke (tobacco)",
+      "to engulf, to overwhelm",
+      "to keep down, to suppress",
+      "to accept (e.g. demand, condition)",
+      "to make light of, to conceal"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "transitive",
+    "examples": [
+      {
+        "japanese": "毎朝、コーヒーを飲んでから会社に行きます。",
+        "furigana": "毎朝[まいあさ]、コーヒーを 飲[の]んでから 会社[かいしゃ]に 行[い]きます。",
+        "romaji": "maiasa, koohiionondekarakaishaniikimasu.",
+        "english": "Every morning I have coffee and then go to the office.",
+        "audio": "audio/janki-0e1574681f14.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "風邪なの？薬、飲んだ？",
+        "furigana": "風邪[かぜ]なの？ 薬[くすり]、 飲[の]んだ？",
+        "romaji": "kazenano?kusuri, nonda?",
+        "english": "Do you have a cold? Did you take any medicine?",
+        "audio": "audio/janki-b2124f0c84eb.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "飲む",
+      "negative": "飲まない",
+      "past": "飲んだ",
+      "past_negative": "飲まなかった",
+      "te_form": "飲んで",
+      "potential": "飲める",
+      "passive": "飲まれる"
+    },
+    "tags": [
+      "jpdb",
+      "jpdb:anki-test-top-20-verbs"
+    ],
+    "usage_notes": "Everyday word for drinking. Note that Japanese uses 飲む (not 食べる) for taking medicine: 薬を飲む. On its own, 飲む often implies drinking alcohol — 飲みに行く means \"to go out drinking.\" Godan verb: 飲みます / 飲まない / 飲んだ / 飲んで.",
+    "audio": "audio/janki-c1059a77bbe6.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 400,
+    "source": {
+      "type": "jpdb",
+      "imported_from": "Anki Test - Top 20 Verbs",
+      "row": null,
+      "raw_fields": {
+        "vid": "1169870",
+        "sid": "2839775424",
+        "deck": "Anki Test - Top 20 Verbs",
+        "card_state": "locked,new"
+      }
     }
   }
 ]

@@ -33,6 +33,7 @@ request/response contract (:func:`furigana_to_anki`,
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import random
@@ -202,11 +203,28 @@ def urllib_transport(
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return response.status, _decode_body(response.read(), response.status, url)
     except urllib.error.HTTPError as exc:
-        return exc.code, _decode_body(exc.read(), exc.code, url)
+        # Reading the error body is live socket I/O on a connection that has
+        # already misbehaved — `urlopen` raises at the status line, with the
+        # response unread — and it happens *inside* this handler, where the
+        # sibling clauses below cannot reach it. The status is what jpdb's
+        # retry logic needs; a body that will not come is not worth losing it.
+        try:
+            detail = exc.read()
+        except (OSError, http.client.HTTPException):
+            detail = b""
+        return exc.code, _decode_body(detail, exc.code, url)
     except urllib.error.URLError as exc:
         raise JpdbError(f"Could not reach {url}: {exc.reason}") from exc
     except TimeoutError as exc:
         raise JpdbError(f"{url} timed out after {timeout:g}s") from exc
+    except (OSError, http.client.HTTPException) as exc:
+        # `URLError` covers less than it looks: `urlopen` wraps only the
+        # *request*, so a peer that accepts the connection and closes it
+        # without answering arrives as a bare `RemoteDisconnected` — a
+        # `ConnectionResetError` and a `BadStatusLine`, neither a `URLError`.
+        # Escaping as a non-JankiError means a traceback where an error
+        # message belongs.
+        raise JpdbError(f"Could not reach {url}: {exc}") from exc
 
 
 def _backoff_delay(attempt: int, base: float, cap: float, jitter: Callable[[], float]) -> float:
@@ -828,29 +846,82 @@ def pos_to_verb_group(codes: Any) -> str:
     return ""
 
 
+#: Labels that describe a *secondary* use of a word that is otherwise a verb.
+#: jpdb puts these first often enough to matter: 見る comes back as
+#: ``["aux-v", "vt", "v1"]`` and 分かる as ``["int", "vi", "v5", "v5r"]``, both
+#: measured against the live API. Taking the first recognized code labelled six
+#: of twenty ordinary verbs "auxiliary verb" or "interjection" on real cards,
+#: each one contradicting the verb group on the same card.
+_SECONDARY_TO_A_VERB = frozenset(
+    {
+        "auxiliary",
+        "auxiliary verb",
+        "auxiliary adjective",
+        "interjection",
+        # する arrives as ["aux-v", "vi", "suf", "vt", "vs"]: "suffix" is its
+        # 勉強する use, not what the word is. A word that really is only a suffix
+        # (〜的, 〜家) carries no verb code, so it keeps the label.
+        "suffix",
+    }
+)
+
+
 def pos_to_part_of_speech(codes: Any) -> str:
     """A human-readable part of speech for a JMDict code list, or ``""``.
 
-    First recognized code wins, and jpdb lists them most-significant first — so
-    a noun that takes する (``["n", "vs"]``) is a noun here, while its verb
-    group is still ``suru``.
+    First recognized code wins, *except* that a verb code outranks the
+    auxiliary and interjection labels wherever both appear. jpdb does not order
+    these by significance the way the rest of this function assumes: 〜ている and
+    分かる! are real but secondary uses, and they arrive ahead of the codes for
+    the ordinary verb the card is about.
+
+    Only that family is outranked. A noun that takes する (``["n", "vs"]``) is
+    still a noun here, with a ``suru`` verb group — that ordering is jpdb saying
+    something true about which word it is, not about which sense came first.
+
+    A word that genuinely *is* primarily an auxiliary — た, られる — is labelled
+    "verb" by this rule. That is the accepted cost: those are not words a
+    vocabulary deck teaches as entries, while 見る, する, なる, いる, 来る and
+    分かる are, and mislabelling those teaches a beginner the wrong category for
+    six of the commonest verbs in the language.
     """
+    first = ""
     for code in _codes(codes):
         label = _PARTS_OF_SPEECH.get(code)
         if label:
-            return label
+            if label not in _SECONDARY_TO_A_VERB:
+                # `first or label`, not `label`: only a *verb* code outranks a
+                # secondary one, which is what the rule above says. Returning
+                # the later label demoted 〜的 to a noun for ["suf", "n"] and
+                # turned ["aux-adj", "adj-i"] into an い-adjective — which then
+                # reached `conjugate` and wrote a whole paradigm for ない.
+                return first or label
+            first = first or label
+            continue
         if _VERB_CODE.match(code):
             return "verb"
-    return ""
+    return first
 
 
 def pos_to_transitivity(codes: Any) -> str:
-    """``"transitive"``/``"intransitive"`` from ``vt``/``vi``, or ``""``."""
-    for code in _codes(codes):
-        transitivity = _TRANSITIVITY.get(code)
-        if transitivity:
-            return transitivity
-    return ""
+    """``"transitive"``/``"intransitive"`` from ``vt``/``vi``, or ``""``.
+
+    **A word tagged both gets neither.** する comes back as
+    ``["aux-v", "vi", "suf", "vt", "vs"]`` — measured, not guessed — and taking
+    the first match called it intransitive, on a card whose own example is
+    仕事をします. Which one is true depends on the sense, so there is no single
+    answer to state, and stating one anyway is exactly the guess this project
+    does not make. The card then shows no transitivity rather than a wrong one,
+    and `usage_notes` is where a real distinction belongs.
+    """
+    found = {
+        transitivity
+        for code in _codes(codes)
+        if (transitivity := _TRANSITIVITY.get(code))
+    }
+    if len(found) != 1:
+        return ""
+    return found.pop()
 
 
 # The remaining wire-value normalizers live here for the same reason the POS

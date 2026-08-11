@@ -672,6 +672,16 @@ def ai_schema() -> Any:
 
     class GeneratedExample(BaseModel):
         japanese: str = Field(description="The sentence, in Japanese.")
+        # Not `register`: that name shadows an attribute on pydantic's BaseModel
+        # and the class emits a warning on every construction. The record field
+        # keeps the linguistic term.
+        speech_level: str = Field(
+            default="polite",
+            description=(
+                "'polite' for a 〜ます/です sentence, 'casual' for the plain form "
+                "a friend would use."
+            ),
+        )
         furigana: str = Field(
             default="",
             description=(
@@ -722,7 +732,11 @@ def ai_targets(
     return [record for record in records if record.id in needed]
 
 
-def ai_prompt(record: VocabularyRecord, recent: Sequence[str] = ()) -> str:
+def ai_prompt(
+    record: VocabularyRecord,
+    recent: Sequence[str] = (),
+    taught: str = "",
+) -> str:
     """The user turn for one record: what janki knows, and what it has seen.
 
     The dictionary facts go in so the model writes about *this* word rather
@@ -730,6 +744,11 @@ def ai_prompt(record: VocabularyRecord, recent: Sequence[str] = ()) -> str:
     from 一日 alone. The recent examples go in as variety pressure: asked for
     an example of twenty verbs in a row, a model will write twenty variations
     of 毎日〜ます unless it can see that it already did.
+
+    ``taught`` is the grammar the learner is currently studying, from documents
+    they have read and reviewed. It is a preference, not an instruction: a
+    sentence forced into a pattern that does not suit the word is worse than one
+    in ordinary Japanese, and the block says so.
     """
     lines = [f"Word: {record.expression}"]
     if record.reading:
@@ -743,6 +762,8 @@ def ai_prompt(record: VocabularyRecord, recent: Sequence[str] = ()) -> str:
     ):
         if value:
             lines.append(f"{label}: {value}")
+    if taught:
+        lines.append("\n" + taught)
     if recent:
         lines.append(
             "\nSentences already written in this run — write something "
@@ -752,14 +773,21 @@ def ai_prompt(record: VocabularyRecord, recent: Sequence[str] = ()) -> str:
 
 
 AI_INSTRUCTIONS = """\
-Write one example sentence for the word, and a usage note if there is something
-worth saying.
+Write **two** example sentences for the word, and a usage note if there is
+something worth saying.
 
-The sentence must contain the word itself, conjugated if that reads more
-naturally, and must be simple enough for a beginner working through Genki-style
-grammar. Give its furigana in Anki notation, with a space before every bracketed
-group that follows kana. Do not fill in romaji — janki generates that from the
-furigana and discards whatever you send.
+The first sentence is polite (〜ます / 〜です); set its speech_level to
+"polite". The second is the same kind of everyday sentence in **casual** plain
+form, as a friend would say it; set its speech_level to "casual". Write a different sentence
+rather than the same one with the ending swapped — casual speech drops
+particles, uses different sentence-final forms (〜の, 〜んだ, 〜よ, 〜ね), and a
+mechanical de-politening teaches none of that.
+
+Both must contain the word itself, conjugated if that reads more naturally, and
+both must be simple enough for a beginner working through Genki-style grammar.
+Give each sentence's furigana in Anki notation, with a space before every
+bracketed group that follows kana. Do not fill in romaji — janki generates that
+from the furigana and discards whatever you send.
 
 Say nothing you are not sure of. An empty usage note is a fine answer; an
 invented nuance is not."""
@@ -804,13 +832,30 @@ def apply_ai_result(
     kept: list[ExampleSentence] = []
 
     for item in getattr(parsed, "examples", []) or []:
+        register = str(getattr(item, "speech_level", "") or "").strip().lower()
         example = ExampleSentence(
             japanese=str(getattr(item, "japanese", "") or "").strip(),
             furigana=str(getattr(item, "furigana", "") or "").strip(),
             english=str(getattr(item, "english", "") or "").strip(),
+            # Anything the model does not label is polite: that is what the
+            # instructions ask for first and what every example written before
+            # the field existed actually is. Guessing "casual" would put a ます
+            # sentence in a slot labelled casual, which teaches the opposite of
+            # what the label says.
+            register=register if register in ("polite", "casual") else "polite",
         )
         if not example.japanese:
             continue
+        # Before anything reads the furigana. A model writes 週末[しゅうまつ]、何[なに]
+        # without the separator space perhaps half the time, and Anki then draws
+        # なに over 、何 while the comma vanishes from the reading the romaji and
+        # the sentence audio are built from. The repair adds only the separator,
+        # never a reading or a segmentation, so it is safe to run unattended;
+        # spills that would need a guess are left for `spilled_furigana_groups`.
+        if example.furigana:
+            example = replace(
+                example, furigana=qc.repair_spilled_punctuation(example.furigana)
+            )
         if not qc.example_contains_target(example, record.expression, record.verb_group):
             outcome.rejected.append(example.japanese)
             continue
@@ -863,6 +908,215 @@ def _flag_unverified(record: VocabularyRecord, sentences: Sequence[str]) -> Voca
 
 
 @dataclass(slots=True)
+class RecheckResult:
+    """What a furigana re-check found."""
+
+    records: list[VocabularyRecord] = field(default_factory=list)
+    #: ``record id -> [sentence]`` cleared, because jpdb now agrees.
+    cleared: dict[str, list[str]] = field(default_factory=dict)
+    #: ``record id -> [(sentence, why)]`` still not vouched for.
+    differing: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
+    #: Sentences jpdb could not parse at all — unverified, not fine.
+    unparsed: list[str] = field(default_factory=list)
+    #: ``record id -> [(sentence, why)]`` cleared because an adjudicator judged
+    #: the writer's reading the ordinary one where jpdb disagreed.
+    adjudicated: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
+
+    @property
+    def changed(self) -> bool:
+        return bool(self.cleared)
+
+
+ADJUDICATE_INSTRUCTIONS = """\
+You settle disagreements about how a Japanese sentence is read.
+
+You are given a sentence, the reading a dictionary parse produced, and the
+reading its writer produced. Say which one a native speaker would use for this
+sentence in ordinary modern Japanese.
+
+Both are usually defensible; you are judging *ordinary usage*, not possibility.
+日本語 is にほんご, not にっぽんご, even though both are attested.
+
+Answer "writer" or "dictionary" — or "unsure", which is a real answer and the
+right one whenever the two readings are both ordinary, the word is rare, or the
+difference is a proper noun you cannot place. An unsure verdict leaves the
+sentence flagged for a human, which costs a re-check; a confident wrong one puts
+a reading nobody uses onto a card."""
+
+
+@functools.cache
+def adjudication_schema() -> Any:
+    """The shape an adjudication must take."""
+    from pydantic import BaseModel, Field
+
+    class Adjudication(BaseModel):
+        verdict: str = Field(
+            description="'writer', 'dictionary', or 'unsure'."
+        )
+        why: str = Field(default="", description="One short clause.")
+
+    return Adjudication
+
+
+def adjudicate_reading(
+    sentence: str,
+    dictionary_reading: str,
+    writer_reading: str,
+    *,
+    model: str,
+    client: Any | None = None,
+) -> tuple[str, str]:
+    """``(verdict, why)`` for one disagreement. Never raises.
+
+    A model is a poor *source* of readings — non-deterministic, and confidently
+    wrong on exactly the rare words where a check matters — but a good judge of
+    which of two given readings is the ordinary one, which is a much narrower
+    question. So it never proposes a reading, only picks between two that
+    already exist, and "unsure" is an answer it is told to give.
+
+    Anything that goes wrong is ``("unsure", …)``: an adjudicator that cannot
+    answer must leave the flag alone, not clear it.
+    """
+    blocks = claude_client.system_blocks(ADJUDICATE_INSTRUCTIONS)
+    prompt = (
+        f"Sentence: {sentence}\n"
+        f"Dictionary reading: {dictionary_reading}\n"
+        f"Writer reading: {writer_reading}\n"
+        "Which is how this sentence is normally read?"
+    )
+    try:
+        call = claude_client.parse_call(
+            model, blocks, prompt, adjudication_schema(), client, max_tokens=200
+        )
+    except JankiError as exc:
+        return "unsure", f"the adjudicator could not be reached: {exc}"
+    if call.parsed is None:
+        return "unsure", f"the adjudicator did not answer ({call.stop_reason})"
+    verdict = str(getattr(call.parsed, "verdict", "") or "").strip().lower()
+    why = str(getattr(call.parsed, "why", "") or "").strip()
+    return (verdict if verdict in {"writer", "dictionary", "unsure"} else "unsure"), why
+
+
+def recheck_furigana(
+    records: Sequence[VocabularyRecord],
+    *,
+    jpdb_client: jpdb.JpdbClient | None = None,
+    ids: Sequence[str] | None = None,
+    accept: bool = False,
+    adjudicate_model: str = "",
+    ai_client: Any | None = None,
+) -> RecheckResult:
+    """Re-ask jpdb whether each flagged example's furigana is right.
+
+    The flag is written once, when an example is created, and read much later by
+    ``janki audio`` deciding whether to speak a sentence. That makes it stale
+    twice over: a human can fix the furigana by hand, and the *check itself* can
+    improve — as it did when it stopped mistaking jpdb's per-character
+    segmentation for disagreement, which had flagged 12 of 17 correct examples.
+    Neither an AI pass nor an edit re-asks, so without this the only way to clear
+    a flag was to rewrite the sentence and pay for it again.
+
+    Only flagged examples are re-checked, and only ever cleared: an example
+    nobody doubted is not put in doubt by a parse that happens to fail today.
+
+    ``accept`` clears the flags of the named records on a *human's* authority
+    instead of asking jpdb. It exists because jpdb can be wrong: its parse reads
+    日本語 as にっぽんご, and the language is にほんご. Without it the choice was
+    to write a reading nobody uses into a card or to leave a correct sentence
+    unvoiced forever. It requires ``ids`` — accepting everything unread is not a
+    judgment — and the ledger records ``kind="human"`` so the entry says who
+    vouched.
+    """
+    if accept and not ids:
+        raise EnrichError(
+            "--accept clears a flag on your authority rather than jpdb's, so it "
+            "needs the record ids you are vouching for. Accepting everything "
+            "unread is not a judgment."
+        )
+    if not accept and jpdb_client is None:
+        raise EnrichError("A furigana re-check needs a jpdb client or --accept.")
+    result = RecheckResult(records=list(records))
+    known = {record.id for record in result.records}
+    wanted = set(ids) if ids else None
+    if wanted is not None:
+        # Named and not found is a typo, not an empty result. Every other
+        # ids-taking pass here refuses the same way; without it
+        # `--recheck-furigana word:わかる:わかる` (the id is word:分かる:わかる)
+        # reported a clean negative and exited 0.
+        missing = sorted(wanted - known)
+        if missing:
+            raise EnrichError(
+                "No record has "
+                + ("this id: " if len(missing) == 1 else "these ids: ")
+                + ", ".join(missing)
+            )
+    for index, record in enumerate(result.records):
+        if wanted is not None and record.id not in wanted:
+            continue
+        raw_fields = dict(record.source.raw_fields)
+        flagged = {
+            item.strip()
+            for item in raw_fields.get(UNVERIFIED_KEY, "").split(",")
+            if item.strip()
+        }
+        if not flagged:
+            continue
+        cleared: list[str] = []
+        for example in record.examples:
+            sentence = example.japanese.strip()
+            fingerprint = short_fingerprint(sentence)
+            if not sentence or fingerprint not in flagged:
+                continue
+            if accept:
+                cleared.append(sentence)
+                flagged.discard(fingerprint)
+                continue
+            try:
+                parse = jpdb_client.parse(sentence)
+            except JankiError:
+                # Nothing means unverified rather than fine, the same way the
+                # AI pass treats an absent client.
+                result.unparsed.append(sentence)
+                continue
+            verdict = qc.verify_example_furigana(example, parse)
+            if verdict:
+                cleared.append(sentence)
+                flagged.discard(fingerprint)
+                continue
+            why = "; ".join(verdict.differences[:2])
+            if adjudicate_model:
+                # jpdb and the writer disagree, and jpdb is not always right —
+                # its parse reads 日本語 as にっぽんご. A model is a poor source
+                # of readings but a good judge of which of two is ordinary, so
+                # it breaks the tie and nothing else.
+                call, reason = adjudicate_reading(
+                    sentence,
+                    verdict.expected,
+                    example.furigana or example.japanese,
+                    model=adjudicate_model,
+                    client=ai_client,
+                )
+                if call == "writer":
+                    cleared.append(sentence)
+                    flagged.discard(fingerprint)
+                    result.adjudicated.setdefault(record.id, []).append((sentence, reason))
+                    continue
+                why = f"{why} — adjudicator: {call}" + (f", {reason}" if reason else "")
+            result.differing.setdefault(record.id, []).append((sentence, why))
+        if not cleared:
+            continue
+        result.cleared[record.id] = cleared
+        if flagged:
+            raw_fields[UNVERIFIED_KEY] = ",".join(sorted(flagged))
+        else:
+            raw_fields.pop(UNVERIFIED_KEY, None)
+        result.records[index] = replace(
+            record, source=replace(record.source, raw_fields=raw_fields)
+        )
+    return result
+
+
+@dataclass(slots=True)
 class AiResult:
     """What an AI pass would write, and everything it refused along the way."""
 
@@ -908,6 +1162,7 @@ def enrich_ai(
     ids: Sequence[str] | None = None,
     client: Any | None = None,
     jpdb_client: jpdb.JpdbClient | None = None,
+    taught: str = "",
 ) -> AiResult:
     """Write examples and usage notes for the records that lack them.
 
@@ -925,7 +1180,11 @@ def enrich_ai(
     for record in targets:
         result.looked_up += 1
         call = claude_client.parse_call(
-            model, blocks, ai_prompt(record, recent[-VARIETY_EXAMPLES:]), ai_schema(), client
+            model,
+            blocks,
+            ai_prompt(record, recent[-VARIETY_EXAMPLES:], taught),
+            ai_schema(),
+            client,
         )
         absorb_ai_call(
             result,
@@ -1234,12 +1493,18 @@ def batch_requests(
     model: str,
     style_guide: str,
     ids: Sequence[str] | None = None,
+    taught: str = "",
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """The batch entries for every record that needs enriching, and their ids.
 
     A one-hour cache TTL rather than the default five minutes: the style guide
     leads every request, and a batch's requests are read over a span that a
     five-minute window would not survive.
+
+    ``taught`` carries the reviewed patterns, exactly as the immediate path
+    does. Without it the two paths wrote different sentences for the same
+    record at different prices — and batch is the one used for bulk, so most of
+    a collection would have got the unsteered version.
     """
     targets = ai_targets(records, ids)
     blocks = claude_client.system_blocks(style_guide, AI_INSTRUCTIONS, cache_ttl="1h")
@@ -1247,7 +1512,11 @@ def batch_requests(
     batch_key_map(record_ids)
     requests = [
         claude_client.batch_request(
-            batch_custom_id(record.id), model, blocks, ai_prompt(record), ai_schema()
+            batch_custom_id(record.id),
+            model,
+            blocks,
+            ai_prompt(record, taught=taught),
+            ai_schema(),
         )
         for record in targets
     ]

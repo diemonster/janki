@@ -1,28 +1,41 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import sys
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import date
 from pathlib import Path
 from typing import Any
 
 from japanese_anki import (
+    audio_cmd,
     claude_client,
     enrich,
     extract,
     jpdb,
+    kanji,
     ledger,
     migrate,
+    patterns,
     promote,
+    review,
     status,
 )
+from japanese_anki.audio_cmd import AudioError
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
-from japanese_anki.exporters.anki import AnkiBuildError, build_deck, resolve_deck_records
-from japanese_anki.identifiers import short_fingerprint
+from japanese_anki.exporters import pattern_cards
+from japanese_anki.exporters.anki import (
+    AnkiBuildError,
+    build_deck,
+    deck_kind,
+    deck_notetype,
+    resolve_deck_records,
+)
+from japanese_anki.identifiers import normalize_identity_part, short_fingerprint
 from japanese_anki.importers import jpdb_import, jpdb_reviews
 from japanese_anki.importers.shirabe import import_file, inspect_file
 from japanese_anki.inputs import prepare_inputs
@@ -49,7 +62,8 @@ from japanese_anki.staging import (
     rewrite_staging,
     write_staging,
 )
-from japanese_anki.validation import has_errors, validate_records
+from japanese_anki.tts import openai_tts, voicevox
+from japanese_anki.validation import ValidationIssue, has_errors, validate_records
 
 
 def _path(value: str) -> Path:
@@ -819,6 +833,122 @@ def _enrich_staging(
     return 0
 
 
+def _recheck_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
+    """Re-ask jpdb about examples that were flagged, and clear the ones it now
+    vouches for.
+
+    Cheap and jpdb-only: it writes no sentence and calls no model, so a flag
+    left by a check that has since improved costs a parse rather than a
+    rewrite.
+    """
+    output_path = config.normalized_file.resolve()
+    records = load_records(output_path) if output_path.exists() else []
+    if not records:
+        print(f"No records to check in {output_path}.")
+        return 0
+
+    book = ledger.load(config.ledger_file)
+    result = enrich.recheck_furigana(
+        records,
+        # No key is asked for when a human is doing the vouching.
+        jpdb_client=None if args.accept else jpdb.JpdbClient(jpdb.api_key_from_env()),
+        ids=args.ids or None,
+        accept=args.accept,
+        # Off when a human is already doing the vouching, and off when the
+        # config names no model.
+        adjudicate_model="" if (args.accept or args.no_adjudicate) else config.adjudicate_model,
+    )
+
+    cleared = sum(len(items) for items in result.cleared.values())
+    if result.changed:
+        save_records_json(output_path, result.records)
+        adjudicated = {rid for rid in result.adjudicated}
+        who_for = lambda rid: (  # noqa: E731 - a lookup, not a policy
+            "human" if args.accept else ("ai" if rid in adjudicated else "jpdb")
+        )
+        for record_id in result.cleared:
+            # `fields=["furigana"]` was a false statement: this pass writes no
+            # record field at all — it clears an *example's* unverified flag.
+            # Worse, `record_enriched` dedups on (kind, model, fields), so a
+            # later genuine --jpdb pass that really did fill `furigana` would
+            # collapse into this entry and inherit its date.
+            # Who vouched is part of the record: a reading a model adjudicated
+            # is not the same evidence as one a dictionary confirmed, and six
+            # months later that difference is the only thing that explains why
+            # a sentence was trusted.
+            who = who_for(record_id)
+            book.record_enriched(
+                record_id,
+                kind=who,
+                model=config.adjudicate_model if who == "ai" else who,
+                fields=["furigana_unverified"],
+            )
+    ledger_error = _save_ledger(book) if result.changed else None
+
+    settled = sum(len(items) for items in result.adjudicated.values())
+    if cleared:
+        if args.accept:
+            vouched = "your authority"
+        elif settled == cleared:
+            vouched = "the adjudicator's reading"
+        elif settled:
+            vouched = f"jpdb's parse, {settled} of them after adjudication"
+        else:
+            vouched = "jpdb's parse"
+        print(
+            f"Confirmed {cleared} example(s) across {len(result.cleared)} record(s) "
+            f"on {vouched}; their audio is no longer held back."
+        )
+    elif result.unparsed and not result.differing:
+        # jpdb answered nothing at all — an expired key, or the API down. Saying
+        # "not vouched for yet" asserts a judgment that was never obtained.
+        print(
+            f"jpdb could not parse any of the {len(result.unparsed)} flagged "
+            "example(s), so nothing was confirmed or ruled out.",
+            file=sys.stderr,
+        )
+    elif result.differing:
+        print("Nothing to confirm: jpdb reads every flagged example differently.")
+    else:
+        print("Nothing to confirm: no example carries an unverified-furigana flag.")
+    if settled:
+        print(
+            f"{settled} of those were settled by the adjudicator, which judged the "
+            "sentence's own reading the ordinary one where jpdb disagreed:"
+        )
+        for record_id, items in result.adjudicated.items():
+            for sentence, why in items:
+                print(f"  {record_id}: {sentence}")
+                if why:
+                    print(f"    {why}")
+    if result.differing:
+        total = sum(len(items) for items in result.differing.values())
+        print(f"Still unconfirmed ({total}) — jpdb reads these differently:")
+        for record_id, items in result.differing.items():
+            for sentence, why in items:
+                print(f"  {record_id}: {sentence}")
+                print(f"    {why}")
+    for sentence in result.unparsed:
+        print(f"warning: jpdb could not parse: {sentence}", file=sys.stderr)
+    if result.unparsed and not cleared and not result.differing:
+        return 1
+    if ledger_error is not None:
+        _report_enrichment_ledger_failure(
+            ledger_error,
+            rerun=(
+                "Re-running --recheck-furigana records nothing: the flags it "
+                "cleared are already gone from the records, so it finds nothing "
+                "left to confirm."
+            ),
+            aftermath=(
+                "The records themselves are correct and their audio will "
+                "generate; only the note that jpdb vouched for them is missing."
+            ),
+        )
+        return 1
+    return 0
+
+
 def command_enrich(args: argparse.Namespace) -> int:
     """Fill empty fields on existing records from a dictionary.
 
@@ -833,6 +963,7 @@ def command_enrich(args: argparse.Namespace) -> int:
             ("--jpdb", args.jpdb),
             ("--ai", args.ai),
             ("--polish-meanings", args.polish_meanings),
+            ("--recheck-furigana", args.recheck_furigana),
         )
         if chosen
     ]
@@ -894,6 +1025,14 @@ def command_enrich(args: argparse.Namespace) -> int:
             "what it is for, and why it confirms one record at a time."
         )
     force_fields = enrich.parse_force_fields(args.force_fields, ai=args.ai)
+    if args.accept and not args.recheck_furigana:
+        raise JankiError("--accept is part of --recheck-furigana; it has no meaning alone.")
+    if args.recheck_furigana and (args.staging is not None or force_fields):
+        raise JankiError(
+            "--recheck-furigana re-asks jpdb about examples that already exist; "
+            "it reads no staging file and writes no field, so --staging and "
+            "--force-fields have nothing to act on."
+        )
     if args.staging is not None and (force_fields or args.ids):
         raise JankiError(
             "enrich --staging proposes readings for held rows and writes nothing "
@@ -925,6 +1064,9 @@ def command_enrich(args: argparse.Namespace) -> int:
     # --ai verifies example furigana *with* it.
     if args.polish_meanings:
         return _polish_meanings(config, args)
+
+    if args.recheck_furigana:
+        return _recheck_furigana(config, args)
 
     # Neither of these asks jpdb anything — one writes a ledger entry, the
     # other builds requests — so neither may demand a key to run.
@@ -1034,6 +1176,12 @@ def _enrich_ai(
             f"{len(targets)} record(s). Promote or move it first, or pass --force."
         )
     book = ledger.load(config.ledger_file)
+    # Only reviewed documents. An unreviewed pattern set is a model's reading of
+    # a slide deck that nobody has checked, and letting it steer the sentences on
+    # every card would spread one bad inference across the whole collection.
+    taught = patterns.format_patterns(
+        patterns.reviewed_patterns(patterns.load_store(config.patterns_file))
+    )
     result = enrich.enrich_ai(
         records,
         model=model,
@@ -1041,7 +1189,12 @@ def _enrich_ai(
         force_fields=force_fields,
         ids=args.ids or None,
         jpdb_client=jpdb.JpdbClient(jpdb.api_key_from_env()),
+        taught=taught,
     )
+    if taught:
+        print(
+            f"Writing with {taught.count(chr(10) + '*')} reviewed pattern(s) in mind."
+        )
 
     for warning in result.warnings:
         print(f"warning: {warning}", file=sys.stderr)
@@ -1178,12 +1331,23 @@ def _batch_submit(
 
     model = args.model or config.enrich_model
     style_guide = claude_client.read_style_guide(config.root)
+    # The same reviewed patterns the immediate path uses. A batch is the same
+    # work at a different price, so it must be the same request.
+    taught = patterns.format_patterns(
+        patterns.reviewed_patterns(patterns.load_store(config.patterns_file))
+    )
     requests, pending_ids = enrich.batch_requests(
-        records, model=model, style_guide=style_guide, ids=args.ids or None
+        records,
+        model=model,
+        style_guide=style_guide,
+        ids=args.ids or None,
+        taught=taught,
     )
     if not requests:
         print("Nothing to submit: every record already has examples and usage notes.")
         return 0
+    if taught:
+        print(f"Writing with {taught.count(chr(10) + '*')} reviewed pattern(s) in mind.")
 
     batch_id = claude_client.submit_batch(requests)
     book.record_batch(
@@ -1767,6 +1931,189 @@ def _inside_archive(path: Path, archive_dir: Path) -> bool:
     return path.is_relative_to(archive_dir)
 
 
+def _provider_name(config: ProjectConfig, chosen: str | None) -> str:
+    """The engine this run speaks words through, normalised once.
+
+    One definition, because two normalisations disagree: ``_speech_provider``
+    lower-cased and defaulted while ``_sentence_provider`` compared the raw
+    config string, so ``provider = "Voicevox"`` — or an empty one, or
+    ``--provider voicevox`` overriding an ``azure`` file — built a VOICEVOX word
+    provider and then silently discarded the configured sentence voice.
+    """
+    return (chosen or config.tts_provider or "voicevox").strip().lower()
+
+
+def _sentence_provider(config: ProjectConfig, chosen: str | None, words: Any) -> Any:
+    """The provider that reads example sentences.
+
+    ``words`` when nothing else is configured, so the default is one voice
+    throughout and the ledger keeps recording what it always did. A separate
+    sentence voice is worth having because the two recordings do different
+    jobs: a word is a thing to identify, a sentence is a thing to follow, and
+    hearing them in one voice makes the sentence sound like a longer word.
+    """
+    name = (config.sentence_provider or "").strip().lower()
+    if name == "openai":
+        return openai_tts.OpenAiSpeechProvider(
+            voice=config.openai_voice,
+            model=config.openai_model,
+            instructions=config.openai_instructions,
+            # Deliberately not `voicevox_speed`: this API has no rate
+            # parameter, so tying its staleness to a VOICEVOX knob would bill
+            # for a full re-render of every sentence whenever the *word* pace
+            # was tuned, and write a rate into the ledger the engine was never
+            # told. Pace here lives in `instructions`, which `settings` records.
+        )
+    if name not in {"", "voicevox"}:
+        raise AudioError(
+            f"Unknown [tts] sentence_provider {name!r}. Known: voicevox, openai, "
+            "or leave it empty to read sentences in the same voice as the words."
+        )
+    if _provider_name(config, chosen) == "voicevox":
+        speaker = config.voicevox_sentence_speaker
+        # `is not None`, not truthiness: 0 is a real style id.
+        if speaker is not None and speaker != config.voicevox_speaker:
+            return voicevox.VoicevoxProvider(
+                base_url=config.voicevox_url,
+                speaker=speaker,
+                speed=config.voicevox_speed,
+            )
+    return words
+
+
+def _speech_provider(config: ProjectConfig, chosen: str | None) -> Any:
+    """The provider this run speaks *words* through.
+
+    Only VOICEVOX can force a pitch accent, which is what a word clip is for,
+    so this stays VOICEVOX. ``azure`` is still refused by name rather than
+    falling through to "unknown": it was a real plan, it was evaluated and
+    dropped, and a user who wrote it in their config deserves to hear which of
+    those happened. Sentences are a separate choice — see
+    :func:`_sentence_provider`.
+    """
+    name = _provider_name(config, chosen)
+    if name == "voicevox":
+        return voicevox.VoicevoxProvider(
+            base_url=config.voicevox_url,
+            speaker=config.voicevox_speaker,
+            speed=config.voicevox_speed,
+        )
+    if name == "azure":
+        raise AudioError(
+            "The Azure provider was evaluated and dropped — VOICEVOX reads the "
+            "ambiguous kanji correctly and needs no account (see M5.7 in "
+            "docs/IMPLEMENTATION_PLAN.md). Words use VOICEVOX, which is the "
+            "only engine here that can force a pitch accent; for sentences set "
+            "[tts] sentence_provider = \"openai\"."
+        )
+    raise AudioError(
+        f"Unknown TTS provider {name!r}. Words are voiced by voicevox. For "
+        "sentences, set [tts] sentence_provider to voicevox or openai."
+    )
+
+
+def command_audio(args: argparse.Namespace) -> int:
+    """Generate the audio a card plays.
+
+    Refuses before spending anything when the engine is not answering: a run
+    that synthesizes forty clips and then fails on the forty-first has written
+    forty files and half a ledger, and the common reason is simply that the
+    engine is not running.
+    """
+    config = _load_config(args)
+    output_path = config.normalized_file.resolve()
+    records = load_records(output_path) if output_path.exists() else []
+    if not records:
+        print(f"No records to voice in {output_path}.")
+        return 0
+
+    provider = _speech_provider(config, args.provider)
+    # Only what this run will actually use. A `--words` run never reaches the
+    # sentence provider, and refusing to start because *that* engine lacks a
+    # key would abort a job it plays no part in.
+    sentences = _sentence_provider(config, args.provider, provider) if args.examples else provider
+    # Keyed by identity so one engine doing both jobs is checked once.
+    engines: dict[int, Any] = {}
+    if args.words:
+        engines[id(provider)] = provider
+    if args.examples:
+        engines[id(sentences)] = sentences
+    for engine in engines.values():
+        if not engine.available():
+            raise AudioError(f"{engine.name}: {engine.launch_hint}")
+
+    book = ledger.load(config.ledger_file)
+    media_dir = config.media_dir.resolve()
+    result = audio_cmd.generate_audio(
+        records,
+        provider=provider,
+        sentence_provider=sentences,
+        book=book,
+        media_dir=media_dir,
+        # Passed straight through: `generate_audio` refuses when neither is
+        # asked for, and a default here would make that refusal unreachable and
+        # quietly voice every record in the collection.
+        words=args.words,
+        examples=args.examples,
+        ids=args.ids or None,
+        force=args.force,
+        allow_default_accent=args.allow_default_accent,
+    )
+
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    if result.no_pattern:
+        print(
+            f"warning: {len(result.no_pattern)} record(s) have no accent pattern "
+            "and were skipped rather than voiced with a guessed one — "
+            "'janki enrich --jpdb' fills it, or --allow-default-accent opts into "
+            f"the guess: {', '.join(result.no_pattern[:5])}"
+            + (" ..." if len(result.no_pattern) > 5 else ""),
+            file=sys.stderr,
+        )
+    if result.unverified:
+        print(
+            f"warning: {len(result.unverified)} example(s) carry furigana jpdb "
+            "never confirmed and were left unvoiced; check them first.",
+            file=sys.stderr,
+        )
+    if result.no_reading:
+        print(
+            f"warning: {len(result.no_reading)} record(s) have no reading to "
+            f"speak: {', '.join(result.no_reading[:5])}"
+            + (" ..." if len(result.no_reading) > 5 else ""),
+            file=sys.stderr,
+        )
+
+    if result.file_count:
+        save_records_json(output_path, result.records)
+    ledger_error = _save_ledger(book)
+
+    print(
+        f"Wrote {result.file_count} clip(s) for {len(result.written)} record(s) "
+        f"into {config.media_dir.resolve() / audio_cmd.AUDIO_SUBDIR}."
+        + (f" {result.up_to_date} already current." if result.up_to_date else "")
+    )
+    if args.prune:
+        removed = audio_cmd.prune_unreferenced(result.records, media_dir, book)
+        print(f"Pruned {len(removed)} unreferenced clip(s).")
+        if removed:
+            ledger_error = _save_ledger(book) or ledger_error
+    # Both are reported, and the run's own failure first: a ledger warning on
+    # its own reads as a successful partial run, and the records this never
+    # reached would be invisible.
+    if result.stopped_by:
+        print(f"error: {result.stopped_by}", file=sys.stderr)
+        print(
+            "The clips written before this are saved; re-running picks up where "
+            "it stopped.",
+            file=sys.stderr,
+        )
+    if ledger_error is not None:
+        _report_ledger_failure(ledger_error)
+    return 1 if (result.stopped_by or ledger_error is not None) else 0
+
+
 def command_promote(args: argparse.Namespace) -> int:
     """Move a reviewed staging file's records into the normalized collection.
 
@@ -1918,18 +2265,85 @@ def command_promote(args: argparse.Namespace) -> int:
     return 0
 
 
-def _validate_path(path: Path) -> tuple[list, int]:
-    raw = load_structured(path)
-    if isinstance(raw, dict) and "deck" in raw:
-        _, records = resolve_deck_records(path)
+def _validate_path(
+    path: Path,
+    store: Callable[[], Mapping[str, patterns.PatternSet]] | None = None,
+    config: ProjectConfig | None = None,
+) -> tuple[list, int]:
+    try:
+        raw = load_structured(path)
+    except JankiError as exc:
+        # A hand-edited deck file is the likeliest thing in `data/decks/` to be
+        # malformed — an unterminated quote, a tab, a merge marker — and its own
+        # unreadability used to cancel the sweep before a single deck was
+        # reported, with no "Validated N records" line at all.
+        return [ValidationIssue("error", str(exc), source=str(path))], 0
+    # `exporters.anki.deck_kind`, so this, the build and `status` cannot drift
+    # about what a kind is. On truthiness alone a typo — or a deliberate
+    # `kind: vocabulary` — sent an ordinary deck down the pattern path, which
+    # invented two errors that are false for it and skipped every record the
+    # file actually holds.
+    #
+    # Guarded on the shape first: `validate` also takes a records file, which is
+    # a list, and `deck_kind` refuses a non-mapping because for a *deck* that is
+    # a real error.
+    if isinstance(raw, dict):
+        try:
+            kind = deck_kind(path)
+        except DataError as exc:
+            # Reported as this file's error rather than raised, so a sweep still
+            # validates every other deck — the rule this command follows for a
+            # deck it cannot read.
+            return [ValidationIssue("error", str(exc), source=str(path))], 0
     else:
-        records = load_records(path)
+        kind = ""
+    if kind in ("pattern", "conjugation"):
+        # A pattern or conjugation deck holds no records, so the ordinary path
+        # found none and called the file clean — leaving every defect the build
+        # refuses invisible to the command whose job is catching one first.
+        try:
+            problems = pattern_cards.deck_problems(
+                # `store()` is resolved *inside* the guard: `patterns.json` is
+                # machine-written and committed, so it can carry a merge marker,
+                # and `deck_problems` — careful about every other failure it can
+                # meet — never entered its own frame to catch that one.
+                path, store() if store else None, config
+            )
+        except JankiError as exc:
+            return [ValidationIssue("error", str(exc), source=str(path))], 0
+        return [
+            ValidationIssue("error", problem, source=str(path))
+            for problem in problems
+        ], 0
+
+    try:
+        if isinstance(raw, dict) and "deck" in raw:
+            _, records = resolve_deck_records(path)
+        else:
+            records = load_records(path)
+    except JankiError as exc:
+        # This file's error, like the two branches above. A missing or
+        # unparseable collection used to escape to `main`, so the deck naming it
+        # — first by name in `data/decks/` — cancelled the sweep, and the one
+        # line printed named the collection but not the deck that pointed at it.
+        return [ValidationIssue("error", str(exc), source=str(path))], 0
     issues = validate_records(records, path)
     return issues, len(records)
 
 
 def command_validate(args: argparse.Namespace) -> int:
     config = _load_config(args)
+    # Read lazily. `patterns.json` is machine-written and committed, so it can
+    # carry a merge marker — and reading it up front made that failure cancel
+    # `janki validate data/staging/…yaml`, a command with nothing to do with it.
+    deck_store: dict[str, patterns.PatternSet] | None = None
+
+    def store() -> dict[str, patterns.PatternSet]:
+        nonlocal deck_store
+        if deck_store is None:
+            deck_store = patterns.load_store(config.patterns_file)
+        return deck_store
+
     paths: list[Path]
     if args.path:
         paths = [args.path.resolve()]
@@ -1944,7 +2358,7 @@ def command_validate(args: argparse.Namespace) -> int:
     all_issues = []
     total_records = 0
     for path in paths:
-        issues, count = _validate_path(path)
+        issues, count = _validate_path(path, store, config)
         all_issues.extend(issues)
         total_records += count
 
@@ -1958,39 +2372,1245 @@ def command_validate(args: argparse.Namespace) -> int:
     return 1 if has_errors(all_issues) else 0
 
 
-def _build_one(deck_path: Path, config: ProjectConfig, output: Path | None = None) -> None:
-    result = build_deck(deck_path, config, output)
+def resolve_deck_path(deck: Path, config: ProjectConfig) -> Path:
+    """A deck argument as a path, or as a bare name under ``deck_dir``.
+
+    `janki build verbs` is what a person types; requiring
+    `data/decks/verbs.yaml` every time is friction with no safety in it, since
+    the name has to match a file either way. An argument that exists as written
+    wins, so a deck file in the working directory is never shadowed by a
+    same-named one under ``deck_dir``.
+    """
+    if deck.exists():
+        return deck.resolve()
+    if deck.parent == Path("") or deck.parent == Path("."):
+        for suffix in ("", ".yaml", ".yml"):
+            candidate = config.deck_dir / f"{deck.name}{suffix}"
+            if candidate.exists():
+                return candidate.resolve()
+    raise AnkiBuildError(
+        f"No such deck: {deck}. Give a path to a deck file, or the bare name "
+        f"of one under {config.deck_dir}."
+    )
+
+
+#: What `--only-new` looks for in the records it is about to ship, and what to
+#: call each gap. Every one of these is a card that behaves differently from its
+#: neighbours for a reason invisible on the card itself, which is why they are
+#: reported by count before the build rather than discovered during study.
+_BUILD_GAPS: tuple[tuple[str, str], ...] = (
+    ("no word audio", "audio"),
+    ("no example sentence", "examples"),
+    ("no pitch accent", "accent"),
+)
+
+
+def _record_gaps(record: VocabularyRecord) -> tuple[str, ...]:
+    """What this record is missing, by the names the ledger stores.
+
+    One definition, used both to warn before a build and to record what the
+    build shipped without — so "it went out silent" and "it has a clip now"
+    are answered against the same question rather than two similar ones.
+    """
+    gaps = []
+    if not record.audio:
+        gaps.append("audio")
+    if not any(example.japanese.strip() for example in record.examples):
+        gaps.append("examples")
+    if not record.pitch_accent and not record.audio_accent.strip():
+        gaps.append("accent")
+    return tuple(gaps)
+
+
+def _gap_counts(records: Sequence[VocabularyRecord]) -> dict[str, int]:
+    counts = {"audio": 0, "examples": 0, "accent": 0}
+    for record in records:
+        for gap in _record_gaps(record):
+            counts[gap] += 1
+    return counts
+
+
+def _confirm_gaps(
+    records: Sequence[VocabularyRecord], assume_yes: bool, *, stem: str
+) -> bool:
+    """Report what the new records are missing, and ask before shipping them."""
+    counts = _gap_counts(records)
+    described = [
+        f"{counts[key]} of {len(records)} new records have {label}"
+        for label, key in _BUILD_GAPS
+        if counts[key]
+    ]
+    if not described:
+        return True
+    for line in described:
+        print(f"warning: {stem}: {line}", file=sys.stderr)
+    if assume_yes or not sys.stdin.isatty():
+        # Unattended runs proceed: `janki refresh` drives this, and a pipeline
+        # that stops for an unanswerable question is worse than one that ships
+        # a card missing its audio and says so.
+        return True
+    try:
+        answer = input("Build them anyway? [y/N] ")
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return False
+    return answer.strip().lower() in {"y", "yes"}
+
+
+def _refuse_unreviewed(
+    records: Sequence[Any], config: ProjectConfig, deck_path: Path
+) -> None:
+    """Stop a shipping build on a card nobody has read, or one still flagged.
+
+    Both halves matter. An unreviewed card has not been through the gate at all;
+    a card with an open error has been through it and failed. Neither is
+    something to ship, and the message says which of the two it is because the
+    remedies are different — one is `janki review`, the other is a fix or an
+    `--accept`.
+    """
+    if not config.require_review:
+        return
+    store = review.load_store(config.review_file)
+    stale = review.unreviewed(records, store)
+    blocking = review.open_findings(records, store)
+    if not stale and not blocking:
+        return
+
+    lines: list[str] = [f"{deck_path.name} is not ready to ship."]
+    if stale:
+        shown = ", ".join(record.id for record in stale[:5])
+        more = f" and {len(stale) - 5} more" if len(stale) > 5 else ""
+        lines.append(
+            f"  {len(stale)} card(s) have not been read since they last "
+            f"changed: {shown}{more}"
+        )
+        lines.append("  Run: janki review")
+    for record_id, finding in blocking:
+        lines.append(f"  {record_id} — {finding.where}: {finding.problem}")
+        if finding.suggestion:
+            lines.append(f"      suggested: {finding.suggestion}")
+    if blocking:
+        lines.append(
+            "  Fix the card and re-run janki review, or overrule it: "
+            "janki review --accept <id> --because '<why>'"
+        )
+    raise AnkiBuildError("\n".join(lines))
+
+
+def _build_one(
+    deck_path: Path,
+    config: ProjectConfig,
+    output: Path | None = None,
+    *,
+    book: ledger.Ledger | None = None,
+    only_new: bool = False,
+    assume_yes: bool = False,
+    sweep: bool = False,
+) -> bool:
+    """Build one deck. Returns whether any export entry is now pending.
+
+    Not "was a package written": the two diverge for a `--output` build, which
+    writes a real package and deliberately records nothing, and the caller uses
+    this to decide whether a failed ledger save has anything to apologise for.
+
+    ``book`` is the caller's ledger — loaded once per command and saved once,
+    the rule this module follows everywhere. Exports are recorded for a plain
+    build too, not only `--only-new`: `unexported` is what makes the next
+    `--only-new` correct, and a full build that shipped a record without
+    saying so would make that record look new forever.
+    """
+    stem = deck_path.stem
+    include_ids: set[str] | None = None
+    recorded = False
+    # A pattern deck is a different shape entirely — rules, not records — so it
+    # is dispatched before the vocabulary path reads the file as a word list.
+    kind = deck_kind(deck_path)
+    if kind == "conjugation":
+        if only_new:
+            # On a sweep the flag is a *mode* applied to every deck, not an
+            # assertion about each one, so a deck that cannot honour it says so
+            # and builds fully. Refusing outright stopped `--all` at the first
+            # drill deck — and `janki refresh` runs `build --all --only-new`, so
+            # the documented pipeline broke the moment one existed.
+            if sweep:
+                print(
+                    f"note: {deck_path.name} records no exports, so --only-new "
+                    f"cannot narrow it; building all of it."
+                )
+            else:
+                raise AnkiBuildError(
+                    f"{deck_path.name}: --only-new needs export history, and a "
+                    f"conjugation deck records none. Build it without the flag."
+                )
+        normalized = pattern_cards.collection_for(deck_path, config)
+        records = load_records(normalized)
+        # The same gate a word deck passes, on the records this deck will
+        # actually ship — filtered, and conjugable. A drill card carries the
+        # expression, the reading and a meaning straight off the record, so
+        # shipping one janki has not read is the thing the gate exists to stop;
+        # but gating the whole collection refused the build over nouns no drill
+        # card could carry, and over records `exclude_ids` had held back.
+        if output is None:
+            _refuse_unreviewed(
+                pattern_cards.shipping_records(deck_path, records), config, deck_path
+            )
+        target, count = pattern_cards.build_conjugation_deck(
+            deck_path, config, records, output
+        )
+        print(f"Built {target} — {count} drill card(s)")
+        return False
+    if kind == "pattern":
+        target, count = pattern_cards.build_pattern_deck(
+            deck_path,
+            config,
+            patterns.load_store(config.patterns_file),
+            output,
+            _verb_groups(config),
+        )
+        print(f"Built {target} — {count} rule card(s)")
+        # Nothing to record: exports track which *records* a deck has shipped,
+        # and a pattern deck ships none.
+        return False
+    _, records = resolve_deck_records(deck_path)
+    # The last gate, and only on a build that ships. A `--output` build is a
+    # throwaway that records nothing — `make gates` builds one on every run —
+    # so holding it to a review nobody asked for would make the gate something
+    # to work around rather than something to pass.
+    if output is None:
+        _refuse_unreviewed(records, config, deck_path)
+    if only_new:
+        # Validated before the "nothing new" shortcut, not after it. A deck
+        # whose already-shipped records are broken is a broken deck, and an
+        # incremental build that exits 0 on one a full build refuses would hide
+        # that until the next full build.
+        issues = validate_records(records, deck_path)
+        if has_errors(issues):
+            formatted = "\n".join(issue.format() for issue in issues)
+            raise AnkiBuildError(f"Deck validation failed:\n{formatted}")
+
+        ids = [record.id for record in records]
+        new_ids = book.unexported(stem, ids) if book else []
+        if book is not None:
+            behind = set(book.exported_before_their_work(stem, ids))
+            behind |= set(book.shipped_incomplete(stem, records))
+            if behind:
+                print(
+                    f"warning: {stem}: {len(behind)} record(s) shipped without "
+                    "audio, examples or accent and have it now, or changed "
+                    "after this deck last built them. --only-new cannot see "
+                    f"them; run 'janki build {stem}' to rebuild the whole deck.",
+                    file=sys.stderr,
+                )
+        if not new_ids:
+            print(f"{stem}: nothing new to build ({len(records)} record(s) already exported)")
+            return False
+        include_ids = set(new_ids)
+        included = [record for record in records if record.id in include_ids]
+        if not _confirm_gaps(included, assume_yes, stem=stem):
+            print(f"{stem}: not built.")
+            return False
+
+    result = build_deck(deck_path, config, output, include_ids=include_ids)
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
     cards = ", ".join(result.card_types)
+    scope = " (new only)" if only_new else ""
+    plural = "" if result.note_count == 1 else "s"
     print(
-        f"Built {result.output_path} — {result.note_count} notes, "
+        f"Built {result.output_path}{scope} — {result.note_count} note{plural}, "
         f"cards: {cards}, media: {result.media_count}"
     )
+    if book is None:
+        return True
+    if output is not None:
+        # Only a build to the deck's *own* declared package records exports. A
+        # `--output` build is a throwaway — a package to eyeball, or `make
+        # gates` proving the exporter still runs — and claiming those records
+        # shipped consumes their new-ness: the next `--only-new` skips them and
+        # they never reach a card, with nothing to say so. Said out loud,
+        # because a `--only-new --output` run that quietly records nothing
+        # rebuilds the identical package every day and never says why.
+        print(
+            f"not recorded as exported: --output builds are throwaways. "
+            f"Run 'janki build {stem}' to build the deck's own package and "
+            "record it.",
+            file=sys.stderr,
+        )
+        return recorded
+    by_id = {record.id: record for record in records}
+    for record_id in result.record_ids:
+        shipped = by_id.get(record_id)
+        gaps = _record_gaps(shipped) if shipped is not None else ()
+        recorded = book.record_export(record_id, stem, gaps=gaps) or recorded
+    return recorded
+
+
+def _finish_build(book: ledger.Ledger, built: bool) -> int:
+    """Save the export entries, reporting a failure without losing the build.
+
+    ``built`` says whether any package reached disk. A run that built nothing —
+    "nothing new to build", or a declined prompt — has no export entries
+    pending, so a failing save there must not announce packages that do not
+    exist and records that will be revisited.
+    """
+    error = _save_ledger(book)
+    if error is None:
+        return 0
+    _report_ledger_failure(error)
+    if built:
+        print(
+            "The package(s) above were written; only the export history was "
+            "not. The next '--only-new' will include those records again.",
+            file=sys.stderr,
+        )
+    return 1
 
 
 def command_build(args: argparse.Namespace) -> int:
     config = _load_config(args)
+    # Loaded before anything is built, so a ledger janki cannot read refuses
+    # the command rather than surfacing after a package is already on disk.
+    book = ledger.load(config.ledger_file)
     if args.all:
         if args.deck:
             raise AnkiBuildError("Do not provide a deck path together with --all")
+        if args.output:
+            raise AnkiBuildError(
+                "--output names one file; it cannot be combined with --all. "
+                "Each deck's own 'output:' key names its file."
+            )
         deck_paths = sorted(
             [*config.deck_dir.glob("*.yaml"), *config.deck_dir.glob("*.yml")]
         )
         if not deck_paths:
             raise AnkiBuildError(f"No deck files found under {config.deck_dir}")
-        for deck_path in deck_paths:
-            _build_one(deck_path, config)
-        return 0
+        built = False
+        code = 0
+        refused = False
+        try:
+            for deck_path in deck_paths:
+                try:
+                    built = _build_one(
+                        deck_path, config, book=book,
+                        only_new=args.only_new, assume_yes=args.yes, sweep=True,
+                    ) or built
+                except JankiError as exc:
+                    # Per deck, so one broken file does not hide every other
+                    # deck's build — the rule `validate` follows for the same
+                    # error, and the reason the drill deck's `--only-new`
+                    # refusal became a note on a sweep. A deck sorting first by
+                    # name used to cancel the lot, including the build stage
+                    # `janki refresh` reaches only after paying for jpdb, `--ai`
+                    # and audio. Still a non-zero exit: nothing about this is
+                    # fine.
+                    print(f"error: {deck_path.name}: {exc}", file=sys.stderr)
+                    refused = True
+        finally:
+            # In a `finally` because a later deck refusing must not discard
+            # what earlier decks already recorded in memory. Export state is
+            # reconstructible by nothing, so a lost entry means those records
+            # ship again on every future --only-new while `janki status` keeps
+            # calling them unexported.
+            # Captured, not discarded: a failed save is the loss this whole
+            # `finally` exists to report, and returning 0 anyway told `refresh`
+            # — and any cron gating on the exit code — that the build was clean.
+            code = _finish_build(book, built)
+        return code or (1 if refused else 0)
 
     if not args.deck:
         raise AnkiBuildError("Provide a deck YAML path or use --all")
     output = args.output.resolve() if args.output else None
-    _build_one(args.deck.resolve(), config, output)
+    built = _build_one(
+        resolve_deck_path(args.deck, config), config, output,
+        book=book, only_new=args.only_new, assume_yes=args.yes,
+        # `--all` is a sweep; so is the single-deck build refresh runs. Only the
+        # first was taught that, so `janki refresh --deck <conjugation deck>`
+        # hit a refusal whose remedy — drop `--only-new` — refresh gives nobody
+        # a way to follow, after every earlier stage had already paid for itself.
+        sweep=args.swept,
+    )
+    return _finish_build(book, built)
+
+
+#: The refresh pipeline, in order. Each entry is the stage's own command line,
+#: parsed by the real parser rather than assembled as a Namespace — a stage
+#: that grows a flag then keeps its default here instead of raising
+#: AttributeError halfway through a run.
+_REFRESH_STAGES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("jpdb", "--no-jpdb", ("enrich", "--jpdb")),
+    ("ai", "--no-ai", ("enrich", "--ai")),
+    # Between writing and voicing on purpose: `--ai` flags every example jpdb
+    # reads differently, and `audio` refuses to speak a flagged one. Without a
+    # re-check in between, a disagreement the adjudicator would have settled in
+    # seconds leaves the sentence silent until someone notices.
+    ("recheck", "--no-recheck", ("enrich", "--recheck-furigana")),
+    ("audio", "--no-audio", ("audio", "--words", "--examples")),
+    # Last before the build, because it reads the finished card: the sentences
+    # `--ai` wrote, the readings `--jpdb` filled, the register each example
+    # claims. Reviewing before those stages would read a card that does not
+    # exist yet and pass it. `build` refuses on an open finding anyway, so a
+    # refresh that skipped this would simply fail one stage later with less to
+    # say about why.
+    ("review", "--no-review", ("review",)),
+    ("build", "--no-build", ("build",)),
+)
+
+
+def command_refresh(args: argparse.Namespace) -> int:
+    """Run the whole pipeline in order: enrich, voice, build what is new.
+
+    The stages are the four commands a person runs by hand after adding words,
+    in the only order that works — jpdb fills the readings and accents that
+    `audio` needs to force a pitch, `--ai` writes the examples that `audio`
+    then voices, and `--only-new` ships what the earlier stages just finished.
+    Running them out of order silently produces less: a build before `audio`
+    ships cards with no sound and marks them exported, so the next `--only-new`
+    will not revisit them.
+
+    Each stage is the real command, called in-process — not a subprocess, so a
+    failure is a `JankiError` with a stack rather than an exit code, and not a
+    reimplementation, so there is one definition of what "enrich --jpdb" means.
+    A stage that fails stops the run: every later stage depends on what the
+    failed one was supposed to produce, and the alternative is a package built
+    from half-enriched records.
+    """
+    parser = build_parser()
+    root = ["--root", str(args.root)] if args.root else []
+    deck = [str(args.deck)] if args.deck else ["--all"]
+
+    # Read once, to decide whether the review stage belongs in this run at all.
+    # A project that has turned the gate off should not have refresh spend a
+    # request per card on a check `build` will not consult.
+    requires_review = _load_config(args).require_review
+
+    ran: list[str] = []
+    for name, flag, command in _REFRESH_STAGES:
+        if getattr(args, f"no_{name}"):
+            print(f"— {name}: skipped ({flag})")
+            continue
+        if name == "review" and not requires_review:
+            print(f"— {name}: skipped ([review] require = false)")
+            continue
+        argv = [*root, *command]
+        if name == "build":
+            # No `--yes`: refresh is an interactive command — the enrich stages
+            # ahead of it prompt too — and the gap prompt exists precisely
+            # because shipping bare cards *and marking them exported* hides
+            # them from every later `--only-new`. A non-TTY still proceeds, so
+            # scripted runs are unaffected.
+            argv += [*deck, "--only-new", "--swept"]
+        stage = parser.parse_args(argv)
+        print(f"— {name}: janki {' '.join(argv[len(root):])}")
+        code = stage.handler(stage)
+        if code != 0:
+            print(
+                f"refresh stopped at '{name}' (exit {code}). The stages after it "
+                "depend on what it was supposed to produce.",
+                file=sys.stderr,
+            )
+            return code
+        ran.append(name)
+
+    print(f"refresh: {len(ran)} stage(s) completed: {', '.join(ran) or 'none'}")
     return 0
+
+
+def _collection_lines(config: ProjectConfig) -> list[str]:
+    """What Anki says about the notetypes this project's decks build.
+
+    Only about *this project's* decks: the check is keyed by each deck's own
+    model id, so a collection full of shared decks with their own clone
+    notetypes is neither inspected nor mentioned. janki did not create those and
+    cannot fix them, and a report that listed them would bury the one line that
+    is actionable.
+
+    Anything that goes wrong here is a warning, never a failure. A missing Anki,
+    an unreadable collection, or several profiles to choose between are all
+    ordinary states, and `janki status` has to keep working in every one of
+    them — it is the command people run *because* something is confusing.
+    """
+    collection, note = status.resolve_collection(config)
+    if collection is None:
+        return [f"warning: {note}"] if note else []
+    decks = []
+    lines = []
+    for deck_path in sorted([*config.deck_dir.glob("*.yaml"), *config.deck_dir.glob("*.yml")]):
+        try:
+            model_id, model_name, fields = deck_notetype(deck_path, config)
+        except JankiError as exc:
+            # Skipped, not fatal: the rest of this module's rule is that a deck
+            # file which cannot be read is a warning and a skipped deck. A
+            # `return` here cancelled the collection check for every *other*
+            # deck, so the one thing this command exists to say went unsaid
+            # because of a deck the user already knew was broken.
+            lines.append(f"warning: could not read {deck_path.name}: {exc}")
+            continue
+        decks.append((deck_path.stem, model_id, model_name, fields))
+
+    findings, warnings = status.check_collection(collection, decks)
+    lines.extend(f"warning: {message}" for message in warnings)
+    for finding in findings:
+        lines.append(f"warning: Anki: {finding.where}: {finding.message}")
+    return lines
+
+
+def _classes_for(
+    entries: Sequence[patterns.PatternSet],
+    config: ProjectConfig,
+    ask_jpdb: bool,
+    known: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Every verb class available for checking these documents.
+
+    The collection first, because it is free and offline and `enrich --jpdb`
+    already put jpdb's own answer there. Then jpdb itself for what is left, on
+    request — one `/parse` call for every remaining verb, which is how a word
+    the collection has never held (おきる, まつ) gets checked at all rather than
+    held back.
+    """
+    # Taken from the caller when it has one: `_verb_groups` parses the whole
+    # collection and *warns* when it cannot, so recomputing it on the recovery
+    # path printed the same warning twice and read the file twice.
+    known = _verb_groups(config) if known is None else known
+    if not ask_jpdb:
+        return known
+    missing = [
+        verb
+        for entry in entries
+        for verb in patterns.chart_verbs(entry)
+        if verb not in known
+    ]
+    if not missing:
+        return known
+    client = jpdb.JpdbClient(jpdb.api_key_from_env())
+    return {**patterns.verb_groups_from_jpdb(missing, client), **known}
+
+
+def _verb_groups(config: ProjectConfig) -> dict[str, str]:
+    """Every verb class the collection already knows, by spelling and reading.
+
+    `enrich --jpdb` records a `verb_group` per record from jpdb's own codes, so
+    the class a conjugation chart states in English prose is already on disk in
+    a form janki can use. Keyed both ways because a chart writes its examples in
+    kana (かう ⇨ かって) while the record is 買う with reading かう.
+    """
+    # No `exists()` shortcut. A collection that is *missing* — a renamed file, a
+    # typo in `[paths]` — is as unreadable as one that will not parse, and
+    # returning an empty map for it reached the same loss by the neighbouring
+    # branch: a pattern deck built with every `Examples` field blank, reported
+    # as built, whose GUIDs then blank the examples of the rule cards already in
+    # the user's Anki. `collection_for` refuses a missing collection for a drill
+    # deck already. `load_records` names the file it could not find.
+    normalized = config.normalized_file.resolve()
+    # Raised, not swallowed. "No class on record" and "janki could not read the
+    # collection" are different verdicts, and turning the second into the first
+    # made `janki build` of a pattern deck strip every worked example while
+    # printing an unchanged card count and exiting 0 — and, because the note
+    # GUID deliberately excludes the examples, importing that package *blanks*
+    # the Examples field of rule cards already in the user's Anki. It also made
+    # `janki patterns --check` report an all-clear over a run in which nothing
+    # was checked. A caller that means to continue anyway says so.
+    records = load_records(normalized)
+
+    # Accumulated per key, then narrowed to the keys exactly one class claims.
+    # A kana key is where the class is *ambiguous* — かえる is 変える (ichidan)
+    # and 帰る (godan), きる is 切る and 着る — and taking whichever record loaded
+    # first turned a correct chart row into a confident failure. A key two
+    # records disagree about is not knowledge.
+    seen: dict[str, dict[str, str]] = {}
+    for record in records:
+        if not record.verb_group:
+            continue
+        # Folded to the name `conjugate` would accept, so two spellings of one
+        # class do not read as a disagreement. A CSV import writes the column
+        # through verbatim, so `五段` sits beside another record's jpdb-written
+        # `godan` — `enrich --jpdb` only fills a field that is empty, so it
+        # never repairs one. Unfolded, that pair dropped かう and held the row
+        # back saying no class was on record, when two were and both agreed.
+        # Two genuinely unrecognized names stay distinct and still reach the
+        # "does not recognise the verb class" branch.
+        group = patterns.group_identity(record.verb_group) or record.verb_group
+        for key in (record.expression, record.reading):
+            # Normalized like `conjugate`'s own arguments and like the verb the
+            # chart is scanned for: records are stored as imported, so a
+            # decomposed dakuten (く + U+3099) would never match a composed ぐ.
+            folded = normalize_identity_part(key or "")
+            if folded:
+                # Keyed by the folded class, valued by a raw spelling: the fold
+                # decides whether two records agree, and the raw spelling is
+                # what `check_pattern_rules` quotes back when `conjugate` does
+                # not recognise the name.
+                seen.setdefault(folded, {}).setdefault(group, record.verb_group)
+    return {
+        key: next(iter(spellings.values()))
+        for key, spellings in seen.items()
+        if len(spellings) == 1
+    }
+
+
+def _rule_check_lines(
+    entry: patterns.PatternSet, groups: Mapping[str, str] | None = None
+) -> list[str]:
+    """What janki's own conjugation rules say about a chart's worked examples.
+
+    Empty for a document with nothing checkable — a lesson deck states no
+    conjugations, and a chart that gives only rule shapes (``く → いて``) offers
+    nothing to compute against. Silence there is correct: reporting "0 checked"
+    on every slide deck would train the eye to skip the line that matters.
+    """
+    checks = patterns.check_pattern_rules(entry, groups)
+    if not checks:
+        return []
+    examined = [check for check in checks if check.examined]
+    held = [check for check in checks if not check.examined]
+    disagreed = [check for check in examined if not check.agrees]
+    lines = [
+        f"    checked {len(examined) - len(disagreed)}/{len(examined)} worked "
+        f"example(s) against janki's conjugation rules"
+    ]
+    # Which column each row matched. This code deliberately declines to parse
+    # which form the chart teaches, so it has to say what it found instead:
+    # `のむ ⇨ のんだ` on a て-form chart agrees — as a *past* — and without
+    # naming the form, the most likely garble on such a chart reads as a pass.
+    for check in examined:
+        if check.agrees:
+            lines.append(
+                f"        {check.verb} ⇨ {check.claimed} matched "
+                f"{check.form.replace('_', ' ')}"
+            )
+    # Named, not dropped. A row found and not examined used to disappear
+    # entirely, so a chart with one readable row and one janki has no opinion
+    # about reported "all 1 agree" and said nothing about the other.
+    for check in held:
+        lines.append(
+            f"    note: {check.verb} ⇨ {check.claimed} not checked — "
+            f"{check.held_back}"
+        )
+    for check in disagreed:
+        lines.append(
+            f"    warning: {check.verb} ⇨ {check.claimed} is not what janki "
+            f"computes ({', '.join(check.computed) or 'no group applies'}) "
+            f"— for {check.template!r}"
+        )
+    return lines
+
+
+def command_patterns(args: argparse.Namespace) -> int:
+    """Read documents for what they teach.
+
+    Separate from `extract`, which asks a page which *words* are on it. That is
+    the wrong question for a te-form chart — almost no vocabulary, entirely
+    about a form — and for a week's slides, which are really about 〜んだ and
+    つもり and happen to contain sixty unglossed words.
+
+    Nothing extracted here is used until a human marks it reviewed. It is
+    inference from prose and slide ordering, not a dictionary lookup, and this
+    project does not let an inferred thing onto a card unread.
+    """
+    config = _load_config(args)
+    store = patterns.load_store(config.patterns_file)
+
+    # Same trap the --review guard below exists for, reintroduced for a new
+    # flag: `--check` returns before the read loop, so files passed alongside it
+    # were never read, never stored, and never mentioned — on a zero exit.
+    if args.check and (args.files or args.review):
+        given = [str(path) for path in args.files] + list(args.review)
+        raise JankiError(
+            "--check reads nothing and only re-checks the store, so it cannot "
+            f"be combined with {', '.join(given)}. Run them separately."
+        )
+
+    if args.review and args.files:
+        # `files` is nargs="*" and `--review` appends, so
+        # `janki patterns --review a.pdf b.pdf` binds b.pdf to `files` — a
+        # natural thing to type, and the review branch used to return before
+        # reading it, reporting only "Marked 1 document(s) reviewed".
+        raise JankiError(
+            "Read documents and mark them reviewed in separate runs: "
+            f"--review names {', '.join(args.review)} while "
+            f"{', '.join(str(path) for path in args.files)} would be read as "
+            "new document(s)."
+        )
+
+    if args.review:
+        unknown = [name for name in args.review if name not in store]
+        if unknown:
+            raise JankiError(
+                "No document has been read under "
+                + ", ".join(sorted(unknown))
+                + f". Known: {', '.join(sorted(store)) or 'none'}"
+            )
+        for name in args.review:
+            store[name] = dataclasses.replace(store[name], reviewed=True)
+        patterns.save_store(config.patterns_file, store)
+        # Per document, and honest about which ones this actually puts to work.
+        # Only lesson documents steer example sentences, so "their patterns are
+        # now in use" was false for a te-form chart — eight human-reviewed
+        # patterns vanishing from the pipeline while the command said otherwise.
+        for name in args.review:
+            entry = store[name]
+            print(f"Marked {name} reviewed.")
+            if entry.kind not in patterns.STEERING_KINDS:
+                print(
+                    f"warning: {name} is a {entry.kind} document, and only "
+                    f"{'/'.join(patterns.STEERING_KINDS)} documents steer example "
+                    f"sentences — nothing uses its patterns yet.",
+                    file=sys.stderr,
+                )
+        return 0
+
+    if args.check:
+        if not store:
+            print("No documents read yet. Pass a PDF or image to read one.")
+            return 0
+        entries = list(store.values())
+        collection_error = ""
+        try:
+            known = _verb_groups(config)
+        except JankiError as exc:
+            # Not fatal on its own. `--ask-jpdb` is documented as the way to
+            # check verbs the collection does not hold, and a collection janki
+            # cannot read is the limit case — aborting here never asked, and a
+            # store of lesson decks or bare-ending charts needed no class at
+            # all. Refused below only for a verb nothing could answer for.
+            known = {}
+            collection_error = f"could not read the collection for verb classes: {exc}"
+        lookup_error = ""
+        try:
+            groups = _classes_for(entries, config, args.ask_jpdb, known)
+        except JankiError as exc:
+            # Two independent failures, and both have to be said. Unguarded,
+            # an unset `JPDB_API_KEY` or a 429 unwound past the line reporting
+            # the collection, so the user fixed the key, re-ran, and only then
+            # learned the collection was the real problem. The offline classes
+            # are kept for the same reason the read path keeps them: a transient
+            # 429 must not discard the checks they would have produced.
+            groups = known
+            lookup_error = f"could not look up verb classes: {exc}"
+        # The verbs the store names that no read could answer for. Only those
+        # make a failed read this command's failure — `--check`'s exit code is
+        # its entire product, and reporting "nothing could be checked" on exit 0
+        # is a pass over a run that verified nothing. Counted for the jpdb
+        # failure as well as the collection one: on the read path the exit code
+        # means "a document was lost" and a failed lookup is deliberately kept
+        # out of it, but `--check` loses nothing and has no other signal, so
+        # leaving it out passed a run whose garbled row was never checked while
+        # blaming the very lookup that failed.
+        failed_reads = [note for note in (collection_error, lookup_error) if note]
+        unresolved = sorted({
+            verb
+            for entry in entries
+            for verb in patterns.chart_verbs(entry)
+            if verb not in groups
+        }) if failed_reads else []
+        stranded = bool(unresolved)
+        # What to blame, from what actually failed. Hard-coding the collection
+        # was safe only while it was the sole cause: a 429 then reported a
+        # healthy `vocabulary.json` as unreadable and sent the user to
+        # `[paths]` over a transient network error they need only re-run.
+        cause = " and ".join(
+            phrase
+            for phrase, failed in (
+                ("the collection could not be read", bool(collection_error)),
+                ("the verb-class lookup failed", bool(lookup_error)),
+            )
+            if failed
+        )
+        for note in failed_reads:
+            # Once each, at the severity the outcome earned. Printing eagerly
+            # *and* again after the lookup said the same sentence twice, as a
+            # warning and as an error, and the second carried less than the
+            # first.
+            print(f"{'error' if stranded else 'warning'}: {note}", file=sys.stderr)
+        if stranded:
+            print(f"error: no class for {', '.join(unresolved)}", file=sys.stderr)
+        disagreed = checked = 0
+        skipped_names: list[str] = []
+        for name, entry in sorted(store.items()):
+            found = patterns.check_pattern_rules(entry, groups)
+            examined = [check for check in found if check.examined]
+            if not found:
+                skipped_names.append(f"{name} ({entry.kind})")
+                continue
+            print(f"{name} — {entry.kind}")
+            for line in _rule_check_lines(entry, groups):
+                print(line)
+            # Held-back rows are named by `_rule_check_lines` and count toward
+            # neither the total nor the exit code: janki having no opinion is
+            # not the chart being wrong.
+            checked += len(examined)
+            disagreed += sum(1 for check in examined if not check.agrees)
+        # The all-clear is only said when something was actually checked. Saying
+        # it over a store of lesson decks — or a chart whose rows this cannot
+        # read — is false reassurance from the one command whose entire job is
+        # reassurance.
+        # Named whenever there are any, not only when *nothing* was checkable:
+        # one readable chart beside nine documents this cannot read printed an
+        # unqualified all-clear and never mentioned the nine.
+        if skipped_names:
+            print(
+                "Not checked against janki's conjugation rules: "
+                + ", ".join(skipped_names)
+            )
+        if not checked:
+            if stranded:
+                # Not the ordinary "janki has no opinion about these rows": the
+                # command could not read the file it needed. Saying the first
+                # over the second is the false reassurance this whole block
+                # exists to avoid.
+                print(f"{cause[0].upper()}{cause[1:]}, so these rules were "
+                      "checked against nothing.")
+            else:
+                print("Nothing in the store could be checked against those rules.")
+            return 1 if stranded else 0
+        if not disagreed:
+            # Qualified when something was stranded, and blamed on whatever
+            # actually failed. An unqualified all-clear over a run that could
+            # not read what it needed is the false reassurance this block is
+            # written against — and the held-back rows above blame "no verb
+            # class on record", sending the user to `janki enrich --jpdb`, which
+            # is the very read that just failed.
+            print(
+                f"All {checked} worked example(s) agree with janki's "
+                f"conjugation rules."
+                if not stranded
+                else f"{checked} worked example(s) agree with janki's conjugation "
+                f"rules; {cause}, so {', '.join(unresolved)} went unchecked."
+            )
+        return 1 if disagreed or stranded else 0
+
+    if not args.files:
+        for name, entry in sorted(store.items()):
+            mark = "reviewed" if entry.reviewed else "UNREVIEWED"
+            if entry.reviewed and entry.kind not in patterns.STEERING_KINDS:
+                mark = "reviewed, not used for sentences"
+            print(f"{name} — {entry.kind}, {len(entry.patterns)} pattern(s) [{mark}]")
+            for pattern in entry.patterns:
+                gloss = f" — {pattern.gloss}" if pattern.gloss else ""
+                print(f"    {pattern.template}{gloss}")
+        if not store:
+            print("No documents read yet. Pass a PDF or image to read one.")
+        return 0
+
+    prepared_inputs = prepare_inputs(args.files, config.scan_inbox)
+    # The store is keyed by basename, so two inputs named chart.pdf in different
+    # directories claim one entry: the first is read, paid for, printed as read
+    # — and then overwritten by the second when the store is saved. Refused by
+    # name rather than silently keeping one of them.
+    # One file named twice is one document. `prepare_inputs` content-addresses
+    # the inbox, so naming the copy in ~/Downloads beside the original it was
+    # copied from — or one path caught by two overlapping globs — arrives here
+    # as two `PreparedInput`s with the same `origin_path`. Reading it twice
+    # bills twice for one document, and refusing the batch over it lost every
+    # other document in the run for a duplicate that costs nothing.
+    # Keyed by the real path, not the spelling: a file already under the inbox
+    # is returned verbatim, so `data/inbox/scans/../scans/chart.pdf` and a
+    # symlinked inbox are the same file under two strings — and two strings
+    # survive to the basename guard below, which aborts the batch and offers
+    # "rename one", i.e. edit a file under `data/inbox/`.
+    seen_paths: set[Path] = set()
+    deduped = []
+    for prepared in prepared_inputs:
+        real = prepared.origin_path.resolve()
+        if real in seen_paths:
+            # Said out loud. `prepare_inputs` keeps duplicates on purpose, so
+            # collapsing them here without a word would be the quiet discard
+            # this project refuses everywhere else — even when what is dropped
+            # costs nothing.
+            print(f"note: {prepared.origin_path} was named more than once; read once")
+            continue
+        seen_paths.add(real)
+        deduped.append(prepared)
+    prepared_inputs = deduped
+
+    by_name: dict[str, set[str]] = {}
+    for prepared in prepared_inputs:
+        by_name.setdefault(prepared.origin_path.name, set()).add(
+            str(prepared.origin_path)
+        )
+    clashing = {
+        name: sorted(paths) for name, paths in by_name.items() if len(paths) > 1
+    }
+    if clashing:
+        detail = "; ".join(
+            f"{name}: {', '.join(paths)}" for name, paths in sorted(clashing.items())
+        )
+        # No "read them in separate runs": that performs the loss this refuses.
+        # The second run finds the first's entry unreviewed and replaces it with
+        # nothing on stdout saying a document was displaced — or, if the first
+        # was reviewed, skips the second entirely as "already read and marked
+        # reviewed", reporting a document that has never been read, on exit 0.
+        raise JankiError(
+            f"Two inputs would be stored under one name, and the second would "
+            f"replace the first: {detail}. Rename one so the store keys differ."
+        )
+    failures: list[str] = []
+    skipped: list[str] = []
+    read: list[str] = []
+    fresh: list[patterns.PatternSet] = []
+    for prepared in prepared_inputs:
+        # Before the read, not after it. `reviewed` is the one piece of
+        # human-entered state in this file and `extract_patterns` always returns
+        # False, so replacing an entry outright silently un-reviewed a document
+        # on the command's most ordinary invocation — `janki patterns
+        # data/inbox/scans/*.pdf` after dropping in one new handout. Checking
+        # afterwards fixed that but billed a full document read against every
+        # already-reviewed file in the inbox and threw the answer away; the
+        # store key is `origin_path.name`, which is known here.
+        previous = store.get(prepared.origin_path.name)
+        if previous is not None and previous.reviewed and not args.force:
+            skipped.append(
+                f"{prepared.origin_path.name}: already read and marked reviewed, "
+                f"so it was not read again. --force re-reads it; its patterns "
+                f"then need reviewing again before enrich uses them."
+            )
+            continue
+        try:
+            found = patterns.extract_patterns(
+                prepared,
+                model=config.extract_model,
+                style_guide=claude_client.read_style_guide(config.root),
+            )
+        except JankiError as exc:
+            failures.append(f"{prepared.origin_path.name}: {exc}")
+            continue
+        store[found.source] = found
+        read.append(found.source)
+        # The object, not a second lookup by key. The key is a bare basename, so
+        # two inputs named chart.pdf in different directories resolved to one
+        # entry — the second checked twice and the first never.
+        fresh.append(found)
+        print(
+            f"{found.source}: {found.kind}, {len(found.patterns)} pattern(s) "
+            f"— {found.title or '(untitled)'}"
+        )
+        for pattern in found.patterns:
+            gloss = f" — {pattern.gloss}" if pattern.gloss else ""
+            print(f"    {pattern.template}{gloss}")
+    # Saved before anything else can fail. The class lookup below can raise —
+    # an unset key, a timeout, a 429 — and it used to sit inside this loop,
+    # outside the try, so one bad request discarded every document already read
+    # and paid for in the same run.
+    patterns.save_store(config.patterns_file, store)
+
+    # A conjugation chart shows its work, and janki computes te-forms — so the
+    # rules are checked rather than believed, which is the same shape the
+    # furigana path uses against jpdb. Automatic rather than a flag: a check
+    # nobody runs catches nothing.
+    #
+    # One lookup for the whole run, after the reads: the collection is parsed
+    # once instead of once per document, and `--ask-jpdb` makes the single
+    # request its help text promises rather than one per file.
+    offline_error = ""
+    try:
+        offline = _verb_groups(config)
+    except JankiError as exc:
+        # Continued, because every document was read and saved above and losing
+        # those to an unrelated file would be the worse outcome — but recorded
+        # in `failures`, so the exit code still says the rule check did not
+        # happen. Silently exiting 0 here let `janki patterns *.pdf && …` run on
+        # from a run that verified nothing.
+        offline = {}
+        offline_error = f"could not read the collection for verb classes: {exc}"
+    try:
+        classes = _classes_for(fresh, config, args.ask_jpdb, offline)
+    except JankiError as exc:
+        # The offline map, not nothing. `_classes_for` reads the collection's
+        # own `verb_group` values first and only then asks jpdb for what is
+        # missing, so discarding both on a 429 held back every row — reporting
+        # "no verb class on record" for verbs that are on record, and losing the
+        # garbled row the offline check would have caught.
+        classes = offline
+        # Kept out of `failures`, which means "a document was lost" and decides
+        # the exit code. Nothing was lost: every document was read and saved,
+        # and failing the run here breaks the very
+        # `janki patterns *.pdf && janki patterns --review …` chain the non-zero
+        # exit exists to protect.
+        print(f"warning: could not look up verb classes: {exc}", file=sys.stderr)
+    if offline_error:
+        # Decided *after* jpdb, and on what is still missing rather than on what
+        # the documents named. `--ask-jpdb` exists precisely to answer for verbs
+        # the collection does not hold, and a missing collection is the limit
+        # case of that — so a run whose every verb jpdb resolved was reported as
+        # unchecked while stdout said `checked 1/1`, and exited 1 into the
+        # `janki patterns *.pdf && janki patterns --review …` chain. A chart of
+        # bare endings (`く → いて`) names no verb and resolves the same way.
+        unresolved = sorted({
+            verb
+            for entry in fresh
+            for verb in patterns.chart_verbs(entry)
+            if verb not in classes
+        })
+        if unresolved:
+            failures.append(
+                f"{offline_error} — no class for {', '.join(unresolved)}, so "
+                "those worked examples were not checked"
+            )
+        else:
+            # Said, but not counted: nothing in this run needed the map, and
+            # failing here would break the `janki patterns *.pdf && janki
+            # patterns --review …` chain over a file the run never consulted.
+            print(f"warning: {offline_error}", file=sys.stderr)
+    for entry in fresh:
+        # Named, because these lines carry no filename of their own and two
+        # charts can share a template string. Checking inside the read loop used
+        # to put them under the document's own header; the whole run's output
+        # was one undifferentiated block without this.
+        print(f"{entry.source} — {entry.kind}")
+        for line in _rule_check_lines(entry, classes):
+            print(line)
+    # Deliberately skipping a document janki already has is not a problem, so it
+    # is a notice on stdout rather than a warning — and it must not reach the
+    # exit code, or the very idiom the non-zero exit protects
+    # (`janki patterns *.pdf && janki patterns --review new.pdf`) would break
+    # the moment one file in the inbox had been reviewed.
+    for notice in skipped:
+        print(f"note: {notice}")
+    for failure in failures:
+        print(f"warning: {failure}", file=sys.stderr)
+    # Per document that succeeded, not gated on the whole run succeeding: a run
+    # where one of three documents failed still read two, and printing nothing
+    # about them left it with no next step.
+    if read:
+        print(
+            "\nNothing uses these yet. Read them, then: janki patterns --review "
+            + " --review ".join(repr(name) for name in read)
+        )
+        for name in read:
+            if store[name].kind not in patterns.STEERING_KINDS:
+                print(
+                    f"    ({name} is a {store[name].kind} document — reviewing it "
+                    f"records that you checked it, but example sentences are "
+                    f"steered only by "
+                    f"{'/'.join(patterns.STEERING_KINDS)} documents.)"
+                )
+    # Any loss is a non-zero exit, for the reason spelled out in `command_kanji`
+    # below: `janki patterns *.pdf && janki patterns --review …` must not run on
+    # from a document that was never read.
+    return 1 if failures else 0
+
+
+def command_review(args: argparse.Namespace) -> int:
+    """Read the finished cards, and say which ones are not fit to ship.
+
+    The last gate: every other check in janki is a rule, and this is the only
+    one that reads the card. It never has the last word — a finding blocks a
+    build until a person fixes the card or overrules the finding by name.
+    """
+    config = _load_config(args)
+    records = _shipping_records(config)
+    store = review.load_store(config.review_file)
+
+    if args.accept:
+        if not args.because:
+            raise JankiError(
+                "--accept needs --because: an acceptance with no reason is "
+                "indistinguishable next month from one nobody thought about."
+            )
+        # Every id applied before anything is announced. Printing inside the
+        # loop told the user an acceptance was recorded, then raised on the next
+        # id before `save_store` — so the card they had just been told was clear
+        # was refused by the very next build.
+        shipping = {review.card_fingerprint(record) for record in records}
+        for record_id in args.accept:
+            store = review.accept(store, record_id, args.because, shipping)
+        review.save_store(config.review_file, store)
+        for record_id in args.accept:
+            print(f"Accepted the findings on {record_id}: {args.because}")
+        return 0
+
+    known = {record.id for record in records}
+    if args.ids:
+        unknown = [record_id for record_id in args.ids if record_id not in known]
+        if unknown:
+            raise JankiError(
+                "No record with id " + ", ".join(sorted(unknown)) + " in any deck."
+            )
+        records = [record for record in records if record.id in set(args.ids)]
+
+    todo = records if args.force else review.unreviewed(records, store)
+    if not todo:
+        blocking = review.open_findings(records, store)
+        if blocking:
+            for record_id, finding in blocking:
+                print(f"{record_id} — {finding.where}: {finding.problem}", file=sys.stderr)
+            print(
+                f"{len(blocking)} finding(s) still open. Fix the card and re-run, "
+                "or: janki review --accept <id> --because '<why>'",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"All {len(records)} card(s) already read at their current content.")
+        return 0
+
+    # The model that will actually read them, not the configured one:
+    # `--model haiku` printed "with claude-opus-5" and billed the other.
+    model = args.model or config.enrich_model
+    print(f"Reading {len(todo)} card(s) with {model}...")
+    fresh, failures = review.review_records(
+        todo,
+        model=model,
+        style_guide=claude_client.read_style_guide(config.root),
+        card_design=_card_design_text(config.root),
+        max_meanings=config.max_meanings,
+    )
+    store.update(review.carry_acceptances(store, fresh))
+    review.save_store(config.review_file, store)
+
+    # Reported by record id, never by the store's key. The key is a content
+    # fingerprint — `72e046d7c08d — meanings: ...` names nothing a person can
+    # look up or pass to `--accept`.
+    by_record = sorted(fresh.values(), key=lambda entry: entry.record_id)
+    errors = [
+        (entry.record_id, finding)
+        for entry in by_record
+        for finding in entry.findings
+        if finding.severity == "error"
+    ]
+    notes = [
+        (entry.record_id, finding)
+        for entry in by_record
+        for finding in entry.findings
+        if finding.severity == "note"
+    ]
+    for record_id, finding in notes:
+        print(f"note: {record_id} — {finding.where}: {finding.problem}")
+    for record_id, finding in errors:
+        print(f"error: {record_id} — {finding.where}: {finding.problem}", file=sys.stderr)
+        if finding.suggestion:
+            print(f"       suggested: {finding.suggestion}", file=sys.stderr)
+
+    for failure in failures:
+        print(f"warning: could not read {failure}", file=sys.stderr)
+    clean = sum(
+        1
+        for entry in fresh.values()
+        if not any(f.severity == "error" for f in entry.findings)
+    )
+    print(
+        f"Read {len(fresh)} of {len(todo)} card(s): {clean} ready to ship, "
+        f"{len(errors)} error(s)."
+        + (f" {len(failures)} could not be read." if failures else "")
+    )
+    # A card that could not be read stays absent from the store, so it is still
+    # unreviewed and the build still refuses it — but the run says so rather
+    # than reporting a clean pass over cards it never saw.
+    if errors or failures:
+        print(
+            "Fix those cards and re-run, or overrule one: "
+            "janki review --accept <id> --because '<why>'",
+            file=sys.stderr,
+        )
+    return 1 if errors or failures else 0
+
+
+def _shipping_records(config: ProjectConfig) -> list[VocabularyRecord]:
+    """Every card version any deck would ship, deduped by content.
+
+    The records the *build* resolves, not the normalized file. A deck may carry
+    an inline ``notes:`` entry overriding a field, or read a different
+    ``source:`` entirely, and reading the normalized file meant `janki review`
+    and `janki build` were looking at different text under the same id — the
+    build refusing a card the review had just called clean, with no flag that
+    reached it.
+
+    A record shipping identically from two decks is one card to read. One
+    shipping *differently* is two, and both are reviewed: the store is keyed by
+    content, so each deck's version is answered on its own terms.
+    """
+    deck_paths = sorted(
+        [*config.deck_dir.glob("*.yaml"), *config.deck_dir.glob("*.yml")]
+    )
+    if not deck_paths:
+        # No decks yet — review the collection, so a project can be checked
+        # before its first deck file exists.
+        normalized = config.normalized_file.resolve()
+        return load_records(normalized) if normalized.exists() else []
+
+    seen: set[str] = set()
+    records: list[VocabularyRecord] = []
+    for deck_path in deck_paths:
+        _, deck_records = resolve_deck_records(deck_path)
+        for record in deck_records:
+            fingerprint = review.card_fingerprint(record)
+            if fingerprint in seen:
+                continue
+            seen.add(fingerprint)
+            records.append(record)
+    return records
+
+
+def _card_design_text(root: Path) -> str:
+    """The card guidelines, as system context for the reader.
+
+    Missing is not an error, unlike the style guide: `docs/CARD_DESIGN.md`
+    describes fields and templates rather than the language rules every AI pass
+    needs, so a project without it can still be reviewed against the style guide
+    alone.
+    """
+    path = Path(root) / "docs" / "CARD_DESIGN.md"
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
+def command_kanji(args: argparse.Namespace) -> int:
+    """Look up the characters this collection uses, once each.
+
+    Reference data, not card content: 前 is the same 前 in 名前 and 前線, so it
+    is fetched per *character* and shared by every record that contains one.
+    Only what is missing is fetched, so re-running after adding words costs one
+    request per new character rather than a re-download of everything.
+    """
+    config = _load_config(args)
+    output_path = config.normalized_file.resolve()
+    records = load_records(output_path) if output_path.exists() else []
+    if not records:
+        print(f"No records to read characters from in {output_path}.")
+        return 0
+
+    wanted: list[str] = []
+    for record in records:
+        wanted.extend(kanji.kanji_in(record.expression))
+    wanted = list(dict.fromkeys(wanted))
+
+    store = kanji.load_store(config.kanji_file)
+    todo = wanted if args.refresh else store.missing(wanted)
+    if not todo:
+        print(f"All {len(wanted)} character(s) already looked up in {config.kanji_file}.")
+        return 0
+
+    failures: list[str] = []
+    for character in todo:
+        try:
+            store.entries[character] = kanji.fetch_kanji(character)
+        except JankiError as exc:
+            # One character that cannot be looked up must not cost the rest:
+            # every other card in the deck still gets its section.
+            failures.append(f"{character}: {exc}")
+    kanji.save_store(config.kanji_file, store)
+
+    print(
+        f"Looked up {len(todo) - len(failures)} character(s) into "
+        f"{status.display_path(config.kanji_file, config.root)}."
+    )
+    for failure in failures:
+        print(f"warning: {failure}", file=sys.stderr)
+    # Any loss is a non-zero exit, not only total loss. kanjiapi has no retry or
+    # backoff here, so one 403 or rate limit part-way through leaves most
+    # characters unlooked-up; exiting 0 let a scripted `janki kanji && janki
+    # build` carry straight on and ship cards whose kanji section is missing,
+    # with nothing but a stderr warning to say so.
+    return 1 if failures else 0
 
 
 def command_status(args: argparse.Namespace) -> int:
     config = _load_config(args)
-    book = ledger.load(config.ledger_file)
+    # --rebuild is the one command asking to *fix* the ledger, so it is the one
+    # that loads a misshapen entry instead of refusing it. Every other command
+    # refuses, and refuses here — before anything is written.
+    book = ledger.load(config.ledger_file, repair=args.rebuild)
     universe = status.collect_records(config)
     staged, staged_warnings = status.collect_staged(config)
 
@@ -2002,12 +3622,36 @@ def command_status(args: argparse.Namespace) -> int:
 
     for warning in [*universe.warnings, *staged_warnings]:
         print(f"warning: {warning}", file=sys.stderr)
+    # Above the ids-only branch with the others: ids mode *moves* human-readable
+    # lines to stderr, it does not drop them, and a scripted run must still hear
+    # that its last import left the notes on the old notetype.
+    try:
+        collection_lines = _collection_lines(config)
+    except Exception as exc:  # noqa: BLE001 - an advisory check, never a gate
+        # Not `JankiError`: the discovery step can raise `RuntimeError` (no home
+        # directory, in a container or a cron unit) or `PermissionError` (an
+        # unreadable Anki folder), and neither is caught upstream. This runs
+        # before `--rebuild`, so an unhandled one aborted the *ledger repair* —
+        # an advisory warning cancelling the one status invocation that writes
+        # durable state.
+        collection_lines = [f"warning: could not check Anki: {exc}"]
+    for line in collection_lines:
+        print(line, file=sys.stderr)
 
     if args.rebuild:
         summary = status.rebuild(
             book, universe.records, config.media_dir, sources_by_id=universe.normalized_sources
         )
         book.save()
+        for record_id, parked in book.repaired.items():
+            for where in parked:
+                print(
+                    f"repaired: {record_id} had an unreadable structured key; "
+                    f"it was reset to empty and its old value kept as {where!r}. "
+                    "The rebuild below refills what it can, which is never all "
+                    "of it — check that key before deleting it.",
+                    file=prose,
+                )
         for line in status.format_rebuild(summary, config.root):
             print(line, file=prose)
 
@@ -2260,6 +3904,31 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     enrich_parser.add_argument(
+        "--no-adjudicate",
+        action="store_true",
+        help=(
+            "With --recheck-furigana: leave every jpdb disagreement flagged "
+            "instead of asking a model which reading is the ordinary one."
+        ),
+    )
+    enrich_parser.add_argument(
+        "--accept",
+        action="store_true",
+        help=(
+            "With --recheck-furigana: clear the named records' flags on your "
+            "authority rather than jpdb's, for an example jpdb reads wrongly."
+        ),
+    )
+    enrich_parser.add_argument(
+        "--recheck-furigana",
+        action="store_true",
+        help=(
+            "Re-ask jpdb about examples flagged as unverified, and clear the "
+            "ones it vouches for so their audio can be generated. Writes no "
+            "sentences and calls no model."
+        ),
+    )
+    enrich_parser.add_argument(
         "--polish-meanings",
         action="store_true",
         help=(
@@ -2338,6 +4007,39 @@ def build_parser() -> argparse.ArgumentParser:
     )
     extract_parser.set_defaults(handler=command_extract)
 
+    audio_parser = subparsers.add_parser(
+        "audio", help="Generate word and example audio for records"
+    )
+    audio_parser.add_argument(
+        "ids", nargs="*", metavar="ID", help="Record ids. Omit for every record."
+    )
+    audio_parser.add_argument(
+        "--words", action="store_true", help="Word audio, with the accent forced."
+    )
+    audio_parser.add_argument(
+        "--examples", action="store_true", help="Example-sentence audio, read naturally."
+    )
+    audio_parser.add_argument(
+        "--provider",
+        choices=("voicevox", "azure"),
+        help="Override [tts] provider for this run.",
+    )
+    audio_parser.add_argument(
+        "--force", action="store_true", help="Regenerate clips that already exist."
+    )
+    audio_parser.add_argument(
+        "--prune", action="store_true", help="Delete janki-* clips nothing references."
+    )
+    audio_parser.add_argument(
+        "--allow-default-accent",
+        action="store_true",
+        help=(
+            "Voice records with no accent pattern, letting the engine choose — "
+            "tagged 'accent_unverified' in the ledger."
+        ),
+    )
+    audio_parser.set_defaults(handler=command_audio)
+
     promote_parser = subparsers.add_parser(
         "promote",
         help="Move a reviewed staging file's records into the collection",
@@ -2363,7 +4065,139 @@ def build_parser() -> argparse.ArgumentParser:
     build_command.add_argument("deck", type=_path, nargs="?")
     build_command.add_argument("--all", action="store_true")
     build_command.add_argument("--output", type=_path)
+    build_command.add_argument(
+        "--only-new",
+        action="store_true",
+        help=(
+            "Include only records this deck has never been built with, per the "
+            "ledger's export history."
+        ),
+    )
+    build_command.add_argument(
+        "--swept",
+        action="store_true",
+        # Hidden: refresh's own flag, not a user's. `refresh` injects
+        # `--only-new` into every build it runs, so on that path the flag is a
+        # mode applied to whatever deck was named rather than an assertion the
+        # user made about it — and a deck that records no exports must note that
+        # and build fully instead of failing the last stage of a run that has
+        # already spent its jpdb, --ai and audio calls. A person who types
+        # `janki build drill --only-new` by hand still gets the refusal.
+        help=argparse.SUPPRESS,
+    )
+    build_command.add_argument(
+        "--yes",
+        action="store_true",
+        help="Do not ask about records missing audio, examples, or pitch accent.",
+    )
     build_command.set_defaults(handler=command_build)
+
+    refresh_parser = subparsers.add_parser(
+        "refresh",
+        help="Enrich, voice, and build what is new — the whole pipeline in order.",
+    )
+    refresh_parser.add_argument(
+        "--deck",
+        type=_path,
+        help="Build only this deck (path or bare name). Default: every deck.",
+    )
+    for _name, _flag, _command in _REFRESH_STAGES:
+        refresh_parser.add_argument(
+            _flag, action="store_true", help=f"Skip the {_name} stage."
+        )
+    refresh_parser.set_defaults(handler=command_refresh)
+
+    patterns_parser = subparsers.add_parser(
+        "patterns",
+        help="Read a handout or slide deck for the grammar it teaches.",
+    )
+    patterns_parser.add_argument("files", type=_path, nargs="*")
+    patterns_parser.add_argument(
+        "--review",
+        action="append",
+        default=[],
+        metavar="DOCUMENT",
+        help=(
+            "Mark a document's patterns reviewed. Example sentences may then "
+            "use them, if it is a lesson document — a conjugation chart is "
+            "reviewed for its own sake and steers no sentences. Repeat for "
+            "several."
+        ),
+    )
+    patterns_parser.add_argument(
+        "--ask-jpdb",
+        dest="ask_jpdb",
+        action="store_true",
+        help=(
+            "Look up the verb class of any word the collection does not hold, "
+            "so its rows can be checked instead of held back. One jpdb request; "
+            "without it this command touches no network."
+        ),
+    )
+    patterns_parser.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            "Check every stored document's worked examples against janki's own "
+            "conjugation rules, without re-reading anything. Exits non-zero on "
+            "a disagreement, and on a verb it needed a class for that no read "
+            "could answer for — an unreadable collection, or a failed "
+            "--ask-jpdb lookup."
+        ),
+    )
+    patterns_parser.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "Re-read a document already marked reviewed. Its patterns drop back "
+            "to unreviewed and stop steering sentences until reviewed again."
+        ),
+    )
+    patterns_parser.set_defaults(handler=command_patterns)
+
+    review_parser = subparsers.add_parser(
+        "review",
+        help="Read the finished cards for correctness — the last gate before a build.",
+    )
+    review_parser.add_argument("ids", nargs="*", metavar="ID")
+    review_parser.add_argument(
+        "--accept",
+        action="append",
+        default=[],
+        metavar="ID",
+        help=(
+            "Overrule the findings on a card on your authority. Needs --because. "
+            "The acceptance covers this version of the card only: edit it and "
+            "the question comes back."
+        ),
+    )
+    review_parser.add_argument(
+        "--because",
+        default="",
+        metavar="REASON",
+        help="Why the findings were overruled. Recorded beside the acceptance.",
+    )
+    review_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-read every card, not only the ones that changed since last time.",
+    )
+    review_parser.add_argument(
+        "--model", dest="model", default="", metavar="ID",
+        help="Override the configured model for this run.",
+    )
+    review_parser.set_defaults(handler=command_review)
+
+    kanji_parser = subparsers.add_parser(
+        "kanji",
+        help="Look up stroke order and on/kun readings for the characters in use.",
+    )
+    kanji_parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help="Re-fetch every character, not only the ones not looked up yet.",
+    )
+    kanji_parser.set_defaults(handler=command_kanji)
 
     status_parser = subparsers.add_parser(
         "status", help="Summarize records, ledger state, and duplicate candidates"

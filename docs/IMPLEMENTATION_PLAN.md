@@ -247,7 +247,7 @@ refinement below).
   `model: "jpdb"`; supersedes the design example's single object, so
   jpdb and AI passes never overwrite each other), `audio` (list of
   `{file, of: "word"|"example", provider, voice: int, content_fp, at}`),
-  `exports` (`dict[deck_file_stem, iso_date]`), and a top-level
+  `exports` (`dict[deck_file_stem, iso_date | {at, missing}]`), and a top-level
   `pending_batches` section (consumed by M4.4).
 - API (idempotent, persisted via the atomic writer, file sorted by
   record id): `load(path)`, `record_added`, `record_source_seen`,
@@ -965,7 +965,27 @@ every command that does not need the network was run — `jpdb ping` from `/` wi
 no project and no key, `import-jpdb export.csv` end to end, and every documented
 error path — but the API-backed flows need a live `JPDB_API_KEY`, which is
 owner-only for the same reason M2.1F is. Those are covered by tests against fake
-transports, not by a live run, and this note is where that gap is recorded.*
+transports, not by a live run, and this note is where that gap is recorded.
+
+**Gap partly closed 2026-08-08.** `jpdb ping`, `/parse`, `enrich --jpdb`
+and `list_user_decks` were run against the live API on the real
+collection. Still fake-transport only, and worth naming so this note
+keeps doing its job: **`import-jpdb --deck` end to end**
+(`deck/list-vocabulary` → `lookup-vocabulary`) and **`enrich --staging`**.
+The first is the shape janki guesses at hardest: it fetches a
+`[vid, sid]` row list and then batches `lookup-vocabulary` over it,
+matching answers to requests **positionally** — so a batch that comes
+back short raises and aborts the whole deck import rather than warning
+(`jpdb.py`'s "the results are positional"). All against a hand-written
+fake, which makes it the one to run before any deck is built from it.
+(Not the `occurences` reconciliation: `import_deck` leaves
+`fetch_occurences` at its `False` default and no caller in `src/` sets
+it, so that branch is unreachable from this flow.) `enrich --jpdb`
+filled `pitch_accent` and `frequency_rank` for all three records
+(行く `LHH` rank 100, 話す `LHLL` rank 200, 食べる `LHLL` rank 200) and
+recorded the pass in the ledger. The owner's decks were listed live: 584
+words in Genki Vol 1, 641 across all decks — the number that decides
+whether batch mode earns its keep.*
 
 Depends on: all M2 tasks except M2.1F (owner-only; see the lane map)
 Files: `README.md`.
@@ -1510,7 +1530,21 @@ M5.7 anytime after M5.3.
 ### [x] M5.1 Pitch conversion + HTML renderer (merge gate: golden tests)
 
 *Done 2026-08-08. DESIGN_V2's conversion implemented exactly, golden set
-in place. Five decisions worth recording. (1) **Heiban and odaka produce
+in place. **Verified against live jpdb the same day**, which is what the
+goldens were previously asserting from memory: 橋 `LHL`, 箸 `HLL`, 端
+`LHH`, 病院 `LLHHHH`, 授業 `HHLLLL` — every hand-written golden matches
+the API exactly, and the `len(pattern) == len(reading) + 1` invariant
+holds on all five. 病院 returning **six** characters for a **four**-mora
+word is the part that matters: it confirms the one-character-per-*kana*
+width, which is what forces the regrouping. It does **not** confirm the
+"read the level off the mora's first kana" choice, as an earlier version
+of this note claimed — びょ's two kana both carry `L` there, so first-
+and last-kana readings agree, and 授業 is non-discriminating the same
+way. No live response can confirm that rule: it only differs on a source
+that writes a small kana with the *following* mora's level, which is
+malformed input jpdb does not produce. It stays a defensive choice, held
+in place by `test_the_moras_level_is_read_off_its_first_kana` alone. Run end to end on the real collection too:
+行く → `イク'`, 話す → `ハナ'ス`, 食べる → `タベ'ル`. Five decisions worth recording. (1) **Heiban and odaka produce
 the same AquesTalk string, and that is right, not a bug to fix later.**
 The notation carries one mark per phrase and the engine writes heiban on
 the final mora — where odaka's goes. The two differ only in the pitch of
@@ -1583,7 +1617,41 @@ naive rule is wrong for heiban.
   ん words, length-mismatch error. Expected AquesTalk strings cited in
   test comments.
 
-### [~] claimed task/m5.2 2026-08-08 — M5.2 VOICEVOX provider
+### [x] M5.2 VOICEVOX provider
+
+*Done 2026-08-08. Flow exactly as specified. One deviation and three
+decisions. **Deviation:** the protocol has a fourth member, `launch_hint`.
+The task list gives `name`/`voice` and the reason — M5.3 writes them
+without an `isinstance` ladder — and "an engine that is not running" is
+the most common failure of a locally-hosted one, so the CLI needs to say
+how to start it under exactly the same reasoning. (1) `available()`
+never raises: a local engine being down is this system's ordinary state,
+so refused connection, timeout and error status are all the same answer,
+and the caller prints the hint. (2) The accent mark is stripped only on
+the forced path — in ordinary text an apostrophe is punctuation, and
+removing it would change what is spoken. (3) `/audio_query` answering
+with anything but an object is refused rather than replaced with a
+hand-built AudioQuery, which is the same quiet-failure trap as
+constructing defaults.
+
+Amended same day, from review. The substitution was gated on the
+*payload* (`forced is not None`), which cannot tell "the engine answered
+`null`" from "we never asked" — so a 200 with `null` fell through to the
+accent `/audio_query` guessed, and an empty list synthesized to silence;
+both would be ledgered as forced-accent audio. It branches on the flag
+now and refuses an unusable answer. `urllib_transport` also converted
+too little: `urlopen` wraps only the *request* in `URLError`, so a peer
+that accepts a connection and closes it arrives as a bare
+`RemoteDisconnected`, and a schemeless URL (an empty `voicevox_url`) as a
+`ValueError` from `Request()` — which sat outside the `try`. Every
+transport failure is a `TtsError` now, which is what lets `available()`
+promise it never raises.
+
+The ways this breaks are each pinned by the test that names them,
+verified by mutation: `is_kana` reaching `/audio_query` (the silent one —
+FastAPI drops it, the request succeeds, the audio is guessed), the forced
+phrases never substituted, the mark left in for `/audio_query`, and a
+hand-constructed AudioQuery.*
 
 Depends on: M1.6 (not M5.1 — tests use a hand-written AquesTalk string)
 Files: new `src/japanese_anki/tts/__init__.py` (provider protocol),
@@ -1613,23 +1681,97 @@ whole ballgame.
   (marker-value round-trip).
 - `available()` failure message includes a launch hint.
 
-### [ ] M5.5 Notetype-upgrade verification (spike; blocks M5.4)
+### [x] M5.5 Notetype-upgrade verification (spike; blocks M5.4)
 
-Depends on: — (start anytime)
-Files: new `docs/NOTETYPE_UPGRADE.md` (findings); throwaway scripts in
-scratch (not committed).
-Design: DESIGN_V2 "Schema changes" (the unproven claim).
+*Done 2026-08-08, in the desktop app as well as the library — and the two
+disagreed, which is the finding. Full write-up in
+`docs/NOTETYPE_UPGRADE.md`.
 
-- Empirically answer: importing an `.apkg` with the same `model_id` but
-  three appended fields into a live Anki collection with review
-  history — in-place notetype upgrade with GUID-matched note updates,
-  or remap/skip? Method: scratch Anki profile → build current →
-  import → review a card → rebuild with appended fields → re-import.
-- Document the verified procedure (either "safe: append + reimport" or
-  the required in-Anki/scripted notetype migration). M5.4 implements
-  whatever this concludes and links it.
+**Append + reimport upgrades the notetype in place, matches notes by GUID
+and keeps review history — but only with "Merge Notetypes" enabled, and
+Anki's default is off.** With it off the import keeps every existing note
+on the 19-field notetype and files the incoming 22-field one as a
+separate, empty notetype with `+` appended to its name. Nothing errors,
+nothing is lost, scheduling survives either way — the new fields simply
+never reach a note. Established three ways: library with the flag on
+(19→22 in place, ivl 21 / reps 4 preserved), the owner's real GUI import
+at default settings (3 notes on the old type, an empty `…+` beside it,
+both studied cards still `Due 2026-08-08`), and the library with the flag
+off, which reproduced the GUI result exactly and so identifies the option
+as the whole difference.
 
-### [ ] M5.3 `janki audio`
+**M5.4 must therefore**: document the checkbox wherever the README says
+to import a rebuilt deck; detect the failure (a notetype named `…+`, or
+an existing one with fewer fields than `FIELD_NAMES`) and say so in
+`janki status`; and **never** renumber `model_id` to force a fresh
+notetype, which would orphan every card's scheduling.
+
+*Revised 2026-08-08.* The first and third landed in M5.4. The detector
+did not, and the reason is that it was specified against the wrong
+subject: `janki status` reports on **`vocabulary.json`** — "the
+collection" in janki's vocabulary is the repo, not Anki's. Nothing in
+janki opens `collection.anki2` or knows where it lives, so "detect the
+`…+` notetype" is a new capability rather than a status tweak. It moves
+to **M5.8**, which is where that capability gets decided.
+
+One thing this spike did not record and should have: **appending a field
+is a schema change**, so it forces a one-directional full AnkiWeb sync.
+Verified 2026-08-08 against `anki` 26.08.1 — `models.add_field` +
+`update_dict` bumps the collection's `scm` mark. The README now says to
+sync before importing, so the direction you are asked to choose is the
+trivial one.
+
+The spike was worth running twice: the library alone would have shipped
+"append is safe" as unconditional, and the condition is the part that
+bites.*
+
+### [x] M5.3 `janki audio`
+
+*Done 2026-08-08, **including a live run against VOICEVOX 0.25.2** (the
+arm64 engine image under colima, native rather than emulated). Contract
+as written.
+
+The live run settled the question M5.2 was built for, and the answer is
+that the feature is load-bearing rather than theoretical. Asked for the
+accent phrases of はし three ways:
+
+| word | pattern | forced (`is_kana=true`) | engine's guess |
+| --- | --- | --- | --- |
+| 橋 odaka | `LHL` → `ハシ'` | accent **2** | accent 1 |
+| 箸 atamadaka | `HLL` → `ハ'シ` | accent **1** | accent 1 |
+| 端 heiban | `LHH` → `ハシ'` | accent **2** | accent 1 |
+
+Left to guess the engine gives all three **accent 1** — so 橋 and 端 are
+spoken as 箸, which is exactly the failure DESIGN_V2 predicted. Forcing
+separates 箸 from the other two, and 橋 vs 箸 synthesize to different
+bytes through janki's own provider (same length, different md5). It does
+**not** make all three distinct, and must not be read that way: 橋 and 端
+share `ハシ'` and accent 2 by design, because AquesTalk carries one mark
+per phrase and the odaka/heiban difference lands on a particle janki does
+not speak (`pitch.py`'s module docstring). What forcing buys is that 橋
+and 端 stop being pronounced *wrongly*, not that they become
+distinguishable from each other in isolation. The three real records voiced correctly, a re-run reported "3
+already current" and wrote nothing, and `--examples` voiced the
+sentences. Decisions: (1) at
+least one of `--words`/`--examples` is required rather than defaulting —
+they are different recordings made different ways, and neither is the
+obvious default. (2) `--provider azure` is refused **by name** until
+M5.7 rather than falling back to VOICEVOX, which would record Azure in
+the ledger against VOICEVOX's audio. (3) The command checks
+`available()` before spending: a run that voices forty clips and dies on
+the forty-first leaves forty files and half a ledger, and "the engine is
+not running" is the ordinary cause. (4) "Is there already a clip for
+this?" needs **three** facts and the ledger holds one: an entry saying
+this was recorded, the record still naming that file, and the file
+existing. Asking the ledger alone (which is what shipped first, as
+`has_audio`) calls a record current whose reference was dropped, and then
+`--prune` deletes the clip nothing appears to want. `ledger` exposes
+`audio_file_for`, returning the *name* rather than a yes/no, and
+`audio_cmd._is_current` checks all three. (5) `--prune` deletes only
+`janki-*`: a clip somebody dropped into `data/media` by hand is theirs.
+A pattern that does not fit its reading is reported and skipped, because
+`to_aquestalk` refuses rather than guesses and this command must not
+convert that refusal into a guess of its own.*
 
 Depends on: M5.1, M5.2, M2.2, M1.3
 Files: new `src/japanese_anki/audio_cmd.py`, `src/japanese_anki/cli.py`,
@@ -1656,7 +1798,33 @@ Design: DESIGN_V2 "Audio > Mechanics".
   `--force` regenerates in place (same filenames; Anki media sync
   picks up content changes).
 
-### [ ] M5.4 Exporter + templates (ships all new note fields at once)
+### [x] M5.4 Exporter + templates (ships all new note fields at once)
+
+*Done 2026-08-08. `FIELD_NAMES` 19 → 22, appended in one release, with the
+rule written at the append itself and in CARD_DESIGN. Verified in a real
+build: notetype `1607392313` carries 22 fields, notes carry 22 values,
+and the three real records package 6 media files.
+
+Decisions. (1) One `_resolve_media` for all three media fields rather
+than three copies of the same branch — that duplication is what let the
+image path keep the old base directory after audio moved. (2) A verbatim
+`[sound:]` tag warns and is passed through: no file is packaged, so the
+card is silent unless that media is already in the collection, which for
+a pipeline that generates its own audio is a trap rather than a feature.
+Warnings ride out on `BuildResult` rather than printing from the
+exporter, so `build` decides how loudly to say it. (3) A pattern that
+does not fit its reading leaves `PitchAccent` **empty** — a card is the
+last place to start guessing at an alignment refused everywhere else.
+(4) The diagram draws the particle slot, which is what makes odaka
+visible: the fall lands after the word, so a diagram stopping at the last
+kana would make 橋 look identical to 端. Their *audio* does collapse
+(M5.1); the diagram does not. (5) Production-back gains word audio and
+the diagram, since a production card asks you to say the word and the
+answer side should say it back.
+
+Each behaviour pinned by mutation: swapping the appended field order,
+raising instead of skipping an unfittable pattern, dropping the
+`media_dir` fallback, and removing the passthrough warning all go red.*
 
 Depends on: M5.3, M5.5, M5.1
 Files: `src/japanese_anki/exporters/anki.py`,
@@ -1678,7 +1846,7 @@ Design: DESIGN_V2 "Schema changes" + "Audio > Mechanics".
   shallow-merge nuance, link `NOTETYPE_UPGRADE.md`; follow whatever
   import procedure M5.5 concluded.
 
-### [ ] M5.6 `build --only-new` + `janki refresh`
+### [x] M5.6 `build --only-new` + `janki refresh`
 
 Depends on: M5.4 (exporter settled), M2.6, M4.2 (refresh calls them),
 M1.3
@@ -1703,18 +1871,186 @@ Design: DESIGN_V2 "CLI surface".
   an interrupted build can't leave a truncated package that a later
   `--only-new`-era run mistakes for a good one.
 
-### [ ] M5.7 Azure sentence-audio provider
+*Landed 2026-08-08.* Two things the plan did not name and the code needed:
 
-Depends on: M5.3
-Files: new `src/japanese_anki/tts/azure.py`, `tests/test_azure_tts.py`.
+- **`--only-new` with nothing new writes no package.** genanki will happily
+  produce a zero-note deck, which would replace the last good `.apkg` with an
+  empty one — worse than an out-of-date deck, because the file on disk is what
+  the user imports.
+- **Exports are recorded from `BuildResult.record_ids`, not from the deck
+  file.** Recording every deck record would mark records exported that the
+  package does not contain, and those are invisible to every later
+  `--only-new` — they would never reach a card and nothing would report it.
+  Pinning this needed a ledger seeded with an *older* export date; with both
+  builds dated today the right and wrong behaviours are byte-identical.
 
-- REST via the M5.2 transport shape (no SDK dep): key header, SSML
+Verified live against the real project: all four stages ran in order and each
+correctly reported a no-op.
+
+### [x] M5.7 Sentence-audio provider — **OpenAI, not Azure**
+
+Both premises were tested and neither held.
+
+**"A natural adult voice matters more for sentences"** was written when
+VOICEVOX meant speaker 46, the default character voice. The owner chose
+青山龍星 (13) at 0.7×. The premise was about a voice nobody was using.
+
+**Reading control** was the stronger argument, and the only one that
+was about correctness rather than taste: word audio forces the accent,
+sentence audio forces nothing, so VOICEVOX guesses every reading in a
+sentence and a wrong guess teaches a wrong reading. Azure's
+`<sub alias>` fed from verified furigana would fix that. Checked
+against a live engine, speaker 13: eight classic two-reading traps
+(今日, 上手, 大人, 今朝, 市場, 何か, 人気, 一日中) all correct, and all
+three of the project's own example sentences correct — including
+城崎温泉 → キノサキオンセン, a non-obvious place-name reading. OpenJTalk,
+which VOICEVOX uses underneath, is better at this than the plan assumed.
+
+Against that: an Azure account, `AZURE_SPEECH_KEY`, per-character
+billing, a network round-trip per sentence, and a second provider to
+maintain — replacing something local, free, and working.
+
+**What shipped instead** is `voicevox_sentence_speaker`: a second local
+voice for example sentences, which is the part of the idea that was
+actually wanted (a sentence should not sound like a longer word). It
+went in as a **second provider** rather than a second voice on one
+provider, because everything downstream — the voice the ledger records,
+the voice `_is_current` compares — already asks *a provider*. That seam
+is exactly where an Azure provider would attach, so this stays cheap to
+revisit if the reading accuracy above ever stops holding, or if the deck
+is shared publicly and VOICEVOX's per-character terms of use become the
+deciding factor.
+
+**Superseded 2026-08-09 by an OpenAI provider.** The owner listened to
+both engines on their own sentences and preferred OpenAI's. Since the
+key was already set for the AI enrichment passes, the account objection
+that sank Azure did not apply, and the sentence seam landed the day
+before was where it attached — `src/japanese_anki/tts/openai_tts.py`,
+`tests/test_openai_tts.py`, ~30 lines of CLI and config.
+
+What the build had to add beyond the seam:
+
+- **The protocol's `voice` widened to `int | str`.** VOICEVOX numbers
+  its speakers, OpenAI names them. Mapping `onyx` onto an index would
+  put a number in a committed ledger that means nothing outside janki.
+- **A `suffix` on the protocol.** The API's WAV is a *streaming* WAV
+  with `0xFFFFFFFF` placeholder chunk sizes — its header claims 89,478
+  seconds for a 4.5-second clip. mp3 avoids it, and a hard-coded `.wav`
+  downstream would have named an mp3 file `.wav`.
+- **A refusal, not a fallback.** `synthesize(forced_accent=True)`
+  raises. A provider that accepted the flag and ignored it would return
+  a clip for 橋 that says 箸 — the failure this milestone exists to
+  prevent, arriving as working audio.
+
+Azure remains unbuilt and the reasoning above still holds against it.
+
+**Conversational audio models were tested too, and cannot do this job.**
+`gpt-audio` and `gpt-audio-1.5` on `/v1/chat/completions` generate speech
+natively rather than rendering finished text, which is the architecture
+ChatGPT's voice mode uses and a fair thing to want. But janki needs the
+clip to say *exactly* the sentence on the card, and they are chat models:
+asked to read 「日本語を話しますか。」 they **answer** it (0/3 verbatim,
+"はい、話せますよ…"), and asked to read 「すみません、駅はどこですか。」 they
+give directions to an invented station (0/3, a different route each time).
+`gpt-audio-mini` replied to a statement with a paragraph about Korean
+food. `gpt-audio-1.5` also swapped 。for an ASCII period once on a
+sentence it otherwise read correctly, changing the closing intonation.
+
+The failure is silent and total: the card plays fluent, confident
+Japanese that is not the sentence. Questions are ordinary in a beginner
+deck, so this is not an edge case. **TTS renders what it is given;
+conversational models respond to it** — janki needs the first, which is
+the same distinction that keeps words on VOICEVOX one level down.
+
+GPT-Live is not on the API as of 2026-08-09, and when it arrives it will
+be a conversational model, so it would fail this same test. The realtime
+family (`gpt-realtime-2.1`, WebRTC) is the right tool for live
+conversation practice, which is a different product from a deck builder:
+janki writes files to disk, with no browser, microphone, or session.
+
+~~Depends on: M5.3
+Files: new `src/japanese_anki/tts/azure.py`, `tests/test_azure_tts.py`.~~
+
+~~- REST via the M5.2 transport shape (no SDK dep): key header, SSML
   body, voice/region from config, `AZURE_SPEECH_KEY` env.
   `<sub alias="...">` substitution fed from **verified** furigana for
   reading-ambiguous tokens. Fake-transport tests assert SSML shape and
-  sub/alias injection. Wire into `audio --provider azure`.
+  sub/alias injection. Wire into `audio --provider azure`.~~
+**Not built.** The instructions above are the cancelled Azure plan, kept
+for the record. What shipped is `tts/openai_tts.py`; see below.
 
-### [ ] M5.W Milestone 5 wrap
+### [x] M5.8 Tell the user when an import silently did not upgrade
+
+Depends on: M5.4
+Files: TBD — the shape of this task is the decision it has to make first.
+
+Carried out of M5.5's spike (see the revision note there). With "Merge
+Notetypes" left off, an import leaves the old notetype in place and files
+a `…+` clone with zero notes beside it. Nothing is lost, nothing errors,
+and none of the new fields reach a card — the user finds out when they
+notice a diagram that never appears.
+
+The obstacle is that janki cannot see any of this. It has no path to
+`collection.anki2`, no config naming one, and reading it directly needs
+Anki closed. So this task's first job is choosing how janki learns what
+is in the collection:
+
+- **Read `collection.anki2` directly** — no dependency, but only while
+  Anki is shut, and a wrong guess at the profile path is worse than
+  silence.
+- **AnkiConnect** — an HTTP API most collections already have installed,
+  works with Anki open, and would let `janki status` ask directly. Also
+  the route by which a later janki could write into a live collection
+  rather than shipping a package — which would make this whole failure
+  mode structurally impossible, since the checkbox belongs to the import
+  dialog and there would be no import dialog. (Prior art:
+  `ankimcp/anki-mcp-server-addon` runs an MCP server *inside* Anki on the
+  same bridge-to-the-Qt-thread pattern AnkiConnect uses.)
+- **Say nothing and document harder** — the README now covers the
+  checkbox and the full-sync consequence, which may be enough.
+
+Whatever it picks, the detector must read `deck.model_id` rather than the
+derived value, or it will misreport any deck that pins one.
+
+*Done 2026-08-09. It picked **read the file**, and the choice was easy
+once measured.* `src/japanese_anki/collection.py` is standard library
+only: three SQL queries against a **copy** of `collection.anki2`. The
+`anki` package would cost a large version-coupled dependency and
+AnkiConnect an add-on install plus a running Anki, and neither buys
+anything for a question with a yes-or-no answer. If janki ever needs to
+*write*, that trade changes — `notetypes.config` is protobuf and writes
+need USN/`mod`/`scm` bookkeeping, so writing by hand is not on the table.
+
+The plan said direct reading "needs Anki closed". That was half right and
+the fix is trivial: Anki holds an exclusive lock, so an ordinary
+read-only open answers `database is locked` — but copying the file and
+reading the copy works with Anki open, which is when someone actually
+runs `janki status`. Three wrinkles, all found by trying it against a
+real collection rather than reasoning about it:
+
+- Anki registers a custom `unicase` collation; any query ordering by a
+  collated column fails until one is registered.
+- The collection is WAL-mode, so copying the main file alone can read a
+  stale snapshot. The `-wal`/`-shm` sidecars are copied with it.
+- `notetypes.config` is protobuf, not JSON. Nothing needed from it —
+  names and field counts are plain relational tables.
+
+`deck_notetype` is exported from the exporter so the check asks the same
+question a build answers, honouring a pinned `model_id`/`model_name`
+rather than recomputing them.
+
+**Scope, deliberately narrow.** Only the notetypes this project's decks
+build are inspected. The collection this was written against holds 1,815
+notes on `+` clones — Yotsubato, Tofugu, a Quizlet course, all from
+re-importing updated shared decks — and none are janki's business.
+Listing them would bury the one actionable line.
+
+Nothing here is ever an error. No Anki, no import yet, several profiles
+to choose between, or a collection too old to read are all ordinary
+states reported as warnings, because `janki status` is the command people
+run *because* something is already confusing.
+
+### [x] M5.W Milestone 5 wrap
 
 Depends on: all M5 tasks
 Files: `README.md`.
@@ -1722,3 +2058,24 @@ Files: `README.md`.
 - README: audio setup (VOICEVOX install/launch, credit line for shared
   decks), `janki refresh` as the headline weekly workflow, retire the
   "no synthesized audio" limitation paragraph.
+
+*Done 2026-08-09.* The README gained a top-level **Audio** section
+covering both engines, how to get VOICEVOX running, how to audition
+voices, and the per-character terms of use that matter only if a deck is
+shared. Three claims were retired as false rather than merely stale:
+
+- "`janki audio` arrives in Milestone 5" and "`janki build` does not yet
+  mark records exported, so `--unexported` currently lists everything".
+- **"Changing a voice does not make existing audio stale... so re-run
+  with `--force`."** This was the most dangerous of the three, because
+  it was accurate when written and became *wrong* rather than
+  incomplete: the ledger now records engine, voice, rate and style
+  settings per clip, so a change re-voices exactly what it affects and
+  `--force` is a bigger hammer than the situation calls for. A reader
+  following it would have re-rendered a whole collection — through a
+  paid API, for the OpenAI half.
+
+Milestone 5 shipped one thing it did not plan (`tts/openai_tts.py`) and
+did not ship one thing it did (`tts/azure.py`); both are recorded under
+M5.7. The `janki status` notetype detector specified in M5.5 moved to
+M5.8, which is now the only open item in Milestone 5's neighbourhood.

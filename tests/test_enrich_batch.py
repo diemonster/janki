@@ -260,6 +260,23 @@ def test_the_batch_prompt_has_no_variety_pressure(tmp_path: Path) -> None:
     assert not any("already written in this run" in text for text in contents)
 
 
+def test_the_batch_carries_the_same_reviewed_patterns_as_the_immediate_path() -> None:
+    """A batch is the same work at a different price, so it must be the same
+    request. `batch_requests` had no way to accept the patterns block, so
+    `enrich --ai` wrote 〜んだ sentences while `enrich --ai --batch-submit` on
+    the same record wrote whatever the model reached for — and batch is the
+    path used for bulk, so most of a collection got the unsteered version."""
+    from japanese_anki.patterns import Pattern, format_patterns
+
+    requests, _ = enrich.batch_requests(
+        many(2), model="m", style_guide="guide",
+        taught=format_patterns([Pattern("〜んだ", "explains")]),
+    )
+
+    contents = [item["params"]["messages"][0]["content"] for item in requests]
+    assert all("〜んだ" in text for text in contents)
+
+
 def test_the_batch_asks_for_the_long_cache_window() -> None:
     # A five-minute window does not survive the span a batch's requests are read
     # over; the style guide leads every one of them.
