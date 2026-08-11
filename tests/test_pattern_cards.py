@@ -456,8 +456,29 @@ def test_a_line_janki_cannot_cut_apart_is_refused_by_name(template: str) -> None
     GUID, the whole line, orphaned the notes the row's rules had shipped as. The
     only signal was the card count dropping. The row is hand-fixable in
     `patterns.json`, and saying so beats printing a card that teaches nothing."""
-    with pytest.raises(PatternDeckError, match="cannot tell where"):
+    with pytest.raises(PatternDeckError, match="cannot tell where") as raised:
         cards_for(chart(Pattern(template)), CLASSES)
+
+    # Which ambiguity it is, not a hard-coded story. The first row holds exactly
+    # one separator, so telling its author to look for a second one — the
+    # message every refusal used to carry — sends them hunting for something
+    # that is not there.
+    expected = (
+        "one character for both listing and dividing"
+        if template.count("/") + template.count("、") + template.count(",") == 4
+        else "two separators cut it into rules equally well"
+    )
+    assert expected in str(raised.value)
+
+
+def test_a_chain_with_no_separator_is_prose_rather_than_a_refusal() -> None:
+    """`〜て → 〜ている → 〜てる` is a progression a chart writes on one line, and
+    it holds no separator at all — so there is no cut to be ambiguous about.
+    Treating every uncut line as an ambiguity refused the whole document over
+    it, taking the chart's other rows with it."""
+    cards = cards_for(chart(Pattern("〜て → 〜ている → 〜てる")), CLASSES)
+
+    assert [(c.trigger, c.result) for c in cards] == [("〜て → 〜ている → 〜てる", "")]
 
 
 def test_validate_reports_a_line_janki_cannot_cut_apart(tmp_path: Path) -> None:

@@ -286,20 +286,11 @@ def _split_rules(template: str) -> list[tuple[str, str, str]]:
         return [(_tidy(template), "", "")]
     if arrows == 1:
         return [_rule_pair(template, masked)]
-    spans = _rule_spans(masked, arrows)
+    spans = _rule_spans(masked, arrows, template)
     if spans is None:
-        # Refused, not degraded. Shipping the line as one prose card put both
-        # answers on the *front* — `pattern-front.html` renders `{{Trigger}}`,
-        # and an empty `Result` means no `→ ?` prompt — so the card asked its
-        # own question and answered it, while its GUID, the whole line, orphaned
-        # the notes the row's rules had already shipped as. The only signal was
-        # the card count dropping. This row is hand-fixable in `patterns.json`,
-        # and saying so beats printing a card that teaches nothing.
-        raise PatternDeckError(
-            f"janki cannot tell where {template!r} divides: two separators cut "
-            f"it into rules equally well, and the wrong one drills a trigger "
-            f"the document never wrote. Put each rule on its own row."
-        )
+        # No cut, and no ambiguity either: `〜て → 〜ている → 〜てる` is a
+        # progression chain with no separator in it at all. Prose is what it is.
+        return [(_tidy(template), "", "")]
     return [_rule_pair(template[a:b], masked[a:b]) for a, b in spans]
 
 
@@ -329,8 +320,17 @@ def _fitting_cut(
     return None
 
 
-def _rule_spans(masked: str, arrows: int) -> list[tuple[int, int]] | None:
-    """One span per rule, or ``None`` when the line cannot be cut safely."""
+def _rule_spans(
+    masked: str, arrows: int, template: str
+) -> list[tuple[int, int]] | None:
+    """One span per rule.
+
+    ``None`` when the line states no cut to make — a chain like
+    ``〜て → 〜ている → 〜てる`` has no separator in it — which the caller reads as
+    prose. An *ambiguous* line raises instead, saying which ambiguity it is:
+    janki does not know what the document states there, and shipping it as one
+    prose card put both answers on the card's own front.
+    """
     # Each separator the line uses, in the order it first appears, plus their
     # union — so the choice never depends on a set's iteration order.
     candidates: list[str] = []
@@ -358,11 +358,13 @@ def _rule_spans(masked: str, arrows: int) -> list[tuple[int, int]] | None:
         # first: it drilled `いて / う` as an answer and minted a GUID for the
         # trigger `つ`, which the document never wrote.
         #
-        # So: one prose card carrying the whole line, as for
-        # `う/つ/る → って/った / く → いて`. Those rules go undrilled, which is a
-        # real loss — but the card still carries the document's own text, and
-        # its GUID is derived from that text rather than from a guess.
-        return None
+        # So: refused by name. The row is hand-fixable in `patterns.json`, and
+        # saying so beats a card that teaches nothing.
+        raise PatternDeckError(
+            f"janki cannot tell where {template!r} divides: two separators cut "
+            f"it into rules equally well, and the wrong one drills a trigger "
+            f"the document never wrote. Put each rule on its own row."
+        )
     # Two dividers on one line (`… / … 、 …`): neither cuts the line alone, and
     # their union is the same test over both.
     union = _fitting_cut(masked, _SEPARATOR_CHARS, arrows)
@@ -382,7 +384,17 @@ def _rule_spans(masked: str, arrows: int) -> list[tuple[int, int]] | None:
             spans.append((start, b))
             start = None
         elif spans:
-            return None
+            # One character doing both jobs, and a run after a rule has ended:
+            # in `う/つ/る → って/った / く → いて`, `った` is either the rest of
+            # that rule's answer or the next rule's trigger, and the line does
+            # not say which. Named as its own ambiguity — telling someone to
+            # look for a second separator that is not there helps nobody.
+            raise PatternDeckError(
+                f"janki cannot tell where {template!r} divides: it uses one "
+                f"character for both listing and dividing, so the run after the "
+                f"first rule could belong to that rule's answer or to the next "
+                f"rule's trigger. Put each rule on its own row."
+            )
     return spans if len(spans) == arrows else None
 
 
