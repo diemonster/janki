@@ -265,9 +265,11 @@ def _split_rules(template: str) -> list[tuple[str, str, str]]:
     genuinely undecidable, since ``って/った / く → いて`` reads equally as a
     two-item result list or as the next rule's trigger.
 
-    A line stating rules that cannot be cut apart is refused, naming the
-    template: janki does not know what the document says there, and the row is
-    hand-fixable in `patterns.json` by putting each rule on its own line.
+    A line whose cut is *ambiguous* is refused, naming the template: janki does
+    not know what the document says there, and the row is hand-fixable in
+    `patterns.json` by putting each rule on its own line. A line — or a piece of
+    one — that simply states no cut, like the chain ``〜て → 〜ている → 〜てる``,
+    is prose and becomes one card.
 
     A template with no arrow is a rule stated in prose and becomes a single card
     with no answer half; the gloss is the answer. Guessing where to cut it would
@@ -280,7 +282,19 @@ def _split_rules(template: str) -> list[tuple[str, str, str]]:
     `行く (exception)` — a trigger that is also the GUID, so the next build of a
     shipped deck adds a second note and strands the first one's review history.
     """
-    masked = _masked(template)
+    return _cards_in(template, _masked(template))
+
+
+def _cards_in(template: str, masked: str) -> list[tuple[str, str, str]]:
+    """The cards one piece of a line makes — the whole line, or one cut of it.
+
+    Applied again to each piece, because a cut can leave a piece that is itself
+    more than one rule's worth of arrows: `〜て → 〜ている → 〜てる / 〜ておく → 〜とく`
+    divides unambiguously at the `/`, and only the first half is a chain. Judged
+    once for the whole line, the well-formed rule beside it never became a card,
+    and the single note that shipped carried the entire line as its trigger —
+    which is also its GUID.
+    """
     arrows = len(_ARROW.findall(masked))
     if not arrows:
         return [(_tidy(template), "", "")]
@@ -291,7 +305,11 @@ def _split_rules(template: str) -> list[tuple[str, str, str]]:
         # No cut, and no ambiguity either: `〜て → 〜ている → 〜てる` is a
         # progression chain with no separator in it at all. Prose is what it is.
         return [(_tidy(template), "", "")]
-    return [_rule_pair(template[a:b], masked[a:b]) for a, b in spans]
+    return [
+        card
+        for a, b in spans
+        for card in _cards_in(template[a:b], masked[a:b])
+    ]
 
 
 def _cut_at(masked: str, cuts: Sequence[int]) -> list[tuple[int, int]]:
@@ -327,9 +345,12 @@ def _rule_spans(
 
     ``None`` when the line states no cut to make — a chain like
     ``〜て → 〜ている → 〜てる`` has no separator in it — which the caller reads as
-    prose. An *ambiguous* line raises instead, saying which ambiguity it is:
-    janki does not know what the document states there, and shipping it as one
-    prose card put both answers on the card's own front.
+    prose. A span may hold more than one arrow and still be a real cut; the
+    caller asks again about each piece.
+
+    An *ambiguous* line raises instead, saying which ambiguity it is: janki does
+    not know what the document states there, and shipping it as one prose card
+    put both answers on the card's own front.
     """
     # Each separator the line uses, in the order it first appears, plus their
     # union — so the choice never depends on a set's iteration order.
@@ -395,7 +416,10 @@ def _rule_spans(
                 f"first rule could belong to that rule's answer or to the next "
                 f"rule's trigger. Put each rule on its own row."
             )
-    return spans if len(spans) == arrows else None
+    # More than one span is a real cut, even when a span holds more than one
+    # arrow: the caller looks at each piece again, so a chain beside a rule
+    # keeps the rule. One span is no cut at all — the chain by itself.
+    return spans if len(spans) > 1 else None
 
 
 def _rule_pair(text: str, masked: str) -> tuple[str, str, str]:

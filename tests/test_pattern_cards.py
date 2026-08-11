@@ -481,6 +481,22 @@ def test_a_chain_with_no_separator_is_prose_rather_than_a_refusal() -> None:
     assert [(c.trigger, c.result) for c in cards] == [("〜て → 〜ている → 〜てる", "")]
 
 
+def test_a_chain_beside_a_rule_keeps_the_rule() -> None:
+    """The `/` divides this line unambiguously; only the first half is a chain.
+    Judged once for the whole line, the count of pieces never matched the count
+    of arrows, so `〜ておく → 〜とく` — a well-formed rule the document states —
+    never became a card, and the single note that shipped carried the entire
+    line as its trigger, which is also its GUID."""
+    cards = cards_for(
+        chart(Pattern("〜て → 〜ている → 〜てる / 〜ておく → 〜とく")), CLASSES
+    )
+
+    assert [(c.trigger, c.result) for c in cards] == [
+        ("〜て → 〜ている → 〜てる", ""),
+        ("〜ておく", "〜とく"),
+    ]
+
+
 def test_validate_reports_a_line_janki_cannot_cut_apart(tmp_path: Path) -> None:
     """Through `deck_problems`, so `janki validate`, the build and the check all
     say the same thing about the row."""
