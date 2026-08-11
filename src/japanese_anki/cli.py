@@ -1145,7 +1145,13 @@ def command_enrich(args: argparse.Namespace) -> int:
     # Read the ledger before anything is written, and only once.
     book = ledger.load(config.ledger_file)
     result = enrich.enrich_records(
-        client, records, force_fields=force_fields, ids=args.ids or None
+        client,
+        records,
+        force_fields=force_fields,
+        ids=args.ids or None,
+        # For one question: does jpdb's per-character furigana assign a
+        # character a reading it has? A jukujikun says no.
+        kanji_store=kanji.load_store(config.kanji_file),
     )
 
     for warning in result.warnings:

@@ -220,6 +220,39 @@ def _dedupe_key(reading: str) -> str:
     return _match_key(reading)
 
 
+def assigns_a_known_reading(info: KanjiInfo | None, reading: str) -> bool:
+    """Could this character be read this way, per KANJIDIC?
+
+    Asked of a *per-character* furigana split, which jpdb hands back for every
+    compound: `明日` arrives as ``[["明","あ"], ["日","した"]]``. あ is a real
+    reading of 明 (あ.かり, あ.くる); した is no reading of 日 at all, because
+    あした is *jukujikun* — the reading belongs to the compound and not to its
+    characters. A card built from that split teaches two readings that do not
+    exist.
+
+    True when the store has never heard of the character: silence is not
+    disagreement, and a lookup nobody has run must not start rejecting furigana
+    the dictionary supplied.
+
+    Matched on the stem, since a per-character reading carries no okurigana:
+    the split gives 明→あ where the store holds あ(かり), and requiring the whole
+    reading would reject every ordinary kun reading in the language. The store
+    keeps readings in display form — ``あ(かり)``, ``〜あ(け)`` — so the stem is
+    what precedes the parenthesis, position markers removed.
+    """
+    if info is None:
+        return True
+    wanted = _to_hiragana(reading.strip())
+    if not wanted:
+        return True
+    for item in info.readings:
+        text = item.reading.replace("〜", "").replace("-", "").strip()
+        stem = _to_hiragana(text.split("(")[0].split(".")[0].strip())
+        if wanted in {_match_key(text), stem}:
+            return True
+    return False
+
+
 def _display_reading(reading: str) -> str:
     """A reading for a card: ``つか.う`` becomes ``つか(う)``.
 

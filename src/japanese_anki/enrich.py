@@ -302,8 +302,47 @@ def dictionary_readings(
     )
 
 
+def _furigana_for(
+    record: VocabularyRecord, token: Mapping[str, Any], kanji_store: Any | None
+) -> str:
+    """jpdb's furigana for this word, or the whole-word form when its split lies.
+
+    jpdb hands back one reading per *character*: 明日 arrives as
+    ``[["明","あ"], ["日","した"]]``. That is right for an ordinary compound and
+    wrong for a jukujikun, where the reading belongs to the word — した is no
+    reading of 日, and a card built from that split teaches two readings that do
+    not exist. Checked against KANJIDIC, which janki already holds in
+    `data/kanji.json`, so this is a lookup rather than an opinion.
+
+    Falls back to ``expression[reading]``, which is always true: it says the
+    word is read that way and claims nothing about which character contributes
+    what. Without a kanji store — nobody has run `janki kanji` — jpdb's split
+    stands, because silence is not disagreement.
+    """
+    written = jpdb.furigana_to_anki(token.get("furigana"))
+    segments = token.get("furigana")
+    if kanji_store is None or not isinstance(segments, list) or len(segments) < 2:
+        return written
+    from japanese_anki.kanji import assigns_a_known_reading
+
+    for segment in segments:
+        # A bare string is kana the word carries verbatim; only a pair claims a
+        # character is read a particular way.
+        if not isinstance(segment, list) or len(segment) != 2:
+            continue
+        text, reading = str(segment[0]), str(segment[1])
+        if len(text) != 1:
+            continue
+        if not assigns_a_known_reading(kanji_store.entries.get(text), reading):
+            return f"{record.expression}[{record.reading}]" if record.reading else written
+    return written
+
+
 def _proposals(
-    record: VocabularyRecord, token: Mapping[str, Any], entry: Mapping[str, Any]
+    record: VocabularyRecord,
+    token: Mapping[str, Any],
+    entry: Mapping[str, Any],
+    kanji_store: Any | None = None,
 ) -> dict[str, Any]:
     """Every value jpdb states, or janki computes, for one record.
 
@@ -318,7 +357,7 @@ def _proposals(
     verb_group = jpdb.pos_to_verb_group(codes)
     kana_reading = record.reading and not contains_kanji(record.reading)
     return {
-        "furigana": jpdb.furigana_to_anki(token.get("furigana")),
+        "furigana": _furigana_for(record, token, kanji_store),
         "romaji": kana_to_romaji(record.reading) if kana_reading else "",
         "part_of_speech": part_of_speech,
         "verb_group": verb_group,
@@ -365,8 +404,13 @@ def enrich_records(
     *,
     force_fields: Sequence[str] = (),
     ids: Sequence[str] | None = None,
+    kanji_store: Any | None = None,
 ) -> EnrichResult:
     """Fill empty fields on ``records`` (or just ``ids``) from jpdb.
+
+    ``kanji_store`` is consulted for one thing only: whether jpdb's
+    per-character furigana assigns a character a reading it actually has. See
+    :func:`_furigana_for`.
 
     A record with nothing left to fill never reaches the network. Note what that
     does *not* say: a field jpdb has no answer for stays empty, so the record
@@ -445,7 +489,9 @@ def enrich_records(
                 continue
             token, entry = found
 
-        updated, changes = _apply(record, _proposals(record, token, entry), writable)
+        updated, changes = _apply(
+            record, _proposals(record, token, entry, kanji_store), writable
+        )
         if changes:
             result.records[by_id[record_id]] = updated
             result.changes[record_id] = changes
@@ -803,6 +849,30 @@ class AiOutcome:
     unverified: list[str] = field(default_factory=list)
 
 
+def _words_of(parse: Any) -> list[str]:
+    """The spellings jpdb segmented a sentence into, in order.
+
+    Empty for a parse that is missing or shaped unexpectedly: a repair with no
+    boundaries to work from must leave the furigana alone, not guess at it.
+    """
+    tokens = getattr(parse, "tokens", None)
+    vocabulary = getattr(parse, "vocabulary", None)
+    if not isinstance(tokens, list) or not isinstance(vocabulary, list):
+        return []
+    words = []
+    for token in tokens:
+        if not isinstance(token, Mapping):
+            continue
+        index = token.get("vocabulary_index")
+        if not isinstance(index, int) or not 0 <= index < len(vocabulary):
+            continue
+        entry = vocabulary[index]
+        spelling = str(entry.get("spelling", "")) if isinstance(entry, Mapping) else ""
+        if spelling:
+            words.append(spelling)
+    return words
+
+
 def apply_ai_result(
     record: VocabularyRecord,
     parsed: Any,
@@ -855,6 +925,17 @@ def apply_ai_result(
         if example.furigana:
             example = replace(
                 example, furigana=qc.repair_spilled_punctuation(example.furigana)
+            )
+            # Then the spills that repair will not touch, using jpdb's own
+            # segmentation of this very sentence — already fetched below to
+            # verify the readings, and until now thrown away afterwards. The
+            # boundary is a dictionary fact; the readings, grouping and
+            # punctuation stay the writer's. No extra call, no model.
+            example = replace(
+                example,
+                furigana=qc.repair_from_word_boundaries(
+                    example.furigana, _words_of((parses or {}).get(example.japanese))
+                ),
             )
         if not qc.example_contains_target(example, record.expression, record.verb_group):
             outcome.rejected.append(example.japanese)

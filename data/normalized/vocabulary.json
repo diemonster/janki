@@ -258,7 +258,7 @@
     "examples": [
       {
         "japanese": "バスはすぐ来ますから、大丈夫です。",
-        "furigana": "バスは すぐ 来[き]ますから、大丈夫[だいじょうぶ]です。",
+        "furigana": "バスは すぐ 来[き]ますから、 大丈夫[だいじょうぶ]です。",
         "romaji": "basuha sugukidaijoubudesu.",
         "english": "The bus will come soon, so it's fine.",
         "audio": "",
@@ -394,7 +394,7 @@
     "examples": [
       {
         "japanese": "そう言えば、来週の休みに京都へ行くつもりです。",
-        "furigana": "そう 言[い]えば、来週[らいしゅう]の 休[やす]みに 京都[きょうと]へ 行[い]くつもりです。",
+        "furigana": "そう 言[い]えば、 来週[らいしゅう]の 休[やす]みに 京都[きょうと]へ 行[い]くつもりです。",
         "romaji": "souiraishuunoyasuminikyoutoheikutsumoridesu.",
         "english": "Speaking of which, I'm planning to go to Kyoto on next week's day off.",
         "audio": "",
@@ -599,7 +599,7 @@
       },
       {
         "japanese": "もう帰るね。明日は朝が早いんだ。",
-        "furigana": "もう 帰[かえ]るね。明日[あした]は 朝[あさ]が 早[はや]いんだ。",
+        "furigana": "もう 帰[かえ]るね。 明日[あした]は 朝[あさ]が 早[はや]いんだ。",
         "romaji": "moukaeashitahaasagahayainda.",
         "english": "I'm heading home soon. I have an early morning tomorrow, you see.",
         "audio": "",
@@ -689,12 +689,12 @@
     "id": "word:一杯:いっぱい",
     "expression": "一杯",
     "reading": "いっぱい",
-    "furigana": "一[いっ] 杯[ぱい]",
+    "furigana": "一杯[いっぱい]",
     "romaji": "ippai",
     "meanings": [
       "A lot, a full container"
     ],
-    "part_of_speech": "adverb",
+    "part_of_speech": "na-adjective",
     "verb_group": "",
     "transitivity": "",
     "examples": [
@@ -708,7 +708,7 @@
       },
       {
         "japanese": "見て、空に星が一杯だよ。",
-        "furigana": "見[み]て、空[そら]に 星[ほし]が 一杯[いっぱい]だよ。",
+        "furigana": "見[み]て、 空[そら]に 星[ほし]が 一杯[いっぱい]だよ。",
         "romaji": "misoranihoshigaippaidayo.",
         "english": "Look, the sky is full of stars.",
         "audio": "",
@@ -809,7 +809,7 @@
     "meanings": [
       "Today"
     ],
-    "part_of_speech": "adverb",
+    "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
     "examples": [
@@ -932,7 +932,7 @@
     "meanings": [
       "Amazing, wow"
     ],
-    "part_of_speech": "adverb",
+    "part_of_speech": "i-adjective",
     "verb_group": "",
     "transitivity": "",
     "examples": [
@@ -953,7 +953,13 @@
         "register": "casual"
       }
     ],
-    "conjugations": {},
+    "conjugations": {
+      "plain": "凄い",
+      "negative": "凄くない",
+      "past": "凄かった",
+      "past_negative": "凄くなかった",
+      "te_form": "凄くて"
+    },
     "tags": [
       "anki"
     ],
@@ -1410,12 +1416,12 @@
     "id": "word:明日:あした",
     "expression": "明日",
     "reading": "あした",
-    "furigana": "明[あ] 日[した]",
+    "furigana": "明日[あした]",
     "romaji": "ashita",
     "meanings": [
       "Tomorrow"
     ],
-    "part_of_speech": "adverb",
+    "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
     "examples": [
@@ -1678,7 +1684,7 @@
       },
       {
         "japanese": "ねえ、明日の祭り、行くの？",
-        "furigana": "ねえ、明日[あした]の 祭[まつ]り、行[い]くの？",
+        "furigana": "ねえ、 明日[あした]の 祭[まつ]り、行[い]くの？",
         "romaji": "ashitanomatsuikuno?",
         "english": "Hey, are you going to tomorrow's festival?",
         "audio": "",

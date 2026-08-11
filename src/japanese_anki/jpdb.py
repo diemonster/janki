@@ -852,6 +852,14 @@ def pos_to_verb_group(codes: Any) -> str:
 #: measured against the live API. Taking the first recognized code labelled six
 #: of twenty ordinary verbs "auxiliary verb" or "interjection" on real cards,
 #: each one contradicting the verb group on the same card.
+#: "Adverb" is a *use*, not a category, and jpdb lists it first for words whose
+#: category is something else: 凄い is ``["adv", "adj-i"]`` and 明日 is
+#: ``["adv", "n"]``, both measured against the live API. Labelled adverb, an
+#: い-adjective loses its conjugation and a temporal noun stops being a noun —
+#: `janki review` caught both on a twenty-card pilot. A word that really is only
+#: an adverb (すぐ, とても) carries no other code and keeps the label.
+_SECONDARY_TO_A_CONTENT_WORD = frozenset({"adverb"})
+
 _SECONDARY_TO_A_VERB = frozenset(
     {
         "auxiliary",
@@ -886,9 +894,15 @@ def pos_to_part_of_speech(codes: Any) -> str:
     six of the commonest verbs in the language.
     """
     first = ""
+    adverbial = ""
     for code in _codes(codes):
         label = _PARTS_OF_SPEECH.get(code)
         if label:
+            if label in _SECONDARY_TO_A_CONTENT_WORD:
+                # Held, not returned: an adverb code that precedes an adjective
+                # or a noun is jpdb naming a use before it names the word.
+                adverbial = adverbial or label
+                continue
             if label not in _SECONDARY_TO_A_VERB:
                 # `first or label`, not `label`: only a *verb* code outranks a
                 # secondary one, which is what the rule above says. Returning
@@ -900,7 +914,7 @@ def pos_to_part_of_speech(codes: Any) -> str:
             continue
         if _VERB_CODE.match(code):
             return "verb"
-    return first
+    return first or adverbial
 
 
 def pos_to_transitivity(codes: Any) -> str:
