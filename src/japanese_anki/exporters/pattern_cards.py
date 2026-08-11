@@ -45,6 +45,7 @@ from japanese_anki.config import ProjectConfig
 from japanese_anki.conjugation import CONJUGATION_FORMS
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import _deck_string_set
+from japanese_anki.identifiers import normalize_identity_part
 from japanese_anki.io import DataError, load_records, load_structured
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.patterns import (
@@ -159,8 +160,8 @@ def cards_for(
         # against the displayed trigger, the example matched no card, and the
         # fallback below — which keeps what belongs to no *other* rule — then
         # put it on every card on the row.
-        bare = [_unannotated(trigger) for trigger, _ in rules]
-        for (trigger, result), verb_of in zip(rules, bare, strict=True):
+        bare = [_unannotated(trigger) for trigger, _, _ in rules]
+        for (trigger, result, annotation), verb_of in zip(rules, bare, strict=True):
             # A row stating several rules — `くる → きて / する → して` — has
             # worked examples for each, and putting both on both cards asks
             # about くる while showing する. Where the trigger *is* the example's
@@ -174,7 +175,11 @@ def cards_for(
                 PatternCard(
                     trigger=trigger,
                     result=result,
-                    gloss=pattern.gloss,
+                    # The annotation the answer gave up, beside the model's own
+                    # gloss rather than dropped: `(voiced → で)` is a rule
+                    # explanation transcribed from the page, and a rebuild would
+                    # otherwise overwrite it in a collection that has it.
+                    gloss=" ".join(part for part in (pattern.gloss, annotation) if part),
                     examples=examples,
                 )
             )
@@ -208,7 +213,7 @@ def _masked(template: str) -> str:
     )
 
 
-def _split_rules(template: str) -> list[tuple[str, str]]:
+def _split_rules(template: str) -> list[tuple[str, str, str]]:
     """``A → B / C → D`` into two pairs, ``う/つ/る → って`` into one.
 
     The same characters do both jobs: `patterns.INSTRUCTIONS` asks for a rule's
@@ -258,12 +263,12 @@ def _split_rules(template: str) -> list[tuple[str, str]]:
     masked = _masked(template)
     arrows = len(_ARROW.findall(masked))
     if not arrows:
-        return [(_tidy(template), "")]
+        return [(_tidy(template), "", "")]
     if arrows == 1:
         return [_rule_pair(template, masked)]
     spans = _rule_spans(masked, arrows)
     if spans is None:
-        return [(_tidy(template), "")]
+        return [(_tidy(template), "", "")]
     return [_rule_pair(template[a:b], masked[a:b]) for a, b in spans]
 
 
@@ -293,6 +298,24 @@ def _fitting_cut(
     return None
 
 
+def _stray_dividers(masked: str, spans: Sequence[tuple[int, int]]) -> int:
+    """Dividers left inside the trigger halves of a cut.
+
+    Joiners are not counted: `う・つ → って` is one rule with a trigger list, and
+    the nakaguro there says nothing about where the line divides.
+    """
+    strays = 0
+    for a, b in spans:
+        arrow = _ARROW.search(masked[a:b])
+        trigger = masked[a:b][: arrow.start()] if arrow else masked[a:b]
+        strays += sum(
+            1
+            for char in trigger
+            if char in _SEPARATOR_CHARS and char not in _JOINERS
+        )
+    return strays
+
+
 def _rule_spans(masked: str, arrows: int) -> list[tuple[int, int]] | None:
     """One span per rule, or ``None`` when the line cannot be cut safely."""
     # Each separator the line uses, in the order it first appears, plus their
@@ -313,13 +336,20 @@ def _rule_spans(masked: str, arrows: int) -> list[tuple[int, int]] | None:
         agreed = {tuple(spans) for spans in fitting}
         if len(agreed) == 1:
             return fitting[0]
-        # Two dividers that fit and disagree is real ambiguity, not a puzzle to
-        # be resolved by a ranking: `/` lists triggers in the shape
+        # Two dividers that fit and disagree. No fixed order of the characters
+        # can settle it — `/` lists triggers in the shape
         # `patterns.INSTRUCTIONS` asks for *and* divides rules, and so does each
-        # comma, so no fixed order can be right in both directions. One prose
-        # card carrying the whole line, as for `う/つ/る → って/った / く → いて`
-        # — the trigger is the note's GUID, and a guessed one is worse than a
-        # rule left undrilled.
+        # comma — but the line still says which cut is real: a wrong one leaves
+        # a divider it did not cut on inside a trigger. In
+        # `する → して, した / くる → きて` cutting at `,` asks `した / くる`, while
+        # `/` leaves `する` and `くる`; the mirror row resolves the same way.
+        # Joiners are not counted, since `う・つ` is an ordinary trigger list.
+        ranked = sorted(fitting, key=lambda spans: _stray_dividers(masked, spans))
+        if _stray_dividers(masked, ranked[0]) < _stray_dividers(masked, ranked[1]):
+            return ranked[0]
+        # Nothing left to tell them apart. One prose card carrying the whole
+        # line, as for `う/つ/る → って/った / く → いて` — the trigger is the
+        # note's GUID, and a guessed one is worse than a rule left undrilled.
         return None
     # Two dividers on one line (`… / … 、 …`): neither cuts the line alone, and
     # their union is the same test over both.
@@ -344,28 +374,47 @@ def _rule_spans(masked: str, arrows: int) -> list[tuple[int, int]] | None:
     return spans if len(spans) == arrows else None
 
 
-def _rule_pair(text: str, masked: str) -> tuple[str, str]:
-    """The question and answer halves of one rule.
+def _rule_pair(text: str, masked: str) -> tuple[str, str, str]:
+    """The question and answer halves of one rule, and the answer's annotation.
 
     The trigger keeps whatever the document wrote, parenthetical included: it is
     the question *and* `PatternCard.identity`, so an annotation dropped from it
-    is a note GUID that moves. The answer does not: `Result` is documented as
-    the answer alone (`って`, `きて`), and `Gloss` is the field beside it for the
-    annotations — `って (godan)` in an answer slot is a classification the
-    learner is being asked to produce.
+    is a note GUID that moves. The answer does not — `Result` is documented as
+    the answer alone (`って`, `きて`), and `って (godan)` in an answer slot is a
+    classification the learner is being asked to produce — so what is taken out
+    of it is handed back for the gloss. Nothing the document wrote leaves the
+    pipeline.
+
+    Unless the annotation *is* the answer: `く → （いて）` is a well-formed rule
+    written in full-width brackets, and stripping it left an empty answer, which
+    collapsed the rule into a prose card whose question contained its own answer
+    — and whose trigger, the GUID, became the whole line.
     """
     arrow = _ARROW.search(masked)
     if arrow:
         trigger = text[: arrow.start()]
-        result = masked[arrow.end():].replace(_MASK, "")
-        if _tidy(trigger) and _tidy(result):
-            return (_tidy(trigger), _tidy(result))
-    return (_tidy(text), "")
+        raw = text[arrow.end():]
+        stripped = _tidy(masked[arrow.end():].replace(_MASK, ""))
+        annotation = (
+            " ".join(_tidy(part) for part in re.findall(r"[(（][^)）]*[)）]", raw))
+            if stripped
+            else ""
+        )
+        result = stripped or _tidy(raw)
+        if _tidy(trigger) and result:
+            return (_tidy(trigger), result, annotation)
+    return (_tidy(text), "", "")
 
 
 def _unannotated(text: str) -> str:
-    """The text with its parentheticals gone — what the rule checker reads."""
-    return _tidy(_masked(text).replace(_MASK, ""))
+    """The text with its parentheticals gone — what the rule checker reads.
+
+    Normalized like the checker's own reading, not only stripped: a chart
+    extracted on macOS arrives with decomposed kana, so an unnormalized ぐ is
+    く plus U+3099 and matches nothing the checker returns.
+    """
+    bare = _masked(text).replace(_MASK, "")
+    return _tidy(normalize_identity_part(bare) or bare)
 
 
 def _tidy(text: str) -> str:

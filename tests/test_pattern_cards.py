@@ -113,6 +113,41 @@ def test_an_annotated_trigger_still_claims_its_own_example() -> None:
     ]
 
 
+def test_an_annotation_taken_out_of_the_answer_lands_on_the_gloss() -> None:
+    """`(voiced → で)` is a rule explanation transcribed from the page. It has no
+    place in `Result`, which is the answer alone — but dropping it put document
+    content out of the pipeline with no error, and, since the GUID is the
+    trigger, a rebuild would overwrite `いで (voiced → で)` with `いで` in a
+    collection that already carries it."""
+    cards = cards_for(
+        chart(Pattern("く → いて / ぐ → いで (voiced → で)", "godan て-form")), CLASSES
+    )
+
+    assert [(c.result, c.gloss) for c in cards] == [
+        ("いて", "godan て-form"),
+        ("いで", "godan て-form (voiced → で)"),
+    ]
+
+
+def test_a_decomposed_trigger_still_claims_its_own_example() -> None:
+    """`check_pattern_rules` composes what it reads, so `check.verb` is NFC
+    while a chart extracted on macOS arrives decomposed — およぐ as およく plus
+    U+3099. Compared unnormalized the example matched no card, and the fallback
+    then put it on every card on the row."""
+    import unicodedata
+
+    decomposed = unicodedata.normalize("NFD", "およぐ")
+    cards = cards_for(
+        chart(Pattern(
+            f"{decomposed} (exception) → およいで / く → いて",
+            examples=(f"{decomposed} ⇨ およいで",),
+        )),
+        {"およぐ": "godan"},
+    )
+
+    assert [c.examples for c in cards] == [("およぐ ⇨ およいで",), ()]
+
+
 def test_a_rule_stated_by_ending_takes_the_rows_examples() -> None:
     """No example names `う・つ・る`, so the row's whole verified set is its."""
     cards = cards_for(
@@ -339,15 +374,17 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
             [("く", "いて・いた"), ("ぐ", "いで・いだ"), ("す", "して")],
         ),
         # `,` and `/` both cut this into two one-arrow pieces and they disagree
-        # about where. `/` lists triggers in the shape `patterns.INSTRUCTIONS`
-        # asks for *and* divides rules, and so does each comma, so no fixed
-        # order of the characters can be right in both directions — one prose
-        # card, rather than a guessed trigger that is also the note's GUID.
-        (
-            "する → して, した / くる → きて",
-            [("する → して, した / くる → きて", "")],
-        ),
-        ("する → して/した、くる → きて", [("する → して/した、くる → きて", "")]),
+        # about where. No fixed order of the characters settles it — `/` lists
+        # triggers in the shape `patterns.INSTRUCTIONS` asks for *and* divides
+        # rules, and so does each comma — but the line does: the wrong cut
+        # leaves a divider it did not cut on inside a trigger (`した / くる`).
+        # The mirror row resolves the same way, with the roles swapped.
+        ("する → して, した / くる → きて", [("する", "して, した"), ("くる", "きて")]),
+        ("する → して/した、くる → きて", [("する", "して/した"), ("くる", "きて")]),
+        # The annotation *is* the answer. Stripped, the answer was empty and the
+        # rule collapsed into a prose card whose question contained its own
+        # answer — and whose trigger, the note's GUID, became the whole line.
+        ("く → （いて）", [("く", "（いて）")]),
         # The mirror: a two-item trigger list on the *second* rule, where `・`
         # also cuts two one-arrow pieces — `く → いて / う` and `つ → って`.
         ("く → いて / う・つ → って", [("く", "いて"), ("う・つ", "って")]),
@@ -368,7 +405,7 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
         "a-gloss-on-a-lone-rule", "a-gloss-on-a-rule-with-a-sibling",
         "a-parenthetical-in-the-trigger", "a-two-item-result-list",
         "two-item-result-lists-throughout", "two-dividers-that-disagree",
-        "two-dividers-that-disagree-the-other-way",
+        "two-dividers-that-disagree-the-other-way", "an-answer-in-brackets",
         "a-two-item-trigger-list-on-the-second-rule",
         "a-full-width-space-after-a-trailing-separator",
     ],
