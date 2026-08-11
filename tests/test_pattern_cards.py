@@ -129,6 +129,23 @@ def test_an_annotation_taken_out_of_the_answer_lands_on_the_gloss() -> None:
     ]
 
 
+def test_the_same_rule_written_two_ways_keeps_one_identity() -> None:
+    """The note GUID is derived from the trigger, and a chart read on one
+    machine arrives with decomposed kana while another gives composed —
+    `patterns.json` stores the template with only `.strip()`, so nothing
+    upstream settles the form. Unnormalized, the same rule minted two GUIDs and
+    the second build added a note beside the first instead of updating it."""
+    import unicodedata
+
+    decomposed = cards_for(
+        chart(Pattern(unicodedata.normalize("NFD", "およぐ") + " → およいで"))
+    )
+    composed = cards_for(chart(Pattern("およぐ → およいで")))
+
+    assert decomposed[0].trigger != composed[0].trigger, "the text is as written"
+    assert decomposed[0].identity == composed[0].identity, "the identity is not"
+
+
 def test_a_decomposed_trigger_still_claims_its_own_example() -> None:
     """`check_pattern_rules` composes what it reads, so `check.verb` is NFC
     while a chart extracted on macOS arrives decomposed — およぐ as およく plus
@@ -374,13 +391,18 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
             [("く", "いて・いた"), ("ぐ", "いで・いだ"), ("す", "して")],
         ),
         # `,` and `/` both cut this into two one-arrow pieces and they disagree
-        # about where. No fixed order of the characters settles it — `/` lists
-        # triggers in the shape `patterns.INSTRUCTIONS` asks for *and* divides
-        # rules, and so does each comma — but the line does: the wrong cut
-        # leaves a divider it did not cut on inside a trigger (`した / くる`).
-        # The mirror row resolves the same way, with the roles swapped.
-        ("する → して, した / くる → きて", [("する", "して, した"), ("くる", "きて")]),
-        ("する → して/した、くる → きて", [("する", "して/した"), ("くる", "きて")]),
+        # about where. It is the same string as `く → いて / う、つ → って` — a
+        # rule followed by a two-item trigger list — up to which character plays
+        # which role, so nothing in the line can say which cut is real, and any
+        # score that prefers one is a fixed preference for the earlier or the
+        # later cut. One prose card: those rules go undrilled, but the card
+        # carries the document's own text and its GUID comes from that text
+        # rather than from a guess.
+        (
+            "する → して, した / くる → きて",
+            [("する → して, した / くる → きて", "")],
+        ),
+        ("く → いて / う、つ → って", [("く → いて / う、つ → って", "")]),
         # The annotation *is* the answer. Stripped, the answer was empty and the
         # rule collapsed into a prose card whose question contained its own
         # answer — and whose trigger, the note's GUID, became the whole line.
@@ -405,7 +427,7 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
         "a-gloss-on-a-lone-rule", "a-gloss-on-a-rule-with-a-sibling",
         "a-parenthetical-in-the-trigger", "a-two-item-result-list",
         "two-item-result-lists-throughout", "two-dividers-that-disagree",
-        "two-dividers-that-disagree-the-other-way", "an-answer-in-brackets",
+        "the-same-string-with-the-roles-swapped", "an-answer-in-brackets",
         "a-two-item-trigger-list-on-the-second-rule",
         "a-full-width-space-after-a-trailing-separator",
     ],

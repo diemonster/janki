@@ -113,8 +113,16 @@ class PatternCard:
         routinely shortens by hand. Either in the identity means a rebuild
         duplicates the card and strands its review history, which is the failure
         AGENTS.md's deterministic-GUID rule exists to prevent.
+
+        Normalized, like every other durable identity in this project: a chart
+        read on one machine arrives with decomposed kana and on another with
+        composed, and `patterns.json` stores the template with only `.strip()`,
+        so nothing upstream settles the form. Unnormalized, the same rule minted
+        two GUIDs and the second build added a note beside the first instead of
+        updating it. The displayed `Trigger` keeps the document's own bytes;
+        only what the GUID is derived from is folded.
         """
-        return self.trigger
+        return normalize_identity_part(self.trigger) or self.trigger
 
 
 def cards_for(
@@ -298,24 +306,6 @@ def _fitting_cut(
     return None
 
 
-def _stray_dividers(masked: str, spans: Sequence[tuple[int, int]]) -> int:
-    """Dividers left inside the trigger halves of a cut.
-
-    Joiners are not counted: `う・つ → って` is one rule with a trigger list, and
-    the nakaguro there says nothing about where the line divides.
-    """
-    strays = 0
-    for a, b in spans:
-        arrow = _ARROW.search(masked[a:b])
-        trigger = masked[a:b][: arrow.start()] if arrow else masked[a:b]
-        strays += sum(
-            1
-            for char in trigger
-            if char in _SEPARATOR_CHARS and char not in _JOINERS
-        )
-    return strays
-
-
 def _rule_spans(masked: str, arrows: int) -> list[tuple[int, int]] | None:
     """One span per rule, or ``None`` when the line cannot be cut safely."""
     # Each separator the line uses, in the order it first appears, plus their
@@ -336,20 +326,19 @@ def _rule_spans(masked: str, arrows: int) -> list[tuple[int, int]] | None:
         agreed = {tuple(spans) for spans in fitting}
         if len(agreed) == 1:
             return fitting[0]
-        # Two dividers that fit and disagree. No fixed order of the characters
-        # can settle it — `/` lists triggers in the shape
-        # `patterns.INSTRUCTIONS` asks for *and* divides rules, and so does each
-        # comma — but the line still says which cut is real: a wrong one leaves
-        # a divider it did not cut on inside a trigger. In
-        # `する → して, した / くる → きて` cutting at `,` asks `した / くる`, while
-        # `/` leaves `する` and `くる`; the mirror row resolves the same way.
-        # Joiners are not counted, since `う・つ` is an ordinary trigger list.
-        ranked = sorted(fitting, key=lambda spans: _stray_dividers(masked, spans))
-        if _stray_dividers(masked, ranked[0]) < _stray_dividers(masked, ranked[1]):
-            return ranked[0]
-        # Nothing left to tell them apart. One prose card carrying the whole
-        # line, as for `う/つ/る → って/った / く → いて` — the trigger is the
-        # note's GUID, and a guessed one is worse than a rule left undrilled.
+        # Two dividers that fit and disagree, and nothing in the line says
+        # which is real. `する → して, した / くる → きて` — a result list, then a
+        # rule — and `く → いて / う、つ → って` — a rule, then a trigger list —
+        # are the same string up to which character plays which role, so any
+        # score that prefers one is only a fixed preference for the earlier or
+        # the later cut. Scoring the trigger halves read the second row as the
+        # first: it drilled `いて / う` as an answer and minted a GUID for the
+        # trigger `つ`, which the document never wrote.
+        #
+        # So: one prose card carrying the whole line, as for
+        # `う/つ/る → って/った / く → いて`. Those rules go undrilled, which is a
+        # real loss — but the card still carries the document's own text, and
+        # its GUID is derived from that text rather than from a guess.
         return None
     # Two dividers on one line (`… / … 、 …`): neither cuts the line alone, and
     # their union is the same test over both.
