@@ -62,19 +62,45 @@ def test_the_documented_record_shows_every_field_a_record_can_carry() -> None:
         assert not missing, f"{cls.__name__} fields undocumented: {missing}"
 
 
+#: Fields the doc may legitimately differ from the collection on, because they
+#: are illustration rather than fact: prose a person wrote, sentences that grow,
+#: file paths, and the import that happened to see this word first.
+ILLUSTRATIVE = frozenset(
+    {"usage_notes", "examples", "audio", "audio_accent", "image", "source", "tags"}
+)
+
+
 def test_the_documented_word_matches_the_collection_it_was_taken_from() -> None:
     """The example is this repository's own 話す. Where the two disagree one of
-    them is wrong about Japanese, and the doc is the copy nobody validates."""
-    import json
+    them is wrong about Japanese, and the doc is the copy nobody validates.
 
-    doc = documented_record()
-    collection = json.loads(
-        (Path(__file__).parents[1] / "data" / "normalized" / "vocabulary.json")
-        .read_text(encoding="utf-8")
+    Compared field by field against the model rather than against a hand-listed
+    tuple: a list written by hand covers what its author thought of, which is
+    how the doc came to claim `LHHH` for a 中高 verb (the collection says
+    `LHLL`) and rank 1042 for a word jpdb ranks 200. `audio_accent` is
+    illustrative because it is deliberately empty here — it exists for the
+    reader who listened and disagreed."""
+    from japanese_anki.config import ProjectConfig
+    from japanese_anki.io import load_records
+
+    doc = VocabularyRecord.from_dict(documented_record())
+    config = ProjectConfig.load(Path(__file__).parents[1])
+    if not config.normalized_file.exists():
+        pytest.skip("no collection in this checkout")
+    real = next(
+        (r for r in load_records(config.normalized_file) if r.id == doc.id), None
     )
-    real = next((r for r in collection if r["id"] == doc["id"]), None)
     if real is None:  # the record may legitimately leave the collection
-        pytest.skip(f"{doc['id']} is no longer in the collection")
+        pytest.skip(f"{doc.id} is no longer in the collection")
 
-    for field in ("expression", "reading", "part_of_speech", "verb_group", "transitivity"):
-        assert doc[field] == real[field], field
+    differing = [
+        field.name
+        for field in dataclasses.fields(VocabularyRecord)
+        if field.name not in ILLUSTRATIVE
+        and getattr(doc, field.name) != getattr(real, field.name)
+    ]
+
+    assert not differing, (
+        f"{doc.id} differs from the collection on {differing} — "
+        "one of the two is wrong"
+    )

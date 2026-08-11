@@ -20,8 +20,8 @@ part_of_speech: "verb"
 verb_group: "godan"
 transitivity: "transitive"
 pitch_accent:
-  - "LHHH"
-frequency_rank: 1042
+  - "LHLL"                         # one position per mora, plus the particle
+frequency_rank: 200
 examples:
   - japanese: "毎日、妻と日本語で話します。"
     furigana: "毎日[まいにち]、 妻[つま]と 日本語[にほんご]で 話[はな]します。"
@@ -47,14 +47,18 @@ tags:
   - "shirabe"
 usage_notes: "Used for speaking or talking with someone."
 audio: "audio/janki-7f20.wav"      # written by `janki audio`, not by hand
-audio_accent: "LHHH"               # the accent that clip was spoken with
+audio_accent: ""                   # set only when a clip was spoken with
+                                   # an accent other than the one above
 image: ""
 source:
   type: "shirabe"
   imported_from: "shirabe-export.csv"
   row: 2
-  raw_fields:                      # every source column janki did not recognize,
-    Memo: "from lesson 3"          # kept verbatim so nothing is lost on import
+  raw_fields:                      # the source row verbatim — recognized columns
+    Word: "話す"                     # included — plus janki's own annotations
+    Memo: "from lesson 3"          # (hold_reason, suggested_reading, jpdb ids).
+                                   # Do not prune what looks duplicated: this is
+                                   # the only copy of what the file said
 ```
 
 `expression` is required, and `meanings` must hold at least one entry — an empty

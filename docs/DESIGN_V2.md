@@ -455,7 +455,8 @@ The correct flow matters, because the obvious one fails silently:
 hand-waved, because the naive rule is wrong for the largest accent class:
 
 - jpdb's pattern is one character per *kana* of the reading **plus one
-  trailing position for the following particle** (`話す` → `LHHH`).
+  trailing position for the following particle** (`話す` → `LHLL`: な is the
+  nucleus, and the drop lands on す).
   Community clients hard-assert `len(pattern) == len(reading) + 1`.
 - Regroup kana into **morae** first (ゃゅょ attach to the preceding kana;
   っ and ん count as morae) — accent positions are mora positions.
