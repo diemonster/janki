@@ -9,7 +9,7 @@ them alike. The card needs the same pattern drawn, which is
 
 **The naive rule is wrong for the largest accent class**, which is why this is a
 module and not a lambda. jpdb's pattern has one character per *kana* plus one
-trailing position for the following particle, so ``話す`` → ``LHHH``. Accent is
+trailing position for the following particle, so ``話す`` → ``LHLL``. Accent is
 a property of *morae*, not kana — ``びょ`` is one mora written with two kana —
 so the pattern has to be regrouped before it is read. And the accent nucleus is
 the mora *after which* H falls to L, which means the particle position is the

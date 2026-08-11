@@ -336,12 +336,17 @@ def _field_values(
     did: the first real clip sent the exporter looking in ``data/decks/audio/``
     for a file that lives in ``data/media/audio/``.
     """
-    example = record.first_example
     casual = record.example_in("casual")
-    if casual.japanese and casual is example:
-        # A record whose only example is casual fills the casual slot and leaves
-        # the main one empty, rather than showing the same sentence twice.
-        example = ExampleSentence()
+    # The first example that is not the casual one, rather than examples[0] with
+    # the casual case blanked out. Nothing orders this list — `enrich --ai`
+    # appends in whatever order the model answered — and taking index 0 meant a
+    # record whose casual sentence happened to come first showed *no* main
+    # example: the polite sentence was on the record, paid for, and read by no
+    # field. A record whose only example is casual still fills the casual slot
+    # and leaves the main one empty, rather than showing one sentence twice.
+    example = next(
+        (item for item in record.examples if item is not casual), ExampleSentence()
+    )
     audio_field = ""
     if record.audio:
         found = _resolve_media(

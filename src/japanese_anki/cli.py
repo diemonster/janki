@@ -837,9 +837,9 @@ def _recheck_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
     """Re-ask jpdb about examples that were flagged, and clear the ones it now
     vouches for.
 
-    Cheap and jpdb-only: it writes no sentence and calls no model, so a flag
-    left by a check that has since improved costs a parse rather than a
-    rewrite.
+    Cheap and mostly jpdb-only: it writes no sentence, and calls a model only to
+    adjudicate a disagreement — so a flag left by a check that has since
+    improved costs a parse rather than a rewrite.
     """
     output_path = config.normalized_file.resolve()
     records = load_records(output_path) if output_path.exists() else []
@@ -3925,7 +3925,9 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Re-ask jpdb about examples flagged as unverified, and clear the "
             "ones it vouches for so their audio can be generated. Writes no "
-            "sentences and calls no model."
+            "sentences. Where jpdb and the sentence disagree it asks the "
+            "adjudicator model, which --no-adjudicate or an empty "
+            "[ai] adjudicate_model turns off."
         ),
     )
     enrich_parser.add_argument(

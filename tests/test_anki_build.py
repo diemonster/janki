@@ -940,6 +940,34 @@ def test_both_registers_reach_the_card(tmp_path: Path) -> None:
     assert values[names.index("CasualEnglish")] == "casual"
 
 
+def test_the_casual_example_coming_first_does_not_empty_the_main_slot(
+    tmp_path: Path,
+) -> None:
+    """Nothing orders `examples`: `enrich --ai` appends them in whatever order
+    the model answered, and a hand-written record follows the schema doc, which
+    says a card has a slot for each register without saying which comes first.
+
+    Taking `examples[0]` and blanking it when it was the casual one meant a
+    record whose casual sentence happened to lead showed *no* main example — the
+    polite sentence was on the record, paid for, and read by no field, with
+    nothing to report it: the record has examples, so `status` sees no gap and
+    `janki review` reads the record rather than the built note."""
+    _project(tmp_path)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:使う:つかう", expression="使う", reading="つかう", meanings=["to use"],
+        examples=[
+            ExampleSentence(japanese="使う？", english="casual", register="casual"),
+            ExampleSentence(japanese="使います。", english="polite", register="polite"),
+        ],
+    )])
+
+    build_deck(tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg")
+
+    names, values = _fields(tmp_path / "o.apkg")
+    assert values[names.index("ExampleJapanese")] == "使います。"
+    assert values[names.index("CasualJapanese")] == "使う？"
+
+
 def test_a_record_with_only_a_casual_example_does_not_show_it_twice(tmp_path: Path) -> None:
     """Otherwise the same sentence fills both slots and the card claims a
     polite/casual contrast it does not have."""

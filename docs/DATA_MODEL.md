@@ -20,7 +20,8 @@ part_of_speech: "verb"
 verb_group: "godan"
 transitivity: "transitive"
 pitch_accent:
-  - "LHLL"                         # one position per mora, plus the particle
+  - "LHLL"                         # one position per *kana* of the reading,
+                                   # plus one for the following particle
 frequency_rank: 200
 examples:
   - japanese: "毎日、妻と日本語で話します。"
@@ -47,8 +48,11 @@ tags:
   - "shirabe"
 usage_notes: "Used for speaking or talking with someone."
 audio: "audio/janki-7f20.wav"      # written by `janki audio`, not by hand
-audio_accent: ""                   # set only when a clip was spoken with
-                                   # an accent other than the one above
+audio_accent: ""                   # the accent to force *instead of*
+                                   # pitch_accent[0], when you have listened and
+                                   # disagree. It replaces the pattern in the
+                                   # audio and on the card, so it is an
+                                   # instruction, not a note about a past clip
 image: ""
 source:
   type: "shirabe"
