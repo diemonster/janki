@@ -53,10 +53,12 @@ from japanese_anki.errors import JankiError
 
 __all__ = [
     "CollectionError",
+    "DeckNote",
     "Notetype",
     "clone_suffix_of",
     "default_anki_root",
     "find_profiles",
+    "read_deck_notes",
     "read_notetypes",
 ]
 
@@ -92,6 +94,22 @@ class Notetype:
         plus signs and then a space — which a bare ``endswith`` misses entirely.
         """
         return self.name.strip().endswith(CLONE_SUFFIX)
+
+
+@dataclass(frozen=True, slots=True)
+class DeckNote:
+    """One note in a deck, as an importer needs it.
+
+    ``fields`` is keyed by the notetype's own field names, so a caller maps
+    "Front"/"Back" rather than counting positions — a note carries its fields as
+    one `\x1f`-joined string, and the names live in another table entirely.
+    """
+
+    id: int
+    guid: str
+    notetype: str
+    fields: dict[str, str]
+    tags: str
 
 
 def default_anki_root() -> Path | None:
@@ -205,6 +223,107 @@ def _read_copy(work: Path, source: Path) -> list[Notetype]:
          for i, n, f, c in rows),
         key=lambda notetype: notetype.name.casefold(),
     )
+
+
+def read_deck_notes(collection: Path, deck: str) -> list[DeckNote]:
+    """Every note with at least one card in ``deck``, oldest first.
+
+    Same copy-then-open-read-only path as :func:`read_notetypes`, for the same
+    reason: Anki holds an exclusive lock while it runs, and this is a thing
+    somebody would run with Anki open.
+
+    Matched on the deck's exact name. A note whose cards sit in two decks is
+    returned once — the caller wants the note, not the cards — and a card
+    parked in a filtered deck is found through ``odid``, which is where Anki
+    keeps its real home while it is borrowed.
+    """
+    source = Path(collection)
+    if not source.is_file():
+        raise CollectionError(f"No Anki collection at {source}")
+    with tempfile.TemporaryDirectory(prefix="janki-collection-") as scratch:
+        work = Path(scratch) / "collection.anki2"
+        try:
+            shutil.copy2(source, work)
+            for suffix in _SIDECARS:
+                sidecar = source.with_name(source.name + suffix)
+                if sidecar.is_file():
+                    shutil.copy2(sidecar, work.with_name(work.name + suffix))
+        except OSError as exc:
+            raise CollectionError(f"Could not read {source}: {exc.strerror or exc}") from exc
+        return _read_deck_copy(work, source, deck)
+
+
+def _read_deck_copy(work: Path, source: Path, deck: str) -> list[DeckNote]:
+    try:
+        connection = sqlite3.connect(f"file:{work}?mode=ro", uri=True)
+    except sqlite3.Error as exc:
+        raise CollectionError(f"Could not open a copy of {source}: {exc}") from exc
+    try:
+        # Registered before any query touches a collated index. Without it
+        # SQLite cannot plan against Anki's own tables and answers "no query
+        # solution" — which reads like a broken query rather than a missing
+        # collation, and cost an hour to recognise once already.
+        connection.create_collation("unicase", _unicase)
+        # Anki separates the components of a nested deck name with \x1f;
+        # `Parent::Child` is what a person types and what the UI shows.
+        wanted = deck.replace("::", "\x1f")
+        deck_ids = [
+            int(row[0])
+            for row in connection.execute("select id, name from decks").fetchall()
+            if str(row[1]) == deck or str(row[1]) == wanted
+        ]
+        if not deck_ids:
+            known = sorted(
+                str(name).replace("\x1f", "::")
+                for (_, name) in connection.execute("select id, name from decks")
+            )
+            raise CollectionError(
+                f"No deck named {deck!r} in {source}. Known: {', '.join(known)}"
+            )
+        placeholders = ",".join("?" * len(deck_ids))
+        note_ids = [
+            int(row[0])
+            for row in connection.execute(
+                f"select distinct nid from cards where did in ({placeholders})"
+                f" or odid in ({placeholders})",
+                (*deck_ids, *deck_ids),
+            ).fetchall()
+        ]
+        names: dict[int, list[str]] = {}
+        for ntid, name in connection.execute(
+            "select ntid, name from fields order by ntid, ord"
+        ):
+            names.setdefault(int(ntid), []).append(str(name))
+        notetypes = {
+            int(i): str(n) for i, n in connection.execute("select id, name from notetypes")
+        }
+        notes = []
+        for nid in sorted(note_ids):
+            row = connection.execute(
+                "select guid, mid, flds, tags from notes where id = ?", (nid,)
+            ).fetchone()
+            if row is None:  # a card whose note is gone: Anki's own repair territory
+                continue
+            guid, mid, flds, tags = row
+            field_names = names.get(int(mid), [])
+            values = str(flds).split("\x1f")
+            notes.append(
+                DeckNote(
+                    id=nid,
+                    guid=str(guid),
+                    notetype=notetypes.get(int(mid), str(mid)),
+                    # Zipped rather than indexed: a notetype whose field list
+                    # disagrees with a note's stored values is a real state, and
+                    # dropping the extras beats raising over somebody else's deck.
+                    fields=dict(zip(field_names, values, strict=False)),
+                    tags=str(tags or "").strip(),
+                )
+            )
+        return notes
+    except sqlite3.Error as exc:
+        raise CollectionError(f"Could not read notes from {source}: {exc}") from exc
+    finally:
+        connection.close()
 
 
 def clone_suffix_of(name: str, notetypes: list[Notetype]) -> list[Notetype]:

@@ -25,6 +25,7 @@ from japanese_anki import (
     status,
 )
 from japanese_anki.audio_cmd import AudioError
+from japanese_anki.collection import read_deck_notes
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters import pattern_cards
@@ -36,7 +37,7 @@ from japanese_anki.exporters.anki import (
     resolve_deck_records,
 )
 from japanese_anki.identifiers import normalize_identity_part, short_fingerprint
-from japanese_anki.importers import jpdb_import, jpdb_reviews
+from japanese_anki.importers import anki_deck, jpdb_import, jpdb_reviews
 from japanese_anki.importers.shirabe import import_file, inspect_file
 from japanese_anki.inputs import prepare_inputs
 from japanese_anki.io import (
@@ -583,6 +584,54 @@ def command_import_shirabe(args: argparse.Namespace) -> int:
         replace=args.replace,
         assume_yes=args.yes,
     )
+
+
+def command_import_anki(args: argparse.Namespace) -> int:
+    """Read a deck already in Anki into a staging file for review.
+
+    Into staging rather than into the collection, because the mapping is
+    inference: which line of a shared deck's HTML is the reading and which is
+    the gloss. `janki promote` is what makes any of it real, the same as for a
+    photo or a PDF.
+    """
+    config = _load_config(args)
+    collection, note = status.resolve_collection(config)
+    if collection is None:
+        raise DataError(
+            note or "No Anki collection found. Name one with [anki] profile or collection."
+        )
+
+    notes = read_deck_notes(collection, args.deck)
+    if not notes:
+        print(f"No notes in {args.deck!r}.")
+        return 0
+
+    result = anki_deck.records_from_notes(
+        notes, args.deck, front_field=args.front or "", back_field=args.back or ""
+    )
+    target = anki_deck.deck_path(config.staging_dir, args.deck)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    meta: dict[str, Any] = {
+        "source_file": args.deck,
+        "extracted_at": date.today().isoformat(),
+    }
+    # Into the file, not only onto the terminal: the staging file is what a
+    # reviewer reads later, and a count that lives in scrollback is a silent
+    # discard with an extra step.
+    if result.held:
+        meta["review_notes"] = result.held_note
+    write_staging(target, result.records, meta, force=args.force)
+
+    print(
+        f"Read {len(notes)} note(s) from {args.deck!r}: {len(result.records)} record(s)"
+        + (f", {len(result.held)} held" if result.held else "")
+    )
+    print(f"Wrote {target}")
+    print(
+        "Nothing is in the collection yet. Review that file, then: "
+        f"janki validate {target} && janki promote {target}"
+    )
+    return 0
 
 
 def command_import_jpdb(args: argparse.Namespace) -> int:
@@ -3800,6 +3849,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="Answer the --replace confirmation prompt with yes.",
     )
     import_parser.set_defaults(handler=command_import_shirabe)
+
+    anki_import_parser = subparsers.add_parser(
+        "import-anki",
+        help="Read a deck already in Anki into a staging file, to enrich it",
+    )
+    anki_import_parser.add_argument(
+        "--deck",
+        required=True,
+        metavar="NAME",
+        help="The deck to read, by its name in Anki (Parent::Child for a subdeck).",
+    )
+    anki_import_parser.add_argument(
+        "--front",
+        metavar="FIELD",
+        help="Field holding the word. Default: the notetype's first field.",
+    )
+    anki_import_parser.add_argument(
+        "--back",
+        metavar="FIELD",
+        help="Field holding the reading and meaning. Default: the second field.",
+    )
+    anki_import_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite a staging file you have already started reviewing.",
+    )
+    anki_import_parser.set_defaults(handler=command_import_anki)
 
     jpdb_import_parser = subparsers.add_parser(
         "import-jpdb",

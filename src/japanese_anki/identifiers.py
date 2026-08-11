@@ -82,6 +82,36 @@ def contains_kanji(value: str) -> bool:
     )
 
 
+#: The kana a *reading* is written in, plus the marks that ride along with one:
+#: the prolonged sound mark, the iteration marks, and the combining dakuten a
+#: decomposed が is spelled with. Katakana is here because a reading copied off a
+#: dictionary is sometimes written in it, and half-width katakana because that is
+#: what an old export carries; NFKC folds the latter before this ever sees it.
+_KANA_RANGES: tuple[tuple[int, int], ...] = (
+    (0x3041, 0x309F),  # hiragana, with ゝゞ and the combining voiced marks
+    (0x30A0, 0x30FF),  # katakana, with ・ー and ヽヾ
+    (0x31F0, 0x31FF),  # katakana phonetic extensions (ㇰ, small kana for Ainu)
+)
+
+
+def is_kana(value: str) -> bool:
+    """Whether every character of ``value`` is kana.
+
+    Not the negation of :func:`contains_kanji`: "no kanji" is true of `to speak`
+    and of an empty string, and a caller asking this question — which line of a
+    shared deck's HTML is the reading, and which is the English — needs the
+    positive test. Empty is false: nothing is not a reading.
+
+    Normalized first, for the same reason `contains_kanji` is: half-width
+    katakana ｶﾅ folds to katakana, and a raw test would call a real reading
+    something else.
+    """
+    text = normalize_identity_part(value)
+    return bool(text) and all(
+        any(low <= code <= high for low, high in _KANA_RANGES) for code in map(ord, text)
+    )
+
+
 def stable_record_id(expression: str, reading: str = "") -> str:
     expression_part = normalize_identity_part(expression)
     reading_part = normalize_identity_part(reading)
