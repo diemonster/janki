@@ -1034,6 +1034,44 @@ def test_check_names_the_stranded_verbs_even_when_a_row_disagrees(
     assert "no class for まつ" in out.err
 
 
+def test_check_does_not_pass_when_the_lookup_it_needed_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A readable collection that simply does not hold まつ, and a jpdb lookup
+    that fails. The run then checks かう, holds the garbled まつ row back, and
+    used to print an unqualified all-clear on exit 0 — while the held-back row
+    blamed "no verb class on record" and pointed at `janki enrich --jpdb`, the
+    lookup that had just failed. `--check`'s exit code is its entire product and
+    it loses no document, so a failed read it needed is its failure."""
+    root = project(tmp_path, [{
+        "id": "word:買う:かう", "expression": "買う", "reading": "かう",
+        "meanings": ["to buy"], "verb_group": "godan",
+    }])
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("う・つ・る → って")]
+    parsed.patterns[0].examples = ["かう ⇨ かって", "まつ ⇨ まつて"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+    cli.main(["--root", str(root), "patterns", str(document(root, "chart.pdf"))])
+
+    def refuse(*_args, **_kwargs):
+        raise JankiError("jpdb said 429")
+
+    monkeypatch.setattr(cli.patterns, "verb_groups_from_jpdb", refuse)
+    monkeypatch.setattr(cli.jpdb, "api_key_from_env", lambda: "k")
+    monkeypatch.setattr(cli.jpdb, "JpdbClient", lambda _key: object())
+    capsys.readouterr()
+
+    code = cli.main(["--root", str(root), "patterns", "--check", "--ask-jpdb"])
+
+    out = capsys.readouterr()
+    assert code == 1
+    assert "All 1 worked example(s) agree" not in out.out, "not an all-clear"
+    assert "no class for まつ" in out.err
+    assert "could not look up verb classes: jpdb said 429" in out.err
+
+
 def test_check_says_the_collection_failed_even_when_jpdb_does_too(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

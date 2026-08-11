@@ -3075,6 +3075,7 @@ def command_patterns(args: argparse.Namespace) -> int:
             # all. Refused below only for a verb nothing could answer for.
             known = {}
             collection_error = f"could not read the collection for verb classes: {exc}"
+        lookup_error = ""
         try:
             groups = _classes_for(entries, config, args.ask_jpdb, known)
         except JankiError as exc:
@@ -3085,29 +3086,32 @@ def command_patterns(args: argparse.Namespace) -> int:
             # are kept for the same reason the read path keeps them: a transient
             # 429 must not discard the checks they would have produced.
             groups = known
-            print(f"warning: could not look up verb classes: {exc}", file=sys.stderr)
-        # The verbs the store names that nothing could answer for. Only those
-        # make the unreadable collection this command's failure — `--check`'s
-        # exit code is its entire product, and reporting "nothing could be
-        # checked" on exit 0 is a pass over a run that verified nothing.
+            lookup_error = f"could not look up verb classes: {exc}"
+        # The verbs the store names that no read could answer for. Only those
+        # make a failed read this command's failure — `--check`'s exit code is
+        # its entire product, and reporting "nothing could be checked" on exit 0
+        # is a pass over a run that verified nothing. Counted for the jpdb
+        # failure as well as the collection one: on the read path the exit code
+        # means "a document was lost" and a failed lookup is deliberately kept
+        # out of it, but `--check` loses nothing and has no other signal, so
+        # leaving it out passed a run whose garbled row was never checked while
+        # blaming the very lookup that failed.
+        failed_reads = [note for note in (collection_error, lookup_error) if note]
         unresolved = sorted({
             verb
             for entry in entries
             for verb in patterns.chart_verbs(entry)
             if verb not in groups
-        }) if collection_error else []
+        }) if failed_reads else []
         stranded = bool(unresolved)
-        if collection_error:
-            # Once, at the severity the outcome earned. Printing eagerly *and*
-            # again after the lookup said the same sentence twice, as a warning
-            # and as an error, and the second carried less than the first.
-            print(
-                f"error: {collection_error} — no class for "
-                f"{', '.join(unresolved)}"
-                if stranded
-                else f"warning: {collection_error}",
-                file=sys.stderr,
-            )
+        for note in failed_reads:
+            # Once each, at the severity the outcome earned. Printing eagerly
+            # *and* again after the lookup said the same sentence twice, as a
+            # warning and as an error, and the second carried less than the
+            # first.
+            print(f"{'error' if stranded else 'warning'}: {note}", file=sys.stderr)
+        if stranded:
+            print(f"error: no class for {', '.join(unresolved)}", file=sys.stderr)
         disagreed = checked = 0
         skipped_names: list[str] = []
         for name, entry in sorted(store.items()):
