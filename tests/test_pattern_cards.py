@@ -1111,6 +1111,58 @@ def test_a_deck_naming_an_unreadable_collection_does_not_cancel_the_sweep(
     assert "Validated 1 records" in out, "and the other deck was still checked"
 
 
+@pytest.mark.parametrize(
+    ("name", "body", "extra"),
+    [
+        ("a-broken.yaml", 'name: B\ndeck:\n  source: "../vocabulary.json\n', None),
+        (
+            "a-pattern.yaml",
+            "deck:\n  kind: pattern\n  name: R\n  deck_id: 1\n  model_id: 2\n"
+            '  document: "x.pdf"\n',
+            "patterns.json",
+        ),
+    ],
+    ids=["a-deck-file-that-will-not-parse", "an-unreadable-pattern-store"],
+)
+def test_nothing_a_single_deck_cannot_read_cancels_the_sweep(
+    tmp_path: Path, capsys, name: str, body: str, extra: str | None
+) -> None:
+    """The first read of the deck file, and the pattern store resolved as an
+    argument, both sat outside every guard. A hand-edited deck file is the
+    likeliest thing in `data/decks/` to be malformed, and `patterns.json` is
+    machine-written and committed and so merge-marker-prone — either one
+    cancelled the run before a single deck was reported."""
+    import json
+
+    from japanese_anki import cli
+
+    project(tmp_path)
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps(
+            [verb("買う", "かう", "godan", part_of_speech="verb").to_dict()],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "decks" / name).write_text(body, encoding="utf-8")
+    (tmp_path / "decks" / "words.yaml").write_text(
+        'name: W\ndeck:\n  source: "../vocabulary.json"\n', encoding="utf-8"
+    )
+    if extra:
+        (tmp_path / extra).write_text("<<<<<<< HEAD\n", encoding="utf-8")
+        (tmp_path / "janki.toml").write_text(
+            (tmp_path / "janki.toml").read_text(encoding="utf-8")
+            + f'patterns_file = "{extra}"\n',
+            encoding="utf-8",
+        )
+
+    assert cli.main(["--root", str(tmp_path), "validate"]) == 1
+
+    out = capsys.readouterr().out
+    assert name in out, "the file that could not be read is named"
+    assert "Validated 1 records" in out, "and the other deck was still checked"
+
+
 def test_a_deck_kind_janki_does_know_is_left_to_the_ordinary_path(
     tmp_path: Path, capsys
 ) -> None:

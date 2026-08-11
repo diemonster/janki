@@ -1001,6 +1001,67 @@ def test_check_does_not_call_a_partly_stranded_run_all_clear(
     assert "All 1 worked example(s) agree" not in out.out, "not an all-clear"
     assert "まつ went unchecked" in out.out
     assert out.err.count("could not read the collection") == 1, "said once"
+    assert "no class for まつ" in out.err, "and names what was stranded"
+
+
+def test_check_names_the_stranded_verbs_even_when_a_row_disagrees(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The stdout line naming them is printed only when nothing disagreed, so on
+    a run that is both stranded and wrong the stderr line is the only place the
+    unresolved verbs are named."""
+    root = project(tmp_path)
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("う・つ・る → って")]
+    parsed.patterns[0].examples = ["かう ⇨ かいて", "まつ ⇨ まって"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+    cli.main(["--root", str(root), "patterns", str(document(root, "chart.pdf"))])
+    (root / "vocabulary.json").unlink()
+    monkeypatch.setattr(
+        cli.patterns, "verb_groups_from_jpdb", lambda *_a, **_k: {"かう": "godan"}
+    )
+    monkeypatch.setattr(cli.jpdb, "api_key_from_env", lambda: "k")
+    monkeypatch.setattr(cli.jpdb, "JpdbClient", lambda _key: object())
+    capsys.readouterr()
+
+    code = cli.main(["--root", str(root), "patterns", "--check", "--ask-jpdb"])
+
+    out = capsys.readouterr()
+    assert code == 1
+    assert "かう ⇨ かいて is not what janki computes" in out.out, "the row disagreed"
+    assert "no class for まつ" in out.err
+
+
+def test_check_says_the_collection_failed_even_when_jpdb_does_too(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Two independent failures. Unguarded, an unset key or a 429 unwound past
+    the line reporting the collection, so the user fixed the key, re-ran, and
+    only then learned the collection was the real problem."""
+    root = project(tmp_path)
+    parsed = Parsed("pattern", "Chart", [])
+    parsed.patterns = [Item("う・つ・る → って")]
+    parsed.patterns[0].examples = ["かう ⇨ かって"]
+    monkeypatch.setattr(
+        patterns_module.claude_client, "parse_call", reader({"chart.pdf": parsed})
+    )
+    cli.main(["--root", str(root), "patterns", str(document(root, "chart.pdf"))])
+    (root / "vocabulary.json").unlink()
+
+    def refuse():
+        raise JankiError("JPDB_API_KEY is not set")
+
+    monkeypatch.setattr(cli.jpdb, "api_key_from_env", refuse)
+    capsys.readouterr()
+
+    code = cli.main(["--root", str(root), "patterns", "--check", "--ask-jpdb"])
+
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "could not read the collection for verb classes" in err
+    assert "JPDB_API_KEY is not set" in err, "and the other failure too"
 
 
 def test_a_failed_lookup_keeps_the_offline_classes(

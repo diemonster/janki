@@ -2270,7 +2270,14 @@ def _validate_path(
     store: Callable[[], Mapping[str, patterns.PatternSet]] | None = None,
     config: ProjectConfig | None = None,
 ) -> tuple[list, int]:
-    raw = load_structured(path)
+    try:
+        raw = load_structured(path)
+    except JankiError as exc:
+        # A hand-edited deck file is the likeliest thing in `data/decks/` to be
+        # malformed — an unterminated quote, a tab, a merge marker — and its own
+        # unreadability used to cancel the sweep before a single deck was
+        # reported, with no "Validated N records" line at all.
+        return [ValidationIssue("error", str(exc), source=str(path))], 0
     # `exporters.anki.deck_kind`, so this, the build and `status` cannot drift
     # about what a kind is. On truthiness alone a typo — or a deliberate
     # `kind: vocabulary` — sent an ordinary deck down the pattern path, which
@@ -2294,13 +2301,20 @@ def _validate_path(
         # A pattern or conjugation deck holds no records, so the ordinary path
         # found none and called the file clean — leaving every defect the build
         # refuses invisible to the command whose job is catching one first.
-        issues = [
-            ValidationIssue("error", problem, source=str(path))
-            for problem in pattern_cards.deck_problems(
+        try:
+            problems = pattern_cards.deck_problems(
+                # `store()` is resolved *inside* the guard: `patterns.json` is
+                # machine-written and committed, so it can carry a merge marker,
+                # and `deck_problems` — careful about every other failure it can
+                # meet — never entered its own frame to catch that one.
                 path, store() if store else None, config
             )
-        ]
-        return issues, 0
+        except JankiError as exc:
+            return [ValidationIssue("error", str(exc), source=str(path))], 0
+        return [
+            ValidationIssue("error", problem, source=str(path))
+            for problem in problems
+        ], 0
 
     try:
         if isinstance(raw, dict) and "deck" in raw:
@@ -3061,7 +3075,17 @@ def command_patterns(args: argparse.Namespace) -> int:
             # all. Refused below only for a verb nothing could answer for.
             known = {}
             collection_error = f"could not read the collection for verb classes: {exc}"
-        groups = _classes_for(entries, config, args.ask_jpdb, known)
+        try:
+            groups = _classes_for(entries, config, args.ask_jpdb, known)
+        except JankiError as exc:
+            # Two independent failures, and both have to be said. Unguarded,
+            # an unset `JPDB_API_KEY` or a 429 unwound past the line reporting
+            # the collection, so the user fixed the key, re-ran, and only then
+            # learned the collection was the real problem. The offline classes
+            # are kept for the same reason the read path keeps them: a transient
+            # 429 must not discard the checks they would have produced.
+            groups = known
+            print(f"warning: could not look up verb classes: {exc}", file=sys.stderr)
         # The verbs the store names that nothing could answer for. Only those
         # make the unreadable collection this command's failure — `--check`'s
         # exit code is its entire product, and reporting "nothing could be
