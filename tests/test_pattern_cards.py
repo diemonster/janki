@@ -146,6 +146,17 @@ def test_the_same_rule_written_two_ways_keeps_one_identity() -> None:
     assert decomposed[0].identity == composed[0].identity, "the identity is not"
 
 
+def test_a_full_width_bracket_survives_into_the_identity() -> None:
+    """Composed, not NFKC-folded. `normalize_identity_part` — right for a
+    *record* id — folds compatibility characters, and a chart cell is full of
+    them: `（〜てもいい）` in full-width brackets would fold to ASCII parens and
+    move the GUID of a card already shipped, stranding its review history, which
+    is the one thing this identity exists to hold still."""
+    card = cards_for(chart(Pattern("（〜てもいい）")))[0]
+
+    assert card.identity == "（〜てもいい）"
+
+
 def test_a_decomposed_trigger_still_claims_its_own_example() -> None:
     """`check_pattern_rules` composes what it reads, so `check.verb` is NFC
     while a chart extracted on macOS arrives decomposed — およぐ as およく plus
@@ -329,14 +340,6 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
             "かう・まつ ⇨ かって・まって / く → いて",
             [("かう・まつ", "かって・まって"), ("く", "いて")],
         ),
-        # The same character on both sides of that run: the line gives no way to
-        # tell a result list from the next rule's trigger list. One prose card
-        # carrying the whole line, rather than a confident rule teaching the
-        # wrong trigger — which is also the note's GUID.
-        (
-            "う/つ/る → って/った / く → いて",
-            [("う/つ/る → って/った / く → いて", "")],
-        ),
         # A quoted chart cell. The parenthetical is stripped to *count* arrows,
         # and letting the stripped text reach the output made an empty trigger —
         # a blank card, with the guid `pattern:<document>:`.
@@ -390,19 +393,6 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
             "く → いて・いた / ぐ → いで・いだ / す → して",
             [("く", "いて・いた"), ("ぐ", "いで・いだ"), ("す", "して")],
         ),
-        # `,` and `/` both cut this into two one-arrow pieces and they disagree
-        # about where. It is the same string as `く → いて / う、つ → って` — a
-        # rule followed by a two-item trigger list — up to which character plays
-        # which role, so nothing in the line can say which cut is real, and any
-        # score that prefers one is a fixed preference for the earlier or the
-        # later cut. One prose card: those rules go undrilled, but the card
-        # carries the document's own text and its GUID comes from that text
-        # rather than from a guess.
-        (
-            "する → して, した / くる → きて",
-            [("する → して, した / くる → きて", "")],
-        ),
-        ("く → いて / う、つ → って", [("く → いて / う、つ → って", "")]),
         # The annotation *is* the answer. Stripped, the answer was empty and the
         # rule collapsed into a prose card whose question contained its own
         # answer — and whose trigger, the note's GUID, became the whole line.
@@ -420,14 +410,13 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
         "mixed-roles", "a-trailing-separator", "same-character-both-jobs",
         "two-different-dividers", "a-parenthetical-arrow",
         "a-result-list-before-a-second-rule", "a-kana-result-list-before-a-rule",
-        "an-ambiguous-result-list", "a-parenthesised-cell",
+        "a-parenthesised-cell",
         "a-parenthetical-on-a-prose-rule",
         "the-whole-te-form-row", "a-trigger-list-on-the-second-rule",
         "trigger-and-result-lists-on-both", "an-arrow-inside-a-prose-gloss",
         "a-gloss-on-a-lone-rule", "a-gloss-on-a-rule-with-a-sibling",
         "a-parenthetical-in-the-trigger", "a-two-item-result-list",
-        "two-item-result-lists-throughout", "two-dividers-that-disagree",
-        "the-same-string-with-the-roles-swapped", "an-answer-in-brackets",
+        "two-item-result-lists-throughout", "an-answer-in-brackets",
         "a-two-item-trigger-list-on-the-second-rule",
         "a-full-width-space-after-a-trailing-separator",
     ],
@@ -444,6 +433,44 @@ def test_a_separator_divides_rules_only_when_every_piece_has_an_arrow(
     cards = cards_for(chart(Pattern(template)), CLASSES)
 
     assert [(c.trigger, c.result) for c in cards] == expected
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        # One character doing both jobs: `って/った` is a result list, or `った`
+        # is the next rule's trigger, and the line does not say which.
+        "う/つ/る → って/った / く → いて",
+        # Two characters, each of which cuts the line into rules equally well.
+        # This row and the next are the same string up to which one plays which
+        # role, so no rule about the characters can be right for both.
+        "する → して, した / くる → きて",
+        "く → いて / う、つ → って",
+    ],
+    ids=["same-character-both-jobs", "a-result-list-then-a-rule", "a-rule-then-a-list"],
+)
+def test_a_line_janki_cannot_cut_apart_is_refused_by_name(template: str) -> None:
+    """Shipped as one prose card, the line put both answers on the *front* —
+    `pattern-front.html` renders `{{Trigger}}`, and an empty `Result` means no
+    `→ ?` prompt — so the card asked its own question and answered it, while its
+    GUID, the whole line, orphaned the notes the row's rules had shipped as. The
+    only signal was the card count dropping. The row is hand-fixable in
+    `patterns.json`, and saying so beats printing a card that teaches nothing."""
+    with pytest.raises(PatternDeckError, match="cannot tell where"):
+        cards_for(chart(Pattern(template)), CLASSES)
+
+
+def test_validate_reports_a_line_janki_cannot_cut_apart(tmp_path: Path) -> None:
+    """Through `deck_problems`, so `janki validate`, the build and the check all
+    say the same thing about the row."""
+    from japanese_anki.exporters.pattern_cards import deck_problems
+
+    project(tmp_path)
+    store = {"teform.pdf": chart(Pattern("する → して, した / くる → きて"))}
+
+    problems = deck_problems(deck_file(tmp_path), store, ProjectConfig.load(tmp_path))
+
+    assert any("cannot tell where" in problem for problem in problems), problems
 
 
 # --- the drill deck ------------------------------------------------------------

@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import html
 import re
+import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -114,15 +115,22 @@ class PatternCard:
         duplicates the card and strands its review history, which is the failure
         AGENTS.md's deterministic-GUID rule exists to prevent.
 
-        Normalized, like every other durable identity in this project: a chart
-        read on one machine arrives with decomposed kana and on another with
-        composed, and `patterns.json` stores the template with only `.strip()`,
-        so nothing upstream settles the form. Unnormalized, the same rule minted
-        two GUIDs and the second build added a note beside the first instead of
-        updating it. The displayed `Trigger` keeps the document's own bytes;
-        only what the GUID is derived from is folded.
+        Composed, because a chart read on one machine arrives with decomposed
+        kana and on another with composed, and `patterns.json` stores the
+        template with only `.strip()` — so nothing upstream settles the form and
+        the same rule minted two GUIDs, the second build adding a note beside
+        the first instead of updating it. The displayed `Trigger` keeps the
+        document's own bytes; only what the GUID is derived from is folded.
+
+        NFC, and deliberately not the NFKC that `normalize_identity_part`
+        applies to a *record* identity. NFKC folds compatibility characters, and
+        a chart cell is full of them: `（〜てもいい）` in full-width brackets
+        would fold to ASCII parens, moving the GUID of a card already shipped
+        and stranding its review history — which is the very thing this identity
+        exists to hold still. Canonical composition settles the kana question
+        and touches nothing the document chose.
         """
-        return normalize_identity_part(self.trigger) or self.trigger
+        return unicodedata.normalize("NFC", self.trigger).strip() or self.trigger
 
 
 def cards_for(
@@ -244,18 +252,22 @@ def _split_rules(template: str) -> list[tuple[str, str, str]]:
 
     More than one cut can fit by coincidence: in ``くる → きて・きた / する → して``
     both `・` and `/` yield two one-arrow pieces, and cutting at `・` drops きた
-    from the first answer and asks ``きた / する``. They are told apart by how the
-    characters are used rather than by where they appear — `・` joins the items
-    of a list and never divides two statements, a solidus divides, and the
-    commas fall in between.
+    from the first answer and asks ``きた / する``. Only the nakaguro is decided
+    in advance — it joins the items of a list and never divides two statements.
+    Every other separator is a peer, and two peers that fit and disagree are
+    refused rather than ranked: ``する → して, した / くる → きて`` and
+    ``く → いて / う、つ → って`` are the same string up to which character plays
+    which role.
 
     When no cut fits at all, the line uses one character for both jobs.
     Arrow-less pieces before the first rule are its trigger list and are rejoined
     to it — ``う/つ/る → って / く → いて``. Arrow-less pieces *after* a rule are
     genuinely undecidable, since ``って/った / く → いて`` reads equally as a
-    two-item result list or as the next rule's trigger, and the line ships as one
-    prose card rather than as a rule teaching the wrong trigger — which is also
-    the note's GUID.
+    two-item result list or as the next rule's trigger.
+
+    A line stating rules that cannot be cut apart is refused, naming the
+    template: janki does not know what the document says there, and the row is
+    hand-fixable in `patterns.json` by putting each rule on its own line.
 
     A template with no arrow is a rule stated in prose and becomes a single card
     with no answer half; the gloss is the answer. Guessing where to cut it would
@@ -276,7 +288,18 @@ def _split_rules(template: str) -> list[tuple[str, str, str]]:
         return [_rule_pair(template, masked)]
     spans = _rule_spans(masked, arrows)
     if spans is None:
-        return [(_tidy(template), "", "")]
+        # Refused, not degraded. Shipping the line as one prose card put both
+        # answers on the *front* — `pattern-front.html` renders `{{Trigger}}`,
+        # and an empty `Result` means no `→ ?` prompt — so the card asked its
+        # own question and answered it, while its GUID, the whole line, orphaned
+        # the notes the row's rules had already shipped as. The only signal was
+        # the card count dropping. This row is hand-fixable in `patterns.json`,
+        # and saying so beats printing a card that teaches nothing.
+        raise PatternDeckError(
+            f"janki cannot tell where {template!r} divides: two separators cut "
+            f"it into rules equally well, and the wrong one drills a trigger "
+            f"the document never wrote. Put each rule on its own row."
+        )
     return [_rule_pair(template[a:b], masked[a:b]) for a, b in spans]
 
 
