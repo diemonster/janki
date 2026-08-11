@@ -14,8 +14,12 @@ kanji_file = "data/kanji.json"
 scan_inbox = "data/inbox/scans"
 
 [anki]
-# Which Anki profile janki checks its own notetype in.
-profile = "janki-test"
+# Which Anki profile janki checks its own notetype in. The real one: the
+# scratch "janki-test" profile was for verifying the notetype upgrade against
+# a collection with no review history to lose. Reading is safe either way —
+# janki copies the collection to a temp directory and opens the copy, and never
+# writes to yours.
+profile = "User 1"
 default_deck_name = "Brandon Japanese"
 default_deck_id = 2059400110
 model_id_base = 1607392310
