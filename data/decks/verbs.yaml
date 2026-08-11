@@ -1,14 +1,15 @@
 deck:
   name: "Brandon Japanese::Starter Verbs"
   deck_id: 2059400111
-  description: "A small starter deck used to verify the local Japanese Anki pipeline."
+  description: "Every verb in the collection."
   output: "sample-verbs.apkg"
   cards:
     recognition: true
     production: true
     reading: false
   source: ../normalized/vocabulary.json
-  include_ids:
-  - word:行く:いく
-  - word:話す:はなす
-  - word:食べる:たべる
+  # No include_ids: every record in the source. The three that used to be
+  # pinned here were a starter set for verifying the pipeline, and the other
+  # seventeen sat in a second deck only so the two would not both claim the
+  # same records — same source file, same GUIDs, so an overlap means each
+  # import moves the notes between decks.

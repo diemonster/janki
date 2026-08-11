@@ -6,6 +6,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 from japanese_anki.config import ProjectConfig
 from japanese_anki.exporters import anki
+from japanese_anki.io import load_records
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -61,13 +62,15 @@ def test_builder_wires_templates_fields_and_stable_guids(tmp_path, monkeypatch) 
     monkeypatch.setattr(anki, "genanki", fake)
 
     output = tmp_path / "verbs.apkg"
+    config = ProjectConfig.load(PROJECT_ROOT)
     result = anki.build_deck(
         PROJECT_ROOT / "data/decks/verbs.yaml",
-        ProjectConfig.load(PROJECT_ROOT),
+        config,
         output,
     )
 
-    assert result.note_count == 3
+    # From the source, not pinned — see the note in test_anki_build.py.
+    assert result.note_count == len(load_records(config.normalized_file))
     assert result.card_types == ("recognition", "production")
     assert output.exists()
     with ZipFile(output) as archive:
