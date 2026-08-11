@@ -152,17 +152,23 @@ def cards_for(
     cards: list[PatternCard] = []
     for pattern in entry.patterns:
         checked = agreed.get(pattern.template, [])
-        for trigger, result in _split_rules(pattern.template):
+        rules = _split_rules(pattern.template)
+        # Matched on the trigger without its parenthetical, because
+        # `check_pattern_rules` reads the same row with parentheticals removed:
+        # `check.verb` for `かう (exception) → かって` is the bare かう. Compared
+        # against the displayed trigger, the example matched no card, and the
+        # fallback below — which keeps what belongs to no *other* rule — then
+        # put it on every card on the row.
+        bare = [_unannotated(trigger) for trigger, _ in rules]
+        for (trigger, result), verb_of in zip(rules, bare, strict=True):
             # A row stating several rules — `くる → きて / する → して` — has
             # worked examples for each, and putting both on both cards asks
             # about くる while showing する. Where the trigger *is* the example's
             # verb, keep only its own; where it is an ending (`う・つ・る`) no
             # example names it, so the row's whole set belongs to the card.
-            mine = [text for verb, text in checked if verb == trigger]
+            mine = [text for verb, text in checked if verb == verb_of]
             examples = tuple(mine) if mine else tuple(
-                text for verb, text in checked
-                if not any(verb == other for other, _ in
-                           [(t, r) for t, r in _split_rules(pattern.template)])
+                text for verb, text in checked if verb not in bare
             )
             cards.append(
                 PatternCard(
@@ -181,11 +187,14 @@ def cards_for(
 _MASK = "\uf8ff"
 
 
-#: How readily each separator divides two whole statements rather than joining
-#: the items of one, most-dividing first. Only consulted when two of them both
-#: fit the line, which is a coincidence of counts rather than a real ambiguity.
-#: The union is last: it is the answer only when no single character fits.
-_DIVIDER_RANK = ("／", "/", "；", ";", "，", ",", "、", "･", "・", _SEPARATOR_CHARS)
+#: Separators that join the items of one statement and never divide two. The
+#: nakaguro is a joiner in Japanese typography, which is why `う・つ・る` is a
+#: trigger list and never two rules — and taking it as a divider cut
+#: `くる → きて・きた / する → して` after きて, losing きた and asking `きた / する`.
+#:
+#: Anything not named here is treated as a possible divider, so a separator
+#: added to `LIST_SEPARATORS` needs no edit here and cannot fail on a chart row.
+_JOINERS = frozenset("・･")
 
 
 def _masked(template: str) -> str:
@@ -263,10 +272,25 @@ def _cut_at(masked: str, cuts: Sequence[int]) -> list[tuple[int, int]]:
     spans: list[tuple[int, int]] = []
     start = 0
     for cut in (*cuts, len(masked)):
-        if masked[start:cut].strip(_SEPARATOR_CHARS + " "):
+        # All whitespace, not the ASCII space alone: U+3000 is ordinary in
+        # Japanese source text, and a trailing `/　` left a span that fit
+        # nothing, so a two-rule line shipped as one prose card.
+        if masked[start:cut].strip().strip(_SEPARATOR_CHARS).strip():
             spans.append((start, cut))
         start = cut + 1
     return spans
+
+
+def _fitting_cut(
+    masked: str, chars: str, arrows: int
+) -> list[tuple[int, int]] | None:
+    """The spans this cut makes, if it makes one rule out of each."""
+    spans = _cut_at(masked, [i for i, char in enumerate(masked) if char in chars])
+    if len(spans) == arrows and all(
+        len(_ARROW.findall(masked[a:b])) == 1 for a, b in spans
+    ):
+        return spans
+    return None
 
 
 def _rule_spans(masked: str, arrows: int) -> list[tuple[int, int]] | None:
@@ -275,29 +299,33 @@ def _rule_spans(masked: str, arrows: int) -> list[tuple[int, int]] | None:
     # union — so the choice never depends on a set's iteration order.
     candidates: list[str] = []
     for char in masked:
-        if char in _SEPARATOR_CHARS and char not in candidates:
+        if char in _SEPARATOR_CHARS and char not in _JOINERS and char not in candidates:
             candidates.append(char)
 
-    fitting: list[tuple[str, list[tuple[int, int]]]] = []
-    # Every candidate is tried, not just the first that fits — see the ranking
-    # below.
-    for candidate in (*candidates, _SEPARATOR_CHARS):
-        cuts = [i for i, char in enumerate(masked) if char in candidate]
-        spans = _cut_at(masked, cuts)
-        if len(spans) == arrows and all(
-            len(_ARROW.findall(masked[a:b])) == 1 for a, b in spans
-        ):
-            fitting.append((candidate, spans))
+    # Every candidate is tried, not just the first that fits: two can fit the
+    # same line by coincidence of counts.
+    fitting = [
+        spans
+        for candidate in candidates
+        if (spans := _fitting_cut(masked, candidate, arrows))
+    ]
     if fitting:
-        # More than one can fit by coincidence: in `くる → きて・きた / する → して`
-        # both `・` and `/` cut two one-arrow pieces, and cutting at `・` drops
-        # きた from the first answer and asks `きた / する`. Ranked by how the
-        # characters are actually used rather than by where they appear —
-        # `・` joins the items of a list and never divides two statements, a
-        # solidus divides, and the commas fall in between. Taking whichever came
-        # first in the line let a lister win by being written earlier.
-        fitting.sort(key=lambda pair: _DIVIDER_RANK.index(pair[0]))
-        return fitting[0][1]
+        agreed = {tuple(spans) for spans in fitting}
+        if len(agreed) == 1:
+            return fitting[0]
+        # Two dividers that fit and disagree is real ambiguity, not a puzzle to
+        # be resolved by a ranking: `/` lists triggers in the shape
+        # `patterns.INSTRUCTIONS` asks for *and* divides rules, and so does each
+        # comma, so no fixed order can be right in both directions. One prose
+        # card carrying the whole line, as for `う/つ/る → って/った / く → いて`
+        # — the trigger is the note's GUID, and a guessed one is worse than a
+        # rule left undrilled.
+        return None
+    # Two dividers on one line (`… / … 、 …`): neither cuts the line alone, and
+    # their union is the same test over both.
+    union = _fitting_cut(masked, _SEPARATOR_CHARS, arrows)
+    if union:
+        return union
 
     # One character doing both jobs. Arrow-less pieces before the first rule are
     # its trigger list; one after a rule has ended could be that rule's result
@@ -317,12 +345,27 @@ def _rule_spans(masked: str, arrows: int) -> list[tuple[int, int]] | None:
 
 
 def _rule_pair(text: str, masked: str) -> tuple[str, str]:
+    """The question and answer halves of one rule.
+
+    The trigger keeps whatever the document wrote, parenthetical included: it is
+    the question *and* `PatternCard.identity`, so an annotation dropped from it
+    is a note GUID that moves. The answer does not: `Result` is documented as
+    the answer alone (`って`, `きて`), and `Gloss` is the field beside it for the
+    annotations — `って (godan)` in an answer slot is a classification the
+    learner is being asked to produce.
+    """
     arrow = _ARROW.search(masked)
     if arrow:
-        trigger, result = text[: arrow.start()], text[arrow.end():]
+        trigger = text[: arrow.start()]
+        result = masked[arrow.end():].replace(_MASK, "")
         if _tidy(trigger) and _tidy(result):
             return (_tidy(trigger), _tidy(result))
     return (_tidy(text), "")
+
+
+def _unannotated(text: str) -> str:
+    """The text with its parentheticals gone — what the rule checker reads."""
+    return _tidy(_masked(text).replace(_MASK, ""))
 
 
 def _tidy(text: str) -> str:

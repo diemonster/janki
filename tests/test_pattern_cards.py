@@ -96,6 +96,23 @@ def test_each_rule_on_a_row_keeps_only_its_own_example() -> None:
     assert cards[1].examples == ("する ⇨ して",)
 
 
+def test_an_annotated_trigger_still_claims_its_own_example() -> None:
+    """`check_pattern_rules` reads the row with parentheticals removed, so
+    `check.verb` is the bare かう. Matched against the displayed trigger the
+    example belonged to no card — and the fallback, which keeps whatever belongs
+    to no *other* rule, then put it on the `く → いて` card as well, showing a
+    worked example from a different rule."""
+    cards = cards_for(
+        chart(Pattern("かう (exception) → かって / く → いて", examples=("かう ⇨ かって",))),
+        CLASSES,
+    )
+
+    assert [(c.trigger, c.examples) for c in cards] == [
+        ("かう (exception)", ("かう ⇨ かって",)),
+        ("く", ()),
+    ]
+
+
 def test_a_rule_stated_by_ending_takes_the_rows_examples() -> None:
     """No example names `う・つ・る`, so the row's whole verified set is its."""
     cards = cards_for(
@@ -244,12 +261,9 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
         ),
         # A parenthetical carrying an arrow of its own, which `patterns.py`
         # documents as ordinary chart content. Masked while the line is read,
-        # and kept in what the card says — the text is the document's, and the
-        # trigger half of it is the note's GUID.
-        (
-            "く → いて / ぐ → いで (voiced → で)",
-            [("く", "いて"), ("ぐ", "いで (voiced → で)")],
-        ),
+        # and kept out of the answer — `Result` is the answer alone and `Gloss`
+        # is the field beside it for annotations.
+        ("く → いて / ぐ → いで (voiced → で)", [("く", "いて"), ("ぐ", "いで")]),
         # A rule whose *result* is a list, followed by a second rule. An
         # arrow-less run was always attached forward, so `った` left the first
         # answer and became the second card's question: `った / く`. Which
@@ -308,11 +322,8 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
         # The same rule with and without a sibling on the line, which used to
         # give two different answers — one path built the card from the stripped
         # text and the other from the original.
-        ("う・つ・る → って (godan)", [("う・つ・る", "って (godan)")]),
-        (
-            "う・つ・る → って (godan) / く → いて",
-            [("う・つ・る", "って (godan)"), ("く", "いて")],
-        ),
+        ("う・つ・る → って (godan)", [("う・つ・る", "って")]),
+        ("う・つ・る → って (godan) / く → いて", [("う・つ・る", "って"), ("く", "いて")]),
         # A parenthetical in the *trigger* half, which is the note's GUID: cut
         # away, the next build of a shipped deck emits `pattern:<doc>:行く`
         # where the collection holds `pattern:<doc>:行く (exception)`, so genanki
@@ -327,10 +338,23 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
             "く → いて・いた / ぐ → いで・いだ / す → して",
             [("く", "いて・いた"), ("ぐ", "いで・いだ"), ("す", "して")],
         ),
-        ("する → して, した / くる → きて", [("する", "して, した"), ("くる", "きて")]),
+        # `,` and `/` both cut this into two one-arrow pieces and they disagree
+        # about where. `/` lists triggers in the shape `patterns.INSTRUCTIONS`
+        # asks for *and* divides rules, and so does each comma, so no fixed
+        # order of the characters can be right in both directions — one prose
+        # card, rather than a guessed trigger that is also the note's GUID.
+        (
+            "する → して, した / くる → きて",
+            [("する → して, した / くる → きて", "")],
+        ),
+        ("する → して/した、くる → きて", [("する → して/した、くる → きて", "")]),
         # The mirror: a two-item trigger list on the *second* rule, where `・`
         # also cuts two one-arrow pieces — `く → いて / う` and `つ → って`.
         ("く → いて / う・つ → って", [("く", "いて"), ("う・つ", "って")]),
+        # U+3000 is ordinary in Japanese source text. Tested for blankness with
+        # the ASCII space alone, the trailing piece made a third span that fit
+        # nothing, and both rules shipped as one prose card.
+        ("く → いて / ぐ → いで /\u3000", [("く", "いて"), ("ぐ", "いで")]),
     ],
     ids=[
         "slashed-triggers", "dotted-triggers", "two-rules-slash", "two-rules-comma",
@@ -343,8 +367,10 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
         "trigger-and-result-lists-on-both", "an-arrow-inside-a-prose-gloss",
         "a-gloss-on-a-lone-rule", "a-gloss-on-a-rule-with-a-sibling",
         "a-parenthetical-in-the-trigger", "a-two-item-result-list",
-        "two-item-result-lists-throughout", "a-comma-separated-result-list",
+        "two-item-result-lists-throughout", "two-dividers-that-disagree",
+        "two-dividers-that-disagree-the-other-way",
         "a-two-item-trigger-list-on-the-second-rule",
+        "a-full-width-space-after-a-trailing-separator",
     ],
 )
 def test_a_separator_divides_rules_only_when_every_piece_has_an_arrow(
