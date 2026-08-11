@@ -176,6 +176,23 @@ def test_a_decomposed_trigger_still_claims_its_own_example() -> None:
     assert [c.examples for c in cards] == [("およぐ ⇨ およいで",), ()]
 
 
+def test_a_chain_beside_a_rule_keeps_its_own_worked_example() -> None:
+    """The example attribution reads card *triggers*, and a chain's card is its
+    whole text — so くる appeared in no trigger, and the fallback that keeps
+    what belongs to no *other* rule put `くる ⇨ きて` on the `く → いて` card:
+    an irregular's て-form shown as a worked example of the く rule. The card
+    that names the verb is the one that claims it."""
+    cards = cards_for(
+        chart(Pattern("くる → きて → きた / く → いて", examples=("くる ⇨ きて",))),
+        CLASSES,
+    )
+
+    assert [(c.trigger, c.examples) for c in cards] == [
+        ("くる → きて → きた", ("くる ⇨ きて",)),
+        ("く", ()),
+    ]
+
+
 def test_a_rule_stated_by_ending_takes_the_rows_examples() -> None:
     """No example names `う・つ・る`, so the row's whole verified set is its."""
     cards = cards_for(

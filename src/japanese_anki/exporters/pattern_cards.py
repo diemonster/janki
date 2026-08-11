@@ -54,6 +54,7 @@ from japanese_anki.patterns import (
     LIST_SEPARATORS,
     PatternSet,
     check_pattern_rules,
+    verb_pairs_in,
 )
 
 __all__ = [
@@ -177,15 +178,32 @@ def cards_for(
         # fallback below — which keeps what belongs to no *other* rule — then
         # put it on every card on the row.
         bare = [_unannotated(trigger) for trigger, _, _ in rules]
+        # Plus the verbs named *inside* a piece that states no rule. A row can
+        # hold a chain beside a rule — `くる → きて → きた / く → いて` — and the
+        # chain's card is its whole text, so its verb appears in no trigger.
+        # Unclaimed, the fallback below (which keeps what belongs to no *other*
+        # rule) put くる ⇨ きて on the `く → いて` card, showing an irregular's
+        # て-form as a worked example of the く rule.
+        owned = set(bare)
+        for trigger, result, _annotation in rules:
+            if not result:
+                owned.update(verb for verb, _ in verb_pairs_in(_unannotated(trigger)))
         for (trigger, result, annotation), verb_of in zip(rules, bare, strict=True):
             # A row stating several rules — `くる → きて / する → して` — has
             # worked examples for each, and putting both on both cards asks
             # about くる while showing する. Where the trigger *is* the example's
             # verb, keep only its own; where it is an ending (`う・つ・る`) no
             # example names it, so the row's whole set belongs to the card.
-            mine = [text for verb, text in checked if verb == verb_of]
+            # A card that states no rule is its whole text, so the verbs it
+            # claims are the ones named *in* it rather than its trigger.
+            claims = (
+                {verb_of}
+                if result
+                else {verb_of, *(verb for verb, _ in verb_pairs_in(verb_of))}
+            )
+            mine = [text for verb, text in checked if verb in claims]
             examples = tuple(mine) if mine else tuple(
-                text for verb, text in checked if verb not in bare
+                text for verb, text in checked if verb not in owned
             )
             cards.append(
                 PatternCard(

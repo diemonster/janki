@@ -338,7 +338,7 @@ def chart_verbs(entry: PatternSet) -> list[str]:
         for text in (pattern.template, *pattern.examples):
             stripped = re.sub(r"[(（][^)）]*[)）]", " ", text)
             stripped = normalize_identity_part(stripped) or stripped
-            for verb, _claimed in _pairs_in(stripped):
+            for verb, _claimed in verb_pairs_in(stripped):
                 if verb[-1] in _DICTIONARY_ENDINGS and verb not in seen:
                     seen.append(verb)
     return seen
@@ -451,7 +451,7 @@ def group_identity(group: str) -> str:
     return normalized_group_name(group) or _normalize_group(group)
 
 
-def _pairs_in(text: str) -> list[tuple[str, str]]:
+def verb_pairs_in(text: str) -> list[tuple[str, str]]:
     """Every complete ``verb ⇨ form`` claim on one line, or nothing.
 
     Split on list separators first, then match inside a segment, so a match can
@@ -640,7 +640,7 @@ def check_pattern_rules(
             # ぐ is く plus U+3099, which is outside the word class, so
             # およぐ ⇨ およいで matched nothing at all.
             stripped = normalize_identity_part(stripped) or stripped
-            for match in _pairs_in(stripped):
+            for match in verb_pairs_in(stripped):
                 verb, claimed = match
                 if verb[-1] not in _DICTIONARY_ENDINGS:
                     continue
