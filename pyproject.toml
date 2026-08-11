@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "japanese-anki"
-version = "0.1.0"
+version = "1.0.0"
 description = "A local, version-controlled pipeline for converting Japanese study material and Shirabe Jisho exports into Anki decks."
 readme = "README.md"
 requires-python = ">=3.11"
