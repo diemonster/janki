@@ -8,6 +8,8 @@ deck:
     production: true
     reading: false
   source: ../normalized/vocabulary.json
+  # Everything except what came out of an Anki deck, which yotsuba.yaml takes.
+  exclude_tags: [anki]
   # No include_ids: every record in the source. The three that used to be
   # pinned here were a starter set for verifying the pipeline, and the other
   # seventeen sat in a second deck only so the two would not both claim the

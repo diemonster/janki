@@ -4,6 +4,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": [
       {
         "where": "usage_notes",
@@ -24,6 +25,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": [
       {
         "where": "meanings",
@@ -38,6 +40,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
   },
   "094be9aa53a4": {
@@ -45,6 +48,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
   },
   "0da3e0688305": {
@@ -52,20 +56,105 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
+  },
+  "0f9db0dccc41": {
+    "record_id": "word:店:みせ",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "meanings",
+        "problem": "The sole gloss is \"Store\", but both example translations render 店 as \"restaurant\" and \"shop\"; on the production card a learner prompted with \"Store\" alone gets no signal that 店 also covers eating places.",
+        "severity": "note",
+        "suggestion": "Add the ordinary companion glosses, e.g. \"shop\", \"store\", \"restaurant (establishment)\"."
+      }
+    ]
+  },
+  "107a30e84a16": {
+    "record_id": "word:学校:がっこう",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "19e46d943776": {
+    "record_id": "word:もう:もう",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "Pitch accent",
+        "problem": "Four patterns are listed for a two-mora word but only two distinct shapes appear: LHH and HLL are each repeated. The card will draw the same diagram twice over, which reads as if もう had four accents rather than the two it has (atamadaka [1] and heiban [0]).",
+        "severity": "note",
+        "suggestion": "Deduplicate to the two distinct patterns, primary first: HLL, LHH."
+      }
+    ]
+  },
+  "28526e396a36": {
+    "record_id": "word:お父さん:おとうさん",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "usage_notes",
+        "problem": "\"Colloquially 「とーちゃん」 in this text\" refers to a \"text\" the card does not contain, so the note is unusable as written; it also spells the colloquial form with a katakana long mark instead of the usual とうちゃん/父ちゃん.",
+        "severity": "note",
+        "suggestion": "Replace with a self-contained note, e.g. \"Colloquial variants: とうちゃん (父ちゃん), パパ.\" Better still, use the slot for the 父 vs お父さん distinction a Genki learner needs."
+      },
+      {
+        "where": "examples[0]",
+        "problem": "The polite (です/ます) sentence uses お父さん for the speaker's own father, which cuts against the 父 (own father, humble) vs お父さん (someone else's father, or direct address) distinction Genki teaches alongside this word — and the contrast is made sharper by 父の日 sitting in the same sentence with the ちち reading.",
+        "severity": "note",
+        "suggestion": "Either make the recipient someone else's father / a direct-address use, or add a usage note explaining that お父さん for one's own father is normal in casual family talk but 父 is used when speaking politely about him to outsiders."
+      }
+    ]
   },
   "2c28231d0441": {
     "record_id": "word:来る:くる",
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
+  },
+  "2e9860331808": {
+    "record_id": "word:すぐ:すぐ",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "meanings",
+        "problem": "\"almost\" is not a sense of すぐ; it renders the feel of もうすぐ (\"any minute now\"), as the card's own usage note says (\"The 'almost/any minute now' feeling usually comes with もう\"). Listing it as a bare meaning teaches a false gloss, and neither example sentence uses that sense.",
+        "severity": "error",
+        "suggestion": "Replace with the core senses, e.g. \"immediately\", \"right away\", \"soon\" (optionally \"right nearby\" for the distance use), and leave the もうすぐ nuance in usage_notes."
+      }
+    ]
   },
   "317f118e653b": {
     "record_id": "word:食べる:たべる",
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "38a4cf22a5cc": {
+    "record_id": "word:人:ひと",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
   },
   "3bfd1c9b2075": {
@@ -73,6 +162,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
   },
   "40e667588618": {
@@ -80,6 +170,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
   },
   "4cc62e4477ac": {
@@ -87,6 +178,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": [
       {
         "where": "meanings",
@@ -101,13 +193,30 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
+  },
+  "4ee83a658d68": {
+    "record_id": "word:第1話:だいいちわ",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "meanings / examples[1]",
+        "problem": "The only gloss is \"Chapter 1\", but examples[1] uses 第１話 in the episode-of-a-series sense and translates it as \"episode 1\" — a sense the meanings field never lists, even though the usage note explains it.",
+        "severity": "note",
+        "suggestion": "Add \"episode 1\" as a second meaning alongside \"Chapter 1\" so both example sentences are covered by the card's glosses."
+      }
+    ]
   },
   "5014c3e5af52": {
     "record_id": "word:読む:よむ",
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
   },
   "540fb1e70fdd": {
@@ -115,6 +224,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": [
       {
         "where": "meanings",
@@ -129,6 +239,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": [
       {
         "where": "usage_notes",
@@ -144,11 +255,20 @@
       }
     ]
   },
+  "563cb3155e90": {
+    "record_id": "word:ここ:ここ",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "564158147976": {
     "record_id": "word:できる:できる",
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
   },
   "5805315cb4d7": {
@@ -156,6 +276,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
   },
   "5db4770668b4": {
@@ -163,6 +284,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
   },
   "6615a936ef8c": {
@@ -170,6 +292,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
   },
   "6b8a17ed6aac": {
@@ -177,6 +300,42 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "6b99f990f10a": {
+    "record_id": "word:明日:あした",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "Furigana",
+        "problem": "明日 read あした is a jukujikun: the reading is assigned to the compound as a whole and cannot be split as 明=あ + 日=した. The split furigana teaches two nonexistent kanji readings (the example sentence correctly uses the whole-word form 明日[あした]).",
+        "severity": "error",
+        "suggestion": "明日[あした]"
+      },
+      {
+        "where": "Part of speech",
+        "problem": "明日 is a temporal noun that also functions adverbially; labelling it simply \"adverb\" conflicts with the card's own usage note example 明日は忙しいです, where it is the topic noun.",
+        "severity": "note",
+        "suggestion": "\"noun (temporal); used adverbially\" or similar."
+      },
+      {
+        "where": "Usage notes",
+        "problem": "The clause \"It can be marked with は or を-less topic は for contrast\" is garbled and does not state a usable rule.",
+        "severity": "note",
+        "suggestion": "\"It can take は for contrast: 明日は忙しいです.\""
+      }
+    ]
+  },
+  "6d6eff9e91c9": {
+    "record_id": "word:夏休み:なつやすみ",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
   },
   "72e046d7c08d": {
@@ -184,6 +343,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": [
       {
         "where": "Transitivity",
@@ -204,6 +364,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": [
       {
         "where": "meanings",
@@ -218,16 +379,17 @@
     "at": "2026-08-10",
     "accepted": true,
     "accepted_because": "jpdb's API returns HLL for なる and the deck owner confirmed it against jpdb; jpdb is this deck's authority for accents. The heiban reading is the dictionary's, not the one this deck follows.",
-    "findings": [],
     "accepted_marks": [
       "pitch accent|error"
-    ]
+    ],
+    "findings": []
   },
   "821147473e9c": {
     "record_id": "word:使う:つかう",
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
   },
   "82efe1347fc6": {
@@ -235,13 +397,45 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
+  },
+  "833287b2442f": {
+    "record_id": "word:今日:きょう",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "part_of_speech",
+        "problem": "今日 is primarily a temporal noun that also functions adverbially (今日は月曜日です, 今日の予定), so labelling it simply \"adverb\" understates its use — and the card's own usage note describes it as \"a time word that works adverbially\".",
+        "severity": "note",
+        "suggestion": "Label it as a noun (temporal noun) used adverbially, e.g. \"noun, adverb\"."
+      }
+    ]
+  },
+  "85295c402c19": {
+    "record_id": "word:そう言えば:そういえば",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "usage_notes",
+        "problem": "The note reads \"Colloquially 「そういや」 in this text.\" — the trailing \"in this text\" appears to be leftover boilerplate from a source and makes the sentence incoherent on a standalone vocabulary card; neither example contains そういや.",
+        "severity": "note",
+        "suggestion": "Rewrite as a self-contained note, e.g. \"Often contracted to そういや in casual speech.\""
+      }
+    ]
   },
   "85d4300f2dc9": {
     "record_id": "word:思う:おもう",
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": [
       {
         "where": "usage_notes",
@@ -263,11 +457,33 @@
       }
     ]
   },
+  "882af7950d34": {
+    "record_id": "word:よつば:よつば",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "meanings / examples[0]",
+        "problem": "The only listed meaning is \"Yotsuba (name)\", but the example sentence uses よつば in its ordinary lexical sense \"four-leaf\" (四つ葉のクローバー = four-leaf clover), a sense the card never glosses. As written the card teaches that よつば means a girl's given name and then shows a sentence where it does not.",
+        "severity": "error",
+        "suggestion": "Add the primary sense first, e.g. meanings: \"four leaves\", \"four-leaf (clover)\", keeping \"Yotsuba (given name)\" as a secondary gloss; the の-adjective part of speech and the usage note then match the example."
+      },
+      {
+        "where": "expression",
+        "problem": "The usage note says the word is \"almost always seen in 四つ葉のクローバー\", i.e. normally written with kanji, yet the headword and the example sentence are kana-only, so the learner never meets the form they will actually encounter.",
+        "severity": "note",
+        "suggestion": "Use 四つ葉 as the expression with reading よつば and furigana 四[よ]つ 葉[ば], and write the example as 公園で四つ葉のクローバーを見つけました。"
+      }
+    ]
+  },
   "9085503c8ff2": {
     "record_id": "word:飲む:のむ",
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": [
       {
         "where": "meanings",
@@ -282,6 +498,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": [
       {
         "where": "meanings",
@@ -296,6 +513,15 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "a540db4bdf9b": {
+    "record_id": "word:引っ越す:ひっこす",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
   },
   "a7a45fbd7cb8": {
@@ -303,13 +529,42 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
+  },
+  "ab79713fd3c2": {
+    "record_id": "word:凄い:すごい",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "part_of_speech",
+        "problem": "凄い is an i-adjective (both examples use it as a predicate adjective: 凄いですね / 凄いね), but the card labels it an adverb; a learner would try to attach it directly to verbs or expect it not to conjugate.",
+        "severity": "error",
+        "suggestion": "Set part of speech to i-adjective (い-adjective). If the colloquial adverbial use (すごい美味しい) is worth teaching, put it in usage_notes rather than the POS field."
+      },
+      {
+        "where": "usage_notes",
+        "problem": "\"Colloquially 「すげえ」 in this text.\" is garbled — \"in this text\" refers to nothing on the card, so the note states no usable rule.",
+        "severity": "note",
+        "suggestion": "Rewrite as something like \"In casual (often male) speech, frequently pronounced すげえ.\""
+      },
+      {
+        "where": "meanings",
+        "problem": "\"wow\" is an interjection gloss, not a meaning of the adjective 凄い, and neither example uses it that way; it also omits the common negative sense (terrible, dreadful).",
+        "severity": "note",
+        "suggestion": "Use compact adjective glosses, e.g. \"amazing\", \"incredible\", \"terrible\"."
+      }
+    ]
   },
   "ad107d067fba": {
     "record_id": "word:書く:かく",
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
   },
   "b679c074c9ad": {
@@ -317,6 +572,15 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "bc1d5560f4b8": {
+    "record_id": "word:家:いえ",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
   },
   "bcfb6daa9373": {
@@ -324,6 +588,9 @@
     "at": "2026-08-10",
     "accepted": true,
     "accepted_because": "Verified against jpdb's API earlier and confirmed by the deck owner: jpdb returns HLL for なる (な high, る low), and jpdb is the accepted authority for this deck's accents. The reviewer's heiban reading is the dictionary's, not the one this deck follows.",
+    "accepted_marks": [
+      "pitch accent|error"
+    ],
     "findings": [
       {
         "where": "Pitch accent",
@@ -337,9 +604,6 @@
         "severity": "note",
         "suggestion": "Trim to the senses the card actually teaches, e.g. \"to become\", \"to turn into\", \"to get (to be)\", and move the rarer senses to usage_notes or drop them."
       }
-    ],
-    "accepted_marks": [
-      "pitch accent|error"
     ]
   },
   "c4b39126e8e9": {
@@ -347,6 +611,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
   },
   "c58782314caf": {
@@ -354,6 +619,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": [
       {
         "where": "meanings",
@@ -368,6 +634,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": [
       {
         "where": "meanings",
@@ -382,13 +649,45 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
+  },
+  "d85eb096b47b": {
+    "record_id": "word:一杯:いっぱい",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "part_of_speech / examples",
+        "problem": "The card labels 一杯 an adverb, but both example sentences use it predicatively (おなかが一杯です, 星が一杯だよ), i.e. as a な-adjective/noun rather than adverbially; a learner following the label might produce something like *一杯だ食べる or expect 一杯 to modify a verb here.",
+        "severity": "note",
+        "suggestion": "Label it as な-adjective/noun (adv only as a secondary sense), or add an adverbial example such as お腹一杯食べました so the stated part of speech matches what the sentences show."
+      }
+    ]
+  },
+  "dccc71759d77": {
+    "record_id": "word:祭り:まつり",
+    "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "usage_notes",
+        "problem": "花火祭り is given as a common compound, but the standard Japanese term for a fireworks event is 花火大会; 花火祭り is at best marginal and could lead a learner to produce an odd phrase.",
+        "severity": "note",
+        "suggestion": "Replace 花火祭り with a genuinely common compound such as 秋祭り or 神社の祭り, and mention 花火大会 separately if the fireworks context is wanted."
+      }
+    ]
   },
   "df225de2cca9": {
     "record_id": "word:聞く:きく",
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
   },
   "e277a3fd9cb7": {
@@ -396,6 +695,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
   },
   "e904270cf820": {
@@ -403,6 +703,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
   },
   "ee6ad85be641": {
@@ -410,6 +711,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": [
       {
         "where": "meanings",
@@ -424,6 +726,7 @@
     "at": "2026-08-10",
     "accepted": false,
     "accepted_because": "",
+    "accepted_marks": [],
     "findings": [
       {
         "where": "usage_notes",

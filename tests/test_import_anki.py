@@ -92,11 +92,15 @@ def test_a_variant_beside_the_reading_becomes_a_usage_note() -> None:
     """`すごい　「すげえ」` is the reading and then the form the manga prints. A
     reading pack for a manga is *about* that second form, so it is kept — and
     kept as a usage note, which `enrich --ai` fills only when it is empty, so
-    what the source said survives the model that would otherwise write there."""
+    what the source said survives the model that would otherwise write there.
+
+    Worded to stand alone: the card does not name the book it came from, so an
+    earlier "…in this text" referred to nothing a learner could see — which is
+    what `janki review` caught on three cards of a twenty-card pilot."""
     record = only("<div>凄い</div>", "<div>すごい　「すげえ」</div><div>Amazing, wow</div>")
 
     assert (record.expression, record.reading) == ("凄い", "すごい")
-    assert record.usage_notes == "Colloquially 「すげえ」 in this text."
+    assert record.usage_notes == "Colloquial form: 「すげえ」."
     assert record.meanings == ["Amazing, wow"]
 
 
@@ -109,7 +113,7 @@ def test_a_variant_on_its_own_line_is_not_a_second_reading() -> None:
     )
 
     assert record.reading == "おねえちゃん"
-    assert record.usage_notes == "Colloquially 「おねーちゃん」 in this text."
+    assert record.usage_notes == "Colloquial form: 「おねーちゃん」."
     assert record.meanings == ["Older sister"]
 
 

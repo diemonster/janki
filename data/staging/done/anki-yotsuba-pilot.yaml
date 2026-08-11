@@ -1,0 +1,654 @@
+source_file: Yotsubato Volume 1 Reading Pack Vocab
+extracted_at: '2026-08-11'
+review_notes: 'A twenty-record pilot, taken as the first twenty of the deck, to measure what the whole
+  708 will cost and look like before spending it.
+
+
+  Promoted 20 record(s) from this file.'
+records:
+- id: word:引っ越す:ひっこす
+  expression: 引っ越す
+  reading: ひっこす
+  furigana: ''
+  romaji: hikkosu
+  meanings:
+  - To move (to a new residence)
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426309255'
+      anki_guid: G|;avUk2-c
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>引っ越す</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>ひっこす</div><div>To move
+        (to a new residence)</div></span>'
+      anki_Add Reverse: y
+- id: word:第1話:だいいちわ
+  expression: 第１話
+  reading: だいいちわ
+  furigana: ''
+  romaji: daiichiwa
+  meanings:
+  - Chapter 1
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426430343'
+      anki_guid: Q*m`xy;y0R
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>第１話</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>だいいちわ</div><div>Chapter
+        1</div></span>'
+      anki_Add Reverse: y
+- id: word:もう:もう
+  expression: もう
+  reading: もう
+  furigana: ''
+  romaji: mou
+  meanings:
+  - Soon, shortly
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426443776'
+      anki_guid: y6;wc%,S^]
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>もう</div>
+      anki_Back: <div>もう</div><div>Soon, shortly</div>
+      anki_Add Reverse: ''
+- id: word:すぐ:すぐ
+  expression: すぐ
+  reading: すぐ
+  furigana: ''
+  romaji: sugu
+  meanings:
+  - Soon, almost
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426463241'
+      anki_guid: '&verAZYn['
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>すぐ</div>
+      anki_Back: <div>すぐ</div><div>Soon, almost</div><div><br /></div>
+      anki_Add Reverse: ''
+- id: word:よつば:よつば
+  expression: よつば
+  reading: よつば
+  furigana: ''
+  romaji: yotsuba
+  meanings:
+  - Yotsuba (name)
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426473513'
+      anki_guid: D@$Yu,1MbY
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>よつば</div>
+      anki_Back: <div>よつば</div><div>Yotsuba (name)</div>
+      anki_Add Reverse: ''
+- id: word:凄い:すごい
+  expression: 凄い
+  reading: すごい
+  furigana: ''
+  romaji: sugoi
+  meanings:
+  - Amazing, wow
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: Colloquially 「すげえ」 in this text.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426483745'
+      anki_guid: Gj&EUt19z-
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>凄い</div>
+      anki_Back: <div>すごい　「すげえ」</div><div>Amazing, wow</div>
+      anki_Add Reverse: y
+- id: word:お父さん:おとうさん
+  expression: お父さん
+  reading: おとうさん
+  furigana: ''
+  romaji: otousan
+  meanings:
+  - Dad, father
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: Colloquially 「とーちゃん」 in this text.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426500601'
+      anki_guid: bS_Z@slM;M
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>お父さん</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>おとうさん　「とーちゃん」</div><div>Dad,
+        father</div></span>'
+      anki_Add Reverse: y
+- id: word:ここ:ここ
+  expression: ここ
+  reading: ここ
+  furigana: ''
+  romaji: koko
+  meanings:
+  - Here
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426516369'
+      anki_guid: KDlmkrO~;w
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>ここ</div>
+      anki_Back: <div>ここ</div><div>Here</div>
+      anki_Add Reverse: ''
+- id: word:家:いえ
+  expression: 家
+  reading: いえ
+  furigana: ''
+  romaji: ie
+  meanings:
+  - House
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426527058'
+      anki_guid: G}m).G>&`S
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>家</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>いえ</div><div>House</div></span>'
+      anki_Add Reverse: y
+- id: word:一杯:いっぱい
+  expression: 一杯
+  reading: いっぱい
+  furigana: ''
+  romaji: ippai
+  meanings:
+  - A lot, a full container
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426538296'
+      anki_guid: ME?9`I9654
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>一杯</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>いっぱい</div><div>A lot, a
+        full container</div></span>'
+      anki_Add Reverse: y
+- id: word:ある:ある
+  expression: ある
+  reading: ある
+  furigana: ''
+  romaji: aru
+  meanings:
+  - To be, exist (non-living)
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426552586'
+      anki_guid: PYm3nc[>wO
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>ある</div>
+      anki_Back: <div>ある</div><div>To be, exist (non-living)</div>
+      anki_Add Reverse: ''
+- id: word:店:みせ
+  expression: 店
+  reading: みせ
+  furigana: ''
+  romaji: mise
+  meanings:
+  - Store
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426563808'
+      anki_guid: b9<5?2Wb$5
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>店</div>
+      anki_Back: <div>みせ</div><div>Store</div>
+      anki_Add Reverse: y
+- id: word:人:ひと
+  expression: 人
+  reading: ひと
+  furigana: ''
+  romaji: hito
+  meanings:
+  - People, person
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426583826'
+      anki_guid: ghh:]l4:tg
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>人</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>ひと</div><div>People, person</div></span>'
+      anki_Add Reverse: y
+- id: word:いる:いる
+  expression: いる
+  reading: いる
+  furigana: ''
+  romaji: iru
+  meanings:
+  - To be, exist (living)
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426596882'
+      anki_guid: l$^;L-Dm){
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>いる</div>
+      anki_Back: <div>いる</div><div>To be, exist (living)</div>
+      anki_Add Reverse: ''
+- id: word:今日:きょう
+  expression: 今日
+  reading: きょう
+  furigana: ''
+  romaji: kyou
+  meanings:
+  - Today
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426608577'
+      anki_guid: qo[qgmk*-4
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>今日</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>きょう</div><div>Today</div></span>'
+      anki_Add Reverse: y
+- id: word:祭り:まつり
+  expression: 祭り
+  reading: まつり
+  furigana: ''
+  romaji: matsuri
+  meanings:
+  - Festival
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426618872'
+      anki_guid: hm$_[ZPOG9
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>祭り</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>まつり</div><div>Festival</div></span>'
+      anki_Add Reverse: y
+- id: word:学校:がっこう
+  expression: 学校
+  reading: がっこう
+  furigana: ''
+  romaji: gakkou
+  meanings:
+  - School
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426636121'
+      anki_guid: re?/URqG^Z
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>学校</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>がっこう</div><div>School</div></span>'
+      anki_Add Reverse: y
+- id: word:そう言えば:そういえば
+  expression: そう言えば
+  reading: そういえば
+  furigana: ''
+  romaji: souieba
+  meanings:
+  - “Speaking of which”
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: Colloquially 「そういや」 in this text.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426646697'
+      anki_guid: n}tyCoOIlE
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>そう言えば</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>そういえば　「そういや」</div><div>“Speaking
+        of which”</div></span>'
+      anki_Add Reverse: y
+- id: word:明日:あした
+  expression: 明日
+  reading: あした
+  furigana: ''
+  romaji: ashita
+  meanings:
+  - Tomorrow
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426664369'
+      anki_guid: mt6@G=t,<A
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>明日</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>あした</div><div>Tomorrow</div></span>'
+      anki_Add Reverse: y
+- id: word:夏休み:なつやすみ
+  expression: 夏休み
+  reading: なつやすみ
+  furigana: ''
+  romaji: natsuyasumi
+  meanings:
+  - Summer break, summer vacation
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426681529'
+      anki_guid: 5pg%p6+5k
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>夏休み</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>なつやすみ</div><div>Summer
+        break, summer vacation</div></span>'
+      anki_Add Reverse: y

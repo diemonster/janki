@@ -137,7 +137,10 @@ def _record(
     # taken from the source survives the model that would otherwise write one.
     spoken = ""
     if variants:
-        spoken = f"Colloquially 「{'」, 「'.join(dict.fromkeys(variants))}」 in this text."
+        # Self-contained: the card does not name the book it came from, so a
+        # note saying "in this text" refers to nothing a learner can see. The
+        # review gate caught this on three cards of a twenty-card pilot.
+        spoken = f"Colloquial form: 「{'」, 「'.join(dict.fromkeys(variants))}」."
     return VocabularyRecord(
         usage_notes=spoken,
         id=stable_record_id(expression, reading),

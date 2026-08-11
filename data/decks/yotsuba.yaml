@@ -1,0 +1,14 @@
+deck:
+  name: "Brandon Japanese::Yotsubato Vol. 1"
+  deck_id: 2059400115
+  description: "The Yotsubato volume 1 reading pack, enriched: readings, pitch, sentences and audio."
+  output: "yotsuba.apkg"
+  cards:
+    recognition: true
+    production: true
+    reading: false
+  source: ../normalized/vocabulary.json
+  # The tag `import-anki` puts on everything it reads. The verb deck excludes
+  # the same tag, so the two never claim the same record — same source file,
+  # same GUIDs, and an overlap means each import moves notes between decks.
+  include_tags: [anki]

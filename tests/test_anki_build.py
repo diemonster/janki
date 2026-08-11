@@ -8,8 +8,8 @@ import pytest
 pytest.importorskip("genanki")
 
 from japanese_anki.config import ProjectConfig
-from japanese_anki.exporters.anki import AnkiBuildError, build_deck
-from japanese_anki.io import DataError, load_records
+from japanese_anki.exporters.anki import AnkiBuildError, build_deck, resolve_deck_records
+from japanese_anki.io import DataError
 from japanese_anki.models import ExampleSentence, VocabularyRecord
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -20,11 +20,12 @@ def test_builds_importable_package(tmp_path: Path) -> None:
     output = tmp_path / "verbs.apkg"
     result = build_deck(PROJECT_ROOT / "data/decks/verbs.yaml", config, output)
 
-    # Counted from the source rather than pinned: this deck takes every record,
-    # so a magic number here fails whenever a word is added — which says
-    # nothing about the builder, the only thing this test is about.
-    expected = len(load_records(config.normalized_file))
-    assert result.note_count == expected
+    # From the deck's own membership rather than pinned or counted off the
+    # source: a magic number fails whenever a word is added, and a source count
+    # fails whenever the deck's filters change — neither of which says anything
+    # about the builder, the only thing this test is about.
+    _, expected = resolve_deck_records(PROJECT_ROOT / "data/decks/verbs.yaml")
+    assert result.note_count == len(expected)
     assert result.card_types == ("recognition", "production")
     assert output.exists()
     with ZipFile(output) as archive:

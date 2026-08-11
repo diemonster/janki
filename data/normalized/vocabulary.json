@@ -130,6 +130,177 @@
     }
   },
   {
+    "id": "word:お父さん:おとうさん",
+    "expression": "お父さん",
+    "reading": "おとうさん",
+    "furigana": "お 父[とう]さん",
+    "romaji": "otousan",
+    "meanings": [
+      "Dad, father"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "父の日にお父さんにネクタイをあげるつもりです。",
+        "furigana": "父[ちち]の 日[ひ]にお 父[とう]さんにネクタイをあげるつもりです。",
+        "romaji": "chichinohiniotousanninekutaioagerutsumoridesu.",
+        "english": "I'm planning to give my dad a necktie on Father's Day.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "明日、お父さんと山に登るんだ。",
+        "furigana": "明日[あした]、お 父[とう]さんと 山[やま]に 登[のぼ]るんだ。",
+        "romaji": "ashita, otousantoyamaninoborunda.",
+        "english": "Tomorrow I'm going hiking with my dad, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "Colloquial form: 「とーちゃん」.",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [
+      "LHLLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 1400,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426500601",
+        "anki_guid": "bS_Z@slM;M",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>お父さん</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>おとうさん　「とーちゃん」</div><div>Dad, father</div></span>",
+        "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:ここ:ここ",
+    "expression": "ここ",
+    "reading": "ここ",
+    "furigana": "",
+    "romaji": "koko",
+    "meanings": [
+      "Here"
+    ],
+    "part_of_speech": "pronoun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "ここで昼ご飯を食べるつもりです。",
+        "furigana": "ここで 昼[ひる]ご 飯[はん]を 食[た]べるつもりです。",
+        "romaji": "kokodehirugohan'otaberutsumoridesu.",
+        "english": "I'm planning to eat lunch here.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "ここが新しいカフェなの？",
+        "furigana": "ここが 新[あたら]しいカフェなの？",
+        "romaji": "kokogaatarashiikafenano?",
+        "english": "Is this the new café?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "ここ is the place near the speaker ('here'), contrasting with そこ (near the listener) and あそこ (far from both). It is a pronoun, so it takes particles directly: ここで (action location), ここに (existence/destination), ここは (topic). Don't say ここの前に for 'in front of me' — use ここ only for places. In polite or business speech, こちら is often used instead of ここ.",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 100,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426516369",
+        "anki_guid": "KDlmkrO~;w",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>ここ</div>",
+        "anki_Back": "<div>ここ</div><div>Here</div>",
+        "anki_Add Reverse": ""
+      }
+    }
+  },
+  {
+    "id": "word:すぐ:すぐ",
+    "expression": "すぐ",
+    "reading": "すぐ",
+    "furigana": "",
+    "romaji": "sugu",
+    "meanings": [
+      "Soon, almost"
+    ],
+    "part_of_speech": "adverb",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "バスはすぐ来ますから、大丈夫です。",
+        "furigana": "バスは すぐ 来[き]ますから、大丈夫[だいじょうぶ]です。",
+        "romaji": "basuha sugukidaijoubudesu.",
+        "english": "The bus will come soon, so it's fine.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "ごめん、今から すぐ行くんだ。",
+        "furigana": "ごめん、今[いま]から すぐ 行[い]くんだ。",
+        "romaji": "imakara suguikunda.",
+        "english": "Sorry — I'm heading over right now.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "Basic sense is \"right away, immediately\" in time; すぐに is an interchangeable variant that sounds a little more deliberate. すぐ also works for distance — すぐそこ \"right over there\", 駅のすぐ前 \"right in front of the station\". The \"almost/any minute now\" feeling usually comes with もう: もうすぐ着きます \"we'll arrive any minute\".",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 400,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426463241",
+        "anki_guid": "&verAZYn[",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>すぐ</div>",
+        "anki_Back": "<div>すぐ</div><div>Soon, almost</div><div><br /></div>",
+        "anki_Add Reverse": ""
+      }
+    }
+  },
+  {
     "id": "word:する:する",
     "expression": "する",
     "reading": "する",
@@ -205,6 +376,63 @@
         "sid": "460825390",
         "deck": "Anki Test - Top 20 Verbs",
         "card_state": "new"
+      }
+    }
+  },
+  {
+    "id": "word:そう言えば:そういえば",
+    "expression": "そう言えば",
+    "reading": "そういえば",
+    "furigana": "そう 言[い]えば",
+    "romaji": "souieba",
+    "meanings": [
+      "“Speaking of which”"
+    ],
+    "part_of_speech": "expression",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "そう言えば、来週の休みに京都へ行くつもりです。",
+        "furigana": "そう 言[い]えば、来週[らいしゅう]の 休[やす]みに 京都[きょうと]へ 行[い]くつもりです。",
+        "romaji": "souiraishuunoyasuminikyoutoheikutsumoridesu.",
+        "english": "Speaking of which, I'm planning to go to Kyoto on next week's day off.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "そう言えば、あの映画まだ見てないんだ。",
+        "furigana": "そう 言[い]えば、あの 映画[えいが]まだ 見[み]てないんだ。",
+        "romaji": "souieba, anoeigamadamitenainda.",
+        "english": "Come to think of it, I still haven't seen that movie.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "Colloquial form: 「そういや」.",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [
+      "HLLHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 4000,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426646697",
+        "anki_guid": "n}tyCoOIlE",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>そう言えば</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>そういえば　「そういや」</div><div>“Speaking of which”</div></span>",
+        "anki_Add Reverse": "y"
       }
     }
   },
@@ -349,6 +577,287 @@
     }
   },
   {
+    "id": "word:もう:もう",
+    "expression": "もう",
+    "reading": "もう",
+    "furigana": "",
+    "romaji": "mou",
+    "meanings": [
+      "Soon, shortly"
+    ],
+    "part_of_speech": "adverb",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "映画はもう始まります。",
+        "furigana": "映画[えいが]はもう 始[はじ]まります。",
+        "romaji": "eigahamouhajimarimasu.",
+        "english": "The movie is starting soon.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "もう帰るね。明日は朝が早いんだ。",
+        "furigana": "もう 帰[かえ]るね。明日[あした]は 朝[あさ]が 早[はや]いんだ。",
+        "romaji": "moukaeashitahaasagahayainda.",
+        "english": "I'm heading home soon. I have an early morning tomorrow, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "With a non-past verb, もう means \"soon / any moment now\" (もう始まります = it's about to start); with a past verb it means \"already\" (もう食べました). もうすぐ is a common, slightly more emphatic way to say \"very soon.\" Note also もう〜ません/〜ない = \"not any more.\"",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [
+      "LHH",
+      "HLL",
+      "HLL",
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 100,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426443776",
+        "anki_guid": "y6;wc%,S^]",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>もう</div>",
+        "anki_Back": "<div>もう</div><div>Soon, shortly</div>",
+        "anki_Add Reverse": ""
+      }
+    }
+  },
+  {
+    "id": "word:よつば:よつば",
+    "expression": "よつば",
+    "reading": "よつば",
+    "furigana": "",
+    "romaji": "yotsuba",
+    "meanings": [
+      "Yotsuba (name)"
+    ],
+    "part_of_speech": "no-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "公園でよつばのクローバーを見つけました。",
+        "furigana": "公園[こうえん]でよつばのクローバーを 見[み]つけました。",
+        "romaji": "kouendeyotsubanokuroobaaomitsukemashita.",
+        "english": "I found a four-leaf clover in the park.",
+        "audio": "",
+        "register": "polite"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "Almost always seen in 四つ葉のクローバー (\"four-leaf clover\"), which is a symbol of good luck in Japan; the の comes from this noun-modifying use, which is why it is listed as a の-adjective. よつば is also used as a girl's given name.",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 124400,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426473513",
+        "anki_guid": "D@$Yu,1MbY",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>よつば</div>",
+        "anki_Back": "<div>よつば</div><div>Yotsuba (name)</div>",
+        "anki_Add Reverse": ""
+      }
+    }
+  },
+  {
+    "id": "word:一杯:いっぱい",
+    "expression": "一杯",
+    "reading": "いっぱい",
+    "furigana": "一[いっ] 杯[ぱい]",
+    "romaji": "ippai",
+    "meanings": [
+      "A lot, a full container"
+    ],
+    "part_of_speech": "adverb",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "もうおなかが一杯です。デザートは食べません。",
+        "furigana": "もうおなかが 一杯[いっぱい]です。デザートは 食[た]べません。",
+        "romaji": "mouonakagaippaidesu. dezaatohatabemasen.",
+        "english": "I'm already full. I won't have dessert.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "見て、空に星が一杯だよ。",
+        "furigana": "見[み]て、空[そら]に 星[ほし]が 一杯[いっぱい]だよ。",
+        "romaji": "misoranihoshigaippaidayo.",
+        "english": "Look, the sky is full of stars.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "Very often written in kana as いっぱい. おなかがいっぱい is the standard way to say \"I'm full\" after eating. Note that the same reading いっぱい also works as a counter meaning \"one cup/glass\" (ビールを一杯 = one beer), so context decides which sense is meant.",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [
+      "LHHHH",
+      "HLLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 2700,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426538296",
+        "anki_guid": "ME?9`I9654",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>一杯</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>いっぱい</div><div>A lot, a full container</div></span>",
+        "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:人:ひと",
+    "expression": "人",
+    "reading": "ひと",
+    "furigana": "人[ひと]",
+    "romaji": "hito",
+    "meanings": [
+      "People, person"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "あの人は妻の友達です。",
+        "furigana": "あの 人[ひと]は 妻[つま]の 友達[ともだち]です。",
+        "romaji": "anohitohatsumanotomodachidesu.",
+        "english": "That person is my wife's friend.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "あの人、誰なの？",
+        "furigana": "あの 人[ひと]、 誰[だれ]なの？",
+        "romaji": "anohito, darenano?",
+        "english": "Who is that person?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "ひと is the standalone word for \"person\" and, in the plural sense, \"people.\" あの人 is a common way to refer to a third person you are talking about. Note that the same kanji is read differently inside compounds and counters: 一人 (ひとり), 三人 (さんにん), 日本人 (にほんじん).",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 100,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426583826",
+        "anki_guid": "ghh:]l4:tg",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>人</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>ひと</div><div>People, person</div></span>",
+        "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:今日:きょう",
+    "expression": "今日",
+    "reading": "きょう",
+    "furigana": "今日[きょう]",
+    "romaji": "kyou",
+    "meanings": [
+      "Today"
+    ],
+    "part_of_speech": "adverb",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "今日は日本語を勉強するつもりです。",
+        "furigana": "今日[きょう]は 日本語[にほんご]を 勉強[べんきょう]するつもりです。",
+        "romaji": "kyouhanihongoobenkyousurutsumoridesu.",
+        "english": "I'm planning to study Japanese today.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "今日は仕事が休みなんだ。",
+        "furigana": "今日[きょう]は 仕事[しごと]が 休[やす]みなんだ。",
+        "romaji": "kyouhashigotogayasuminanda.",
+        "english": "Today's my day off from work, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "今日 uses an irregular reading (きょう, not こんじつ in everyday speech). Like 明日 and 毎日, it is a time word that works adverbially, so it takes no に: say 今日、映画を見ます, never 今日に. It can still take は or も as a topic marker (今日は…, 今日も…).",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [
+      "HHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 200,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426608577",
+        "anki_guid": "qo[qgmk*-4",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>今日</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>きょう</div><div>Today</div></span>",
+        "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
     "id": "word:使う:つかう",
     "expression": "使う",
     "reading": "つかう",
@@ -415,6 +924,64 @@
     }
   },
   {
+    "id": "word:凄い:すごい",
+    "expression": "凄い",
+    "reading": "すごい",
+    "furigana": "凄[すご]い",
+    "romaji": "sugoi",
+    "meanings": [
+      "Amazing, wow"
+    ],
+    "part_of_speech": "adverb",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "このゲームの音楽は凄いですね。",
+        "furigana": "このゲームの 音楽[おんがく]は 凄[すご]いですね。",
+        "romaji": "konogeemunoongakuhasugoidesune.",
+        "english": "The music in this game is amazing, isn't it?",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "え、一人で富士山に登ったの？凄いね！",
+        "furigana": "え、 一人[ひとり]で 富士山[ふじさん]に 登[のぼ]ったの？ 凄[すご]いね！",
+        "romaji": "e, hitoridefujisanninobottano?sugoine!",
+        "english": "Huh, you climbed Mt. Fuji by yourself? That's amazing!",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "Colloquial form: 「すげえ」.",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [
+      "LHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 3100,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426483745",
+        "anki_guid": "Gj&EUt19z-",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>凄い</div>",
+        "anki_Back": "<div>すごい　「すげえ」</div><div>Amazing, wow</div>",
+        "anki_Add Reverse": "y",
+        "furigana_unverified": "34997ffa4edc"
+      }
+    }
+  },
+  {
     "id": "word:分かる:わかる",
     "expression": "分かる",
     "reading": "わかる",
@@ -474,6 +1041,299 @@
         "sid": "2821891307",
         "deck": "Anki Test - Top 20 Verbs",
         "card_state": "locked,new"
+      }
+    }
+  },
+  {
+    "id": "word:夏休み:なつやすみ",
+    "expression": "夏休み",
+    "reading": "なつやすみ",
+    "furigana": "夏[なつ] 休[やす]み",
+    "romaji": "natsuyasumi",
+    "meanings": [
+      "Summer break, summer vacation"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "夏休みに家族と山に登るつもりです。",
+        "furigana": "夏休[なつやす]みに 家族[かぞく]と 山[やま]に 登[のぼ]るつもりです。",
+        "romaji": "natsuyasuminikazokutoyamaninoborutsumoridesu.",
+        "english": "I'm planning to climb a mountain with my family over summer break.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "夏休み、どこかに行くの？",
+        "furigana": "夏休[なつやす]み、どこかに 行[い]くの？",
+        "romaji": "natsuyasumi, dokokaniikuno?",
+        "english": "Are you going anywhere for summer vacation?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "Everyday word for the school or company summer break, not just \"summer\" in general (that is 夏). To say what you do during it, mark it with に: 夏休みに旅行します。Compare 冬休み (winter break) and 春休み (spring break).",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [
+      "LHHLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 3700,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426681529",
+        "anki_guid": "5pg%p6+5k",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>夏休み</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>なつやすみ</div><div>Summer break, summer vacation</div></span>",
+        "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:学校:がっこう",
+    "expression": "学校",
+    "reading": "がっこう",
+    "furigana": "学[がっ] 校[こう]",
+    "romaji": "gakkou",
+    "meanings": [
+      "School"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "毎日、自転車で学校に行きます。",
+        "furigana": "毎日[まいにち]、 自転車[じてんしゃ]で 学校[がっこう]に 行[い]きます。",
+        "romaji": "mainichi, jitenshadegakkouniikimasu.",
+        "english": "I go to school by bicycle every day.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "学校まで歩いて行くの？",
+        "furigana": "学校[がっこう]まで 歩[ある]いて 行[い]くの？",
+        "romaji": "gakkoumadearuiteikuno?",
+        "english": "Do you walk to school?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "Use に (or へ) with 行く for school as a destination, but で when school is where an activity happens: 学校で日本語を勉強します。学校 covers elementary through high school and schools in general; a university is normally 大学, not 学校.",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [
+      "LHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 700,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426636121",
+        "anki_guid": "re?/URqG^Z",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>学校</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>がっこう</div><div>School</div></span>",
+        "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:家:いえ",
+    "expression": "家",
+    "reading": "いえ",
+    "furigana": "家[いえ]",
+    "romaji": "ie",
+    "meanings": [
+      "House"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "来年、新しい家を買うつもりです。",
+        "furigana": "来年[らいねん]、 新[あたら]しい 家[いえ]を 買[か]うつもりです。",
+        "romaji": "rainen, atarashiiieokautsumoridesu.",
+        "english": "I'm planning to buy a new house next year.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "この家、ちょっと古いんだ。",
+        "furigana": "この 家[いえ]、ちょっと 古[ふる]いんだ。",
+        "romaji": "konoie, chottofuruinda.",
+        "english": "This house is a little old, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "いえ is the building itself — a house. When you mean \"home\" as in your own household (my place, at home), Japanese usually uses うち, and the same kanji 家 is often read うち in that sense. In compounds 家 is read か or け (作家 さっか \"author\", 家族 かぞく \"family\").",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [
+      "LHL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 200,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426527058",
+        "anki_guid": "G}m).G>&`S",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>家</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>いえ</div><div>House</div></span>",
+        "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:店:みせ",
+    "expression": "店",
+    "reading": "みせ",
+    "furigana": "店[みせ]",
+    "romaji": "mise",
+    "meanings": [
+      "Store"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "この店のラーメンはとてもおいしいです。",
+        "furigana": "この 店[みせ]のラーメンはとてもおいしいです。",
+        "romaji": "konomisenoraamenhatotemooishiidesu.",
+        "english": "The ramen at this restaurant is very good.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "あの店、日曜日は休みなの？",
+        "furigana": "あの 店[みせ]、 日曜日[にちようび]は 休[やす]みなの？",
+        "romaji": "anomise, nichiyoubihayasuminano?",
+        "english": "Is that shop closed on Sundays?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "General word for a shop or restaurant. In conversation お店 is very common and sounds a little softer or more polite. For a specific kind of shop, Japanese usually uses 〜屋（や）instead: 本屋, パン屋, 花屋.",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [
+      "LHL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 700,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426563808",
+        "anki_guid": "b9<5?2Wb$5",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>店</div>",
+        "anki_Back": "<div>みせ</div><div>Store</div>",
+        "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:引っ越す:ひっこす",
+    "expression": "引っ越す",
+    "reading": "ひっこす",
+    "furigana": "引[ひ]っ 越[こ]す",
+    "romaji": "hikkosu",
+    "meanings": [
+      "To move (to a new residence)"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "来月、東京に引っ越すつもりです。",
+        "furigana": "来月[らいげつ]、 東京[とうきょう]に 引[ひ]っ 越[こ]すつもりです。",
+        "romaji": "raigetsu, toukyounihikkosutsumoridesu.",
+        "english": "I'm planning to move to Tokyo next month.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "え、もう引っ越すの？",
+        "furigana": "え、もう 引[ひ]っ 越[こ]すの？",
+        "romaji": "e, mouhikkosuno?",
+        "english": "Huh, you're moving already?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "引っ越す",
+      "negative": "引っ越さない",
+      "past": "引っ越した",
+      "past_negative": "引っ越さなかった",
+      "te_form": "引っ越して",
+      "potential": "引っ越せる",
+      "passive": "引っ越される"
+    },
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "Intransitive: the new place takes に (or へ) — 大阪に引っ越す, and the old place takes から. The noun form 引っ越し is very common, often as 引っ越しをする ('to move house') or 引っ越しの準備 ('moving preparations'). Note the small っ in both the kanji spelling and the reading ひっこす.",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [
+      "LHHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 5600,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426309255",
+        "anki_guid": "G|;avUk2-c",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>引っ越す</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>ひっこす</div><div>To move (to a new residence)</div></span>",
+        "anki_Add Reverse": "y"
       }
     }
   },
@@ -543,6 +1403,56 @@
         "sid": "3737793312",
         "deck": "Anki Test - Top 20 Verbs",
         "card_state": "locked,new"
+      }
+    }
+  },
+  {
+    "id": "word:明日:あした",
+    "expression": "明日",
+    "reading": "あした",
+    "furigana": "明[あ] 日[した]",
+    "romaji": "ashita",
+    "meanings": [
+      "Tomorrow"
+    ],
+    "part_of_speech": "adverb",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "明日、友だちと山に登ります。",
+        "furigana": "明日[あした]、 友[とも]だちと 山[やま]に 登[のぼ]ります。",
+        "romaji": "ashita, tomodachitoyamaninoborimasu.",
+        "english": "Tomorrow I'm going to climb a mountain with a friend.",
+        "audio": "",
+        "register": "polite"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "明日 is a time word that works like an adverb, so it takes no に: 明日行きます (not ×明日に行きます). It can be marked with は or を-less topic は for contrast (明日は忙しいです). The same kanji can be read あす (a little more formal, common in news and announcements) or みょうにち (very formal, business); あした is the everyday spoken reading.",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [
+      "LHHL",
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 600,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426664369",
+        "anki_guid": "mt6@G=t,<A",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>明日</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>あした</div><div>Tomorrow</div></span>",
+        "anki_Add Reverse": "y"
       }
     }
   },
@@ -742,6 +1652,118 @@
         "sid": "2987388496",
         "deck": "Anki Test - Top 20 Verbs",
         "card_state": "locked,new"
+      }
+    }
+  },
+  {
+    "id": "word:祭り:まつり",
+    "expression": "祭り",
+    "reading": "まつり",
+    "furigana": "祭[まつ]り",
+    "romaji": "matsuri",
+    "meanings": [
+      "Festival"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "来週の日曜日、京都の祭りを見に行くつもりです。",
+        "furigana": "来週[らいしゅう]の 日曜日[にちようび]、 京都[きょうと]の 祭[まつ]りを 見[み]に 行[い]くつもりです。",
+        "romaji": "raishuunonichiyoubi, kyoutonomatsuriominiikutsumoridesu.",
+        "english": "Next Sunday, I'm planning to go see a festival in Kyoto.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "ねえ、明日の祭り、行くの？",
+        "furigana": "ねえ、明日[あした]の 祭[まつ]り、行[い]くの？",
+        "romaji": "ashitanomatsuikuno?",
+        "english": "Hey, are you going to tomorrow's festival?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "Very often said with the polite prefix お: お祭り. Appears in compounds such as 夏祭り (summer festival) and 花火祭り. When you talk about doing something at a festival, the festival is a place, so use で (祭りで焼きそばを食べました); use に with the verb 行く/来る for going to it.",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 4300,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426618872",
+        "anki_guid": "hm$_[ZPOG9",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>祭り</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>まつり</div><div>Festival</div></span>",
+        "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:第1話:だいいちわ",
+    "expression": "第１話",
+    "reading": "だいいちわ",
+    "furigana": "",
+    "romaji": "daiichiwa",
+    "meanings": [
+      "Chapter 1"
+    ],
+    "part_of_speech": "",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "この漫画の第１話はとてもおもしろかったです。",
+        "furigana": "この 漫画[まんが]の 第[だい]１[いち]話[わ]はとてもおもしろかったです。",
+        "romaji": "konomanganodaiichiwahatotemoomoshirokattadesu.",
+        "english": "Chapter 1 of this manga was very interesting.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "昨日、アニメの第１話を見たんだ。すごくよかったよ。",
+        "furigana": "昨日[きのう]、アニメの 第[だい]１[いち]話[わ]を 見[み]たんだ。すごくよかったよ。",
+        "romaji": "kinou, animenodaiichiwaomitanda. sugokuyokattayo.",
+        "english": "I watched episode 1 of the anime yesterday. It was really good.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "第〜話 counts episodes of a TV show or anime and chapters of a manga or novel. The counter 話 is read わ: 第１話 (だいいちわ), 第２話 (だいにわ), 第３話 (だいさんわ). Written with a digit (第1話) as often as with 一.",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426430343",
+        "anki_guid": "Q*m`xy;y0R",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>第１話</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>だいいちわ</div><div>Chapter 1</div></span>",
+        "anki_Add Reverse": "y"
       }
     }
   },
