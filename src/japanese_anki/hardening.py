@@ -857,14 +857,19 @@ def load_pilots(
         ) from exc
     if not stat.S_ISDIR(details.st_mode):
         raise HardeningError("Hardening path quality/pilots is not a directory")
-    paths = sorted(
-        [
-            path
-            for path in directory.iterdir()
-            if path.suffix.lower() in {".yaml", ".yml"}
-        ],
-        key=lambda path: path.name,
-    )
+    try:
+        paths = sorted(
+            [
+                path
+                for path in directory.iterdir()
+                if path.suffix.lower() in {".yaml", ".yml"}
+            ],
+            key=lambda path: path.name,
+        )
+    except OSError as exc:
+        raise HardeningError(
+            f"Could not list quality/pilots: {exc.strerror or exc}"
+        ) from exc
     pilots = tuple(_parse_pilot(_read_yaml(path, root), path, root) for path in paths)
     ids = [pilot.id for pilot in pilots]
     if len(set(ids)) != len(ids):

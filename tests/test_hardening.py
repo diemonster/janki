@@ -329,6 +329,27 @@ def test_invalid_utf_8_is_a_cli_error(
     assert "Could not decode quality/findings.yaml as UTF-8" in capsys.readouterr().err
 
 
+def test_pilot_directory_listing_failure_is_a_cli_error(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _project(tmp_path)
+    pilot_dir = root / "quality" / "pilots"
+    original_iterdir = Path.iterdir
+
+    def fail_for_pilots(path: Path):
+        if path == pilot_dir:
+            raise PermissionError("test denied")
+        return original_iterdir(path)
+
+    monkeypatch.setattr(Path, "iterdir", fail_for_pilots)
+
+    assert _run(root) == 1
+
+    assert "Could not list quality/pilots: test denied" in capsys.readouterr().err
+
+
 def test_a_recurrence_cannot_repeat_initial_evidence(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
