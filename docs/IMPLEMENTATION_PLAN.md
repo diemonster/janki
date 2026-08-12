@@ -2307,7 +2307,13 @@ Four boundaries apply to every M7 task:
 Lane map: {M7.1} → {M7.2} → {M7.3} → {M7.4, M7.5} →
 {M7.6A, M7.6B, M7.6C in parallel} → {M7.7} → {M7.W}.
 
-### [ ] M7.1 The hardening protocol and safety contract
+### [x] M7.1 The hardening protocol and safety contract
+
+*Done 2026-08-12. Added the deck-defect workflow and self-healing limits in
+`docs/HARDENING.md`. Added the systemic-defect completion rule, exact automatic
+repair allowlist, identity boundary, and user-only authority rules to
+`AGENTS.md`. M7.1 defines behavior only. The catalog, cases, repair registry,
+and live evaluation controls remain in their dependent tasks.*
 
 Depends on: —
 Files: new `docs/HARDENING.md`, `AGENTS.md`,

@@ -36,6 +36,35 @@ is the durable source of truth; generated `.apkg` files are build artifacts.
 - Identify verb group, transitivity, and common conjugations when known.
 - Flag uncertain readings, pitch accent, meanings, or usage rather than guessing.
 
+## Hardening rules
+
+- Follow `docs/HARDENING.md` when real deck work exposes a defect.
+- Classify a correction as `content-specific` or `systemic` before you
+  generalize it. When uncertain, keep it content-specific and staged.
+- A systemic defect is not complete when only the current row is corrected.
+  Preserve the reproduction and complete the finding, case, production fix,
+  full replay, and `make gates`, or record the finding as open or deferred.
+- Do not manufacture a general validator from one content-specific correction.
+- Automatic repairs are default-deny. Their only allowed target fields are
+  `furigana`, `romaji`, `examples[*].furigana`, `examples[*].romaji`, `audio`,
+  `image`, and `frequency_rank`. The canonical
+  `source.raw_fields["janki_repairs"]` entry is required provenance, not a
+  repair target. Every other record or source field is denied unless a reviewed
+  contract change adds it with an invariant and adversarial fixtures.
+- Never repair or propose a change to an existing record's `id`, `expression`,
+  or `reading`. These fields determine Anki identity and review history.
+- The user owns live-eval consent, redistribution approval for owner-provided
+  material, human unit-oracle acceptance, manual coverage acceptance,
+  repair-proposal acceptance, ambiguous new-identity resolution,
+  existing-identity migration, accepted-risk approval, and baseline acceptance.
+  An agent must not infer, generate, grant, or widen one of these decisions. It
+  must not answer an approval prompt as the user.
+- An agent may record a user decision only when the approval names every exact
+  fingerprint, scope, decision, and reason required by `docs/HARDENING.md`. A
+  broad request to finish work is not an approval. If exact approval is absent,
+  keep it false or missing and stop that route or use material that does not
+  need the approval.
+
 ## Card-design rules
 
 - Recognition cards are enabled by default.
