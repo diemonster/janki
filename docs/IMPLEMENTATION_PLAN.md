@@ -2355,9 +2355,14 @@ content-specific edit to stay content-specific rather than manufacturing a
 general validator from one observation. Add a second owner-authority rule:
 `live_eval_consent`, `accepted-risk` approval, and baseline acceptance are
 user decisions. An agent must not infer, generate, or set them to complete a
-task. It may record one only after the user explicitly approves the exact case
-or source fingerprint. If approval is absent, the value stays false/missing and
-the agent stops or selects a source that does not need that approval.
+task. For `live_eval_consent`, the user must explicitly approve the exact case
+ID, source fingerprint, provider, resolved model IDs or model scope, and
+purpose. For `accepted-risk`, the user must explicitly approve the exact
+finding, risk, and reason. For a baseline, the user must explicitly approve the
+exact report fingerprint and diff. An agent may record only that exact approval.
+It must not widen its scope. If approval is absent, the value stays
+false/missing and the agent stops or selects a source that does not need that
+approval.
 
 Tests: documentation/link checks only; the schemas and executable enforcement
 arrive in M7.2/M7.3.
@@ -2575,13 +2580,16 @@ giving an agent general write access to curated content.
 
 - A repair declaration has a stable code and version, applicable pipeline
   phase, allowed fields, declared record-input fields, pure precondition,
-  transformation, postcondition, and provenance text. The transformation must
+  transformation, postcondition, and provenance text. All three callbacks must
   read only the declared record-input fields and named external evidence. The
-  registry enforces this rule. It gives the transformation an immutable
-  projection, not the complete record, a path, or a client. An undeclared field
-  is not available. External evidence is passed explicitly and no repair can do
-  live I/O. Applying a repair returns a field diff and evidence. It cannot
-  silently decline after its precondition matches.
+  registry enforces this rule. It gives each callback the same immutable input
+  projection and immutable evidence object. The precondition receives the
+  projected before-values. The transformation receives the same values. The
+  postcondition receives those before-values and the planned output values, but
+  not the complete record. Full-file validation remains a separate step. No
+  callback receives an undeclared field, complete record, path, client, or live
+  I/O capability. Applying a repair returns a field diff and evidence. It
+  cannot silently decline after its precondition matches.
 - `janki repair PATH` is check-only and prints applicable repairs, exact diffs,
   and the input revision. `--check CODE... --format json` selects an ordered
   repair set and also emits a **repair-plan fingerprint** over the input
@@ -2635,22 +2643,33 @@ giving an agent general write access to curated content.
   provenance. This path explicitly carries the annotation onto the existing
   source record. It does not use ordinary existing-wins source merging.
 - Proposal acceptance uses a small recovery journal with the M6.5 discipline.
-  Before the records write, the journal stores the input revision, intended
-  output revision, staging revision, and the complete accepted proposal entries.
-  Each entry has its stable proposal-entry fingerprint. After the records write,
-  the command upserts each accepted entry into the archive by that fingerprint.
-  An existing identical entry is a no-op. A different entry with the same
-  fingerprint is an error. Only after all archive entries are present does the
-  command prune those fingerprints from staging. It then verifies both files
-  and removes the journal.
+  Before the records write, the command computes and journals all intended
+  results. The journal stores the records input revision and exact intended
+  records bytes and revision. It also stores the staging input revision and
+  exact intended staging bytes and revision. The intended staging bytes remove
+  accepted entries and mark every dependent rejected or unreviewed entry stale.
+  They preserve unrelated entries and human comments. The journal also stores
+  the complete accepted archive payload and each stable proposal-entry
+  fingerprint. This payload is sufficient to reconstruct a missing archive
+  entry.
 
-  Recovery has three records-file states. If the file has the input revision,
-  apply can restart from the journal payload. If it has the intended output
-  revision, recovery repeats the archive upsert and conditional prune. These
-  operations are idempotent. For any other revision, recovery refuses and names
-  the journal for manual review. The journal, archive, and staging writes use
-  compare-and-swap guards. The archive-first order prevents lost entries. The
-  fingerprint upsert prevents duplicates. Recovery never treats a rejected or
+  The write order is fixed: create the journal, write the exact intended records
+  bytes, upsert the accepted archive entries, write the exact intended staging
+  bytes, verify all three results, and remove the journal. Each file write uses
+  a compare-and-swap guard. An existing identical archive entry is a no-op. A
+  different entry with the same fingerprint is an error. The archive-first
+  order prevents lost entries. The fingerprint upsert prevents duplicates.
+
+  Recovery checks the records and staging revisions as one state machine. When
+  records still have the input revision, staging must also have its input
+  revision and the archive must not contain an unexpected accepted entry. Only
+  then can apply restart from the journal payload. When records have the
+  intended revision, recovery first repeats the idempotent archive upsert. If
+  staging has its input revision, recovery writes the exact intended staging
+  bytes. If staging already has its intended revision, that write is a no-op.
+  Any other records revision, staging revision, archive conflict, or impossible
+  state makes recovery refuse and name the journal for manual review. Recovery
+  never recomputes decisions, reruns a transformation, or treats a rejected or
   unreviewed entry as accepted.
 - No force, generic `prefer-incoming`, or noninteractive confirmation flag
   bypasses either repair boundary. A future batch acceptance path would need the
@@ -2673,13 +2692,17 @@ in-process confirmation but before replace; partial failure (original intact);
 an attempted undeclared input read; an undeclared write or changed provenance
 that changes the intended output; multiple repairs in deterministic order;
 canonical provenance; and a semantic proposal that reaches staging without
-touching the source record. Proposal tests cover ordinary-promote refusal
-without pruning, duplicate record/field entries, target and basis staleness, an
-accepted target used by another proposal, unrelated and related partial
-acceptance, per-field accept/reject/quit, protected identity fields, source
-annotation carry, and accepted-entry-only archive behavior. Inject a crash after
-the records write, after archive upsert, and after staging prune. Each rerun must
-produce one archive entry, no lost entry, and no second application.
+touching the source record. Undeclared-read tests cover the precondition,
+transformation, and postcondition separately. Proposal tests cover
+ordinary-promote refusal without pruning, duplicate record/field entries,
+target and basis staleness, an accepted target used by another proposal,
+unrelated and related partial acceptance, per-field accept/reject/quit,
+protected identity fields, source annotation carry, and accepted-entry-only
+archive behavior. Inject a crash after the records write, after archive upsert,
+and after the staging write. Each rerun must produce one archive entry, the
+exact intended records and staging bytes, no lost entry, and no second
+application. A dependent rejected proposal must keep its stale marker after
+recovery. An unrelated proposal must remain valid.
 
 ### [ ] M7.6A Pilot pair — born-digital structure
 
