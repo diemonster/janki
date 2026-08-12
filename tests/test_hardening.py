@@ -230,6 +230,34 @@ def test_unknown_fields_are_errors(
     assert "unknown field" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("document", ["catalog", "pilot"])
+@pytest.mark.parametrize("version", [True, 1.0, "1", 2])
+def test_schema_version_must_be_the_exact_supported_integer(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    document: str,
+    version: object,
+) -> None:
+    pilot = _pilot()
+    root = _project(tmp_path, pilots=[pilot])
+    if document == "catalog":
+        (root / "quality" / "findings.yaml").write_text(
+            yaml.safe_dump(
+                {"version": version, "findings": []}, sort_keys=False
+            ),
+            encoding="utf-8",
+        )
+    else:
+        pilot["version"] = version
+        (root / "quality" / "pilots" / "native-table-pilot.yaml").write_text(
+            yaml.safe_dump(pilot, sort_keys=False), encoding="utf-8"
+        )
+
+    assert _run(root) == 1
+
+    assert "version must be integer 1" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize(
     "locator",
     [

@@ -347,6 +347,11 @@ def _bool(value: Any, where: str) -> bool:
     return value
 
 
+def _schema_version(value: Any, where: str) -> None:
+    if isinstance(value, bool) or not isinstance(value, int) or value != SCHEMA_VERSION:
+        raise HardeningError(f"{where} must be integer {SCHEMA_VERSION}")
+
+
 def _locator(value: Any, where: str) -> str:
     result = _text(value, where)
     normalized = result.replace("\\", "/")
@@ -624,10 +629,7 @@ def load_findings(root: Path) -> FindingsCatalog:
     data = _mapping(_read_yaml(path, root), "quality/findings.yaml")
     _no_unknown(data, {"version", "findings"}, "quality/findings.yaml")
     version = _required(data, "version", "quality/findings.yaml")
-    if isinstance(version, bool) or version != SCHEMA_VERSION:
-        raise HardeningError(
-            f"quality/findings.yaml version must be {SCHEMA_VERSION}"
-        )
+    _schema_version(version, "quality/findings.yaml version")
     raw = _list(
         _required(data, "findings", "quality/findings.yaml"),
         "quality/findings.yaml.findings",
@@ -776,8 +778,7 @@ def _parse_pilot(value: Any, path: Path, root: Path) -> Pilot:
     }
     _no_unknown(data, allowed, where)
     version = _required(data, "version", where)
-    if isinstance(version, bool) or version != SCHEMA_VERSION:
-        raise HardeningError(f"{where}.version must be {SCHEMA_VERSION}")
+    _schema_version(version, f"{where}.version")
     pilot_id = _slug(_required(data, "id", where), f"{where}.id")
     if path.stem != pilot_id:
         raise HardeningError(f"{where}.id must match its filename stem {path.stem!r}")
