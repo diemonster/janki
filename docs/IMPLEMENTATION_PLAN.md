@@ -2612,7 +2612,11 @@ giving an agent general write access to curated content.
   the atomic write path and records repair code/version in the namespaced
   `source.raw_fields["janki_repairs"]` annotation as canonical JSON. It refuses
   paths under `data/inbox/`, archived `data/staging/done/`, and `dist/`. It never
-  changes an existing ID.
+  changes an existing ID. Check-only output may show a `proposal-only` repair,
+  but direct apply accepts only a current `ingest-safe` declaration whose target
+  fields are inside M7.1's automatic allowlist. A `proposal-only` repair can
+  write only a proposal-shaped staging file. A `revoked` repair can do neither.
+  No direct-apply confirmation can cross this mode or field boundary.
 - Only repairs explicitly marked `ingest-safe` may run automatically, and only
   while a new candidate is being normalized before it becomes curated. The M7.1
   protected fields remain default-deny. An existing identity-field disagreement
@@ -2638,7 +2642,12 @@ giving an agent general write access to curated content.
   fields. A rejected declaration stays visible and is marked stale; the
   proposal must be regenerated. The command displays each field diff and asks
   `y/n/q` for **each proposal entry**. It collects all decisions before it
-  writes. It refuses an accepted set when one accepted target changes a basis
+  writes. It then acquires the transaction lock set described below. Under the
+  locks, it reloads the records, staging proposals, declarations, and external
+  evidence. It rechecks every displayed old/new value, proposal-entry and basis
+  fingerprint, declaration version and mode, and dependency between accepted
+  entries. Any change makes it refuse before the journal or a target file is
+  written. It refuses an accepted set when one accepted target changes a basis
   field of another accepted entry; the dependent proposal must be regenerated.
   It applies the remaining accepted fields in one records compare-and-swap
   transaction and validates the full result. Rejected and unreviewed entries
@@ -2673,6 +2682,15 @@ giving an agent general write access to curated content.
   existing identical archive entry is a no-op. A different entry with the same
   fingerprint is an error. Computing the complete intended archive before the
   first write prevents lost entries. Fingerprinted upsert prevents duplicates.
+
+  Normal execution and recovery acquire interprocess locks for the journal,
+  records, archive, and staging paths in one canonical path order. They hold the
+  complete lock set while they inspect a state and advance it. All other janki
+  writers use the same per-path locks. Normal execution holds the set from the
+  post-prompt revalidation through journal removal. A process crash releases
+  the locks but leaves the journal. The compare-and-swap checks remain required;
+  the locks do not replace them. Two transactions that share any target cannot
+  create journals or advance their states at the same time.
 
   Recovery checks the records, archive, and staging revisions as one state
   machine. It accepts only the ordered states `(input, input, input)`,
@@ -2717,7 +2735,9 @@ exact intended records and staging bytes, no lost entry, and no second
 application. A dependent rejected proposal must keep its stale marker after
 recovery. An unrelated proposal must remain valid. Also test an unknown,
 changed, or revoked repair version; a second transaction blocked by an existing
-journal; a journal changed before removal; and every invalid recovery-state
+journal; a journal changed before removal; a records, staging, declaration, or
+evidence change during the prompts; a `proposal-only` direct-apply attempt; two
+transactions with one shared target; and every invalid recovery-state
 combination.
 
 ### [ ] M7.6A Pilot pair — born-digital structure
@@ -2833,19 +2853,27 @@ changes with a model or prompt: can it still read the source?
 - `quality/baseline.json` is updated only by
   `janki harden eval --accept-baseline REPORT`, which shows the old/new
   scorecard diff and requires confirmation. Before display, it reads the report
-  once, captures its fingerprint and the current baseline revision, and plans
-  the exact new baseline bytes. The confirmation binds the exact report
-  fingerprint and diff. After confirmation, the command refuses if the report
-  fingerprint or baseline revision changed. It writes the planned bytes with a
-  compare-and-swap guard and does not reread or recompute the accepted report.
-  There is no noninteractive confirmation bypass. The command also verifies all
-  six current pilot/case/oracle links and current prompt fingerprints. Refuse
-  acceptance when the six-case matrix is incomplete, any fixed systemic case
-  regresses, a human-inventoried source unit is
-  missing/duplicated/context-mismatched, a promoted identity is wrong, or an
-  automatic repair has a false positive. Semantic/content correction rates are
-  displayed by source archetype rather than collapsed into a misleading single
-  accuracy score.
+  once and validates its strict schema. It captures the report fingerprint and
+  current baseline revision. It also builds an acceptance-input manifest. This
+  manifest fingerprints every pilot, case, oracle, finding, source reference,
+  prompt, schema, and repair-registry value used to decide whether acceptance is
+  safe. The command puts the manifest in the planned baseline and plans the
+  exact new baseline bytes. The confirmation binds the exact report
+  fingerprint, manifest fingerprint, and diff.
+
+  After confirmation, the command rehashes the report and every manifest input.
+  It uses those reads only to compare fingerprints; it does not replace the
+  validated report or planned baseline with new content. It refuses if a
+  fingerprint or the baseline revision changed. It writes the planned bytes
+  with a compare-and-swap guard. The accepted baseline keeps all manifest
+  fingerprints, and status reports later changes as drift. There is no
+  noninteractive confirmation bypass. The command verifies all six current
+  pilot/case/oracle links and current prompt fingerprints. Refuse acceptance
+  when the six-case matrix is incomplete, any fixed systemic case regresses, a
+  human-inventoried source unit is missing, duplicated, or context-mismatched, a
+  promoted identity is wrong, or an automatic repair has a false positive.
+  Semantic/content correction rates are displayed by source archetype rather
+  than collapsed into a misleading single accuracy score.
 - `janki harden status` incorporates the accepted baseline and reports prompt
   drift (current fingerprints differ without an accepted eval), recurring
   finding codes, source-archetype coverage, and correction/repair trends across
@@ -2855,10 +2883,10 @@ changes with a model or prompt: can it still read the source?
 Tests: fake live responses; explicit private-case selection; source, case,
 provider, resolved-model, and purpose consent boundaries; six-pilot matrix
 completeness; score calculations; baseline compare/accept refusal conditions;
-report or baseline changed after display; prompt drift; and stable JSON suitable
-for review in git. An evaluation run writes only under `dist/`. The separately
-confirmed acceptance operation has one non-`dist/` write: the atomic update of
-`quality/baseline.json`.
+report, baseline, or manifest input changed after display; prompt drift; and
+stable JSON suitable for review in git. An evaluation run writes only under
+`dist/`. The separately confirmed acceptance operation has one non-`dist/`
+write: the atomic update of `quality/baseline.json`.
 
 ### [ ] M7.W Milestone 7 wrap and operating cadence
 
