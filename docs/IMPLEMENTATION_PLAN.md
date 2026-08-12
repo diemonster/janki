@@ -2334,38 +2334,52 @@ deck exposes a defect. This is a behavior contract before it is a CLI:
 6. Run the new case, the entire accumulated corpus, and `make gates`. Close the
    finding only when it links to the passing case and the production fix.
 
-Pin the repair boundary in both docs: an unattended repair may update derived
-or presentation data only when its evidence predicate proves the result. It may
-not change an existing record's `id`, `expression`, `reading`, meanings,
-part-of-speech/verb classification, transitivity, pitch accent, or Japanese or
-English example text. Existing identity (`id`, `expression`, and `reading`) is
-never a repair proposal either: it determines the Anki GUID, so a finding there
-stays blocked and names the manual migration/history decision it needs. A new
+Pin the repair boundary in both docs. The exact safe-repair field allowlist is
+`furigana`, `romaji`, `examples[*].furigana`, `examples[*].romaji`, `audio`,
+`image`, and `frequency_rank`. A repair may update one of these derived or
+presentation fields only when its evidence predicate proves the result. The
+namespaced `source.raw_fields["janki_repairs"]` provenance entry is a required
+side effect, not a repair target. All other record and source fields are
+default-deny. This includes `id`, `expression`, `reading`, meanings,
+part-of-speech/verb classification, transitivity, pitch and audio-accent data,
+Japanese or English example text, conjugations, tags, usage notes, and unknown
+source fields. Existing identity (`id`, `expression`, and `reading`) is never a
+repair proposal either: it determines the Anki GUID, so a finding there stays
+blocked and names the manual migration/history decision it needs. A new
 candidate's identity is still reviewed in staging before its first promotion.
 For the remaining protected content fields, a proposed change uses M7.5's
 fingerprinted, field-scoped staging diff and explicit human acceptance path; an
 ordinary `janki promote` must never consume it. A future task may widen the
-automatic list only by amending this contract with a concrete invariant and
+allowlist only by amending this contract with a concrete invariant and
 adversarial fixtures.
 
 Add an AGENTS.md rule that a systemic defect found during a deck task is not
 complete when only the current data row is corrected: it must follow this
 protocol or be recorded as an open/deferred finding. Conversely, require a
 content-specific edit to stay content-specific rather than manufacturing a
-general validator from one observation. Add a second owner-authority rule:
-`live_eval_consent`, `accepted-risk` approval, and baseline acceptance are
-user decisions. An agent must not infer, generate, or set them to complete a
-task. For `live_eval_consent`, the user must explicitly approve the exact case
-ID, source fingerprint, provider, resolved model IDs or model scope, and
-purpose. The user must also provide the reason stored in the consent record.
-For `accepted-risk`, the user must explicitly approve the exact finding, risk,
-and reason. For a baseline, the user must explicitly approve the exact report
-fingerprint and diff. An agent may record only that exact approval. It must not
-widen its scope. If approval is absent, the value stays false/missing and the
-agent stops or selects a source that does not need that approval.
+general validator from one observation. Add a second owner-authority rule. The
+user owns live-eval consent, redistribution approval for owner-provided source
+material, manual coverage acceptance, repair-proposal acceptance,
+`accepted-risk` approval, and baseline acceptance. An agent must not infer,
+generate, or set these values to complete a task. It must not answer an
+interactive approval prompt as the user.
 
-Tests: documentation/link checks only; the schemas and executable enforcement
-arrive in M7.2/M7.3.
+For `live_eval_consent`, the user must explicitly approve the exact case ID,
+source fingerprint, provider, resolved model IDs or model scope, purpose, and
+stored reason. Redistribution approval must name the exact artifact fingerprint
+and license or other redistribution basis. Manual coverage acceptance must name
+the exact source and coverage-block fingerprints, every mismatch or unmeasured
+disposition accepted, and the reason. A repair-proposal decision must name the
+exact proposal-entry fingerprint and answer. `accepted-risk` approval must name
+the exact finding, risk, and reason. Baseline acceptance must name the exact
+report and acceptance-input-manifest fingerprints and diff. An agent may record
+only that exact approval. It must not widen its scope or treat a broad task
+request as one of these decisions. If approval is absent, the value stays
+false/missing and the agent stops or selects a source that does not need that
+approval.
+
+Tests: documentation and link checks only. Each later task adds its schema and
+executable checks at the first boundary that uses the approval.
 
 ### [ ] M7.2 Findings catalog + `janki harden status`
 
@@ -2442,6 +2456,11 @@ code and can run without a network key.
   oracle, and redistribution status.
 - A model-boundary case has exactly one source form. `bundled_fixture` names a
   minimized file inside the case and requires `redistributable: true`.
+  Owner-provided or source-derived material also requires the M7.1
+  redistribution-approval record bound to the exact bundled artifact hash and
+  stated redistribution basis. The manifest loader rejects missing or
+  mismatched approval. An agent-created synthetic fixture records that basis
+  explicitly and must not contain source-derived pixels.
   `private_inbox_ref` names a repository-relative immutable file under
   `data/inbox/`, pins its SHA-256 without copying its pixels, requires
   `redistributable: false`, and carries a separate repository-owner
@@ -2498,11 +2517,12 @@ against known production behavior.
 Tests: unit-oracle duplicate keys and malformed hashes; both case purposes and
 source forms; reciprocal/dangling links; manifest safety; missing-consent
 default, consent/source fingerprint binding, and changed-source invalidation;
-provider/model/purpose mismatch; hash checks; every runner; a test that every
-seeded finding names a compatible runner; stable discovery ordering;
-open-versus-fixed gate behavior; and a deliberate production mutant at each
-seeded boundary that makes its corresponding case fail. No runner may make a
-live network call or read a private visual source.
+provider/model/purpose mismatch; missing or mismatched redistribution approval;
+hash checks; every runner; a test that every seeded finding names a compatible
+runner; stable discovery ordering; open-versus-fixed gate behavior; and a
+deliberate production mutant at each seeded boundary that makes its
+corresponding case fail. No runner may make a live network call or read a
+private visual source.
 
 ### [ ] M7.4 Extraction accounting and prompt provenance
 
@@ -2544,13 +2564,15 @@ different for prose, where selection is judgement.
 - An oracle mismatch keeps the paid extraction as a staging file but marks
   promotion blocked. A reviewer resolves it by correcting the source units and
   corresponding staging records, rerunning against a corrected oracle, or
-  recording a field-by-field manual coverage acceptance and reason; the reason
-  survives in `data/staging/done/`. A newly extracted table with no oracle is
-  `unmeasured` and also needs a reasoned manual acceptance before promotion.
+  recording the exact M7.1 manual coverage acceptance and reason. Its source and
+  coverage-block fingerprints, accepted dispositions, reason, and approval
+  evidence survive in `data/staging/done/`. A newly extracted table with no
+  oracle is `unmeasured` and needs the same user decision before promotion.
   Prose selection remains reviewable but is not falsely treated as exhaustive.
-  `janki promote` refuses an unresolved coverage block before mutating records
-  or the ledger. Files written before this task remain valid with legacy
-  coverage `unmeasured` and are not retroactively blocked.
+  `janki promote` refuses an unresolved coverage block or a missing or
+  mismatched approval record before mutating records or the ledger. Files
+  written before this task remain valid with legacy coverage `unmeasured` and
+  are not retroactively blocked.
 - Record source SHA-256, mode, provider/model, response-schema version, and
   fingerprints of the system prompt, style guide, and user prompt in staging
   metadata. Never store an API key or absolute source path. This is sufficient
@@ -2564,8 +2586,9 @@ Tests: exact complete coverage; an omitted row replaced by a duplicate or
 invented row; missing/duplicate/context-mismatched/unreadable units; incorrect
 model self-count; source/oracle hash mismatch; multi-input binding before spend;
 blocked promotion with no partial mutation; reasoned acceptance/archive;
-legacy staging compatibility; mixed table/prose reporting; prompt fingerprint
-changes; and no secrets or absolute paths in metadata.
+missing or mismatched coverage approval; legacy staging compatibility; mixed
+table/prose reporting; prompt fingerprint changes; and no secrets or absolute
+paths in metadata.
 
 ### [ ] M7.5 Named safe-repair registry + staged proposals
 
@@ -2641,10 +2664,11 @@ giving an agent general write access to curated content.
   It also rejects identity, undeclared target fields, and undeclared basis
   fields. A rejected declaration stays visible and is marked stale; the
   proposal must be regenerated. The command displays each field diff and asks
-  `y/n/q` for **each proposal entry**. It collects all decisions before it
-  writes. It then acquires the transaction lock set described below. Under the
-  locks, it reloads the records, staging proposals, declarations, and external
-  evidence. It rechecks every displayed old/new value, proposal-entry and basis
+  the user `y/n/q` for **each proposal entry**. An agent cannot answer this
+  prompt under M7.1. The command collects all decisions before it writes. It
+  then acquires the transaction lock set described below. Under the locks, it
+  reloads the records, staging proposals, declarations, and external evidence.
+  It rechecks every displayed old/new value, proposal-entry and basis
   fingerprint, declaration version and mode, and dependency between accepted
   entries. Any change makes it refuse before the journal or a target file is
   written. It refuses an accepted set when one accepted target changes a basis
@@ -2857,7 +2881,13 @@ changes with a model or prompt: can it still read the source?
   current baseline revision. It also builds an acceptance-input manifest. This
   manifest fingerprints every pilot, case, oracle, finding, source reference,
   prompt, schema, and repair-registry value used to decide whether acceptance is
-  safe. The command puts the manifest in the planned baseline and plans the
+  safe. It also fingerprints each raw result artifact referenced by the report.
+  The report's case set must equal the manifest case set. For each case, its
+  source, oracle, provider, resolved model, prompt, response-schema, and raw
+  result fingerprints must match the manifest. Missing or duplicate results are
+  errors. The command recomputes all unit comparisons, refusal conditions, and
+  score totals from the detailed case results. It never trusts report summary
+  fields. The command puts the manifest in the planned baseline and plans the
   exact new baseline bytes. The confirmation binds the exact report
   fingerprint, manifest fingerprint, and diff.
 
@@ -2883,10 +2913,11 @@ changes with a model or prompt: can it still read the source?
 Tests: fake live responses; explicit private-case selection; source, case,
 provider, resolved-model, and purpose consent boundaries; six-pilot matrix
 completeness; score calculations; baseline compare/accept refusal conditions;
-report, baseline, or manifest input changed after display; prompt drift; and
-stable JSON suitable for review in git. An evaluation run writes only under
-`dist/`. The separately confirmed acceptance operation has one non-`dist/`
-write: the atomic update of `quality/baseline.json`.
+report-to-manifest mismatch; a forged summary; report, raw result, baseline, or
+manifest input changed after display; prompt drift; and stable JSON suitable for
+review in git. An evaluation run writes only under `dist/`. The separately
+confirmed acceptance operation has one non-`dist/` write: the atomic update of
+`quality/baseline.json`.
 
 ### [ ] M7.W Milestone 7 wrap and operating cadence
 
