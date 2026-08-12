@@ -57,7 +57,10 @@ Do not create a general validator from one ambiguous example.
 A systemic defect needs the smallest case that still fails. Use one of these
 source forms:
 
-- a minimized fixture that the user has approved for redistribution; or
+- a synthetic fixture that contains no source-derived content and records that
+  basis;
+- a minimized owner-provided or source-derived fixture that the user has
+  approved for redistribution; or
 - an exact fingerprint and locator for an immutable private source under
   `data/inbox/`.
 
