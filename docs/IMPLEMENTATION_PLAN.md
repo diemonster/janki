@@ -2078,7 +2078,7 @@ shared. Three claims were retired as false rather than merely stale:
 Milestone 5 shipped one thing it did not plan (`tts/openai_tts.py`) and
 did not ship one thing it did (`tts/azure.py`); both are recorded under
 M5.7. The `janki status` notetype detector specified in M5.5 moved to
-M5.8, which is now the only open item in Milestone 5's neighbourhood.
+M5.8, which completed it.
 
 ---
 
@@ -2228,7 +2228,17 @@ gloss quality rather than janki defects.
   record in both pools has to be assigned to one by hand (ある and いる
   already were).
 
-### [~] M6.7 claimed codex/main 2026-08-12 — Ship the review hooks with the repository
+### [x] M6.7 Ship the review hooks with the repository
+
+*Done 2026-08-12. The reviewer now lives at tracked
+`scripts/janki-review.sh`, with its project-specific review instructions inline
+so a fresh clone does not depend on the ignored `.claude/agents` directory.
+Tracked post-commit and pre-push shims are installed by bootstrap (or the
+standalone idempotent installer), which migrates the old janki hooks but refuses
+to overwrite an unrelated local hook. The per-clone `.claude/hooks/DISABLED`
+marker remains the kill switch. Failure-path coverage also exposed and fixed a
+watchdog child that could outlive the reviewer and hold output pipes open until
+the full timeout.*
 
 Depends on: —
 Files: `scripts/` (new home), `.git/hooks/*` (shims), `AGENTS.md`.

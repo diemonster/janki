@@ -68,3 +68,15 @@ two directories that start empty (`.gitkeep`), because the repository — not
 Anki's database and not an uncommitted working tree — is the source of truth.
 
 A new import must not erase manually curated examples, notes, conjugations, or furigana.
+
+## Repository review hooks
+
+- `scripts/janki-review.sh` is the tracked implementation used by the
+  post-commit advisory review and the pre-push review gate.
+- `scripts/bootstrap.sh` installs thin shims into Git's hooks directory. Run
+  `scripts/install-review-hooks.sh` directly to refresh only those shims.
+- Never overwrite an unrelated local hook. The installer refuses a conflict so
+  the existing hook and the tracked shim can be combined deliberately.
+- To disable both reviews in one clone, create `.claude/hooks/DISABLED` with a
+  short reason. The hooks announce that state on every commit and push. Delete
+  the marker to re-enable them.

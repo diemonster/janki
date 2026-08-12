@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Managed by scripts/install-review-hooks.sh. Keep this shim thin.
+
+set -uo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+GIT_DIR="$(git rev-parse --git-dir 2>/dev/null)" || exit 0
+REVIEWER="$REPO_ROOT/scripts/janki-review.sh"
+DISABLED="$REPO_ROOT/.claude/hooks/DISABLED"
+
+[ -x "$REVIEWER" ] || exit 0
+
+# The detached reviewer cannot report its own kill-switch check because its
+# output is redirected, so announce the per-clone marker before launching it.
+if [ -f "$DISABLED" ]; then
+  echo "janki review: disabled ($(head -1 "$DISABLED" 2>/dev/null))"
+  echo "  re-enable with: rm .claude/hooks/DISABLED"
+  exit 0
+fi
+
+# Don't fire once per commit during a rebase, cherry-pick, or revert sequence.
+for marker in rebase-merge rebase-apply CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+  [ -e "$GIT_DIR/$marker" ] && exit 0
+done
+
+# Merge commits and root commits do not have a useful authored range to review.
+[ "$(git rev-list --parents -n1 HEAD | wc -w)" -gt 2 ] && exit 0
+git rev-parse --verify -q HEAD~1 >/dev/null || exit 0
+
+SHA="$(git rev-parse --short HEAD)"
+REPORT=".claude/reviews/${SHA}.md"
+
+# Resolve fixed shas before detaching; HEAD may move before the review starts.
+RANGE="$(git rev-parse HEAD~1)..$(git rev-parse HEAD)"
+
+nohup "$REVIEWER" advisory "$RANGE" "$SHA" >/dev/null 2>&1 </dev/null &
+disown 2>/dev/null || true
+
+echo "janki review: started in background -> ${REPORT}"
+exit 0

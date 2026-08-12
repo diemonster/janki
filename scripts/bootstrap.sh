@@ -26,10 +26,9 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e '.[dev]'
 
-ruff check .
-pytest
-janki validate data/decks/verbs.yaml
-janki build data/decks/verbs.yaml --output dist/sample-verbs.apkg
+./scripts/install-review-hooks.sh
+
+make gates
 
 cat <<'MSG'
 

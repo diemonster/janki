@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Managed by scripts/install-review-hooks.sh. Keep this shim thin.
+
+set -uo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+REVIEWER="$REPO_ROOT/scripts/janki-review.sh"
+ZERO="0000000000000000000000000000000000000000"
+
+[ -x "$REVIEWER" ] || exit 0
+
+STATUS=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  # Branch deletion: nothing to review.
+  [ "$local_sha" = "$ZERO" ] && continue
+
+  if [ "$remote_sha" = "$ZERO" ]; then
+    # New remote branch: review only what it adds on top of main.
+    base="$(git merge-base main "$local_sha" 2>/dev/null)" || base=""
+    [ -z "$base" ] && continue
+    range="${base}..${local_sha}"
+  else
+    range="${remote_sha}..${local_sha}"
+  fi
+
+  git diff --quiet "$range" 2>/dev/null && continue
+
+  label="push-$(git rev-parse --short "$local_sha")"
+  echo "janki review: reviewing ${range} before push (Fable, max effort — this takes a few minutes)..."
+
+  # The reviewer must not consume the rest of git's ref list.
+  "$REVIEWER" gate "$range" "$label" </dev/null || STATUS=1
+done
+
+exit "$STATUS"

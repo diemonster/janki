@@ -23,7 +23,14 @@ source .venv/bin/activate
 
 That installs janki and its `[dev]` extra into `.venv` — which includes the AI
 support, so the whole command set works — runs the tests, and builds a sample
-deck into `dist/`. Installing without bootstrap, add the extra you need:
+deck into `dist/`. It also installs the repository's advisory post-commit review
+and pre-push review gate. Existing unrelated Git hooks are never overwritten;
+resolve the reported conflict by combining the hooks manually. Refresh only the
+review hooks with `./scripts/install-review-hooks.sh`. To disable them in this
+clone, create `.claude/hooks/DISABLED` with a short reason; delete it to
+re-enable them.
+
+Installing without bootstrap, add the extra you need:
 `pip install -e '.[ai]'` for `extract`, `patterns`, `review`, `enrich --ai` and
 `enrich --polish-meanings`. `--recheck-furigana` runs without it, and without an
 Anthropic key: jpdb re-reads the sentence either way, and the adjudicator that
