@@ -2359,24 +2359,28 @@ protocol or be recorded as an open/deferred finding. Conversely, require a
 content-specific edit to stay content-specific rather than manufacturing a
 general validator from one observation. Add a second owner-authority rule. The
 user owns live-eval consent, redistribution approval for owner-provided source
-material, manual coverage acceptance, repair-proposal acceptance,
-`accepted-risk` approval, and baseline acceptance. An agent must not infer,
-generate, or set these values to complete a task. It must not answer an
-interactive approval prompt as the user.
+material, human unit-oracle acceptance, manual coverage acceptance,
+repair-proposal acceptance, existing-identity migration, `accepted-risk`
+approval, and baseline acceptance. An agent must not infer, generate, or set
+these values to complete a task. It must not answer an interactive approval
+prompt as the user.
 
 For `live_eval_consent`, the user must explicitly approve the exact case ID,
 source fingerprint, provider, resolved model IDs or model scope, purpose, and
 stored reason. Redistribution approval must name the exact artifact fingerprint
-and license or other redistribution basis. Manual coverage acceptance must name
-the exact source and coverage-block fingerprints, every mismatch or unmeasured
+and license or other redistribution basis. Unit-oracle acceptance must name the
+exact source fingerprint, oracle ID, normalized oracle-content fingerprint,
+oracle type, and selection rubric when present. Manual coverage acceptance must name the
+exact source and coverage-block fingerprints, every mismatch or unmeasured
 disposition accepted, and the reason. A repair-proposal decision must name the
-exact proposal-entry fingerprint and answer. `accepted-risk` approval must name
-the exact finding, risk, and reason. Baseline acceptance must name the exact
-report and acceptance-input-manifest fingerprints and diff. An agent may record
-only that exact approval. It must not widen its scope or treat a broad task
-request as one of these decisions. If approval is absent, the value stays
-false/missing and the agent stops or selects a source that does not need that
-approval.
+exact proposal-entry fingerprint and answer. An existing-identity migration
+must name the exact old/new identity and review-history plan. `accepted-risk`
+approval must name the exact finding, risk, and reason. Baseline acceptance must
+name the exact report and acceptance-input-manifest fingerprints and diff. An
+agent may prepare an oracle draft, but it cannot approve it. It may record only
+an exact user approval. It must not widen its scope or treat a broad task request
+as one of these decisions. If approval is absent, the value stays false/missing
+and the agent stops or selects a source that does not need that approval.
 
 Tests: documentation and link checks only. Each later task adds its schema and
 executable checks at the first boundary that uses the approval.
@@ -2443,10 +2447,15 @@ code and can run without a network key.
   page/section/ordinal unit keys, normalized-context fingerprints, and expected
   dispositions. A `selection` prose oracle inventories the human-chosen target
   identities and locators plus its selection rubric, but never claims the rest
-  of the page is accounted for. Its manifest schema and safe path/hash loader
-  land here so cases, pilots, and status share one definition. M7.4 teaches
-  extraction to produce and compare these facts; M7.3 only validates and
-  replays canned facts without making a model call.
+  of the page is accounted for. The oracle contains the M7.1 owner-approval
+  record bound to the source fingerprint, oracle ID, oracle type, and normalized
+  oracle-content fingerprint. That content fingerprint covers canonical oracle
+  data and excludes the approval block, so it is not circular. An unapproved
+  oracle is a draft. It cannot bind a case or pilot, satisfy a replay gate,
+  authorize promotion, or enter a live baseline. Its manifest schema and safe
+  path/hash loader land here so cases, pilots, and status share one definition.
+  M7.4 teaches extraction to produce and compare these facts; M7.3 only validates
+  and replays canned facts without making a model call.
 - One case lives at `quality/cases/<case-id>/case.yaml` beside only the minimal
   artifacts it needs. Its `purpose` is either `regression` or `coverage`: a
   regression case must link one systemic finding; a coverage case must link one
@@ -2514,9 +2523,10 @@ entries and reciprocal case links to `quality/findings.yaml` in the same task;
 these are not new fixes, but they prove the bundle and catalog formats together
 against known production behavior.
 
-Tests: unit-oracle duplicate keys and malformed hashes; both case purposes and
-source forms; reciprocal/dangling links; manifest safety; missing-consent
-default, consent/source fingerprint binding, and changed-source invalidation;
+Tests: unit-oracle duplicate keys and malformed hashes; missing or mismatched
+oracle approval and draft-oracle gate refusal; both case purposes and source forms;
+reciprocal/dangling links; manifest safety; missing-consent default,
+consent/source fingerprint binding, and changed-source invalidation;
 provider/model/purpose mismatch; missing or mismatched redistribution approval;
 hash checks; every runner; a test that every seeded finding names a compatible
 runner; stable discovery ordering; open-versus-fixed gate behavior; and a
@@ -2554,9 +2564,11 @@ different for prose, where selection is judgement.
   exhaustive promotion gate.
 - `janki extract --coverage-oracle FILE` is repeatable for multi-input runs; each
   supplied oracle binds to exactly one prepared source by SHA-256, and duplicate
-  or unmatched bindings are errors before the first paid call. Inputs without a
-  supplied oracle follow the explicit `unmeasured` path below rather than
-  borrowing another file's count or oracle.
+  or unmatched bindings are errors before the first paid call. A supplied
+  oracle must also have a valid owner-approval record for its current normalized
+  content fingerprint; a draft oracle is an error before the first paid call.
+  Inputs without a supplied oracle follow the explicit `unmeasured` path below
+  rather than borrowing another file's count or oracle.
   Persist the oracle ID/fingerprint and exact missing, unexpected, duplicate,
   context-mismatched, candidate, omission, and unreadable unit sets in a
   `coverage` block in staging metadata. Model-reported totals remain diagnostic
@@ -2884,12 +2896,13 @@ changes with a model or prompt: can it still read the source?
   safe. It also fingerprints each raw result artifact referenced by the report.
   The report's case set must equal the manifest case set. For each case, its
   source, oracle, provider, resolved model, prompt, response-schema, and raw
-  result fingerprints must match the manifest. Missing or duplicate results are
-  errors. The command recomputes all unit comparisons, refusal conditions, and
-  score totals from the detailed case results. It never trusts report summary
-  fields. The command puts the manifest in the planned baseline and plans the
-  exact new baseline bytes. The confirmation binds the exact report
-  fingerprint, manifest fingerprint, and diff.
+  result fingerprints must match the manifest. Every oracle must have a valid
+  owner approval for its current normalized content. Missing or duplicate
+  results are errors. The command recomputes all unit comparisons, refusal
+  conditions, and score totals from the detailed case results. It never trusts
+  report summary fields. The command puts the manifest in the planned baseline
+  and plans the exact new baseline bytes. The confirmation binds the exact
+  report fingerprint, manifest fingerprint, and diff.
 
   After confirmation, the command rehashes the report and every manifest input.
   It uses those reads only to compare fingerprints; it does not replace the
@@ -2938,8 +2951,9 @@ Files: `README.md`, `docs/QUALITY.md`, `docs/IMPORTING.md`,
 - Completion gate: all six pilot reports are complete; every systemic finding
   is fixed with a passing case or carries a user-approved accepted-risk reason;
   the entire fixed corpus replays in `make gates`; the accepted live baseline
-  contains the six pilot-linked coverage cases with current source/oracle and
-  prompt fingerprints; no inventoried source unit disappeared, duplicated, or
-  changed context silently; every promoted identity passed review; and every
-  enabled automatic repair is idempotent with zero known false positives. These
-  are the evidence that the loop works. More total cards, by itself, is not.
+  contains the six pilot-linked coverage cases with current source, approved
+  oracle, and prompt fingerprints; no inventoried source unit disappeared,
+  duplicated, or changed context silently; every promoted identity passed
+  review; and every enabled automatic repair is idempotent with zero known false
+  positives. These are the evidence that the loop works. More total cards, by
+  itself, is not.
