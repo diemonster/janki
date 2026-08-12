@@ -2352,7 +2352,12 @@ Add an AGENTS.md rule that a systemic defect found during a deck task is not
 complete when only the current data row is corrected: it must follow this
 protocol or be recorded as an open/deferred finding. Conversely, require a
 content-specific edit to stay content-specific rather than manufacturing a
-general validator from one observation.
+general validator from one observation. Add a second owner-authority rule:
+`live_eval_consent`, `accepted-risk` approval, and baseline acceptance are
+user decisions. An agent must not infer, generate, or set them to complete a
+task. It may record one only after the user explicitly approves the exact case
+or source fingerprint. If approval is absent, the value stays false/missing and
+the agent stops or selects a source that does not need that approval.
 
 Tests: documentation/link checks only; the schemas and executable enforcement
 arrive in M7.2/M7.3.
@@ -2435,16 +2440,27 @@ code and can run without a network key.
   `private_inbox_ref` names a repository-relative immutable file under
   `data/inbox/`, pins its SHA-256 without copying its pixels, requires
   `redistributable: false`, and carries a separate repository-owner
-  `live_eval_consent` decision plus reason. Consent permits sending that exact
-  fingerprint to the configured model; it does not permit redistribution. A
-  changed or missing private source is unavailable, never silently replaced.
-  Reject absolute paths, `..`, symlink escapes, paths outside those two roots,
-  hash mismatches, unknown runners, and undeclared bundled files.
+  `live_eval_consent` record: exact source fingerprint, approval date, and the
+  user's reason. Missing consent means false. Only the user can grant it under
+  M7.1's owner-authority rule; an agent cannot write `true` on the user's
+  behalf. Consent permits sending that exact fingerprint to the configured
+  model; it does not permit redistribution. A changed or missing private source
+  invalidates the consent and makes the case unavailable, never silently
+  replaced. Reject absolute paths, `..`, symlink escapes, paths outside those
+  two roots, hash mismatches, unknown runners, undeclared bundled files, and a
+  consent record whose fingerprint does not equal the source fingerprint.
 - Initial runners cover the boundaries real decks have already stressed:
   candidate-response → staging records, staging read/rewrite/promote with fake
-  lookup evidence, record validation/QC, and finished-record render/build. They
-  must call production functions; a test-only copy of normalization logic can
-  agree with the same bug and is not a regression test.
+  lookup evidence, record validation/QC, and finished-record render/build. Add
+  two enrichment runners that the seeded cases require: canned jpdb
+  parse/lookup plus KANJIDIC evidence → production dictionary enrichment, and
+  canned AI structured response plus sentence-parse evidence → production AI
+  enrichment outcome **and command-level changed/no-writable-change reporting**.
+  The first owns the POS-precedence and impossible per-character-furigana cases;
+  the second owns the no-writable-change case. The validation/QC runner owns the
+  missing-separator case. Every runner must call production functions; a
+  test-only copy of normalization or reporting logic can agree with the same bug
+  and is not a regression test.
 - A model-boundary case may keep a canned structured response so routine replay
   proves how janki handles that response. If the failure was the model's
   extraction itself, the case uses one of the two source forms above and a human
@@ -2473,10 +2489,13 @@ these are not new fixes, but they prove the bundle and catalog formats together
 against known production behavior.
 
 Tests: unit-oracle duplicate keys and malformed hashes; both case purposes and
-source forms; reciprocal/dangling links; manifest safety; consent validation;
-hash checks; every runner; stable discovery ordering; open-versus-fixed gate
-behavior; and a deliberate production mutant that makes the corresponding case
-fail. No runner may make a live network call or read a private visual source.
+source forms; reciprocal/dangling links; manifest safety; missing-consent
+default, consent/source fingerprint binding, and changed-source invalidation;
+hash checks; every runner; a test that every seeded finding names a compatible
+runner; stable discovery ordering; open-versus-fixed gate behavior; and a
+deliberate production mutant at each seeded boundary that makes its
+corresponding case fail. No runner may make a live network call or read a
+private visual source.
 
 ### [ ] M7.4 Extraction accounting and prompt provenance
 
@@ -2557,38 +2576,59 @@ giving an agent general write access to curated content.
   provenance text. Applying it returns a field diff and evidence; it may not
   silently decline after claiming its precondition matched.
 - `janki repair PATH` is check-only and prints applicable repairs, exact diffs,
-  and the input revision. `--apply CODE...` recomputes and prints those diffs in
-  the same process, captures the revision before displaying them, requires an
-  interactive confirmation, and compare-and-swap writes against that captured
-  revision. For a non-interactive caller, check-only JSON supplies the revision
-  and `--apply` requires an exact `--expected-revision`; a mismatch refuses
-  before any edit. There is no unbound `--yes` path. Apply revalidates the full
-  file through the atomic write path and records repair code/version in the
-  namespaced `source.raw_fields["janki_repairs"]` annotation as a canonical JSON
-  string. It refuses paths under `data/inbox/`, archived `data/staging/done/`,
-  and `dist/`, and never changes an existing ID.
+  and the input revision. `--check CODE... --format json` selects an ordered
+  repair set and also emits a **repair-plan fingerprint** over the input
+  revision and canonical plan JSON. The JSON contains ordered code/version
+  pairs, target record/field names, exact old/new values, and evidence.
+  `--apply CODE...` recomputes and prints that same plan in one process. It
+  captures the revision before display. It requires interactive confirmation
+  and compare-and-swap writes against the captured revision. For a
+  non-interactive caller, the same ordered code list and
+  `--expected-plan FINGERPRINT` are required. Apply recomputes the complete plan
+  and refuses before any edit if its fingerprint differs; matching the input
+  revision alone is not sufficient. There is no unbound `--yes` path. Apply
+  revalidates the full file through the atomic write path and records repair
+  code/version in the namespaced `source.raw_fields["janki_repairs"]` annotation
+  as a canonical JSON string. It refuses paths under `data/inbox/`, archived
+  `data/staging/done/`, and `dist/`, and never changes an existing ID.
 - Only repairs explicitly marked `ingest-safe` may run automatically, and only
   while a new candidate is being normalized before it becomes curated. The M7.1
   protected fields remain default-deny. An existing identity-field disagreement
   becomes a blocking finding, never a repair. A repair that wants to suggest a
   non-identity protected content change writes a **proposal-shaped** staging
-  file containing its code/version, base record and file fingerprints, and the
-  exact allowed old/new field values. It never touches the source record.
+  file. Its `proposals:` list contains one entry per record **and field** with
+  code/version, the exact old/new values, evidence, and a base-field fingerprint
+  over record ID, field name, and the canonical old value. Duplicate entries for
+  the same record/field are invalid. A bundle-level source-file revision is kept
+  for audit, but it is not used to make an unrelated field stale. Creating this
+  file never touches the source record.
 - Ordinary `janki promote` refuses a proposal-shaped file and directs the user
   to `janki promote FILE --accept-proposals`, so the current existing-wins merge
   cannot report a conflict and then archive/delete the only proposal.
   `--accept-proposals` is valid only for that shape: it reloads the normalized
-  records, refuses any stale base fingerprint, rejects identity or undeclared
-  fields, displays each field diff, and asks `y/n/q` per record. It applies only
-  accepted fields under the records revision guard, validates the full result,
-  leaves rejected/unreviewed proposals in staging, and archives accepted ones
-  with the repair provenance. The annotation is explicitly carried onto the
-  existing source record by this path; it is not entrusted to ordinary
-  existing-wins source merging.
+  records, refuses a proposal when its current field value does not match the
+  base-field fingerprint, rejects identity or undeclared fields, displays each
+  field diff, and asks `y/n/q` for **each proposal entry**. It collects all
+  decisions before it writes, applies accepted fields in one records
+  compare-and-swap transaction, validates the full result, leaves rejected and
+  unreviewed field entries unchanged in staging, and archives accepted entries
+  with the repair provenance. Because staleness is field-scoped, accepting one
+  field does not invalidate a rejected proposal for another field on the same
+  record. The annotation is explicitly carried onto the existing source record
+  by this path; it is not entrusted to ordinary existing-wins source merging.
+- Proposal acceptance uses a small recovery journal with the M6.5 discipline.
+  Before the records write, the journal stores the input revision, intended
+  output revision, and accepted proposal-entry fingerprints. Recovery has three
+  states. If the records file has the input revision, apply can restart. If it
+  has the intended output revision, recovery completes archive/prune and does
+  not prompt or apply twice. For any other revision, recovery refuses and names
+  the journal for manual review. The journal and proposal rewrite use
+  compare-and-swap guards. Recovery never treats a rejected or unreviewed entry
+  as accepted.
 - No force, generic `prefer-incoming`, or noninteractive confirmation flag
   bypasses either repair boundary. A future batch acceptance path would need the
-  same proposal and records fingerprints, plus an externally supplied approval
-  artifact, before it could be added.
+  same field and proposal-entry fingerprints. It would also need an externally
+  supplied approval artifact.
 - Seed the registry by wrapping an existing proven mechanical correction, not
   inventing a new semantic rule for the sake of the framework. Furigana
   separator insertion is eligible only when the existing jpdb tokenization and
@@ -2600,13 +2640,16 @@ giving an agent general write access to curated content.
   positive in M7 pilots demotes that repair from automatic to proposal-only
   until a narrower precondition lands.
 
-Tests also cover a file changed after check-only preview, a file changed after
-the in-process confirmation but before replace, partial failure (original
-intact), multiple repairs in deterministic order, canonical provenance, and a
-semantic proposal that reaches staging without touching the source record.
-Proposal tests cover ordinary-promote refusal without pruning, stale proposal
-refusal, per-field acceptance/rejection/quit, protected identity fields, source
-annotation carry, and accepted-only archive behavior.
+Tests also cover a file changed after check-only preview; unchanged input with a
+changed repair version, order, evidence, or diff; a file changed after the
+in-process confirmation but before replace; partial failure (original intact);
+multiple repairs in deterministic order; canonical provenance; and a semantic
+proposal that reaches staging without touching the source record. Proposal
+tests cover ordinary-promote refusal without pruning, duplicate record/field
+entries, stale field refusal, two fields on one record with one accepted and one
+rejected, per-field accept/reject/quit, protected identity fields, source
+annotation carry, crash recovery after the records write, and accepted-entry
+only archive behavior.
 
 ### [ ] M7.6A Pilot pair — born-digital structure
 
@@ -2637,8 +2680,11 @@ fingerprinted `private_inbox_ref` with repository-owner live-eval consent. The
 source slice must be the material actually used for that pilot, not a cleaner
 substitute created after the fact. A pilot without a source that can be sent on
 a later evaluation run remains incomplete; use another suitable source rather
-than silently leaving an archetype out of the baseline. Regression cases for
-systemic findings are additional and may point at the same minimized evidence.
+than silently leaving an archetype out of the baseline. This completion rule
+does not authorize an agent to grant consent: if the user has not explicitly
+approved the exact private fingerprint, the agent must use redistributable
+material or leave the task open. Regression cases for systemic findings are
+additional and may point at the same minimized evidence.
 
 ### [ ] M7.6B Pilot pair — scans and camera captures
 
