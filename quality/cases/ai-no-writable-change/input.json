@@ -1,0 +1,21 @@
+{
+  "records": [
+    {
+      "id": "word:話す:はなす",
+      "expression": "話す",
+      "reading": "はなす",
+      "meanings": ["to speak"]
+    }
+  ],
+  "model": "offline-model",
+  "response": {
+    "parsed": {"examples": [], "usage_notes": ""},
+    "stop_reason": "end_turn"
+  },
+  "observe": [
+    {
+      "id": "word:話す:はなす",
+      "fields": ["examples", "usage_notes"]
+    }
+  ]
+}

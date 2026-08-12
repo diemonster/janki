@@ -32,8 +32,9 @@ bootstrap:
 
 ## gates: the definition of done. Run this, not its parts.
 gates: lint test
+	@$(JANKI) harden replay >/dev/null
 	@$(JANKI) build data/decks/verbs.yaml --output dist/.gates-check.apkg >/dev/null
-	@echo "gates: ruff clean, pytest green, sample deck builds  [$(ROOT)]"
+	@echo "gates: ruff clean, pytest green, hardening replay clean, sample deck builds  [$(ROOT)]"
 
 lint:
 	@$(RUN) -m ruff check "$(ROOT)"

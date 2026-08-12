@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -73,6 +74,10 @@ def _project(
     quality = tmp_path / "quality"
     pilot_dir = quality / "pilots"
     pilot_dir.mkdir(parents=True)
+    oracle_dir = quality / "oracles"
+    oracle_dir.mkdir()
+    case_root = quality / "cases"
+    case_root.mkdir()
     (quality / "findings.yaml").write_text(
         yaml.safe_dump(
             {"version": 1, "findings": findings or []},
@@ -82,11 +87,154 @@ def _project(
         encoding="utf-8",
     )
     for pilot in pilots or []:
+        source = f"source for {pilot['id']}\n".encode()
+        source_fp = hashlib.sha256(source).hexdigest()
+        pilot["source_fingerprint"] = source_fp
+        inbox = tmp_path / "data" / "inbox"
+        inbox.mkdir(parents=True, exist_ok=True)
+        source_path = inbox / f"{pilot['id']}.txt"
+        source_path.write_bytes(source)
+        oracle_model = hardening.UnitOracle(
+            path=oracle_dir / f"{pilot['unit_oracle_id']}.yaml",
+            relative_path=f"quality/oracles/{pilot['unit_oracle_id']}.yaml",
+            id=pilot["unit_oracle_id"],
+            source_fingerprint=source_fp,
+            type="exhaustive",
+            case_ids=(pilot["eval_case_id"],),
+            units=(
+                hardening.OracleUnit(
+                    page=1,
+                    section="main",
+                    ordinal=1,
+                    context_fingerprint=HASH_A,
+                    disposition="candidate",
+                ),
+            ),
+            targets=(),
+            selection_rubric=None,
+            approval=None,
+        )
+        oracle = {
+            "version": 1,
+            "id": oracle_model.id,
+            "source_fingerprint": source_fp,
+            "type": "exhaustive",
+            "case_ids": [pilot["eval_case_id"]],
+            "units": [
+                {
+                    "page": 1,
+                    "section": "main",
+                    "ordinal": 1,
+                    "context_fingerprint": HASH_A,
+                    "disposition": "candidate",
+                }
+            ],
+            "approval": {
+                "authority": "repository-owner",
+                "oracle_id": oracle_model.id,
+                "source_fingerprint": source_fp,
+                "oracle_type": "exhaustive",
+                "oracle_content_fingerprint": hardening.oracle_content_fingerprint(
+                    oracle_model
+                ),
+                "approved_at": "2026-08-12",
+            },
+        }
+        (oracle_dir / f"{pilot['unit_oracle_id']}.yaml").write_text(
+            yaml.safe_dump(oracle, allow_unicode=True, sort_keys=False), encoding="utf-8"
+        )
+        _write_test_case(
+            case_root,
+            case_id=pilot["eval_case_id"],
+            purpose="coverage",
+            gating=True,
+            source_archetype=pilot["source_archetype"],
+            pilot_id=pilot["id"],
+            unit_oracle_id=pilot["unit_oracle_id"],
+            source={
+                "kind": "private_inbox_ref",
+                "path": f"data/inbox/{pilot['id']}.txt",
+                "fingerprint": source_fp,
+                "live_eval": {
+                    "provider": "anthropic",
+                    "models": ["claude-test"],
+                    "purpose": "hardening-eval",
+                },
+            },
+            redistributable=False,
+        )
         (pilot_dir / f"{pilot['id']}.yaml").write_text(
             yaml.safe_dump(pilot, allow_unicode=True, sort_keys=False),
             encoding="utf-8",
         )
+    for finding in findings or []:
+        for case_id in finding.get("case_ids", []):
+            _write_test_case(
+                case_root,
+                case_id=case_id,
+                purpose="regression",
+                gating=finding["state"] == "fixed",
+                source_archetype=finding["source_archetypes"][0],
+                finding_id=finding["id"],
+            )
     return tmp_path
+
+
+def _write_test_case(
+    case_root: Path,
+    *,
+    case_id: str,
+    purpose: str,
+    gating: bool,
+    source_archetype: str,
+    finding_id: str | None = None,
+    pilot_id: str | None = None,
+    unit_oracle_id: str | None = None,
+    source: dict[str, Any] | None = None,
+    redistributable: bool = True,
+) -> None:
+    if hardening._SLUG.fullmatch(case_id) is None:
+        return
+    case_dir = case_root / case_id
+    case_dir.mkdir()
+    input_text = '{"candidates": [], "observe": []}\n'
+    oracle_text = '{"records": [], "record_ids": [], "unusable": 0}\n'
+    (case_dir / "input.json").write_text(input_text, encoding="utf-8")
+    (case_dir / "oracle.json").write_text(oracle_text, encoding="utf-8")
+    manifest: dict[str, Any] = {
+        "version": 1,
+        "id": case_id,
+        "purpose": purpose,
+        "gating": gating,
+        "runner": "candidate-response",
+        "pipeline_boundary": "extraction-normalization",
+        "source_archetype": source_archetype,
+        "redistributable": redistributable,
+        "fixture_basis": "agent-created-synthetic",
+        "fixtures": [
+            {
+                "path": "input.json",
+                "fingerprint": hashlib.sha256(input_text.encode()).hexdigest(),
+            },
+            {
+                "path": "oracle.json",
+                "fingerprint": hashlib.sha256(oracle_text.encode()).hexdigest(),
+            },
+        ],
+        "runner_input": "input.json",
+        "oracle": "oracle.json",
+    }
+    if finding_id is not None:
+        manifest["finding_id"] = finding_id
+    if pilot_id is not None:
+        manifest["pilot_id"] = pilot_id
+    if unit_oracle_id is not None:
+        manifest["unit_oracle_id"] = unit_oracle_id
+    if source is not None:
+        manifest["source"] = source
+    (case_dir / "case.yaml").write_text(
+        yaml.safe_dump(manifest, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
 
 
 def _write_findings(root: Path, findings: list[dict[str, Any]]) -> None:
@@ -644,3 +792,312 @@ def test_complete_pilot_with_fingerprints_is_valid(tmp_path: Path) -> None:
     report = hardening.build_status(root)
 
     assert report.pilots[0].complete is True
+
+
+def _load_yaml(path: Path) -> dict[str, Any]:
+    value = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert isinstance(value, dict)
+    return value
+
+
+def _dump_yaml(path: Path, value: dict[str, Any]) -> None:
+    path.write_text(
+        yaml.safe_dump(value, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
+
+
+def test_draft_oracle_cannot_bind_a_pilot_or_case(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    pilot = _pilot()
+    root = _project(tmp_path, pilots=[pilot])
+    path = root / "quality" / "oracles" / "native-table-units.yaml"
+    oracle = _load_yaml(path)
+    del oracle["approval"]
+    _dump_yaml(path, oracle)
+
+    assert _run(root) == 1
+    assert "cannot bind draft oracle" in capsys.readouterr().err
+
+
+def test_oracle_approval_is_stale_after_reviewed_content_changes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, pilots=[_pilot()])
+    path = root / "quality" / "oracles" / "native-table-units.yaml"
+    oracle = _load_yaml(path)
+    oracle["units"][0]["disposition"] = "duplicate"
+    _dump_yaml(path, oracle)
+
+    assert _run(root) == 1
+    assert "approval is stale" in capsys.readouterr().err
+
+
+def test_selection_oracle_is_a_draft_with_targets_and_a_rubric(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    oracle = {
+        "version": 1,
+        "id": "selected-prose",
+        "source_fingerprint": HASH_A,
+        "type": "selection",
+        "case_ids": [],
+        "targets": [
+            {"identity": "word:話す:はなす", "locator": "page-1/paragraph-2"}
+        ],
+        "selection_rubric": "Select words that the first Genki volume does not teach.",
+    }
+    _dump_yaml(root / "quality" / "oracles" / "selected-prose.yaml", oracle)
+
+    loaded = hardening.load_oracles(root)[0]
+
+    assert loaded.type == "selection"
+    assert loaded.approved is False
+    assert loaded.units == ()
+    assert loaded.targets[0].identity == "word:話す:はなす"
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [("duplicate", "duplicate unit keys"), ("out-of-order", "must use page")],
+)
+def test_exhaustive_oracle_unit_keys_are_unique_and_ordered(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    mutation: str,
+    message: str,
+) -> None:
+    root = _project(tmp_path, pilots=[_pilot()])
+    path = root / "quality" / "oracles" / "native-table-units.yaml"
+    oracle = _load_yaml(path)
+    del oracle["approval"]
+    second = dict(oracle["units"][0])
+    second["ordinal"] = 2
+    oracle["units"].append(second)
+    if mutation == "duplicate":
+        oracle["units"][1]["ordinal"] = 1
+    else:
+        oracle["units"].reverse()
+    _dump_yaml(path, oracle)
+
+    assert _run(root) == 1
+    assert message in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        ("version: 1\nversion: 1\n", "duplicate key"),
+        (
+            "version: 1\nid: bad-hash\nsource_fingerprint: nope\n"
+            "type: exhaustive\ncase_ids: []\nunits:\n"
+            "  - page: 1\n    section: main\n    ordinal: 1\n"
+            f"    context_fingerprint: {HASH_A}\n    disposition: candidate\n",
+            "lowercase SHA-256",
+        ),
+    ],
+)
+def test_oracle_duplicate_keys_and_malformed_hashes_are_errors(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    content: str,
+    message: str,
+) -> None:
+    root = _project(tmp_path)
+    (root / "quality" / "oracles" / "bad-hash.yaml").write_text(
+        content, encoding="utf-8"
+    )
+
+    assert _run(root) == 1
+    assert message in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ("hash", "expected"),
+        ("runner", "unknown runner"),
+        ("path", "path traversal"),
+        ("undeclared", "undeclared"),
+    ],
+)
+def test_case_manifest_rejects_unsafe_or_unpinned_files(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    mutation: str,
+    message: str,
+) -> None:
+    finding = _finding()
+    finding.update(
+        state="fixed", case_ids=["missing-second-column-case"], fix_ref="commit:abc"
+    )
+    root = _project(tmp_path, findings=[finding])
+    case_dir = root / "quality" / "cases" / "missing-second-column-case"
+    manifest_path = case_dir / "case.yaml"
+    manifest = _load_yaml(manifest_path)
+    if mutation == "hash":
+        manifest["fixtures"][0]["fingerprint"] = HASH_C
+    elif mutation == "runner":
+        manifest["runner"] = "os.system"
+    elif mutation == "path":
+        manifest["fixtures"][0]["path"] = "../input.json"
+    else:
+        (case_dir / "extra.txt").write_text("not declared\n", encoding="utf-8")
+    _dump_yaml(manifest_path, manifest)
+
+    assert _run(root) == 1
+    assert message in capsys.readouterr().err
+
+
+def test_private_source_consent_defaults_to_false(tmp_path: Path) -> None:
+    root = _project(tmp_path, pilots=[_pilot()])
+
+    repository = hardening.load_repository(root)
+
+    source = repository.cases[0].source
+    assert source is not None
+    assert source.kind == "private_inbox_ref"
+    assert source.live_eval is not None
+    assert source.live_eval.consented is False
+
+
+@pytest.mark.parametrize("field", ["provider", "models", "purpose"])
+def test_live_consent_binds_case_source_provider_models_and_purpose(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], field: str
+) -> None:
+    root = _project(tmp_path, pilots=[_pilot()])
+    path = root / "quality" / "cases" / "native-table-eval" / "case.yaml"
+    case = _load_yaml(path)
+    source = case["source"]
+    request = source["live_eval"]
+    request["approval"] = {
+        "authority": "repository-owner",
+        "case_id": case["id"],
+        "source_fingerprint": source["fingerprint"],
+        "provider": request["provider"],
+        "models": request["models"],
+        "purpose": request["purpose"],
+        "reason": "Run this exact hardening evaluation.",
+        "approved_at": "2026-08-12",
+    }
+    _dump_yaml(path, case)
+
+    assert _run(root) == 0
+    capsys.readouterr()
+    request["approval"][field] = {
+        "provider": "codex",
+        "models": ["different-model"],
+        "purpose": "another-purpose",
+    }[field]
+    _dump_yaml(path, case)
+    assert _run(root) == 1
+    assert "must match the case, source, provider, models, and purpose" in (
+        capsys.readouterr().err
+    )
+
+
+def test_changed_private_source_invalidates_the_pinned_case(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, pilots=[_pilot()])
+    source = root / "data" / "inbox" / "native-table-pilot.txt"
+    source.write_text("changed source\n", encoding="utf-8")
+
+    assert _run(root) == 1
+    assert "expected" in capsys.readouterr().err
+
+
+def test_private_source_must_stay_under_data_inbox(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, pilots=[_pilot()])
+    path = root / "quality" / "cases" / "native-table-eval" / "case.yaml"
+    case = _load_yaml(path)
+    case["source"]["path"] = "quality/findings.yaml"
+    _dump_yaml(path, case)
+
+    assert _run(root) == 1
+    assert "must be under data/inbox" in capsys.readouterr().err
+
+
+def test_owner_provided_bundled_source_needs_exact_redistribution_approval(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    pilot = _pilot()
+    pilot["redistributable"] = True
+    root = _project(tmp_path, pilots=[pilot])
+    path = root / "quality" / "cases" / "native-table-eval" / "case.yaml"
+    case = _load_yaml(path)
+    case_dir = path.parent
+    source_path = root / case["source"]["path"]
+    source_bytes = source_path.read_bytes()
+    bundled = case_dir / "source.txt"
+    bundled.write_bytes(source_bytes)
+    source_fp = hashlib.sha256(source_bytes).hexdigest()
+    case["redistributable"] = True
+    case["fixture_basis"] = "owner-provided"
+    case["fixtures"].append({"path": "source.txt", "fingerprint": source_fp})
+    case["source"] = {
+        "kind": "bundled_fixture",
+        "path": "source.txt",
+        "fingerprint": source_fp,
+        "basis": "The repository owner permits this test fixture.",
+    }
+    _dump_yaml(path, case)
+
+    assert _run(root) == 1
+    assert "requires repository-owner redistribution approval" in capsys.readouterr().err
+
+    case["source"]["redistribution_approval"] = {
+        "authority": "repository-owner",
+        "case_id": case["id"],
+        "artifact_fingerprint": source_fp,
+        "basis": "The repository owner permits this test fixture.",
+        "approved_at": "2026-08-12",
+    }
+    _dump_yaml(path, case)
+    assert _run(root) == 0
+
+    capsys.readouterr()
+    case["source"]["redistribution_approval"]["artifact_fingerprint"] = HASH_C
+    _dump_yaml(path, case)
+    assert _run(root) == 1
+    assert "must match the case, artifact, and basis" in capsys.readouterr().err
+
+
+def test_case_fixture_symlink_is_rejected(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    finding = _finding()
+    finding.update(state="fixed", case_ids=["fixed-case"], fix_ref="commit:abc")
+    root = _project(tmp_path, findings=[finding])
+    case_dir = root / "quality" / "cases" / "fixed-case"
+    fixture = case_dir / "input.json"
+    target = case_dir / "target.json"
+    target.write_bytes(fixture.read_bytes())
+    fixture.unlink()
+    fixture.symlink_to(target.name)
+
+    assert _run(root) == 1
+    assert "symlink" in capsys.readouterr().err
+
+
+def test_fixed_finding_refuses_a_missing_or_non_gating_case(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    finding = _finding()
+    finding.update(state="fixed", case_ids=["fixed-case"], fix_ref="commit:abc")
+    root = _project(tmp_path, findings=[finding])
+    path = root / "quality" / "cases" / "fixed-case" / "case.yaml"
+    case = _load_yaml(path)
+    case["gating"] = False
+    _dump_yaml(path, case)
+
+    assert _run(root) == 1
+    assert "links non-gating case" in capsys.readouterr().err
+
+    case["gating"] = True
+    _dump_yaml(path, case)
+    case["finding_id"] = "unknown-finding"
+    _dump_yaml(path, case)
+    assert _run(root) == 1
+    assert "do not link both ways" in capsys.readouterr().err

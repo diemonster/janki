@@ -2452,7 +2452,15 @@ accepted-risk approval, deterministic JSON, and a content-specific pilot edit
 that is counted without becoming a systemic finding. Do not create a placeholder
 case parser merely to make M7.2 appear to resolve links before M7.3.
 
-### [ ] M7.3 Minimized case bundles + offline replay
+### [x] M7.3 Minimized case bundles + offline replay
+
+*Done 2026-08-12. Added strict human-oracle and minimized-case schemas,
+fingerprinted and symlink-safe fixture loading, exact owner-approval binding,
+reciprocal case/finding/pilot/oracle checks, and six registered offline
+production-boundary runners. Added `janki harden replay`, made the full gating
+corpus part of `make gates`, and seeded four fixed Yotsubato regressions. The
+offline path uses canned structured responses and can hash a private source,
+but it does not decode or send private source content.*
 
 Depends on: M7.2
 Files: new `quality/cases/README.md`, new `quality/cases/` fixtures,

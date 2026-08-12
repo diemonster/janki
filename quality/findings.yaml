@@ -1,2 +1,50 @@
 version: 1
-findings: []
+findings:
+  - id: ai-no-writable-change
+    state: fixed
+    pipeline_stage: ai-enrichment
+    source_archetypes: [bilingual-layout]
+    symptom: A valid AI answer that wrote no field was absent from the command report.
+    invariant: The command names every visited record that gets no writable change.
+    evidence:
+      - fingerprint: bc60c4667d12b741174eb54b1c14c9831f1f87d0a371e42f4c876c3e05e3b258
+        locator: quality/cases/ai-no-writable-change/input.json
+    recurrences: []
+    case_ids: [ai-no-writable-change]
+    fix_ref: commit:44826b2
+  - id: impossible-character-furigana
+    state: fixed
+    pipeline_stage: dictionary-enrichment
+    source_archetypes: [bilingual-layout]
+    symptom: A compound used per-character furigana that assigned an unknown reading to one kanji.
+    invariant: A per-character split must agree with stored KANJIDIC readings.
+    evidence:
+      - fingerprint: fdec6fc9b4f17a6bd8a08cffcdb9498b3114de0cc3e14b93a2792fa1a43514f1
+        locator: quality/cases/impossible-character-furigana/input.json
+    recurrences: []
+    case_ids: [impossible-character-furigana]
+    fix_ref: commit:fa575e9
+  - id: missing-furigana-separator
+    state: fixed
+    pipeline_stage: validation-qc
+    source_archetypes: [bilingual-layout]
+    symptom: Punctuation and a following word entered one furigana group.
+    invariant: A furigana group must not consume leading punctuation from an earlier token.
+    evidence:
+      - fingerprint: 59a0cebf2afd3a4a4d1ad74f2e4e44c1513ecd04253079711e5ab7c14d06df0a
+        locator: quality/cases/missing-furigana-separator/input.json
+    recurrences: []
+    case_ids: [missing-furigana-separator]
+    fix_ref: commit:fa575e9
+  - id: pos-precedence
+    state: fixed
+    pipeline_stage: dictionary-enrichment
+    source_archetypes: [bilingual-layout]
+    symptom: A secondary use code replaced the word's inflecting part of speech.
+    invariant: Part-of-speech precedence selects the word class before a secondary use.
+    evidence:
+      - fingerprint: 266d0127f40d1c4bdededb7a6f2d415321e119cd3d237d7293405fae11436c81
+        locator: quality/cases/pos-precedence/input.json
+    recurrences: []
+    case_ids: [pos-precedence]
+    fix_ref: commit:fa575e9

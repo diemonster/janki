@@ -1,0 +1,10 @@
+{
+  "errors": 0,
+  "warnings": 1,
+  "spilled_furigana": [
+    {
+      "id": "word:何:なに",
+      "groups": [["、何", "なに"]]
+    }
+  ]
+}

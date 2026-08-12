@@ -71,6 +71,7 @@ __all__ = [
     "enrich_ai",
     "enrich_records",
     "format_field_diff",
+    "format_ai_no_changes",
     "needs_reading",
     "parse_force_fields",
     "polish_meanings",
@@ -1226,6 +1227,17 @@ class AiResult:
     @property
     def changed_fields(self) -> list[str]:
         return sorted({name for fields in self.changes.values() for name in fields})
+
+
+def format_ai_no_changes(result: AiResult) -> list[str]:
+    """Return the command report for valid answers that wrote no field."""
+    if not result.no_changes:
+        return []
+    return [
+        f"No changes for {len(result.no_changes)} of {result.looked_up} "
+        "record(s) the AI pass visited:",
+        *(f"  {record_id}" for record_id in result.no_changes),
+    ]
 
 
 def _verify_parses(

@@ -1,0 +1,29 @@
+{
+  "records": [
+    {
+      "id": "word:明日:あした",
+      "expression": "明日",
+      "reading": "あした",
+      "meanings": ["tomorrow"]
+    }
+  ],
+  "responses": [
+    {
+      "endpoint": "parse",
+      "payload": {
+        "tokens": [[[0, [["明", "あ"], ["日", "した"]]]]],
+        "vocabulary": [[2, 1, "明日", "あした", ["LHLL"], 500, ["adv", "n"]]]
+      }
+    }
+  ],
+  "kanji": {
+    "明": {"readings": [{"kind": "kun", "reading": "あ(かり)"}]},
+    "日": {"readings": [{"kind": "kun", "reading": "ひ"}, {"kind": "on", "reading": "ニチ"}]}
+  },
+  "observe": [
+    {
+      "id": "word:明日:あした",
+      "fields": ["furigana"]
+    }
+  ]
+}

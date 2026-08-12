@@ -1,21 +1,22 @@
-"""Strict, read-only status for deck-driven hardening evidence.
+"""Strict loading and read-only status for deck-driven hardening evidence.
 
-M7.2 owns two reviewed document types: the systemic findings catalog and pilot
-reports. Case and oracle documents arrive in M7.3. This module validates their
-IDs now, but it does not guess their schemas or resolve them early.
+The module owns findings, pilot reports, human unit oracles, minimized cases,
+their content fingerprints, and every reciprocal link between them. Offline
+execution stays in :mod:`japanese_anki.hardening_replay`.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import stat
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
-from pathlib import Path, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 import yaml
@@ -48,6 +49,17 @@ PILOT_STEPS = (
     "final_review",
     "build",
 )
+ORACLE_TYPES = ("exhaustive", "selection")
+UNIT_DISPOSITIONS = ("candidate", "duplicate", "non-vocabulary", "unreadable")
+CASE_PURPOSES = ("regression", "coverage")
+RUNNER_BOUNDARIES = {
+    "candidate-response": "extraction-normalization",
+    "staging-promote": "staging-promote",
+    "validation-qc": "validation-qc",
+    "render-build": "render-build",
+    "dictionary-enrichment": "dictionary-enrichment",
+    "ai-enrichment": "ai-enrichment",
+}
 
 _SLUG = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 _VERSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
@@ -199,6 +211,132 @@ class Pilot:
 
 
 @dataclass(frozen=True, slots=True)
+class OracleUnit:
+    page: int
+    section: str
+    ordinal: int
+    context_fingerprint: str
+    disposition: str
+
+    @property
+    def key(self) -> tuple[int, str, int]:
+        return self.page, self.section, self.ordinal
+
+
+@dataclass(frozen=True, slots=True)
+class SelectionTarget:
+    identity: str
+    locator: str
+
+
+@dataclass(frozen=True, slots=True)
+class OracleApproval:
+    authority: str
+    oracle_id: str
+    source_fingerprint: str
+    oracle_type: str
+    oracle_content_fingerprint: str
+    selection_rubric: str | None
+    approved_at: str
+
+
+@dataclass(frozen=True, slots=True)
+class UnitOracle:
+    path: Path
+    relative_path: str
+    id: str
+    source_fingerprint: str
+    type: str
+    case_ids: tuple[str, ...]
+    units: tuple[OracleUnit, ...]
+    targets: tuple[SelectionTarget, ...]
+    selection_rubric: str | None
+    approval: OracleApproval | None
+
+    @property
+    def approved(self) -> bool:
+        return self.approval is not None
+
+
+@dataclass(frozen=True, slots=True)
+class CaseFixture:
+    path: str
+    fingerprint: str
+
+
+@dataclass(frozen=True, slots=True)
+class RedistributionApproval:
+    authority: str
+    case_id: str
+    artifact_fingerprint: str
+    basis: str
+    approved_at: str
+
+
+@dataclass(frozen=True, slots=True)
+class LiveEvalApproval:
+    authority: str
+    case_id: str
+    source_fingerprint: str
+    provider: str
+    models: tuple[str, ...]
+    purpose: str
+    reason: str
+    approved_at: str
+
+
+@dataclass(frozen=True, slots=True)
+class LiveEvalRequest:
+    provider: str
+    models: tuple[str, ...]
+    purpose: str
+    approval: LiveEvalApproval | None
+
+    @property
+    def consented(self) -> bool:
+        return self.approval is not None
+
+
+@dataclass(frozen=True, slots=True)
+class CaseSource:
+    kind: str
+    path: str
+    fingerprint: str
+    basis: str | None = None
+    redistribution_approval: RedistributionApproval | None = None
+    live_eval: LiveEvalRequest | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class HardeningCase:
+    path: Path
+    relative_path: str
+    id: str
+    purpose: str
+    gating: bool
+    runner: str
+    pipeline_boundary: str
+    source_archetype: str
+    redistributable: bool
+    fixture_basis: str
+    fixtures: tuple[CaseFixture, ...]
+    runner_input: str
+    oracle: str
+    finding_id: str | None
+    pilot_id: str | None
+    unit_oracle_id: str | None
+    source: CaseSource | None
+
+
+@dataclass(frozen=True, slots=True)
+class HardeningRepository:
+    catalog: FindingsCatalog
+    pilots: tuple[Pilot, ...]
+    oracles: tuple[UnitOracle, ...]
+    cases: tuple[HardeningCase, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class RepairFalsePositive:
     code: str
     version: str
@@ -211,6 +349,8 @@ class HardeningStatus:
     findings: tuple[Finding, ...]
     pilots: tuple[Pilot, ...]
     false_positives: tuple[RepairFalsePositive, ...]
+    oracles: tuple[UnitOracle, ...] = ()
+    cases: tuple[HardeningCase, ...] = ()
     catalog_path: str = "quality/findings.yaml"
     pilots_path: str = "quality/pilots"
 
@@ -352,6 +492,22 @@ def _schema_version(value: Any, where: str) -> None:
         raise HardeningError(f"{where} must be integer {SCHEMA_VERSION}")
 
 
+def _date_text(value: Any, where: str) -> str:
+    if isinstance(value, date):
+        result = value.isoformat()
+    else:
+        result = _text(value, where)
+        try:
+            parsed = date.fromisoformat(result)
+        except ValueError as exc:
+            raise HardeningError(f"{where} must be an ISO date") from exc
+        if parsed.isoformat() != result:
+            raise HardeningError(f"{where} must use YYYY-MM-DD")
+    if len(result) != 10:
+        raise HardeningError(f"{where} must use YYYY-MM-DD")
+    return result
+
+
 def _locator(value: Any, where: str) -> str:
     result = _text(value, where)
     normalized = result.replace("\\", "/")
@@ -368,6 +524,86 @@ def _locator(value: Any, where: str) -> str:
             f"{where} must be a repository-relative locator without path traversal"
         )
     return normalized
+
+
+def _relative_file(value: Any, where: str) -> str:
+    result = _locator(value, where)
+    parts = PurePosixPath(result).parts
+    if not parts or any(part in {"", "."} for part in parts):
+        raise HardeningError(f"{where} must name a repository-relative file")
+    return result
+
+
+def _authority(value: Any, where: str) -> str:
+    result = _text(value, where)
+    if result != "repository-owner":
+        raise HardeningError(f"{where} must be 'repository-owner'")
+    return result
+
+
+def _verified_file(
+    path: Path,
+    root: Path,
+    *,
+    expected: str | None = None,
+    return_bytes: bool = False,
+) -> tuple[str, bytes | None]:
+    """Hash a regular file without following a final symlink."""
+    root = root.resolve()
+    candidate = path if path.is_absolute() else root / path
+    _reject_symlink_components(candidate, root)
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(candidate, flags)
+    except FileNotFoundError as exc:
+        raise HardeningError(f"Hardening file not found: {_where(candidate, root)}") from exc
+    except OSError as exc:
+        raise HardeningError(
+            f"Could not open {_where(candidate, root)}: {exc.strerror or exc}"
+        ) from exc
+    digest = hashlib.sha256()
+    chunks: list[bytes] = []
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise HardeningError(
+                f"Hardening path {_where(candidate, root)} is not a regular file"
+            )
+        while True:
+            chunk = os.read(descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+            if return_bytes:
+                chunks.append(chunk)
+        after = os.fstat(descriptor)
+    except OSError as exc:
+        raise HardeningError(
+            f"Could not read {_where(candidate, root)}: {exc.strerror or exc}"
+        ) from exc
+    finally:
+        os.close(descriptor)
+    identity_before = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+    identity_after = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+    if identity_before != identity_after:
+        raise HardeningError(
+            f"Hardening file {_where(candidate, root)} changed while it was read"
+        )
+    fingerprint = digest.hexdigest()
+    if expected is not None and fingerprint != expected:
+        raise HardeningError(
+            f"Hardening file {_where(candidate, root)} has SHA-256 {fingerprint}; "
+            f"expected {expected}"
+        )
+    return fingerprint, b"".join(chunks) if return_bytes else None
+
+
+def verified_file_fingerprint(path: Path, root: Path) -> str:
+    return _verified_file(path, root)[0]
+
+
+def read_verified_bytes(path: Path, root: Path, expected: str) -> bytes:
+    return _verified_file(path, root, expected=expected, return_bytes=True)[1] or b""
 
 
 def _unique(values: Sequence[str], where: str) -> tuple[str, ...]:
@@ -554,6 +790,14 @@ def _parse_finding(value: Any, where: str) -> Finding:
         reason=_optional_text(data, "reason", where),
         approval=approval,
     )
+    unknown_archetypes = sorted(
+        set(finding.source_archetypes) - set(M7_SOURCE_ARCHETYPES)
+    )
+    if unknown_archetypes:
+        raise HardeningError(
+            f"{where}.source_archetypes has unknown value(s): "
+            + ", ".join(unknown_archetypes)
+        )
     initial_evidence = {
         (item.fingerprint, item.locator) for item in finding.evidence
     }
@@ -829,6 +1073,11 @@ def _parse_pilot(value: Any, path: Path, root: Path) -> Pilot:
         ),
         notes=_optional_text(data, "notes", where),
     )
+    if pilot.source_archetype not in M7_SOURCE_ARCHETYPES:
+        raise HardeningError(
+            f"{where}.source_archetype must be one of "
+            f"{', '.join(M7_SOURCE_ARCHETYPES)}"
+        )
     if (
         pilot.corrections.systemic or pilot.false_positive_repairs
     ) and not pilot.finding_ids:
@@ -886,11 +1135,852 @@ def load_pilots(
     return tuple(sorted(pilots, key=lambda item: item.id))
 
 
-def build_status(root: Path) -> HardeningStatus:
+def oracle_content_fingerprint(oracle: UnitOracle) -> str:
+    """Fingerprint reviewed oracle content, but not its approval."""
+    payload: dict[str, Any] = {
+        "id": oracle.id,
+        "source_fingerprint": oracle.source_fingerprint,
+        "type": oracle.type,
+        "case_ids": sorted(oracle.case_ids),
+    }
+    if oracle.type == "exhaustive":
+        payload["units"] = [
+            {
+                "page": unit.page,
+                "section": unit.section,
+                "ordinal": unit.ordinal,
+                "context_fingerprint": unit.context_fingerprint,
+                "disposition": unit.disposition,
+            }
+            for unit in oracle.units
+        ]
+    else:
+        payload["targets"] = [
+            {"identity": target.identity, "locator": target.locator}
+            for target in sorted(
+                oracle.targets, key=lambda item: (item.identity, item.locator)
+            )
+        ]
+        payload["selection_rubric"] = oracle.selection_rubric
+    encoded = json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _parse_oracle_approval(value: Any, where: str) -> OracleApproval:
+    data = _mapping(value, where)
+    allowed = {
+        "authority",
+        "oracle_id",
+        "source_fingerprint",
+        "oracle_type",
+        "oracle_content_fingerprint",
+        "selection_rubric",
+        "approved_at",
+    }
+    _no_unknown(data, allowed, where)
+    return OracleApproval(
+        authority=_authority(
+            _required(data, "authority", where), f"{where}.authority"
+        ),
+        oracle_id=_slug(
+            _required(data, "oracle_id", where), f"{where}.oracle_id"
+        ),
+        source_fingerprint=_fingerprint(
+            _required(data, "source_fingerprint", where),
+            f"{where}.source_fingerprint",
+        ),
+        oracle_type=_text(
+            _required(data, "oracle_type", where), f"{where}.oracle_type"
+        ),
+        oracle_content_fingerprint=_fingerprint(
+            _required(data, "oracle_content_fingerprint", where),
+            f"{where}.oracle_content_fingerprint",
+        ),
+        selection_rubric=_optional_text(data, "selection_rubric", where),
+        approved_at=_date_text(
+            _required(data, "approved_at", where), f"{where}.approved_at"
+        ),
+    )
+
+
+def _parse_oracle(value: Any, path: Path, root: Path) -> UnitOracle:
+    where = _where(path, root)
+    data = _mapping(value, where)
+    allowed = {
+        "version",
+        "id",
+        "source_fingerprint",
+        "type",
+        "case_ids",
+        "units",
+        "targets",
+        "selection_rubric",
+        "approval",
+    }
+    _no_unknown(data, allowed, where)
+    _schema_version(_required(data, "version", where), f"{where}.version")
+    oracle_id = _slug(_required(data, "id", where), f"{where}.id")
+    if path.stem != oracle_id:
+        raise HardeningError(f"{where}.id must match its filename stem {path.stem!r}")
+    oracle_type = _text(_required(data, "type", where), f"{where}.type")
+    if oracle_type not in ORACLE_TYPES:
+        raise HardeningError(f"{where}.type must be one of {', '.join(ORACLE_TYPES)}")
+    units: list[OracleUnit] = []
+    targets: list[SelectionTarget] = []
+    rubric = _optional_text(data, "selection_rubric", where)
+    if oracle_type == "exhaustive":
+        if "targets" in data or rubric is not None:
+            raise HardeningError(
+                f"{where}: exhaustive cannot have targets or selection_rubric"
+            )
+        raw_units = _list(_required(data, "units", where), f"{where}.units")
+        if not raw_units:
+            raise HardeningError(f"{where}.units must not be empty")
+        for index, item in enumerate(raw_units):
+            item_where = f"{where}.units[{index}]"
+            unit = _mapping(item, item_where)
+            _no_unknown(
+                unit,
+                {"page", "section", "ordinal", "context_fingerprint", "disposition"},
+                item_where,
+            )
+            disposition = _text(
+                _required(unit, "disposition", item_where),
+                f"{item_where}.disposition",
+            )
+            if disposition not in UNIT_DISPOSITIONS:
+                raise HardeningError(
+                    f"{item_where}.disposition must be one of "
+                    f"{', '.join(UNIT_DISPOSITIONS)}"
+                )
+            units.append(
+                OracleUnit(
+                    page=_count(
+                        _required(unit, "page", item_where),
+                        f"{item_where}.page",
+                        positive=True,
+                    ),
+                    section=_slug(
+                        _required(unit, "section", item_where),
+                        f"{item_where}.section",
+                    ),
+                    ordinal=_count(
+                        _required(unit, "ordinal", item_where),
+                        f"{item_where}.ordinal",
+                        positive=True,
+                    ),
+                    context_fingerprint=_fingerprint(
+                        _required(unit, "context_fingerprint", item_where),
+                        f"{item_where}.context_fingerprint",
+                    ),
+                    disposition=disposition,
+                )
+            )
+        keys = [unit.key for unit in units]
+        if len(set(keys)) != len(keys):
+            raise HardeningError(f"{where}.units has duplicate unit keys")
+        if keys != sorted(keys):
+            raise HardeningError(
+                f"{where}.units must use page, section, ordinal order"
+            )
+    else:
+        if "units" in data:
+            raise HardeningError(f"{where}: selection cannot have units")
+        if rubric is None:
+            raise HardeningError(f"{where}: selection requires selection_rubric")
+        raw_targets = _list(
+            _required(data, "targets", where), f"{where}.targets"
+        )
+        if not raw_targets:
+            raise HardeningError(f"{where}.targets must not be empty")
+        for index, item in enumerate(raw_targets):
+            item_where = f"{where}.targets[{index}]"
+            target = _mapping(item, item_where)
+            _no_unknown(target, {"identity", "locator"}, item_where)
+            targets.append(
+                SelectionTarget(
+                    identity=_text(
+                        _required(target, "identity", item_where),
+                        f"{item_where}.identity",
+                    ),
+                    locator=_locator(
+                        _required(target, "locator", item_where),
+                        f"{item_where}.locator",
+                    ),
+                )
+            )
+        pairs = [(target.identity, target.locator) for target in targets]
+        if len(set(pairs)) != len(pairs):
+            raise HardeningError(f"{where}.targets has duplicate targets")
+    oracle = UnitOracle(
+        path=path,
+        relative_path=where,
+        id=oracle_id,
+        source_fingerprint=_fingerprint(
+            _required(data, "source_fingerprint", where),
+            f"{where}.source_fingerprint",
+        ),
+        type=oracle_type,
+        case_ids=tuple(
+            sorted(_slug_list(data.get("case_ids", []), f"{where}.case_ids"))
+        ),
+        units=tuple(units),
+        targets=tuple(targets),
+        selection_rubric=rubric,
+        approval=(
+            _parse_oracle_approval(data["approval"], f"{where}.approval")
+            if "approval" in data
+            else None
+        ),
+    )
+    if oracle.approval is not None:
+        approval = oracle.approval
+        expected = oracle_content_fingerprint(oracle)
+        repeated = (
+            approval.oracle_id == oracle.id
+            and approval.source_fingerprint == oracle.source_fingerprint
+            and approval.oracle_type == oracle.type
+            and approval.selection_rubric == oracle.selection_rubric
+        )
+        if not repeated:
+            raise HardeningError(
+                f"{where}.approval must repeat the oracle ID, source fingerprint, "
+                "type, and selection rubric exactly"
+            )
+        if approval.oracle_content_fingerprint != expected:
+            raise HardeningError(
+                f"{where}.approval is stale: oracle content fingerprint must be {expected}"
+            )
+    return oracle
+
+
+def _yaml_directory(root: Path, relative: str) -> tuple[Path, ...]:
+    directory = root / relative
+    _reject_symlink_components(directory, root)
+    try:
+        details = directory.stat()
+    except FileNotFoundError as exc:
+        raise HardeningError(f"Hardening directory not found: {relative}") from exc
+    except OSError as exc:
+        raise HardeningError(
+            f"Could not inspect {relative}: {exc.strerror or exc}"
+        ) from exc
+    if not stat.S_ISDIR(details.st_mode):
+        raise HardeningError(f"Hardening path {relative} is not a directory")
+    try:
+        return tuple(
+            sorted(
+                (
+                    path
+                    for path in directory.iterdir()
+                    if path.suffix.lower() in {".yaml", ".yml"}
+                ),
+                key=lambda path: path.name,
+            )
+        )
+    except OSError as exc:
+        raise HardeningError(
+            f"Could not list {relative}: {exc.strerror or exc}"
+        ) from exc
+
+
+def load_oracles(root: Path) -> tuple[UnitOracle, ...]:
+    root = root.resolve()
+    oracles = tuple(
+        _parse_oracle(_read_yaml(path, root), path, root)
+        for path in _yaml_directory(root, "quality/oracles")
+    )
+    ids = [oracle.id for oracle in oracles]
+    if len(set(ids)) != len(ids):
+        raise HardeningError("quality/oracles has duplicate oracle IDs")
+    return tuple(sorted(oracles, key=lambda item: item.id))
+
+
+def _parse_redistribution_approval(
+    value: Any, where: str
+) -> RedistributionApproval:
+    data = _mapping(value, where)
+    allowed = {
+        "authority",
+        "case_id",
+        "artifact_fingerprint",
+        "basis",
+        "approved_at",
+    }
+    _no_unknown(data, allowed, where)
+    return RedistributionApproval(
+        authority=_authority(
+            _required(data, "authority", where), f"{where}.authority"
+        ),
+        case_id=_slug(_required(data, "case_id", where), f"{where}.case_id"),
+        artifact_fingerprint=_fingerprint(
+            _required(data, "artifact_fingerprint", where),
+            f"{where}.artifact_fingerprint",
+        ),
+        basis=_text(_required(data, "basis", where), f"{where}.basis"),
+        approved_at=_date_text(
+            _required(data, "approved_at", where), f"{where}.approved_at"
+        ),
+    )
+
+
+def _parse_live_approval(value: Any, where: str) -> LiveEvalApproval:
+    data = _mapping(value, where)
+    allowed = {
+        "authority",
+        "case_id",
+        "source_fingerprint",
+        "provider",
+        "models",
+        "purpose",
+        "reason",
+        "approved_at",
+    }
+    _no_unknown(data, allowed, where)
+    models = tuple(
+        _text(item, f"{where}.models[{index}]")
+        for index, item in enumerate(
+            _list(_required(data, "models", where), f"{where}.models")
+        )
+    )
+    if not models:
+        raise HardeningError(f"{where}.models must not be empty")
+    return LiveEvalApproval(
+        authority=_authority(
+            _required(data, "authority", where), f"{where}.authority"
+        ),
+        case_id=_slug(_required(data, "case_id", where), f"{where}.case_id"),
+        source_fingerprint=_fingerprint(
+            _required(data, "source_fingerprint", where),
+            f"{where}.source_fingerprint",
+        ),
+        provider=_slug(
+            _required(data, "provider", where), f"{where}.provider"
+        ),
+        models=_unique(models, f"{where}.models"),
+        purpose=_text(_required(data, "purpose", where), f"{where}.purpose"),
+        reason=_text(_required(data, "reason", where), f"{where}.reason"),
+        approved_at=_date_text(
+            _required(data, "approved_at", where), f"{where}.approved_at"
+        ),
+    )
+
+
+def _parse_live_request(value: Any, where: str) -> LiveEvalRequest:
+    data = _mapping(value, where)
+    _no_unknown(data, {"provider", "models", "purpose", "approval"}, where)
+    models = tuple(
+        _text(item, f"{where}.models[{index}]")
+        for index, item in enumerate(
+            _list(_required(data, "models", where), f"{where}.models")
+        )
+    )
+    if not models:
+        raise HardeningError(f"{where}.models must not be empty")
+    purpose = _text(_required(data, "purpose", where), f"{where}.purpose")
+    if purpose != "hardening-eval":
+        raise HardeningError(f"{where}.purpose must be 'hardening-eval'")
+    return LiveEvalRequest(
+        provider=_slug(_required(data, "provider", where), f"{where}.provider"),
+        models=_unique(models, f"{where}.models"),
+        purpose=purpose,
+        approval=(
+            _parse_live_approval(data["approval"], f"{where}.approval")
+            if "approval" in data
+            else None
+        ),
+    )
+
+
+def _parse_case_source(
+    value: Any,
+    where: str,
+    *,
+    case_id: str,
+    case_dir: Path,
+    root: Path,
+    redistributable: bool,
+    fixture_basis: str,
+    fixture_paths: set[str],
+) -> CaseSource:
+    data = _mapping(value, where)
+    allowed = {
+        "kind",
+        "path",
+        "fingerprint",
+        "basis",
+        "redistribution_approval",
+        "live_eval",
+    }
+    _no_unknown(data, allowed, where)
+    kind = _text(_required(data, "kind", where), f"{where}.kind")
+    fingerprint = _fingerprint(
+        _required(data, "fingerprint", where), f"{where}.fingerprint"
+    )
+    if kind == "bundled_fixture":
+        path = _relative_file(_required(data, "path", where), f"{where}.path")
+        if path not in fixture_paths:
+            raise HardeningError(f"{where}.path must name a declared fixture")
+        if not redistributable:
+            raise HardeningError(f"{where}: bundled_fixture requires redistributable true")
+        if "live_eval" in data:
+            raise HardeningError(f"{where}: bundled_fixture cannot have live_eval")
+        basis = _text(_required(data, "basis", where), f"{where}.basis")
+        _verified_file(case_dir / path, case_dir, expected=fingerprint)
+        approval = (
+            _parse_redistribution_approval(
+                data["redistribution_approval"],
+                f"{where}.redistribution_approval",
+            )
+            if "redistribution_approval" in data
+            else None
+        )
+        if fixture_basis == "agent-created-synthetic":
+            if basis != "agent-created-synthetic":
+                raise HardeningError(
+                    f"{where}.basis must be 'agent-created-synthetic' for a "
+                    "synthetic fixture"
+                )
+            if approval is not None:
+                raise HardeningError(
+                    f"{where}: agent-created-synthetic cannot have redistribution approval"
+                )
+        elif basis == "agent-created-synthetic":
+            raise HardeningError(
+                f"{where}.basis must state the license or permission for "
+                f"{fixture_basis} material"
+            )
+        elif approval is None:
+            raise HardeningError(
+                f"{where}: {basis} requires repository-owner redistribution approval"
+            )
+        elif (
+            approval.case_id != case_id
+            or approval.artifact_fingerprint != fingerprint
+            or approval.basis != basis
+        ):
+            raise HardeningError(
+                f"{where}.redistribution_approval must match the case, artifact, and basis"
+            )
+        return CaseSource(
+            kind=kind,
+            path=path,
+            fingerprint=fingerprint,
+            basis=basis,
+            redistribution_approval=approval,
+        )
+    if kind != "private_inbox_ref":
+        raise HardeningError(
+            f"{where}.kind must be 'bundled_fixture' or 'private_inbox_ref'"
+        )
+    if redistributable:
+        raise HardeningError(f"{where}: private_inbox_ref requires redistributable false")
+    if "basis" in data or "redistribution_approval" in data:
+        raise HardeningError(
+            f"{where}: private_inbox_ref cannot have bundled redistribution fields"
+        )
+    path = _relative_file(_required(data, "path", where), f"{where}.path")
+    if not PurePosixPath(path).is_relative_to(PurePosixPath("data/inbox")):
+        raise HardeningError(f"{where}.path must be under data/inbox")
+    _verified_file(root / path, root / "data" / "inbox", expected=fingerprint)
+    live_eval = _parse_live_request(
+        _required(data, "live_eval", where), f"{where}.live_eval"
+    )
+    if live_eval.approval is not None:
+        approval = live_eval.approval
+        if (
+            approval.case_id != case_id
+            or approval.source_fingerprint != fingerprint
+            or approval.provider != live_eval.provider
+            or approval.models != live_eval.models
+            or approval.purpose != live_eval.purpose
+        ):
+            raise HardeningError(
+                f"{where}.live_eval.approval must match the case, source, provider, "
+                "models, and purpose"
+            )
+    return CaseSource(
+        kind=kind,
+        path=path,
+        fingerprint=fingerprint,
+        live_eval=live_eval,
+    )
+
+
+def _parse_case(value: Any, path: Path, root: Path) -> HardeningCase:
+    where = _where(path, root)
+    data = _mapping(value, where)
+    allowed = {
+        "version",
+        "id",
+        "purpose",
+        "gating",
+        "runner",
+        "pipeline_boundary",
+        "source_archetype",
+        "redistributable",
+        "fixture_basis",
+        "fixtures",
+        "runner_input",
+        "oracle",
+        "finding_id",
+        "pilot_id",
+        "unit_oracle_id",
+        "source",
+    }
+    _no_unknown(data, allowed, where)
+    _schema_version(_required(data, "version", where), f"{where}.version")
+    case_id = _slug(_required(data, "id", where), f"{where}.id")
+    if path.parent.name != case_id:
+        raise HardeningError(
+            f"{where}.id must match its directory name {path.parent.name!r}"
+        )
+    purpose = _text(_required(data, "purpose", where), f"{where}.purpose")
+    if purpose not in CASE_PURPOSES:
+        raise HardeningError(
+            f"{where}.purpose must be one of {', '.join(CASE_PURPOSES)}"
+        )
+    runner = _text(_required(data, "runner", where), f"{where}.runner")
+    if runner not in RUNNER_BOUNDARIES:
+        raise HardeningError(f"{where}.runner names unknown runner {runner!r}")
+    boundary = _slug(
+        _required(data, "pipeline_boundary", where),
+        f"{where}.pipeline_boundary",
+    )
+    if boundary != RUNNER_BOUNDARIES[runner]:
+        raise HardeningError(
+            f"{where}.pipeline_boundary must be {RUNNER_BOUNDARIES[runner]!r} "
+            f"for runner {runner!r}"
+        )
+    fixtures: list[CaseFixture] = []
+    raw_fixtures = _list(_required(data, "fixtures", where), f"{where}.fixtures")
+    if not raw_fixtures:
+        raise HardeningError(f"{where}.fixtures must not be empty")
+    for index, item in enumerate(raw_fixtures):
+        item_where = f"{where}.fixtures[{index}]"
+        fixture = _mapping(item, item_where)
+        _no_unknown(fixture, {"path", "fingerprint"}, item_where)
+        fixtures.append(
+            CaseFixture(
+                path=_relative_file(
+                    _required(fixture, "path", item_where), f"{item_where}.path"
+                ),
+                fingerprint=_fingerprint(
+                    _required(fixture, "fingerprint", item_where),
+                    f"{item_where}.fingerprint",
+                ),
+            )
+        )
+    fixture_paths = [fixture.path for fixture in fixtures]
+    if len(set(fixture_paths)) != len(fixture_paths):
+        raise HardeningError(f"{where}.fixtures has duplicate paths")
+    if "case.yaml" in fixture_paths:
+        raise HardeningError(f"{where}.fixtures cannot declare case.yaml")
+    for fixture in fixtures:
+        _verified_file(
+            path.parent / fixture.path,
+            path.parent,
+            expected=fixture.fingerprint,
+        )
+    try:
+        actual_files = {
+            item.relative_to(path.parent).as_posix()
+            for item in path.parent.rglob("*")
+            if item.is_file() or item.is_symlink()
+        }
+    except OSError as exc:
+        raise HardeningError(f"Could not list {path.parent}: {exc.strerror or exc}") from exc
+    expected_files = {"case.yaml", *fixture_paths}
+    if actual_files != expected_files:
+        undeclared = sorted(actual_files - expected_files)
+        missing = sorted(expected_files - actual_files)
+        details = []
+        if undeclared:
+            details.append("undeclared: " + ", ".join(undeclared))
+        if missing:
+            details.append("missing: " + ", ".join(missing))
+        raise HardeningError(f"{where} fixture set does not match files ({'; '.join(details)})")
+    runner_input = _relative_file(
+        _required(data, "runner_input", where), f"{where}.runner_input"
+    )
+    oracle_path = _relative_file(
+        _required(data, "oracle", where), f"{where}.oracle"
+    )
+    for name, value_ in (("runner_input", runner_input), ("oracle", oracle_path)):
+        if value_ not in set(fixture_paths):
+            raise HardeningError(f"{where}.{name} must name a declared fixture")
+    redistributable = _bool(
+        _required(data, "redistributable", where), f"{where}.redistributable"
+    )
+    fixture_basis = _text(
+        _required(data, "fixture_basis", where), f"{where}.fixture_basis"
+    )
+    if fixture_basis not in {
+        "agent-created-synthetic",
+        "owner-provided",
+        "source-derived",
+    }:
+        raise HardeningError(f"{where}.fixture_basis has an invalid value")
+    source = (
+        _parse_case_source(
+            data["source"],
+            f"{where}.source",
+            case_id=case_id,
+            case_dir=path.parent,
+            root=root,
+            redistributable=redistributable,
+            fixture_basis=fixture_basis,
+            fixture_paths=set(fixture_paths),
+        )
+        if "source" in data
+        else None
+    )
+    if fixture_basis != "agent-created-synthetic" and (
+        source is None or source.kind != "bundled_fixture"
+    ):
+        raise HardeningError(
+            f"{where}: non-synthetic fixtures require an approved bundled source"
+        )
+    finding_id = (
+        _slug(data["finding_id"], f"{where}.finding_id")
+        if "finding_id" in data
+        else None
+    )
+    pilot_id = (
+        _slug(data["pilot_id"], f"{where}.pilot_id")
+        if "pilot_id" in data
+        else None
+    )
+    unit_oracle_id = (
+        _slug(data["unit_oracle_id"], f"{where}.unit_oracle_id")
+        if "unit_oracle_id" in data
+        else None
+    )
+    if purpose == "regression":
+        if finding_id is None or pilot_id is not None:
+            raise HardeningError(
+                f"{where}: regression requires one finding_id and no pilot_id"
+            )
+    elif finding_id is not None or pilot_id is None or unit_oracle_id is None:
+        raise HardeningError(
+            f"{where}: coverage requires pilot_id and unit_oracle_id, and no finding_id"
+        )
+    if source is not None and unit_oracle_id is None:
+        raise HardeningError(f"{where}: a source case requires unit_oracle_id")
+    source_archetype = _slug(
+        _required(data, "source_archetype", where),
+        f"{where}.source_archetype",
+    )
+    if source_archetype not in M7_SOURCE_ARCHETYPES:
+        raise HardeningError(
+            f"{where}.source_archetype must be one of "
+            f"{', '.join(M7_SOURCE_ARCHETYPES)}"
+        )
+    return HardeningCase(
+        path=path,
+        relative_path=where,
+        id=case_id,
+        purpose=purpose,
+        gating=_bool(_required(data, "gating", where), f"{where}.gating"),
+        runner=runner,
+        pipeline_boundary=boundary,
+        source_archetype=source_archetype,
+        redistributable=redistributable,
+        fixture_basis=fixture_basis,
+        fixtures=tuple(sorted(fixtures, key=lambda item: item.path)),
+        runner_input=runner_input,
+        oracle=oracle_path,
+        finding_id=finding_id,
+        pilot_id=pilot_id,
+        unit_oracle_id=unit_oracle_id,
+        source=source,
+    )
+
+
+def load_cases(root: Path) -> tuple[HardeningCase, ...]:
+    root = root.resolve()
+    directory = root / "quality" / "cases"
+    _reject_symlink_components(directory, root)
+    try:
+        entries = tuple(sorted(directory.iterdir(), key=lambda path: path.name))
+    except FileNotFoundError as exc:
+        raise HardeningError("Hardening case directory not found: quality/cases") from exc
+    except OSError as exc:
+        raise HardeningError(
+            f"Could not list quality/cases: {exc.strerror or exc}"
+        ) from exc
+    cases: list[HardeningCase] = []
+    for entry in entries:
+        if entry.name == "README.md":
+            continue
+        if entry.is_symlink():
+            raise HardeningError(f"Hardening case path {_where(entry, root)} is a symlink")
+        if not entry.is_dir():
+            raise HardeningError(
+                f"Hardening case directory has unexpected entry {_where(entry, root)}"
+            )
+        manifest = entry / "case.yaml"
+        cases.append(_parse_case(_read_yaml(manifest, root), manifest, root))
+    ids = [case.id for case in cases]
+    if len(set(ids)) != len(ids):
+        raise HardeningError("quality/cases has duplicate case IDs")
+    return tuple(sorted(cases, key=lambda item: item.id))
+
+
+def load_repository(root: Path) -> HardeningRepository:
     root = root.resolve()
     catalog = load_findings(root)
     finding_ids = {finding.id for finding in catalog.findings}
     pilots = load_pilots(root, known_finding_ids=finding_ids)
+    oracles = load_oracles(root)
+    cases = load_cases(root)
+    findings_by_id = {finding.id: finding for finding in catalog.findings}
+    pilots_by_id = {pilot.id: pilot for pilot in pilots}
+    oracles_by_id = {oracle.id: oracle for oracle in oracles}
+    cases_by_id = {case.id: case for case in cases}
+
+    for finding in catalog.findings:
+        for case_id in finding.case_ids:
+            case = cases_by_id.get(case_id)
+            if case is None:
+                raise HardeningError(
+                    f"Finding {finding.id!r} links unknown case ID {case_id!r}"
+                )
+            if case.finding_id != finding.id:
+                raise HardeningError(
+                    f"Finding {finding.id!r} and case {case.id!r} do not link both ways"
+                )
+            compatible_stages = {
+                case.pipeline_boundary,
+                case.runner,
+                "extraction" if case.pipeline_boundary == "extraction-normalization" else "",
+            }
+            if finding.pipeline_stage not in compatible_stages:
+                raise HardeningError(
+                    f"Case {case.id!r} boundary does not match finding {finding.id!r}"
+                )
+            if case.source_archetype not in finding.source_archetypes:
+                raise HardeningError(
+                    f"Case {case.id!r} source archetype does not match finding "
+                    f"{finding.id!r}"
+                )
+            if finding.state == "fixed" and not case.gating:
+                raise HardeningError(
+                    f"Fixed finding {finding.id!r} links non-gating case {case.id!r}"
+                )
+            if finding.state != "fixed" and case.gating:
+                raise HardeningError(
+                    f"Non-fixed finding {finding.id!r} cannot link gating case {case.id!r}"
+                )
+    for case in cases:
+        if case.finding_id is not None:
+            finding = findings_by_id.get(case.finding_id)
+            if finding is None:
+                raise HardeningError(
+                    f"{case.relative_path} links unknown finding ID {case.finding_id!r}"
+                )
+            if case.id not in finding.case_ids:
+                raise HardeningError(
+                    f"Case {case.id!r} and finding {finding.id!r} do not link both ways"
+                )
+        if case.unit_oracle_id is not None:
+            oracle = oracles_by_id.get(case.unit_oracle_id)
+            if oracle is None:
+                raise HardeningError(
+                    f"{case.relative_path} links unknown oracle ID {case.unit_oracle_id!r}"
+                )
+            if not oracle.approved:
+                raise HardeningError(
+                    f"{case.relative_path} cannot bind draft oracle {oracle.id!r}"
+                )
+            if case.id not in oracle.case_ids:
+                raise HardeningError(
+                    f"Case {case.id!r} and oracle {oracle.id!r} do not link both ways"
+                )
+            if case.source is not None and (
+                case.source.fingerprint != oracle.source_fingerprint
+            ):
+                raise HardeningError(
+                    f"Case {case.id!r} source fingerprint does not match oracle "
+                    f"{oracle.id!r}"
+                )
+        if case.purpose == "coverage":
+            pilot = pilots_by_id.get(case.pilot_id or "")
+            if pilot is None:
+                raise HardeningError(
+                    f"{case.relative_path} links unknown pilot ID {case.pilot_id!r}"
+                )
+            if pilot.eval_case_id != case.id:
+                raise HardeningError(
+                    f"Case {case.id!r} and pilot {pilot.id!r} do not link both ways"
+                )
+            if pilot.unit_oracle_id != case.unit_oracle_id:
+                raise HardeningError(
+                    f"Case {case.id!r} and pilot {pilot.id!r} name different oracles"
+                )
+            if (
+                pilot.source_archetype != case.source_archetype
+                or pilot.redistributable != case.redistributable
+                or case.source is None
+                or pilot.source_fingerprint != case.source.fingerprint
+            ):
+                raise HardeningError(
+                    f"Case {case.id!r} source does not match pilot {pilot.id!r}"
+                )
+    for oracle in oracles:
+        for case_id in oracle.case_ids:
+            case = cases_by_id.get(case_id)
+            if case is None:
+                raise HardeningError(
+                    f"Oracle {oracle.id!r} links unknown case ID {case_id!r}"
+                )
+            if case.unit_oracle_id != oracle.id:
+                raise HardeningError(
+                    f"Oracle {oracle.id!r} and case {case.id!r} do not link both ways"
+                )
+        if not oracle.approved and oracle.case_ids:
+            raise HardeningError(
+                f"Draft oracle {oracle.id!r} cannot link a hardening case"
+            )
+    for pilot in pilots:
+        oracle = oracles_by_id.get(pilot.unit_oracle_id)
+        if oracle is None:
+            raise HardeningError(
+                f"{pilot.relative_path} links unknown oracle ID {pilot.unit_oracle_id!r}"
+            )
+        if not oracle.approved:
+            raise HardeningError(
+                f"{pilot.relative_path} cannot bind draft oracle {oracle.id!r}"
+            )
+        case = cases_by_id.get(pilot.eval_case_id)
+        if case is None:
+            raise HardeningError(
+                f"{pilot.relative_path} links unknown case ID {pilot.eval_case_id!r}"
+            )
+        if case.pilot_id != pilot.id or case.unit_oracle_id != oracle.id:
+            raise HardeningError(
+                f"Pilot {pilot.id!r}, case {case.id!r}, and oracle {oracle.id!r} "
+                "do not link both ways"
+            )
+        if pilot.source_fingerprint != oracle.source_fingerprint:
+            raise HardeningError(
+                f"Pilot {pilot.id!r} source fingerprint does not match oracle "
+                f"{oracle.id!r}"
+            )
+    return HardeningRepository(
+        catalog=catalog,
+        pilots=pilots,
+        oracles=oracles,
+        cases=cases,
+    )
+
+
+def build_status(root: Path) -> HardeningStatus:
+    repository = load_repository(root)
+    catalog = repository.catalog
+    pilots = repository.pilots
     totals: dict[tuple[str, str], int] = defaultdict(int)
     pilot_ids: dict[tuple[str, str], set[str]] = defaultdict(set)
     for pilot in pilots:
@@ -911,6 +2001,8 @@ def build_status(root: Path) -> HardeningStatus:
         findings=catalog.findings,
         pilots=pilots,
         false_positives=false_positives,
+        oracles=repository.oracles,
+        cases=repository.cases,
     )
 
 
@@ -921,6 +2013,12 @@ def status_payload(report: HardeningStatus) -> dict[str, Any]:
     recurrences = [finding for finding in report.findings if finding.recurrences]
     incomplete = [pilot for pilot in report.pilots if not pilot.complete]
     covered = sorted({pilot.source_archetype for pilot in report.pilots})
+    regression_case_ids = {
+        case.id for case in report.cases if case.purpose == "regression"
+    }
+    linked_case_ids = {
+        case_id for finding in report.findings for case_id in finding.case_ids
+    }
     return {
         "schema_version": SCHEMA_VERSION,
         "catalog": report.catalog_path,
@@ -987,6 +2085,24 @@ def status_payload(report: HardeningStatus) -> dict[str, Any]:
             "covered": covered,
             "empty": [item for item in M7_SOURCE_ARCHETYPES if item not in covered],
         },
+        "oracles": {
+            "total": len(report.oracles),
+            "approved": sum(oracle.approved for oracle in report.oracles),
+            "draft": [oracle.id for oracle in report.oracles if not oracle.approved],
+        },
+        "cases": {
+            "total": len(report.cases),
+            "gating": sum(case.gating for case in report.cases),
+            "regression": sum(case.purpose == "regression" for case in report.cases),
+            "coverage": sum(case.purpose == "coverage" for case in report.cases),
+            "finding_coverage": {
+                "linked": len(linked_case_ids),
+                "unlinked_cases": sorted(regression_case_ids - linked_case_ids),
+                "uncovered_findings": [
+                    finding.id for finding in report.findings if not finding.case_ids
+                ],
+            },
+        },
     }
 
 
@@ -994,6 +2110,8 @@ def format_status(report: HardeningStatus) -> list[str]:
     payload = status_payload(report)
     finding_data = payload["findings"]
     pilot_data = payload["pilots"]
+    oracle_data = payload["oracles"]
+    case_data = payload["cases"]
     states = finding_data["by_state"]
     lines = [
         "Hardening status",
@@ -1053,5 +2171,18 @@ def format_status(report: HardeningStatus) -> list[str]:
     empty = payload["source_archetypes"]["empty"]
     lines.append(
         "Empty source-archetype cells: " + (", ".join(empty) if empty else "none")
+    )
+    lines.append(
+        f"Oracles: {oracle_data['total']} "
+        f"({oracle_data['approved']} approved, {len(oracle_data['draft'])} draft)"
+    )
+    lines.append(
+        f"Cases: {case_data['total']} "
+        f"({case_data['gating']} gating, {case_data['regression']} regression, "
+        f"{case_data['coverage']} coverage)"
+    )
+    uncovered = case_data["finding_coverage"]["uncovered_findings"]
+    lines.append(
+        "Findings without cases: " + (", ".join(uncovered) if uncovered else "none")
     )
     return lines

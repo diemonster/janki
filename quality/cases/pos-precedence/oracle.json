@@ -1,0 +1,32 @@
+{
+  "records": [
+    {
+      "id": "word:凄い:すごい",
+      "fields": {
+        "part_of_speech": "i-adjective",
+        "verb_group": "",
+        "conjugations": {
+          "plain": "凄い",
+          "negative": "凄くない",
+          "past": "凄かった",
+          "past_negative": "凄くなかった",
+          "te_form": "凄くて"
+        }
+      }
+    }
+  ],
+  "changes": {
+    "word:凄い:すごい": [
+      "conjugations",
+      "frequency_rank",
+      "furigana",
+      "part_of_speech",
+      "pitch_accent",
+      "romaji"
+    ]
+  },
+  "looked_up": 1,
+  "skipped": 0,
+  "warning_count": 0,
+  "calls": ["parse"]
+}

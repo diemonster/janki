@@ -1,0 +1,21 @@
+{
+  "records": [
+    {
+      "id": "word:明日:あした",
+      "fields": {"furigana": "明日[あした]"}
+    }
+  ],
+  "changes": {
+    "word:明日:あした": [
+      "frequency_rank",
+      "furigana",
+      "part_of_speech",
+      "pitch_accent",
+      "romaji"
+    ]
+  },
+  "looked_up": 1,
+  "skipped": 0,
+  "warning_count": 0,
+  "calls": ["parse"]
+}

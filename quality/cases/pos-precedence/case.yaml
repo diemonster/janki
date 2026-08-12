@@ -1,0 +1,17 @@
+version: 1
+id: pos-precedence
+purpose: regression
+gating: true
+runner: dictionary-enrichment
+pipeline_boundary: dictionary-enrichment
+source_archetype: bilingual-layout
+redistributable: true
+fixture_basis: agent-created-synthetic
+fixtures:
+  - path: input.json
+    fingerprint: 266d0127f40d1c4bdededb7a6f2d415321e119cd3d237d7293405fae11436c81
+  - path: oracle.json
+    fingerprint: 6aeaa7b5e4cd0932526b10d658411525bc920df54efd6f5d6dad11da509ba054
+runner_input: input.json
+oracle: oracle.json
+finding_id: pos-precedence

@@ -1,0 +1,17 @@
+version: 1
+id: impossible-character-furigana
+purpose: regression
+gating: true
+runner: dictionary-enrichment
+pipeline_boundary: dictionary-enrichment
+source_archetype: bilingual-layout
+redistributable: true
+fixture_basis: agent-created-synthetic
+fixtures:
+  - path: input.json
+    fingerprint: fdec6fc9b4f17a6bd8a08cffcdb9498b3114de0cc3e14b93a2792fa1a43514f1
+  - path: oracle.json
+    fingerprint: 4d65a0857477800121833d1abe2c9d08a88ee052b88aa6b39c2b3e4de55d0cf7
+runner_input: input.json
+oracle: oracle.json
+finding_id: impossible-character-furigana

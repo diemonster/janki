@@ -17,6 +17,7 @@ from japanese_anki import (
     enrich,
     extract,
     hardening,
+    hardening_replay,
     jpdb,
     kanji,
     ledger,
@@ -1447,14 +1448,8 @@ def _enrich_ai(
 
 def _report_ai_no_changes(result: enrich.AiResult) -> None:
     """Name every model answer that left its target unchanged."""
-    if not result.no_changes:
-        return
-    print(
-        f"No changes for {len(result.no_changes)} of {result.looked_up} "
-        "record(s) the AI pass visited:"
-    )
-    for record_id in result.no_changes:
-        print(f"  {record_id}")
+    for line in enrich.format_ai_no_changes(result):
+        print(line)
 
 
 def _write_ai_result(
@@ -4332,6 +4327,24 @@ def command_harden_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_harden_replay(args: argparse.Namespace) -> int:
+    config = _load_config(args)
+    results = hardening_replay.replay(config.root, args.cases)
+    if args.format == "json":
+        print(
+            json.dumps(
+                hardening_replay.replay_payload(results),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+        )
+    else:
+        for line in hardening_replay.format_replay(results):
+            print(line)
+    return 0 if all(result.passed for result in results) else 1
+
+
 def command_migrate_inline(args: argparse.Namespace) -> int:
     config = _load_config(args)
     # Load once, save once: the ledger is a whole-file rewrite.
@@ -4930,6 +4943,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Select human-readable text or deterministic JSON.",
     )
     harden_status_parser.set_defaults(handler=command_harden_status)
+    harden_replay_parser = harden_commands.add_parser(
+        "replay", help="Run deterministic offline hardening cases"
+    )
+    harden_replay_parser.add_argument(
+        "cases", nargs="*", metavar="CASE", help="Case IDs. The default is all gating cases."
+    )
+    harden_replay_parser.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="Select human-readable text or deterministic JSON.",
+    )
+    harden_replay_parser.set_defaults(handler=command_harden_replay)
 
     migrate_parser = subparsers.add_parser(
         "migrate-inline",
