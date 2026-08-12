@@ -1,0 +1,653 @@
+source_file: Yotsubato Volume 1 Reading Pack Vocab
+extracted_at: '2026-08-11'
+review_notes: 'Yotsubato rollout batch 02: source rows 21-40 of 708, kept separate so promotion and review
+  stay human-sized.'
+records:
+- id: word:あんまり:あんまり
+  expression: あんまり
+  reading: あんまり
+  furigana: ''
+  romaji: ammari
+  meanings:
+  - Too much
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426695560'
+      anki_guid: dPv)n1,ILv
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>あんまり</div>
+      anki_Back: <div>あんまり</div><div>Too much</div>
+      anki_Add Reverse: ''
+- id: word:乗り出す:のりだす
+  expression: 乗り出す
+  reading: のりだす
+  furigana: ''
+  romaji: noridasu
+  meanings:
+  - Lean forward, lean out
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426821421'
+      anki_guid: u:q]|7WBh3
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>乗り出す</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>のりだす</div><div>Lean forward,
+        lean out</div></span>'
+      anki_Add Reverse: y
+- id: word:危ない:あぶない
+  expression: 危ない
+  reading: あぶない
+  furigana: ''
+  romaji: abunai
+  meanings:
+  - Dangerous
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426834251'
+      anki_guid: l8FL6%h_dQ
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>危ない</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>あぶない</div><div>Dangerous</div></span>'
+      anki_Add Reverse: y
+- id: word:お姉ちゃん:おねえちゃん
+  expression: お姉ちゃん
+  reading: おねえちゃん
+  furigana: ''
+  romaji: oneechan
+  meanings:
+  - Older sister, an older girl
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: Colloquially 「おねーちゃん」 in this text.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426844258'
+      anki_guid: '&bFTL,olf'
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>お姉ちゃん</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>おねえちゃん　</div><div>「おねーちゃん」</div><div>Older
+        sister, an older girl</div></span>'
+      anki_Add Reverse: y
+- id: word:手:て
+  expression: 手
+  reading: て
+  furigana: ''
+  romaji: te
+  meanings:
+  - Hand
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426860777'
+      anki_guid: CP%w{apH*H
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>手</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>て</div><div>Hand</div></span>'
+      anki_Add Reverse: y
+- id: word:振る:ふる
+  expression: 振る
+  reading: ふる
+  furigana: ''
+  romaji: furu
+  meanings:
+  - To wave, to shake
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426871120'
+      anki_guid: DRRH&2?<$$
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>振る</div>
+      anki_Back: '<div><span style=" font-style: normal; font-weight: normal;"><div>ふる</div><div>To wave,
+        to shake</div></span></div>'
+      anki_Add Reverse: y
+- id: word:離す:はなす
+  expression: 離す
+  reading: はなす
+  furigana: ''
+  romaji: hanasu
+  meanings:
+  - To separate, release
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426884282'
+      anki_guid: ba]NEh^Biq
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>離す</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>はなす</div><div>To separate,
+        release</div></span>'
+      anki_Add Reverse: y
+- id: word:俺:おれ
+  expression: 俺
+  reading: おれ
+  furigana: ''
+  romaji: ore
+  meanings:
+  - Masculine form of "I”
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426895067'
+      anki_guid: zYuP;qA@Fg
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>俺</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>おれ</div><div>Masculine
+        form of "I”</div></span>'
+      anki_Add Reverse: y
+- id: word:分:ぶん
+  expression: 分
+  reading: ぶん
+  furigana: ''
+  romaji: bun
+  meanings:
+  - Portion, share, part
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426906441'
+      anki_guid: b~ec4z@x`T
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>分</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>ぶん</div><div>Portion, share,
+        part</div></span>'
+      anki_Add Reverse: y
+- id: word:くれる:くれる
+  expression: くれる
+  reading: くれる
+  furigana: ''
+  romaji: kureru
+  meanings:
+  - To give, to do for one
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426919202'
+      anki_guid: Q?j`bJ1p6a
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>くれる</div>
+      anki_Back: <div>くれる</div><div>To give, to do for one</div>
+      anki_Add Reverse: ''
+- id: word:ほら:ほら
+  expression: ほら
+  reading: ほら
+  furigana: ''
+  romaji: hora
+  meanings:
+  - “Take a look;” “See”
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: Colloquially 「ほーら」 in this text.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426932980'
+      anki_guid: cA_${;r{e[
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>ほら　「ほーら」</div>
+      anki_Back: <div>ほら　「ほーら」</div><div>“Take a look;” “See”&nbsp;</div>
+      anki_Add Reverse: ''
+- id: word:着く:つく
+  expression: 着く
+  reading: つく
+  furigana: ''
+  romaji: tsuku
+  meanings:
+  - Arrive (at)
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426945609'
+      anki_guid: xuBBd]pc]>
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>着く</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>つく</div><div>Arrive (at)</div></span>'
+      anki_Add Reverse: y
+- id: word:どこ:どこ
+  expression: どこ
+  reading: どこ
+  furigana: ''
+  romaji: doko
+  meanings:
+  - Where
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426955352'
+      anki_guid: x!wU=^->6T
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>どこ</div>
+      anki_Back: <div>どこ</div><div>Where</div>
+      anki_Add Reverse: ''
+- id: word:それは:それは
+  expression: それは
+  reading: それは
+  furigana: ''
+  romaji: soreha
+  meanings:
+  - “That is”
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: Colloquially 「そりゃ」 in this text.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426963961'
+      anki_guid: cn+&-O&/B5
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>それは 「そりゃ」</div>
+      anki_Back: <div>それは 「そりゃ」</div><div>“That is”</div>
+      anki_Add Reverse: ''
+- id: word:お前:おまえ
+  expression: お前
+  reading: おまえ
+  furigana: ''
+  romaji: omae
+  meanings:
+  - You (impolite, casual)
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426986873'
+      anki_guid: dDD}vTv%G/
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>お前</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>おまえ</div><div>You (impolite,
+        casual)</div></span>'
+      anki_Add Reverse: y
+- id: word:ジャンボ:ジャンボ
+  expression: ジャンボ
+  reading: ジャンボ
+  furigana: ''
+  romaji: jambo
+  meanings:
+  - Jumbo (name)
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360426997691'
+      anki_guid: hzJP.pB&;b
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>ジャンボ</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;">Jumbo (name)</span>'
+      anki_Add Reverse: ''
+- id: word:よう:よう
+  expression: よう
+  reading: よう
+  furigana: ''
+  romaji: you
+  meanings:
+  - Very casual greeting
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360427010200'
+      anki_guid: De^-:].$AG
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>よう</div>
+      anki_Back: <div>よう</div><div>Very casual greeting</div>
+      anki_Add Reverse: ''
+- id: word:うす:うす
+  expression: うす
+  reading: うす
+  furigana: ''
+  romaji: usu
+  meanings:
+  - Very casual greeting
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360427023184'
+      anki_guid: xHVu3k</)q
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>うす</div>
+      anki_Back: <div>うす</div><div>Very casual greeting</div>
+      anki_Add Reverse: ''
+- id: word:久しぶり:ひさしぶり
+  expression: 久しぶり
+  reading: ひさしぶり
+  furigana: ''
+  romaji: hisashiburi
+  meanings:
+  - “It's been a while;” “Long time no see”
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360427033347'
+      anki_guid: JX)V0G2fJb
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>久しぶり</div>
+      anki_Back: <div>ひさしぶり</div><div>“It's been a while;” “Long time no see”</div>
+      anki_Add Reverse: y
+- id: word:元気:げんき
+  expression: 元気
+  reading: げんき
+  furigana: ''
+  romaji: genki
+  meanings:
+  - Healthy, vigor, spirits, energy
+  part_of_speech: ''
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - anki
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: anki
+    imported_from: Yotsubato Volume 1 Reading Pack Vocab
+    row: null
+    raw_fields:
+      anki_note_id: '1360427047417'
+      anki_guid: uGR+(xe1Ld
+      anki_notetype: Basic (optional reversed card)+
+      anki_tags: Yotsubato1
+      anki_Front: <div>元気</div>
+      anki_Back: '<span style=" font-style: normal; font-weight: normal;"><div>げんき</div><div>Healthy,
+        vigor, spirits, energy</div></span>'
+      anki_Add Reverse: y
