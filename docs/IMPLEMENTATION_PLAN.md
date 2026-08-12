@@ -2228,7 +2228,7 @@ gloss quality rather than janki defects.
   record in both pools has to be assigned to one by hand (ある and いる
   already were).
 
-### [ ] M6.7 Ship the review hooks with the repository
+### [~] M6.7 claimed codex/main 2026-08-12 — Ship the review hooks with the repository
 
 Depends on: —
 Files: `scripts/` (new home), `.git/hooks/*` (shims), `AGENTS.md`.
