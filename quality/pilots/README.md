@@ -80,6 +80,12 @@ approval block, or date. `risk_content_fingerprint(finding)` in
 `japanese_anki.hardening` computes the value. A content change makes an old
 approval invalid.
 
+To prepare an approval, first add the `risk` and `reason` without an approval
+block. Run `janki harden status`. The error gives the normalized risk-content
+fingerprint. Give the finding ID, fingerprint, risk, and reason to the
+repository owner. Add the approval block only after the owner approves those
+exact values.
+
 ## Pilot report
 
 A pilot file has this form:

@@ -256,6 +256,10 @@ def _read_yaml(path: Path, root: Path) -> Any:
     try:
         text = candidate.read_text(encoding="utf-8")
         after = candidate.stat()
+    except UnicodeDecodeError as exc:
+        raise HardeningError(
+            f"Could not decode {_where(candidate, root)} as UTF-8: {exc.reason}"
+        ) from exc
     except OSError as exc:
         raise HardeningError(
             f"Could not read {_where(candidate, root)}: {exc.strerror or exc}"
@@ -515,10 +519,14 @@ def _parse_finding(value: Any, where: str) -> Finding:
         pipeline_stage=_slug(
             _required(data, "pipeline_stage", where), f"{where}.pipeline_stage"
         ),
-        source_archetypes=_slug_list(
-            _required(data, "source_archetypes", where),
-            f"{where}.source_archetypes",
-            nonempty=True,
+        source_archetypes=tuple(
+            sorted(
+                _slug_list(
+                    _required(data, "source_archetypes", where),
+                    f"{where}.source_archetypes",
+                    nonempty=True,
+                )
+            )
         ),
         symptom=_text(_required(data, "symptom", where), f"{where}.symptom"),
         invariant=_text(_required(data, "invariant", where), f"{where}.invariant"),
@@ -528,7 +536,9 @@ def _parse_finding(value: Any, where: str) -> Finding:
         recurrences=_parse_evidence(
             data.get("recurrences", []), f"{where}.recurrences", nonempty=False
         ),
-        case_ids=_slug_list(data.get("case_ids", []), f"{where}.case_ids"),
+        case_ids=tuple(
+            sorted(_slug_list(data.get("case_ids", []), f"{where}.case_ids"))
+        ),
         fix_ref=(
             _locator(data["fix_ref"], f"{where}.fix_ref")
             if "fix_ref" in data
@@ -539,6 +549,16 @@ def _parse_finding(value: Any, where: str) -> Finding:
         reason=_optional_text(data, "reason", where),
         approval=approval,
     )
+    initial_evidence = {
+        (item.fingerprint, item.locator) for item in finding.evidence
+    }
+    repeated_evidence = {
+        (item.fingerprint, item.locator) for item in finding.recurrences
+    }
+    if initial_evidence & repeated_evidence:
+        raise HardeningError(
+            f"{where}.recurrences repeats an initial evidence reference"
+        )
     if state == "open":
         forbidden = (
             finding.fix_ref,
@@ -573,10 +593,16 @@ def _parse_finding(value: Any, where: str) -> Finding:
         ):
             raise HardeningError(f"{where}: deferred cannot have fix or risk fields")
     else:
-        if finding.risk is None or finding.reason is None or approval is None:
-            raise HardeningError(f"{where}: accepted-risk requires risk, reason, and approval")
+        if finding.risk is None or finding.reason is None:
+            raise HardeningError(f"{where}: accepted-risk requires risk and reason")
         if finding.fix_ref is not None or finding.deferral_reason is not None:
             raise HardeningError(f"{where}: accepted-risk cannot have fix or deferral fields")
+        expected = risk_content_fingerprint(finding)
+        if approval is None:
+            raise HardeningError(
+                f"{where}: accepted-risk requires repository-owner approval; "
+                f"the risk content fingerprint is {expected}"
+            )
         if (
             approval.finding_id != finding.id
             or approval.risk != finding.risk
@@ -585,7 +611,6 @@ def _parse_finding(value: Any, where: str) -> Finding:
             raise HardeningError(
                 f"{where}.approval must name the finding ID, risk, and reason exactly"
             )
-        expected = risk_content_fingerprint(finding)
         if approval.risk_content_fingerprint != expected:
             raise HardeningError(
                 f"{where}.approval is stale: risk content fingerprint must be {expected}"

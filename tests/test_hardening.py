@@ -144,6 +144,30 @@ def test_json_status_is_deterministic_and_uses_relative_paths(
     assert str(root) not in first
 
 
+def test_json_status_normalizes_set_like_finding_order(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    first_finding = _finding("first-finding")
+    first_finding["source_archetypes"] = ["scan", "camera"]
+    first_finding["case_ids"] = ["second-case", "first-case"]
+    second_finding = _finding("second-finding")
+    root = _project(tmp_path, findings=[second_finding, first_finding])
+
+    assert _run(root, "--format", "json") == 0
+    first = capsys.readouterr().out
+    first_finding["source_archetypes"].reverse()
+    first_finding["case_ids"].reverse()
+    _write_findings(root, [first_finding, second_finding])
+    assert _run(root, "--format", "json") == 0
+    second = capsys.readouterr().out
+
+    assert second == first
+    assert json.loads(second)["findings"]["open"][0]["source_archetypes"] == [
+        "camera",
+        "scan",
+    ]
+
+
 def test_text_status_reports_all_m7_2_signals(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -277,6 +301,31 @@ def test_duplicate_yaml_keys_are_errors(
     assert "duplicate key" in capsys.readouterr().err
 
 
+def test_invalid_utf_8_is_a_cli_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path)
+    (root / "quality" / "findings.yaml").write_bytes(b"version: 1\n\xff")
+
+    assert _run(root) == 1
+
+    assert "Could not decode quality/findings.yaml as UTF-8" in capsys.readouterr().err
+
+
+def test_a_recurrence_cannot_repeat_initial_evidence(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    finding = _finding()
+    finding["recurrences"] = [dict(finding["evidence"][0])]
+    root = _project(tmp_path, findings=[finding])
+
+    assert _run(root) == 1
+
+    assert "recurrences repeats an initial evidence reference" in (
+        capsys.readouterr().err
+    )
+
+
 @pytest.mark.parametrize(
     ("target", "value"),
     [
@@ -396,6 +445,20 @@ def test_accepted_risk_requires_a_current_owner_approval(tmp_path: Path) -> None
 
     assert report.findings[0].approval is not None
     assert report.findings[0].approval.risk_content_fingerprint == fingerprint
+
+
+def test_accepted_risk_draft_reports_the_fingerprint_for_owner_approval(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    finding, fingerprint = _accepted_risk()
+    del finding["approval"]
+    root = _project(tmp_path, findings=[finding])
+
+    assert _run(root) == 1
+
+    error = capsys.readouterr().err
+    assert "requires repository-owner approval" in error
+    assert fingerprint in error
 
 
 def test_accepted_risk_approval_becomes_stale_after_content_change(
