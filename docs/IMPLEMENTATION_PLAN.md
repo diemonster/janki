@@ -2377,13 +2377,13 @@ must name the exact proposal-entry fingerprint and answer. An ambiguous
 new-identity resolution must name the exact source fingerprint and locator,
 expression, chosen reading, and reviewed evidence. An existing-identity
 migration must name the exact old/new identity and review-history plan.
-`accepted-risk` approval must name the exact finding, risk, and reason. Baseline
-acceptance must name the exact report and acceptance-input-manifest fingerprints
-and diff. An agent may prepare an oracle draft, but it cannot approve it. It may
-record only an exact user approval. It must not widen its scope or treat a broad
-task request as one of these decisions. If approval is absent, the value stays
-false/missing and the agent stops or selects a source that does not need that
-approval.
+`accepted-risk` approval must name the exact finding ID, normalized risk-content
+fingerprint, risk, and reason. Baseline acceptance must name the exact report
+and acceptance-input-manifest fingerprints and diff. An agent may prepare an
+oracle draft, but it cannot approve it. It may record only an exact user
+approval. It must not widen its scope or treat a broad task request as one of
+these decisions. If approval is absent, the value stays false/missing and the
+agent stops or selects a source that does not need that approval.
 
 Tests: documentation and link checks only. Each later task adds its schema and
 executable checks at the first boundary that uses the approval.
@@ -2405,10 +2405,14 @@ into another opaque ledger.
   linked case IDs, and the production fix or deferral rationale. `fixed`
   requires at least one declared case ID and fix reference; existence and the
   reverse link become enforceable when M7.3 defines case discovery.
-  `accepted-risk` requires a repository-owner approval and reason. Unknown keys
-  and malformed link IDs are errors rather than being discarded.
-  Content-specific corrections are counted in pilot reports but do not bloat
-  this catalog.
+  `accepted-risk` requires a repository-owner approval and reason. The approval
+  binds the finding ID and a normalized risk-content fingerprint. That
+  fingerprint covers the pipeline stage, source archetypes, symptom, violated
+  invariant, evidence, linked cases, stated risk, and reason. It excludes the
+  state and approval block, so it is not circular. A missing approval or any
+  later content change makes `accepted-risk` invalid. Unknown keys and malformed
+  link IDs are errors rather than being discarded. Content-specific corrections
+  are counted in pilot reports but do not bloat this catalog.
 - Each `quality/pilots/<id>.yaml` records the source fingerprint and archetype,
   whether redistribution is allowed, its unit-oracle ID, repeatable-eval case
   ID, extracted, omitted, held, promoted, and rejected counts,
@@ -2428,10 +2432,10 @@ into another opaque ledger.
   than gaining a command that silently rewrites decisions and comments.
 
 Tests: valid/invalid documents, unknown fields, path traversal, duplicate IDs,
-malformed link IDs, the requirements for each terminal state, deterministic
-JSON, and a content-specific pilot edit that is counted without becoming a
-systemic finding. Do not create a placeholder case parser merely to make M7.2
-appear to resolve links before M7.3.
+malformed link IDs, the requirements for each terminal state, missing or stale
+accepted-risk approval, deterministic JSON, and a content-specific pilot edit
+that is counted without becoming a systemic finding. Do not create a placeholder
+case parser merely to make M7.2 appear to resolve links before M7.3.
 
 ### [ ] M7.3 Minimized case bundles + offline replay
 
