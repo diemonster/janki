@@ -92,6 +92,93 @@
         }
       ]
     },
+    "word:あんまり:あんまり": {
+      "added_at": "2026-08-12",
+      "audio": [
+        {
+          "at": "2026-08-12",
+          "content_fp": "f19b9c05205a",
+          "file": "janki-aaa4faa66204.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "5fdd2d395b24",
+          "file": "janki-3eab93d0c05a.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "4fefcb79f297",
+          "file": "janki-843cafdc345d.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "frequency_rank",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "furigana_unverified"
+          ],
+          "kind": "human",
+          "model": "human"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "meanings"
+          ],
+          "kind": "polish",
+          "model": "claude-opus-5"
+        }
+      ],
+      "exports": {
+        "yotsuba": "2026-08-12"
+      },
+      "sources": [
+        {
+          "ref": "Yotsubato Volume 1 Reading Pack Vocab",
+          "seen_at": "2026-08-12",
+          "type": "anki"
+        }
+      ]
+    },
     "word:いる:いる": {
       "added_at": "2026-08-09",
       "audio": [
@@ -175,6 +262,222 @@
         }
       ]
     },
+    "word:うす:うす": {
+      "added_at": "2026-08-12",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-08-12",
+          "content_fp": "3706050487dd",
+          "file": "janki-1a0bd2e56b99.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "edd267d0ba9e",
+          "file": "janki-3e9339903504.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "meanings"
+          ],
+          "kind": "polish",
+          "model": "claude-opus-5"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "furigana_unverified"
+          ],
+          "kind": "human",
+          "model": "human"
+        }
+      ],
+      "exports": {
+        "yotsuba": {
+          "at": "2026-08-12",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "Yotsubato Volume 1 Reading Pack Vocab",
+          "seen_at": "2026-08-12",
+          "type": "anki"
+        }
+      ]
+    },
+    "word:お前:おまえ": {
+      "added_at": "2026-08-12",
+      "audio": [
+        {
+          "at": "2026-08-12",
+          "content_fp": "cc66242f47fc",
+          "file": "janki-77b5ed04aa46.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "bb49a68f388a",
+          "file": "janki-c37c70bbdc08.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "meanings"
+          ],
+          "kind": "polish",
+          "model": "claude-opus-5"
+        }
+      ],
+      "exports": {
+        "yotsuba": "2026-08-12"
+      },
+      "sources": [
+        {
+          "ref": "Yotsubato Volume 1 Reading Pack Vocab",
+          "seen_at": "2026-08-12",
+          "type": "anki"
+        }
+      ]
+    },
+    "word:お姉ちゃん:おねえちゃん": {
+      "added_at": "2026-08-12",
+      "audio": [
+        {
+          "at": "2026-08-12",
+          "content_fp": "6e9d36ce2b2a",
+          "file": "janki-32225c7435ac.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "6ce5752433d5",
+          "file": "janki-385d820d1b11.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "724783df6143",
+          "file": "janki-b2f2e91f7c9a.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "examples"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "meanings"
+          ],
+          "kind": "polish",
+          "model": "claude-opus-5"
+        }
+      ],
+      "exports": {
+        "yotsuba": "2026-08-12"
+      },
+      "sources": [
+        {
+          "ref": "Yotsubato Volume 1 Reading Pack Vocab",
+          "seen_at": "2026-08-12",
+          "type": "anki"
+        }
+      ]
+    },
     "word:お父さん:おとうさん": {
       "added_at": "2026-08-11",
       "audio": [
@@ -236,12 +539,101 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-11"
+        "yotsuba": "2026-08-12"
       },
       "sources": [
         {
           "ref": "Yotsubato Volume 1 Reading Pack Vocab",
           "seen_at": "2026-08-11",
+          "type": "anki"
+        }
+      ]
+    },
+    "word:くれる:くれる": {
+      "added_at": "2026-08-12",
+      "audio": [
+        {
+          "at": "2026-08-12",
+          "content_fp": "93dc4f0b6fcb",
+          "file": "janki-bd3f4bb95f9d.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "bba1face14af",
+          "file": "janki-af9a7cf94c3d.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "fddb82c60fa8",
+          "file": "janki-2e626b6ad0db.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "part_of_speech",
+            "pitch_accent",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "furigana_unverified"
+          ],
+          "kind": "human",
+          "model": "human"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "meanings"
+          ],
+          "kind": "polish",
+          "model": "claude-opus-5"
+        }
+      ],
+      "exports": {
+        "yotsuba": "2026-08-12"
+      },
+      "sources": [
+        {
+          "ref": "Yotsubato Volume 1 Reading Pack Vocab",
+          "seen_at": "2026-08-12",
           "type": "anki"
         }
       ]
@@ -307,7 +699,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-11"
+        "yotsuba": "2026-08-12"
       },
       "sources": [
         {
@@ -386,7 +778,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-11"
+        "yotsuba": "2026-08-12"
       },
       "sources": [
         {
@@ -559,12 +951,94 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-11"
+        "yotsuba": "2026-08-12"
       },
       "sources": [
         {
           "ref": "Yotsubato Volume 1 Reading Pack Vocab",
           "seen_at": "2026-08-11",
+          "type": "anki"
+        }
+      ]
+    },
+    "word:それは:それは": {
+      "added_at": "2026-08-12",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-08-12",
+          "content_fp": "45e123385806",
+          "file": "janki-58cdd5f11bc1.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "4398acc8e107",
+          "file": "janki-6444068faaef.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "dc3499d4c603",
+          "file": "janki-c9830c5a53b6.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "examples"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "furigana_unverified"
+          ],
+          "kind": "ai",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "meanings"
+          ],
+          "kind": "polish",
+          "model": "claude-opus-5"
+        }
+      ],
+      "exports": {
+        "yotsuba": {
+          "at": "2026-08-12",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "Yotsubato Volume 1 Reading Pack Vocab",
+          "seen_at": "2026-08-12",
           "type": "anki"
         }
       ]
@@ -655,6 +1129,77 @@
         }
       ]
     },
+    "word:どこ:どこ": {
+      "added_at": "2026-08-12",
+      "audio": [
+        {
+          "at": "2026-08-12",
+          "content_fp": "8805f516265f",
+          "file": "janki-f21f711f95ed.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "24c31ee4fab4",
+          "file": "janki-cd43f4af1a60.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "8c3f357ce75d",
+          "file": "janki-2f238e56fe0f.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "frequency_rank",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        }
+      ],
+      "exports": {
+        "yotsuba": "2026-08-12"
+      },
+      "sources": [
+        {
+          "ref": "Yotsubato Volume 1 Reading Pack Vocab",
+          "seen_at": "2026-08-12",
+          "type": "anki"
+        }
+      ]
+    },
     "word:なる:なる": {
       "added_at": "2026-08-09",
       "audio": [
@@ -741,6 +1286,84 @@
         }
       ]
     },
+    "word:ほら:ほら": {
+      "added_at": "2026-08-12",
+      "audio": [
+        {
+          "at": "2026-08-12",
+          "content_fp": "99acf4410af7",
+          "file": "janki-1f746221e446.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "8dd0835abdf1",
+          "file": "janki-ff771270285f.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "7a5b4130bc4c",
+          "file": "janki-e560ae4ebdea.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "frequency_rank",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "examples"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "meanings"
+          ],
+          "kind": "polish",
+          "model": "claude-opus-5"
+        }
+      ],
+      "exports": {
+        "yotsuba": "2026-08-12"
+      },
+      "sources": [
+        {
+          "ref": "Yotsubato Volume 1 Reading Pack Vocab",
+          "seen_at": "2026-08-12",
+          "type": "anki"
+        }
+      ]
+    },
     "word:もう:もう": {
       "added_at": "2026-08-11",
       "audio": [
@@ -810,12 +1433,78 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-11"
+        "yotsuba": "2026-08-12"
       },
       "sources": [
         {
           "ref": "Yotsubato Volume 1 Reading Pack Vocab",
           "seen_at": "2026-08-11",
+          "type": "anki"
+        }
+      ]
+    },
+    "word:よう:よう": {
+      "added_at": "2026-08-12",
+      "audio": [
+        {
+          "at": "2026-08-12",
+          "content_fp": "5a407ee56b13",
+          "file": "janki-92b3eafb5202.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "ff44e3c218ca",
+          "file": "janki-71f994941fd9.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "frequency_rank",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "meanings"
+          ],
+          "kind": "polish",
+          "model": "claude-opus-5"
+        }
+      ],
+      "exports": {
+        "yotsuba": "2026-08-12"
+      },
+      "sources": [
+        {
+          "ref": "Yotsubato Volume 1 Reading Pack Vocab",
+          "seen_at": "2026-08-12",
           "type": "anki"
         }
       ]
@@ -867,12 +1556,89 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-11"
+        "yotsuba": "2026-08-12"
       },
       "sources": [
         {
           "ref": "Yotsubato Volume 1 Reading Pack Vocab",
           "seen_at": "2026-08-11",
+          "type": "anki"
+        }
+      ]
+    },
+    "word:ジャンボ:ジャンボ": {
+      "added_at": "2026-08-12",
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-08-12",
+          "content_fp": "3573d635c1c1",
+          "file": "janki-8838d8eee68b.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "d0b02ae0a0d2",
+          "file": "janki-ab9f71094d17.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "e70cb386caf7",
+          "file": "janki-9fbe10ba8ffb.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "frequency_rank",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        }
+      ],
+      "exports": {
+        "yotsuba": {
+          "at": "2026-08-12",
+          "missing": [
+            "accent"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "ref": "Yotsubato Volume 1 Reading Pack Vocab",
+          "seen_at": "2026-08-12",
           "type": "anki"
         }
       ]
@@ -956,12 +1722,190 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-11"
+        "yotsuba": "2026-08-12"
       },
       "sources": [
         {
           "ref": "Yotsubato Volume 1 Reading Pack Vocab",
           "seen_at": "2026-08-11",
+          "type": "anki"
+        }
+      ]
+    },
+    "word:久しぶり:ひさしぶり": {
+      "added_at": "2026-08-12",
+      "audio": [
+        {
+          "at": "2026-08-12",
+          "content_fp": "584b476a7f19",
+          "file": "janki-0dd8990e3d1f.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "69cbfbed4d81",
+          "file": "janki-2c492131c53a.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "2294727ecc10",
+          "file": "janki-abb7f1be58bd.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "furigana_unverified"
+          ],
+          "kind": "ai",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "meanings"
+          ],
+          "kind": "polish",
+          "model": "claude-opus-5"
+        }
+      ],
+      "exports": {
+        "yotsuba": "2026-08-12"
+      },
+      "sources": [
+        {
+          "ref": "Yotsubato Volume 1 Reading Pack Vocab",
+          "seen_at": "2026-08-12",
+          "type": "anki"
+        }
+      ]
+    },
+    "word:乗り出す:のりだす": {
+      "added_at": "2026-08-12",
+      "audio": [
+        {
+          "at": "2026-08-12",
+          "content_fp": "94ea4d0aae41",
+          "file": "janki-23de581fbab1.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "c50f2955f606",
+          "file": "janki-8b380365e258.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "1987bf0fc7c7",
+          "file": "janki-667b07d3dd48.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "furigana_unverified"
+          ],
+          "kind": "ai",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "meanings"
+          ],
+          "kind": "polish",
+          "model": "claude-opus-5"
+        }
+      ],
+      "exports": {
+        "yotsuba": "2026-08-12"
+      },
+      "sources": [
+        {
+          "ref": "Yotsubato Volume 1 Reading Pack Vocab",
+          "seen_at": "2026-08-12",
           "type": "anki"
         }
       ]
@@ -1028,7 +1972,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-11"
+        "yotsuba": "2026-08-12"
       },
       "sources": [
         {
@@ -1116,7 +2060,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-11"
+        "yotsuba": "2026-08-12"
       },
       "sources": [
         {
@@ -1204,6 +2148,166 @@
         }
       ]
     },
+    "word:俺:おれ": {
+      "added_at": "2026-08-12",
+      "audio": [
+        {
+          "at": "2026-08-12",
+          "content_fp": "f6d87a1e4b56",
+          "file": "janki-e45ff4d9a48c.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "2461f989d4ad",
+          "file": "janki-5d3262e7f185.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "4aa3ff8352d6",
+          "file": "janki-cc02698f58f4.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "meanings"
+          ],
+          "kind": "polish",
+          "model": "claude-opus-5"
+        }
+      ],
+      "exports": {
+        "yotsuba": "2026-08-12"
+      },
+      "sources": [
+        {
+          "ref": "Yotsubato Volume 1 Reading Pack Vocab",
+          "seen_at": "2026-08-12",
+          "type": "anki"
+        }
+      ]
+    },
+    "word:元気:げんき": {
+      "added_at": "2026-08-12",
+      "audio": [
+        {
+          "at": "2026-08-12",
+          "content_fp": "6544274bc353",
+          "file": "janki-3a1f58b50290.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "d933bec2de75",
+          "file": "janki-c42f54409d87.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "123a55b81408",
+          "file": "janki-d427852a0672.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "meanings"
+          ],
+          "kind": "polish",
+          "model": "claude-opus-5"
+        }
+      ],
+      "exports": {
+        "yotsuba": "2026-08-12"
+      },
+      "sources": [
+        {
+          "ref": "Yotsubato Volume 1 Reading Pack Vocab",
+          "seen_at": "2026-08-12",
+          "type": "anki"
+        }
+      ]
+    },
     "word:凄い:すごい": {
       "added_at": "2026-08-11",
       "audio": [
@@ -1253,12 +2357,92 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-11"
+        "yotsuba": "2026-08-12"
       },
       "sources": [
         {
           "ref": "Yotsubato Volume 1 Reading Pack Vocab",
           "seen_at": "2026-08-11",
+          "type": "anki"
+        }
+      ]
+    },
+    "word:分:ぶん": {
+      "added_at": "2026-08-12",
+      "audio": [
+        {
+          "at": "2026-08-12",
+          "content_fp": "886fa0a63214",
+          "file": "janki-1028b76c1320.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "72f51baee581",
+          "file": "janki-704f44069394.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "95f0618eb00f",
+          "file": "janki-af11b79a7295.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "meanings"
+          ],
+          "kind": "polish",
+          "model": "claude-opus-5"
+        }
+      ],
+      "exports": {
+        "yotsuba": "2026-08-12"
+      },
+      "sources": [
+        {
+          "ref": "Yotsubato Volume 1 Reading Pack Vocab",
+          "seen_at": "2026-08-12",
           "type": "anki"
         }
       ]
@@ -1357,6 +2541,87 @@
         }
       ]
     },
+    "word:危ない:あぶない": {
+      "added_at": "2026-08-12",
+      "audio": [
+        {
+          "at": "2026-08-12",
+          "content_fp": "211a8bd2e738",
+          "file": "janki-47fc120a7b72.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "127c8bde9475",
+          "file": "janki-e0f222912b43.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "1abc03c8725c",
+          "file": "janki-047dc7eb92ea.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "meanings"
+          ],
+          "kind": "polish",
+          "model": "claude-opus-5"
+        }
+      ],
+      "exports": {
+        "yotsuba": "2026-08-12"
+      },
+      "sources": [
+        {
+          "ref": "Yotsubato Volume 1 Reading Pack Vocab",
+          "seen_at": "2026-08-12",
+          "type": "anki"
+        }
+      ]
+    },
     "word:夏休み:なつやすみ": {
       "added_at": "2026-08-11",
       "audio": [
@@ -1419,7 +2684,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-11"
+        "yotsuba": "2026-08-12"
       },
       "sources": [
         {
@@ -1491,7 +2756,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-11"
+        "yotsuba": "2026-08-12"
       },
       "sources": [
         {
@@ -1563,7 +2828,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-11"
+        "yotsuba": "2026-08-12"
       },
       "sources": [
         {
@@ -1635,7 +2900,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-11"
+        "yotsuba": "2026-08-12"
       },
       "sources": [
         {
@@ -1717,7 +2982,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-11"
+        "yotsuba": "2026-08-12"
       },
       "sources": [
         {
@@ -1805,6 +3070,160 @@
         }
       ]
     },
+    "word:手:て": {
+      "added_at": "2026-08-12",
+      "audio": [
+        {
+          "at": "2026-08-12",
+          "content_fp": "8364b13eb55f",
+          "file": "janki-81b34f88168c.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "6d2fe2cda12f",
+          "file": "janki-8eb93c8277bc.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "ae4eb773c361",
+          "file": "janki-79b93afdceb4.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        }
+      ],
+      "exports": {
+        "yotsuba": "2026-08-12"
+      },
+      "sources": [
+        {
+          "ref": "Yotsubato Volume 1 Reading Pack Vocab",
+          "seen_at": "2026-08-12",
+          "type": "anki"
+        }
+      ]
+    },
+    "word:振る:ふる": {
+      "added_at": "2026-08-12",
+      "audio": [
+        {
+          "at": "2026-08-12",
+          "content_fp": "77cdf0e4e3e7",
+          "file": "janki-cc544f6de0e1.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "6474b9b16b25",
+          "file": "janki-7bbef090a1d2.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "56f119db1235",
+          "file": "janki-45577b1ae4c3.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "meanings"
+          ],
+          "kind": "polish",
+          "model": "claude-opus-5"
+        }
+      ],
+      "exports": {
+        "yotsuba": "2026-08-12"
+      },
+      "sources": [
+        {
+          "ref": "Yotsubato Volume 1 Reading Pack Vocab",
+          "seen_at": "2026-08-12",
+          "type": "anki"
+        }
+      ]
+    },
     "word:明日:あした": {
       "added_at": "2026-08-11",
       "audio": [
@@ -1863,7 +3282,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-11"
+        "yotsuba": "2026-08-12"
       },
       "sources": [
         {
@@ -2045,6 +3464,88 @@
         }
       ]
     },
+    "word:着く:つく": {
+      "added_at": "2026-08-12",
+      "audio": [
+        {
+          "at": "2026-08-12",
+          "content_fp": "18f33db5bea8",
+          "file": "janki-d00efc571798.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "096b029aacac",
+          "file": "janki-05af3a9bbfd4.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "7ed756cdd08e",
+          "file": "janki-f471e5711909.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "meanings"
+          ],
+          "kind": "polish",
+          "model": "claude-opus-5"
+        }
+      ],
+      "exports": {
+        "yotsuba": "2026-08-12"
+      },
+      "sources": [
+        {
+          "ref": "Yotsubato Volume 1 Reading Pack Vocab",
+          "seen_at": "2026-08-12",
+          "type": "anki"
+        }
+      ]
+    },
     "word:知る:しる": {
       "added_at": "2026-08-09",
       "audio": [
@@ -2193,7 +3694,7 @@
         }
       ],
       "exports": {
-        "yotsuba": "2026-08-11"
+        "yotsuba": "2026-08-12"
       },
       "sources": [
         {
@@ -2254,7 +3755,7 @@
       ],
       "exports": {
         "yotsuba": {
-          "at": "2026-08-11",
+          "at": "2026-08-12",
           "missing": [
             "accent",
             "audio"
@@ -2844,6 +4345,88 @@
           "ref": "Anki Test - Top 20 Verbs",
           "seen_at": "2026-08-09",
           "type": "jpdb"
+        }
+      ]
+    },
+    "word:離す:はなす": {
+      "added_at": "2026-08-12",
+      "audio": [
+        {
+          "at": "2026-08-12",
+          "content_fp": "e4aa90ca99c5",
+          "file": "janki-22cca7433636.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "e11ac904fab5",
+          "file": "janki-f3661401c6f9.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        },
+        {
+          "at": "2026-08-12",
+          "content_fp": "891d8d4d316d",
+          "file": "janki-895734964e49.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
+      "enriched": [
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-12",
+          "fields": [
+            "meanings"
+          ],
+          "kind": "polish",
+          "model": "claude-opus-5"
+        }
+      ],
+      "exports": {
+        "yotsuba": "2026-08-12"
+      },
+      "sources": [
+        {
+          "ref": "Yotsubato Volume 1 Reading Pack Vocab",
+          "seen_at": "2026-08-12",
+          "type": "anki"
         }
       ]
     },

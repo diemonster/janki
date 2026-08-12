@@ -42,6 +42,7 @@ __all__ = [
     "COMPLETE_STOP_REASONS",
     "BatchEntry",
     "CallResult",
+    "ClaudeRequestError",
     "DEFAULT_MAX_TOKENS",
     "STYLE_GUIDE_PATH",
     "Refusal",
@@ -86,6 +87,10 @@ COMPLETE_STOP_REASONS: frozenset[str] = frozenset({"end_turn"})
 #: The batch ``processing_status`` that means results can be read. Anything else
 #: — ``in_progress``, ``canceling`` — means come back later.
 BATCH_ENDED = "ended"
+
+
+class ClaudeRequestError(JankiError):
+    """The Anthropic service refused or failed a request before responding."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -325,9 +330,18 @@ def parse_call(
     rule 6) — the default builds a real one.
     """
     api = client if client is not None else build_client()
-    response = api.messages.create(
-        **_request_body(model, system_blocks, user_content, schema, max_tokens)
-    )
+    try:
+        response = api.messages.create(
+            **_request_body(model, system_blocks, user_content, schema, max_tokens)
+        )
+    except Exception as exc:
+        # The SDK's transport/status exceptions do not subclass JankiError, so
+        # without this boundary the CLI prints a traceback. Keep the import
+        # lazy and re-raise programming errors from an injected client.
+        api_error = getattr(load_anthropic(), "APIError", ())
+        if api_error and isinstance(exc, api_error):
+            raise ClaudeRequestError(f"{model} request failed: {exc}") from exc
+        raise
     return _result_of(response, schema, model)
 
 

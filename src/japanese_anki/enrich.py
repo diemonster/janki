@@ -1552,11 +1552,19 @@ def polish_meanings(
     """
     blocks = claude_client.system_blocks(style_guide, POLISH_INSTRUCTIONS)
     for record in polish_targets(records, ids):
+        try:
+            call = claude_client.parse_call(
+                model, blocks, polish_prompt(record), polish_schema(), client
+            )
+        except claude_client.ClaudeRequestError as exc:
+            yield PolishOutcome(
+                record=record,
+                warning=f"{record.id}: {exc}; left alone.",
+            )
+            continue
         yield polish_call_outcome(
             record,
-            claude_client.parse_call(
-                model, blocks, polish_prompt(record), polish_schema(), client
-            ),
+            call,
             model=model,
         )
 

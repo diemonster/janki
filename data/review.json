@@ -43,6 +43,14 @@
     "accepted_marks": [],
     "findings": []
   },
+  "0586352a8e5d": {
+    "record_id": "word:ジャンボ:ジャンボ",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "094be9aa53a4": {
     "record_id": "word:行く:いく",
     "at": "2026-08-10",
@@ -54,6 +62,14 @@
   "09f2e491037b": {
     "record_id": "word:お父さん:おとうさん",
     "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "0c224f1cd27c": {
+    "record_id": "word:振る:ふる",
+    "at": "2026-08-12",
     "accepted": false,
     "accepted_because": "",
     "accepted_marks": [],
@@ -111,6 +127,29 @@
     "accepted_marks": [],
     "findings": []
   },
+  "112828a6be6a": {
+    "record_id": "word:うす:うす",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "124bc421d77b": {
+    "record_id": "word:着く:つく",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "pitch accent (second pattern, LHL)",
+        "problem": "A Tokyo-dialect verb in its dictionary form is either heiban (つく + particle all high, LHH) or accented on the penultimate mora (for a two-mora verb, HLL); an odaka pattern with the fall after the verb (LHL) is not an attested accent shape for a plain-form verb, and 着く is normally cited as [1] (つ\\く) only.",
+        "severity": "note",
+        "suggestion": "Keep HLL alone, or if a second attested pattern is intended, record it as the heiban LHH; drop LHL."
+      }
+    ]
+  },
   "19e46d943776": {
     "record_id": "word:もう:もう",
     "at": "2026-08-11",
@@ -123,6 +162,27 @@
         "problem": "Four patterns are listed for a two-mora word but only two distinct shapes appear: LHH and HLL are each repeated. The card will draw the same diagram twice over, which reads as if もう had four accents rather than the two it has (atamadaka [1] and heiban [0]).",
         "severity": "note",
         "suggestion": "Deduplicate to the two distinct patterns, primary first: HLL, LHH."
+      }
+    ]
+  },
+  "226f55723b9b": {
+    "record_id": "word:手:て",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "Part of speech",
+        "problem": "手 read て and glossed \"hand\" is a common noun, not a counter; only the suffixed ～手 (一手 いって) counts moves, and the card's own usage note says 手 \"is normally a noun meaning hand.\" Labelling the headword a counter contradicts the note and teaches a false analysis.",
+        "severity": "error",
+        "suggestion": "Set part of speech to \"noun\" (mentioning the counter suffix ～手 in usage notes only)."
+      },
+      {
+        "where": "examples[0], examples[1]",
+        "problem": "Both example sentences use 手 in the \"move/tactic\" (board-game) sense, which is not among the card's meanings (only \"Hand\"), so neither example illustrates the sense the learner is being tested on.",
+        "severity": "error",
+        "suggestion": "Either add the sense to meanings (e.g. \"hand\", \"move\", \"tactic\") or replace one example with a sentence using 手 as a body part, e.g. 手を洗ってから食べます。"
       }
     ]
   },
@@ -178,9 +238,25 @@
     "accepted_marks": [],
     "findings": []
   },
+  "3199991c7b31": {
+    "record_id": "word:よう:よう",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "329a3b49591d": {
     "record_id": "word:一杯:いっぱい",
     "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "35887634a99a": {
+    "record_id": "word:分:ぶん",
+    "at": "2026-08-12",
     "accepted": false,
     "accepted_because": "",
     "accepted_marks": [],
@@ -271,6 +347,14 @@
     "accepted_marks": [],
     "findings": []
   },
+  "52a5e66fd0c9": {
+    "record_id": "word:どこ:どこ",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "540fb1e70fdd": {
     "record_id": "word:聞く:きく",
     "at": "2026-08-10",
@@ -323,6 +407,14 @@
     "accepted_marks": [],
     "findings": []
   },
+  "565f7ea7659d": {
+    "record_id": "word:離す:はなす",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "5805315cb4d7": {
     "record_id": "word:話す:はなす",
     "at": "2026-08-10",
@@ -331,9 +423,32 @@
     "accepted_marks": [],
     "findings": []
   },
+  "5d153f07068c": {
+    "record_id": "word:お前:おまえ",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0]",
+        "problem": "The sentence labeled \"polite\" pairs the rough pronoun お前 with 〜ですか, a register clash that is unnatural in ordinary speech; the neutral English translation gives no hint of the confrontational tone that would be needed to license it, so the card models お前は…ですか as a normal polite pattern — exactly the mistake a learner of this word is most likely to make. The usage note itself calls the combination unusual, contradicting its presentation as the card's polite example.",
+        "severity": "error",
+        "suggestion": "Replace with a plain-form sentence (e.g. お前は夏休みに京都へ行くつもりか。) or, if a polite-form example is wanted at all, use a different pronoun/omit the subject and keep お前 to the casual example."
+      }
+    ]
+  },
   "5db4770668b4": {
     "record_id": "word:買う:かう",
     "at": "2026-08-10",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "5e0aa3668bad": {
+    "record_id": "word:着く:つく",
+    "at": "2026-08-12",
     "accepted": false,
     "accepted_because": "",
     "accepted_marks": [],
@@ -412,6 +527,21 @@
       }
     ]
   },
+  "6c09721df503": {
+    "record_id": "word:うす:うす",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0]",
+        "problem": "The sentence is labelled \"casual\" but ends in the polite 〜ます set phrase よろしくお願いします, and the usage note beside it says to avoid うす in polite situations, so the card appears to contradict itself. (The mix is real in sports-club speech, but a beginner has no way to see that from the card.)",
+        "severity": "note",
+        "suggestion": "Either use an all-plain sentence (e.g. うす、今日もよろしく。) or add a short note that うす plus お願いします is the standard club/team greeting despite the polite form."
+      }
+    ]
+  },
   "6d6eff9e91c9": {
     "record_id": "word:夏休み:なつやすみ",
     "at": "2026-08-11",
@@ -449,6 +579,14 @@
       }
     ]
   },
+  "7400a32134b0": {
+    "record_id": "word:それは:それは",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "75debbbfef74": {
     "record_id": "word:明日:あした",
     "at": "2026-08-11",
@@ -461,6 +599,21 @@
         "problem": "The phrase \"It can be marked with は or を-less topic は for contrast\" is garbled — it repeats は and refers to a \"を-less topic は\" that means nothing to a beginner.",
         "severity": "note",
         "suggestion": "Simplify to something like: \"It can take は for contrast or topic: 明日は忙しいです ('Tomorrow I'm busy').\""
+      }
+    ]
+  },
+  "762b70315bd4": {
+    "record_id": "word:ほら:ほら",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "usage_notes",
+        "problem": "The note reads \"Colloquially 「ほーら」 in this text\" — it refers to \"this text\", which has no antecedent anywhere on the card, and as written it tells the learner nothing usable about when the lengthened form appears.",
+        "severity": "note",
+        "suggestion": "Either drop the note or restate it as a fact about the word, e.g. \"Often lengthened to 「ほーら」 for emphasis when drawing someone's attention.\""
       }
     ]
   },
@@ -487,6 +640,14 @@
     "accepted_marks": [
       "pitch accent|error"
     ],
+    "findings": []
+  },
+  "80d97ba134ab": {
+    "record_id": "word:うす:うす",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
     "findings": []
   },
   "821147473e9c": {
@@ -562,6 +723,21 @@
       }
     ]
   },
+  "8738dd459705": {
+    "record_id": "word:うす:うす",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0]",
+        "problem": "The example is labeled \"polite\" and pairs うす with 〜ます/よろしくお願いします, which contradicts the card's own usage note that うす is very casual, can sound rough, and should be avoided in polite situations; as presented it teaches that うす has a polite register.",
+        "severity": "error",
+        "suggestion": "Relabel this example as casual/in-group (e.g. a sports-club greeting to teammates) or replace it with a plain-form sentence, e.g. 「うす、おつかれ。」, and reserve the polite label for sentences that do not open with うす."
+      }
+    ]
+  },
   "882af7950d34": {
     "record_id": "word:よつば:よつば",
     "at": "2026-08-11",
@@ -580,6 +756,27 @@
         "problem": "The usage note says the word is \"almost always seen in 四つ葉のクローバー\", i.e. normally written with kanji, yet the headword and the example sentence are kana-only, so the learner never meets the form they will actually encounter.",
         "severity": "note",
         "suggestion": "Use 四つ葉 as the expression with reading よつば and furigana 四[よ]つ 葉[ば], and write the example as 公園で四つ葉のクローバーを見つけました。"
+      }
+    ]
+  },
+  "893e174d93f5": {
+    "record_id": "word:よう:よう",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "Part of speech",
+        "problem": "よう is labeled an auxiliary verb, but the word this card actually teaches (glossed \"hey; yo\", used sentence-initially as a greeting) is an interjection; the card's own usage note says so explicitly, so the POS field contradicts the rest of the card and teaches a false analysis. The auxiliary よう is a separate item (volitional/conjectural suffix, as in 食べよう), not this greeting.",
+        "severity": "error",
+        "suggestion": "Set part of speech to \"interjection\" (or \"interjection (greeting)\")."
+      },
+      {
+        "where": "examples[0]",
+        "problem": "The sentence is labeled polite and uses ですね, but pairs it with an interjection the card describes as very casual and potentially rough/masculine; the register label sits awkwardly against the usage note's \"best used with close friends\".",
+        "severity": "note",
+        "suggestion": "Either relabel this example as semi-casual/familiar (e.g. speaking to a close coworker) or recast it in plain form, e.g. よう、今日は早いね。"
       }
     ]
   },
@@ -621,9 +818,55 @@
     "accepted_marks": [],
     "findings": []
   },
+  "9e9ef3d2c731": {
+    "record_id": "word:お前:おまえ",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "a38a065ce49e": {
+    "record_id": "word:あんまり:あんまり",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "part_of_speech",
+        "problem": "The card labels あんまり a na-adjective, but every meaning listed (\"not very; not much; too much; excessively\") and both example sentences are adverbial; the usage note itself says it is \"usually used adverbially, not as a な-adjective,\" so the POS field contradicts the rest of the card and could lead a beginner to produce forms like あんまりな.",
+        "severity": "note",
+        "suggestion": "Set part of speech to \"adverb\" (optionally noting na-adjective as a secondary, rarer use as in あんまりな話)."
+      }
+    ]
+  },
+  "a4a2b249aace": {
+    "record_id": "word:お前:おまえ",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0]",
+        "problem": "The sentence is labelled \"casual\" but is written in polite form (…行くつもりですか), which both mismatches the stated register and contradicts the card's own usage note that お前 with polite grammar sounds deliberately confrontational rather than neutral — so as presented it models exactly the combination the note warns against.",
+        "severity": "error",
+        "suggestion": "Rewrite in plain form to match the label and the note, e.g. お前は夏休みに京都へ行くつもりなのか。 / お前、夏休みに京都へ行くつもり？ (same English translation)."
+      }
+    ]
+  },
   "a540db4bdf9b": {
     "record_id": "word:引っ越す:ひっこす",
     "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "a6a9d8e777fc": {
+    "record_id": "word:よう:よう",
+    "at": "2026-08-12",
     "accepted": false,
     "accepted_because": "",
     "accepted_marks": [],
@@ -702,6 +945,22 @@
       }
     ]
   },
+  "b1721f34a6aa": {
+    "record_id": "word:お姉ちゃん:おねえちゃん",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "b46ad93bf046": {
+    "record_id": "word:手:て",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "b679c074c9ad": {
     "record_id": "word:読む:よむ",
     "at": "2026-08-10",
@@ -709,6 +968,44 @@
     "accepted_because": "",
     "accepted_marks": [],
     "findings": []
+  },
+  "b8ee9d71cd6c": {
+    "record_id": "word:危ない:あぶない",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "ba71c1753a1e": {
+    "record_id": "word:お姉ちゃん:おねえちゃん",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "usage_notes",
+        "problem": "The note says お姉ちゃん \"may be lengthened and written おねーちゃん\", but おねーちゃん is simply an alternative (casual/manga-style) orthography for the same ねえ long vowel — no extra length is implied. Actual lengthening would be written おねえちゃーん / おねーちゃーん.",
+        "severity": "note",
+        "suggestion": "Reword to something like: \"In casual writing the ねえ is often spelled with a long-vowel mark: おねーちゃん.\""
+      }
+    ]
+  },
+  "bb8e1c29094b": {
+    "record_id": "word:よう:よう",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0]",
+        "problem": "The sentence is labelled casual but ends in the polite copula ですね, which clashes both with the stated register and with よう's rough, intimate-friends-only tone described in the usage notes.",
+        "severity": "error",
+        "suggestion": "Use a plain-form sentence, e.g. よう、今日は早いね。(\"Hey, you're early today.\")"
+      }
+    ]
   },
   "bc1d5560f4b8": {
     "record_id": "word:家:いえ",
@@ -740,6 +1037,14 @@
         "suggestion": "Trim to the senses the card actually teaches, e.g. \"to become\", \"to turn into\", \"to get (to be)\", and move the rarer senses to usage_notes or drop them."
       }
     ]
+  },
+  "bd8a617daf0b": {
+    "record_id": "word:乗り出す:のりだす",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
   },
   "c4b39126e8e9": {
     "record_id": "word:見る:みる",
@@ -787,9 +1092,33 @@
     "accepted_marks": [],
     "findings": []
   },
+  "d0bef3945b20": {
+    "record_id": "word:あんまり:あんまり",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "d46d79b97fa1": {
     "record_id": "word:する:する",
     "at": "2026-08-10",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "d499d6862fb2": {
+    "record_id": "word:ほら:ほら",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "d4f0340f3d18": {
+    "record_id": "word:久しぶり:ひさしぶり",
+    "at": "2026-08-12",
     "accepted": false,
     "accepted_because": "",
     "accepted_marks": [],
@@ -833,6 +1162,14 @@
       }
     ]
   },
+  "dd8e35f5f428": {
+    "record_id": "word:俺:おれ",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "df225de2cca9": {
     "record_id": "word:聞く:きく",
     "at": "2026-08-10",
@@ -849,6 +1186,14 @@
     "accepted_marks": [],
     "findings": []
   },
+  "e490094c5498": {
+    "record_id": "word:お前:おまえ",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "e904270cf820": {
     "record_id": "word:言う:いう",
     "at": "2026-08-10",
@@ -856,6 +1201,42 @@
     "accepted_because": "",
     "accepted_marks": [],
     "findings": []
+  },
+  "ed9b25d75e64": {
+    "record_id": "word:ジャンボ:ジャンボ",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "Part of speech",
+        "problem": "The card labels ジャンボ a な-adjective while its own meaning (\"Jumbo (name)\") and usage note state it is a proper noun; a learner drilling this note would learn a false part of speech and expect adjectival forms like ジャンボだった/ジャンボで that do not exist for a name.",
+        "severity": "error",
+        "suggestion": "Set part of speech to noun (proper noun), and keep the usage note explaining that な in ジャンボなの？ is the copula before explanatory の."
+      },
+      {
+        "where": "Pitch accent",
+        "problem": "ジャンボ has three morae (ジャ・ン・ボ), so with the trailing particle slot the diagram needs four positions, but HHLLL specifies five — the drawn accent cannot correspond to this reading.",
+        "severity": "note",
+        "suggestion": "Re-derive the pattern for a three-mora reading (e.g. HLL plus particle slot for an atamadaka-style reading) or drop the field rather than draw an unaligned diagram."
+      }
+    ]
+  },
+  "ee007af0037c": {
+    "record_id": "word:お姉ちゃん:おねえちゃん",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "usage_notes",
+        "problem": "The note \"Colloquially 「おねーちゃん」 in this text\" is incoherent: no text on the card uses that spelling, and the phrase \"in this text\" refers to nothing, so the learner cannot tell what is being taught.",
+        "severity": "note",
+        "suggestion": "Say what is actually useful, e.g. \"Familiar/affectionate term for one's own or someone else's older sister; also used as a form of address. Casual writing sometimes spells it おねーちゃん.\""
+      }
+    ]
   },
   "ee6ad85be641": {
     "record_id": "word:できる:できる",
@@ -872,6 +1253,14 @@
       }
     ]
   },
+  "f4fa6eac8d4a": {
+    "record_id": "word:くれる:くれる",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "f5ba71e47022": {
     "record_id": "word:ある:ある",
     "at": "2026-08-10",
@@ -886,5 +1275,28 @@
         "suggestion": "Split the registers, e.g. \"The negative is irregular: plain ない, polite ありません — never あらない.\""
       }
     ]
+  },
+  "f9eb019f0d08": {
+    "record_id": "word:それは:それは",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "usage_notes",
+        "problem": "The note ends with \"in this text\", a dangling reference to a source text the learner cannot see; on the card it reads as if そりゃ were somehow limited to a specific passage rather than being the general colloquial contraction of それは.",
+        "severity": "note",
+        "suggestion": "Rephrase without the source reference, e.g. \"Often contracted to 「そりゃ」 in casual speech.\""
+      }
+    ]
+  },
+  "ffbdae53a06b": {
+    "record_id": "word:元気:げんき",
+    "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
   }
 }

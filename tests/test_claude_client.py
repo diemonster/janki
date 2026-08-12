@@ -21,9 +21,11 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
+from japanese_anki import claude_client
 from japanese_anki.claude_client import (
     DEFAULT_MAX_TOKENS,
     STYLE_GUIDE_PATH,
+    ClaudeRequestError,
     build_client,
     load_anthropic,
     parse_call,
@@ -311,6 +313,32 @@ def test_an_injected_client_is_the_one_used(monkeypatch: pytest.MonkeyPatch) -> 
     parse_call("claude-opus-5", system_blocks("guide"), "go", SCHEMA, client)
 
     assert len(client.messages.calls) == 1
+
+
+def test_an_sdk_request_error_becomes_a_clean_janki_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeAPIError(Exception):
+        pass
+
+    class BrokenMessages:
+        def create(self, **kwargs: Any) -> Any:
+            raise FakeAPIError("output blocked by content filtering policy")
+
+    monkeypatch.setattr(
+        claude_client,
+        "load_anthropic",
+        lambda: SimpleNamespace(
+            APIError=FakeAPIError,
+            transform_schema=lambda schema: {"type": "object"},
+        ),
+    )
+    client = SimpleNamespace(messages=BrokenMessages())
+
+    with pytest.raises(ClaudeRequestError) as excinfo:
+        parse_call("claude-opus-5", system_blocks("guide"), "go", SCHEMA, client)
+
+    assert "output blocked by content filtering policy" in str(excinfo.value)
 
 
 def test_the_sdk_helper_really_does_raise_on_a_truncated_answer() -> None:

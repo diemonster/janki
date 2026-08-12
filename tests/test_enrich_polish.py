@@ -929,6 +929,35 @@ def test_ctrl_c_during_a_call_still_writes_what_was_already_accepted(
     assert "Stopped" in capsys.readouterr().out
 
 
+def test_a_request_error_skips_that_record_and_keeps_accepted_work(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    records = [
+        record(),
+        record(id="word:話す:はなす", expression="話す", meanings=["to talk"]),
+        record(id="word:見る:みる", expression="見る", meanings=["to look"]),
+    ]
+    root = project(tmp_path, records)
+
+    class FailsSecond(FakeCall):
+        def __call__(self, *args: Any, **kw: Any) -> CallResult:
+            if len(self.calls) == 1:
+                self.calls.append({"failed": True})
+                raise claude_client.ClaudeRequestError("request was filtered")
+            return super().__call__(*args, **kw)
+
+    patch_all(monkeypatch, FailsSecond(ok("to ask"), ok("to see")))
+    answers(monkeypatch, "y", "y")
+
+    assert cli.main(["--root", str(root), "enrich", "--polish-meanings"]) == 0
+
+    kept = stored(root)
+    assert kept["word:聞く:きく"]["meanings"] == ["to ask"]
+    assert kept["word:話す:はなす"]["meanings"] == ["to talk"]
+    assert kept["word:見る:みる"]["meanings"] == ["to see"]
+    assert "word:話す:はなす: request was filtered; left alone" in capsys.readouterr().err
+
+
 def test_a_failed_ledger_write_does_not_promise_a_recovery_that_never_happens(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

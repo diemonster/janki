@@ -2210,6 +2210,15 @@ batch mode; this does not.
 
 ### [~] M6.6 claimed codex/main 2026-08-12 — The remaining 688 Yotsubato records
 
+*Progress 2026-08-12: batch 02 (source rows 21–40) is complete — 20 promoted,
+dictionary- and AI-enriched, meaning-polished, voiced, reviewed clean, and
+exported. Forty unique source rows now have committed archives, leaving 668.
+The review gate corrected five dictionary/source mismatches and removed three
+examples that could not reach a card field. A live polish request also exposed
+an Anthropic content-filter error escaping as an SDK traceback; request errors
+now become clean per-record warnings, so a later row cannot discard proposals
+already accepted in the same pass.*
+
 Depends on: M6.3, M6.4, M6.5
 Files: `data/staging/anki-yotsubato-volume-1-reading-pack-vocab.yaml`,
 `data/decks/yotsuba.yaml`.

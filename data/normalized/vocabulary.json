@@ -65,6 +65,67 @@
     }
   },
   {
+    "id": "word:あんまり:あんまり",
+    "expression": "あんまり",
+    "reading": "あんまり",
+    "furigana": "",
+    "romaji": "ammari",
+    "meanings": [
+      "not very",
+      "not much",
+      "too much",
+      "excessively"
+    ],
+    "part_of_speech": "adverb",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "コーヒーはあんまり飲みません。",
+        "furigana": "コーヒーはあんまり 飲[の]みません。",
+        "romaji": "koohiihaammarinomimasen.",
+        "english": "I don't drink much coffee.",
+        "audio": "audio/janki-3eab93d0c05a.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "あんまり食べると、眠くなるよ。",
+        "furigana": "あんまり 食[た]べると、 眠[ねむ]くなるよ。",
+        "romaji": "ammaritaberuto, nemukunaruyo.",
+        "english": "If you eat too much, you'll get sleepy.",
+        "audio": "audio/janki-843cafdc345d.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "あんまり is the conversational form of あまり. It is usually used adverbially, not as a な-adjective. With a negative predicate, it means “not very” or “not much” (あんまり食べない). In casual affirmative sentences, it can mean “too much,” often as あんまり〜と or あんまり〜から.",
+    "audio": "audio/janki-aaa4faa66204.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHH",
+      "LHHHL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 900,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426695560",
+        "anki_guid": "dPv)n1,ILv",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>あんまり</div>",
+        "anki_Back": "<div>あんまり</div><div>Too much</div>",
+        "anki_Add Reverse": ""
+      }
+    }
+  },
+  {
     "id": "word:いる:いる",
     "expression": "いる",
     "reading": "いる",
@@ -130,6 +191,162 @@
     }
   },
   {
+    "id": "word:うす:うす",
+    "expression": "うす",
+    "reading": "うす",
+    "furigana": "",
+    "romaji": "usu",
+    "meanings": [
+      "hey",
+      "yo",
+      "hi (very casual)"
+    ],
+    "part_of_speech": "",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "うす、今日もよろしく。",
+        "furigana": "うす、 今日[きょう]もよろしく。",
+        "romaji": "usu, kyoumoyoroshiku.",
+        "english": "Hey, good to work with you today.",
+        "audio": "audio/janki-3e9339903504.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "A very casual greeting, also commonly written うっす. It is especially associated with men, teammates, and close friends and can sound rough, so avoid it in polite or formal situations.",
+    "audio": "audio/janki-1a0bd2e56b99.wav",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360427023184",
+        "anki_guid": "xHVu3k</)q",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>うす</div>",
+        "anki_Back": "<div>うす</div><div>Very casual greeting</div>",
+        "anki_Add Reverse": ""
+      }
+    }
+  },
+  {
+    "id": "word:お前:おまえ",
+    "expression": "お前",
+    "reading": "おまえ",
+    "furigana": "お 前[まえ]",
+    "romaji": "omae",
+    "meanings": [
+      "you (rough, familiar)"
+    ],
+    "part_of_speech": "pronoun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "お前、夏休みに京都へ行くつもり？",
+        "furigana": "お 前[まえ]、 夏休[なつやす]みに 京都[きょうと]へ 行[い]くつもり？",
+        "romaji": "omae, natsuyasuminikyoutoheikutsumori?",
+        "english": "Are you planning to go to Kyoto during summer vacation?",
+        "audio": "audio/janki-c37c70bbdc08.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "お前 is a rough, very familiar way to say “you.” It may be used between close friends or toward someone of lower status, but it can easily sound aggressive or insulting. Avoid it with strangers, teachers, and superiors. It normally goes with casual grammar; pairing it with polite grammar sounds deliberately confrontational rather than respectful.",
+    "audio": "audio/janki-77b5ed04aa46.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 500,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426986873",
+        "anki_guid": "dDD}vTv%G/",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>お前</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>おまえ</div><div>You (impolite, casual)</div></span>",
+        "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:お姉ちゃん:おねえちゃん",
+    "expression": "お姉ちゃん",
+    "reading": "おねえちゃん",
+    "furigana": "お 姉[ねえ]ちゃん",
+    "romaji": "oneechan",
+    "meanings": [
+      "older sister",
+      "big sister"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "お姉ちゃんは母の日に花をあげるつもりです。",
+        "furigana": "お 姉[ねえ]ちゃんは 母[はは]の 日[ひ]に 花[はな]をあげるつもりです。",
+        "romaji": "oneechanhahahanohinihanaoagerutsumoridesu.",
+        "english": "My older sister is planning to give flowers on Mother's Day.",
+        "audio": "audio/janki-385d820d1b11.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "お姉ちゃん、今度の休みに何するつもりなの？",
+        "furigana": "お 姉[ねえ]ちゃん、 今度[こんど]の 休[やす]みに 何[なに]するつもりなの？",
+        "romaji": "oneechan, kondonoyasumininanisurutsumorinano?",
+        "english": "Sis, what are you planning to do on the next day off?",
+        "audio": "audio/janki-b2f2e91f7c9a.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "In casual writing and manga dialogue, the same long vowel is often written おねーちゃん instead of おねえちゃん.",
+    "audio": "audio/janki-32225c7435ac.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHLLLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 3100,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426844258",
+        "anki_guid": "&bFTL,olf",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>お姉ちゃん</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>おねえちゃん　</div><div>「おねーちゃん」</div><div>Older sister, an older girl</div></span>",
+        "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
     "id": "word:お父さん:おとうさん",
     "expression": "お父さん",
     "reading": "おとうさん",
@@ -183,6 +400,72 @@
         "anki_Front": "<div>お父さん</div>",
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>おとうさん　「とーちゃん」</div><div>Dad, father</div></span>",
         "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:くれる:くれる",
+    "expression": "くれる",
+    "reading": "くれる",
+    "furigana": "",
+    "romaji": "kureru",
+    "meanings": [
+      "to give (to me or my group)",
+      "to do (something) for me"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "ichidan",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "誕生日に、妻が新しいヘッドホンをくれました。",
+        "furigana": "誕生日[たんじょうび]に、 妻[つま]が 新[あたら]しいヘッドホンをくれました。",
+        "romaji": "tanjoubini, tsumagaatarashiiheddohon'okuremashita.",
+        "english": "My wife gave me new headphones for my birthday.",
+        "audio": "audio/janki-af9a7cf94c3d.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "その写真、あとで送ってくれるの？",
+        "furigana": "その 写真[しゃしん]、あとで 送[おく]ってくれるの？",
+        "romaji": "sonoshashin, atodeokuttekureruno?",
+        "english": "Will you send me that photo later?",
+        "audio": "audio/janki-2e626b6ad0db.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "くれる",
+      "negative": "くれない",
+      "past": "くれた",
+      "past_negative": "くれなかった",
+      "te_form": "くれて",
+      "potential": "くれられる",
+      "passive": "くれられる"
+    },
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "くれる describes someone giving something to the speaker or someone in the speaker’s in-group; the recipient 私に is often omitted. In 〜てくれる, it means that someone does something for the speaker or their in-group.",
+    "audio": "audio/janki-bd3f4bb95f9d.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 100,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426919202",
+        "anki_guid": "Q?j`bJ1p6a",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>くれる</div>",
+        "anki_Back": "<div>くれる</div><div>To give, to do for one</div>",
+        "anki_Add Reverse": ""
       }
     }
   },
@@ -438,6 +721,62 @@
     }
   },
   {
+    "id": "word:それは:それは",
+    "expression": "それは",
+    "reading": "それは",
+    "furigana": "",
+    "romaji": "soreha",
+    "meanings": [
+      "that is",
+      "as for that"
+    ],
+    "part_of_speech": "",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "それは父の日のプレゼントです。",
+        "furigana": "それは 父[ちち]の 日[ひ]のプレゼントです。",
+        "romaji": "sorehachichinohinopurezentodesu.",
+        "english": "That is a Father's Day present.",
+        "audio": "audio/janki-6444068faaef.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "それは何なの？",
+        "furigana": "それは 何[なん]なの？",
+        "romaji": "sorehanannano?",
+        "english": "What is that?",
+        "audio": "audio/janki-c9830c5a53b6.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "In casual speech, それは commonly contracts to そりゃ.",
+    "audio": "audio/janki-58cdd5f11bc1.wav",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426963961",
+        "anki_guid": "cn+&-O&/B5",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>それは 「そりゃ」</div>",
+        "anki_Back": "<div>それは 「そりゃ」</div><div>“That is”</div>",
+        "anki_Add Reverse": ""
+      }
+    }
+  },
+  {
     "id": "word:できる:できる",
     "expression": "できる",
     "reading": "できる",
@@ -501,6 +840,63 @@
         "sid": "450331373",
         "deck": "Anki Test - Top 20 Verbs",
         "card_state": "new"
+      }
+    }
+  },
+  {
+    "id": "word:どこ:どこ",
+    "expression": "どこ",
+    "reading": "どこ",
+    "furigana": "",
+    "romaji": "doko",
+    "meanings": [
+      "Where"
+    ],
+    "part_of_speech": "pronoun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "夏休みに、どこへ旅行するつもりですか。",
+        "furigana": "夏休[なつやす]みに、どこへ 旅行[りょこう]するつもりですか。",
+        "romaji": "natsuyasumini, dokoheryokousurutsumoridesuka.",
+        "english": "Where are you planning to travel during summer vacation?",
+        "audio": "audio/janki-cd43f4af1a60.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "今どこにいるの？",
+        "furigana": "今[いま]どこにいるの？",
+        "romaji": "imadokoniiruno?",
+        "english": "Where are you now?",
+        "audio": "audio/janki-2f238e56fe0f.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "The particle depends on どこ's role: どこに/へ for a destination or location of existence, どこで for the place where an action occurs, and どこから for a starting point. どこの before a noun asks which place, organization, or group it is associated with, as in どこの会社 (“which company”).",
+    "audio": "audio/janki-f21f711f95ed.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 200,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426955352",
+        "anki_guid": "x!wU=^->6T",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>どこ</div>",
+        "anki_Back": "<div>どこ</div><div>Where</div>",
+        "anki_Add Reverse": ""
       }
     }
   },
@@ -578,6 +974,66 @@
     }
   },
   {
+    "id": "word:ほら:ほら",
+    "expression": "ほら",
+    "reading": "ほら",
+    "furigana": "",
+    "romaji": "hora",
+    "meanings": [
+      "look!",
+      "see?",
+      "there!",
+      "here (handing something over)"
+    ],
+    "part_of_speech": "interjection",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "ほら、あの山が見えますよ。",
+        "furigana": "ほら、あの 山[やま]が 見[み]えますよ。",
+        "romaji": "hora, anoyamagamiemasuyo.",
+        "english": "Look, you can see that mountain.",
+        "audio": "audio/janki-ff771270285f.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "ほら、これが欲しかったんだ。",
+        "furigana": "ほら、これが 欲[ほ]しかったんだ。",
+        "romaji": "hora, koregahoshikattanda.",
+        "english": "See, this is what I wanted.",
+        "audio": "audio/janki-e560ae4ebdea.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "The first vowel is sometimes lengthened as ほーら for emphasis when calling attention to something.",
+    "audio": "audio/janki-1f746221e446.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 600,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426932980",
+        "anki_guid": "cA_${;r{e[",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>ほら　「ほーら」</div>",
+        "anki_Back": "<div>ほら　「ほーら」</div><div>“Take a look;” “See”&nbsp;</div>",
+        "anki_Add Reverse": ""
+      }
+    }
+  },
+  {
     "id": "word:もう:もう",
     "expression": "もう",
     "reading": "もう",
@@ -638,6 +1094,56 @@
     }
   },
   {
+    "id": "word:よう:よう",
+    "expression": "よう",
+    "reading": "よう",
+    "furigana": "",
+    "romaji": "you",
+    "meanings": [
+      "hey",
+      "yo"
+    ],
+    "part_of_speech": "interjection",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "よう、今日は早いね。",
+        "furigana": "よう、 今日[きょう]は 早[はや]いね。",
+        "romaji": "you, kyouhahayaine.",
+        "english": "Hey, you're early today.",
+        "audio": "audio/janki-71f994941fd9.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "As a very casual greeting, よう is an interjection, not an auxiliary verb. It means “Hey!” or “Yo!” and can sound rough or masculine, so it is best used with close friends.",
+    "audio": "audio/janki-92b3eafb5202.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 4400,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360427010200",
+        "anki_guid": "De^-:].$AG",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>よう</div>",
+        "anki_Back": "<div>よう</div><div>Very casual greeting</div>",
+        "anki_Add Reverse": ""
+      }
+    }
+  },
+  {
     "id": "word:よつば:よつば",
     "expression": "よつば",
     "reading": "よつば",
@@ -683,6 +1189,61 @@
         "anki_tags": "Yotsubato1",
         "anki_Front": "<div>よつば</div>",
         "anki_Back": "<div>よつば</div><div>Yotsuba (name)</div>",
+        "anki_Add Reverse": ""
+      }
+    }
+  },
+  {
+    "id": "word:ジャンボ:ジャンボ",
+    "expression": "ジャンボ",
+    "reading": "ジャンボ",
+    "furigana": "",
+    "romaji": "jambo",
+    "meanings": [
+      "Jumbo (name)"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "あの象の名前はジャンボです。",
+        "furigana": "あの 象[ぞう]の 名前[なまえ]はジャンボです。",
+        "romaji": "anozounonamaehajambodesu.",
+        "english": "That elephant's name is Jumbo.",
+        "audio": "audio/janki-ab9f71094d17.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "この子、ジャンボなの？",
+        "furigana": "この 子[こ]、ジャンボなの？",
+        "romaji": "konoko, jambonano?",
+        "english": "Is this little guy Jumbo?",
+        "audio": "audio/janki-9fbe10ba8ffb.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "When ジャンボ is a name, it is a proper noun rather than a な-adjective. In ジャンボなの？, な appears because the name is a noun before the explanatory/question ending の.",
+    "audio": "audio/janki-8838d8eee68b.wav",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": 49800,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426997691",
+        "anki_guid": "hzJP.pB&;b",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>ジャンボ</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\">Jumbo (name)</span>",
         "anki_Add Reverse": ""
       }
     }
@@ -742,6 +1303,135 @@
         "anki_tags": "Yotsubato1",
         "anki_Front": "<div>一杯</div>",
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>いっぱい</div><div>A lot, a full container</div></span>",
+        "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:久しぶり:ひさしぶり",
+    "expression": "久しぶり",
+    "reading": "ひさしぶり",
+    "furigana": "久[ひさ]しぶり",
+    "romaji": "hisashiburi",
+    "meanings": [
+      "long time no see",
+      "it's been a while",
+      "for the first time in a while",
+      "after a long time"
+    ],
+    "part_of_speech": "na-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "久しぶりに家族と旅行します。",
+        "furigana": "久[ひさ]しぶりに 家族[かぞく]と 旅行[りょこう]します。",
+        "romaji": "hisashiburinikazokutoryokoushimasu.",
+        "english": "I'm traveling with my family for the first time in a while.",
+        "audio": "audio/janki-2c492131c53a.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "久しぶり！元気にしてた？",
+        "furigana": "久[ひさ]しぶり！ 元気[げんき]にしてた？",
+        "romaji": "hisashiburi!genkinishiteta?",
+        "english": "Long time no see! Have you been well?",
+        "audio": "audio/janki-abb7f1be58bd.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "久しぶり is often used by itself as a greeting, meaning “Long time no see.” 久しぶりです is more polite. 久しぶりに + verb means “to do something for the first time in a while,” while 久しぶりの + noun means “the first [noun] in a while.”",
+    "audio": "audio/janki-0dd8990e3d1f.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHHH",
+      "LHHHHL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 1700,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360427033347",
+        "anki_guid": "JX)V0G2fJb",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>久しぶり</div>",
+        "anki_Back": "<div>ひさしぶり</div><div>“It's been a while;” “Long time no see”</div>",
+        "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:乗り出す:のりだす",
+    "expression": "乗り出す",
+    "reading": "のりだす",
+    "furigana": "乗[の]り 出[だ]す",
+    "romaji": "noridasu",
+    "meanings": [
+      "to lean forward",
+      "to lean out (of a window)",
+      "to set out on",
+      "to embark on"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "電車の窓から乗り出さないでください。",
+        "furigana": "電車[でんしゃ]の 窓[まど]から 乗[の]り 出[だ]さないでください。",
+        "romaji": "denshanomadokaranoridasanaidekudasai.",
+        "english": "Please don't lean out of the train window.",
+        "audio": "audio/janki-8b380365e258.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "何を見ようとして、そんなに身を乗り出してるの？",
+        "furigana": "何[なに]を 見[み]ようとして、そんなに 身[み]を 乗[の]り 出[だ]してるの？",
+        "romaji": "naniomiyoutoshite, sonnanimionoridashiteruno?",
+        "english": "What are you leaning forward like that to see?",
+        "audio": "audio/janki-667b07d3dd48.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "乗り出す",
+      "negative": "乗り出さない",
+      "past": "乗り出した",
+      "past_negative": "乗り出さなかった",
+      "te_form": "乗り出して",
+      "potential": "乗り出せる",
+      "passive": "乗り出される"
+    },
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "For the physical sense, 身を乗り出す commonly means “to lean forward,” often because of interest or excitement. 窓から（身を）乗り出す means “to lean out of a window.” 乗り出す can also mean “to embark on” or “to take action,” but that is a separate sense.",
+    "audio": "audio/janki-23de581fbab1.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 7900,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426821421",
+        "anki_guid": "u:q]|7WBh3",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>乗り出す</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>のりだす</div><div>Lean forward, lean out</div></span>",
         "anki_Add Reverse": "y"
       }
     }
@@ -927,6 +1617,124 @@
     }
   },
   {
+    "id": "word:俺:おれ",
+    "expression": "俺",
+    "reading": "おれ",
+    "furigana": "俺[おれ]",
+    "romaji": "ore",
+    "meanings": [
+      "I",
+      "me (casual, used by men)"
+    ],
+    "part_of_speech": "pronoun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "俺は来年、日本へ行くつもりです。",
+        "furigana": "俺[おれ]は 来年[らいねん]、 日本[にほん]へ 行[い]くつもりです。",
+        "romaji": "oreharainen, nihonheikutsumoridesu.",
+        "english": "I'm planning to go to Japan next year.",
+        "audio": "audio/janki-5d3262e7f185.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "俺が作った曲、聞くの？",
+        "furigana": "俺[おれ]が 作[つく]った 曲[きょく]、 聞[き]くの？",
+        "romaji": "oregatsukuttakyoku, kikuno?",
+        "english": "Are you going to listen to the song I made?",
+        "audio": "audio/janki-cc02698f58f4.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "俺 is a very informal first-person pronoun used mainly by men. It is common among male friends and family but can sound rough or overly familiar with strangers or in formal situations. Even when the sentence ending is polite, 俺 itself remains casual, so 私 is usually safer in polite settings.",
+    "audio": "audio/janki-e45ff4d9a48c.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 500,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426895067",
+        "anki_guid": "zYuP;qA@Fg",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>俺</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>おれ</div><div>Masculine form of \"I”</div></span>",
+        "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:元気:げんき",
+    "expression": "元気",
+    "reading": "げんき",
+    "furigana": "元[げん] 気[き]",
+    "romaji": "genki",
+    "meanings": [
+      "healthy",
+      "well",
+      "energetic",
+      "in good spirits"
+    ],
+    "part_of_speech": "na-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "妹は毎日元気に学校へ行きます。",
+        "furigana": "妹[いもうと]は 毎日[まいにち] 元気[げんき]に 学校[がっこう]へ 行[い]きます。",
+        "romaji": "imoutohamainichigenkinigakkouheikimasu.",
+        "english": "My younger sister goes to school cheerfully every day.",
+        "audio": "audio/janki-c42f54409d87.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "今日、元気なの？",
+        "furigana": "今日[きょう]、 元気[げんき]なの？",
+        "romaji": "kyou, genkinano?",
+        "english": "Are you feeling well today?",
+        "audio": "audio/janki-d427852a0672.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "元気 is a な-adjective meaning “healthy,” “well,” “energetic,” or “in good spirits.” Use 元気な before a noun (元気な子) and 元気に when it modifies a verb (元気に遊ぶ). 元気？ is a common casual way to ask “How are you?”",
+    "audio": "audio/janki-3a1f58b50290.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 400,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360427047417",
+        "anki_guid": "uGR+(xe1Ld",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>元気</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>げんき</div><div>Healthy, vigor, spirits, energy</div></span>",
+        "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
     "id": "word:凄い:すごい",
     "expression": "凄い",
     "reading": "すごい",
@@ -991,6 +1799,65 @@
     }
   },
   {
+    "id": "word:分:ぶん",
+    "expression": "分",
+    "reading": "ぶん",
+    "furigana": "分[ぶん]",
+    "romaji": "bun",
+    "meanings": [
+      "portion",
+      "share",
+      "one's part"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "妹の分のケーキも買うつもりです。",
+        "furigana": "妹[いもうと]の 分[ぶん]のケーキも 買[か]うつもりです。",
+        "romaji": "imoutonobunnokeekimokautsumoridesu.",
+        "english": "I’m planning to buy a piece of cake for my younger sister, too.",
+        "audio": "audio/janki-704f44069394.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "これ、僕の分なの？",
+        "furigana": "これ、 僕[ぼく]の 分[ぶん]なの？",
+        "romaji": "kore, bokunobunnano?",
+        "english": "Is this my share?",
+        "audio": "audio/janki-af11b79a7295.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "「人・物＋の分」で、その人や物に割り当てられた取り分を表します（例：私の分）。数量に直接付ける「三人分」は「三人に足りる量／三人のための量」という意味です。この意味では「ぶん」と読みます。「分」は「分（ふん／ぷん）」と読むと時間の「minute」になります。",
+    "audio": "audio/janki-1028b76c1320.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 500,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426906441",
+        "anki_guid": "b~ec4z@x`T",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>分</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>ぶん</div><div>Portion, share, part</div></span>",
+        "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
     "id": "word:分かる:わかる",
     "expression": "分かる",
     "reading": "わかる",
@@ -1050,6 +1917,74 @@
         "sid": "2821891307",
         "deck": "Anki Test - Top 20 Verbs",
         "card_state": "locked,new"
+      }
+    }
+  },
+  {
+    "id": "word:危ない:あぶない",
+    "expression": "危ない",
+    "reading": "あぶない",
+    "furigana": "危[あぶ]ない",
+    "romaji": "abunai",
+    "meanings": [
+      "dangerous",
+      "risky",
+      "unsafe",
+      "look out!",
+      "watch out!"
+    ],
+    "part_of_speech": "i-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "この道は夜になると危ないです。",
+        "furigana": "この 道[みち]は 夜[よる]になると 危[あぶ]ないです。",
+        "romaji": "konomichihayoruninarutoabunaidesu.",
+        "english": "This road is dangerous at night.",
+        "audio": "audio/janki-e0f222912b43.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "そんな危ない所に行くつもりなの？",
+        "furigana": "そんな 危[あぶ]ない 所[ところ]に 行[い]くつもりなの？",
+        "romaji": "sonnaabunaitokoroniikutsumorinano?",
+        "english": "Are you planning to go to such a dangerous place?",
+        "audio": "audio/janki-047dc7eb92ea.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "危ない",
+      "negative": "危なくない",
+      "past": "危なかった",
+      "past_negative": "危なくなかった",
+      "te_form": "危なくて"
+    },
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "危ない describes something dangerous or unsafe. Said by itself as 「危ない！」, it is also a common warning meaning “Watch out!”",
+    "audio": "audio/janki-47fc120a7b72.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHH",
+      "LHHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 1000,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426834251",
+        "anki_guid": "l8FL6%h_dQ",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>危ない</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>あぶない</div><div>Dangerous</div></span>",
+        "anki_Add Reverse": "y"
       }
     }
   },
@@ -1416,6 +2351,132 @@
     }
   },
   {
+    "id": "word:手:て",
+    "expression": "手",
+    "reading": "て",
+    "furigana": "手[て]",
+    "romaji": "te",
+    "meanings": [
+      "hand",
+      "move",
+      "tactic"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "将棋で次の手を考えています。",
+        "furigana": "将棋[しょうぎ]で 次[つぎ]の 手[て]を 考[かんが]えています。",
+        "romaji": "shougidetsuginoteokangaeteimasu.",
+        "english": "I’m thinking about my next move in shogi.",
+        "audio": "audio/janki-8eb93c8277bc.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "その手は使わないつもりなの？",
+        "furigana": "その 手[て]は 使[つか]わないつもりなの？",
+        "romaji": "sonotehatsukawanaitsumorinano?",
+        "english": "Are you planning not to use that move?",
+        "audio": "audio/janki-79b93afdceb4.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "手（て） is normally a noun meaning “hand.” It can also mean a move or tactic, especially in board games such as shogi or go. When used after a number, ～手 can count moves, as in 一手（いって） “one move.”",
+    "audio": "audio/janki-81b34f88168c.wav",
+    "image": "",
+    "pitch_accent": [
+      "HL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 200,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426860777",
+        "anki_guid": "CP%w{apH*H",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>手</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>て</div><div>Hand</div></span>",
+        "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:振る:ふる",
+    "expression": "振る",
+    "reading": "ふる",
+    "furigana": "振[ふ]る",
+    "romaji": "furu",
+    "meanings": [
+      "to wave",
+      "to shake",
+      "to swing"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "駅で友達に手を振りました。",
+        "furigana": "駅[えき]で 友達[ともだち]に 手[て]を 振[ふ]りました。",
+        "romaji": "ekidetomodachiniteofurimashita.",
+        "english": "I waved to my friend at the station.",
+        "audio": "audio/janki-7bbef090a1d2.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "どうして首を振るの？",
+        "furigana": "どうして 首[くび]を 振[ふ]るの？",
+        "romaji": "doushitekubiofuruno?",
+        "english": "Why are you shaking your head?",
+        "audio": "audio/janki-45577b1ae4c3.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "振る",
+      "negative": "振らない",
+      "past": "振った",
+      "past_negative": "振らなかった",
+      "te_form": "振って",
+      "potential": "振れる",
+      "passive": "振られる"
+    },
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "振る is transitive: the thing being waved or shaken takes を. Common combinations include 手を振る (“wave one’s hand”) and 首を振る (“shake one’s head”).",
+    "audio": "audio/janki-cc544f6de0e1.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 1000,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426871120",
+        "anki_guid": "DRRH&2?<$$",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>振る</div>",
+        "anki_Back": "<div><span style=\" font-style: normal; font-weight: normal;\"><div>ふる</div><div>To wave, to shake</div></span></div>",
+        "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
     "id": "word:明日:あした",
     "expression": "明日",
     "reading": "あした",
@@ -1593,6 +2654,73 @@
         "sid": "1154899103",
         "deck": "Anki Test - Top 20 Verbs",
         "card_state": "locked,new"
+      }
+    }
+  },
+  {
+    "id": "word:着く:つく",
+    "expression": "着く",
+    "reading": "つく",
+    "furigana": "着[つ]く",
+    "romaji": "tsuku",
+    "meanings": [
+      "to arrive",
+      "to reach",
+      "to get to"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "電車は七時に東京に着きます。",
+        "furigana": "電車[でんしゃ]は 七時[しちじ]に 東京[とうきょう]に 着[つ]きます。",
+        "romaji": "denshahashichijinitoukyounitsukimasu.",
+        "english": "The train arrives in Tokyo at seven.",
+        "audio": "audio/janki-05af3a9bbfd4.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "駅に着いたら、電話するつもりだよ。",
+        "furigana": "駅[えき]に 着[つ]いたら、 電話[でんわ]するつもりだよ。",
+        "romaji": "ekinitsuitara, denwasurutsumoridayo.",
+        "english": "I'm planning to call when I arrive at the station.",
+        "audio": "audio/janki-f471e5711909.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "着く",
+      "negative": "着かない",
+      "past": "着いた",
+      "past_negative": "着かなかった",
+      "te_form": "着いて",
+      "potential": "着ける",
+      "passive": "着かれる"
+    },
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "着く is an intransitive godan verb. Mark the destination with に (or sometimes へ): 駅に着く means “to arrive at the station.”",
+    "audio": "audio/janki-d00efc571798.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 1100,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426945609",
+        "anki_guid": "xuBBd]pc]>",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>着く</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>つく</div><div>Arrive (at)</div></span>",
+        "anki_Add Reverse": "y"
       }
     }
   },
@@ -2234,6 +3362,74 @@
         "sid": "2721851026",
         "deck": "Anki Test - Top 20 Verbs",
         "card_state": "locked,new"
+      }
+    }
+  },
+  {
+    "id": "word:離す:はなす",
+    "expression": "離す",
+    "reading": "はなす",
+    "furigana": "離[はな]す",
+    "romaji": "hanasu",
+    "meanings": [
+      "to separate",
+      "to let go of",
+      "to move away (from)",
+      "to release"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "godan",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "危ないので、子どもの手を離しません。",
+        "furigana": "危[あぶ]ないので、 子[こ]どもの 手[て]を 離[はな]しません。",
+        "romaji": "abunainode, kodomonoteohanashimasen.",
+        "english": "Because it is dangerous, I won't let go of the child's hand.",
+        "audio": "audio/janki-f3661401c6f9.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "そのいす、壁から離すつもりなの？",
+        "furigana": "そのいす、 壁[かべ]から 離[はな]すつもりなの？",
+        "romaji": "sonoisu, kabekarahanasutsumorinano?",
+        "english": "Are you planning to move that chair away from the wall?",
+        "audio": "audio/janki-895734964e49.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "離す",
+      "negative": "離さない",
+      "past": "離した",
+      "past_negative": "離さなかった",
+      "te_form": "離して",
+      "potential": "離せる",
+      "passive": "離される"
+    },
+    "tags": [
+      "anki"
+    ],
+    "usage_notes": "離す is transitive: someone separates or moves something away. Use AをBから離す for “move A away from B,” and 手を離す for “let go.” The corresponding intransitive verb is 離れる (“to separate; to move away”).",
+    "audio": "audio/janki-22cca7433636.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 1000,
+    "source": {
+      "type": "anki",
+      "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
+      "row": null,
+      "raw_fields": {
+        "anki_note_id": "1360426884282",
+        "anki_guid": "ba]NEh^Biq",
+        "anki_notetype": "Basic (optional reversed card)+",
+        "anki_tags": "Yotsubato1",
+        "anki_Front": "<div>離す</div>",
+        "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>はなす</div><div>To separate, release</div></span>",
+        "anki_Add Reverse": "y"
       }
     }
   },
