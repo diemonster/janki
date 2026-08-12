@@ -16,6 +16,7 @@ from japanese_anki import (
     codex_client,
     enrich,
     extract,
+    hardening,
     jpdb,
     kanji,
     ledger,
@@ -4313,6 +4314,24 @@ def command_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_harden_status(args: argparse.Namespace) -> int:
+    config = _load_config(args)
+    report = hardening.build_status(config.root)
+    if args.format == "json":
+        print(
+            json.dumps(
+                hardening.status_payload(report),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+        )
+    else:
+        for line in hardening.format_status(report):
+            print(line)
+    return 0
+
+
 def command_migrate_inline(args: argparse.Namespace) -> int:
     config = _load_config(args)
     # Load once, save once: the ledger is a whole-file rewrite.
@@ -4894,6 +4913,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="'ids' prints bare record ids, one per line, for piping into other commands.",
     )
     status_parser.set_defaults(handler=command_status)
+
+    harden_parser = subparsers.add_parser(
+        "harden", help="Inspect deck-driven hardening evidence"
+    )
+    harden_commands = harden_parser.add_subparsers(
+        dest="harden_command", required=True
+    )
+    harden_status_parser = harden_commands.add_parser(
+        "status", help="Validate and summarize findings and pilot reports"
+    )
+    harden_status_parser.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="Select human-readable text or deterministic JSON.",
+    )
+    harden_status_parser.set_defaults(handler=command_harden_status)
 
     migrate_parser = subparsers.add_parser(
         "migrate-inline",

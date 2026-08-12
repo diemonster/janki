@@ -2394,7 +2394,16 @@ agent stops or selects a source that does not need that approval.
 Tests: documentation and link checks only. Each later task adds its schema and
 executable checks at the first boundary that uses the approval.
 
-### [ ] M7.2 Findings catalog + `janki harden status`
+### [x] M7.2 Findings catalog + `janki harden status`
+
+*Done 2026-08-12. Added strict, duplicate-key-safe schemas for the systemic
+finding catalog and pilot reports. Added the read-only `janki harden status`
+text and deterministic JSON reports. The status reports open and deferred
+findings, recurrences, repair false positives, incomplete pilots, correction
+counts, and empty source-archetype cells. Accepted-risk approvals bind the
+exact owner decision and normalized risk content. Added the seed catalog,
+pilot authoring guide, agent rules, and schema and CLI tests. Case and oracle
+target resolution remains in M7.3 as planned.*
 
 Depends on: M7.1
 Files: new `src/japanese_anki/hardening.py`, new `quality/findings.yaml`,

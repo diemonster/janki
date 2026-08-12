@@ -45,6 +45,14 @@ is the durable source of truth; generated `.apkg` files are build artifacts.
   Preserve the reproduction and complete the finding, case, production fix,
   full replay, and `make gates`, or record the finding as open or deferred.
 - Do not manufacture a general validator from one content-specific correction.
+- Record each systemic defect in `quality/findings.yaml`. Record a
+  content-specific correction only in its pilot report. Do not create a finding
+  for it.
+- Run `janki harden status` after you edit a finding or pilot report. The
+  command is read-only. Edit the reviewed YAML by hand so comments and
+  decisions remain visible.
+- Do not mark a finding as `fixed` until a passing case and a production fix
+  reference exist. M7.3 adds target and reverse-link checks for those cases.
 - Automatic repairs are default-deny. Their only allowed target fields are
   `furigana`, `romaji`, `examples[*].furigana`, `examples[*].romaji`, `audio`,
   `image`, and `frequency_rank`. The canonical
