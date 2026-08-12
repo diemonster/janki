@@ -2360,27 +2360,30 @@ content-specific edit to stay content-specific rather than manufacturing a
 general validator from one observation. Add a second owner-authority rule. The
 user owns live-eval consent, redistribution approval for owner-provided source
 material, human unit-oracle acceptance, manual coverage acceptance,
-repair-proposal acceptance, existing-identity migration, `accepted-risk`
-approval, and baseline acceptance. An agent must not infer, generate, or set
-these values to complete a task. It must not answer an interactive approval
-prompt as the user.
+repair-proposal acceptance, an ambiguous new-identity resolution,
+existing-identity migration, `accepted-risk` approval, and baseline acceptance.
+An agent must not infer, generate, or set these values to complete a task. It
+must not answer an interactive approval prompt as the user.
 
 For `live_eval_consent`, the user must explicitly approve the exact case ID,
 source fingerprint, provider, resolved model IDs or model scope, purpose, and
 stored reason. Redistribution approval must name the exact artifact fingerprint
 and license or other redistribution basis. Unit-oracle acceptance must name the
 exact source fingerprint, oracle ID, normalized oracle-content fingerprint,
-oracle type, and selection rubric when present. Manual coverage acceptance must name the
-exact source and coverage-block fingerprints, every mismatch or unmeasured
-disposition accepted, and the reason. A repair-proposal decision must name the
-exact proposal-entry fingerprint and answer. An existing-identity migration
-must name the exact old/new identity and review-history plan. `accepted-risk`
-approval must name the exact finding, risk, and reason. Baseline acceptance must
-name the exact report and acceptance-input-manifest fingerprints and diff. An
-agent may prepare an oracle draft, but it cannot approve it. It may record only
-an exact user approval. It must not widen its scope or treat a broad task request
-as one of these decisions. If approval is absent, the value stays false/missing
-and the agent stops or selects a source that does not need that approval.
+oracle type, and selection rubric when present. Manual coverage acceptance must
+name the exact source and coverage-block fingerprints, every mismatch or
+unmeasured disposition accepted, and the reason. A repair-proposal decision
+must name the exact proposal-entry fingerprint and answer. An ambiguous
+new-identity resolution must name the exact source fingerprint and locator,
+expression, chosen reading, and reviewed evidence. An existing-identity
+migration must name the exact old/new identity and review-history plan.
+`accepted-risk` approval must name the exact finding, risk, and reason. Baseline
+acceptance must name the exact report and acceptance-input-manifest fingerprints
+and diff. An agent may prepare an oracle draft, but it cannot approve it. It may
+record only an exact user approval. It must not widen its scope or treat a broad
+task request as one of these decisions. If approval is absent, the value stays
+false/missing and the agent stops or selects a source that does not need that
+approval.
 
 Tests: documentation and link checks only. Each later task adds its schema and
 executable checks at the first boundary that uses the approval.
@@ -2524,8 +2527,8 @@ these are not new fixes, but they prove the bundle and catalog formats together
 against known production behavior.
 
 Tests: unit-oracle duplicate keys and malformed hashes; missing or mismatched
-oracle approval and draft-oracle gate refusal; both case purposes and source forms;
-reciprocal/dangling links; manifest safety; missing-consent default,
+oracle approval and draft-oracle gate refusal; both case purposes and source
+forms; reciprocal/dangling links; manifest safety; missing-consent default,
 consent/source fingerprint binding, and changed-source invalidation;
 provider/model/purpose mismatch; missing or mismatched redistribution approval;
 hash checks; every runner; a test that every seeded finding names a compatible
@@ -2645,13 +2648,24 @@ giving an agent general write access to curated content.
   confirmation, apply writes the exact planned bytes. It does not call the
   transformations again. It then verifies the output fingerprint. Apply uses
   the atomic write path and records repair code/version in the namespaced
-  `source.raw_fields["janki_repairs"]` annotation as canonical JSON. It refuses
-  paths under `data/inbox/`, archived `data/staging/done/`, and `dist/`. It never
-  changes an existing ID. Check-only output may show a `proposal-only` repair,
-  but direct apply accepts only a current `ingest-safe` declaration whose target
-  fields are inside M7.1's automatic allowlist. A `proposal-only` repair can
-  write only a proposal-shaped staging file. A `revoked` repair can do neither.
-  No direct-apply confirmation can cross this mode or field boundary.
+  `source.raw_fields["janki_repairs"]` annotation as canonical JSON.
+
+  Check and apply accept only a regular, record-shaped file under the resolved
+  repository's `data/normalized/` or active `data/staging/` root. They bind its
+  canonical repository-relative path and require the strict expected schema.
+  They reject every other root, proposal-shaped files, archive paths, absolute
+  escapes, `..`, symlinks in any path component, non-regular files, and a file
+  identity or revision that changes during safe open. These checks apply on
+  every read and again before atomic replace. A proposal generator creates its
+  output only through the same safe staging-path helper. It never accepts an
+  output path from repair data.
+
+  Apply never changes an existing ID. Check-only output may show a
+  `proposal-only` repair, but direct apply accepts only a current `ingest-safe`
+  declaration whose target fields are inside M7.1's automatic allowlist. A
+  `proposal-only` repair can write only a proposal-shaped staging file. A
+  `revoked` repair can do neither. No direct-apply confirmation can cross this
+  mode or field boundary.
 - Only repairs explicitly marked `ingest-safe` may run automatically, and only
   while a new candidate is being normalized before it becomes curated. The M7.1
   protected fields remain default-deny. An existing identity-field disagreement
@@ -2756,11 +2770,12 @@ giving an agent general write access to curated content.
 Tests also cover a file changed after check-only preview; unchanged input with a
 changed repair version, order, evidence, or diff; a file changed after the
 in-process confirmation but before replace; partial failure (original intact);
-an attempted undeclared input read; an undeclared write or changed provenance
-that changes the intended output; multiple repairs in deterministic order;
-canonical provenance; and a semantic proposal that reaches staging without
-touching the source record. Undeclared-read tests cover the precondition,
-transformation, and postcondition separately. Proposal tests cover
+an outside-root path, parent traversal, symlink component, non-regular file, and
+file-identity swap; an attempted undeclared input read; an undeclared write or
+changed provenance that changes the intended output; multiple repairs in
+deterministic order; canonical provenance; and a semantic proposal that reaches
+staging without touching the source record. Undeclared-read tests cover the
+precondition, transformation, and postcondition separately. Proposal tests cover
 ordinary-promote refusal without pruning, duplicate record/field entries,
 target and basis staleness, an accepted target used by another proposal,
 unrelated and related partial acceptance, per-field accept/reject/quit,
@@ -2849,7 +2864,8 @@ variants of the same table.
 Use the same size, full-pipeline, classification, case, and no-generated-output
 requirements as M7.6A. At least one pilot must force a human reading decision;
 the correct result is a held row followed by review, never a confident guessed
-reading minted into an ID.
+reading minted into an ID. Its staging archive keeps the M7.1 approval record
+bound to the exact source, locator, expression, reading, and reviewed evidence.
 
 ### [ ] M7.7 Live extraction eval + release scorecard
 
@@ -2904,6 +2920,15 @@ changes with a model or prompt: can it still read the source?
   and plans the exact new baseline bytes. The confirmation binds the exact
   report fingerprint, manifest fingerprint, and diff.
 
+  Eval writes one self-contained run directory under `dist/hardening/`.
+  Baseline acceptance requires a regular report in that root. Every raw-result
+  path is a declared relative file in the same run directory. The safe loader
+  rejects absolute paths, `..`, symlinks in any component, non-regular files,
+  undeclared result files, root escape after resolution, and file-identity or
+  revision changes during open. It applies the same checks on the initial read
+  and the post-confirmation rehash. No report field can select another input or
+  output path.
+
   After confirmation, the command rehashes the report and every manifest input.
   It uses those reads only to compare fingerprints; it does not replace the
   validated report or planned baseline with new content. It refuses if a
@@ -2927,10 +2952,11 @@ Tests: fake live responses; explicit private-case selection; source, case,
 provider, resolved-model, and purpose consent boundaries; six-pilot matrix
 completeness; score calculations; baseline compare/accept refusal conditions;
 report-to-manifest mismatch; a forged summary; report, raw result, baseline, or
-manifest input changed after display; prompt drift; and stable JSON suitable for
-review in git. An evaluation run writes only under `dist/`. The separately
-confirmed acceptance operation has one non-`dist/` write: the atomic update of
-`quality/baseline.json`.
+manifest input changed after display; outside-root, parent-traversal, symlink,
+non-regular, undeclared-result, and file-identity-swap paths; prompt drift; and
+stable JSON suitable for review in git. An evaluation run writes only under
+`dist/`. The separately confirmed acceptance operation has one non-`dist/`
+write: the atomic update of `quality/baseline.json`.
 
 ### [ ] M7.W Milestone 7 wrap and operating cadence
 
