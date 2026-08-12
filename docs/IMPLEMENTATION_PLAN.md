@@ -2320,8 +2320,10 @@ deck exposes a defect. This is a behavior contract before it is a CLI:
    locator (page/row/region or note/field), pipeline stage, and exact command.
 2. Classify the correction as `content-specific` or `systemic`, with a short
    reason. When uncertain, choose content-specific and keep it staged.
-3. For a systemic defect, open a finding and make the smallest shareable case
-   that still fails. Do not put an entire owner-provided work into a fixture.
+3. For a systemic defect, open a finding and make the smallest permissible case
+   that still fails: a redistributable minimized fixture or a fingerprinted
+   private-inbox reference. Do not put an entire owner-provided work into a
+   fixture.
 4. Fix the earliest production boundary that can state the rule reliably. A
    prompt change is appropriate for model behavior, but it still needs an
    offline case for downstream handling and a live evaluation case for the
@@ -2336,9 +2338,15 @@ Pin the repair boundary in both docs: an unattended repair may update derived
 or presentation data only when its evidence predicate proves the result. It may
 not change an existing record's `id`, `expression`, `reading`, meanings,
 part-of-speech/verb classification, transitivity, pitch accent, or Japanese or
-English example text. A proposed change to any of those fields goes through a
-staging diff and human promotion. A future task may widen this list only by
-amending this contract with a concrete invariant and adversarial fixtures.
+English example text. Existing identity (`id`, `expression`, and `reading`) is
+never a repair proposal either: it determines the Anki GUID, so a finding there
+stays blocked and names the manual migration/history decision it needs. A new
+candidate's identity is still reviewed in staging before its first promotion.
+For the remaining protected content fields, a proposed change uses M7.5's
+fingerprinted, field-scoped staging diff and explicit human acceptance path; an
+ordinary `janki promote` must never consume it. A future task may widen the
+automatic list only by amending this contract with a concrete invariant and
+adversarial fixtures.
 
 Add an AGENTS.md rule that a systemic defect found during a deck task is not
 complete when only the current data row is corrected: it must follow this
@@ -2364,46 +2372,74 @@ into another opaque ledger.
   pipeline stage, source archetype(s), concise symptom, invariant violated,
   evidence references (content fingerprint plus locator; no absolute paths),
   linked case IDs, and the production fix or deferral rationale. `fixed`
-  requires at least one case and fix reference; `accepted-risk` requires a
-  repository-owner approval and reason. Unknown keys and dangling case IDs are
-  errors rather than being discarded. Content-specific corrections are counted
-  in pilot reports but do not bloat this catalog.
+  requires at least one declared case ID and fix reference; existence and the
+  reverse link become enforceable when M7.3 defines case discovery.
+  `accepted-risk` requires a repository-owner approval and reason. Unknown keys
+  and malformed link IDs are errors rather than being discarded.
+  Content-specific corrections are counted in pilot reports but do not bloat
+  this catalog.
 - Each `quality/pilots/<id>.yaml` records the source fingerprint and archetype,
-  whether redistribution is allowed, the human oracle size, extracted,
-  omitted, held, promoted, and rejected counts, content-specific and systemic
-  correction counts, repair applications, false-positive repairs, model and
-  prompt fingerprints, linked finding/case IDs, and whether the deck completed
-  extract → review → promote → enrich → audio → final review → build. These are
-  measurements, not generated packages; `dist/` remains disposable.
+  whether redistribution is allowed, its unit-oracle ID, repeatable-eval case
+  ID, extracted, omitted, held, promoted, and rejected counts,
+  content-specific and systemic correction counts, repair applications,
+  false-positive repairs, model and prompt fingerprints, linked finding IDs,
+  and whether the deck completed extract → review → promote → enrich → audio →
+  final review → build. M7.2 validates the link syntax; M7.3 validates the
+  targets once it owns their schemas. These are measurements, not generated
+  packages; `dist/` remains disposable.
 - `janki harden status [--format text|json]` validates both document shapes,
-  reports open/deferred findings, broken links, recurrences, case coverage,
-  repair false positives, incomplete pilots, and which source-archetype cells
-  in M7.6 remain empty. Paths in output are repository-relative.
+  reports open/deferred findings, recurrences, repair false positives,
+  incomplete pilots, and which source-archetype cells in M7.6 remain empty.
+  Case/oracle link resolution and corpus coverage are added in M7.3, after the
+  target format exists. Paths in output are repository-relative.
 - Parsing is strict and deterministic. Dates and prose do not participate in
   finding identity. Status is read-only; agents edit the reviewed YAML rather
   than gaining a command that silently rewrites decisions and comments.
 
 Tests: valid/invalid documents, unknown fields, path traversal, duplicate IDs,
-dangling links, the requirements for each terminal state, deterministic JSON,
-and a content-specific pilot edit that is counted without becoming a systemic
-finding.
+malformed link IDs, the requirements for each terminal state, deterministic
+JSON, and a content-specific pilot edit that is counted without becoming a
+systemic finding. Do not create a placeholder case parser merely to make M7.2
+appear to resolve links before M7.3.
 
 ### [ ] M7.3 Minimized case bundles + offline replay
 
 Depends on: M7.2
 Files: new `quality/cases/README.md`, new `quality/cases/` fixtures,
+new `quality/oracles/README.md`, new unit-oracle fixtures,
 new `src/japanese_anki/hardening_replay.py`, `src/japanese_anki/cli.py`,
-`tests/test_hardening_replay.py`, `Makefile`.
+`src/japanese_anki/hardening.py`, `quality/findings.yaml`,
+`tests/test_hardening.py`, `tests/test_hardening_replay.py`, `Makefile`.
 
 Give every systemic lesson a portable reproduction that exercises production
 code and can run without a network key.
 
+- A human unit oracle lives at `quality/oracles/<oracle-id>.yaml` and pins one
+  source SHA-256. An `exhaustive` table/list oracle inventories ordered, unique
+  page/section/ordinal unit keys, normalized-context fingerprints, and expected
+  dispositions. A `selection` prose oracle inventories the human-chosen target
+  identities and locators plus its selection rubric, but never claims the rest
+  of the page is accounted for. Its manifest schema and safe path/hash loader
+  land here so cases, pilots, and status share one definition. M7.4 teaches
+  extraction to produce and compare these facts; M7.3 only validates and
+  replays canned facts without making a model call.
 - One case lives at `quality/cases/<case-id>/case.yaml` beside only the minimal
-  artifacts it needs. The manifest names a registered runner (never a shell
-  command or import path from YAML), pipeline boundary, linked finding, source
-  archetype, fixture hashes, oracle, and redistribution status. Reject absolute
-  paths, `..`, symlink escapes, hash mismatches, unknown runners, and undeclared
-  files.
+  artifacts it needs. Its `purpose` is either `regression` or `coverage`: a
+  regression case must link one systemic finding; a coverage case must link one
+  pilot and its human unit oracle and does not invent a finding merely to satisfy
+  the schema. The manifest also names a registered runner (never a shell command
+  or import path from YAML), pipeline boundary, source archetype, fixture hashes,
+  oracle, and redistribution status.
+- A model-boundary case has exactly one source form. `bundled_fixture` names a
+  minimized file inside the case and requires `redistributable: true`.
+  `private_inbox_ref` names a repository-relative immutable file under
+  `data/inbox/`, pins its SHA-256 without copying its pixels, requires
+  `redistributable: false`, and carries a separate repository-owner
+  `live_eval_consent` decision plus reason. Consent permits sending that exact
+  fingerprint to the configured model; it does not permit redistribution. A
+  changed or missing private source is unavailable, never silently replaced.
+  Reject absolute paths, `..`, symlink escapes, paths outside those two roots,
+  hash mismatches, unknown runners, and undeclared bundled files.
 - Initial runners cover the boundaries real decks have already stressed:
   candidate-response → staging records, staging read/rewrite/promote with fake
   lookup evidence, record validation/QC, and finished-record render/build. They
@@ -2411,9 +2447,10 @@ code and can run without a network key.
   agree with the same bug and is not a regression test.
 - A model-boundary case may keep a canned structured response so routine replay
   proves how janki handles that response. If the failure was the model's
-  extraction itself, the case also keeps a shareable source crop and a human
+  extraction itself, the case uses one of the two source forms above and a human
   oracle for M7.7. Offline replay does **not** claim the current model would read
-  the pixels correctly.
+  the pixels correctly and never decodes or sends a private visual fixture;
+  manifest validation may stream its bytes only to verify the pinned hash.
 - Oracles compare structural facts exactly—source-unit accounting, record IDs,
   held rows, diagnostic codes, field changes, and rendered invariants. Do not
   golden-test arbitrary model prose when the contract is semantic.
@@ -2423,45 +2460,71 @@ code and can run without a network key.
   corpus. An open finding may have a reproducing red case, but it is explicitly
   marked non-gating until the fix lands; closing it flips that case into the
   permanent gate.
+- Extend `janki harden status` with the case/oracle knowledge M7.2 deliberately
+  did not guess: validate both directions of finding, pilot, oracle, and case
+  links; report dangling or mismatched links and case coverage; and refuse a
+  `fixed` finding whose case is absent or still marked non-gating.
 
 Seed the corpus by minimizing at least the already-understood Yotsubato defects:
 POS precedence, impossible per-character furigana, missing furigana separator,
-and an AI response that produces no writable change. These are not new fixes;
-they prove the bundle format against known production behavior.
+and an AI response that produces no writable change. Add their fixed finding
+entries and reciprocal case links to `quality/findings.yaml` in the same task;
+these are not new fixes, but they prove the bundle and catalog formats together
+against known production behavior.
 
-Tests: manifest safety, hash checks, every runner, stable discovery ordering,
-open-versus-fixed gate behavior, and a deliberate production mutant that makes
-the corresponding case fail. No runner may make a live network call.
+Tests: unit-oracle duplicate keys and malformed hashes; both case purposes and
+source forms; reciprocal/dangling links; manifest safety; consent validation;
+hash checks; every runner; stable discovery ordering; open-versus-fixed gate
+behavior; and a deliberate production mutant that makes the corresponding case
+fail. No runner may make a live network call or read a private visual source.
 
 ### [ ] M7.4 Extraction accounting and prompt provenance
 
 Depends on: M7.2, M7.3
 Files: `src/japanese_anki/extract.py`, `src/japanese_anki/staging.py`,
 `src/japanese_anki/promote.py`, `src/japanese_anki/cli.py`,
-`tests/test_extract.py`, `tests/test_promote.py`, new hardening cases.
+`src/japanese_anki/validation.py`,
+`tests/test_extract.py`, `tests/test_promote.py`,
+`tests/test_validation.py`, new hardening cases and unit-oracle fixtures.
 
 Make “the model returned a plausible list” distinguishable from “the source was
 accounted for.” This is strict for table/list material and intentionally
 different for prose, where selection is judgement.
 
 - Replace the table-mode response's bare candidate list with source units. Each
-  unit carries page plus row/order locator, verbatim context, and exactly one
-  disposition: candidate, duplicate, non-vocabulary, or unreadable. Candidate
-  units link one-to-one to a candidate; every other unit gives a reason. Do not
-  deduplicate repeated source rows. Auto mode uses this contract for sections it
+  unit carries a stable page/section/ordinal key, verbatim context, and exactly
+  one disposition: candidate, duplicate, non-vocabulary, or unreadable.
+  Candidate units link one-to-one to a candidate; every other unit gives a
+  reason. Preserve repeated source rows as separate source units even when one
+  is correctly classified `duplicate`; never create two canonical records with
+  the same deterministic ID. Auto mode uses this contract for sections it
   identifies as tables; prose candidates retain `inclusion_reason` and are
   explicitly reported as coverage `unmeasured`, never “complete.”
-- Add `janki extract --expected-units N` for a human-counted table/list oracle.
-  Persist a `coverage` block in staging metadata with expected, reported,
-  candidate, omission, and unaccounted counts. Model-reported counts never
-  satisfy a human oracle by themselves.
-- A mismatch keeps the paid extraction as a staging file but marks promotion
-  blocked. A reviewer resolves it by adding/fixing the missing staging rows or
-  by adding an explicit coverage acceptance and reason to the file; the reason
-  survives in `data/staging/done/`. `janki promote` refuses an unresolved
-  coverage block before mutating records or the ledger. Files written before
-  this task remain valid with coverage `unmeasured` and are not retroactively
-  blocked.
+- Use M7.3's `exhaustive` human unit-oracle format for table/list coverage.
+  Define its context normalization once in production extraction code and
+  compare the exact key/fingerprint/disposition set—not its length—so omitting
+  row six while repeating row five cannot pass. A prose `selection` oracle feeds
+  M7.7's repeatable quality metrics but does not turn prose extraction into an
+  exhaustive promotion gate.
+- `janki extract --coverage-oracle FILE` is repeatable for multi-input runs; each
+  supplied oracle binds to exactly one prepared source by SHA-256, and duplicate
+  or unmatched bindings are errors before the first paid call. Inputs without a
+  supplied oracle follow the explicit `unmeasured` path below rather than
+  borrowing another file's count or oracle.
+  Persist the oracle ID/fingerprint and exact missing, unexpected, duplicate,
+  context-mismatched, candidate, omission, and unreadable unit sets in a
+  `coverage` block in staging metadata. Model-reported totals remain diagnostic
+  only and can never satisfy or replace the human oracle.
+- An oracle mismatch keeps the paid extraction as a staging file but marks
+  promotion blocked. A reviewer resolves it by correcting the source units and
+  corresponding staging records, rerunning against a corrected oracle, or
+  recording a field-by-field manual coverage acceptance and reason; the reason
+  survives in `data/staging/done/`. A newly extracted table with no oracle is
+  `unmeasured` and also needs a reasoned manual acceptance before promotion.
+  Prose selection remains reviewable but is not falsely treated as exhaustive.
+  `janki promote` refuses an unresolved coverage block before mutating records
+  or the ledger. Files written before this task remain valid with legacy
+  coverage `unmeasured` and are not retroactively blocked.
 - Record source SHA-256, mode, provider/model, response-schema version, and
   fingerprints of the system prompt, style guide, and user prompt in staging
   metadata. Never store an API key or absolute source path. This is sufficient
@@ -2471,17 +2534,20 @@ different for prose, where selection is judgement.
   additive output, not replacements for the current source filename and row or
   page detail.
 
-Tests: complete/missing/duplicate/unreadable rows, incorrect model self-count,
-human oracle mismatch, blocked promotion with no partial mutation, reasoned
-acceptance/archive, legacy staging compatibility, mixed table/prose reporting,
-prompt fingerprint changes, and no secrets or absolute paths in metadata.
+Tests: exact complete coverage; an omitted row replaced by a duplicate or
+invented row; missing/duplicate/context-mismatched/unreadable units; incorrect
+model self-count; source/oracle hash mismatch; multi-input binding before spend;
+blocked promotion with no partial mutation; reasoned acceptance/archive;
+legacy staging compatibility; mixed table/prose reporting; prompt fingerprint
+changes; and no secrets or absolute paths in metadata.
 
 ### [ ] M7.5 Named safe-repair registry + staged proposals
 
 Depends on: M7.2, M7.3
 Files: new `src/japanese_anki/repairs.py`, `src/japanese_anki/cli.py`,
 `src/japanese_anki/io.py`, `src/japanese_anki/staging.py`,
-new `tests/test_repairs.py`, new hardening cases.
+`src/japanese_anki/promote.py`, new `tests/test_repairs.py`,
+`tests/test_promote.py`, new hardening cases.
 
 Turn repeated mechanical fixes into constrained production behavior without
 giving an agent general write access to curated content.
@@ -2490,19 +2556,39 @@ giving an agent general write access to curated content.
   phase, allowed fields, pure precondition, transformation, postcondition, and
   provenance text. Applying it returns a field diff and evidence; it may not
   silently decline after claiming its precondition matched.
-- `janki repair PATH` is check-only and prints applicable repairs plus exact
-  diffs. `--apply CODE...` is required for committed staging/normalized data,
-  uses the records revision guard and atomic write path, revalidates the full
-  file, and records repair code/version in the namespaced
-  `source.raw_fields["janki_repairs"]` annotation. It refuses paths under
-  `data/inbox/`, archived `data/staging/done/`, and `dist/`, and never changes an
-  existing ID. If the file changed after the check, the apply refuses and asks
-  for a rerun.
+- `janki repair PATH` is check-only and prints applicable repairs, exact diffs,
+  and the input revision. `--apply CODE...` recomputes and prints those diffs in
+  the same process, captures the revision before displaying them, requires an
+  interactive confirmation, and compare-and-swap writes against that captured
+  revision. For a non-interactive caller, check-only JSON supplies the revision
+  and `--apply` requires an exact `--expected-revision`; a mismatch refuses
+  before any edit. There is no unbound `--yes` path. Apply revalidates the full
+  file through the atomic write path and records repair code/version in the
+  namespaced `source.raw_fields["janki_repairs"]` annotation as a canonical JSON
+  string. It refuses paths under `data/inbox/`, archived `data/staging/done/`,
+  and `dist/`, and never changes an existing ID.
 - Only repairs explicitly marked `ingest-safe` may run automatically, and only
   while a new candidate is being normalized before it becomes curated. The M7.1
-  protected fields remain default-deny; a repair that wants to suggest one of
-  those changes writes a normal staging proposal instead. No `--yes` or force
-  flag bypasses that boundary.
+  protected fields remain default-deny. An existing identity-field disagreement
+  becomes a blocking finding, never a repair. A repair that wants to suggest a
+  non-identity protected content change writes a **proposal-shaped** staging
+  file containing its code/version, base record and file fingerprints, and the
+  exact allowed old/new field values. It never touches the source record.
+- Ordinary `janki promote` refuses a proposal-shaped file and directs the user
+  to `janki promote FILE --accept-proposals`, so the current existing-wins merge
+  cannot report a conflict and then archive/delete the only proposal.
+  `--accept-proposals` is valid only for that shape: it reloads the normalized
+  records, refuses any stale base fingerprint, rejects identity or undeclared
+  fields, displays each field diff, and asks `y/n/q` per record. It applies only
+  accepted fields under the records revision guard, validates the full result,
+  leaves rejected/unreviewed proposals in staging, and archives accepted ones
+  with the repair provenance. The annotation is explicitly carried onto the
+  existing source record by this path; it is not entrusted to ordinary
+  existing-wins source merging.
+- No force, generic `prefer-incoming`, or noninteractive confirmation flag
+  bypasses either repair boundary. A future batch acceptance path would need the
+  same proposal and records fingerprints, plus an externally supplied approval
+  artifact, before it could be added.
 - Seed the registry by wrapping an existing proven mechanical correction, not
   inventing a new semantic rule for the sake of the framework. Furigana
   separator insertion is eligible only when the existing jpdb tokenization and
@@ -2514,17 +2600,22 @@ giving an agent general write access to curated content.
   positive in M7 pilots demotes that repair from automatic to proposal-only
   until a narrower precondition lands.
 
-Tests also cover concurrent edits, partial failure (original intact), multiple
-repairs in deterministic order, provenance stability, and a semantic proposal
-that reaches staging without touching the source record.
+Tests also cover a file changed after check-only preview, a file changed after
+the in-process confirmation but before replace, partial failure (original
+intact), multiple repairs in deterministic order, canonical provenance, and a
+semantic proposal that reaches staging without touching the source record.
+Proposal tests cover ordinary-promote refusal without pruning, stale proposal
+refusal, per-field acceptance/rejection/quit, protected identity fields, source
+annotation carry, and accepted-only archive behavior.
 
 ### [ ] M7.6A Pilot pair — born-digital structure
 
 Depends on: M7.4, M7.5
 Files: two new immutable source copies placed under `data/inbox/` by the input
 pipeline (never hand-edited), corresponding staging archives, curated
-records/deck definitions under `data/`, two `quality/pilots/*.yaml`, new
-findings/cases/tests exposed by the pilots.
+records/deck definitions under `data/`, two `quality/pilots/*.yaml`, two unit
+oracles and two purpose-`coverage` case bundles, plus new findings/regression
+cases/tests exposed by the pilots.
 
 Build two small, genuinely different source slices end to end: one native PDF
 table/grid and one multi-column or mixed prose-and-table PDF. Inventory the
@@ -2539,13 +2630,24 @@ case before this task becomes `[x]`; a deferred systemic defect leaves this
 pilot incomplete. Record content-specific corrections and repair outcomes in
 the pilot reports. Do not commit `.apkg` files.
 
+Every pilot source also produces one repeatable purpose-`coverage` case even
+when it exposes no systemic defect. The case links the pilot's exact human unit
+oracle and uses either a minimized redistributable source slice or the exact
+fingerprinted `private_inbox_ref` with repository-owner live-eval consent. The
+source slice must be the material actually used for that pilot, not a cleaner
+substitute created after the fact. A pilot without a source that can be sent on
+a later evaluation run remains incomplete; use another suitable source rather
+than silently leaving an archetype out of the baseline. Regression cases for
+systemic findings are additional and may point at the same minimized evidence.
+
 ### [ ] M7.6B Pilot pair — scans and camera captures
 
 Depends on: M7.4, M7.5
 Files: two new immutable source copies placed under `data/inbox/` by the input
 pipeline (never hand-edited), corresponding staging archives, curated
-records/deck definitions under `data/`, two `quality/pilots/*.yaml`, new
-findings/cases/tests exposed by the pilots.
+records/deck definitions under `data/`, two `quality/pilots/*.yaml`, two unit
+oracles and two purpose-`coverage` case bundles, plus new findings/regression
+cases/tests exposed by the pilots.
 
 Build one scanned/skewed or low-contrast page and one phone photo with realistic
 perspective, lighting, or background clutter. Use real owner-provided material;
@@ -2563,8 +2665,9 @@ content and declare whether the pixels may be committed.
 Depends on: M7.4, M7.5
 Files: two new immutable source copies placed under `data/inbox/` by the input
 pipeline (never hand-edited), corresponding staging archives, curated
-records/deck definitions under `data/`, two `quality/pilots/*.yaml`, new
-findings/cases/tests exposed by the pilots.
+records/deck definitions under `data/`, two `quality/pilots/*.yaml`, two unit
+oracles and two purpose-`coverage` case bundles, plus new findings/regression
+cases/tests exposed by the pilots.
 
 Build two sources from the remaining hard cases: vertical text, dense annotated
 screenshots, handwritten board/notes, ruby already printed over kanji, or a
@@ -2587,34 +2690,49 @@ Files: `src/japanese_anki/hardening_eval.py` (new),
 Separate deterministic regression safety from the question that actually
 changes with a model or prompt: can it still read the source?
 
-- `janki harden eval [CASE...] --model ID` runs only cases with a shareable
-  visual fixture and human oracle, makes no curated/staging/ledger writes, and
-  emits a scorecard plus raw structured responses under `dist/`. Private inbox
-  sources are excluded by default and require an explicit per-case consent
-  marker; a broad `--include-private` switch is not enough.
-- Compare identities, human-inventoried source-unit coverage, unsupported
-  additions, holds/uncertainty, and diagnostic counts. Exact model wording is
-  not a metric. Record provider/model, schema and all prompt fingerprints,
-  request date, and token usage so a later difference is explainable.
-- `make eval-live` is opt-in and never a dependency of `make gates`; tests fake
-  the transport. `make gates` continues to run the offline corpus and never
-  needs a secret or spends money.
+- `janki harden eval CASE... --model ID` runs only purpose-`coverage` and
+  model-boundary regression cases with a human unit oracle. A bundled fixture
+  must be redistributable. A private inbox reference must match its pinned hash,
+  carry repository-owner live-eval consent, **and be named explicitly on this
+  invocation**; neither an empty case list nor a broad `--include-private`
+  switch can send it. Evaluation makes no curated/staging/ledger writes and
+  emits a scorecard plus raw structured responses under `dist/`.
+- For `exhaustive` oracles compare exact source-unit keys, context fingerprints,
+  dispositions, identities, unsupported additions, and holds/uncertainty. For
+  prose `selection` oracles compare the inventoried target identities and
+  locators plus unsupported additions, but label the rest of the page
+  unmeasured. Exact model wording is not a metric. Record provider/model, schema
+  and all prompt fingerprints, request date, and token usage so a later
+  difference is explainable.
+- The initial accepted scorecard, and every release comparison after it, must
+  include the purpose-`coverage` case linked from each of the six M7.6 pilot
+  reports. Refuse an incomplete or duplicate pilot set; one easy table case
+  cannot stand in for an uncovered scan, camera, or adversarial-layout cell.
+- `make eval-live` is opt-in and never a dependency of `make gates`; its target
+  enumerates the six reviewed case IDs rather than discovering private sources
+  broadly. Tests fake the transport. `make gates` continues to run the offline
+  corpus and never needs a secret or spends money.
 - `quality/baseline.json` is updated only by
   `janki harden eval --accept-baseline REPORT`, which shows the old/new
-  scorecard diff and requires confirmation. Refuse acceptance when any fixed
-  systemic case regresses, a human-inventoried table unit is silently
-  unaccounted, a promoted identity is wrong, or an automatic repair has a false
-  positive. Semantic/content correction rates are displayed by source
-  archetype rather than collapsed into a misleading single accuracy score.
+  scorecard diff and requires confirmation. It also verifies all six current
+  pilot/case/oracle links and current prompt fingerprints. Refuse acceptance
+  when the six-case matrix is incomplete, any fixed systemic case regresses, a
+  human-inventoried source unit is missing/duplicated/context-mismatched, a
+  promoted identity is wrong, or an automatic repair has a false positive.
+  Semantic/content correction rates are displayed by source archetype rather
+  than collapsed into a misleading single accuracy score.
 - `janki harden status` incorporates the accepted baseline and reports prompt
   drift (current fingerprints differ without an accepted eval), recurring
   finding codes, source-archetype coverage, and correction/repair trends across
   pilots. Do not claim statistical improvement from six samples; these are
   guardrails and directional measurements.
 
-Tests: fake live responses, consent boundary, zero writes outside `dist/`,
-score calculations, baseline compare/accept refusal conditions, prompt drift,
-and stable JSON suitable for reviewing in git.
+Tests: fake live responses, explicit private-case selection and consent/hash
+boundaries, six-pilot matrix completeness, score calculations, baseline
+compare/accept refusal conditions, prompt drift, and stable JSON suitable for
+reviewing in git. An evaluation run writes only under `dist/`; the separately
+confirmed acceptance operation's sole non-`dist/` write is the atomic update of
+`quality/baseline.json`.
 
 ### [ ] M7.W Milestone 7 wrap and operating cadence
 
@@ -2634,7 +2752,9 @@ Files: `README.md`, `docs/QUALITY.md`, `docs/IMPORTING.md`,
   applications and false positives, and live-eval prompt/model fingerprints.
 - Completion gate: all six pilot reports are complete; every systemic finding
   is fixed with a passing case or carries a user-approved accepted-risk reason;
-  the entire fixed corpus replays in `make gates`; no table unit disappeared
-  silently; every promoted identity passed review; and every enabled automatic
-  repair is idempotent with zero known false positives. These are the evidence
-  that the loop works. More total cards, by itself, is not.
+  the entire fixed corpus replays in `make gates`; the accepted live baseline
+  contains the six pilot-linked coverage cases with current source/oracle and
+  prompt fingerprints; no inventoried source unit disappeared, duplicated, or
+  changed context silently; every promoted identity passed review; and every
+  enabled automatic repair is idempotent with zero known false positives. These
+  are the evidence that the loop works. More total cards, by itself, is not.
