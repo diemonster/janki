@@ -232,7 +232,14 @@ def test_unknown_fields_are_errors(
 
 @pytest.mark.parametrize(
     "locator",
-    ["../private/source.pdf", "/tmp/source.pdf", "C:\\source.pdf", "https://x.test/a"],
+    [
+        "../private/source.pdf",
+        "/tmp/source.pdf",
+        "C:\\source.pdf",
+        "\\rooted\\source.pdf",
+        "https://x.test/a",
+        "https:\\x.test\\a",
+    ],
 )
 def test_evidence_locator_rejects_path_traversal_and_external_locations(
     tmp_path: Path,
@@ -246,6 +253,16 @@ def test_evidence_locator_rejects_path_traversal_and_external_locations(
     assert _run(root) == 1
 
     assert "repository-relative locator" in capsys.readouterr().err
+
+
+def test_relative_locator_uses_canonical_separators(tmp_path: Path) -> None:
+    finding = _finding()
+    finding["evidence"][0]["locator"] = "quality\\evidence\\source.json"
+    root = _project(tmp_path, findings=[finding])
+
+    loaded = hardening.load_findings(root).findings[0]
+
+    assert loaded.evidence[0].locator == "quality/evidence/source.json"
 
 
 def test_fix_reference_rejects_path_traversal(

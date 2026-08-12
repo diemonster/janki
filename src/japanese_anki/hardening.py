@@ -353,8 +353,8 @@ def _locator(value: Any, where: str) -> str:
     windows = PureWindowsPath(result)
     if (
         "\x00" in result
-        or result.startswith(("/", "~"))
-        or "://" in result
+        or normalized.startswith(("/", "~"))
+        or re.match(r"[A-Za-z][A-Za-z0-9+.-]*:/", normalized)
         or windows.is_absolute()
         or windows.drive
         or ".." in normalized.split("/")
@@ -362,7 +362,7 @@ def _locator(value: Any, where: str) -> str:
         raise HardeningError(
             f"{where} must be a repository-relative locator without path traversal"
         )
-    return result
+    return normalized
 
 
 def _unique(values: Sequence[str], where: str) -> tuple[str, ...]:
