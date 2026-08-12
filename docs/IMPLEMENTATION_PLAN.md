@@ -2208,7 +2208,7 @@ batch mode; this does not.
 - Keep the one-at-a-time path: it is right for a handful, and `q` stopping
   the spend is a real property.
 
-### [ ] M6.6 The remaining 688 Yotsubato records
+### [~] M6.6 claimed codex/main 2026-08-12 — The remaining 688 Yotsubato records
 
 Depends on: M6.3, M6.4, M6.5
 Files: `data/staging/anki-yotsubato-volume-1-reading-pack-vocab.yaml`,
