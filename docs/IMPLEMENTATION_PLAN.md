@@ -2261,3 +2261,380 @@ instead of looking like one still running) travels with neither.
 - Keep the kill switch: `.claude/hooks/DISABLED` turns both hooks off and
   says so on every commit and push. **Currently in place** — delete that
   file to re-enable.
+
+---
+
+## Milestone 7 — Deck-driven hardening (the repository learns)
+
+The Yotsubato rollout proved the useful half of the loop: a real deck exposes
+failures that synthetic unit tests did not, and a systemic failure can become a
+deterministic rule instead of costing a human again. What is missing is the
+durable protocol around that behavior. Today an agent can fix the current card,
+write an ordinary test, or improve a prompt, but nothing requires it to say
+which kind of lesson it learned, preserve a minimal reproduction, replay every
+past lesson, or prove that an automatic repair cannot damage a different card.
+
+**“Self-healing” has a deliberately narrow meaning in this milestone.** After a
+systemic failure has been diagnosed once, a later run must either avoid it,
+repair it with a named deterministic transformation whose pre- and
+postconditions pass, or stop with an actionable finding. It does not mean model
+weight updates, cross-run hidden memory, or allowing a model to rewrite curated
+Japanese unattended. The repository is the memory: cases, fixtures, rules,
+repair functions, prompt versions, decisions, and tests all travel with it.
+
+Four boundaries apply to every M7 task:
+
+1. **Classify before generalizing.** A source-specific correction (this gloss is
+   wrong, this handwritten kana is ambiguous) stays a curated edit. A systemic
+   correction (this layout loses the second column, this parser always chooses
+   the wrong POS) becomes a finding and a regression case. Agents must not turn
+   one ambiguous example into a global rule.
+2. **Evidence before automation.** Automatic repair is default-deny. A repair
+   needs a stable code, a narrow precondition, an invariant explaining why
+   meaning and identity are preserved, a postcondition, an idempotence test, and
+   both a positive and a near-miss fixture. Stored curated records are never
+   changed merely because a new repair exists.
+3. **No model grades itself.** Model-reported row counts, confidence, and
+   omissions are useful evidence, not ground truth. Pilot oracles come from a
+   human inventory of the source. Semantic judgements remain reviewable.
+4. **Keep private source material private by default.** `data/inbox/` remains
+   the immutable evidence. A full PDF or photo is not copied into the regression
+   corpus merely because it found a bug. Cases use a minimized, cropped,
+   redacted, or synthetic fixture; committing source pixels requires an explicit
+   redistribution declaration. A source fingerprint and locator preserve the
+   link back to private evidence without duplicating it.
+
+Lane map: {M7.1} → {M7.2} → {M7.3} → {M7.4, M7.5} →
+{M7.6A, M7.6B, M7.6C in parallel} → {M7.7} → {M7.W}.
+
+### [ ] M7.1 The hardening protocol and safety contract
+
+Depends on: —
+Files: new `docs/HARDENING.md`, `AGENTS.md`,
+`docs/IMPLEMENTATION_PLAN.md` (task completion note only).
+
+Write the procedure an agent follows whenever building or reviewing a real
+deck exposes a defect. This is a behavior contract before it is a CLI:
+
+1. Reproduce the observed behavior and preserve the source fingerprint,
+   locator (page/row/region or note/field), pipeline stage, and exact command.
+2. Classify the correction as `content-specific` or `systemic`, with a short
+   reason. When uncertain, choose content-specific and keep it staged.
+3. For a systemic defect, open a finding and make the smallest shareable case
+   that still fails. Do not put an entire owner-provided work into a fixture.
+4. Fix the earliest production boundary that can state the rule reliably. A
+   prompt change is appropriate for model behavior, but it still needs an
+   offline case for downstream handling and a live evaluation case for the
+   prompt itself.
+5. Add or extend a deterministic validator when the same fact can now be
+   stated without judgement. Add a repair only within the safety boundary
+   below; otherwise emit a proposal or hold the record.
+6. Run the new case, the entire accumulated corpus, and `make gates`. Close the
+   finding only when it links to the passing case and the production fix.
+
+Pin the repair boundary in both docs: an unattended repair may update derived
+or presentation data only when its evidence predicate proves the result. It may
+not change an existing record's `id`, `expression`, `reading`, meanings,
+part-of-speech/verb classification, transitivity, pitch accent, or Japanese or
+English example text. A proposed change to any of those fields goes through a
+staging diff and human promotion. A future task may widen this list only by
+amending this contract with a concrete invariant and adversarial fixtures.
+
+Add an AGENTS.md rule that a systemic defect found during a deck task is not
+complete when only the current data row is corrected: it must follow this
+protocol or be recorded as an open/deferred finding. Conversely, require a
+content-specific edit to stay content-specific rather than manufacturing a
+general validator from one observation.
+
+Tests: documentation/link checks only; the schemas and executable enforcement
+arrive in M7.2/M7.3.
+
+### [ ] M7.2 Findings catalog + `janki harden status`
+
+Depends on: M7.1
+Files: new `src/japanese_anki/hardening.py`, new `quality/findings.yaml`,
+new `quality/pilots/README.md`, `src/japanese_anki/cli.py`, `AGENTS.md`,
+new `tests/test_hardening.py`.
+
+Make the lessons and rollout evidence machine-readable without turning them
+into another opaque ledger.
+
+- `quality/findings.yaml` is human-readable and committed. One systemic finding
+  has a stable slug, state (`open`, `fixed`, `deferred`, `accepted-risk`),
+  pipeline stage, source archetype(s), concise symptom, invariant violated,
+  evidence references (content fingerprint plus locator; no absolute paths),
+  linked case IDs, and the production fix or deferral rationale. `fixed`
+  requires at least one case and fix reference; `accepted-risk` requires a
+  repository-owner approval and reason. Unknown keys and dangling case IDs are
+  errors rather than being discarded. Content-specific corrections are counted
+  in pilot reports but do not bloat this catalog.
+- Each `quality/pilots/<id>.yaml` records the source fingerprint and archetype,
+  whether redistribution is allowed, the human oracle size, extracted,
+  omitted, held, promoted, and rejected counts, content-specific and systemic
+  correction counts, repair applications, false-positive repairs, model and
+  prompt fingerprints, linked finding/case IDs, and whether the deck completed
+  extract → review → promote → enrich → audio → final review → build. These are
+  measurements, not generated packages; `dist/` remains disposable.
+- `janki harden status [--format text|json]` validates both document shapes,
+  reports open/deferred findings, broken links, recurrences, case coverage,
+  repair false positives, incomplete pilots, and which source-archetype cells
+  in M7.6 remain empty. Paths in output are repository-relative.
+- Parsing is strict and deterministic. Dates and prose do not participate in
+  finding identity. Status is read-only; agents edit the reviewed YAML rather
+  than gaining a command that silently rewrites decisions and comments.
+
+Tests: valid/invalid documents, unknown fields, path traversal, duplicate IDs,
+dangling links, the requirements for each terminal state, deterministic JSON,
+and a content-specific pilot edit that is counted without becoming a systemic
+finding.
+
+### [ ] M7.3 Minimized case bundles + offline replay
+
+Depends on: M7.2
+Files: new `quality/cases/README.md`, new `quality/cases/` fixtures,
+new `src/japanese_anki/hardening_replay.py`, `src/japanese_anki/cli.py`,
+`tests/test_hardening_replay.py`, `Makefile`.
+
+Give every systemic lesson a portable reproduction that exercises production
+code and can run without a network key.
+
+- One case lives at `quality/cases/<case-id>/case.yaml` beside only the minimal
+  artifacts it needs. The manifest names a registered runner (never a shell
+  command or import path from YAML), pipeline boundary, linked finding, source
+  archetype, fixture hashes, oracle, and redistribution status. Reject absolute
+  paths, `..`, symlink escapes, hash mismatches, unknown runners, and undeclared
+  files.
+- Initial runners cover the boundaries real decks have already stressed:
+  candidate-response → staging records, staging read/rewrite/promote with fake
+  lookup evidence, record validation/QC, and finished-record render/build. They
+  must call production functions; a test-only copy of normalization logic can
+  agree with the same bug and is not a regression test.
+- A model-boundary case may keep a canned structured response so routine replay
+  proves how janki handles that response. If the failure was the model's
+  extraction itself, the case also keeps a shareable source crop and a human
+  oracle for M7.7. Offline replay does **not** claim the current model would read
+  the pixels correctly.
+- Oracles compare structural facts exactly—source-unit accounting, record IDs,
+  held rows, diagnostic codes, field changes, and rendered invariants. Do not
+  golden-test arbitrary model prose when the contract is semantic.
+- `janki harden replay [CASE...] [--format text|json]` runs every fixed case by
+  default and exits nonzero on a mismatch. Pytest parametrizes over the same
+  discovery API, so `make gates` automatically replays the complete fixed
+  corpus. An open finding may have a reproducing red case, but it is explicitly
+  marked non-gating until the fix lands; closing it flips that case into the
+  permanent gate.
+
+Seed the corpus by minimizing at least the already-understood Yotsubato defects:
+POS precedence, impossible per-character furigana, missing furigana separator,
+and an AI response that produces no writable change. These are not new fixes;
+they prove the bundle format against known production behavior.
+
+Tests: manifest safety, hash checks, every runner, stable discovery ordering,
+open-versus-fixed gate behavior, and a deliberate production mutant that makes
+the corresponding case fail. No runner may make a live network call.
+
+### [ ] M7.4 Extraction accounting and prompt provenance
+
+Depends on: M7.2, M7.3
+Files: `src/japanese_anki/extract.py`, `src/japanese_anki/staging.py`,
+`src/japanese_anki/promote.py`, `src/japanese_anki/cli.py`,
+`tests/test_extract.py`, `tests/test_promote.py`, new hardening cases.
+
+Make “the model returned a plausible list” distinguishable from “the source was
+accounted for.” This is strict for table/list material and intentionally
+different for prose, where selection is judgement.
+
+- Replace the table-mode response's bare candidate list with source units. Each
+  unit carries page plus row/order locator, verbatim context, and exactly one
+  disposition: candidate, duplicate, non-vocabulary, or unreadable. Candidate
+  units link one-to-one to a candidate; every other unit gives a reason. Do not
+  deduplicate repeated source rows. Auto mode uses this contract for sections it
+  identifies as tables; prose candidates retain `inclusion_reason` and are
+  explicitly reported as coverage `unmeasured`, never “complete.”
+- Add `janki extract --expected-units N` for a human-counted table/list oracle.
+  Persist a `coverage` block in staging metadata with expected, reported,
+  candidate, omission, and unaccounted counts. Model-reported counts never
+  satisfy a human oracle by themselves.
+- A mismatch keeps the paid extraction as a staging file but marks promotion
+  blocked. A reviewer resolves it by adding/fixing the missing staging rows or
+  by adding an explicit coverage acceptance and reason to the file; the reason
+  survives in `data/staging/done/`. `janki promote` refuses an unresolved
+  coverage block before mutating records or the ledger. Files written before
+  this task remain valid with coverage `unmeasured` and are not retroactively
+  blocked.
+- Record source SHA-256, mode, provider/model, response-schema version, and
+  fingerprints of the system prompt, style guide, and user prompt in staging
+  metadata. Never store an API key or absolute source path. This is sufficient
+  to explain model drift without treating a model name as the full prompt.
+- Give deterministic extraction/validation failures stable diagnostic codes;
+  human-facing messages may improve without breaking case identity. Codes are
+  additive output, not replacements for the current source filename and row or
+  page detail.
+
+Tests: complete/missing/duplicate/unreadable rows, incorrect model self-count,
+human oracle mismatch, blocked promotion with no partial mutation, reasoned
+acceptance/archive, legacy staging compatibility, mixed table/prose reporting,
+prompt fingerprint changes, and no secrets or absolute paths in metadata.
+
+### [ ] M7.5 Named safe-repair registry + staged proposals
+
+Depends on: M7.2, M7.3
+Files: new `src/japanese_anki/repairs.py`, `src/japanese_anki/cli.py`,
+`src/japanese_anki/io.py`, `src/japanese_anki/staging.py`,
+new `tests/test_repairs.py`, new hardening cases.
+
+Turn repeated mechanical fixes into constrained production behavior without
+giving an agent general write access to curated content.
+
+- A repair declaration has a stable code and version, applicable pipeline
+  phase, allowed fields, pure precondition, transformation, postcondition, and
+  provenance text. Applying it returns a field diff and evidence; it may not
+  silently decline after claiming its precondition matched.
+- `janki repair PATH` is check-only and prints applicable repairs plus exact
+  diffs. `--apply CODE...` is required for committed staging/normalized data,
+  uses the records revision guard and atomic write path, revalidates the full
+  file, and records repair code/version in the namespaced
+  `source.raw_fields["janki_repairs"]` annotation. It refuses paths under
+  `data/inbox/`, archived `data/staging/done/`, and `dist/`, and never changes an
+  existing ID. If the file changed after the check, the apply refuses and asks
+  for a rerun.
+- Only repairs explicitly marked `ingest-safe` may run automatically, and only
+  while a new candidate is being normalized before it becomes curated. The M7.1
+  protected fields remain default-deny; a repair that wants to suggest one of
+  those changes writes a normal staging proposal instead. No `--yes` or force
+  flag bypasses that boundary.
+- Seed the registry by wrapping an existing proven mechanical correction, not
+  inventing a new semantic rule for the sake of the framework. Furigana
+  separator insertion is eligible only when the existing jpdb tokenization and
+  reading-evidence predicates agree. If that cannot meet the contract, use a
+  narrower derived-field repair and leave furigana as a proposal.
+- Every repair ships with: triggering case, at least two non-triggering near
+  misses, apply-twice idempotence, no-ID-change assertion, full-file validation,
+  and a mutation that proves the pre- or postcondition matters. A single false
+  positive in M7 pilots demotes that repair from automatic to proposal-only
+  until a narrower precondition lands.
+
+Tests also cover concurrent edits, partial failure (original intact), multiple
+repairs in deterministic order, provenance stability, and a semantic proposal
+that reaches staging without touching the source record.
+
+### [ ] M7.6A Pilot pair — born-digital structure
+
+Depends on: M7.4, M7.5
+Files: two new immutable source copies placed under `data/inbox/` by the input
+pipeline (never hand-edited), corresponding staging archives, curated
+records/deck definitions under `data/`, two `quality/pilots/*.yaml`, new
+findings/cases/tests exposed by the pilots.
+
+Build two small, genuinely different source slices end to end: one native PDF
+table/grid and one multi-column or mixed prose-and-table PDF. Inventory the
+source before extraction. Target 10–30 useful records per source (or the whole
+page when it contains fewer); the point is layout breadth, not another
+hundreds-row rollout.
+
+Complete extract → coverage review → promote → dictionary/AI enrichment →
+audio → final review → build for both. Every human correction is classified.
+A systemic correction must link an open finding before the fix and a passing
+case before this task becomes `[x]`; a deferred systemic defect leaves this
+pilot incomplete. Record content-specific corrections and repair outcomes in
+the pilot reports. Do not commit `.apkg` files.
+
+### [ ] M7.6B Pilot pair — scans and camera captures
+
+Depends on: M7.4, M7.5
+Files: two new immutable source copies placed under `data/inbox/` by the input
+pipeline (never hand-edited), corresponding staging archives, curated
+records/deck definitions under `data/`, two `quality/pilots/*.yaml`, new
+findings/cases/tests exposed by the pilots.
+
+Build one scanned/skewed or low-contrast page and one phone photo with realistic
+perspective, lighting, or background clutter. Use real owner-provided material;
+if no suitable licensed/private source is available, leave the task open rather
+than generating a clean mock-up and calling the capture path tested. At least
+one source should contain a cell the human marks unreadable or ambiguous, so the
+hold/omission path is exercised rather than only happy-path OCR.
+
+Use the same size, full-pipeline, classification, case, and no-generated-output
+requirements as M7.6A. Minimized regression crops must exclude unrelated page
+content and declare whether the pixels may be committed.
+
+### [ ] M7.6C Pilot pair — adversarial visual language
+
+Depends on: M7.4, M7.5
+Files: two new immutable source copies placed under `data/inbox/` by the input
+pipeline (never hand-edited), corresponding staging archives, curated
+records/deck definitions under `data/`, two `quality/pilots/*.yaml`, new
+findings/cases/tests exposed by the pilots.
+
+Build two sources from the remaining hard cases: vertical text, dense annotated
+screenshots, handwritten board/notes, ruby already printed over kanji, or a
+layout that interleaves Japanese-only and bilingual material. Choose two that
+fill different uncovered cells in `janki harden status`; do not pick two visual
+variants of the same table.
+
+Use the same size, full-pipeline, classification, case, and no-generated-output
+requirements as M7.6A. At least one pilot must force a human reading decision;
+the correct result is a held row followed by review, never a confident guessed
+reading minted into an ID.
+
+### [ ] M7.7 Live extraction eval + release scorecard
+
+Depends on: M7.6A, M7.6B, M7.6C
+Files: `src/japanese_anki/hardening_eval.py` (new),
+`src/japanese_anki/cli.py`, `Makefile`, `quality/baseline.json` (new),
+`tests/test_hardening_eval.py`, `docs/HARDENING.md`.
+
+Separate deterministic regression safety from the question that actually
+changes with a model or prompt: can it still read the source?
+
+- `janki harden eval [CASE...] --model ID` runs only cases with a shareable
+  visual fixture and human oracle, makes no curated/staging/ledger writes, and
+  emits a scorecard plus raw structured responses under `dist/`. Private inbox
+  sources are excluded by default and require an explicit per-case consent
+  marker; a broad `--include-private` switch is not enough.
+- Compare identities, human-inventoried source-unit coverage, unsupported
+  additions, holds/uncertainty, and diagnostic counts. Exact model wording is
+  not a metric. Record provider/model, schema and all prompt fingerprints,
+  request date, and token usage so a later difference is explainable.
+- `make eval-live` is opt-in and never a dependency of `make gates`; tests fake
+  the transport. `make gates` continues to run the offline corpus and never
+  needs a secret or spends money.
+- `quality/baseline.json` is updated only by
+  `janki harden eval --accept-baseline REPORT`, which shows the old/new
+  scorecard diff and requires confirmation. Refuse acceptance when any fixed
+  systemic case regresses, a human-inventoried table unit is silently
+  unaccounted, a promoted identity is wrong, or an automatic repair has a false
+  positive. Semantic/content correction rates are displayed by source
+  archetype rather than collapsed into a misleading single accuracy score.
+- `janki harden status` incorporates the accepted baseline and reports prompt
+  drift (current fingerprints differ without an accepted eval), recurring
+  finding codes, source-archetype coverage, and correction/repair trends across
+  pilots. Do not claim statistical improvement from six samples; these are
+  guardrails and directional measurements.
+
+Tests: fake live responses, consent boundary, zero writes outside `dist/`,
+score calculations, baseline compare/accept refusal conditions, prompt drift,
+and stable JSON suitable for reviewing in git.
+
+### [ ] M7.W Milestone 7 wrap and operating cadence
+
+Depends on: all M7 tasks
+Files: `README.md`, `docs/QUALITY.md`, `docs/IMPORTING.md`,
+`docs/PROJECT_PLAN.md`, `docs/HARDENING.md`.
+
+- Add the deck-driven workflow to the main docs: inventory → extract → review →
+  classify → capture systemic case → fix/repair → replay → finish deck. Explain
+  plainly that agents improve repository behavior, not model weights or hidden
+  memory.
+- Reconcile PROJECT_PLAN's later phases with this inserted hardening milestone;
+  direct local Anki sync remains a separate future capability and does not gain
+  write permission as a side effect of M7.
+- Publish the six-pilot scorecard by source archetype: oracle coverage, holds,
+  content-specific/systemic correction rates, fixed/deferred findings, repair
+  applications and false positives, and live-eval prompt/model fingerprints.
+- Completion gate: all six pilot reports are complete; every systemic finding
+  is fixed with a passing case or carries a user-approved accepted-risk reason;
+  the entire fixed corpus replays in `make gates`; no table unit disappeared
+  silently; every promoted identity passed review; and every enabled automatic
+  repair is idempotent with zero known false positives. These are the evidence
+  that the loop works. More total cards, by itself, is not.
