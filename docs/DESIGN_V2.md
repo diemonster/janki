@@ -385,7 +385,9 @@ starts tracking records it could never update.
 
 ## AI integration
 
-AI runs inside `janki` via the Anthropic Python SDK. `ANTHROPIC_API_KEY`
+Anthropic-backed AI runs inside `janki` via the Anthropic Python SDK.
+Immediate `enrich --ai` can instead launch the authenticated Codex CLI.
+`ANTHROPIC_API_KEY`
 from the environment (or an `ant auth login` profile — the SDK resolves
 it). The `prompts/` directory shrinks to what it is: documentation of
 review workflows for a human driving a coding agent, no longer the
@@ -418,7 +420,9 @@ enrichment mechanism.
   `enrich --ai --polish-meanings` — because meanings are never empty (the
   importer always fills them), so fill-empty semantics can never touch
   them. It always shows old→new per record and requires confirmation.
-- Default model `claude-opus-5`, configurable (`[ai] enrich_model`).
+- Immediate enrichment defaults to Codex `gpt-5.6-sol` at `ultra` reasoning;
+  provider, model, and reasoning effort are independently configurable.
+  Meaning polish and review retain separate Claude model settings.
 
 **Batch mode** (`enrich --ai --batch-submit` / `--batch-fetch`): the
 Message Batches API halves token cost but jobs can take hours, so it is
@@ -427,6 +431,13 @@ IDs persisted in the ledger — submit, walk away, fetch later; re-submit
 refuses while a batch is pending. Worth it for backfilling a
 thousand-word jpdb mining deck; pointless for the weekly ten words (which
 run synchronously in seconds for cents).
+
+`--polish-meanings` accepts the same batch actions for large source decks.
+Fetch preserves its per-record diff and y/n/q review; quitting records only
+the proposals still unseen, so another fetch resumes locally without another
+model call. Each request is fingerprinted at submission; a record edited while
+the batch is running keeps its newer curation and the older answer is reported
+and ignored.
 
 ## Audio
 
@@ -617,7 +628,11 @@ scan_inbox  = "data/inbox/scans"
 
 [ai]
 extract_model = "claude-opus-5"
-enrich_model  = "claude-opus-5"
+enrich_provider = "codex"
+enrich_model = "gpt-5.6-sol"
+enrich_reasoning_effort = "ultra"
+polish_model = "claude-opus-5"
+review_model = "claude-opus-5"
 
 [tts]
 provider     = "voicevox"          # or "azure"
@@ -680,9 +695,12 @@ free.
 - **Anki notetype upgrade on field append** — treated as unproven until
   tested (see Schema changes); this is the single biggest
   review-history-safety risk in the design.
-- **Concurrent writes**: vocabulary.json and ledger.json get atomic
-  temp-file+rename writes; true locking is out of scope for a single-user
-  tool.
+- **Concurrent writes**: vocabulary.json and ledger.json use atomic
+  temp-file+rename writes and refuse a whole-file save when the content changed
+  since that command read it. An interprocess lock spans the final comparison
+  and rename, so two writers cannot both validate the same old revision and
+  then replace one another. Locks live in a private per-user temporary or cache
+  directory rather than creating artifacts beside tracked data.
 
 ## Milestones
 

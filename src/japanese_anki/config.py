@@ -44,7 +44,15 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "profile",
     ),
     "cards": ("recognition", "production", "reading", "max_meanings"),
-    "ai": ("extract_model", "enrich_model", "adjudicate_model"),
+    "ai": (
+        "extract_model",
+        "enrich_provider",
+        "enrich_model",
+        "enrich_reasoning_effort",
+        "polish_model",
+        "review_model",
+        "adjudicate_model",
+    ),
     "tts": (
         "provider",
         "voicevox_url",
@@ -190,6 +198,16 @@ def _str(data: dict[str, Any], section: str, key: str, default: str) -> str:
     return value
 
 
+def _choice(
+    data: dict[str, Any], section: str, key: str, default: str, choices: tuple[str, ...]
+) -> str:
+    value = _str(data, section, key, default).strip().lower()
+    if value not in choices:
+        valid = ", ".join(repr(choice) for choice in choices)
+        raise ConfigError(f"[{section}] {key} must be one of {valid}, got {value!r}")
+    return value
+
+
 def _closest(candidate: str, options: tuple[str, ...] | list[str]) -> str | None:
     matches = difflib.get_close_matches(candidate, list(options), n=1, cutoff=0.6)
     return matches[0] if matches else None
@@ -295,7 +313,11 @@ class ProjectConfig:
     #: its dictionary entry. 0 means show them all.
     max_meanings: int
     extract_model: str
+    enrich_provider: str
     enrich_model: str
+    enrich_reasoning_effort: str
+    polish_model: str
+    review_model: str
     #: Settles a furigana disagreement between jpdb and the writer. Cheap on
     #: purpose: it picks between two given readings and never proposes one.
     #: Empty turns adjudication off and every disagreement stays flagged.
@@ -346,6 +368,31 @@ class ProjectConfig:
         def project_path(value: str) -> Path:
             return (project_root / value).resolve()
 
+        ai_table = data.get("ai", {})
+        legacy_ai = (
+            isinstance(ai_table, Mapping)
+            and "enrich_model" in ai_table
+            and "enrich_provider" not in ai_table
+        )
+        # Before providers and per-pass models existed, ``enrich_model`` meant
+        # Anthropic for --ai, meaning polish, and review. Preserve that exact
+        # configuration shape on upgrade; a newly configured Codex project
+        # names ``enrich_provider`` explicitly, as the generated config does.
+        enrich_provider = _choice(
+            data,
+            "ai",
+            "enrich_provider",
+            "anthropic" if legacy_ai else "codex",
+            ("codex", "anthropic"),
+        )
+        enrich_model = _str(
+            data,
+            "ai",
+            "enrich_model",
+            "claude-opus-5" if enrich_provider == "anthropic" else "gpt-5.6-sol",
+        )
+        legacy_shared_model = enrich_model if legacy_ai else "claude-opus-5"
+
         return cls(
             root=project_root,
             name=_str(data, "project", "name", "Japanese Anki"),
@@ -392,7 +439,13 @@ class ProjectConfig:
             },
             max_meanings=_int(data, "cards", "max_meanings", 4),
             extract_model=_str(data, "ai", "extract_model", "claude-opus-5"),
-            enrich_model=_str(data, "ai", "enrich_model", "claude-opus-5"),
+            enrich_provider=enrich_provider,
+            enrich_model=enrich_model,
+            enrich_reasoning_effort=_str(
+                data, "ai", "enrich_reasoning_effort", "ultra"
+            ),
+            polish_model=_str(data, "ai", "polish_model", legacy_shared_model),
+            review_model=_str(data, "ai", "review_model", legacy_shared_model),
             adjudicate_model=_str(
                 data, "ai", "adjudicate_model", "claude-haiku-4-5-20251001"
             ),

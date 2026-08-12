@@ -900,3 +900,90 @@ def test_a_case_only_edit_does_not_make_word_audio_look_stale() -> None:
     ) == ledger_module.word_audio_content_fingerprint(
         replace(upper, pitch_accent=["lhll"])
     )
+
+
+def test_batch_recovery_never_deletes_an_unknown_same_named_artifact(
+    tmp_path: Path,
+) -> None:
+    ledger_path = tmp_path / "ledger.json"
+    recovery_path = ledger_module.batch_recovery_path(ledger_path)
+    recovery_path.write_text("important unrelated content\n", encoding="utf-8")
+
+    with pytest.raises(LedgerError, match="recovery journal"):
+        ledger_module.clear_batch_recovery(ledger_path, "msgbatch_polish")
+
+    assert recovery_path.read_text(encoding="utf-8") == "important unrelated content\n"
+
+
+def test_a_second_fetch_cannot_replace_different_recovery_for_the_same_batch(
+    tmp_path: Path,
+) -> None:
+    ledger_path = tmp_path / "ledger.json"
+    entry = {
+        "kind": "polish",
+        "model": "claude-opus-5",
+        "submitted_at": "2026-08-11",
+        "pending_ids": ["one", "two"],
+        "force_fields": [],
+        "prompt_fingerprints": {"one": "fp-one", "two": "fp-two"},
+    }
+    first = ledger_module.write_batch_recovery(
+        ledger_path,
+        "msgbatch_polish",
+        entry,
+        accepted_meanings={"one": ["first review"]},
+        retry_ids=["two"],
+    )
+
+    with pytest.raises(LedgerError, match="Another fetch"):
+        ledger_module.write_batch_recovery(
+            ledger_path,
+            "msgbatch_polish",
+            entry,
+            accepted_meanings={"two": ["second review"]},
+            retry_ids=["one"],
+        )
+
+    current = ledger_module.load_batch_recovery(ledger_path)
+    assert current is not None
+    assert current.text == first.text
+    assert current.accepted_meanings == {"one": ["first review"]}
+
+
+def test_a_stale_fetch_cannot_clear_a_newer_same_batch_journal(tmp_path: Path) -> None:
+    ledger_path = tmp_path / "ledger.json"
+    entry = {
+        "kind": "polish",
+        "model": "claude-opus-5",
+        "submitted_at": "2026-08-11",
+        "pending_ids": ["one"],
+        "force_fields": [],
+        "prompt_fingerprints": {"one": "fp-one"},
+    }
+    stale = ledger_module.write_batch_recovery(
+        ledger_path,
+        "msgbatch_polish",
+        entry,
+        accepted_meanings={"one": ["older review"]},
+        retry_ids=[],
+    )
+    assert ledger_module.clear_batch_recovery(
+        ledger_path, "msgbatch_polish", expected=stale
+    )
+    newer = ledger_module.write_batch_recovery(
+        ledger_path,
+        "msgbatch_polish",
+        entry,
+        accepted_meanings={"one": ["newer review"]},
+        retry_ids=[],
+    )
+
+    with pytest.raises(LedgerError, match="newer journal was kept intact"):
+        ledger_module.clear_batch_recovery(
+            ledger_path, "msgbatch_polish", expected=stale
+        )
+
+    current = ledger_module.load_batch_recovery(ledger_path)
+    assert current is not None
+    assert current.text == newer.text
+    assert current.accepted_meanings == {"one": ["newer review"]}

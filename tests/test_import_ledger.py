@@ -406,7 +406,7 @@ def test_the_records_are_written_before_the_ledger(
     book.save()
     before = (root / "ledger.json").read_text(encoding="utf-8")
 
-    def refuse(path: Path, records: list) -> None:
+    def refuse(path: Path, records: list, **kwargs: object) -> None:
         raise DataError(f"Could not write {path}: Permission denied")
 
     monkeypatch.setattr(cli, "save_records_json", refuse)

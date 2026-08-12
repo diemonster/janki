@@ -69,7 +69,7 @@ from typing import Any
 
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import short_fingerprint
-from japanese_anki.io import DataError, atomic_write_text
+from japanese_anki.io import DataError, atomic_write_text, exclusive_path_lock
 from japanese_anki.models import ExampleSentence, VocabularyRecord
 
 
@@ -78,6 +78,8 @@ class LedgerError(JankiError):
 
 
 LEDGER_VERSION = 1
+BATCH_RECOVERY_VERSION = 1
+_BATCH_RECOVERY_MARKER = "janki-polish-batch-recovery"
 
 # Who did the enriching. The kind is what keeps a jpdb pass and an AI pass from
 # being mistaken for each other; the model is which one of them ran. ``polish``
@@ -95,6 +97,19 @@ ENRICHMENT_KINDS: tuple[str, ...] = ("jpdb", "ai", "polish", "human")
 
 # What a piece of audio says: the word itself, or one example sentence.
 AUDIO_KINDS: tuple[str, ...] = ("word", "example")
+
+
+@dataclass(frozen=True)
+class BatchRecovery:
+    """Durable state for the gap between a polish batch and its ledger write."""
+
+    path: Path
+    batch_id: str
+    entry: dict[str, Any]
+    phase: str
+    accepted_meanings: dict[str, list[str]]
+    retry_ids: list[str]
+    text: str = field(repr=False, compare=False)
 
 
 def _iso_date(value: str | None) -> str:
@@ -307,6 +322,190 @@ def _checked_details(caller: str, details: dict[str, Any]) -> dict[str, Any]:
     return details
 
 
+def batch_recovery_path(ledger_path: Path) -> Path:
+    """Return the one recovery journal associated with ``ledger_path``."""
+    path = Path(ledger_path)
+    suffix = path.suffix or ".json"
+    stem = path.stem if path.suffix else path.name
+    return path.with_name(f"{stem}.polish-batch-recovery{suffix}")
+
+
+def load_batch_recovery(ledger_path: Path) -> BatchRecovery | None:
+    """Load a janki-owned polish recovery journal, refusing unknown content."""
+    path = batch_recovery_path(ledger_path)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise LedgerError(
+            f"Could not read batch recovery journal {path}: {exc.strerror or exc}"
+        ) from exc
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise LedgerError(f"Could not parse batch recovery journal {path}: {exc}") from exc
+    if not isinstance(data, dict) or data.get("marker") != _BATCH_RECOVERY_MARKER:
+        raise LedgerError(
+            f"Refusing to treat {path} as janki batch recovery state because its "
+            "ownership marker is missing. Move the unrelated file aside and retry."
+        )
+    if data.get("version") != BATCH_RECOVERY_VERSION:
+        raise LedgerError(
+            f"Batch recovery journal {path} has unsupported version "
+            f"{data.get('version')!r}. Upgrade janki before changing it."
+        )
+    batch_id = data.get("batch_id")
+    entry = data.get("batch")
+    phase = data.get("phase")
+    accepted = data.get("accepted_meanings", {})
+    retry_ids = data.get("retry_ids", [])
+    if not isinstance(batch_id, str) or not batch_id.strip():
+        raise LedgerError(f"Batch recovery journal {path} has no batch id")
+    if not isinstance(entry, dict) or entry.get("kind") != "polish":
+        raise LedgerError(f"Batch recovery journal {path} has no polish batch descriptor")
+    if phase not in {"submitted", "applied"}:
+        raise LedgerError(f"Batch recovery journal {path} has unknown phase {phase!r}")
+    if not isinstance(accepted, dict) or any(
+        not isinstance(record_id, str)
+        or not isinstance(meanings, list)
+        or any(not isinstance(item, str) for item in meanings)
+        for record_id, meanings in accepted.items()
+    ):
+        raise LedgerError(
+            f"Batch recovery journal {path}: 'accepted_meanings' must map ids to strings"
+        )
+    if not isinstance(retry_ids, list) or any(
+        not isinstance(item, str) for item in retry_ids
+    ):
+        raise LedgerError(
+            f"Batch recovery journal {path}: 'retry_ids' must be a list of strings"
+        )
+    return BatchRecovery(
+        path=path,
+        batch_id=batch_id,
+        entry=dict(entry),
+        phase=phase,
+        accepted_meanings={
+            str(record_id): list(meanings) for record_id, meanings in accepted.items()
+        },
+        retry_ids=list(retry_ids),
+        text=text,
+    )
+
+
+def write_batch_recovery(
+    ledger_path: Path,
+    batch_id: str,
+    entry: Mapping[str, Any],
+    *,
+    accepted_meanings: Mapping[str, Iterable[str]] | None = None,
+    retry_ids: Iterable[str] | None = None,
+) -> BatchRecovery:
+    """Atomically preserve enough polish state for ``--batch-fetch`` to resume.
+
+    ``retry_ids is None`` is the just-submitted phase.  Supplying it, including
+    an empty iterable, marks the records/ledger handoff after local review.
+    Existing non-janki content is never overwritten.
+    """
+    key = str(batch_id).strip()
+    if not key:
+        raise LedgerError("A batch recovery journal needs a batch id")
+    descriptor = dict(entry)
+    if descriptor.get("kind") != "polish":
+        raise LedgerError("Only a meaning-polish batch can use polish recovery state")
+    phase = "submitted" if retry_ids is None else "applied"
+    payload = {
+        "marker": _BATCH_RECOVERY_MARKER,
+        "version": BATCH_RECOVERY_VERSION,
+        "batch_id": key,
+        "batch": descriptor,
+        "phase": phase,
+        "accepted_meanings": {
+            str(record_id): [str(item) for item in meanings]
+            for record_id, meanings in (accepted_meanings or {}).items()
+        },
+        "retry_ids": []
+        if retry_ids is None
+        else list(dict.fromkeys(str(item) for item in retry_ids)),
+    }
+    try:
+        text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    except (TypeError, ValueError) as exc:
+        raise LedgerError(
+            f"Could not serialise batch recovery state for {key}: {exc}"
+        ) from exc
+    path = batch_recovery_path(ledger_path)
+    try:
+        with exclusive_path_lock(path):
+            existing = load_batch_recovery(ledger_path)
+            if existing is not None:
+                if existing.text == text:
+                    return existing
+                if existing.batch_id != key:
+                    raise LedgerError(
+                        f"Batch {existing.batch_id} still has recovery state in "
+                        f"{existing.path}; fetch or forget it before recording "
+                        "another batch."
+                    )
+                raise LedgerError(
+                    f"Recovery state for batch {key} changed while this command "
+                    "was reviewing it. Another fetch may still be writing; its "
+                    "journal was kept intact. Let that command finish, then fetch "
+                    "again."
+                )
+            atomic_write_text(path, text)
+            written = load_batch_recovery(ledger_path)
+            if written is None:  # pragma: no cover - atomic write just landed
+                raise LedgerError(
+                    f"Batch recovery journal {path} disappeared after writing"
+                )
+            return written
+    except DataError as exc:
+        raise LedgerError(str(exc)) from exc
+
+
+def clear_batch_recovery(
+    ledger_path: Path,
+    batch_id: str,
+    *,
+    expected: BatchRecovery | None = None,
+) -> bool:
+    """Remove only the validated journal for ``batch_id``.
+
+    Loading first is deliberate: this command must never delete a same-named
+    artifact that it did not create or a recovery belonging to another batch.
+    """
+    try:
+        with exclusive_path_lock(batch_recovery_path(ledger_path)):
+            recovery = load_batch_recovery(ledger_path)
+            if recovery is None:
+                return False
+            if recovery.batch_id != str(batch_id):
+                raise LedgerError(
+                    f"Refusing to remove recovery for batch {recovery.batch_id} while "
+                    f"finishing batch {batch_id}."
+                )
+            if expected is not None and recovery.text != expected.text:
+                raise LedgerError(
+                    f"Recovery state for batch {batch_id} changed after this command "
+                    "read it. The newer journal was kept intact; let the other "
+                    "fetch finish, then retry."
+                )
+            try:
+                recovery.path.unlink()
+            except FileNotFoundError:
+                return True
+            except OSError as exc:
+                raise LedgerError(
+                    f"Could not remove completed batch recovery journal "
+                    f"{recovery.path}: {exc.strerror or exc}"
+                ) from exc
+    except DataError as exc:
+        raise LedgerError(str(exc)) from exc
+    return True
+
+
 @dataclass
 class Ledger:
     """An in-memory ledger bound to the file it was loaded from."""
@@ -368,12 +567,6 @@ class Ledger:
         of those handlers; permission denied, a read-only mount and ENOSPC are
         the shapes a real save failure actually has.
         """
-        if self.guarded and self._text_on_disk() != self.baseline:
-            raise LedgerError(
-                f"Ledger {self.path} changed on disk since it was read; saving now "
-                "would discard those changes. Load the ledger once per command and "
-                "save once, then re-run."
-            )
         payload = {
             **self.extra,
             "version": LEDGER_VERSION,
@@ -382,7 +575,14 @@ class Ledger:
         }
         text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
         try:
-            atomic_write_text(self.path, text)
+            with exclusive_path_lock(self.path):
+                if self.guarded and self._text_on_disk() != self.baseline:
+                    raise LedgerError(
+                        f"Ledger {self.path} changed on disk since it was read; "
+                        "saving now would discard those changes. Load the ledger "
+                        "once per command and save once, then re-run."
+                    )
+                atomic_write_text(self.path, text)
         except DataError as exc:
             raise LedgerError(str(exc)) from exc
         # What we just wrote is now what we have read: saving twice in one
@@ -652,6 +852,7 @@ class Ledger:
         model: str,
         pending_ids: Iterable[str],
         force_fields: Iterable[str] = (),
+        prompt_fingerprints: Mapping[str, str] | None = None,
         at: str | None = None,
     ) -> None:
         """Remember a submitted batch and the records it covers.
@@ -672,7 +873,7 @@ class Ledger:
                 "A pending batch with no record ids could never be applied to "
                 "anything; nothing was recorded."
             )
-        self.pending_batches[str(batch_id)] = {
+        entry: dict[str, Any] = {
             "kind": kind,
             "model": model,
             "submitted_at": _iso_date(at),
@@ -682,6 +883,25 @@ class Ledger:
             # would report "nothing to fill" and throw away a paid answer.
             "force_fields": list(dict.fromkeys(str(item) for item in force_fields)),
         }
+        if prompt_fingerprints is not None:
+            fingerprints = {
+                str(record_id): str(fingerprint)
+                for record_id, fingerprint in prompt_fingerprints.items()
+            }
+            missing = [record_id for record_id in ids if not fingerprints.get(record_id)]
+            extra = [record_id for record_id in fingerprints if record_id not in ids]
+            if missing or extra:
+                details = []
+                if missing:
+                    details.append(f"missing {', '.join(missing)}")
+                if extra:
+                    details.append(f"unknown {', '.join(extra)}")
+                raise LedgerError(
+                    "Batch prompt fingerprints must exactly cover its pending ids: "
+                    + "; ".join(details)
+                )
+            entry["prompt_fingerprints"] = fingerprints
+        self.pending_batches[str(batch_id)] = entry
 
     def pending_batch(self) -> tuple[str, dict[str, Any]] | None:
         """The batch in flight, as ``(batch_id, entry)``, or ``None``.

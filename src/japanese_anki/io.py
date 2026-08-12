@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import copy
 import dataclasses
+import hashlib
 import json
 import os
 import stat
@@ -20,6 +21,114 @@ from japanese_anki.models import ModelError, VocabularyRecord
 
 class DataError(JankiError):
     pass
+
+
+def _user_home() -> Path:
+    """Return the current user's home so tests can isolate cache fallbacks."""
+    return Path.home()
+
+
+def _owned_private_directory(path: Path) -> bool:
+    """Whether ``path`` is a real directory private to the current Unix user."""
+    try:
+        details = os.lstat(path)
+    except OSError:
+        return False
+    if not stat.S_ISDIR(details.st_mode):
+        return False
+    if hasattr(os, "getuid") and details.st_uid != os.getuid():
+        return False
+    return stat.S_IMODE(details.st_mode) & 0o077 == 0
+
+
+def _path_lock_root() -> Path:
+    """Choose a stable lock namespace another local user cannot own first."""
+    temporary = Path(tempfile.gettempdir())
+    if os.name == "nt" or _owned_private_directory(temporary):
+        return temporary / "janki-file-locks"
+    return _user_home() / ".cache" / "janki" / "file-locks"
+
+
+@contextlib.contextmanager
+def exclusive_path_lock(path: Path) -> Iterable[None]:
+    """Serialize whole-file transactions on ``path`` across processes.
+
+    Atomic rename keeps readers from seeing a partial file, but it cannot make
+    a preceding compare-and-swap check atomic: two writers can both compare the
+    old content before either one renames.  The lock lives in a private per-user
+    temp or cache directory rather than beside the target, so protecting tracked
+    files never creates an untracked artifact under ``data/``.
+    """
+    target = Path(os.path.realpath(path))
+    lock_root = _path_lock_root()
+    digest = hashlib.sha256(os.fsencode(target)).hexdigest()
+    lock_path = lock_root / f"{digest}.lock"
+    try:
+        lock_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        if os.name != "nt" and not _owned_private_directory(lock_root):
+            raise DataError(
+                f"Could not lock {target}: lock directory {lock_root} is not a "
+                "private directory owned by the current user"
+            )
+        handle = lock_path.open("a+b")
+    except DataError:
+        raise
+    except OSError as exc:
+        raise DataError(f"Could not lock {target}: {exc.strerror or exc}") from exc
+    with handle:
+        if os.name == "nt":  # pragma: no cover - exercised on Windows
+            import msvcrt
+
+            try:
+                if handle.seek(0, os.SEEK_END) == 0:
+                    handle.write(b"\0")
+                    handle.flush()
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+            except OSError as exc:
+                raise DataError(
+                    f"Could not lock {target}: {exc.strerror or exc}"
+                ) from exc
+            try:
+                yield
+            finally:
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            except OSError as exc:
+                raise DataError(
+                    f"Could not lock {target}: {exc.strerror or exc}"
+                ) from exc
+            try:
+                yield
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+@dataclass(frozen=True, slots=True)
+class RecordsRevision:
+    """The exact records-file content a read-modify-write pass started from."""
+
+    path: Path
+    text: str | None
+
+
+def records_revision(path: Path) -> RecordsRevision:
+    """Capture ``path`` for a later stale-writer check, including absence."""
+    target = Path(os.path.realpath(path))
+    try:
+        text = target.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        text = None
+    except OSError as exc:
+        raise DataError(
+            f"Could not read records file {target}: {exc.strerror or exc}"
+        ) from exc
+    return RecordsRevision(target, text)
 
 
 def _target_mode(path: Path) -> int:
@@ -115,10 +224,35 @@ def load_records(path: Path) -> list[VocabularyRecord]:
         raise DataError(f"Could not read a record in {path}: {exc}") from exc
 
 
-def save_records_json(path: Path, records: list[VocabularyRecord]) -> None:
+def save_records_json(
+    path: Path,
+    records: list[VocabularyRecord],
+    *,
+    expected: RecordsRevision | None = None,
+) -> None:
+    """Atomically save records, refusing to overwrite a newer collection.
+
+    ``expected`` comes from :func:`records_revision` immediately before the
+    command reads the collection. It includes a missing file as real state, so
+    two first-time writers cannot silently replace one another either.
+    """
+    target = Path(os.path.realpath(path))
+    if expected is not None and target != expected.path:
+        raise DataError(
+            f"Records revision for {expected.path} cannot guard a write to {target}."
+        )
     payload = [record.to_dict() for record in sorted(records, key=lambda item: item.id)]
     text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
-    atomic_write_text(path, text)
+    with exclusive_path_lock(target):
+        if expected is not None:
+            current = records_revision(target).text
+            if current != expected.text:
+                raise DataError(
+                    f"Records file {target} changed on disk since it was read; saving "
+                    "now would discard those changes. Another janki command may still "
+                    "be writing it. Let that command finish, then re-run this one."
+                )
+        atomic_write_text(target, text)
 
 
 MERGE_LABELS: tuple[str, ...] = ("added", "filled", "unchanged", "conflicting")

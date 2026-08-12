@@ -35,7 +35,11 @@ def test_defaults_apply_when_the_new_sections_are_absent(
     assert config.media_dir == root / "data/media"
     assert config.scan_inbox == root / "data/inbox/scans"
     assert config.extract_model == "claude-opus-5"
-    assert config.enrich_model == "claude-opus-5"
+    assert config.enrich_provider == "codex"
+    assert config.enrich_model == "gpt-5.6-sol"
+    assert config.enrich_reasoning_effort == "ultra"
+    assert config.polish_model == "claude-opus-5"
+    assert config.review_model == "claude-opus-5"
     assert config.tts_provider == "voicevox"
     assert config.voicevox_url == "http://localhost:50021"
     assert config.voicevox_speaker == 46
@@ -58,7 +62,11 @@ def test_new_sections_override_defaults_and_paths_resolve_against_the_root(
 
         [ai]
         extract_model = "claude-haiku-4-5"
+        enrich_provider = "anthropic"
         enrich_model = "claude-sonnet-5"
+        enrich_reasoning_effort = "high"
+        polish_model = "claude-sonnet-5"
+        review_model = "claude-opus-5-1"
 
         [tts]
         provider = "azure"
@@ -76,7 +84,11 @@ def test_new_sections_override_defaults_and_paths_resolve_against_the_root(
     assert config.media_dir == root / "assets"
     assert config.scan_inbox == root / "data/inbox/pages"
     assert config.extract_model == "claude-haiku-4-5"
+    assert config.enrich_provider == "anthropic"
     assert config.enrich_model == "claude-sonnet-5"
+    assert config.enrich_reasoning_effort == "high"
+    assert config.polish_model == "claude-sonnet-5"
+    assert config.review_model == "claude-opus-5-1"
     assert config.tts_provider == "azure"
     assert config.voicevox_url == "http://voice.local:1234"
     assert config.voicevox_speaker == 8
@@ -147,6 +159,59 @@ def test_unknown_key_with_no_near_match_lists_the_valid_keys(
     assert "temperature" in stderr
     assert "extract_model" in stderr
     assert "enrich_model" in stderr
+
+
+def test_an_unknown_enrichment_provider_is_rejected(tmp_path: Path) -> None:
+    _write_config(
+        tmp_path,
+        """
+        [ai]
+        enrich_provider = "fable"
+        """,
+    )
+
+    with pytest.raises(ConfigError) as caught:
+        ProjectConfig.load(tmp_path)
+
+    assert "enrich_provider" in str(caught.value)
+    assert "codex" in str(caught.value)
+    assert "anthropic" in str(caught.value)
+
+
+def test_a_legacy_enrich_model_keeps_its_anthropic_and_shared_model_meaning(
+    tmp_path: Path,
+) -> None:
+    _write_config(
+        tmp_path,
+        """
+        [ai]
+        enrich_model = "claude-sonnet-legacy"
+        """,
+    )
+
+    config = ProjectConfig.load(tmp_path)
+
+    assert config.enrich_provider == "anthropic"
+    assert config.enrich_model == "claude-sonnet-legacy"
+    assert config.polish_model == "claude-sonnet-legacy"
+    assert config.review_model == "claude-sonnet-legacy"
+
+
+def test_an_explicit_anthropic_provider_gets_an_anthropic_model_default(
+    tmp_path: Path,
+) -> None:
+    _write_config(
+        tmp_path,
+        """
+        [ai]
+        enrich_provider = "anthropic"
+        """,
+    )
+
+    config = ProjectConfig.load(tmp_path)
+
+    assert config.enrich_provider == "anthropic"
+    assert config.enrich_model == "claude-opus-5"
 
 
 def test_unknown_section_warns_with_the_nearest_valid_section(

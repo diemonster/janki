@@ -55,6 +55,7 @@ from japanese_anki.io import (
     load_records,
     load_structured,
     merge_records,
+    records_revision,
     save_records_json,
 )
 from japanese_anki.ledger import Ledger
@@ -515,6 +516,7 @@ def migrate_inline(deck_path: Path, config: ProjectConfig, book: Ledger) -> Migr
         else str(deck_config.get("source"))
     )
 
+    normalized_revision = records_revision(normalized_file)
     existing = load_records(normalized_file) if normalized_file.exists() else []
     # Inline notes are the authoritative content: they are what the deck exports
     # today, so every field they actually carry wins over the normalized copy.
@@ -575,7 +577,7 @@ def migrate_inline(deck_path: Path, config: ProjectConfig, book: Ledger) -> Migr
             reserialized.append(guard.path)
         written.append(guard.path)
 
-    save_records_json(normalized_file, records)
+    save_records_json(normalized_file, records, expected=normalized_revision)
     written.append(normalized_file)
 
     updates: dict[str, Any] = {}

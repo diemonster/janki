@@ -1,6 +1,6 @@
 """Writing examples and usage notes — ``janki enrich --ai``.
 
-No network (IMPLEMENTATION_PLAN rule 6): the Claude call is faked and jpdb is
+No network (IMPLEMENTATION_PLAN rule 6): the model call is faked and jpdb is
 driven through a fake transport, so the QC routing is exercised for real rather
 than stubbed at the decision.
 """
@@ -63,7 +63,7 @@ def record(**overrides: Any) -> VocabularyRecord:
 
 
 class FakeCall:
-    """Stands in for ``claude_client.parse_call``."""
+    """Stands in for either provider's structured call."""
 
     def __init__(self, *results: CallResult) -> None:
         self.results = list(results)
@@ -72,7 +72,9 @@ class FakeCall:
     def __call__(
         self, model: str, blocks: Any, content: Any, schema: Any, client: Any = None, **kw: Any
     ) -> CallResult:
-        self.calls.append({"model": model, "system": blocks, "content": content})
+        self.calls.append(
+            {"model": model, "system": blocks, "content": content, **kw}
+        )
         return self.results.pop(0) if self.results else CallResult(answer(), "end_turn", None)
 
 
@@ -399,7 +401,7 @@ def project(tmp_path: Path, records: list[VocabularyRecord]) -> Path:
 
 def patch_all(monkeypatch: pytest.MonkeyPatch, call: FakeCall, api: FakeJpdb) -> None:
     monkeypatch.setenv("JPDB_API_KEY", "k")
-    monkeypatch.setattr(cli.enrich.claude_client, "parse_call", call)
+    monkeypatch.setattr(cli.codex_client, "parse_call", call)
     monkeypatch.setattr(cli.jpdb, "JpdbClient", lambda key, *a, **kw: jpdb_for(api))
 
 
@@ -534,6 +536,19 @@ def test_nothing_to_do_is_said_before_any_call(
     assert "already has examples" in capsys.readouterr().out
 
 
+def test_a_visited_record_that_produces_no_change_is_named(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = project(tmp_path, [record()])
+    patch_all(monkeypatch, FakeCall(CallResult(answer(), "end_turn", None)), FakeJpdb())
+
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--yes"]) == 0
+
+    output = capsys.readouterr().out
+    assert "No changes for 1 of 1 record(s)" in output
+    assert "word:話す:はなす" in output
+
+
 def test_the_model_can_be_overridden_per_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -542,10 +557,11 @@ def test_the_model_can_be_overridden_per_run(
     patch_all(monkeypatch, call, FakeJpdb({"話します。": HANASHIMASU}))
 
     cli.main(
-        ["--root", str(root), "enrich", "--ai", "--yes", "--model", "claude-haiku-4-5"]
+        ["--root", str(root), "enrich", "--ai", "--yes", "--model", "gpt-future"]
     )
 
-    assert call.calls[0]["model"] == "claude-haiku-4-5"
+    assert call.calls[0]["model"] == "gpt-future"
+    assert call.calls[0]["reasoning_effort"] == "ultra"
 
 
 def test_a_flagged_example_is_reported_and_recorded(
@@ -647,7 +663,7 @@ def test_the_staging_file_reads_back_through_the_loader(
         (root / "staging" / "ai-enrichment.yaml").read_text(encoding="utf-8")
     )
 
-    assert raw["model"] == "claude-opus-5"
+    assert raw["model"] == "gpt-5.6-sol"
     assert raw["records"][0]["usage_notes"] == "note"
 
 

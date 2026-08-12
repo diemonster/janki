@@ -13,6 +13,7 @@ from typing import Any
 from japanese_anki import (
     audio_cmd,
     claude_client,
+    codex_client,
     enrich,
     extract,
     jpdb,
@@ -45,10 +46,12 @@ from japanese_anki.io import (
     PREFER_INCOMING_PROTECTED,
     DataError,
     MergeOutcome,
+    RecordsRevision,
     load_records,
     load_structured,
     merge_records,
     parse_prefer_incoming,
+    records_revision,
     save_records_json,
 )
 from japanese_anki.models import VocabularyRecord
@@ -327,6 +330,151 @@ def _save_ledger(book: ledger.Ledger) -> ledger.LedgerError | None:
     return None
 
 
+def _install_polish_batch(
+    book: ledger.Ledger, batch_id: str, entry: Mapping[str, Any]
+) -> None:
+    """Install one recovered batch without displacing concurrent batch state."""
+    others = [key for key in book.pending_batches if str(key) != str(batch_id)]
+    if others:
+        raise ledger.LedgerError(
+            f"Cannot recover polish batch {batch_id} while batch {others[0]} is "
+            "pending. Fetch or forget that batch first; the recovery journal "
+            "will stay intact."
+        )
+    existing = book.pending_batches.get(str(batch_id))
+    if existing is not None:
+        if not isinstance(existing, dict) or existing.get("kind") != "polish":
+            raise ledger.LedgerError(
+                f"Ledger entry {batch_id} conflicts with its polish recovery journal"
+            )
+        return
+    book.pending_batches[str(batch_id)] = dict(entry)
+
+
+def _save_ledger_change(
+    config: ProjectConfig,
+    change: Callable[[ledger.Ledger], None],
+    *,
+    attempts: int = 3,
+) -> tuple[ledger.Ledger | None, ledger.LedgerError | None]:
+    """Replay one idempotent mutation on the latest ledger after conflicts."""
+    failure: ledger.LedgerError | None = None
+    for _ in range(attempts):
+        try:
+            current = ledger.load(config.ledger_file)
+            change(current)
+            current.save()
+        except ledger.LedgerError as exc:
+            failure = exc
+            continue
+        return current, None
+    return None, failure
+
+
+def _unfinished_polish_recovery(config: ProjectConfig) -> ledger.BatchRecovery | None:
+    """Return recovery state that must win the one-batch slot."""
+    return ledger.load_batch_recovery(config.ledger_file)
+
+
+def _refuse_unfinished_polish_recovery(config: ProjectConfig) -> None:
+    recovery = _unfinished_polish_recovery(config)
+    if recovery is None:
+        return
+    raise JankiError(
+        f"Polish batch {recovery.batch_id} has unfinished recovery state in "
+        f"{recovery.path}. Finalize it first with: "
+        "janki enrich --polish-meanings --batch-fetch."
+    )
+
+
+def _recover_polish_batch(
+    config: ProjectConfig, records: Sequence[VocabularyRecord]
+) -> tuple[ledger.Ledger, bool]:
+    """Restore a submitted batch or finish provenance after records landed.
+
+    The boolean is true when an applied recovery completed the whole batch, so
+    the caller must not contact Anthropic or show the same proposals again.
+    """
+    recovery = _unfinished_polish_recovery(config)
+    if recovery is None:
+        return ledger.load(config.ledger_file), False
+
+    if recovery.phase == "submitted":
+        current = ledger.load(config.ledger_file)
+        pending = current.pending_batch()
+        if pending is not None and pending[0] == recovery.batch_id:
+            ledger.clear_batch_recovery(
+                config.ledger_file, recovery.batch_id, expected=recovery
+            )
+            print(
+                f"Recovered the durable descriptor for polish batch "
+                f"{recovery.batch_id}."
+            )
+            return current, False
+
+        saved, failure = _save_ledger_change(
+            config,
+            lambda book: _install_polish_batch(
+                book, recovery.batch_id, recovery.entry
+            ),
+        )
+        if failure is not None or saved is None:
+            raise JankiError(
+                f"Could not restore polish batch {recovery.batch_id} from "
+                f"{recovery.path}: {failure}. The journal is intact; retry "
+                "--batch-fetch once the ledger is writable."
+            )
+        ledger.clear_batch_recovery(
+            config.ledger_file, recovery.batch_id, expected=recovery
+        )
+        print(f"Restored polish batch {recovery.batch_id} to the ledger.")
+        return saved, False
+
+    by_id = {record.id: record for record in records}
+    landed = [
+        record_id
+        for record_id, meanings in recovery.accepted_meanings.items()
+        if record_id in by_id and list(by_id[record_id].meanings) == meanings
+    ]
+    not_landed = [
+        record_id
+        for record_id in recovery.accepted_meanings
+        if record_id not in landed
+    ]
+    retry_ids = list(dict.fromkeys([*recovery.retry_ids, *not_landed]))
+    model = str(recovery.entry.get("model") or config.polish_model)
+
+    def finish(book: ledger.Ledger) -> None:
+        _install_polish_batch(book, recovery.batch_id, recovery.entry)
+        for record_id in landed:
+            book.record_enriched(
+                record_id,
+                kind="polish",
+                model=model,
+                fields=enrich.POLISH_FIELDS,
+            )
+        if retry_ids:
+            book.record_batch_retry(recovery.batch_id, retry_ids)
+        else:
+            book.clear_batch(recovery.batch_id)
+
+    saved, failure = _save_ledger_change(config, finish)
+    if failure is not None or saved is None:
+        raise JankiError(
+            f"Could not finish polish batch {recovery.batch_id} from "
+            f"{recovery.path}: {failure}. Accepted meanings remain in the "
+            "records and the recovery journal is intact; retry --batch-fetch."
+        )
+    ledger.clear_batch_recovery(
+        config.ledger_file, recovery.batch_id, expected=recovery
+    )
+    print(
+        f"Recovered ledger provenance for {len(landed)} accepted polish "
+        f"proposal(s) from batch {recovery.batch_id}."
+    )
+    return saved, not retry_ids
+
+
 def _report_ledger_failure(exc: ledger.LedgerError) -> None:
     print(f"warning: {exc}", file=sys.stderr)
     print(
@@ -475,6 +623,7 @@ def run_import(
       reconstructed from anything. A ledger that will not save is therefore a
       warning over a full summary, never an error instead of one.
     """
+    output_revision = records_revision(output_path)
     discarded: list[str] = []
     if replace:
         # --replace only needs the count, so an unreadable file must not block
@@ -512,7 +661,7 @@ def run_import(
     )
 
     merged, outcomes = merge_records(existing, list(records), prefer_incoming)
-    save_records_json(output_path, merged)
+    save_records_json(output_path, merged, expected=output_revision)
 
     # Held rows are deliberately absent here: they never reached the records, so
     # the ledger must not claim janki has them.
@@ -770,6 +919,7 @@ def command_import_jpdb_reviews(args: argparse.Namespace) -> int:
     config = _load_config(args)
     source_path = args.file.resolve()
     output_path = config.normalized_file.resolve()
+    output_revision = records_revision(output_path)
     records = load_records(output_path) if output_path.exists() else []
     if not records:
         print(f"No records to match against in {output_path}.")
@@ -788,7 +938,7 @@ def command_import_jpdb_reviews(args: argparse.Namespace) -> int:
         )
 
     if result.changed:
-        save_records_json(output_path, result.records)
+        save_records_json(output_path, result.records, expected=output_revision)
     # Every matched record, changed or not: the sighting says this export saw
     # the word, which is true whether or not its count moved since last time.
     seen = sum(
@@ -891,6 +1041,7 @@ def _recheck_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
     improved costs a parse rather than a rewrite.
     """
     output_path = config.normalized_file.resolve()
+    output_revision = records_revision(output_path)
     records = load_records(output_path) if output_path.exists() else []
     if not records:
         print(f"No records to check in {output_path}.")
@@ -910,7 +1061,7 @@ def _recheck_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
 
     cleared = sum(len(items) for items in result.cleared.values())
     if result.changed:
-        save_records_json(output_path, result.records)
+        save_records_json(output_path, result.records, expected=output_revision)
         adjudicated = {rid for rid in result.adjudicated}
         who_for = lambda rid: (  # noqa: E731 - a lookup, not a policy
             "human" if args.accept else ("ai" if rid in adjudicated else "jpdb")
@@ -1061,11 +1212,11 @@ def command_enrich(args: argparse.Namespace) -> int:
             "records, so it has no field list to widen and no staging file to "
             "overwrite."
         )
-    if batch_flags and not args.ai:
+    if batch_flags and not (args.ai or args.polish_meanings):
         raise JankiError(
-            f"enrich {batch_flags[0]} batches the --ai pass, so it needs --ai. "
-            "The dictionary pass is not billed per token and the polish pass is "
-            "confirmed one record at a time, so neither has anything to batch."
+            f"enrich {batch_flags[0]} needs --ai or --polish-meanings: those are "
+            "the model-backed passes. The dictionary and furigana re-check "
+            "passes have nothing to batch."
         )
     if args.polish_meanings and args.force_fields:
         raise JankiError(
@@ -1111,7 +1262,7 @@ def command_enrich(args: argparse.Namespace) -> int:
     # --polish-meanings rewrites English and asks jpdb nothing, so it must not
     # require a key to run. The other paths do: --jpdb enriches *from* jpdb and
     # --ai verifies example furigana *with* it.
-    if args.polish_meanings:
+    if args.polish_meanings and not batch_flags:
         return _polish_meanings(config, args)
 
     if args.recheck_furigana:
@@ -1120,10 +1271,17 @@ def command_enrich(args: argparse.Namespace) -> int:
     # Neither of these asks jpdb anything — one writes a ledger entry, the
     # other builds requests — so neither may demand a key to run.
     if args.batch_forget:
-        return _batch_forget(config)
+        return _batch_forget(
+            config, expected_kind="polish" if args.polish_meanings else "ai"
+        )
 
     if args.batch_submit:
+        if args.polish_meanings:
+            return _polish_batch_submit(config, args)
         return _batch_submit(config, args, force_fields)
+
+    if args.polish_meanings and args.batch_fetch:
+        return _polish_batch_fetch(config, args)
 
     client = jpdb.JpdbClient(jpdb.api_key_from_env())
 
@@ -1137,6 +1295,7 @@ def command_enrich(args: argparse.Namespace) -> int:
         return _enrich_ai(config, args, force_fields)
 
     output_path = config.normalized_file.resolve()
+    output_revision = records_revision(output_path)
     records = load_records(output_path) if output_path.exists() else []
     if not records:
         print(f"No records to enrich in {output_path}.")
@@ -1169,7 +1328,7 @@ def command_enrich(args: argparse.Namespace) -> int:
         print("Aborted: nothing was written.", file=sys.stderr)
         return 1
 
-    save_records_json(output_path, result.records)
+    save_records_json(output_path, result.records, expected=output_revision)
     for record_id, changed in result.changes.items():
         book.record_enriched(record_id, kind="jpdb", model="jpdb", fields=changed)
     ledger_error = _save_ledger(book)
@@ -1208,6 +1367,7 @@ def _enrich_ai(
     the same route a photographed handout takes and for the same reason.
     """
     output_path = config.normalized_file.resolve()
+    output_revision = records_revision(output_path)
     records = load_records(output_path) if output_path.exists() else []
     if not records:
         print(f"No records to enrich in {output_path}.")
@@ -1245,6 +1405,16 @@ def _enrich_ai(
         ids=args.ids or None,
         jpdb_client=jpdb.JpdbClient(jpdb.api_key_from_env()),
         taught=taught,
+        parse_call=(
+            codex_client.parse_call
+            if config.enrich_provider == "codex"
+            else claude_client.parse_call
+        ),
+        call_options=(
+            {"reasoning_effort": config.enrich_reasoning_effort}
+            if config.enrich_provider == "codex"
+            else {}
+        ),
     )
     if taught:
         print(
@@ -1253,6 +1423,7 @@ def _enrich_ai(
 
     for warning in result.warnings:
         print(f"warning: {warning}", file=sys.stderr)
+    _report_ai_no_changes(result)
     if not result.changes:
         print(
             f"Nothing written: looked at {result.looked_up} record(s), and none "
@@ -1269,7 +1440,20 @@ def _enrich_ai(
         model=model,
         force=args.force,
         assume_yes=args.yes,
+        expected=output_revision,
     )
+
+
+def _report_ai_no_changes(result: enrich.AiResult) -> None:
+    """Name every model answer that left its target unchanged."""
+    if not result.no_changes:
+        return
+    print(
+        f"No changes for {len(result.no_changes)} of {result.looked_up} "
+        "record(s) the AI pass visited:"
+    )
+    for record_id in result.no_changes:
+        print(f"  {record_id}")
 
 
 def _write_ai_result(
@@ -1282,6 +1466,7 @@ def _write_ai_result(
     model: str,
     force: bool,
     assume_yes: bool,
+    expected: RecordsRevision,
 ) -> int:
     """Land an AI pass's proposals: staging file for a large one, diff for a small.
 
@@ -1327,7 +1512,7 @@ def _write_ai_result(
         print("Aborted: nothing was written.", file=sys.stderr)
         return 1
 
-    save_records_json(output_path, result.records)
+    save_records_json(output_path, result.records, expected=expected)
     for record_id, changed in result.changes.items():
         book.record_enriched(record_id, kind="ai", model=model, fields=changed)
     ledger_error = _save_ledger(book)
@@ -1368,6 +1553,13 @@ def _batch_submit(
     submitted batch nobody kept the id of is work that was paid for and cannot
     be collected.
     """
+    if config.enrich_provider != "anthropic":
+        raise JankiError(
+            "--batch-submit uses Anthropic's Message Batches API. Set [ai] "
+            "enrich_provider = \"anthropic\" and enrich_model to a Claude model, "
+            "or omit --batch-submit to use configured Codex enrichment."
+        )
+    _refuse_unfinished_polish_recovery(config)
     output_path = config.normalized_file.resolve()
     records = load_records(output_path) if output_path.exists() else []
     if not records:
@@ -1431,7 +1623,318 @@ def _batch_submit(
     return 0
 
 
-def _batch_forget(config: ProjectConfig) -> int:
+def _polish_batch_submit(config: ProjectConfig, args: argparse.Namespace) -> int:
+    """Submit every selected meaning-polish request as one Anthropic batch."""
+    _refuse_unfinished_polish_recovery(config)
+    output_path = config.normalized_file.resolve()
+    records = load_records(output_path) if output_path.exists() else []
+    if not records:
+        print(f"No records to enrich in {output_path}.")
+        return 0
+
+    book = ledger.load(config.ledger_file)
+    if (pending := book.pending_batch()) is not None:
+        batch_id, entry = pending
+        kind = str(entry.get("kind") or "ai")
+        flag = "--polish-meanings" if kind == "polish" else "--ai"
+        raise JankiError(
+            f"Batch {batch_id} is still out, covering "
+            f"{len(entry.get('pending_ids', []))} record(s). Fetch it first: "
+            f"janki enrich {flag} --batch-fetch. Only one batch may be pending."
+        )
+
+    model = args.model or config.polish_model
+    requests, pending_ids, prompt_fingerprints = enrich.polish_batch_requests(
+        records,
+        model=model,
+        style_guide=claude_client.read_style_guide(config.root),
+        ids=args.ids or None,
+    )
+    if not requests:
+        print("Nothing to submit for meaning polish.")
+        return 0
+
+    batch_id = claude_client.submit_batch(requests)
+    book.record_batch(
+        batch_id,
+        kind="polish",
+        model=model,
+        pending_ids=pending_ids,
+        prompt_fingerprints=prompt_fingerprints,
+    )
+    entry = dict(book.pending_batches[batch_id])
+    recovery_state: ledger.BatchRecovery | None = None
+    recovery_error: ledger.LedgerError | None = None
+    try:
+        recovery_state = ledger.write_batch_recovery(
+            config.ledger_file, batch_id, entry
+        )
+    except ledger.LedgerError as exc:
+        recovery_error = exc
+
+    saved, ledger_error = _save_ledger_change(
+        config,
+        lambda latest: _install_polish_batch(latest, batch_id, entry),
+    )
+    if ledger_error is not None or saved is None:
+        print(f"warning: {ledger_error}", file=sys.stderr)
+        if recovery_state is not None:
+            print(
+                f"Batch {batch_id} was submitted, and its complete descriptor "
+                f"is safe in {recovery_state.path}. Once the ledger is writable, run "
+                "'janki enrich --polish-meanings --batch-fetch'; janki will "
+                "restore the entry before fetching.",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"Batch {batch_id} was submitted, but neither its ledger entry "
+                "nor its recovery journal could be written. The journal error "
+                f"was: {recovery_error}. The results remain reachable from the "
+                "Anthropic console under that batch id.",
+                file=sys.stderr,
+            )
+        return 1
+
+    if recovery_state is not None:
+        try:
+            ledger.clear_batch_recovery(
+                config.ledger_file, batch_id, expected=recovery_state
+            )
+        except ledger.LedgerError as exc:
+            print(f"warning: {exc}", file=sys.stderr)
+            print(
+                "The batch is safely in the ledger. Run --batch-fetch again; "
+                "janki will validate and clear the redundant recovery journal.",
+                file=sys.stderr,
+            )
+            return 1
+    elif recovery_error is not None:
+        print(
+            f"warning: Batch {batch_id} is in the ledger, but its temporary "
+            f"recovery journal could not be created: {recovery_error}",
+            file=sys.stderr,
+        )
+
+    print(f"Submitted {len(requests)} meaning-polish request(s) as batch {batch_id}.")
+    print("  Collect and review them with: janki enrich --polish-meanings --batch-fetch")
+    return 0
+
+
+def _polish_batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
+    """Collect a polish batch and review its already-paid proposals locally."""
+    output_path = config.normalized_file.resolve()
+    output_revision = records_revision(output_path)
+    records = load_records(output_path) if output_path.exists() else []
+    book, recovered_complete = _recover_polish_batch(config, records)
+    if recovered_complete:
+        return 0
+    pending = book.pending_batch()
+    if pending is None:
+        print(
+            "No batch is pending. Submit one with: "
+            "janki enrich --polish-meanings --batch-submit"
+        )
+        return 0
+    batch_id, entry = pending
+    actual_kind = str(entry.get("kind") or "ai")
+    if actual_kind != "polish":
+        raise JankiError(
+            f"Batch {batch_id} is an AI-enrichment batch. Fetch it with: "
+            "janki enrich --ai --batch-fetch."
+        )
+    if not records:
+        raise JankiError(
+            f"Batch {batch_id} is pending, but there are no records in "
+            f"{output_path} to apply it to. Restore the collection or use "
+            "'janki enrich --polish-meanings --batch-forget'."
+        )
+
+    pending_ids = [str(item) for item in entry.get("pending_ids", [])]
+    retry = [str(item) for item in entry.get("retry_ids", [])]
+    candidates = retry or pending_ids
+    model = str(entry.get("model") or config.polish_model)
+    status_now = claude_client.batch_status(batch_id)
+    if status_now != claude_client.BATCH_ENDED:
+        print(
+            f"Batch {batch_id} is {status_now or 'in an unreported state'} "
+            f"({len(pending_ids)} record(s)). Nothing to review yet."
+        )
+        return 0
+
+    raw_fingerprints = entry.get("prompt_fingerprints")
+    if not isinstance(raw_fingerprints, Mapping):
+        raise JankiError(
+            f"Batch {batch_id} predates polish input tracking, so janki cannot "
+            "prove its answers still describe the current records. It stays "
+            "pending; forget it explicitly and submit a new polish batch."
+        )
+    prompt_fingerprints = {
+        str(record_id): str(fingerprint)
+        for record_id, fingerprint in raw_fingerprints.items()
+    }
+    missing_fingerprints = [
+        record_id
+        for record_id in pending_ids
+        if not prompt_fingerprints.get(record_id)
+    ]
+    if missing_fingerprints:
+        raise JankiError(
+            f"Batch {batch_id} has no submitted-input fingerprint for "
+            f"{len(missing_fingerprints)} record(s), so applying their answers "
+            "could overwrite newer curation. It stays pending; forget it "
+            "explicitly and submit a new polish batch."
+        )
+
+    present = {record.id for record in records}
+    if pending_ids and not any(record_id in present for record_id in pending_ids):
+        raise JankiError(
+            f"Batch {batch_id} came back, but none of its {len(pending_ids)} "
+            f"record(s) remain in {output_path}. It stays pending; restore the "
+            "collection or forget it explicitly."
+        )
+
+    result = enrich.apply_polish_batch_results(
+        records,
+        claude_client.batch_results(batch_id, enrich.polish_schema(), model),
+        pending_ids,
+        model=model,
+        prompt_fingerprints=prompt_fingerprints,
+        only=retry,
+    )
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    for record_id, reason in result.failed.items():
+        print(f"warning: {record_id}: {reason}; left untouched.", file=sys.stderr)
+    for record_id, reason in result.invalid.items():
+        print(
+            f"warning: {record_id}: the answer did not parse ({reason}); left "
+            "pending.",
+            file=sys.stderr,
+        )
+    if result.missing:
+        print(
+            f"warning: {len(result.missing)} batched record(s) are no longer in "
+            f"the collection: {', '.join(result.missing)}",
+            file=sys.stderr,
+        )
+    if result.stale:
+        print(
+            f"warning: {len(result.stale)} batched record(s) changed after "
+            "submission, so their older polish answers were ignored: "
+            f"{', '.join(result.stale)}",
+            file=sys.stderr,
+        )
+    if result.unchanged:
+        print(
+            f"{len(result.unchanged)} record(s) already had the glosses "
+            f"{model} would write."
+        )
+
+    positions = {record.id: index for index, record in enumerate(records)}
+    updated = list(records)
+    accepted: dict[str, enrich.PolishOutcome] = {}
+    declined = 0
+    stopped = False
+    remaining: list[str] = []
+    proposal_ids = [record_id for record_id in candidates if record_id in result.proposals]
+    for index, record_id in enumerate(proposal_ids):
+        outcome = result.proposals[record_id]
+        for line in enrich.format_field_diff({record_id: dict(outcome.changes)}):
+            print(line)
+        answer = _confirm_polish(args.yes)
+        if answer == "quit":
+            stopped = True
+            remaining = proposal_ids[index:]
+            break
+        if answer == "no":
+            declined += 1
+            continue
+        updated[positions[record_id]] = outcome.proposed
+        accepted[record_id] = outcome
+
+    retry_ids = list(dict.fromkeys([*remaining, *result.invalid]))
+    accepted_meanings = {
+        record_id: list(outcome.proposed.meanings)
+        for record_id, outcome in accepted.items()
+    }
+    try:
+        recovery_state = ledger.write_batch_recovery(
+            config.ledger_file,
+            batch_id,
+            entry,
+            accepted_meanings=accepted_meanings,
+            retry_ids=retry_ids,
+        )
+    except ledger.LedgerError as exc:
+        print(f"warning: {exc}", file=sys.stderr)
+        print(
+            "Nothing was written: janki could not durably record how to finish "
+            "the records/ledger handoff. Resolve the recovery-file problem and "
+            "fetch again; the paid batch answers are unchanged.",
+            file=sys.stderr,
+        )
+        return 1
+
+    if accepted:
+        save_records_json(output_path, updated, expected=output_revision)
+        print(f"Rewrote the meanings of {len(accepted)} record(s) in {output_path}.")
+    if declined:
+        print(f"{declined} proposal(s) declined.")
+    if stopped:
+        print(
+            f"Stopped with {len(remaining)} proposal(s) still to review; fetching "
+            "again resumes there without another model call."
+        )
+
+    def finish(latest: ledger.Ledger) -> None:
+        _install_polish_batch(latest, batch_id, entry)
+        for record_id in accepted:
+            latest.record_enriched(
+                record_id, kind="polish", model=model, fields=enrich.POLISH_FIELDS
+            )
+        if retry_ids:
+            latest.record_batch_retry(batch_id, retry_ids)
+        else:
+            latest.clear_batch(batch_id)
+
+    _saved, ledger_error = _save_ledger_change(config, finish)
+    if ledger_error is not None:
+        print(f"warning: {ledger_error}", file=sys.stderr)
+        print(
+            f"Batch {batch_id} could not be finalized in the ledger. Accepted "
+            f"meanings are already in the records, and their provenance plus "
+            f"the exact retry set are safe in {recovery_state.path}. Fetch again; "
+            "janki will finalize that journal before checking prompt fingerprints "
+            "or showing proposals.",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        ledger.clear_batch_recovery(
+            config.ledger_file, batch_id, expected=recovery_state
+        )
+    except ledger.LedgerError as exc:
+        print(f"warning: {exc}", file=sys.stderr)
+        print(
+            "The ledger is finalized, but its redundant recovery journal remains. "
+            "Run --batch-fetch again to validate and clear it.",
+            file=sys.stderr,
+        )
+        return 1
+    if accepted:
+        print(f"Ledger: recorded a polish pass over {len(accepted)} record(s).")
+    if result.invalid:
+        print(
+            f"Batch {batch_id} stays pending for {len(result.invalid)} answer(s) "
+            "that did not parse; fetching again costs nothing.",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
+def _batch_forget(config: ProjectConfig, *, expected_kind: str) -> int:
     """Drop the pending batch entry without collecting it.
 
     The only supported way out of a batch that can never be applied — the
@@ -1443,12 +1946,43 @@ def _batch_forget(config: ProjectConfig) -> int:
     Nothing is destroyed: the results stay on Anthropic's side for weeks, and
     the id is printed on the way out so a console lookup is still possible.
     """
+    recovery = _unfinished_polish_recovery(config)
+    if recovery is not None and expected_kind != "polish":
+        raise JankiError(
+            f"Batch {recovery.batch_id} is a meaning-polish batch with recovery "
+            "state. Handle it with --polish-meanings --batch-fetch or "
+            "--polish-meanings --batch-forget."
+        )
     book = ledger.load(config.ledger_file)
     pending = book.pending_batch()
+    if recovery is not None and recovery.phase == "applied" and (
+        pending is None or pending[0] == recovery.batch_id
+    ):
+        raise JankiError(
+            f"Batch {recovery.batch_id} has accepted meanings awaiting ledger "
+            "provenance. Run --batch-fetch once to finalize them; then forget "
+            "any remaining retry rows."
+        )
     if pending is None:
+        if recovery is not None:
+            ledger.clear_batch_recovery(
+                config.ledger_file, recovery.batch_id, expected=recovery
+            )
+            print(
+                f"Forgot recovered polish batch {recovery.batch_id}. Its results "
+                "remain reachable from the Anthropic console under that id."
+            )
+            return 0
         print("No batch is pending; nothing to forget.")
         return 0
     batch_id, entry = pending
+    actual_kind = str(entry.get("kind") or "ai")
+    if actual_kind != expected_kind:
+        flag = "--polish-meanings" if actual_kind == "polish" else "--ai"
+        raise JankiError(
+            f"Batch {batch_id} is a {actual_kind} batch. Forget it with: "
+            f"janki enrich {flag} --batch-forget."
+        )
     book.clear_batch(batch_id)
     if (ledger_error := _save_ledger(book)) is not None:
         print(f"warning: {ledger_error}", file=sys.stderr)
@@ -1461,12 +1995,31 @@ def _batch_forget(config: ProjectConfig) -> int:
             file=sys.stderr,
         )
         return 1
+    if recovery is not None and recovery.batch_id == batch_id:
+        try:
+            ledger.clear_batch_recovery(
+                config.ledger_file, batch_id, expected=recovery
+            )
+        except ledger.LedgerError as exc:
+            print(f"warning: {exc}", file=sys.stderr)
+            print(
+                "The ledger batch was forgotten, but its recovery journal remains. "
+                "Run --batch-forget again to clear that validated journal.",
+                file=sys.stderr,
+            )
+            return 1
     print(
         f"Forgot batch {batch_id} ({len(entry.get('pending_ids', []))} record(s), "
         f"submitted {entry.get('submitted_at', 'on an unknown date')}). Its "
         "results are still on Anthropic's side and reachable from the console "
         "under that id; janki will not look for them again."
     )
+    if recovery is not None and recovery.batch_id != batch_id:
+        print(
+            f"  Recovery for concurrently submitted polish batch "
+            f"{recovery.batch_id} remains intact. Restore it with: janki enrich "
+            "--polish-meanings --batch-fetch"
+        )
     return 0
 
 
@@ -1479,11 +2032,23 @@ def _batch_fetch(
     here. A batch still running prints its status and exits 0, which is a
     successful answer to "is it ready" — the question this command asks.
     """
+    _refuse_unfinished_polish_recovery(config)
     output_path = config.normalized_file.resolve()
+    output_revision = records_revision(output_path)
     records = load_records(output_path) if output_path.exists() else []
     book = ledger.load(config.ledger_file)
     pending = book.pending_batch()
-    if pending is not None and not records:
+    if pending is None:
+        print("No batch is pending. Submit one with: janki enrich --ai --batch-submit")
+        return 0
+    batch_id, entry = pending
+    actual_kind = str(entry.get("kind") or "ai")
+    if actual_kind != "ai":
+        raise JankiError(
+            f"Batch {batch_id} is a meaning-polish batch. Fetch it with: "
+            "janki enrich --polish-meanings --batch-fetch."
+        )
+    if not records:
         # An empty collection is a --root pointed at the wrong project or a
         # normalized file that went missing, not a batch that failed — so the
         # batch stays pending rather than being cleared against nothing.
@@ -1494,16 +2059,12 @@ def _batch_fetch(
         # collect yet still says so rather than erroring; this one is checked
         # first, before even that call. `--batch-forget` is the way out of both.
         raise JankiError(
-            f"Batch {pending[0]} is pending, but there are no records in "
+            f"Batch {batch_id} is pending, but there are no records in "
             f"{output_path} to apply it to. Point --root at the right project, "
             "or restore the file, and fetch again — fetching costs nothing. If "
             "the collection is gone for good, 'janki enrich --ai --batch-forget' "
             "drops the entry."
         )
-    if pending is None:
-        print("No batch is pending. Submit one with: janki enrich --ai --batch-submit")
-        return 0
-    batch_id, entry = pending
     pending_ids = [str(item) for item in entry.get("pending_ids", [])]
     # Both from the entry, not from this invocation: the batch was submitted
     # under one model and one set of overwritable fields, and it was answered
@@ -1587,6 +2148,7 @@ def _batch_fetch(
 
     for warning in result.warnings:
         print(f"warning: {warning}", file=sys.stderr)
+    _report_ai_no_changes(result)
     for record_id, reason in outcome.failed.items():
         # The reason carries its own ending: whether the record is still there
         # to leave untouched is something only the apply pass knows.
@@ -1641,6 +2203,7 @@ def _batch_fetch(
         model=model,
         force=args.force,
         assume_yes=args.yes,
+        expected=output_revision,
     )
     if code != 0:
         # Declined, or the ledger write failed. Either way the batch stays
@@ -1797,12 +2360,13 @@ def _polish_meanings(config: ProjectConfig, args: argparse.Namespace) -> int:
     answer a single prompt can take.
     """
     output_path = config.normalized_file.resolve()
+    output_revision = records_revision(output_path)
     records = load_records(output_path) if output_path.exists() else []
     if not records:
         print(f"No records to enrich in {output_path}.")
         return 0
 
-    model = args.model or config.enrich_model
+    model = args.model or config.polish_model
     style_guide = claude_client.read_style_guide(config.root)
     targets = enrich.polish_targets(records, args.ids or None)
     print(
@@ -1859,7 +2423,7 @@ def _polish_meanings(config: ProjectConfig, args: argparse.Namespace) -> int:
         print("Nothing written.")
         return 0
 
-    save_records_json(output_path, updated)
+    save_records_json(output_path, updated, expected=output_revision)
     for record_id in accepted:
         book.record_enriched(
             record_id, kind="polish", model=model, fields=enrich.POLISH_FIELDS
@@ -2077,6 +2641,7 @@ def command_audio(args: argparse.Namespace) -> int:
     """
     config = _load_config(args)
     output_path = config.normalized_file.resolve()
+    output_revision = records_revision(output_path)
     records = load_records(output_path) if output_path.exists() else []
     if not records:
         print(f"No records to voice in {output_path}.")
@@ -2141,7 +2706,7 @@ def command_audio(args: argparse.Namespace) -> int:
         )
 
     if result.file_count:
-        save_records_json(output_path, result.records)
+        save_records_json(output_path, result.records, expected=output_revision)
     ledger_error = _save_ledger(book)
 
     print(
@@ -2236,6 +2801,7 @@ def command_promote(args: argparse.Namespace) -> int:
     # permanently, since a stored id is exempt from the re-mint that repairs it.
     # Held rows stay in data/staging/, which is committed.
     output_path = config.normalized_file.resolve()
+    output_revision = records_revision(output_path)
     existing = load_records(output_path) if output_path.exists() else []
     stored_ids, unreadable = status.surviving_ids(config, existing)
     for problem in unreadable:
@@ -2271,7 +2837,7 @@ def command_promote(args: argparse.Namespace) -> int:
     book = ledger.load(config.ledger_file)
 
     merged, outcomes = merge_records(existing, result.promoted, ())
-    save_records_json(output_path, merged)
+    save_records_json(output_path, merged, expected=output_revision)
 
     added = sum(
         book.record_added(record_id)
@@ -3500,7 +4066,7 @@ def command_review(args: argparse.Namespace) -> int:
 
     # The model that will actually read them, not the configured one:
     # `--model haiku` printed "with claude-opus-5" and billed the other.
-    model = args.model or config.enrich_model
+    model = args.model or config.review_model
     print(f"Reading {len(todo)} card(s) with {model}...")
     fresh, failures = review.review_records(
         todo,
@@ -3959,22 +4525,23 @@ def build_parser() -> argparse.ArgumentParser:
     enrich_parser.add_argument(
         "--ai",
         action="store_true",
-        help="Write examples and usage notes with the Claude API.",
+        help="Write examples and usage notes with the configured AI provider.",
     )
     enrich_parser.add_argument(
         "--batch-submit",
         action="store_true",
         help=(
-            "Send the --ai pass as one Message Batch: half price, answered "
-            "within a day. Collect it later with --batch-fetch."
+            "Send --ai or --polish-meanings through Anthropic's Message "
+            "Batches API: half price, answered within a day. The --ai form "
+            "requires enrich_provider = \"anthropic\"."
         ),
     )
     enrich_parser.add_argument(
         "--batch-fetch",
         action="store_true",
         help=(
-            "Collect the pending batch if it has finished, or report how far "
-            "along it is."
+            "Collect the pending batch if it has finished. Meaning-polish "
+            "proposals are then reviewed locally and can be resumed with q."
         ),
     )
     enrich_parser.add_argument(

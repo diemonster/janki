@@ -99,18 +99,21 @@ Set `[ai] adjudicate_model = ""` to turn it off entirely.
 
 `janki enrich --jpdb` fills what jpdb knows. Two more passes write what it does
 not — an example sentence a beginner can read, a note on how the word is
-actually used, better English glosses. Both need the AI extra and an Anthropic
-key, the same ones `janki extract` uses:
+actually used, better English glosses. Both need the AI extra. Immediate
+example writing uses the authenticated Codex CLI by default; meaning polish,
+extraction, and Anthropic batch submission use an Anthropic key:
 
 ```bash
 python -m pip install -e '.[ai]'
+codex login
 export ANTHROPIC_API_KEY='...'
 ```
 
 `--ai` needs `JPDB_API_KEY` as well, because it checks every sentence it writes
-against jpdb's parse of it — so the live pass and `--batch-fetch` will not start
-without one. `--batch-submit` does not need it: no sentence exists to check yet.
-Neither does `--polish-meanings`, which writes English and asks jpdb nothing.
+against jpdb's parse of it — so the live pass and an AI `--batch-fetch` will not
+start without one. `--batch-submit` does not need it: no sentence exists to
+check yet. Neither does `--polish-meanings`, including its batch actions, which
+writes English and asks jpdb nothing.
 
 One pass per run. `--jpdb`, `--ai` and `--polish-meanings` each show you their
 own diff, and merging two unrelated sets of proposals into one y/n is not
@@ -168,6 +171,8 @@ route.
 ```bash
 janki enrich --polish-meanings              # every record
 janki enrich --polish-meanings word:聞く:きく # just this one
+janki enrich --polish-meanings --batch-submit # price a large pass as one batch
+janki enrich --polish-meanings --batch-fetch  # collect and review its proposals
 ```
 
 This is the one pass that rewrites a field that is already full, so it is a
@@ -193,6 +198,20 @@ are the same verb with two meanings a learner needs kept apart, and the
 sentences the record was collected with are the only evidence of which one it
 means.
 
+For a large pass, `--batch-submit` sends the same per-record requests through
+Anthropic's Message Batches API. `--batch-fetch` waits until the answers exist,
+then presents their meaning diffs locally. Answering `q` records exactly the
+unreviewed proposal IDs; the next fetch resumes there without another model
+call or another charge. Accepted proposals are written as they are reviewed,
+and declined or unchanged rows are settled rather than shown again.
+
+Submission also records a fingerprint of every record-specific prompt. If a
+record's meanings, examples, or other prompt inputs change while the batch is
+running, fetch names that record and ignores its now-stale answer instead of
+overwriting the newer curation. A polish batch submitted by an older janki that
+did not record those fingerprints must be explicitly forgotten and resubmitted;
+janki cannot safely infer whether its answers are still current.
+
 ### Large runs: batch mode
 
 The Message Batches API is the same request at half price, answered within a day
@@ -205,12 +224,27 @@ janki enrich --ai --batch-fetch     # collect it, or hear how far along it is
 janki enrich --ai --batch-forget    # give up on one that can no longer land
 ```
 
+Meaning polish uses the same submit/fetch/forget flags with
+`--polish-meanings`; unlike AI enrichment, its fetch remains a per-record
+review because it replaces curated content rather than filling empty fields.
+
 One batch at a time: two in flight would leave two answers for the same word and
 no way to say which is current. The batch id and the records it covers live in
 the ledger, because a submitted batch nobody kept the id of is work that was paid
 for and cannot be collected. `--batch-fetch` polls once and exits — the point of
 batching is that nobody is sitting there — so a batch still running just reports
 its status.
+
+Meaning-polish also protects the two moments when the external batch, records,
+and ledger cannot be written as one transaction. Janki atomically writes a
+recovery journal beside the configured ledger
+(`data/ledger.polish-batch-recovery.json` by default) before registering a
+newly submitted batch and before landing accepted meanings. If a concurrent or
+failed ledger write interrupts either handoff, the next
+`janki enrich --polish-meanings --batch-fetch` restores the full descriptor or
+records the accepted proposals' provenance before it checks prompt fingerprints.
+The file is machine-owned operational state: do not edit or delete it. Janki
+validates its ownership marker and batch id before removing it after recovery.
 
 Answers go through exactly the same checks as the live pass. A row the batch
 reports as errored, expired or canceled is reported by name and leaves its record
@@ -220,7 +254,7 @@ janki's own schema is the only thing rejecting it, so a later fetch retries
 exactly those rows. `--batch-forget` is there for when they are not worth
 chasing.
 
-### What it costs
+### What Anthropic batch enrichment costs
 
 The rates are per million tokens, and the batch API halves both:
 
@@ -241,7 +275,8 @@ what janki already knows. One call per record, every time.
 
 That makes the output the variable, and the part worth measuring rather than
 predicting: current models think before they answer, and thinking is billed as
-output. **Run one record first and look at the usage in the Anthropic console**
+output. **Run one Anthropic-backed record first and look at the usage in the
+Anthropic console**
 before pointing a pass at a few thousand. A rough floor for planning is a cent or
 two per record on `claude-opus-5`, half that batched — but treat a number you
 measured on your own collection as the real one.
@@ -259,9 +294,34 @@ model.
 ```toml
 [ai]
 extract_model = "claude-opus-5"
-enrich_model = "claude-opus-5"
+enrich_provider = "codex"
+enrich_model = "gpt-5.6-sol"
+enrich_reasoning_effort = "ultra"
+polish_model = "claude-opus-5"
+review_model = "claude-opus-5"
 ```
 
-`enrich_model` covers `--ai` and `--polish-meanings`; `--model` overrides it for
-one run. A batch is fetched with the model it was **submitted** under, whatever
-the config says by the time you collect it, because that is what answered it.
+The immediate `--ai` pass uses `enrich_provider`, `enrich_model`, and (for
+Codex) `enrich_reasoning_effort`. `--model` overrides the model for one run.
+Meaning polish and the card review gate remain Anthropic-backed and have their
+own model settings so changing the enrichment provider cannot change them by
+accident.
+
+Codex receives imported deck text as untrusted prompt content. Janki runs the
+CLI from an empty temporary workspace with user configuration ignored, keeps
+the read-only sandbox and execution-policy rules enabled, and disables shell,
+unified exec, multi-agent, app/plugin, browser/computer, local-image, and web
+tools for that call. The model therefore has no local file-reading tool through
+which a prompt embedded in a source gloss could retrieve host data.
+
+For upgrade compatibility, an older `[ai]` table that has `enrich_model` but no
+`enrich_provider` keeps its original meaning: Anthropic is selected and that
+model remains the default for enrichment, meaning polish, and review. Add
+`enrich_provider = "codex"` explicitly when migrating that configuration to
+Codex-backed enrichment.
+
+Message Batches are an Anthropic API feature. For an `--ai` batch, set
+`enrich_provider = "anthropic"` and choose a Claude `enrich_model`; polish
+batches use `polish_model`. An already pending batch remains fetchable if the
+config later changes. A batch is fetched with the model it was **submitted**
+under because that is what answered it.

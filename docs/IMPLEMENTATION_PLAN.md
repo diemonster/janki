@@ -2079,3 +2079,166 @@ Milestone 5 shipped one thing it did not plan (`tts/openai_tts.py`) and
 did not ship one thing it did (`tts/azure.py`); both are recorded under
 M5.7. The `janki status` notetype detector specified in M5.5 moved to
 M5.8, which is now the only open item in Milestone 5's neighbourhood.
+
+---
+
+## Milestone 6 — Enriching decks janki did not create
+
+The v1.0.0 line is finished: every task in Milestones 1–5 is `[x]`, the
+history carries no AI co-author trailers, and `main` is tagged. This
+milestone starts from a question the earlier ones never asked — *what
+about the decks already in Anki?* — and from what a twenty-record pilot
+of that idea measured.
+
+### [x] M6.1 `janki import-anki` — read a deck out of the collection
+
+Files: `src/japanese_anki/importers/anki_deck.py` (new),
+`src/japanese_anki/collection.py` (`read_deck_notes`),
+`src/japanese_anki/identifiers.py` (`is_kana`), `src/japanese_anki/cli.py`,
+`tests/test_import_anki.py` (new).
+
+Reads a deck through the same copy-then-open-read-only path `janki
+status` uses, maps Front/Back into records, and writes them to
+`data/staging/` — never to the collection, because which line of a
+shared deck's HTML is the reading is inference, and inference does not
+ship unread here. janki still never writes to Anki.
+
+Measured on the Yotsubato Volume 1 reading pack: **708 records from 716
+notes**, the remaining eight being the same word listed twice. The deck's
+conventions, each found by looking at what was failing rather than
+assumed: `すごい　「すげえ」` (reading then the spoken form, kept as a usage
+note), the same variant on its own line (resolved by position — the first
+*unbracketed* kana line is the reading), `「げつもく」` with nothing outside
+the brackets (there the brackets hold the word), and `あれ？` (punctuation
+belongs on the card, not in a pronunciation that becomes half the record
+id). Two unbracketed kana lines stay held: a deck glossing in Japanese
+looks exactly like one giving a reading.
+
+### [x] M6.2 What the pilot's review gate paid for
+
+Files: `src/japanese_anki/jpdb.py`, `src/japanese_anki/kanji.py`,
+`src/japanese_anki/enrich.py`, `src/japanese_anki/qc.py`.
+
+Three defects the gate found on twenty cards, all systemic — each would
+have recurred across the remaining 688:
+
+- **A part of speech jpdb names second.** `["adv", "adj-i"]` for 凄い,
+  `["adv", "n"]` for 明日. Taking the first recognized code cost an
+  い-adjective its conjugation table and made temporal nouns adverbs.
+- **A reading split across characters that do not have it.** jpdb hands
+  back one reading per character; 明日 arrived as `明[あ] 日[した]`, and
+  した is no reading of 日. Checked against KANJIDIC, which janki already
+  holds, so it is a lookup rather than an opinion. It caught 一杯 too.
+- **A spill that needed a segmentation.** jpdb's parse of the same
+  sentence is fetched to verify readings and was then discarded; its word
+  boundaries say where the separator goes. No extra call, no model.
+
+### [x] M6.3 Report the records an AI pass wrote nothing for
+
+*Done 2026-08-11. Live and batched passes now report both the count and every
+record id whose valid model answer produced no writable change, including when
+other records in the same pass did change.*
+
+Depends on: M6.2
+Files: `src/japanese_anki/enrich.py`, `src/japanese_anki/cli.py`,
+`tests/test_enrich_ai.py`.
+
+`enrich --ai` visited 凄い and よつば, wrote nothing for either, and
+reported only `Enriched 17 record(s)`. A rejected sentence *is* reported;
+an answer that produces no change is not, so the only way to notice is to
+diff the collection. At 708 records that is roughly 75 records quietly
+without examples.
+
+- Count targets, and name every target that produced no change, in the
+  same shape the rejection warning already uses.
+- A test that a record whose answer yields nothing is named on stdout.
+
+### [x] M6.4 A concurrent-write guard for the records file
+
+*Done 2026-08-11. Every read-modify-write command captures the exact records
+file it started from and `save_records_json` refuses if that content changed
+before the atomic replace. The newer file stays intact and the error names the
+safe remedy: let the other command finish, then re-run. Review hardening put an
+interprocess lock around the comparison and replace (and the ledger's matching
+transaction), closing the remaining window where two writers could both pass
+the comparison. The stable lock lives under a private per-user temp or cache
+directory, not in tracked `data/`.*
+
+Depends on: —
+Files: `src/japanese_anki/io.py`, `src/japanese_anki/ledger.py` (the
+existing guard is the model), `tests/test_io.py`.
+
+`enrich --ai` run while `janki audio` was still writing saved
+`vocabulary.json` from a copy read before the audio paths landed: 48
+clips on disk that no record referenced. The ledger has a guard for
+exactly this and refused its own write with a message naming the fix; the
+records file has none.
+
+- Same shape as `ledger`'s: remember what was read, refuse to save over a
+  file that changed underneath, and say what to re-run.
+- A test that two writers over one file lose nothing silently.
+
+### [x] M6.5 `--polish-meanings` at scale
+
+*Done 2026-08-11. Chose Message Batch submit/fetch. Fetch keeps the existing
+per-record diff and y/n/q review, but the model work is already complete; `q`
+stores only the unreviewed proposal ids in the ledger so the next fetch resumes
+without paying again or repeating settled rows. Submission fingerprints each
+record's prompt inputs, so edits made while the batch is out cannot be
+overwritten by its older answer. A machine-owned recovery journal preserves the
+full submission descriptor across a failed initial ledger save and preserves
+accepted meanings plus the exact retry set across the records/ledger handoff.
+Fetch reconciles that journal before fingerprint checks, so meanings that
+already landed cannot turn their own provenance into a stale discarded row.
+Review hardening made journal replacement and removal compare-and-swap safe:
+two fetches of the same batch cannot overwrite or clear one another's distinct
+accepted/retry state.*
+
+Depends on: M6.3
+Files: `src/japanese_anki/enrich.py`, `src/japanese_anki/cli.py`.
+
+The pilot's residual errors were all *source gloss quality* — すぐ carried
+"almost" (a sense of もうすぐ), 一杯 "a full container" (the counter, not
+the な-adjective). That is what this pass is for, and it asks about one
+record at a time, which does not fit 688 of them. `--ai` already has
+batch mode; this does not.
+
+- Batch submit/fetch for the polish pass, or a staging-file route like
+  the one `--ai` takes above fifty records.
+- Keep the one-at-a-time path: it is right for a handful, and `q` stopping
+  the spend is a real property.
+
+### [ ] M6.6 The remaining 688 Yotsubato records
+
+Depends on: M6.3, M6.4, M6.5
+Files: `data/staging/anki-yotsubato-volume-1-reading-pack-vocab.yaml`,
+`data/decks/yotsuba.yaml`.
+
+The staging file is written and committed; eighteen of its records are
+promoted, enriched, voiced, gate-passed and built. Measured per record
+from that pilot: ~1.5 jpdb lookups, ~1 Opus call for sentences, ~0.5
+Haiku calls for adjudication, ~1 review call, ~2.8 audio clips, and
+**about one card in six needing a human** — almost all of it now source
+gloss quality rather than janki defects.
+
+- Promote in batches rather than all at once: `janki promote` archives
+  the file when nothing is left held, and a 688-record diff is not review.
+- Expect the deck to need `exclude_tags`/`include_tags` upkeep as it
+  grows — `verbs.yaml` and `yotsuba.yaml` split on the `anki` tag, and a
+  record in both pools has to be assigned to one by hand (ある and いる
+  already were).
+
+### [ ] M6.7 Ship the review hooks with the repository
+
+Depends on: —
+Files: `scripts/` (new home), `.git/hooks/*` (shims), `AGENTS.md`.
+
+`.claude/` is gitignored, so `janki-review.sh` and both git hooks exist
+in one clone and nowhere else: a fresh clone gets no gate at all, and the
+failure-reporting fix (a review that dies now writes `VERDICT: ERROR`
+instead of looking like one still running) travels with neither.
+
+- Move the script somewhere tracked; keep `.git/hooks/*` as thin shims.
+- Keep the kill switch: `.claude/hooks/DISABLED` turns both hooks off and
+  says so on every commit and push. **Currently in place** — delete that
+  file to re-enable.

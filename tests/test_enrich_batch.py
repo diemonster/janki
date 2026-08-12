@@ -165,7 +165,10 @@ def project(tmp_path: Path, records: list[VocabularyRecord]) -> Path:
         "[paths]\n"
         'normalized_file = "vocabulary.json"\n'
         'ledger_file = "ledger.json"\n'
-        'staging_dir = "staging"\n',
+        'staging_dir = "staging"\n'
+        "\n[ai]\n"
+        'enrich_provider = "anthropic"\n'
+        'enrich_model = "claude-opus-5"\n',
         encoding="utf-8",
     )
     (tmp_path / "docs").mkdir(exist_ok=True)
@@ -186,6 +189,26 @@ def patch_all(monkeypatch: pytest.MonkeyPatch, batches: FakeBatches) -> None:
     )
     # transform_schema comes from the SDK; the fake never sends it anywhere.
     monkeypatch.setattr(claude_client, "load_anthropic", fake_sdk)
+
+
+def test_submit_explains_that_message_batches_need_anthropic(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = project(tmp_path, [record()])
+    config = (root / "janki.toml").read_text(encoding="utf-8")
+    (root / "janki.toml").write_text(
+        config.replace('enrich_provider = "anthropic"', 'enrich_provider = "codex"'),
+        encoding="utf-8",
+    )
+
+    code = cli.main(
+        ["--root", str(root), "enrich", "--ai", "--batch-submit"]
+    )
+
+    assert code == 1
+    stderr = capsys.readouterr().err
+    assert "Message Batches API" in stderr
+    assert 'enrich_provider = "anthropic"' in stderr
 
 
 def stored(root: Path) -> dict[str, dict[str, Any]]:
@@ -372,6 +395,30 @@ def test_fetching_with_nothing_pending_says_so(
     assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch"]) == 0
 
     assert "No batch is pending" in capsys.readouterr().out
+
+
+def test_ai_fetch_refuses_a_pending_polish_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = project(tmp_path, many(1))
+    batches = FakeBatches()
+    patch_all(monkeypatch, batches)
+    book = ledger.load(root / "ledger.json")
+    item = many(1)[0]
+    book.record_batch(
+        "msgbatch_polish",
+        kind="polish",
+        model="claude-opus-5",
+        pending_ids=[item.id],
+        prompt_fingerprints={item.id: enrich.polish_prompt_fingerprint(item)},
+    )
+    book.save()
+
+    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch"]) == 1
+
+    assert "meaning-polish batch" in capsys.readouterr().err
+    assert list(book_of(root)["pending_batches"]) == ["msgbatch_polish"]
+    assert batches.retrieved == []
 
 
 def test_a_batch_still_running_reports_and_exits_zero(

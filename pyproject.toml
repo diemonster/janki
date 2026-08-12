@@ -22,17 +22,17 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# The Anthropic SDK is optional so that import, build, status and every other
-# non-AI command runs on a checkout that never installed it. claude_client.py
-# imports it lazily and names this extra when it is missing.
+# AI response validation and the Anthropic SDK are optional so that import,
+# build, status and every other non-AI command run without them. Codex-backed
+# enrichment launches the separately installed, authenticated Codex CLI.
 # The floor is the version claude_client.py was verified against, not a guess:
 # it needs the top-level transform_schema export and
 # messages.create(output_config={"format": ...}), and a floor nobody checked
 # would fail at the first AI call rather than at install time.
 ai = [
   "anthropic>=0.121",
-  # Imported directly by claude_client to validate a response against the
-  # schema, so it is declared rather than leaned on as an SDK transitive.
+  # Imported directly by both structured-output clients to validate a response
+  # against the schema, so it is declared rather than leaned on transitively.
   "pydantic>=2",
 ]
 # dev pulls in ai on purpose. The *runtime* promise is that non-AI commands

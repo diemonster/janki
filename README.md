@@ -30,12 +30,18 @@ Anthropic key: jpdb re-reads the sentence either way, and the adjudicator that
 would settle a disagreement between them is what those buy — without it the
 disagreement stays flagged.
 
-What is left is two keys:
+Immediate `enrich --ai` calls use your Codex CLI login. Install the Codex CLI
+and authenticate it once if needed:
 
 ```bash
-export ANTHROPIC_API_KEY='...'   # anything that asks a model: extract,
-                                 # patterns, review, enrich --ai and
-                                 # --polish-meanings
+codex login
+```
+
+The remaining provider credentials are environment variables:
+
+```bash
+export ANTHROPIC_API_KEY='...'   # extract, patterns, review,
+                                 # --polish-meanings, and Anthropic batches
 export JPDB_API_KEY='...'        # every jpdb lookup — import-jpdb, promote's
                                  # reading check, patterns, jpdb ping, and
                                  # enrich --jpdb/--ai/--staging/--recheck-furigana
@@ -161,6 +167,7 @@ own collection is the newer side. Details and the measurements behind them:
 | `janki promote FILE.yaml` | Move a reviewed staging file into the collection |
 | `janki enrich --jpdb` | Fill fields from the dictionary |
 | `janki enrich --ai` | Write example sentences and usage notes |
+| `janki enrich --polish-meanings --batch-submit` | Queue a large gloss-improvement pass for later review |
 | `janki kanji` | Look up stroke order and on/kun readings |
 | `janki audio --words --examples` | Voice the words and the sentences |
 | `janki review` | Read the finished cards for correctness |
@@ -190,7 +197,10 @@ max_meanings = 4              # senses per card; 0 shows them all, a deck may
                               # set its own. The record keeps every sense
 
 [ai]
-enrich_model = "claude-opus-5"
+enrich_provider = "codex"       # or "anthropic"
+enrich_model = "gpt-5.6-sol"
+enrich_reasoning_effort = "ultra"
+polish_model = "claude-opus-5"  # review_model is independently configurable
 
 [tts]
 voicevox_speaker = 13         # words, with the pitch accent forced

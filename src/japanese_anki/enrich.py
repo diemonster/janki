@@ -31,6 +31,7 @@ you meant, and ``/parse`` picks for itself unless it is told. So the pass runs
 from __future__ import annotations
 
 import functools
+import hashlib
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, is_dataclass, replace
 from dataclasses import fields as dc_fields
@@ -62,6 +63,7 @@ __all__ = [
     "absorb_ai_call",
     "apply_ai_result",
     "apply_batch_results",
+    "apply_polish_batch_results",
     "batch_custom_id",
     "batch_key_map",
     "batch_requests",
@@ -72,7 +74,10 @@ __all__ = [
     "needs_reading",
     "parse_force_fields",
     "polish_meanings",
+    "polish_batch_requests",
+    "polish_call_outcome",
     "polish_prompt",
+    "polish_prompt_fingerprint",
     "polish_schema",
     "polish_targets",
     "suggest_readings",
@@ -1215,6 +1220,7 @@ class AiResult:
     rejected: dict[str, list[str]] = field(default_factory=dict)
     unverified: dict[str, list[str]] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    no_changes: list[str] = field(default_factory=list)
     looked_up: int = 0
 
     @property
@@ -1251,6 +1257,8 @@ def enrich_ai(
     force_fields: Sequence[str] = (),
     ids: Sequence[str] | None = None,
     client: Any | None = None,
+    parse_call: Any | None = None,
+    call_options: Mapping[str, Any] | None = None,
     jpdb_client: jpdb.JpdbClient | None = None,
     taught: str = "",
 ) -> AiResult:
@@ -1265,16 +1273,19 @@ def enrich_ai(
     positions = {record.id: index for index, record in enumerate(result.records)}
     targets = ai_targets(result.records, ids)
     blocks = claude_client.system_blocks(style_guide, AI_INSTRUCTIONS)
+    caller = parse_call or claude_client.parse_call
+    options = dict(call_options or {})
     recent: list[str] = []
 
     for record in targets:
         result.looked_up += 1
-        call = claude_client.parse_call(
+        call = caller(
             model,
             blocks,
             ai_prompt(record, recent[-VARIETY_EXAMPLES:], taught),
             ai_schema(),
             client,
+            **options,
         )
         absorb_ai_call(
             result,
@@ -1351,6 +1362,8 @@ def absorb_ai_call(
         recent.extend(
             example.japanese for example in outcome.record.examples if example.japanese
         )
+    else:
+        result.no_changes.append(record.id)
 
 
 # --- polishing meanings ------------------------------------------------------
@@ -1454,6 +1467,11 @@ def polish_prompt(record: VocabularyRecord) -> str:
     return "\n".join(lines)
 
 
+def polish_prompt_fingerprint(record: VocabularyRecord) -> str:
+    """Identify the exact record content a polish answer was requested for."""
+    return hashlib.sha256(polish_prompt(record).encode("utf-8")).hexdigest()
+
+
 @dataclass(frozen=True, slots=True)
 class PolishOutcome:
     """One record's turn through the pass: what was proposed, or why nothing was."""
@@ -1492,6 +1510,31 @@ def apply_polish_result(record: VocabularyRecord, parsed: Any) -> PolishOutcome:
     )
 
 
+def polish_call_outcome(
+    record: VocabularyRecord, call: claude_client.CallResult, *, model: str
+) -> PolishOutcome:
+    """Turn either a live or batched model call into one polish outcome."""
+    parsed, stop_reason, refusal = call
+    if stop_reason == "refusal":
+        detail = f" ({refusal.category})" if refusal is not None else ""
+        return PolishOutcome(
+            record=record,
+            warning=(
+                f"{record.id}: {model} declined to gloss "
+                f"{record.expression}{detail}; left alone."
+            ),
+        )
+    if parsed is None:
+        return PolishOutcome(
+            record=record,
+            warning=(
+                f"{record.id}: {model} returned nothing usable for "
+                f"{record.expression} (stop reason: {stop_reason}); left alone."
+            ),
+        )
+    return apply_polish_result(record, parsed)
+
+
 def polish_meanings(
     records: Sequence[VocabularyRecord],
     *,
@@ -1509,29 +1552,13 @@ def polish_meanings(
     """
     blocks = claude_client.system_blocks(style_guide, POLISH_INSTRUCTIONS)
     for record in polish_targets(records, ids):
-        parsed, stop_reason, refusal = claude_client.parse_call(
-            model, blocks, polish_prompt(record), polish_schema(), client
+        yield polish_call_outcome(
+            record,
+            claude_client.parse_call(
+                model, blocks, polish_prompt(record), polish_schema(), client
+            ),
+            model=model,
         )
-        if stop_reason == "refusal":
-            detail = f" ({refusal.category})" if refusal is not None else ""
-            yield PolishOutcome(
-                record=record,
-                warning=(
-                    f"{record.id}: {model} declined to gloss "
-                    f"{record.expression}{detail}; left alone."
-                ),
-            )
-            continue
-        if parsed is None:
-            yield PolishOutcome(
-                record=record,
-                warning=(
-                    f"{record.id}: {model} returned nothing usable for "
-                    f"{record.expression} (stop reason: {stop_reason}); left alone."
-                ),
-            )
-            continue
-        yield apply_polish_result(record, parsed)
 
 
 # --- the AI pass, batched ----------------------------------------------------
@@ -1611,6 +1638,113 @@ def batch_requests(
         for record in targets
     ]
     return requests, record_ids
+
+
+def polish_batch_requests(
+    records: Sequence[VocabularyRecord],
+    *,
+    model: str,
+    style_guide: str,
+    ids: Sequence[str] | None = None,
+) -> tuple[list[dict[str, Any]], list[str], dict[str, str]]:
+    """Anthropic batch entries for a meaning-polish pass."""
+    targets = polish_targets(records, ids)
+    blocks = claude_client.system_blocks(
+        style_guide, POLISH_INSTRUCTIONS, cache_ttl="1h"
+    )
+    record_ids = [record.id for record in targets]
+    prompt_fingerprints = {
+        record.id: polish_prompt_fingerprint(record) for record in targets
+    }
+    batch_key_map(record_ids)
+    requests = [
+        claude_client.batch_request(
+            batch_custom_id(record.id),
+            model,
+            blocks,
+            polish_prompt(record),
+            polish_schema(),
+        )
+        for record in targets
+    ]
+    return requests, record_ids, prompt_fingerprints
+
+
+@dataclass(slots=True)
+class PolishBatchApplyResult:
+    """Reviewable polish proposals and every batch row not represented by one."""
+
+    proposals: dict[str, PolishOutcome] = field(default_factory=dict)
+    unchanged: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    failed: dict[str, str] = field(default_factory=dict)
+    invalid: dict[str, str] = field(default_factory=dict)
+    missing: list[str] = field(default_factory=list)
+    stale: list[str] = field(default_factory=list)
+    settled: list[str] = field(default_factory=list)
+    looked_up: int = 0
+
+
+def apply_polish_batch_results(
+    records: Sequence[VocabularyRecord],
+    entries: Iterable[claude_client.BatchEntry],
+    pending_ids: Sequence[str],
+    *,
+    model: str,
+    prompt_fingerprints: Mapping[str, str],
+    only: Sequence[str] = (),
+) -> PolishBatchApplyResult:
+    """Map a completed polish batch back to records without accepting proposals."""
+    result = PolishBatchApplyResult()
+    by_id = {record.id: record for record in records}
+    keys = batch_key_map(pending_ids)
+    candidates = {str(item) for item in only}
+    seen: set[str] = set()
+
+    for entry in entries:
+        record_id = keys.get(entry.custom_id)
+        if record_id is None:
+            result.warnings.append(
+                f"The batch returned a result keyed {entry.custom_id!r}, which "
+                "belongs to no record this batch was submitted for; it was "
+                "ignored rather than guessed at."
+            )
+            continue
+        seen.add(record_id)
+        if candidates and record_id not in candidates:
+            result.settled.append(record_id)
+            continue
+        record = by_id.get(record_id)
+        if record is None:
+            result.missing.append(record_id)
+            continue
+        if prompt_fingerprints.get(record_id) != polish_prompt_fingerprint(record):
+            result.stale.append(record_id)
+            continue
+        if entry.result is None:
+            if entry.outcome == "invalid":
+                result.invalid[record_id] = entry.detail or "schema validation failed"
+            else:
+                detail = f": {entry.detail}" if entry.detail else ""
+                result.failed[record_id] = f"the batch reported {entry.outcome}{detail}"
+            continue
+        result.looked_up += 1
+        outcome = polish_call_outcome(record, entry.result, model=model)
+        if outcome.warning:
+            result.warnings.append(outcome.warning)
+        elif outcome.proposed is None:
+            result.unchanged.append(record_id)
+        else:
+            result.proposals[record_id] = outcome
+
+    for record_id in pending_ids:
+        if record_id in seen or (candidates and record_id not in candidates):
+            continue
+        if record_id in by_id:
+            result.failed[record_id] = "the batch returned no result for it"
+        else:
+            result.missing.append(record_id)
+    return result
 
 
 @dataclass(slots=True)

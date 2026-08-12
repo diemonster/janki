@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import stat
+import threading
 from pathlib import Path
 
 import pytest
@@ -177,6 +178,102 @@ def test_save_records_json_writes_sorted_records_that_load_back(tmp_path: Path) 
     assert text.endswith("\n")
     assert "話す" in text  # not escaped to 話
     assert [record.expression for record in io.load_records(target)] == ["話す", "食べる"]
+
+
+def test_two_record_writers_cannot_silently_discard_each_other(tmp_path: Path) -> None:
+    target = tmp_path / "vocabulary.json"
+    io.save_records_json(target, [_record()])
+
+    first_revision = io.records_revision(target)
+    first_records = io.load_records(target)
+    second_revision = io.records_revision(target)
+    second_records = io.load_records(target)
+
+    first_records.append(_record("食べる", "たべる"))
+    io.save_records_json(target, first_records, expected=first_revision)
+    second_records.append(_record("見る", "みる"))
+
+    with pytest.raises(DataError) as caught:
+        io.save_records_json(target, second_records, expected=second_revision)
+
+    assert "changed on disk since it was read" in str(caught.value)
+    assert "re-run" in str(caught.value)
+    assert [record.expression for record in io.load_records(target)] == ["話す", "食べる"]
+
+
+def test_revision_check_and_replace_are_one_locked_transaction(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "vocabulary.json"
+    io.save_records_json(target, [_record()])
+    first_revision = io.records_revision(target)
+    second_revision = io.records_revision(target)
+    real_atomic_write = io.atomic_write_text
+    first_in_writer = threading.Event()
+    release_first = threading.Event()
+    second_done = threading.Event()
+    failures: dict[str, BaseException] = {}
+
+    def held_write(path: Path, text: str) -> None:
+        if "食べる" in text:
+            first_in_writer.set()
+            release_first.wait(timeout=2)
+        real_atomic_write(path, text)
+
+    def save_first() -> None:
+        try:
+            io.save_records_json(
+                target, [_record(), _record("食べる", "たべる")], expected=first_revision
+            )
+        except BaseException as exc:  # pragma: no cover - asserted below
+            failures["first"] = exc
+
+    def save_second() -> None:
+        try:
+            io.save_records_json(
+                target, [_record(), _record("見る", "みる")], expected=second_revision
+            )
+        except BaseException as exc:
+            failures["second"] = exc
+        finally:
+            second_done.set()
+
+    monkeypatch.setattr(io, "atomic_write_text", held_write)
+    first = threading.Thread(target=save_first)
+    second = threading.Thread(target=save_second)
+    first.start()
+    assert first_in_writer.wait(timeout=2)
+    second.start()
+    second_finished_before_release = second_done.wait(timeout=0.1)
+    release_first.set()
+    first.join(timeout=2)
+    second.join(timeout=2)
+
+    assert not second_finished_before_release
+    assert "first" not in failures
+    assert isinstance(failures.get("second"), DataError)
+    assert [record.expression for record in io.load_records(target)] == ["話す", "食べる"]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Windows temp directories are per-user")
+def test_locks_avoid_a_shared_temp_namespace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    shared_temp = tmp_path / "shared-temp"
+    shared_temp.mkdir(mode=0o700)
+    shared_temp.chmod(0o1777)
+    user_home = tmp_path / "user-home"
+    user_home.mkdir()
+    monkeypatch.setattr(io.tempfile, "gettempdir", lambda: str(shared_temp))
+    monkeypatch.setattr(io, "_user_home", lambda: user_home)
+
+    with io.exclusive_path_lock(tmp_path / "vocabulary.json"):
+        pass
+
+    lock_root = user_home / ".cache" / "janki" / "file-locks"
+    assert lock_root.is_dir()
+    assert stat.S_IMODE(lock_root.stat().st_mode) == 0o700
+    assert not (shared_temp / "janki-file-locks").exists()
 
 
 def test_main_reports_any_janki_error_without_registration(

@@ -1,7 +1,7 @@
 """The single owner of the Anthropic client.
 
-Every AI feature — ``extract`` (M3.3), ``enrich --ai`` (M4.2),
-``--polish-meanings`` (M4.3), batch submit/fetch (M4.4) — calls
+Every Anthropic-backed AI feature — ``extract`` (M3.3),
+``--polish-meanings`` (M4.3), review, and batch submit/fetch (M4.4) — calls
 :func:`parse_call` rather than building its own client. One owner means one
 place where the model is chosen, the API key is resolved, the style guide is
 cached, and the **stop reason is handed back to the caller** — the last of
@@ -18,6 +18,9 @@ signature instead of by everyone remembering. What to *do* about each reason
 is the caller's — M3.3 turns ``refusal`` into an ``ExtractError`` naming the
 category and refuses truncated output outright — because a truncated
 vocabulary table and a truncated meaning polish deserve different answers.
+
+Immediate ``enrich --ai`` calls may instead use :mod:`codex_client`; both
+providers return the same :class:`CallResult` shape.
 
 The ``anthropic`` package is an optional dependency (``pip install -e '.[ai]'``)
 and is imported lazily, so ``janki build`` works on a machine that has never

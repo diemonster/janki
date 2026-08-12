@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from japanese_anki import cli, enrich
+from japanese_anki import claude_client, cli, enrich
 from japanese_anki.claude_client import CallResult, Refusal
 from japanese_anki.enrich import (
     apply_polish_result,
@@ -90,6 +90,10 @@ def stored(root: Path) -> dict[str, dict[str, Any]]:
     return {item["id"]: item for item in payload}
 
 
+def book_of(root: Path) -> dict[str, Any]:
+    return json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+
+
 def answers(monkeypatch: pytest.MonkeyPatch, *replies: str) -> list[str]:
     """Drive the per-record prompt from a script, and record what it asked."""
     seen = list(replies)
@@ -139,6 +143,20 @@ def test_the_prompt_carries_the_examples_that_say_which_sense_it_is() -> None:
 
     assert "Current meanings: to hear; hearing" in text
     assert "先生に聞きました。" in text
+
+
+def test_the_prompt_fingerprint_covers_meanings_and_sense_defining_examples() -> None:
+    original = record(examples=[ExampleSentence(japanese="音楽を聞きました。")])
+
+    assert enrich.polish_prompt_fingerprint(original) != enrich.polish_prompt_fingerprint(
+        record(
+            meanings=["to ask"],
+            examples=[ExampleSentence(japanese="音楽を聞きました。")],
+        )
+    )
+    assert enrich.polish_prompt_fingerprint(original) != enrich.polish_prompt_fingerprint(
+        record(examples=[ExampleSentence(japanese="先生に聞きました。")])
+    )
 
 
 def test_a_record_with_no_examples_still_prompts() -> None:
@@ -402,6 +420,431 @@ def test_the_model_can_be_overridden_per_run(
     )
 
     assert call.calls[0]["model"] == "m2"
+
+
+# --- batch scale -------------------------------------------------------------
+
+
+def _patch_polish_batch_submit(
+    monkeypatch: pytest.MonkeyPatch, submitted: list[list[dict[str, Any]]]
+) -> None:
+    def request(
+        custom_id: str, model: str, blocks: Any, content: str, schema: Any
+    ) -> dict[str, Any]:
+        return {"custom_id": custom_id, "model": model, "content": content}
+
+    monkeypatch.setattr(enrich.claude_client, "batch_request", request)
+    monkeypatch.setattr(
+        cli.claude_client,
+        "submit_batch",
+        lambda requests: submitted.append(list(requests)) or "msgbatch_polish",
+    )
+
+
+def test_polish_can_be_submitted_as_one_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    records = [record(), record(id="word:話す:はなす", expression="話す")]
+    root = project(tmp_path, records)
+    submitted: list[list[dict[str, Any]]] = []
+    _patch_polish_batch_submit(monkeypatch, submitted)
+
+    assert cli.main(
+        ["--root", str(root), "enrich", "--polish-meanings", "--batch-submit"]
+    ) == 0
+
+    assert len(submitted[0]) == 2
+    pending = book_of(root)["pending_batches"]["msgbatch_polish"]
+    assert pending["kind"] == "polish"
+    assert pending["pending_ids"] == [item.id for item in records]
+    assert set(pending["prompt_fingerprints"]) == {item.id for item in records}
+
+
+def test_polish_submit_rebases_without_losing_a_parallel_ledger_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    item = record()
+    root = project(tmp_path, [item])
+    _patch_polish_batch_submit(monkeypatch, [])
+    real_save = cli.ledger.Ledger.save
+    first = True
+
+    def race(book: cli.ledger.Ledger) -> None:
+        nonlocal first
+        if first:
+            first = False
+            parallel = cli.ledger.load(book.path)
+            parallel.extra["parallel-agent"] = {"kept": True}
+            real_save(parallel)
+        real_save(book)
+
+    monkeypatch.setattr(cli.ledger.Ledger, "save", race)
+
+    assert cli.main(
+        ["--root", str(root), "enrich", "--polish-meanings", "--batch-submit"]
+    ) == 0
+
+    payload = book_of(root)
+    assert payload["parallel-agent"] == {"kept": True}
+    assert list(payload["pending_batches"]) == ["msgbatch_polish"]
+
+
+def test_failed_polish_submit_keeps_a_complete_auto_recovery_journal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    item = record()
+    root = project(tmp_path, [item])
+    _patch_polish_batch_submit(monkeypatch, [])
+    real_save = cli.ledger.Ledger.save
+    monkeypatch.setattr(
+        cli.ledger.Ledger,
+        "save",
+        lambda self: (_ for _ in ()).throw(cli.ledger.LedgerError("busy ledger")),
+    )
+
+    assert cli.main(
+        ["--root", str(root), "enrich", "--polish-meanings", "--batch-submit"]
+    ) == 1
+
+    recovery = cli.ledger.load_batch_recovery(root / "ledger.json")
+    assert recovery is not None
+    assert recovery.batch_id == "msgbatch_polish"
+    assert recovery.entry["model"]
+    assert recovery.entry["pending_ids"] == [item.id]
+    assert recovery.entry["prompt_fingerprints"][item.id]
+    assert "complete descriptor" in capsys.readouterr().err
+
+    monkeypatch.setattr(cli.ledger.Ledger, "save", real_save)
+    monkeypatch.setattr(cli.claude_client, "batch_status", lambda batch_id: "processing")
+    assert cli.main(
+        ["--root", str(root), "enrich", "--polish-meanings", "--batch-fetch"]
+    ) == 0
+
+    assert list(book_of(root)["pending_batches"]) == ["msgbatch_polish"]
+    assert cli.ledger.load_batch_recovery(root / "ledger.json") is None
+
+
+def test_forget_can_resolve_two_batches_created_by_a_submission_race(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    item = record()
+    root = project(tmp_path, [item])
+    fingerprint = enrich.polish_prompt_fingerprint(item)
+    book = cli.ledger.load(root / "ledger.json")
+    book.record_batch(
+        "msgbatch_in_ledger",
+        kind="polish",
+        model="claude-opus-5",
+        pending_ids=[item.id],
+        prompt_fingerprints={item.id: fingerprint},
+        at="2026-08-11",
+    )
+    book.save()
+    recovery_entry = {
+        "kind": "polish",
+        "model": "claude-opus-5",
+        "submitted_at": "2026-08-11",
+        "pending_ids": [item.id],
+        "force_fields": [],
+        "prompt_fingerprints": {item.id: fingerprint},
+    }
+    cli.ledger.write_batch_recovery(
+        root / "ledger.json", "msgbatch_recovered", recovery_entry
+    )
+
+    assert cli.main(
+        ["--root", str(root), "enrich", "--polish-meanings", "--batch-forget"]
+    ) == 0
+
+    assert book_of(root)["pending_batches"] == {}
+    recovery = cli.ledger.load_batch_recovery(root / "ledger.json")
+    assert recovery is not None
+    assert recovery.batch_id == "msgbatch_recovered"
+    assert "remains intact" in capsys.readouterr().out
+
+
+def test_polish_fetch_refuses_a_pending_ai_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    item = record()
+    root = project(tmp_path, [item])
+    book = cli.ledger.load(root / "ledger.json")
+    book.record_batch(
+        "msgbatch_ai", kind="ai", model="claude-opus-5", pending_ids=[item.id]
+    )
+    book.save()
+
+    assert cli.main(
+        ["--root", str(root), "enrich", "--polish-meanings", "--batch-fetch"]
+    ) == 1
+
+    assert "AI-enrichment batch" in capsys.readouterr().err
+    assert list(book_of(root)["pending_batches"]) == ["msgbatch_ai"]
+
+
+def test_fetching_a_polish_batch_reviews_and_writes_its_proposals(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    item = record()
+    root = project(tmp_path, [item])
+    _patch_polish_batch_submit(monkeypatch, [])
+    assert cli.main(
+        ["--root", str(root), "enrich", "--polish-meanings", "--batch-submit"]
+    ) == 0
+    monkeypatch.setattr(cli.claude_client, "batch_status", lambda batch_id: "ended")
+    monkeypatch.setattr(
+        cli.claude_client,
+        "batch_results",
+        lambda batch_id, schema, model: iter(
+            [
+                claude_client.BatchEntry(
+                    enrich.batch_custom_id(item.id),
+                    "succeeded",
+                    "",
+                    ok("to ask"),
+                )
+            ]
+        ),
+    )
+
+    assert cli.main(
+        [
+            "--root",
+            str(root),
+            "enrich",
+            "--polish-meanings",
+            "--batch-fetch",
+            "--yes",
+        ]
+    ) == 0
+
+    assert stored(root)[item.id]["meanings"] == ["to ask"]
+    assert book_of(root)["pending_batches"] == {}
+    assert book_of(root)["records"][item.id]["enriched"][0]["kind"] == "polish"
+
+
+def test_fetch_recovers_provenance_after_meanings_land_but_ledger_does_not(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    item = record()
+    root = project(tmp_path, [item])
+    _patch_polish_batch_submit(monkeypatch, [])
+    assert cli.main(
+        ["--root", str(root), "enrich", "--polish-meanings", "--batch-submit"]
+    ) == 0
+    monkeypatch.setattr(cli.claude_client, "batch_status", lambda batch_id: "ended")
+    monkeypatch.setattr(
+        cli.claude_client,
+        "batch_results",
+        lambda batch_id, schema, model: iter(
+            [
+                claude_client.BatchEntry(
+                    enrich.batch_custom_id(item.id),
+                    "succeeded",
+                    "",
+                    ok("to ask"),
+                )
+            ]
+        ),
+    )
+    real_save = cli.ledger.Ledger.save
+    monkeypatch.setattr(
+        cli.ledger.Ledger,
+        "save",
+        lambda self: (_ for _ in ()).throw(cli.ledger.LedgerError("busy ledger")),
+    )
+    capsys.readouterr()
+
+    assert cli.main(
+        [
+            "--root",
+            str(root),
+            "enrich",
+            "--polish-meanings",
+            "--batch-fetch",
+            "--yes",
+        ]
+    ) == 1
+
+    assert stored(root)[item.id]["meanings"] == ["to ask"]
+    recovery = cli.ledger.load_batch_recovery(root / "ledger.json")
+    assert recovery is not None
+    assert recovery.phase == "applied"
+    assert recovery.accepted_meanings == {item.id: ["to ask"]}
+    assert "provenance" in capsys.readouterr().err
+
+    monkeypatch.setattr(cli.ledger.Ledger, "save", real_save)
+    monkeypatch.setattr(
+        cli.claude_client,
+        "batch_status",
+        lambda batch_id: pytest.fail("recovery must finish before polling Anthropic"),
+    )
+    assert cli.main(
+        ["--root", str(root), "enrich", "--polish-meanings", "--batch-fetch"]
+    ) == 0
+
+    payload = book_of(root)
+    assert payload["pending_batches"] == {}
+    assert payload["records"][item.id]["enriched"][0]["kind"] == "polish"
+    assert cli.ledger.load_batch_recovery(root / "ledger.json") is None
+
+
+def test_fetch_ignores_an_answer_when_its_prompt_inputs_changed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    item = record()
+    root = project(tmp_path, [item])
+    _patch_polish_batch_submit(monkeypatch, [])
+    assert cli.main(
+        ["--root", str(root), "enrich", "--polish-meanings", "--batch-submit"]
+    ) == 0
+    changed = record(meanings=["human correction"])
+    (root / "vocabulary.json").write_text(
+        json.dumps([changed.to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+    monkeypatch.setattr(cli.claude_client, "batch_status", lambda batch_id: "ended")
+    monkeypatch.setattr(
+        cli.claude_client,
+        "batch_results",
+        lambda batch_id, schema, model: iter(
+            [
+                claude_client.BatchEntry(
+                    enrich.batch_custom_id(item.id), "succeeded", "", ok("to ask")
+                )
+            ]
+        ),
+    )
+    capsys.readouterr()
+
+    assert cli.main(
+        [
+            "--root",
+            str(root),
+            "enrich",
+            "--polish-meanings",
+            "--batch-fetch",
+            "--yes",
+        ]
+    ) == 0
+
+    assert stored(root)[item.id]["meanings"] == ["human correction"]
+    assert book_of(root)["pending_batches"] == {}
+    stderr = capsys.readouterr().err
+    assert "changed after submission" in stderr
+    assert item.id in stderr
+
+
+def test_fetch_refuses_an_older_polish_batch_without_input_fingerprints(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    item = record()
+    root = project(tmp_path, [item])
+    _patch_polish_batch_submit(monkeypatch, [])
+    assert cli.main(
+        ["--root", str(root), "enrich", "--polish-meanings", "--batch-submit"]
+    ) == 0
+    book = cli.ledger.load(root / "ledger.json")
+    book.pending_batches["msgbatch_polish"].pop("prompt_fingerprints")
+    book.save()
+    monkeypatch.setattr(cli.claude_client, "batch_status", lambda batch_id: "ended")
+    capsys.readouterr()
+
+    assert cli.main(
+        ["--root", str(root), "enrich", "--polish-meanings", "--batch-fetch"]
+    ) == 1
+
+    assert "predates polish input tracking" in capsys.readouterr().err
+    assert list(book_of(root)["pending_batches"]) == ["msgbatch_polish"]
+
+
+def test_an_invalid_answer_for_a_deleted_record_does_not_hold_the_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    deleted = record()
+    surviving = record(id="word:話す:はなす", expression="話す", reading="はなす")
+    root = project(tmp_path, [deleted, surviving])
+    _patch_polish_batch_submit(monkeypatch, [])
+    assert cli.main(
+        ["--root", str(root), "enrich", "--polish-meanings", "--batch-submit"]
+    ) == 0
+    (root / "vocabulary.json").write_text(
+        json.dumps([surviving.to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+    monkeypatch.setattr(cli.claude_client, "batch_status", lambda batch_id: "ended")
+    monkeypatch.setattr(
+        cli.claude_client,
+        "batch_results",
+        lambda batch_id, schema, model: iter(
+            [
+                claude_client.BatchEntry(
+                    enrich.batch_custom_id(deleted.id), "invalid", "bad shape", None
+                ),
+                claude_client.BatchEntry(
+                    enrich.batch_custom_id(surviving.id), "succeeded", "", ok()
+                ),
+            ]
+        ),
+    )
+    capsys.readouterr()
+
+    assert cli.main(
+        ["--root", str(root), "enrich", "--polish-meanings", "--batch-fetch"]
+    ) == 0
+
+    assert book_of(root)["pending_batches"] == {}
+    stderr = capsys.readouterr().err
+    assert deleted.id in stderr
+    assert "no longer in the collection" in stderr
+
+
+def test_quitting_batch_review_persists_exactly_what_is_left(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    records = [record(), record(id="word:話す:はなす", expression="話す")]
+    root = project(tmp_path, records)
+    _patch_polish_batch_submit(monkeypatch, [])
+    cli.main(
+        ["--root", str(root), "enrich", "--polish-meanings", "--batch-submit"]
+    )
+    monkeypatch.setattr(cli.claude_client, "batch_status", lambda batch_id: "ended")
+    monkeypatch.setattr(
+        cli.claude_client,
+        "batch_results",
+        lambda batch_id, schema, model: iter(
+            [
+                claude_client.BatchEntry(
+                    enrich.batch_custom_id(records[0].id), "succeeded", "", ok("to ask")
+                ),
+                claude_client.BatchEntry(
+                    enrich.batch_custom_id(records[1].id), "succeeded", "", ok("to speak")
+                ),
+            ]
+        ),
+    )
+    answers(monkeypatch, "y", "q")
+    capsys.readouterr()
+
+    assert cli.main(
+        ["--root", str(root), "enrich", "--polish-meanings", "--batch-fetch"]
+    ) == 0
+
+    pending = book_of(root)["pending_batches"]["msgbatch_polish"]
+    assert pending["retry_ids"] == [records[1].id]
+    assert stored(root)[records[0].id]["meanings"] == ["to ask"]
+    assert "fetching again resumes" in capsys.readouterr().out
+
+    answers(monkeypatch, "y")
+    assert cli.main(
+        ["--root", str(root), "enrich", "--polish-meanings", "--batch-fetch"]
+    ) == 0
+
+    assert stored(root)[records[1].id]["meanings"] == ["to speak"]
+    assert book_of(root)["pending_batches"] == {}
+    assert records[0].id not in capsys.readouterr().out
 
 
 # --- the flag belongs to one pass --------------------------------------------
