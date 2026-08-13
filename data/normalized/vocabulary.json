@@ -2713,7 +2713,7 @@
         "furigana": "黄金律[おうごんりつ]の 修復[しゅうふく]について",
         "romaji": "ougonritsunoshuufukunitsuite",
         "english": "About the restoration of the Golden Rule",
-        "audio": "",
+        "audio": "audio/janki-f9727ad0459f.mp3",
         "register": "polite"
       }
     ],
@@ -2722,7 +2722,7 @@
       "m7-camera-vertical-dialogue"
     ],
     "usage_notes": "修復する means “to restore” or “to repair,” especially by returning something damaged—such as a building, artwork, or data—to its former condition. 修理する is more common for fixing everyday machines and appliances.",
-    "audio": "",
+    "audio": "audio/janki-3c7b20704aff.wav",
     "image": "",
     "pitch_accent": [
       "LLHHHH"
@@ -2880,7 +2880,7 @@
         "furigana": "円卓[えんたく]へようこそ！",
         "romaji": "entakuheyoukoso!",
         "english": "Welcome to the round table!",
-        "audio": "",
+        "audio": "audio/janki-8d44ba3d57b6.mp3",
         "register": "polite"
       }
     ],
@@ -2889,7 +2889,7 @@
       "m7-camera-vertical-dialogue"
     ],
     "usage_notes": "円卓 is somewhat formal or literary. It often appears in expressions such as 円卓会議 (“round-table conference”) and 円卓の騎士 (“Knights of the Round Table”).",
-    "audio": "",
+    "audio": "audio/janki-3e3bf4601e89.wav",
     "image": "",
     "pitch_accent": [
       "LHHHH"
@@ -3124,7 +3124,7 @@
       "m7-camera-vertical-dialogue"
     ],
     "usage_notes": "初めて means “for the first time.” Before a noun, use 初めての, as in 初めてのおかた (“someone who is here for the first time”). おかた is a respectful way to say “person.”",
-    "audio": "",
+    "audio": "audio/janki-d8c299bfd738.wav",
     "image": "",
     "pitch_accent": [
       "LHLLL"
@@ -3459,7 +3459,7 @@
         "furigana": "ときに 貴方[あなた] 祝福[しゅくふく]の 導[みちび]きは？",
         "romaji": "tokinianatashukufukunomichibikiha?",
         "english": "By the way, what about the guidance of grace?",
-        "audio": "",
+        "audio": "audio/janki-87efd03ac03b.mp3",
         "register": "casual"
       }
     ],
@@ -3468,7 +3468,7 @@
       "m7-camera-vertical-dialogue"
     ],
     "usage_notes": "導き is the noun form of 導く (“to guide”). It often has a literary, spiritual, or fantasy-like tone, as in 神の導き (“divine guidance”) or 祝福の導き (“the guidance of grace”).",
-    "audio": "",
+    "audio": "audio/janki-5ecc5507150f.wav",
     "image": "",
     "pitch_accent": [
       "LHHHH",
@@ -3511,7 +3511,7 @@
         "furigana": "その 前[まえ]に 差[さ]し 支[つか]えなければ",
         "romaji": "sonomaenisashitsukaenakereba",
         "english": "Before that, if you don't mind...",
-        "audio": "",
+        "audio": "audio/janki-043ec52af758.mp3",
         "register": "polite"
       }
     ],
@@ -3520,7 +3520,7 @@
       "m7-camera-vertical-dialogue"
     ],
     "usage_notes": "「差し支えなければ」は「もし不都合でなければ／よろしければ」という丁寧でやや改まった表現で、質問や依頼の前によく使います。",
-    "audio": "",
+    "audio": "audio/janki-ed9a01c97cf4.wav",
     "image": "",
     "pitch_accent": [
       "LHHHHH"
@@ -3888,7 +3888,7 @@
       "m7-camera-vertical-dialogue"
     ],
     "usage_notes": "探求 is a relatively formal word for the sustained pursuit or investigation of an idea, truth, or knowledge. Common combinations include 真理の探求 (“the pursuit of truth”) and 知識の探求 (“the pursuit of knowledge”).",
-    "audio": "",
+    "audio": "audio/janki-066577ea2544.wav",
     "image": "",
     "pitch_accent": [
       "LHHHHH"
@@ -3939,7 +3939,7 @@
       "m7-camera-vertical-dialogue"
     ],
     "usage_notes": "新来 is chiefly used with の before a person or group, as in 新来のかた (“newly arrived people; newcomers”).",
-    "audio": "",
+    "audio": "audio/janki-9fd6917c99f9.wav",
     "image": "",
     "pitch_accent": [
       "LHHHH"
@@ -4451,7 +4451,7 @@
       "m7-camera-vertical-dialogue"
     ],
     "usage_notes": "祈祷 is a formal or religious term for prayer or ritual invocation, often used as 祈祷する (“to pray” or “to perform a prayer ritual”).",
-    "audio": "",
+    "audio": "audio/janki-85106483957f.wav",
     "image": "",
     "pitch_accent": [
       "LHHH"
@@ -4493,7 +4493,7 @@
         "furigana": "ときに 貴方[あなた] 祝福[しゅくふく]の 導[みちび]きは？",
         "romaji": "tokinianatashukufukunomichibikiha?",
         "english": "By the way, what guidance does the blessing offer you?",
-        "audio": "",
+        "audio": "audio/janki-ba6870b1cd75.mp3",
         "register": "casual"
       }
     ],
@@ -4502,7 +4502,7 @@
       "m7-camera-vertical-dialogue"
     ],
     "usage_notes": "「祝福」は「祝福する」（to bless）、「祝福を受ける」（to receive a blessing）などの形でよく使います。この例文は古風で芝居がかった言い方です。",
-    "audio": "",
+    "audio": "audio/janki-5ba4e06e89ff.wav",
     "image": "",
     "pitch_accent": [
       "LLHHHH"
@@ -4666,7 +4666,7 @@
       "m7-camera-vertical-dialogue"
     ],
     "usage_notes": "聖職者 is a broad, relatively formal term for a member of the clergy. More specific titles include 神父 (Catholic priest), 牧師 (Protestant minister), and 僧侶 (Buddhist monk or priest).",
-    "audio": "",
+    "audio": "audio/janki-329814cd4ade.wav",
     "image": "",
     "pitch_accent": [
       "LHHHLLLL"
@@ -4778,7 +4778,7 @@
         "furigana": "二本指[にほんゆび]様[さま]の 祈祷[きとう]にご 興味[きょうみ]は？",
         "romaji": "nihon'yubisamanokitounigokyoumiha?",
         "english": "Are you interested in the Two Fingers’ incantations?",
-        "audio": "",
+        "audio": "audio/janki-47cb6b5caa11.mp3",
         "register": "polite"
       }
     ],
@@ -4787,7 +4787,7 @@
       "m7-camera-vertical-dialogue"
     ],
     "usage_notes": "「〜に興味がある」 means “to be interested in something.” 「ご興味は？」 is a polite, honorific abbreviation of 「ご興味はありますか」.",
-    "audio": "",
+    "audio": "audio/janki-abc8b4f42271.wav",
     "image": "",
     "pitch_accent": [
       "HHLLL",
@@ -4960,7 +4960,7 @@
         "furigana": "貴方[あなた]の 見解[けんかい]を 伺[うかが]いたく",
         "romaji": "anatanokenkaioukagaitaku",
         "english": "I would like to hear your point of view.",
-        "audio": "",
+        "audio": "audio/janki-362c7f0702b7.mp3",
         "register": "polite"
       }
     ],
@@ -4969,7 +4969,7 @@
       "m7-camera-vertical-dialogue"
     ],
     "usage_notes": "見解 is more formal than 意見 and is often used for considered views on an issue. Common expressions include 見解を述べる (“state one’s view”), 見解を示す (“express one’s view”), and 見解を伺う (“ask someone’s view”).",
-    "audio": "",
+    "audio": "audio/janki-66e2039eff3c.wav",
     "image": "",
     "pitch_accent": [
       "LHHHH"
@@ -5205,7 +5205,7 @@
         "furigana": "貴方[あなた]の 見解[けんかい]を 伺[うかが]いたく",
         "romaji": "anatanokenkaioukagaitaku",
         "english": "I would like to hear your opinion.",
-        "audio": "",
+        "audio": "audio/janki-7dbfc4f1483f.mp3",
         "register": "polite"
       }
     ],
@@ -5573,7 +5573,7 @@
       "m7-camera-vertical-dialogue"
     ],
     "usage_notes": "A formal noun often used for the ethical principle of treating others as one would like to be treated. It can also mean a fundamental rule in a particular field.",
-    "audio": "",
+    "audio": "audio/janki-672a2359cc41.wav",
     "image": "",
     "pitch_accent": [
       "LHHLLLL"

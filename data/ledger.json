@@ -3503,7 +3503,30 @@
     },
     "word:修復:しゅうふく": {
       "added_at": "2026-08-13",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-13",
+          "content_fp": "30b660f062ce",
+          "file": "janki-3c7b20704aff.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-13",
+          "content_fp": "ea2ed0ecc341",
+          "file": "janki-f9727ad0459f.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-13",
@@ -3697,7 +3720,30 @@
     },
     "word:円卓:えんたく": {
       "added_at": "2026-08-13",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-13",
+          "content_fp": "2247d6e8ee48",
+          "file": "janki-3e3bf4601e89.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-13",
+          "content_fp": "2d47a72f8a79",
+          "file": "janki-8d44ba3d57b6.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-13",
@@ -3963,7 +4009,17 @@
     },
     "word:初めて:はじめて": {
       "added_at": "2026-08-13",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-13",
+          "content_fp": "b5bd0ce1b89c",
+          "file": "janki-d8c299bfd738.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-13",
@@ -4364,7 +4420,30 @@
     },
     "word:導き:みちびき": {
       "added_at": "2026-08-13",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-13",
+          "content_fp": "b0bd43d95981",
+          "file": "janki-5ecc5507150f.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-13",
+          "content_fp": "ccfc21029cff",
+          "file": "janki-87efd03ac03b.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-13",
@@ -4397,7 +4476,30 @@
     },
     "word:差し支え:さしつかえ": {
       "added_at": "2026-08-13",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-13",
+          "content_fp": "b09194911a10",
+          "file": "janki-ed9a01c97cf4.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-13",
+          "content_fp": "b9b5c402442f",
+          "file": "janki-043ec52af758.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-13",
@@ -4816,7 +4918,17 @@
     },
     "word:探求:たんきゅう": {
       "added_at": "2026-08-13",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-13",
+          "content_fp": "98b8097dcdda",
+          "file": "janki-066577ea2544.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-13",
@@ -4850,7 +4962,17 @@
     },
     "word:新来:しんらい": {
       "added_at": "2026-08-13",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-13",
+          "content_fp": "7baf6b642e50",
+          "file": "janki-9fd6917c99f9.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-13",
@@ -5482,7 +5604,17 @@
     },
     "word:祈祷:きとう": {
       "added_at": "2026-08-13",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-13",
+          "content_fp": "8dc98acd9e6f",
+          "file": "janki-85106483957f.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-13",
@@ -5516,7 +5648,30 @@
     },
     "word:祝福:しゅくふく": {
       "added_at": "2026-08-13",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-13",
+          "content_fp": "7d9bbca06b81",
+          "file": "janki-5ba4e06e89ff.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-13",
+          "content_fp": "ccfc21029cff",
+          "file": "janki-ba6870b1cd75.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-13",
@@ -5696,7 +5851,17 @@
     },
     "word:聖職者:せいしょくしゃ": {
       "added_at": "2026-08-13",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-13",
+          "content_fp": "181f2615ecaa",
+          "file": "janki-329814cd4ade.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-13",
@@ -5815,7 +5980,30 @@
     },
     "word:興味:きょうみ": {
       "added_at": "2026-08-13",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-13",
+          "content_fp": "bcadae1950f9",
+          "file": "janki-abc8b4f42271.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-13",
+          "content_fp": "eeb2a103d6cf",
+          "file": "janki-47cb6b5caa11.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-13",
@@ -6024,7 +6212,30 @@
     },
     "word:見解:けんかい": {
       "added_at": "2026-08-13",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-13",
+          "content_fp": "e14e668e151e",
+          "file": "janki-66e2039eff3c.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        },
+        {
+          "at": "2026-08-13",
+          "content_fp": "9f820179841a",
+          "file": "janki-362c7f0702b7.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-13",
@@ -6303,7 +6514,21 @@
     },
     "word:貴方:あなた": {
       "added_at": "2026-08-13",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-13",
+          "content_fp": "9f820179841a",
+          "file": "janki-7dbfc4f1483f.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-13",
@@ -6711,7 +6936,17 @@
     },
     "word:黄金律:おうごんりつ": {
       "added_at": "2026-08-13",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-13",
+          "content_fp": "7f32a686b37e",
+          "file": "janki-672a2359cc41.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-13",
