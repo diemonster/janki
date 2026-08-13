@@ -1,5 +1,5 @@
 version: 1
-id: review-pitch-fact-recheck
+id: review-pitch-unbound-remains-reviewable
 purpose: regression
 gating: true
 runner: semantic-review-recheck
@@ -9,9 +9,9 @@ redistributable: true
 fixture_basis: agent-created-synthetic
 fixtures:
   - path: input.json
-    fingerprint: 0b2af7e5a8f9cff39462ba2dfbaa393188b892b3836989b2867f5ccd5ffbe17a
+    fingerprint: 69e4328d23552b60517d16a760b04ca28f3c7bd2397b083851748d52a1d7281c
   - path: oracle.json
-    fingerprint: a252ed65ea57581c433e634fde19c39dc55ddc5a01810c6358aa09299cc4f2c3
+    fingerprint: 025657b994e4be401f6e53b56d502f1e05a2a83d53856038c66383f336873583
 runner_input: input.json
 oracle: oracle.json
 finding_id: review-pitch-fact-recheck

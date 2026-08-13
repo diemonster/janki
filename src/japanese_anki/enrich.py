@@ -582,6 +582,8 @@ def enrich_records(
                 f"do not fit reading {record.reading}; pitch accent was not written"
             )
         updated, changes = _apply(record, proposals, writable)
+        if "pitch_accent" in changes:
+            updated = pitch.bind_source(updated)
         if changes:
             result.records[by_id[record_id]] = updated
             result.changes[record_id] = changes

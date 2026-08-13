@@ -1891,7 +1891,8 @@
         "page": "1",
         "context": "日曜日 あさ䛿やくおきないつもりです。 夜おそくに䛽るつもりです。",
         "inclusion_reason": "Core daily-routine verb paired with おきる.",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_pitch_accent_source": "jpdb:0aaf91263374b884efeee9b41d91b4c3e05a24680c2ef300c74f003b6c63d48e"
       }
     }
   },

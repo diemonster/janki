@@ -32,9 +32,11 @@ silently speaking the wrong accent onto a card built to teach that accent.
 
 from __future__ import annotations
 
+import hashlib
 import html
 import unicodedata
 from collections.abc import Sequence
+from dataclasses import replace
 
 from japanese_anki.errors import JankiError
 from japanese_anki.models import VocabularyRecord
@@ -42,6 +44,9 @@ from japanese_anki.models import VocabularyRecord
 __all__ = [
     "ACCENT_MARK",
     "PitchError",
+    "SOURCE_BINDING_KEY",
+    "bind_source",
+    "has_source_binding",
     "morae",
     "pattern_facts",
     "render_pitch_html",
@@ -56,6 +61,11 @@ class PitchError(JankiError):
 
 #: AquesTalk's accent nucleus mark, written after the accented mora.
 ACCENT_MARK = "'"
+
+#: A content-bound statement that the stored pattern came from a named source.
+#: It lives with the record rather than in the operational ledger so a manual
+#: edit to the pattern can be detected even when old enrichment history remains.
+SOURCE_BINDING_KEY = "janki_pitch_accent_source"
 
 #: Kana that attach to the mora before them rather than forming one of their
 #: own. ``っ`` is deliberately absent — it *is* a mora, and so is ``ん``, which
@@ -202,6 +212,36 @@ def select_pattern(record: VocabularyRecord) -> str | None:
         if pattern.strip():
             return pattern.strip().upper()
     return None
+
+
+def _source_binding(reading: str, patterns: Sequence[str], source: str) -> str:
+    values = [source.strip().lower(), unicodedata.normalize("NFC", reading)]
+    values.extend(pattern.strip().upper() for pattern in patterns if pattern.strip())
+    digest = hashlib.sha256("\0".join(values).encode("utf-8")).hexdigest()
+    return f"{values[0]}:{digest}"
+
+
+def bind_source(
+    record: VocabularyRecord, source: str = "jpdb"
+) -> VocabularyRecord:
+    """Bind the current pitch value to the source that supplied it."""
+    if not record.pitch_accent:
+        return record
+    raw_fields = dict(record.source.raw_fields)
+    raw_fields[SOURCE_BINDING_KEY] = _source_binding(
+        record.reading, record.pitch_accent, source
+    )
+    return replace(record, source=replace(record.source, raw_fields=raw_fields))
+
+
+def has_source_binding(
+    record: VocabularyRecord, source: str = "jpdb"
+) -> bool:
+    """Whether source metadata proves the current pitch value came from it."""
+    if not record.pitch_accent:
+        return False
+    expected = _source_binding(record.reading, record.pitch_accent, source)
+    return record.source.raw_fields.get(SOURCE_BINDING_KEY, "") == expected
 
 
 def pattern_facts(reading: str, patterns: Sequence[str]) -> str:

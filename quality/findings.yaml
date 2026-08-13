@@ -91,14 +91,16 @@ findings:
     pipeline_stage: final-review
     source_archetypes: [mixed-layout-pdf]
     symptom: Final review raised blocking pitch findings after it misread the stored raw pattern, counted a small kana as a separate mora, or replaced valid dictionary accent from model memory.
-    invariant: A pitch finding gets one independent recheck with the exact raw pattern, its deterministic mora-level rendering, and the source-authority boundary; non-pitch findings remain unchanged.
+    invariant: A pitch finding gets one independent recheck with the exact raw pattern and deterministic mora-level rendering; model memory yields only when a source marker fingerprints the current jpdb value.
     evidence:
-      - fingerprint: 1789e8f300b42ab38fd47e6afc5c6484392b602c6329937df4fa5a805275e501
+      - fingerprint: 0b2af7e5a8f9cff39462ba2dfbaa393188b892b3836989b2867f5ccd5ffbe17a
         locator: quality/cases/review-pitch-fact-recheck/input.json
     recurrences:
-      - fingerprint: 4b5beae857f510f21adeaa4250a7f9bfe01e55f429a7936a166bd68fcb1e78d7
+      - fingerprint: 897419d33e89c133d85a1474d5bf76d3aeb354859413755ca83c30ec33943dac
         locator: quality/cases/review-pitch-source-authority/input.json
-    case_ids: [review-pitch-fact-recheck, review-pitch-source-authority]
+      - fingerprint: 69e4328d23552b60517d16a760b04ca28f3c7bd2397b083851748d52a1d7281c
+        locator: quality/cases/review-pitch-unbound-remains-reviewable/input.json
+    case_ids: [review-pitch-fact-recheck, review-pitch-source-authority, review-pitch-unbound-remains-reviewable]
     fix_ref: src/japanese_anki/review.py#pitch_recheck_prompt
   - id: extraction-oracle-key-binding
     state: fixed

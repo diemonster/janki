@@ -831,8 +831,9 @@ def _semantic_review_recheck(data: dict[str, Any], root: Path) -> Any:
         ),
         "recheck_prompt_binds_source_authority": (
             len(prompts) > 1
-            and "source-bound dictionary data" in prompts[1]
-            and "do not replace a valid lexical pattern from model memory" in prompts[1]
+            and "content-bound jpdb source marker" in prompts[1]
+            and "do not replace this valid lexical pattern from model memory"
+            in prompts[1]
         ),
         "findings": [finding.to_dict() for finding in entry.findings] if entry else [],
         "failures": failures,

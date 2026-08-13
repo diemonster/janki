@@ -23,6 +23,8 @@ import pytest
 from japanese_anki.models import SourceReference, VocabularyRecord
 from japanese_anki.pitch import (
     PitchError,
+    bind_source,
+    has_source_binding,
     morae,
     render_pitch_html,
     select_pattern,
@@ -40,6 +42,20 @@ def record(**overrides: object) -> VocabularyRecord:
     }
     values.update(overrides)
     return VocabularyRecord(**values)  # type: ignore[arg-type]
+
+
+def test_a_source_binding_covers_the_exact_current_pitch_value() -> None:
+    card = bind_source(record(pitch_accent=["LHH"]))
+
+    assert has_source_binding(card)
+
+    card.pitch_accent[0] = "HLL"
+
+    assert not has_source_binding(card)
+
+
+def test_an_unbound_pitch_value_is_not_assumed_to_be_from_jpdb() -> None:
+    assert not has_source_binding(record(pitch_accent=["LHH"]))
 
 
 # ---------------------------------------------------------------------------

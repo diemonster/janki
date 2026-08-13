@@ -924,6 +924,21 @@ def test_no_cap_shows_everything() -> None:
 
 def test_pitch_recheck_binds_source_authority_and_mechanical_facts() -> None:
     """A semantic reader cannot safely replace dictionary accent from memory."""
+    from japanese_anki.pitch import bind_source
+    from japanese_anki.review import pitch_recheck_prompt
+
+    card = bind_source(record(reading="ねる", pitch_accent=["LHH"]))
+    text = pitch_recheck_prompt(
+        card,
+        [Finding("pitch_accent", "ねる should use HLL", "error")],
+    )
+
+    assert "raw LHH; morae ね=L, る=H; following particle=H" in text
+    assert "content-bound jpdb source marker" in text
+    assert "do not replace this valid lexical pattern from model memory" in text
+
+
+def test_pitch_recheck_does_not_claim_authority_for_an_unbound_value() -> None:
     from japanese_anki.review import pitch_recheck_prompt
 
     card = record(reading="ねる", pitch_accent=["LHH"])
@@ -932,9 +947,8 @@ def test_pitch_recheck_binds_source_authority_and_mechanical_facts() -> None:
         [Finding("pitch_accent", "ねる should use HLL", "error")],
     )
 
-    assert "raw LHH; morae ね=L, る=H; following particle=H" in text
-    assert "source-bound dictionary data" in text
-    assert "do not replace a valid lexical pattern from model memory" in text
+    assert "no valid source binding" in text
+    assert "Do not assume that it came from jpdb" in text
 
 
 def test_a_force_re_read_of_the_same_card_keeps_its_acceptance() -> None:

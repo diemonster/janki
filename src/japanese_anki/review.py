@@ -357,6 +357,15 @@ def pitch_recheck_prompt(
     """Ask once more with the deterministic interpretation of raw pitch data."""
     concerns = "\n".join(f"- {finding.problem}" for finding in findings)
     facts = pitch.pattern_facts(record.reading, record.pitch_accent)
+    authority = (
+        "The current lexical pattern has a content-bound jpdb source marker. "
+        "It is source-bound dictionary data that has already passed deterministic "
+        "shape checks. This semantic review is not an accent dictionary: do not "
+        "replace this valid lexical pattern from model memory."
+        if pitch.has_source_binding(record)
+        else "The current lexical pattern has no valid source binding. Do not assume "
+        "that it came from jpdb; assess the first review concern on its merits."
+    )
     return (
         card_prompt(record, max_meanings)
         + "\n\nRecheck only the pitch-accent concerns from the first review:\n"
@@ -365,12 +374,10 @@ def pitch_recheck_prompt(
         + facts
         + "\nRaw jpdb patterns have one slot per kana plus the following particle. "
         "A small kana has a raw slot but joins the preceding kana into one mora. "
-        "The stored lexical pattern is source-bound dictionary data that has "
-        "already passed deterministic shape checks. This semantic review is not "
-        "an accent dictionary: do not replace a valid lexical pattern from model "
-        "memory. Use the mechanical facts above, and do not claim that the stored "
+        + authority
+        + " Use the mechanical facts above, and do not claim that the stored "
         "raw value is a different value. Return a pitch finding only for an "
-        "internal inconsistency that the mechanical facts demonstrate."
+        "internal inconsistency that the facts above demonstrate."
     )
 
 

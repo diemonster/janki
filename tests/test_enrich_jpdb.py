@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 import yaml
 
-from japanese_anki import cli, enrich, jpdb
+from japanese_anki import cli, enrich, jpdb, pitch
 from japanese_anki.enrich import (
     EnrichError,
     enrich_records,
@@ -160,6 +160,7 @@ def test_every_field_jpdb_states_or_janki_computes_is_filled() -> None:
     assert enriched.part_of_speech == "verb"
     assert enriched.verb_group == "godan"
     assert enriched.pitch_accent == ["LHLL"]
+    assert pitch.has_source_binding(enriched)
     assert enriched.frequency_rank == 200
     assert enriched.conjugations["negative"] == "話さない"
     assert result.looked_up == 1
@@ -196,6 +197,7 @@ def test_a_populated_field_is_left_exactly_as_the_human_wrote_it() -> None:
     enriched = result.records[0]
     assert enriched.part_of_speech == "godan verb (u-verb)"
     assert enriched.pitch_accent == ["HLLL"]
+    assert not pitch.has_source_binding(enriched)
     changed = result.changes["word:話す:はなす"]
     assert "part_of_speech" not in changed
     assert "pitch_accent" not in changed

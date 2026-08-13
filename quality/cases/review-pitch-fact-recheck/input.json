@@ -7,7 +7,13 @@
       "meanings": ["to sleep", "to go to bed"],
       "part_of_speech": "verb (ru-verb)",
       "verb_group": "ichidan",
-      "pitch_accent": ["HLL"]
+      "pitch_accent": ["HLL"],
+      "source": {
+        "type": "extract",
+        "raw_fields": {
+          "janki_pitch_accent_source": "jpdb:79681fe52d677e204e952df87a395e5f17e81eda13d6ae5111c6430c9bedd681"
+        }
+      }
     }
   ],
   "model": "offline-model",

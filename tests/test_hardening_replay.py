@@ -29,6 +29,7 @@ SEEDED_CASES = (
     "reading-check-suru-compound",
     "review-pitch-fact-recheck",
     "review-pitch-source-authority",
+    "review-pitch-unbound-remains-reviewable",
 )
 DISCOVERED_CASES = hardening_replay.discover_cases(ROOT)
 
