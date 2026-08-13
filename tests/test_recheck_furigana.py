@@ -275,7 +275,15 @@ def test_the_command_names_both_kanjidic_blocks_and_jpdb_differences(
     monkeypatch.setattr(cli.jpdb, "JpdbClient", lambda *a, **k: client)
     monkeypatch.setattr(cli.jpdb, "api_key_from_env", lambda *a, **k: "test-key")
 
-    assert cli.main(["--root", str(root), "enrich", "--recheck-furigana"]) == 0
+    assert cli.main(
+        [
+            "--root",
+            str(root),
+            "enrich",
+            "--recheck-furigana",
+            "--no-adjudicate",
+        ]
+    ) == 0
 
     output = capsys.readouterr().out
     assert "differ from jpdb's parse or are blocked" in output
