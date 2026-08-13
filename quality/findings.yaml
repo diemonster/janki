@@ -167,7 +167,7 @@ findings:
     case_ids: [derived-romaji-repair]
     fix_ref: docs/IMPLEMENTATION_PLAN.md#m7.5
   - id: example-romaji-invalid-furigana
-    state: open
+    state: fixed
     pipeline_stage: repair-plan
     source_archetypes: [camera]
     symptom: The automatic example-romaji repair derived a lossy value from furigana that the validator had already marked as structurally invalid.
@@ -177,6 +177,7 @@ findings:
         locator: quality/cases/example-romaji-invalid-furigana/input.json
     recurrences: []
     case_ids: [example-romaji-invalid-furigana]
+    fix_ref: src/japanese_anki/repairs.py#_example_romaji_values
   - id: extraction-unit-accounting
     state: fixed
     pipeline_stage: extraction

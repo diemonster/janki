@@ -21,6 +21,7 @@ SEEDED_CASES = (
     "enrichment-forced-kana-reading",
     "enrichment-invalid-pitch-length",
     "enrichment-suru-compound",
+    "example-romaji-invalid-furigana",
     "extraction-oracle-key-binding",
     "extraction-selection-target-binding",
     "extraction-unit-accounting",

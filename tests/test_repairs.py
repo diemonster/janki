@@ -98,6 +98,50 @@ def test_example_romaji_repair_is_narrow_and_idempotent() -> None:
     assert near_changes == []
 
 
+def test_example_romaji_repair_refuses_structurally_invalid_furigana() -> None:
+    declarations = repairs.REGISTRY.select(["example-romaji-from-furigana"])
+    spilled = record(
+        examples=[
+            ExampleSentence(
+                japanese="ねえ、明日の祭り、行くの？",
+                furigana="ねえ、 明日[あした]の 祭[まつ]り、行[い]くの？",
+                romaji="reviewed-spill",
+            )
+        ]
+    )
+    stray = record(
+        examples=[
+            ExampleSentence(
+                japanese="バスはすぐ来ます。",
+                furigana="バスは すぐ 来[き]ます。",
+                romaji="reviewed-space",
+            )
+        ]
+    )
+
+    unchanged, changes = repairs.apply_declarations(
+        [spilled, stray], declarations, modes=frozenset({"ingest-safe"})
+    )
+
+    assert unchanged == [spilled, stray]
+    assert changes == []
+
+    corrected = replace(
+        spilled,
+        examples=[
+            replace(
+                spilled.examples[0],
+                furigana="ねえ、 明日[あした]の 祭[まつ]り、 行[い]くの？",
+            )
+        ],
+    )
+    repaired, corrected_changes = repairs.apply_declarations(
+        [corrected], declarations, modes=frozenset({"ingest-safe"})
+    )
+    assert repaired[0].examples[0].romaji == "nee, ashitanomatsuri, ikuno?"
+    assert [change.field for change in corrected_changes] == ["examples[0].romaji"]
+
+
 def test_punctuation_proposal_has_two_near_misses_and_is_idempotent() -> None:
     declarations = repairs.REGISTRY.select(
         ["example-furigana-punctuation-separator"]

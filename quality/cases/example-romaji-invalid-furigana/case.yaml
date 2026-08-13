@@ -1,7 +1,7 @@
 version: 1
 id: example-romaji-invalid-furigana
 purpose: regression
-gating: false
+gating: true
 runner: repair-plan
 pipeline_boundary: repair-plan
 source_archetype: camera
@@ -11,7 +11,7 @@ fixtures:
   - path: input.json
     fingerprint: 643375818ce75a5e16bba8d2e7493a38426d5d8af46bc9841df5ee0d0d975371
   - path: oracle.json
-    fingerprint: 010128c1e798253be3975dc2efdd447e9e8df5f62e450d24e9ce07fbbefa63f6
+    fingerprint: c5636a4f5b018b671dd1b28b7c9e20270b34073b787b9f6c81fb7c35ba6ae95e
 runner_input: input.json
 oracle: oracle.json
 finding_id: example-romaji-invalid-furigana

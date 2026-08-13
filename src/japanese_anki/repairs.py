@@ -623,6 +623,14 @@ def _example_romaji_values(before: Mapping[str, Any]) -> list[str]:
         before["examples[*].romaji"],
         strict=True,
     ):
+        if furigana and (
+            qc.spilled_furigana_groups(furigana)
+            or qc.stray_furigana_spaces(furigana)
+        ):
+            # Romaji is safe to derive only from structurally valid furigana.
+            # Keep the reviewed value until a human corrects the notation.
+            values.append(romaji)
+            continue
         repaired = qc.regenerate_example_romaji(
             ExampleSentence(japanese=japanese, furigana=furigana, romaji=romaji)
         )
@@ -704,7 +712,7 @@ REGISTRY = RepairRegistry(
         ),
         RepairDeclaration(
             code="example-romaji-from-furigana",
-            version="1.0.0",
+            version="1.1.0",
             phase="ingest",
             mode="ingest-safe",
             allowed_fields=("examples[*].romaji",),
