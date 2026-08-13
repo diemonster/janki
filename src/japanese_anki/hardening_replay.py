@@ -29,10 +29,16 @@ from japanese_anki import (
     repairs,
     review,
     staging,
+    status,
     validation,
 )
 from japanese_anki.config import ProjectConfig
-from japanese_anki.exporters.anki import FIELD_NAMES, build_deck, resolve_deck_records
+from japanese_anki.exporters.anki import (
+    FIELD_NAMES,
+    build_deck,
+    deck_kind,
+    resolve_deck_records,
+)
 from japanese_anki.inputs import PreparedInput
 from japanese_anki.io import save_records_json
 from japanese_anki.models import VocabularyRecord
@@ -1131,47 +1137,36 @@ def _render_build(data: dict[str, Any], root: Path) -> Any:
 
 
 def _deck_membership(data: dict[str, Any], root: Path) -> Any:
-    """Observe stable-ID membership and every overlap in named word decks."""
-    _only(data, {"decks"}, "deck-membership")
-    decks = _string_list(data.get("decks"), "decks")
-    if len(decks) < 2:
+    """Report empty word decks and stable IDs claimed by more than one."""
+    _only(data, set(), "deck-membership")
+    config = ProjectConfig.load(root)
+    deck_paths = [
+        path
+        for path in status.deck_files(config)
+        if deck_kind(path) in {"", "vocabulary"}
+    ]
+    if len(deck_paths) < 2:
         raise hardening.HardeningError(
-            "deck-membership.decks must contain at least two paths"
+            "deck-membership needs at least two discovered vocabulary decks"
         )
 
-    deck_root = (root / "data" / "decks").resolve()
-
-    def deck_path(value: str, where: str) -> Path:
-        relative = Path(value)
-        if relative.is_absolute() or ".." in relative.parts:
-            raise hardening.HardeningError(f"{where} must be a repository path")
-        path = (root / relative).resolve()
-        if (
-            not path.is_relative_to(deck_root)
-            or path.suffix not in {".yaml", ".yml"}
-            or not path.is_file()
-        ):
-            raise hardening.HardeningError(
-                f"{where} must name an existing data/decks YAML file"
-            )
-        return path
-
     memberships: dict[str, set[str]] = {}
-    for index, value in enumerate(decks):
-        path = deck_path(value, f"deck-membership.decks[{index}]")
+    for path in deck_paths:
+        value = path.relative_to(root).as_posix()
         _, records = resolve_deck_records(path)
         memberships[value] = {record.id for record in records}
 
     overlaps: dict[str, list[str]] = {}
+    decks = list(memberships)
     for left_index, left in enumerate(decks):
         for right in decks[left_index + 1 :]:
-            overlaps[f"{left} <> {right}"] = sorted(
-                memberships[left] & memberships[right]
-            )
+            shared = sorted(memberships[left] & memberships[right])
+            if shared:
+                overlaps[f"{left} <> {right}"] = shared
     return {
-        "membership_counts": {
-            name: len(record_ids) for name, record_ids in memberships.items()
-        },
+        "empty_decks": sorted(
+            name for name, record_ids in memberships.items() if not record_ids
+        ),
         "overlaps": overlaps,
     }
 

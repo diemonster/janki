@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from japanese_anki import status
 from japanese_anki.config import ProjectConfig
 from japanese_anki.exporters import anki
 
@@ -79,18 +80,18 @@ def test_builder_wires_templates_fields_and_stable_guids(tmp_path, monkeypatch) 
 
 
 def test_word_decks_are_nonempty_and_do_not_share_stable_ids() -> None:
-    names = (
-        "verbs.yaml",
-        "yotsuba.yaml",
-        "m7-mixed-tsumori.yaml",
-        "m7-native-teform-table.yaml",
-        "m7-camera-vertical-dialogue.yaml",
-    )
+    config = ProjectConfig.load(PROJECT_ROOT)
+    paths = [
+        path
+        for path in status.deck_files(config)
+        if anki.deck_kind(path) in {"", "vocabulary"}
+    ]
     memberships: dict[str, set[str]] = {}
-    for name in names:
-        _, records = anki.resolve_deck_records(PROJECT_ROOT / "data/decks" / name)
+    for path in paths:
+        name = path.name
+        _, records = anki.resolve_deck_records(path)
         memberships[name] = {record.id for record in records}
         assert memberships[name], name
 
-    for left, right in combinations(names, 2):
+    for left, right in combinations(memberships, 2):
         assert memberships[left].isdisjoint(memberships[right]), f"{left} <> {right}"

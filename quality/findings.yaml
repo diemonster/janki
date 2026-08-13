@@ -5,9 +5,9 @@ findings:
     pipeline_stage: deck-membership
     source_archetypes: [camera, mixed-layout-pdf, native-pdf-table]
     symptom: The unfiltered general verbs deck also claimed records assigned to dedicated hardening-pilot decks, so packages exported the same stable Anki GUIDs under different deck IDs.
-    invariant: A canonical record belongs to at most one built deck unless an explicit reviewed migration plan says otherwise; dedicated pilot tags are excluded from the general verbs deck.
+    invariant: Every discovered vocabulary deck is nonempty and enters an automatic all-pairs stable-ID check; no record belongs to more than one word deck unless an explicit reviewed migration plan says otherwise.
     evidence:
-      - fingerprint: 1fc715368c254ba839602c87a38cecb508c5458b2d269b3e41b4a04753f135f8
+      - fingerprint: ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356
         locator: quality/cases/deck-membership-partition/input.json
     recurrences: []
     case_ids: [deck-membership-partition]
