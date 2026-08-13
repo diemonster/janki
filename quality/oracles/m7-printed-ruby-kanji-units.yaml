@@ -1,0 +1,176 @@
+version: 1
+id: m7-printed-ruby-kanji-units
+source_fingerprint: 4c8d08e2d84a8557063a51383714e13546a60b5527cbf9476c772e888a8df932
+type: exhaustive
+case_ids: []
+units:
+  - page: 1
+    section: block-112
+    ordinal: 1
+    context_fingerprint: 5283091a76f18263f06175fce8bbd27a143dc03c079600a8a833a5bccb66942a
+    disposition: candidate
+  - page: 1
+    section: block-112
+    ordinal: 2
+    context_fingerprint: 062b303327ce2f9959374e1d46db250f38cb2fcfb45aa1f22ee93bf129f3b168
+    disposition: candidate
+  - page: 1
+    section: block-113
+    ordinal: 1
+    context_fingerprint: 8c5373ca0078d5985be9f7808bef71ecc01ad66202f36bee8f5de2d3b1b287ec
+    disposition: non-vocabulary
+  - page: 1
+    section: block-113
+    ordinal: 2
+    context_fingerprint: 2e292953afe3dc8e64bc6c3995e3afcff61d627ac05ce338a98c947d1b35c0b8
+    disposition: candidate
+  - page: 1
+    section: block-113
+    ordinal: 3
+    context_fingerprint: 519183e060e409a7c00b0ae9f6f0cf5f210d767bded3c7436796ebb7a5867a9f
+    disposition: candidate
+  - page: 1
+    section: block-114
+    ordinal: 1
+    context_fingerprint: 0670fce7cd5c530d4b68981cdbe94d93e8bf0ccb18a37253d05d8da42340c3de
+    disposition: non-vocabulary
+  - page: 1
+    section: block-114
+    ordinal: 2
+    context_fingerprint: 9d3ebe4cf8aa746a954b57ea66f77d4656e5d94f630031bc4a0f1526e44afac5
+    disposition: non-vocabulary
+  - page: 1
+    section: block-114
+    ordinal: 3
+    context_fingerprint: c8b713f8fdc659393d75809cba180b49285acce55a87c732d4c67f210da07d0c
+    disposition: candidate
+  - page: 1
+    section: block-114
+    ordinal: 4
+    context_fingerprint: c545d2ed8a8939d394fe3202fd652c89d18b233feb0158827a63d75eed2bf480
+    disposition: candidate
+  - page: 1
+    section: block-115
+    ordinal: 1
+    context_fingerprint: 413bbb42654e5b7949823f26225d7e614b3842b16d5517e983e403a376d059b3
+    disposition: candidate
+  - page: 1
+    section: block-115
+    ordinal: 2
+    context_fingerprint: ea7e3e692e68e54b087017b4f298087a1f0f270b2fe205a162a5025b9a8ceab5
+    disposition: candidate
+  - page: 2
+    section: block-116
+    ordinal: 1
+    context_fingerprint: c2c8dab8d6a45637a259256bf4c5cf2606dd7e1c345db857829661e8139cffea
+    disposition: candidate
+  - page: 2
+    section: block-116
+    ordinal: 2
+    context_fingerprint: c24890c5e214db2f97a4b59c2c3ef2fc4549b4a082fc36756ea495f9ad83624e
+    disposition: candidate
+  - page: 2
+    section: block-116
+    ordinal: 3
+    context_fingerprint: ea7e3e692e68e54b087017b4f298087a1f0f270b2fe205a162a5025b9a8ceab5
+    disposition: duplicate
+  - page: 2
+    section: block-117
+    ordinal: 1
+    context_fingerprint: ebed0aa6cc583ca9529308163c7720cbbf835ce3ed397991dcb8faa37754a8e6
+    disposition: candidate
+  - page: 2
+    section: block-117
+    ordinal: 2
+    context_fingerprint: 4a2f1104f91dde9dde8dc99f9c24c8fe10ca4163cda9ec688fe59eb4d6d1e382
+    disposition: candidate
+  - page: 2
+    section: block-117
+    ordinal: 3
+    context_fingerprint: a6fa965ac97b6e812142283eddca3a82ab39bf07b57d90f7ad35a41b0513f54e
+    disposition: candidate
+  - page: 2
+    section: block-118
+    ordinal: 1
+    context_fingerprint: fb04ed0ae1093a240ba2e6841e4577d8d8090181ecfd18e96c1adf058d1eed60
+    disposition: candidate
+  - page: 2
+    section: block-119
+    ordinal: 1
+    context_fingerprint: 9f6beffae5ced084fd8431c8c5a1b3e0290d6f111621da9feefb5a87d247a3af
+    disposition: non-vocabulary
+  - page: 2
+    section: block-119
+    ordinal: 2
+    context_fingerprint: 619ebbddeabfc88e964c90a2d7994fb27221a8ed9280ecd62597e39f2b6ed6a1
+    disposition: candidate
+  - page: 2
+    section: block-119
+    ordinal: 3
+    context_fingerprint: 237b8c8a564e5e3f9de500a6f5422fecb4124f75218f2b458d58f9b4251b845a
+    disposition: candidate
+  - page: 3
+    section: block-120
+    ordinal: 1
+    context_fingerprint: 12bb50b8cebd2cf6a6f1a78e1b2453ebfb48cbc7484236693ec8f1a0f1f3d82d
+    disposition: non-vocabulary
+  - page: 3
+    section: block-120
+    ordinal: 2
+    context_fingerprint: 493e7a2e90f2181963b76f4c27950446f32374aa3bc5d5d8ecdb9a387bff78a4
+    disposition: duplicate
+  - page: 3
+    section: block-120
+    ordinal: 3
+    context_fingerprint: 69708ecb15ed2f8333905518d55c2e65d2000762fdcdb639c743b59788f6f64b
+    disposition: candidate
+  - page: 3
+    section: block-121
+    ordinal: 1
+    context_fingerprint: b144d0b23b48bd27afd3859d46d2dd135417d5e2e07b192e5dbb1040bd39c946
+    disposition: candidate
+  - page: 3
+    section: block-121
+    ordinal: 2
+    context_fingerprint: 39b8c4694705d81e023d23a703053eca9dcb306801451dc914861290626ca97f
+    disposition: candidate
+  - page: 3
+    section: block-121
+    ordinal: 3
+    context_fingerprint: b19f4e64d33b4faa02ae56d4c07dd408d6fd7391e0ec660340fce618e6195b02
+    disposition: non-vocabulary
+  - page: 3
+    section: block-122
+    ordinal: 1
+    context_fingerprint: 137bcb3f3eabb2beeedf41f6751a424ca559809a2762f3602fd923447e5805b3
+    disposition: candidate
+  - page: 3
+    section: block-122
+    ordinal: 2
+    context_fingerprint: ab68dafd0754ccca6d7746eb4661673b88c91d8eca7f9494773782326fdbe687
+    disposition: candidate
+  - page: 3
+    section: block-122
+    ordinal: 3
+    context_fingerprint: a068ab386a5641839f7647c5d43ad61ea65c51869d6ef10d08ef1ca4003d79c0
+    disposition: non-vocabulary
+  - page: 3
+    section: block-122
+    ordinal: 4
+    context_fingerprint: c0fd4dbf55297e1c16bd6e8e3a14123be8605810ece5cc0182198bec3ebbd05f
+    disposition: candidate
+  - page: 3
+    section: block-122
+    ordinal: 5
+    context_fingerprint: efd5ef1f234cb5cbbd46ca224ea7f8ce72ff0330913f2050c1aaa9ae8c5da02c
+    disposition: candidate
+  - page: 3
+    section: block-123
+    ordinal: 1
+    context_fingerprint: 41ea49f0ee4c6c46f8ca70560a6f978dd96de11b9d160825283abf903641500b
+    disposition: candidate
+  - page: 3
+    section: block-123
+    ordinal: 2
+    context_fingerprint: eb5f70d772b55751bc87c8ed9066717785f9a42d6acdfa1c4d198ac6a67cd23a
+    disposition: candidate

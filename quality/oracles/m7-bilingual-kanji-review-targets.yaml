@@ -1,0 +1,51 @@
+version: 1
+id: m7-bilingual-kanji-review-targets
+source_fingerprint: d75967df4e7becbcdde3ba6abac5f685df7b760d8a7f234a38d7667d102473b0
+type: selection
+case_ids: []
+targets:
+  - identity: 'word:明日:'
+    locator: page-1/part-1/question-1-a/first-clue
+  - identity: word:てんき:てんき
+    locator: page-1/part-1/question-1-a/second-clue
+  - identity: word:あめ:あめ
+    locator: page-1/part-1/question-1-b/first-rain-clue
+  - identity: word:よる:よる
+    locator: page-1/part-1/question-1-b/night-clue
+  - identity: word:やみます:やみます
+    locator: page-1/part-1/question-1-b/final-clue
+  - identity: word:ゆき:ゆき
+    locator: page-1/part-1/question-2/clue
+  - identity: word:とまっています:とまっています
+    locator: page-1/part-1/question-3/clue
+  - identity: word:雨天中止:うてんちゅうし
+    locator: page-1/part-1/question-4/clue
+  - identity: word:そうちょう:そうちょう
+    locator: page-1/part-1/question-5/first-clue
+  - identity: word:やすい:やすい
+    locator: page-1/part-1/question-5/second-clue
+  - identity: word:早く起きる:はやくおきる
+    locator: page-1/part-1/question-5/final-clue
+  - identity: word:今年2月:ことしにがつ
+    locator: page-1/part-2/hotel-opening
+  - identity: word:九分:きゅうふん
+    locator: page-1/part-2/travel-time
+  - identity: word:二人:ふたり
+    locator: page-1/part-2/guest-count
+  - identity: word:夕食:ゆうしょく
+    locator: page-1/part-2/dinner
+  - identity: word:十六時:じゅうろくじ
+    locator: page-1/part-2/check-in-start
+  - identity: word:二十一時:にじゅういちじ
+    locator: page-1/part-2/check-in-end
+  - identity: word:朝食:ちょうしょく
+    locator: page-1/part-2/breakfast
+  - identity: word:十時半:じゅうじはん
+    locator: page-1/part-2/check-out
+selection_rubric: >-
+  Select exactly the 19 target entries from the Japanese answer clues and hotel
+  guide. Preserve each target identity, including the empty reading for 明日,
+  and use the locator to quote its source context. Use only the first listed あめ
+  occurrence. Exclude instructions, blank lines, English glosses, emoji,
+  punctuation, hotel and transport names, prices, and all entries outside the
+  target list. The empty 明日 reading must remain held for owner review.
