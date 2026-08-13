@@ -1,5 +1,17 @@
 version: 1
 findings:
+  - id: anki-deck-membership-overlap
+    state: fixed
+    pipeline_stage: deck-membership
+    source_archetypes: [camera, mixed-layout-pdf, native-pdf-table]
+    symptom: The unfiltered general verbs deck also claimed records assigned to dedicated hardening-pilot decks, so packages exported the same stable Anki GUIDs under different deck IDs.
+    invariant: A canonical record belongs to at most one built deck unless an explicit reviewed migration plan says otherwise; dedicated pilot tags are excluded from the general verbs deck.
+    evidence:
+      - fingerprint: 1265d8cf038291cfe6f503b7b6902cca4df65ad3d819a13aa6790f8dfdab3d57
+        locator: quality/cases/deck-membership-partition/input.json
+    recurrences: []
+    case_ids: [deck-membership-partition]
+    fix_ref: data/decks/verbs.yaml
   - id: ai-existing-example-annotations
     state: fixed
     pipeline_stage: ai-enrichment

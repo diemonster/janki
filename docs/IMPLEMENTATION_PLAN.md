@@ -2870,8 +2870,10 @@ additional and may point at the same minimized evidence.
 approved 14-target camera oracle. The owner also approved the exact private
 Anthropic evaluation scope. The first live extraction returned all 14 approved
 identities and readings; source-context review and validation passed. Promotion
-has not started. The distinct real scan and the ambiguous/unreadable-unit
-evidence are still open.*
+added all 14 records and archived the reviewed staging file at
+`data/staging/done/IMG_4563.jpg.yaml`. Dictionary and AI enrichment, audio,
+final review, build, the coverage case, and the pilot report remain open. The
+distinct real scan and the ambiguous/unreadable-unit evidence are still open.*
 
 Depends on: M7.4, M7.5
 Files: two new immutable source copies placed under `data/inbox/` by the input

@@ -1,0 +1,17 @@
+version: 1
+id: deck-membership-partition
+purpose: regression
+gating: true
+runner: deck-membership
+pipeline_boundary: deck-membership
+source_archetype: camera
+redistributable: true
+fixture_basis: agent-created-synthetic
+fixtures:
+  - path: input.json
+    fingerprint: 1265d8cf038291cfe6f503b7b6902cca4df65ad3d819a13aa6790f8dfdab3d57
+  - path: oracle.json
+    fingerprint: 9e777fd167d21037e274af3ce136c62f0aaab660b526c3a630d780955fee4b8e
+runner_input: input.json
+oracle: oracle.json
+finding_id: anki-deck-membership-overlap

@@ -75,3 +75,16 @@ def test_builder_wires_templates_fields_and_stable_guids(tmp_path, monkeypatch) 
     assert output.exists()
     with ZipFile(output) as archive:
         assert "collection.anki2" in archive.namelist()
+
+
+def test_general_verbs_do_not_claim_hardening_pilot_records() -> None:
+    _, verbs = anki.resolve_deck_records(PROJECT_ROOT / "data/decks/verbs.yaml")
+    verb_ids = {record.id for record in verbs}
+
+    for name in (
+        "m7-mixed-tsumori.yaml",
+        "m7-native-teform-table.yaml",
+        "m7-camera-vertical-dialogue.yaml",
+    ):
+        _, pilot = anki.resolve_deck_records(PROJECT_ROOT / "data/decks" / name)
+        assert verb_ids.isdisjoint(record.id for record in pilot), name

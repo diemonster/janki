@@ -14,6 +14,7 @@ SEEDED_CASES = (
     "ai-existing-example-annotations",
     "ai-no-writable-change",
     "ai-rejected-example-retry",
+    "deck-membership-partition",
     "derived-romaji-repair",
     "enrichment-forced-kana-reading",
     "enrichment-invalid-pitch-length",
@@ -181,6 +182,15 @@ def test_every_registered_runner_calls_its_production_boundary() -> None:
     candidate = hardening_replay.RUNNERS["candidate-response"](
         {"candidates": [], "observe": []}, ROOT
     )
+    deck_membership = hardening_replay.RUNNERS["deck-membership"](
+        {
+            "primary_deck": "data/decks/verbs.yaml",
+            "separate_decks": [
+                "data/decks/m7-camera-vertical-dialogue.yaml"
+            ],
+        },
+        ROOT,
+    )
     input_provenance = hardening_replay.RUNNERS["input-provenance"](
         {"source_name": "lesson.pdf", "content": "%PDF-1.7 synthetic"}, ROOT
     )
@@ -247,6 +257,9 @@ def test_every_registered_runner_calls_its_production_boundary() -> None:
     ai = hardening_replay.replay(ROOT, ["ai-no-writable-change"])[0]
 
     assert candidate["record_ids"] == []
+    assert deck_membership == {
+        "overlaps": {"data/decks/m7-camera-vertical-dialogue.yaml": []}
+    }
     assert input_provenance == {
         "exit_code": 0,
         "origin_relative_path": "data/inbox/lesson.pdf",

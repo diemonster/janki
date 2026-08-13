@@ -32,7 +32,7 @@ from japanese_anki import (
     validation,
 )
 from japanese_anki.config import ProjectConfig
-from japanese_anki.exporters.anki import FIELD_NAMES, build_deck
+from japanese_anki.exporters.anki import FIELD_NAMES, build_deck, resolve_deck_records
 from japanese_anki.inputs import PreparedInput
 from japanese_anki.io import save_records_json
 from japanese_anki.models import VocabularyRecord
@@ -1130,7 +1130,50 @@ def _render_build(data: dict[str, Any], root: Path) -> Any:
     }
 
 
+def _deck_membership(data: dict[str, Any], root: Path) -> Any:
+    """Observe stable-ID overlap between one deck and named separate decks."""
+    _only(data, {"primary_deck", "separate_decks"}, "deck-membership")
+    primary = data.get("primary_deck")
+    separate = _string_list(data.get("separate_decks"), "separate_decks")
+    if not isinstance(primary, str) or not primary:
+        raise hardening.HardeningError(
+            "deck-membership.primary_deck must be non-empty text"
+        )
+    if not separate:
+        raise hardening.HardeningError(
+            "deck-membership.separate_decks must not be empty"
+        )
+
+    deck_root = (root / "data" / "decks").resolve()
+
+    def deck_path(value: str, where: str) -> Path:
+        relative = Path(value)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise hardening.HardeningError(f"{where} must be a repository path")
+        path = (root / relative).resolve()
+        if (
+            not path.is_relative_to(deck_root)
+            or path.suffix not in {".yaml", ".yml"}
+            or not path.is_file()
+        ):
+            raise hardening.HardeningError(
+                f"{where} must name an existing data/decks YAML file"
+            )
+        return path
+
+    primary_path = deck_path(primary, "deck-membership.primary_deck")
+    _, primary_records = resolve_deck_records(primary_path)
+    primary_ids = {record.id for record in primary_records}
+    overlaps: dict[str, list[str]] = {}
+    for index, value in enumerate(separate):
+        path = deck_path(value, f"deck-membership.separate_decks[{index}]")
+        _, records = resolve_deck_records(path)
+        overlaps[value] = sorted(primary_ids & {record.id for record in records})
+    return {"overlaps": overlaps}
+
+
 RUNNERS: dict[str, Callable[[dict[str, Any], Path], Any]] = {
+    "deck-membership": _deck_membership,
     "input-provenance": _input_provenance,
     "candidate-response": _candidate_response,
     "extraction-prompt": _extraction_prompt,
