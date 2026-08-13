@@ -3504,7 +3504,19 @@
     "word:修復:しゅうふく": {
       "added_at": "2026-08-13",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -3677,7 +3689,18 @@
     "word:円卓:えんたく": {
       "added_at": "2026-08-13",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -3923,7 +3946,18 @@
     "word:初めて:はじめて": {
       "added_at": "2026-08-13",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -4304,7 +4338,18 @@
     "word:導き:みちびき": {
       "added_at": "2026-08-13",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -4317,7 +4362,18 @@
     "word:差し支え:さしつかえ": {
       "added_at": "2026-08-13",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -4716,7 +4772,19 @@
     "word:探求:たんきゅう": {
       "added_at": "2026-08-13",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -4729,7 +4797,18 @@
     "word:新来:しんらい": {
       "added_at": "2026-08-13",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -5341,7 +5420,19 @@
     "word:祈祷:きとう": {
       "added_at": "2026-08-13",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -5354,7 +5445,19 @@
     "word:祝福:しゅくふく": {
       "added_at": "2026-08-13",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -5513,7 +5616,18 @@
     "word:聖職者:せいしょくしゃ": {
       "added_at": "2026-08-13",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -5612,7 +5726,18 @@
     "word:興味:きょうみ": {
       "added_at": "2026-08-13",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -5793,7 +5918,18 @@
     "word:見解:けんかい": {
       "added_at": "2026-08-13",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -6450,7 +6586,18 @@
     "word:黄金律:おうごんりつ": {
       "added_at": "2026-08-13",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {

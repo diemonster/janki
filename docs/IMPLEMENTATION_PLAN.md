@@ -2871,9 +2871,12 @@ approved 14-target camera oracle. The owner also approved the exact private
 Anthropic evaluation scope. The first live extraction returned all 14 approved
 identities and readings; source-context review and validation passed. Promotion
 added all 14 records and archived the reviewed staging file at
-`data/staging/done/IMG_4563.jpg.yaml`. Dictionary and AI enrichment, audio,
-final review, build, the coverage case, and the pilot report remain open. The
-distinct real scan and the ambiguous/unreadable-unit evidence are still open.*
+`data/staging/done/IMG_4563.jpg.yaml`. A later dictionary pass filled verified
+facts for 13 records. The approved
+source reading supplied `貴方[あなた]`; jpdb did not match that spelling and no
+pitch was guessed. AI enrichment, audio, final review, build, the coverage
+case, and the pilot report remain open. The distinct real scan and the
+ambiguous/unreadable-unit evidence are still open.*
 
 Depends on: M7.4, M7.5
 Files: two new immutable source copies placed under `data/inbox/` by the input

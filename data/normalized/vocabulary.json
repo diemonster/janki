@@ -2694,14 +2694,14 @@
     "id": "word:修復:しゅうふく",
     "expression": "修復",
     "reading": "しゅうふく",
-    "furigana": "",
+    "furigana": "修[しゅう] 復[ふく]",
     "romaji": "shuufuku",
     "meanings": [
       "restoration",
       "repair"
     ],
     "part_of_speech": "noun",
-    "verb_group": "",
+    "verb_group": "suru",
     "transitivity": "",
     "examples": [
       {
@@ -2720,9 +2720,11 @@
     "usage_notes": "",
     "audio": "",
     "image": "",
-    "pitch_accent": [],
+    "pitch_accent": [
+      "LLHHHH"
+    ],
     "audio_accent": "",
-    "frequency_rank": null,
+    "frequency_rank": 5700,
     "source": {
       "type": "extract",
       "imported_from": "IMG_4563.jpg",
@@ -2733,7 +2735,8 @@
         "page": "1",
         "context": "その前に差し支えなければ黄金律の修復について貴方の見解を伺いたく",
         "inclusion_reason": "Useful suru-noun for repairing or restoring things and relationships.",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_pitch_accent_source": "jpdb:5824c6a4bc49d670ce1d2b16fb67d75cacb460c4c15c0ce8992e6a87c4478b7a"
       }
     }
   },
@@ -2859,7 +2862,7 @@
     "id": "word:円卓:えんたく",
     "expression": "円卓",
     "reading": "えんたく",
-    "furigana": "",
+    "furigana": "円[えん] 卓[たく]",
     "romaji": "entaku",
     "meanings": [
       "round table"
@@ -2884,9 +2887,11 @@
     "usage_notes": "",
     "audio": "",
     "image": "",
-    "pitch_accent": [],
+    "pitch_accent": [
+      "LHHHH"
+    ],
     "audio_accent": "",
-    "frequency_rank": null,
+    "frequency_rank": 16900,
     "source": {
       "type": "extract",
       "imported_from": "IMG_4563.jpg",
@@ -2897,7 +2902,8 @@
         "page": "1",
         "context": "円卓へようこそ！",
         "inclusion_reason": "Concrete intermediate noun and a place name element in the scene.",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_pitch_accent_source": "jpdb:12d27608bfde6e51a8b3828f74675078b1a8573546741bb775375b16497352e1"
       }
     }
   },
@@ -3091,7 +3097,7 @@
     "id": "word:初めて:はじめて",
     "expression": "初めて",
     "reading": "はじめて",
-    "furigana": "",
+    "furigana": "初[はじ]めて",
     "romaji": "hajimete",
     "meanings": [
       "for the first time"
@@ -3116,9 +3122,11 @@
     "usage_notes": "",
     "audio": "",
     "image": "",
-    "pitch_accent": [],
+    "pitch_accent": [
+      "LHLLL"
+    ],
     "audio_accent": "",
-    "frequency_rank": null,
+    "frequency_rank": 300,
     "source": {
       "type": "extract",
       "imported_from": "IMG_4563.jpg",
@@ -3129,7 +3137,8 @@
         "page": "1",
         "context": "初めてのおかたでしょう？ コリンと申します",
         "inclusion_reason": "Common adverb used here as a modifier (初めてのおかた); worth reinforcing the の-modifier usage.",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_pitch_accent_source": "jpdb:34e32a8e77cfbf56d057b9f81e568c3b0d706904424f825b01750486688817d8"
       }
     }
   },
@@ -3430,7 +3439,7 @@
     "id": "word:導き:みちびき",
     "expression": "導き",
     "reading": "みちびき",
-    "furigana": "",
+    "furigana": "導[みちび]き",
     "romaji": "michibiki",
     "meanings": [
       "guidance",
@@ -3456,9 +3465,12 @@
     "usage_notes": "",
     "audio": "",
     "image": "",
-    "pitch_accent": [],
+    "pitch_accent": [
+      "LHHHH",
+      "LHHHL"
+    ],
     "audio_accent": "",
-    "frequency_rank": null,
+    "frequency_rank": 13900,
     "source": {
       "type": "extract",
       "imported_from": "IMG_4563.jpg",
@@ -3469,7 +3481,8 @@
         "page": "1",
         "context": "ときに貴方 祝福の導きは？",
         "inclusion_reason": "Nominalized form of 導く; shows verb-to-noun derivation.",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_pitch_accent_source": "jpdb:c0d9d65c23715985ccaea35f0811bb05c8d0d5412cc3ac13425e55cae2433d12"
       }
     }
   },
@@ -3477,7 +3490,7 @@
     "id": "word:差し支え:さしつかえ",
     "expression": "差し支え",
     "reading": "さしつかえ",
-    "furigana": "",
+    "furigana": "差[さ]し 支[つか]え",
     "romaji": "sashitsukae",
     "meanings": [
       "hindrance",
@@ -3504,9 +3517,11 @@
     "usage_notes": "",
     "audio": "",
     "image": "",
-    "pitch_accent": [],
+    "pitch_accent": [
+      "LHHHHH"
+    ],
     "audio_accent": "",
-    "frequency_rank": null,
+    "frequency_rank": 33800,
     "source": {
       "type": "extract",
       "imported_from": "IMG_4563.jpg",
@@ -3517,7 +3532,8 @@
         "page": "1",
         "context": "その前に差し支えなければ黄金律の修復について貴方の見解を伺いたく",
         "inclusion_reason": "Appears in the set polite phrase 差し支えなければ (\"if you don't mind\").",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_pitch_accent_source": "jpdb:5c893ea13a801f27b066756cd6323ce2f36bd1fee2802a9ffbee3c2c5d380edb"
       }
     }
   },
@@ -3842,7 +3858,7 @@
     "id": "word:探求:たんきゅう",
     "expression": "探求",
     "reading": "たんきゅう",
-    "furigana": "",
+    "furigana": "探[たん] 求[きゅう]",
     "romaji": "tankyuu",
     "meanings": [
       "search",
@@ -3850,7 +3866,7 @@
       "pursuit"
     ],
     "part_of_speech": "noun",
-    "verb_group": "",
+    "verb_group": "suru",
     "transitivity": "",
     "examples": [
       {
@@ -3869,9 +3885,11 @@
     "usage_notes": "",
     "audio": "",
     "image": "",
-    "pitch_accent": [],
+    "pitch_accent": [
+      "LHHHHH"
+    ],
     "audio_accent": "",
-    "frequency_rank": null,
+    "frequency_rank": 24000,
     "source": {
       "type": "extract",
       "imported_from": "IMG_4563.jpg",
@@ -3882,7 +3900,8 @@
         "page": "1",
         "context": "私は聖職者として黄金律の探求をしています",
         "inclusion_reason": "Useful suru-noun for abstract pursuit; common in written Japanese.",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_pitch_accent_source": "jpdb:a087f1945a9f64e4a562e72a5826f29e360d48b6d4d55d00f4ab0f91ce9a39d2"
       }
     }
   },
@@ -3890,7 +3909,7 @@
     "id": "word:新来:しんらい",
     "expression": "新来",
     "reading": "しんらい",
-    "furigana": "",
+    "furigana": "新[しん] 来[らい]",
     "romaji": "shinrai",
     "meanings": [
       "newly arrived",
@@ -3916,9 +3935,11 @@
     "usage_notes": "",
     "audio": "",
     "image": "",
-    "pitch_accent": [],
+    "pitch_accent": [
+      "LHHHH"
+    ],
     "audio_accent": "",
-    "frequency_rank": null,
+    "frequency_rank": 69700,
     "source": {
       "type": "extract",
       "imported_from": "IMG_4563.jpg",
@@ -3929,7 +3950,8 @@
         "page": "1",
         "context": "新来のかたにはぜひお伝えしたいのです 役に立ちます",
         "inclusion_reason": "Compound of 新 + 来 that is transparent but not obvious to a learner.",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_pitch_accent_source": "jpdb:25c0c759d35178e9575a6e745e6f3282f3681a89bd0f8ceeb41f521ec1b2d181"
       }
     }
   },
@@ -4398,14 +4420,14 @@
     "id": "word:祈祷:きとう",
     "expression": "祈祷",
     "reading": "きとう",
-    "furigana": "",
+    "furigana": "祈[き] 祷[とう]",
     "romaji": "kitou",
     "meanings": [
       "prayer",
       "incantation"
     ],
     "part_of_speech": "noun",
-    "verb_group": "",
+    "verb_group": "suru",
     "transitivity": "",
     "examples": [
       {
@@ -4424,9 +4446,11 @@
     "usage_notes": "",
     "audio": "",
     "image": "",
-    "pitch_accent": [],
+    "pitch_accent": [
+      "LHHH"
+    ],
     "audio_accent": "",
-    "frequency_rank": null,
+    "frequency_rank": 25000,
     "source": {
       "type": "extract",
       "imported_from": "IMG_4563.jpg",
@@ -4437,7 +4461,8 @@
         "page": "1",
         "context": "それと実は祈祷の示教もしておりましてどうでしょう？",
         "inclusion_reason": "Ruby-glossed noun central to the dialogue; less common than 祈り so worth a card.",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_pitch_accent_source": "jpdb:9576d7e74a78949f147e1dd18f9539fa46fa9e2d80a85253ff6d396f5b9481b4"
       }
     }
   },
@@ -4445,14 +4470,14 @@
     "id": "word:祝福:しゅくふく",
     "expression": "祝福",
     "reading": "しゅくふく",
-    "furigana": "",
+    "furigana": "祝[しゅく] 福[ふく]",
     "romaji": "shukufuku",
     "meanings": [
       "blessing",
       "benediction"
     ],
     "part_of_speech": "noun",
-    "verb_group": "",
+    "verb_group": "suru",
     "transitivity": "",
     "examples": [
       {
@@ -4471,9 +4496,11 @@
     "usage_notes": "",
     "audio": "",
     "image": "",
-    "pitch_accent": [],
+    "pitch_accent": [
+      "LLHHHH"
+    ],
     "audio_accent": "",
-    "frequency_rank": null,
+    "frequency_rank": 3800,
     "source": {
       "type": "extract",
       "imported_from": "IMG_4563.jpg",
@@ -4484,7 +4511,8 @@
         "page": "1",
         "context": "ときに貴方 祝福の導きは？",
         "inclusion_reason": "Common noun in religious and celebratory contexts.",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_pitch_accent_source": "jpdb:98ff7e88a81b9d3651d25ee798d36d9529af79cd4ffb6fb9a3059d5e50d0ee72"
       }
     }
   },
@@ -4604,7 +4632,7 @@
     "id": "word:聖職者:せいしょくしゃ",
     "expression": "聖職者",
     "reading": "せいしょくしゃ",
-    "furigana": "",
+    "furigana": "聖[せい] 職[しょく] 者[しゃ]",
     "romaji": "seishokusha",
     "meanings": [
       "clergyman",
@@ -4631,9 +4659,11 @@
     "usage_notes": "",
     "audio": "",
     "image": "",
-    "pitch_accent": [],
+    "pitch_accent": [
+      "LHHHLLLL"
+    ],
     "audio_accent": "",
-    "frequency_rank": null,
+    "frequency_rank": 15800,
     "source": {
       "type": "extract",
       "imported_from": "IMG_4563.jpg",
@@ -4644,7 +4674,8 @@
         "page": "1",
         "context": "私は聖職者として黄金律の探求をしています",
         "inclusion_reason": "Religious-role noun built on useful kanji (聖・職・者).",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_pitch_accent_source": "jpdb:123a2375056234a819b9de1356f15a8a49c396be63a69d03f43b59e2075e96f3"
       }
     }
   },
@@ -4722,7 +4753,7 @@
     "id": "word:興味:きょうみ",
     "expression": "興味",
     "reading": "きょうみ",
-    "furigana": "",
+    "furigana": "興[きょう] 味[み]",
     "romaji": "kyoumi",
     "meanings": [
       "interest",
@@ -4748,9 +4779,12 @@
     "usage_notes": "",
     "audio": "",
     "image": "",
-    "pitch_accent": [],
+    "pitch_accent": [
+      "HHLLL",
+      "LLHHL"
+    ],
     "audio_accent": "",
-    "frequency_rank": null,
+    "frequency_rank": 900,
     "source": {
       "type": "extract",
       "imported_from": "IMG_4563.jpg",
@@ -4761,7 +4795,8 @@
         "page": "1",
         "context": "二本指様の祈祷にご興味は？",
         "inclusion_reason": "High-frequency noun with the ～に興味がある pattern.",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_pitch_accent_source": "jpdb:3ef2ccb06d2be21b40ce805bbb34c92444288f773d0de5f4c85ccd18b23c4ccf"
       }
     }
   },
@@ -4899,7 +4934,7 @@
     "id": "word:見解:けんかい",
     "expression": "見解",
     "reading": "けんかい",
-    "furigana": "",
+    "furigana": "見[けん] 解[かい]",
     "romaji": "kenkai",
     "meanings": [
       "opinion",
@@ -4926,9 +4961,11 @@
     "usage_notes": "",
     "audio": "",
     "image": "",
-    "pitch_accent": [],
+    "pitch_accent": [
+      "LHHHH"
+    ],
     "audio_accent": "",
-    "frequency_rank": null,
+    "frequency_rank": 7400,
     "source": {
       "type": "extract",
       "imported_from": "IMG_4563.jpg",
@@ -4939,7 +4976,8 @@
         "page": "1",
         "context": "その前に差し支えなければ黄金律の修復について貴方の見解を伺いたく",
         "inclusion_reason": "Formal noun for an opinion, common in written and polite speech.",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_pitch_accent_source": "jpdb:de86626de3568b2a9a4e44add06bf14417eb0cf7069621f8f136ca0140e081f5"
       }
     }
   },
@@ -5143,7 +5181,7 @@
     "id": "word:貴方:あなた",
     "expression": "貴方",
     "reading": "あなた",
-    "furigana": "",
+    "furigana": "貴方[あなた]",
     "romaji": "anata",
     "meanings": [
       "you (polite/formal)"
@@ -5501,7 +5539,7 @@
     "id": "word:黄金律:おうごんりつ",
     "expression": "黄金律",
     "reading": "おうごんりつ",
-    "furigana": "",
+    "furigana": "黄[おう] 金[ごん] 律[りつ]",
     "romaji": "ougonritsu",
     "meanings": [
       "golden rule",
@@ -5527,9 +5565,11 @@
     "usage_notes": "",
     "audio": "",
     "image": "",
-    "pitch_accent": [],
+    "pitch_accent": [
+      "LHHLLLL"
+    ],
     "audio_accent": "",
-    "frequency_rank": null,
+    "frequency_rank": 81000,
     "source": {
       "type": "extract",
       "imported_from": "IMG_4563.jpg",
@@ -5540,7 +5580,8 @@
         "page": "1",
         "context": "私は聖職者として黄金律の探求をしています",
         "inclusion_reason": "Key setting term repeated on the page; teaches 黄金 plus 律.",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_pitch_accent_source": "jpdb:a9fd729e984f1e24776a64435e219806505f4bf0204e54ee9c15709ad21cbb8a"
       }
     }
   }
