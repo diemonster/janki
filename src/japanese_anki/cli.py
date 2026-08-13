@@ -1127,6 +1127,11 @@ def _recheck_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
         )
     elif result.differing:
         print("Nothing to confirm: jpdb reads every flagged example differently.")
+    elif result.blocked:
+        print(
+            "Nothing to confirm: stored KANJIDIC evidence requires human "
+            "review for every flagged example."
+        )
     else:
         print("Nothing to confirm: no example carries an unverified-furigana flag.")
     if settled:
@@ -1143,6 +1148,16 @@ def _recheck_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
         total = sum(len(items) for items in result.differing.values())
         print(f"Still unconfirmed ({total}) — jpdb reads these differently:")
         for record_id, items in result.differing.items():
+            for sentence, why in items:
+                print(f"  {record_id}: {sentence}")
+                print(f"    {why}")
+    if result.blocked:
+        total = sum(len(items) for items in result.blocked.values())
+        print(
+            f"Still blocked ({total}) — stored KANJIDIC readings reject these "
+            "generated character splits:"
+        )
+        for record_id, items in result.blocked.items():
             for sentence, why in items:
                 print(f"  {record_id}: {sentence}")
                 print(f"    {why}")

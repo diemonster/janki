@@ -151,7 +151,8 @@ def test_an_impossible_character_group_survives_dictionary_recheck() -> None:
 
     assert result.cleared == {}
     assert client.asked == []
-    assert "日[した]" in result.differing[subject.id][0][1]
+    assert "日[した]" in result.blocked[subject.id][0][1]
+    assert result.differing == {}
     assert result.records[0].source.raw_fields["furigana_unverified"]
 
 
@@ -183,6 +184,32 @@ def _project(tmp_path: Path, records: list[VocabularyRecord]) -> Path:
     return tmp_path
 
 
+def _write_day_store(root: Path) -> None:
+    path = root / "data" / "kanji.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "日": KanjiInfo(
+                    character="日",
+                    readings=(Reading(kind="on", reading="ニチ"),),
+                ).to_dict()
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _impossible_example() -> tuple[VocabularyRecord, str]:
+    sentence = "明日は晴れます。"
+    example = ExampleSentence(
+        japanese=sentence,
+        furigana="明[あ] 日[した]は 晴[は]れます。",
+    )
+    return record(example, flagged=fingerprint(sentence)), sentence
+
+
 def test_the_command_writes_records_then_the_ledger(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -203,6 +230,57 @@ def test_the_command_writes_records_then_the_ledger(
     # "furigana" would let a later real --jpdb pass collapse into this entry.
     assert fields == ["furigana_unverified"]
     assert "Confirmed 1 example" in capsys.readouterr().out
+
+
+def test_the_command_reports_a_kanjidic_block_without_calling_jpdb(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    subject, sentence = _impossible_example()
+    root = _project(tmp_path, [subject])
+    _write_day_store(root)
+    client = FakeJpdb(
+        {sentence: parse_of(["明日", "あした"], "は", ["晴", "は"], "れます")}
+    )
+    monkeypatch.setattr(cli.jpdb, "JpdbClient", lambda *a, **k: client)
+    monkeypatch.setattr(cli.jpdb, "api_key_from_env", lambda *a, **k: "test-key")
+
+    assert cli.main(["--root", str(root), "enrich", "--recheck-furigana"]) == 0
+
+    stored = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    raw_fields = stored[0]["source"]["raw_fields"]
+    assert raw_fields["furigana_unverified"] == fingerprint(sentence)
+    assert client.asked == []
+    output = capsys.readouterr().out
+    assert "stored KANJIDIC" in output
+    assert "jpdb reads these differently" not in output
+
+
+def test_human_accept_bypasses_the_kanjidic_block_and_jpdb(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    subject, sentence = _impossible_example()
+    root = _project(tmp_path, [subject])
+    _write_day_store(root)
+
+    def refuse_client(*_args: Any, **_kwargs: Any) -> None:
+        raise AssertionError("human acceptance must not construct a jpdb client")
+
+    monkeypatch.setattr(cli.jpdb, "JpdbClient", refuse_client)
+
+    assert cli.main(
+        [
+            "--root",
+            str(root),
+            "enrich",
+            "--recheck-furigana",
+            "--accept",
+            subject.id,
+        ]
+    ) == 0
+
+    stored = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    assert "furigana_unverified" not in stored[0]["source"]["raw_fields"]
+    assert sentence in stored[0]["examples"][0]["japanese"]
 
 
 def test_a_run_where_jpdb_answered_nothing_does_not_report_a_verdict(

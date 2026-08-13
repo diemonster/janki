@@ -1066,9 +1066,9 @@ def apply_ai_result(
     * an example whose furigana disagrees with jpdb's parse is **kept and
       flagged**, because the sentence may be right where the segmentation is
       not, and a human deciding that is better than janki throwing away good
-      Japanese — but only if the examples land at all: when the fill rules keep
-      the record's existing examples, ``unverified`` comes back empty, because
-      there is no stored example for the flag to be about;
+      Japanese. A flag lands only with the example it describes. A stored
+      example is also re-flagged when its surviving furigana assigns a reading
+      KANJIDIC does not list for that character;
     * romaji is regenerated from the furigana, always, whatever arrived.
 
     ``parses`` maps a sentence to its jpdb ``ParseResult``. An absent one is
@@ -1189,6 +1189,7 @@ def apply_ai_result(
         # answer matched what is already there. Nothing was flagged, so nothing
         # may be reported as flagged: a reviewer told to check a key would find
         # no key. The rejections still stand; those were the model's sentences
+        # either way.
         outcome.unverified = []
         outcome.impossible_furigana = []
     outcome.record = updated
@@ -1222,6 +1223,9 @@ class RecheckResult:
     cleared: dict[str, list[str]] = field(default_factory=dict)
     #: ``record id -> [(sentence, why)]`` still not vouched for.
     differing: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
+    #: ``record id -> [(sentence, why)]`` blocked before a jpdb request because
+    #: KANJIDIC rejects a generated one-character reading.
+    blocked: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
     #: Sentences jpdb could not parse at all — unverified, not fine.
     unparsed: list[str] = field(default_factory=list)
     #: ``record id -> [(sentence, why)]`` cleared because an adjudicator judged
@@ -1394,7 +1398,7 @@ def recheck_furigana(
                 groups = ", ".join(
                     f"{text}[{reading}]" for text, reading in impossible
                 )
-                result.differing.setdefault(record.id, []).append(
+                result.blocked.setdefault(record.id, []).append(
                     (
                         sentence,
                         "generated furigana still assigns an unknown "
