@@ -318,6 +318,55 @@ def atomic_write_text_bound(
         os.close(directory_fd)
 
 
+def unlink_path_bound(
+    path: Path,
+    *,
+    expected_revision: str,
+    expected_identity: tuple[int, int] | None = None,
+) -> None:
+    """Remove one exact regular file without following a changed path."""
+    target = Path(path).absolute()
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    directory_flags |= getattr(os, "O_NOFOLLOW", 0)
+    try:
+        directory_fd = os.open(target.parent, directory_flags)
+    except OSError as exc:
+        raise DataError(f"Could not open target directory for {target}: {exc}") from exc
+    try:
+        try:
+            descriptor = os.open(
+                target.name,
+                os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+                dir_fd=directory_fd,
+            )
+        except OSError as exc:
+            raise DataError(f"Bound removal target changed: {target}") from exc
+        try:
+            details = os.fstat(descriptor)
+            if not stat.S_ISREG(details.st_mode):
+                raise DataError(f"Bound removal target is not regular: {target}")
+            if expected_identity is not None and (
+                details.st_dev,
+                details.st_ino,
+            ) != expected_identity:
+                raise DataError(f"Bound removal target changed identity: {target}")
+            digest = hashlib.sha256()
+            while chunk := os.read(descriptor, 1024 * 1024):
+                digest.update(chunk)
+            if digest.hexdigest() != expected_revision:
+                raise DataError(f"Bound removal target changed content: {target}")
+        finally:
+            os.close(descriptor)
+        os.unlink(target.name, dir_fd=directory_fd)
+        os.fsync(directory_fd)
+    except DataError:
+        raise
+    except OSError as exc:
+        raise DataError(f"Could not remove {target}: {exc.strerror or exc}") from exc
+    finally:
+        os.close(directory_fd)
+
+
 def load_structured(path: Path) -> Any:
     suffix = path.suffix.lower()
     try:

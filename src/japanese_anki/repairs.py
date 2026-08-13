@@ -12,13 +12,15 @@ import copy
 import hashlib
 import io
 import json
+import math
 import os
 import re
 import stat
+from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, fields, replace
 from datetime import UTC, date, datetime
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import MappingProxyType
 from typing import Any
 
@@ -35,6 +37,7 @@ from japanese_anki.io import (
     atomic_write_text_bound,
     exclusive_path_lock,
     exclusive_path_locks,
+    unlink_path_bound,
 )
 from japanese_anki.models import ExampleSentence, VocabularyRecord
 from japanese_anki.romaji import kana_to_romaji
@@ -53,6 +56,7 @@ AUTOMATIC_FIELDS = frozenset(
     }
 )
 IDENTITY_FIELDS = frozenset({"id", "expression", "reading"})
+STRUCTURED_RECORD_FIELDS = frozenset({"examples", "source"})
 PROPOSAL_KIND = "repair-proposals"
 ARCHIVE_KIND = "repair-proposal-archive"
 JOURNAL_MARKER = "janki-repair-proposal-transaction"
@@ -104,8 +108,18 @@ def _unique_mapping(
 _StrictLoader.add_constructor(BaseResolver.DEFAULT_MAPPING_TAG, _unique_mapping)
 
 
+def _reject_json_constant(value: str) -> Any:
+    raise ValueError(f"non-finite number {value}")
+
+
 def _canonical(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
 
 
 def fingerprint(value: Any) -> str:
@@ -125,6 +139,34 @@ def _freeze(value: Any) -> Any:
     if isinstance(value, set | frozenset):
         return tuple(sorted((_freeze(item) for item in value), key=repr))
     return copy.deepcopy(value)
+
+
+def _thaw(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(key): _thaw(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_thaw(item) for item in value]
+    return copy.deepcopy(value)
+
+
+def _validate_json_value(value: Any, where: str) -> None:
+    if value is None or isinstance(value, str | bool | int):
+        return
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise RepairError(f"{where} cannot contain a non-finite number")
+        return
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise RepairError(f"{where} mapping keys must be text")
+            _validate_json_value(item, f"{where}.{key}")
+        return
+    if isinstance(value, list | tuple):
+        for index, item in enumerate(value):
+            _validate_json_value(item, f"{where}[{index}]")
+        return
+    raise RepairError(f"{where} must contain only canonical JSON values")
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,7 +267,7 @@ class ProposalAcceptance:
 
 
 def _validate_field_pattern(value: str, where: str) -> None:
-    match = _PATTERN.fullmatch(value)
+    match = _PATTERN.fullmatch(value) if isinstance(value, str) else None
     if match is None:
         raise RepairError(f"{where} has invalid field path {value!r}")
     record_fields = set(VocabularyRecord(id="", expression="").to_dict())
@@ -247,20 +289,37 @@ class RepairRegistry:
             self._validate(declaration)
             if declaration.code in by_code:
                 raise RepairError(f"Duplicate repair code {declaration.code!r}")
-            by_code[declaration.code] = declaration
+            by_code[declaration.code] = replace(
+                declaration,
+                allowed_fields=tuple(declaration.allowed_fields),
+                input_fields=tuple(declaration.input_fields),
+                evidence=_freeze(declaration.evidence),
+            )
         self._by_code = MappingProxyType(dict(sorted(by_code.items())))
 
     @staticmethod
     def _validate(declaration: RepairDeclaration) -> None:
-        if not _SLUG.fullmatch(declaration.code):
+        if not isinstance(declaration.code, str) or not _SLUG.fullmatch(declaration.code):
             raise RepairError("Repair code must be a lowercase slug")
-        if not _VERSION.fullmatch(declaration.version):
+        if not isinstance(declaration.version, str) or not _VERSION.fullmatch(
+            declaration.version
+        ):
             raise RepairError(f"Repair {declaration.code} has an invalid version")
         if declaration.mode not in REPAIR_MODES:
             raise RepairError(f"Repair {declaration.code} has an invalid mode")
-        if not declaration.phase or not declaration.provenance.strip():
+        if (
+            not isinstance(declaration.phase, str)
+            or not _SLUG.fullmatch(declaration.phase)
+            or not isinstance(declaration.provenance, str)
+            or not declaration.provenance.strip()
+        ):
             raise RepairError(f"Repair {declaration.code} needs phase and provenance")
-        if not declaration.allowed_fields or not declaration.input_fields:
+        if (
+            not isinstance(declaration.allowed_fields, tuple)
+            or not isinstance(declaration.input_fields, tuple)
+            or not declaration.allowed_fields
+            or not declaration.input_fields
+        ):
             raise RepairError(f"Repair {declaration.code} needs declared fields")
         if len(set(declaration.allowed_fields)) != len(declaration.allowed_fields):
             raise RepairError(f"Repair {declaration.code} repeats an allowed field")
@@ -268,6 +327,10 @@ class RepairRegistry:
             raise RepairError(f"Repair {declaration.code} repeats an input field")
         for name in (*declaration.allowed_fields, *declaration.input_fields):
             _validate_field_pattern(name, f"Repair {declaration.code}")
+            if name in STRUCTURED_RECORD_FIELDS:
+                raise RepairError(
+                    f"Repair {declaration.code} must declare leaf fields, not {name!r}"
+                )
         if any(name in IDENTITY_FIELDS for name in declaration.allowed_fields):
             raise RepairError(f"Repair {declaration.code} cannot target identity")
         if declaration.mode == "ingest-safe" and not set(
@@ -278,6 +341,9 @@ class RepairRegistry:
             )
         if not isinstance(declaration.evidence, Mapping):
             raise RepairError(f"Repair {declaration.code} evidence must be a mapping")
+        _validate_json_value(
+            declaration.evidence, f"Repair {declaration.code} evidence"
+        )
         for callback in (
             declaration.precondition,
             declaration.transformation,
@@ -369,7 +435,7 @@ def _provenance_entry(
         "code": declaration.code,
         "version": declaration.version,
         "fields": sorted(fields),
-        "evidence": copy.deepcopy(dict(declaration.evidence)),
+        "evidence": _thaw(declaration.evidence),
         "provenance": declaration.provenance,
     }
 
@@ -381,8 +447,11 @@ def _annotate_repair(
     existing = raw_fields.get("janki_repairs", "")
     if existing:
         try:
-            payload = json.loads(existing)
-        except json.JSONDecodeError as exc:
+            payload = json.loads(
+                existing,
+                parse_constant=_reject_json_constant,
+            )
+        except (json.JSONDecodeError, ValueError) as exc:
             raise RepairError(
                 f"{record.id}: source.raw_fields.janki_repairs is not valid JSON"
             ) from exc
@@ -395,6 +464,20 @@ def _annotate_repair(
         payload.append(entry)
     raw_fields["janki_repairs"] = _canonical(payload)
     return replace(record, source=replace(record.source, raw_fields=raw_fields))
+
+
+def _require_canonical_record(record: VocabularyRecord, repair_code: str) -> None:
+    raw = record.to_dict()
+    try:
+        round_trip = VocabularyRecord.from_dict(raw).to_dict()
+    except JankiError as exc:
+        raise RepairError(
+            f"Repair {repair_code} produced an invalid record: {exc}"
+        ) from exc
+    if round_trip != raw:
+        raise RepairError(
+            f"Repair {repair_code} produced a value outside the canonical schema"
+        )
 
 
 def apply_declarations(
@@ -413,7 +496,7 @@ def apply_declarations(
                 f"Repair {declaration.code}@{declaration.version} is "
                 f"{declaration.mode}; this operation accepts {', '.join(sorted(modes))}"
             )
-        evidence = _freeze(dict(declaration.evidence))
+        evidence = declaration.evidence
         for index, record in enumerate(result):
             before = _projection(record, declaration.input_fields)
             try:
@@ -479,7 +562,7 @@ def apply_declarations(
                         path,
                         old,
                         copy.deepcopy(new),
-                        copy.deepcopy(dict(declaration.evidence)),
+                        _thaw(declaration.evidence),
                         declaration.provenance,
                     )
                 )
@@ -490,6 +573,7 @@ def apply_declarations(
             if updated.id != record.id:
                 raise RepairError(f"Repair {declaration.code} changed record identity")
             updated = _annotate_repair(updated, declaration, changed_fields)
+            _require_canonical_record(updated, declaration.code)
             result[index] = updated
             changes.extend(local)
     return result, changes
@@ -695,12 +779,16 @@ def _strict_data(text: str, path: Path) -> Any:
                     result[key] = value
                 return result
 
-            return json.loads(text, object_pairs_hook=unique)
+            return json.loads(
+                text,
+                object_pairs_hook=unique,
+                parse_constant=_reject_json_constant,
+            )
         if path.suffix.lower() in {".yaml", ".yml"}:
             return yaml.load(text, Loader=_StrictLoader)
     except RepairError:
         raise
-    except (json.JSONDecodeError, yaml.YAMLError) as exc:
+    except (json.JSONDecodeError, ValueError, yaml.YAMLError) as exc:
         raise RepairError(f"Could not parse repair input {path}: {exc}") from exc
     raise RepairError(f"Repair input must be JSON or YAML: {path}")
 
@@ -790,9 +878,12 @@ def read_safe_document(
         path_details = os.lstat(candidate)
     except OSError as exc:
         raise RepairError(f"Repair input changed while it was read: {path}") from exc
-    if identity != after_identity or (path_details.st_dev, path_details.st_ino) != (
-        before.st_dev,
-        before.st_ino,
+    if (
+        (initial_details.st_dev, initial_details.st_ino)
+        != (before.st_dev, before.st_ino)
+        or identity != after_identity
+        or (path_details.st_dev, path_details.st_ino)
+        != (before.st_dev, before.st_ino)
     ):
         raise RepairError(f"Repair input changed identity while it was read: {path}")
     raw_bytes = b"".join(chunks)
@@ -996,7 +1087,6 @@ def build_check_plan(
 ) -> RepairPlan:
     """Build one check-only plan that can include proposal-only repairs."""
     current = list(document.records)
-    preview = list(document.records)
     changes: list[RepairChange] = []
     for declaration in declarations:
         if declaration.mode == "revoked":
@@ -1009,14 +1099,8 @@ def build_check_plan(
             modes=frozenset({declaration.mode}),
         )
         changes.extend(local)
-        if declaration.mode == "ingest-safe":
-            current = updated
-        preview, _preview_changes = apply_declarations(
-            preview,
-            [declaration],
-            modes=frozenset({declaration.mode}),
-        )
-    issues = validate_records(preview, document.relative_path)
+        current = updated
+    issues = validate_records(current, document.relative_path)
     if has_errors(issues):
         codes = ", ".join(
             sorted(
@@ -1060,8 +1144,7 @@ def _expanded_basis_fields(
     declaration: RepairDeclaration,
     target: str,
 ) -> tuple[str, ...]:
-    target_match = _PATH.fullmatch(target)
-    target_index = target_match.group("index") if target_match else None
+    del target
     result: list[str] = []
     for pattern in declaration.input_fields:
         match = _PATTERN.fullmatch(pattern)
@@ -1071,17 +1154,10 @@ def _expanded_basis_fields(
             result.append(match.group("field"))
             continue
         items = getattr(record, match.group("field"))
-        if target_index is not None and target_match is not None and (
-            target_match.group("field") == match.group("field")
-        ):
-            result.append(
-                f"{match.group('field')}[{target_index}].{match.group('nested')}"
-            )
-        else:
-            result.extend(
-                f"{match.group('field')}[{index}].{match.group('nested')}"
-                for index in range(len(items))
-            )
+        result.extend(
+            f"{match.group('field')}[{index}].{match.group('nested')}"
+            for index in range(len(items))
+        )
     return tuple(dict.fromkeys(result))
 
 
@@ -1094,11 +1170,15 @@ def proposal_basis(
     fields_ = _expanded_basis_fields(record, declaration, target)
     basis = {name: _field_value(record, name) for name in fields_}
     payload = {
-        "record_id": record.id,
+        "record_identity": {
+            "id": record.id,
+            "expression": record.expression,
+            "reading": record.reading,
+        },
         "target_field": target,
         "target_old": old,
         "basis": basis,
-        "evidence": dict(declaration.evidence),
+        "evidence": _thaw(declaration.evidence),
     }
     return basis, fingerprint(payload)
 
@@ -1121,7 +1201,7 @@ def proposal_entry(
         "basis_fields": list(basis),
         "basis": basis,
         "basis_fingerprint": basis_fingerprint,
-        "evidence": copy.deepcopy(dict(declaration.evidence)),
+        "evidence": _thaw(declaration.evidence),
         "provenance": declaration.provenance,
     }
     payload["proposal_entry_fingerprint"] = fingerprint(payload)
@@ -1187,7 +1267,20 @@ def create_proposals(
     text = yaml.safe_dump(
         payload, allow_unicode=True, sort_keys=False, default_flow_style=False, width=100
     )
-    with exclusive_path_lock(target):
+    with exclusive_path_locks([document.path, target]):
+        current_source = read_safe_document(
+            document.root,
+            document.normalized_file,
+            document.staging_dir,
+            document.path,
+        )
+        if (
+            current_source.revision != document.revision
+            or current_source.identity[:2] != document.identity[:2]
+        ):
+            raise RepairError(
+                "The normalized source changed before proposal creation"
+            )
         try:
             target_details = os.lstat(target)
         except FileNotFoundError:
@@ -1230,7 +1323,14 @@ def _relative_path(value: Any, where: str) -> str:
     if not isinstance(value, str) or not value:
         raise RepairError(f"{where} must be a repository-relative path")
     pure = PurePosixPath(value.replace("\\", "/"))
-    if pure.is_absolute() or ".." in pure.parts or "." in pure.parts:
+    windows = PureWindowsPath(value)
+    if (
+        pure.is_absolute()
+        or windows.is_absolute()
+        or windows.drive
+        or ".." in pure.parts
+        or "." in pure.parts
+    ):
         raise RepairError(f"{where} must be a repository-relative path")
     return pure.as_posix()
 
@@ -1271,7 +1371,7 @@ def validate_proposal_payload(value: Any, where: str = "proposal file") -> dict[
             date.fromisoformat(created_at)
         except ValueError as exc:
             raise RepairError(f"{where}.created_at must be an ISO date") from exc
-    elif not isinstance(created_at, date):
+    elif type(created_at) is not date:
         raise RepairError(f"{where}.created_at must be an ISO date")
     raw_entries = data.get("proposals")
     if not isinstance(raw_entries, list):
@@ -1335,6 +1435,19 @@ def _proposal_parser() -> YAML:
     return parser
 
 
+def _preserve_standalone_comments(before: str, after: str) -> str:
+    """Keep standalone comments that ruamel attached to a removed entry."""
+    before_comments = Counter(
+        line for line in before.splitlines(keepends=True) if line.lstrip().startswith("#")
+    )
+    after_comments = Counter(
+        line for line in after.splitlines(keepends=True) if line.lstrip().startswith("#")
+    )
+    missing = list((before_comments - after_comments).elements())
+    prefix = "".join(line if line.endswith("\n") else line + "\n" for line in missing)
+    return prefix + after if missing else after
+
+
 def _render_proposal_changes(
     document: SafeDocument,
     *,
@@ -1366,7 +1479,7 @@ def _render_proposal_changes(
     payload["proposals"] = raw_entries
     buffer = io.StringIO()
     parser.dump(payload, buffer)
-    return buffer.getvalue()
+    return _preserve_standalone_comments(document.text, buffer.getvalue())
 
 
 def _entry_reason(
@@ -1391,7 +1504,7 @@ def _entry_reason(
         return "A proposal cannot change an identity field."
     if not any(_path_matches(target, allowed) for allowed in declaration.allowed_fields):
         return "The target field is not declared by this repair."
-    if dict(entry["evidence"]) != dict(declaration.evidence):
+    if dict(entry["evidence"]) != _thaw(declaration.evidence):
         return "The repair evidence changed."
     if entry["provenance"] != declaration.provenance:
         return "The repair provenance changed."
@@ -1479,13 +1592,15 @@ def proposal_archive_path(staging_dir: Path, proposal_file: Path) -> Path:
     return staging_dir.resolve() / "done" / proposal_file.name
 
 
-def _read_file_state(path: Path, root: Path) -> tuple[str | None, str]:
-    """Read one regular file and return text plus its content revision."""
+def _read_file_state_bound(
+    path: Path, root: Path
+) -> tuple[str | None, str, tuple[int, int] | None]:
+    """Read one regular file and bind its name, bytes, and identity."""
     _reject_symlink_components(path.absolute(), root.resolve())
     try:
         details = os.lstat(path)
     except FileNotFoundError:
-        return None, ABSENT_REVISION
+        return None, ABSENT_REVISION, None
     except OSError as exc:
         raise RepairError(f"Could not inspect {path}: {exc.strerror or exc}") from exc
     if not stat.S_ISREG(details.st_mode):
@@ -1503,22 +1618,32 @@ def _read_file_state(path: Path, root: Path) -> tuple[str | None, str]:
         after = os.fstat(descriptor)
     finally:
         os.close(descriptor)
-    if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) != (
-        after.st_dev,
-        after.st_ino,
-        after.st_size,
-        after.st_mtime_ns,
+    try:
+        path_details = os.lstat(path)
+    except OSError as exc:
+        raise RepairError(f"Transaction target changed while it was read: {path}") from exc
+    if (
+        (details.st_dev, details.st_ino) != (before.st_dev, before.st_ino)
+        or (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+        != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+        or (path_details.st_dev, path_details.st_ino)
+        != (before.st_dev, before.st_ino)
     ):
         raise RepairError(f"Transaction target changed while it was read: {path}")
     try:
         text = b"".join(chunks).decode("utf-8")
     except UnicodeDecodeError as exc:
         raise RepairError(f"Transaction target is not UTF-8: {path}") from exc
-    return text, bytes_fingerprint(text)
+    return text, bytes_fingerprint(text), (before.st_dev, before.st_ino)
+
+
+def _read_file_state(path: Path, root: Path) -> tuple[str | None, str]:
+    text, revision, _identity = _read_file_state_bound(path, root)
+    return text, revision
 
 
 def _cas_write(path: Path, root: Path, expected: str, intended: str) -> None:
-    _current, revision = _read_file_state(path, root)
+    _current, revision, identity = _read_file_state_bound(path, root)
     if revision != expected:
         raise RepairError(
             f"Transaction target {path} changed: expected {expected}, found {revision}"
@@ -1527,6 +1652,7 @@ def _cas_write(path: Path, root: Path, expected: str, intended: str) -> None:
         path,
         intended,
         expected_revision=None if expected == ABSENT_REVISION else expected,
+        expected_identity=identity,
         expected_absent=expected == ABSENT_REVISION,
     )
     _written, written_revision = _read_file_state(path, root)
@@ -1561,6 +1687,10 @@ def _archive_payload(text: str | None, path: Path) -> dict[str, Any]:
         _sha(item.get("source_revision"), f"{where}.source_revision")
         if not isinstance(item.get("accepted_at"), str) or not item["accepted_at"]:
             raise RepairError(f"{where}.accepted_at must be non-empty text")
+        try:
+            datetime.fromisoformat(item["accepted_at"])
+        except ValueError as exc:
+            raise RepairError(f"{where}.accepted_at must be an ISO timestamp") from exc
         _verify_entry_fingerprint(item, where)
     return copy.deepcopy(dict(raw))
 
@@ -1649,6 +1779,7 @@ def _apply_accepted_entries(
         result[index] = _annotate_repair(
             result[index], declaration, sorted(changed_fields)
         )
+        _require_canonical_record(result[index], code)
     return result
 
 
@@ -1778,6 +1909,9 @@ def _load_journal(text: str, path: Path, root: Path) -> dict[str, Any]:
         isinstance(item, Mapping) for item in accepted
     ):
         raise RepairError(f"Recovery journal {path} has invalid accepted entries")
+    if not accepted:
+        raise RepairError(f"Recovery journal {path} has no accepted entries")
+    accepted_fingerprints: set[str] = set()
     for index, entry in enumerate(accepted):
         if set(entry) != _ENTRY_REQUIRED:
             raise RepairError(
@@ -1785,6 +1919,9 @@ def _load_journal(text: str, path: Path, root: Path) -> dict[str, Any]:
             )
         entry_fingerprint = entry.get("proposal_entry_fingerprint")
         _sha(entry_fingerprint, f"journal accepted_entries[{index}] fingerprint")
+        if entry_fingerprint in accepted_fingerprints:
+            raise RepairError(f"Recovery journal {path} repeats an accepted entry")
+        accepted_fingerprints.add(entry_fingerprint)
         _verify_entry_fingerprint(entry, f"journal accepted_entries[{index}]")
     transaction_fingerprint = data.pop("transaction_fingerprint", None)
     if transaction_fingerprint != fingerprint(data):
@@ -1818,13 +1955,14 @@ def _journal_targets(
 
 
 def _remove_journal(path: Path, root: Path, expected_text: str) -> None:
-    current, _revision = _read_file_state(path, root)
+    current, revision, identity = _read_file_state_bound(path, root)
     if current != expected_text:
         raise RepairError(f"Recovery journal changed before removal: {path}")
-    try:
-        path.unlink()
-    except OSError as exc:
-        raise RepairError(f"Could not remove recovery journal {path}: {exc}") from exc
+    unlink_path_bound(
+        path,
+        expected_revision=revision,
+        expected_identity=identity,
+    )
 
 
 def _advance_transaction(
@@ -1912,6 +2050,8 @@ def accept_proposals(
     known_fingerprints = {
         str(entry["proposal_entry_fingerprint"]) for entry in review.entries
     }
+    if not all(isinstance(value, bool) for value in decisions.values()):
+        raise RepairError("Each proposal decision must be true or false")
     unknown_decisions = sorted(set(decisions) - known_fingerprints)
     if unknown_decisions:
         raise RepairError(

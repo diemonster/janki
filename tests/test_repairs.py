@@ -188,6 +188,22 @@ def test_registry_and_runtime_refuse_protected_or_undeclared_writes() -> None:
             [record()], [declaration], modes=frozenset({"ingest-safe"})
         )
 
+    with pytest.raises(repairs.RepairError, match="leaf fields"):
+        repairs.RepairRegistry([replace(base, input_fields=("examples",))])
+    with pytest.raises(repairs.RepairError, match="canonical JSON"):
+        repairs.RepairRegistry([replace(base, evidence={"object": object()})])
+    frozen = repairs.RepairRegistry(
+        [replace(base, evidence={"nested": {"proof": "stable"}})]
+    ).all()[0]
+    with pytest.raises(TypeError):
+        frozen.evidence["nested"]["proof"] = "changed"
+    _updated, nested_changes = repairs.apply_declarations(
+        [record(romaji="wrong")],
+        [frozen],
+        modes=frozenset({"ingest-safe"}),
+    )
+    assert nested_changes[0].evidence == {"nested": {"proof": "stable"}}
+
 
 def test_a_failed_postcondition_blocks_the_repair() -> None:
     base = repairs.REGISTRY.get("record-romaji-from-reading")
@@ -199,6 +215,24 @@ def test_a_failed_postcondition_blocks_the_repair() -> None:
     )
 
     with pytest.raises(repairs.RepairError, match="postcondition failed"):
+        repairs.apply_declarations(
+            [record(romaji="wrong")],
+            [declaration],
+            modes=frozenset({"ingest-safe"}),
+        )
+
+
+def test_a_declared_write_still_has_to_match_the_canonical_field_type() -> None:
+    base = repairs.REGISTRY.get("record-romaji-from-reading")
+    assert base is not None
+    declaration = replace(
+        base,
+        code="test-invalid-output-type",
+        transformation=lambda _before, _evidence: {"romaji": ["neko"]},
+        postcondition=lambda _before, _planned, _evidence: True,
+    )
+
+    with pytest.raises(repairs.RepairError, match="canonical schema"):
         repairs.apply_declarations(
             [record(romaji="wrong")],
             [declaration],
@@ -250,6 +284,36 @@ def test_plan_fingerprint_covers_version_evidence_diff_and_output(tmp_path: Path
     annotation = json.loads(original.records[0].source.raw_fields["janki_repairs"])
     assert annotation[0]["code"] == base.code
     assert annotation[0]["version"] == base.version
+
+
+def test_mixed_check_plan_runs_each_callback_once_and_fingerprints_shown_bytes(
+    tmp_path: Path,
+) -> None:
+    document = safe_document(tmp_path, record(romaji="wrong"))
+    base = repairs.REGISTRY.get("record-romaji-from-reading")
+    assert base is not None
+    calls = 0
+
+    def transform(before: Any, evidence: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        return base.transformation(before, evidence)
+
+    declaration = replace(
+        base,
+        code="test-proposal-preview",
+        mode="proposal-only",
+        transformation=transform,
+    )
+
+    plan = repairs.build_check_plan(document, [declaration])
+
+    assert calls == 1
+    assert plan.records[0].romaji == "neko"
+    assert '"romaji": "neko"' in plan.intended_text
+    assert plan.intended_output_fingerprint == repairs.bytes_fingerprint(
+        plan.intended_text
+    )
 
 
 def test_apply_refuses_an_identity_swap_after_its_compare(
@@ -336,6 +400,8 @@ def test_proposal_generation_does_not_touch_source_and_acceptance_is_field_scope
     )
     assert stale == {}
     entry_fingerprint = entries[0]["proposal_entry_fingerprint"]
+    with pytest.raises(repairs.RepairError, match="true or false"):
+        repairs.accept_proposals(review_state, {entry_fingerprint: "yes"})  # type: ignore[dict-item]
     result = repairs.accept_proposals(review_state, {entry_fingerprint: True})
 
     assert result.accepted == 1
@@ -350,6 +416,98 @@ def test_proposal_generation_does_not_touch_source_and_acceptance_is_field_scope
         entry_fingerprint
     ]
     assert not repairs.proposal_journal_path(staging).exists()
+
+
+def test_proposal_creation_refuses_a_source_change_after_planning(tmp_path: Path) -> None:
+    root, normalized, staging = project(tmp_path, [punctuation_record()])
+    document = repairs.read_safe_document(root, normalized, staging, normalized)
+    changed = punctuation_record()
+    changed.meanings.append("days off")
+    save_records_json(normalized, [changed])
+
+    with pytest.raises(repairs.RepairError, match="source changed"):
+        repairs.create_proposals(
+            document,
+            repairs.REGISTRY.select(
+                ["example-furigana-punctuation-separator"]
+            ),
+            staging,
+        )
+    assert not repairs.proposal_path(staging, document.relative_path).exists()
+
+
+def test_proposal_rewrite_preserves_a_comment_attached_to_an_accepted_entry(
+    tmp_path: Path,
+) -> None:
+    item = punctuation_record()
+    item.examples.append(
+        ExampleSentence(
+            japanese="今、何て言ったの？",
+            furigana="今[いま]、何[なん]て 言[い]ったの？",
+            english="What did you say?",
+        )
+    )
+    root, normalized, staging = project(tmp_path, [item])
+    document = repairs.read_safe_document(root, normalized, staging, normalized)
+    proposal_path, entries = repairs.create_proposals(
+        document,
+        repairs.REGISTRY.select(["example-furigana-punctuation-separator"]),
+        staging,
+    )
+    text = proposal_path.read_text(encoding="utf-8")
+    markers = [
+        index
+        for index, line in enumerate(text.splitlines())
+        if line == "- code: example-furigana-punctuation-separator"
+    ]
+    assert len(markers) == 2
+    lines = text.splitlines()
+    lines.insert(markers[1], "  # keep this reviewer comment")
+    proposal_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    proposal_document = repairs.read_safe_document(
+        root, normalized, staging, proposal_path, allow_proposal=True
+    )
+
+    rendered = repairs._render_proposal_changes(
+        proposal_document,
+        accepted=frozenset({entries[0]["proposal_entry_fingerprint"]}),
+    )
+
+    assert "# keep this reviewer comment" in rendered
+    assert entries[1]["proposal_entry_fingerprint"] in rendered
+
+
+def test_wildcard_basis_covers_every_value_given_to_the_callback(tmp_path: Path) -> None:
+    item = punctuation_record()
+    item.examples.append(
+        ExampleSentence(
+            japanese="今、何て言ったの？",
+            furigana="今[いま]、何[なん]て 言[い]ったの？",
+            english="What did you say?",
+        )
+    )
+    root, normalized, staging = project(tmp_path, [item])
+    document = repairs.read_safe_document(root, normalized, staging, normalized)
+    proposal_path, entries = repairs.create_proposals(
+        document,
+        repairs.REGISTRY.select(["example-furigana-punctuation-separator"]),
+        staging,
+    )
+    assert entries[0]["basis_fields"] == [
+        "examples[0].furigana",
+        "examples[1].furigana",
+    ]
+    changed = item
+    changed.examples[1].furigana = "今[いま]、 何[なん]て 言[い]ったの？"
+    save_records_json(normalized, [changed])
+
+    _review_state, stale = repairs.inspect_proposals(
+        root, normalized, staging, proposal_path
+    )
+
+    assert set(stale) == {
+        entry["proposal_entry_fingerprint"] for entry in entries
+    }
 
 
 def test_changed_basis_is_marked_stale_without_changing_records(tmp_path: Path) -> None:
@@ -372,6 +530,27 @@ def test_changed_basis_is_marked_stale_without_changing_records(tmp_path: Path) 
     raw = yaml.safe_load(proposal_path.read_text(encoding="utf-8"))
     assert "stale" in raw["proposals"][0]
     assert load_records(normalized)[0].examples[0].furigana == changed.examples[0].furigana
+
+
+def test_proposal_basis_detects_identity_drift_even_when_the_id_does_not_change(
+    tmp_path: Path,
+) -> None:
+    root, normalized, staging = project(tmp_path, [punctuation_record()])
+    document = repairs.read_safe_document(root, normalized, staging, normalized)
+    proposal_path, _entries = repairs.create_proposals(
+        document,
+        repairs.REGISTRY.select(["example-furigana-punctuation-separator"]),
+        staging,
+    )
+    changed = punctuation_record()
+    changed.expression = "週末ごろ"
+    save_records_json(normalized, [changed])
+
+    _review_state, stale = repairs.inspect_proposals(
+        root, normalized, staging, proposal_path
+    )
+
+    assert list(stale.values()) == ["A proposal basis value changed."]
 
 
 def test_ordinary_promote_refuses_a_proposal_without_pruning_it(
@@ -417,6 +596,35 @@ def test_noninteractive_apply_needs_the_exact_plan(
     assert result == 1
     assert "--expected-plan" in capsys.readouterr().err
     assert normalized.read_bytes() == before
+
+
+def test_noninteractive_no_op_apply_still_needs_an_expected_plan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root, normalized, _staging = project(tmp_path, [record(romaji="neko")])
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+
+    result = cli.main(
+        [
+            "--root",
+            str(root),
+            "repair",
+            str(normalized),
+            "--apply",
+            "record-romaji-from-reading",
+        ]
+    )
+
+    assert result == 1
+    assert "--expected-plan" in capsys.readouterr().err
+
+
+def test_repair_value_output_is_never_shortened() -> None:
+    value = "x" * 200
+
+    assert cli._format_repair_value(value) == json.dumps(value)
 
 
 def test_noninteractive_apply_writes_only_the_checked_exact_plan(
@@ -545,7 +753,7 @@ def test_dependency_check_rejects_two_accepted_dependent_fields() -> None:
 
 @pytest.mark.parametrize(
     "crash_after",
-    ["records", "archive", "staging"],
+    ["journal", "records", "archive", "staging"],
 )
 def test_recovery_finishes_each_ordered_partial_write_once(
     tmp_path: Path,
@@ -570,7 +778,11 @@ def test_recovery_finishes_each_ordered_partial_write_once(
         nonlocal crashed
         original_write(path, root_, expected, intended)
         is_target = (
-            (crash_after == "records" and path == normalized)
+            (
+                crash_after == "journal"
+                and path == repairs.proposal_journal_path(staging)
+            )
+            or (crash_after == "records" and path == normalized)
             or (crash_after == "staging" and path == proposal_path)
             or (crash_after == "archive" and path.parent.name == "done")
         )
@@ -636,3 +848,73 @@ def test_recovery_refuses_an_out_of_order_target_state(
     with pytest.raises(repairs.RepairError, match="ordered transaction state"):
         repairs.recover_proposal_transaction(root, normalized, staging)
     assert repairs.proposal_journal_path(staging).exists()
+
+
+@pytest.mark.parametrize(
+    "intended_targets",
+    [
+        frozenset({"archive"}),
+        frozenset({"staging"}),
+        frozenset({"records", "staging"}),
+        frozenset({"archive", "staging"}),
+    ],
+)
+def test_recovery_refuses_each_invalid_binary_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    intended_targets: frozenset[str],
+) -> None:
+    root, normalized, staging = project(tmp_path, [punctuation_record()])
+    document = repairs.read_safe_document(root, normalized, staging, normalized)
+    proposal_path, entries = repairs.create_proposals(
+        document,
+        repairs.REGISTRY.select(["example-furigana-punctuation-separator"]),
+        staging,
+    )
+    review_state, stale = repairs.inspect_proposals(
+        root, normalized, staging, proposal_path
+    )
+    assert stale == {}
+
+    def stop_before_targets(*_args: Any, **_kwargs: Any) -> None:
+        raise RuntimeError("stop after journal")
+
+    monkeypatch.setattr(repairs, "_advance_transaction", stop_before_targets)
+    with pytest.raises(RuntimeError, match="stop after journal"):
+        repairs.accept_proposals(
+            review_state,
+            {entries[0]["proposal_entry_fingerprint"]: True},
+        )
+    journal_path = repairs.proposal_journal_path(staging)
+    journal_text = journal_path.read_text(encoding="utf-8")
+    payload = repairs._load_journal(journal_text, journal_path, root)
+    targets = repairs._journal_targets(payload, root, normalized, staging)
+    for name in intended_targets:
+        targets[name].parent.mkdir(parents=True, exist_ok=True)
+        targets[name].write_text(payload["intended_text"][name], encoding="utf-8")
+    monkeypatch.undo()
+
+    with pytest.raises(repairs.RepairError, match="ordered transaction state"):
+        repairs.recover_proposal_transaction(root, normalized, staging)
+    assert journal_path.exists()
+
+
+def test_journal_removal_refuses_an_identity_swap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _normalized, staging = project(tmp_path, [record()])
+    journal = repairs.proposal_journal_path(staging)
+    text = '{"marker": "test"}\n'
+    journal.write_text(text, encoding="utf-8")
+    original_unlink = repairs.unlink_path_bound
+
+    def swap_then_unlink(path: Path, **kwargs: Any) -> None:
+        path.rename(path.with_suffix(".original"))
+        path.write_text(text, encoding="utf-8")
+        original_unlink(path, **kwargs)
+
+    monkeypatch.setattr(repairs, "unlink_path_bound", swap_then_unlink)
+
+    with pytest.raises(DataError, match="changed identity"):
+        repairs._remove_journal(journal, root, text)
+    assert journal.read_text(encoding="utf-8") == text

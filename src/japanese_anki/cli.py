@@ -2860,8 +2860,13 @@ def _print_repair_plan(plan: repairs.RepairPlan, output_format: str) -> None:
     for change in plan.changes:
         print(
             f"  {change.record_id} {change.field}: "
-            f"{_format_merge_value(change.old)} -> {_format_merge_value(change.new)}"
+            f"{_format_repair_value(change.old)} -> {_format_repair_value(change.new)}"
         )
+
+
+def _format_repair_value(value: Any) -> str:
+    """Format one complete value without the merge summary's truncation."""
+    return json.dumps(value, ensure_ascii=False, sort_keys=True)
 
 
 def command_repair(args: argparse.Namespace) -> int:
@@ -2901,14 +2906,13 @@ def command_repair(args: argparse.Namespace) -> int:
             raise repairs.RepairError(
                 "The repair plan does not match --expected-plan; no file was changed"
             )
+        if not sys.stdin.isatty() and not args.expected_plan:
+            raise repairs.RepairError(
+                "Non-interactive apply requires --expected-plan with this exact plan"
+            )
         if not plan.changes:
             return 0
-        if not sys.stdin.isatty():
-            if not args.expected_plan:
-                raise repairs.RepairError(
-                    "Non-interactive apply requires --expected-plan with this exact plan"
-                )
-        else:
+        if sys.stdin.isatty():
             try:
                 answer = input("Apply this exact repair plan? [y/N] ").strip().lower()
             except (EOFError, KeyboardInterrupt):
@@ -2964,8 +2968,8 @@ def _accept_repair_proposals(args: argparse.Namespace, config: ProjectConfig) ->
     for entry in review_state.entries:
         print(
             f"{entry['record_id']} {entry['target_field']}: "
-            f"{_format_merge_value(entry['old_value'])} -> "
-            f"{_format_merge_value(entry['new_value'])}"
+            f"{_format_repair_value(entry['old_value'])} -> "
+            f"{_format_repair_value(entry['new_value'])}"
         )
         while True:
             try:
