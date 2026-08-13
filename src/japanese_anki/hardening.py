@@ -1685,11 +1685,12 @@ def _parse_case(value: Any, path: Path, root: Path) -> HardeningCase:
             expected=fixture.fingerprint,
         )
     try:
-        actual_files = {
-            item.relative_to(path.parent).as_posix()
-            for item in path.parent.rglob("*")
-            if item.is_file() or item.is_symlink()
-        }
+        actual_files: set[str] = set()
+        for item in path.parent.rglob("*"):
+            details = item.lstat()
+            if stat.S_ISDIR(details.st_mode):
+                continue
+            actual_files.add(item.relative_to(path.parent).as_posix())
     except OSError as exc:
         raise HardeningError(f"Could not list {path.parent}: {exc.strerror or exc}") from exc
     expected_files = {"case.yaml", *fixture_paths}
@@ -1815,9 +1816,15 @@ def load_cases(root: Path) -> tuple[HardeningCase, ...]:
     for entry in entries:
         if entry.name == "README.md":
             continue
-        if entry.is_symlink():
+        try:
+            details = entry.lstat()
+        except OSError as exc:
+            raise HardeningError(
+                f"Could not inspect {_where(entry, root)}: {exc.strerror or exc}"
+            ) from exc
+        if stat.S_ISLNK(details.st_mode):
             raise HardeningError(f"Hardening case path {_where(entry, root)} is a symlink")
-        if not entry.is_dir():
+        if not stat.S_ISDIR(details.st_mode):
             raise HardeningError(
                 f"Hardening case directory has unexpected entry {_where(entry, root)}"
             )
@@ -2088,7 +2095,17 @@ def status_payload(report: HardeningStatus) -> dict[str, Any]:
         "oracles": {
             "total": len(report.oracles),
             "approved": sum(oracle.approved for oracle in report.oracles),
-            "draft": [oracle.id for oracle in report.oracles if not oracle.approved],
+            "draft": [
+                {
+                    "id": oracle.id,
+                    "path": oracle.relative_path,
+                    "type": oracle.type,
+                    "source_fingerprint": oracle.source_fingerprint,
+                    "oracle_content_fingerprint": oracle_content_fingerprint(oracle),
+                }
+                for oracle in report.oracles
+                if not oracle.approved
+            ],
         },
         "cases": {
             "total": len(report.cases),
@@ -2175,6 +2192,10 @@ def format_status(report: HardeningStatus) -> list[str]:
     lines.append(
         f"Oracles: {oracle_data['total']} "
         f"({oracle_data['approved']} approved, {len(oracle_data['draft'])} draft)"
+    )
+    lines.extend(
+        f"  {item['id']}: draft content {item['oracle_content_fingerprint']}"
+        for item in oracle_data["draft"]
     )
     lines.append(
         f"Cases: {case_data['total']} "

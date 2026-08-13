@@ -1,10 +1,18 @@
 {
   "errors": 0,
-  "warnings": 1,
+  "warnings": 0,
+  "diagnostics": [],
+  "furigana": [
+    {
+      "id": "word:何:なに",
+      "record": "何[なに]",
+      "examples": ["週末[しゅうまつ]、 何[なに]するの？"]
+    }
+  ],
   "spilled_furigana": [
     {
       "id": "word:何:なに",
-      "groups": [["、何", "なに"]]
+      "groups": []
     }
   ]
 }

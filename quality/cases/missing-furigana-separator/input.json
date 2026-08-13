@@ -4,8 +4,16 @@
       "id": "word:何:なに",
       "expression": "何",
       "reading": "なに",
-      "furigana": "週末[しゅうまつ]、何[なに]するの？",
-      "meanings": ["what"]
+      "furigana": "何[なに]",
+      "meanings": ["what"],
+      "examples": [
+        {
+          "japanese": "週末、何するの？",
+          "furigana": "週末[しゅうまつ]、何[なに]するの？",
+          "english": "What will you do this weekend?"
+        }
+      ]
     }
-  ]
+  ],
+  "repair_spilled_punctuation": true
 }

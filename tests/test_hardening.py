@@ -854,6 +854,16 @@ def test_selection_oracle_is_a_draft_with_targets_and_a_rubric(tmp_path: Path) -
     assert loaded.approved is False
     assert loaded.units == ()
     assert loaded.targets[0].identity == "word:話す:はなす"
+    status = hardening.status_payload(hardening.build_status(root))
+    assert status["oracles"]["draft"] == [
+        {
+            "id": "selected-prose",
+            "path": "quality/oracles/selected-prose.yaml",
+            "type": "selection",
+            "source_fingerprint": HASH_A,
+            "oracle_content_fingerprint": hardening.oracle_content_fingerprint(loaded),
+        }
+    ]
 
 
 @pytest.mark.parametrize(

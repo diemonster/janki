@@ -76,6 +76,7 @@ class ValidationIssue:
     message: str
     record_id: str = ""
     source: str = ""
+    code: str = ""
 
     def format(self) -> str:
         location = self.source
@@ -114,23 +115,34 @@ def _accent_patterns(record: VocabularyRecord) -> list[tuple[str, str]]:
 def validate_record(record: VocabularyRecord, source: str = "") -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
 
-    def add(level: str, message: str) -> None:
+    def add(level: str, code: str, message: str) -> None:
         issues.append(
-            ValidationIssue(level=level, message=message, record_id=record.id, source=source)
+            ValidationIssue(
+                level=level,
+                message=message,
+                record_id=record.id,
+                source=source,
+                code=code,
+            )
         )
 
     if not record.id:
-        add("error", "missing stable ID")
+        add("error", "missing-id", "missing stable ID")
     if not record.expression:
-        add("error", "missing expression")
+        add("error", "missing-expression", "missing expression")
     if contains_kanji(record.expression) and not record.reading:
-        add("error", f"expression contains kanji but reading is missing; {_STAGING_HINT}")
+        add(
+            "error",
+            "missing-reading",
+            f"expression contains kanji but reading is missing; {_STAGING_HINT}",
+        )
     elif _is_readingless_kanji_id(record.id):
         # Reported once the reading is filled in and the ID still is not: while the
         # reading is empty the message above states the same fault, and a staging
         # file under review would carry two errors per row for one fix.
         add(
             "error",
+            "readingless-id",
             "ID was minted without a reading (word:<expression>:) and cannot be "
             f"corrected in place without orphaning review history; {_STAGING_HINT}",
         )
@@ -141,30 +153,41 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
         # and it is just as permanent as the empty-reading shape above.
         add(
             "error",
+            "kanji-reading",
             "reading is written in kanji, so the ID's reading slot holds a spelling "
             "rather than a pronunciation and cannot be corrected in place without "
             f"orphaning review history; {_STAGING_HINT}",
         )
     if not record.meanings:
-        add("error", "at least one English meaning is required")
+        add("error", "missing-meaning", "at least one English meaning is required")
     if record.furigana and record.furigana.count("[") != record.furigana.count("]"):
-        add("error", "furigana brackets are unbalanced")
+        add("error", "unbalanced-furigana", "furigana brackets are unbalanced")
     elif record.furigana and (spilled := _misplaced_furigana(record.furigana)):
         add(
             "warning",
+            "spilled-furigana",
             "furigana is missing a space before "
             + ", ".join(repr(text) for text in spilled)
             + " — Anki draws a reading over everything back to the previous "
             "space, so it will spill onto the kana before it",
         )
     if record.furigana and not record.reading:
-        add("warning", "furigana is present but the plain reading is empty")
+        add(
+            "warning",
+            "furigana-without-reading",
+            "furigana is present but the plain reading is empty",
+        )
     if record.verb_group and not record.part_of_speech:
-        add("warning", "verb group is present but part of speech is empty")
+        add(
+            "warning",
+            "verb-group-without-part-of-speech",
+            "verb group is present but part of speech is empty",
+        )
     for label, pattern in _accent_patterns(record):
         if not _PITCH_PATTERN.match(pattern):
             add(
                 "error",
+                "invalid-pitch-accent",
                 f"{label} {pattern!r} is not an accent pattern: expected only "
                 "'H' and 'L', one per kana of the reading plus the following particle",
             )
@@ -176,6 +199,7 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
             # record simply gets no audio until someone checks it.
             add(
                 "warning",
+                "pitch-accent-length",
                 f"{label} {pattern!r} has {len(pattern)} position(s) for a "
                 f"{len(_kana(record.reading))}-kana reading; "
                 f"{len(_kana(record.reading)) + 1} were expected (one per kana "
@@ -184,14 +208,27 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
             )
     for index, example in enumerate(record.examples, start=1):
         if example.japanese and not example.english:
-            add("warning", f"example {index} has Japanese but no English translation")
+            add(
+                "warning",
+                "example-missing-english",
+                f"example {index} has Japanese but no English translation",
+            )
         if example.english and not example.japanese:
-            add("warning", f"example {index} has English but no Japanese sentence")
+            add(
+                "warning",
+                "example-missing-japanese",
+                f"example {index} has English but no Japanese sentence",
+            )
         if example.furigana and example.furigana.count("[") != example.furigana.count("]"):
-            add("error", f"example {index} has unbalanced furigana brackets")
+            add(
+                "error",
+                "example-unbalanced-furigana",
+                f"example {index} has unbalanced furigana brackets",
+            )
         elif example.furigana and (spilled := _misplaced_furigana(example.furigana)):
             add(
                 "warning",
+                "example-spilled-furigana",
                 f"example {index} furigana is missing a space before "
                 + ", ".join(repr(text) for text in spilled)
                 + " — Anki draws a reading over everything back to the previous "
@@ -200,6 +237,7 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
         if example.furigana and (stray := _stray_furigana_spaces(example.furigana)):
             add(
                 "warning",
+                "example-stray-furigana-space",
                 f"example {index} furigana has a space before "
                 + ", ".join(repr(text) for text in stray)
                 + ", which no reading annotates — in a furigana field a space "
@@ -225,13 +263,19 @@ def validate_records(
                     message=f"duplicate ID also seen at record {seen[record.id]}",
                     record_id=record.id,
                     source=source_text,
+                    code="duplicate-id",
                 )
             )
         else:
             seen[record.id] = index
     if not records:
         issues.append(
-            ValidationIssue(level="warning", message="no records found", source=source_text)
+            ValidationIssue(
+                level="warning",
+                message="no records found",
+                source=source_text,
+                code="no-records",
+            )
         )
     return issues
 

@@ -9,9 +9,9 @@ redistributable: true
 fixture_basis: agent-created-synthetic
 fixtures:
   - path: input.json
-    fingerprint: 59a0cebf2afd3a4a4d1ad74f2e4e44c1513ecd04253079711e5ab7c14d06df0a
+    fingerprint: 0ab89b453179775c61a3b67059c29579d8c3355fd3ef692692bef32ceabf296d
   - path: oracle.json
-    fingerprint: 3c90a71472751fca5b75381cd668f6749568c96fa4deb3f09dc7f4dde9ce8488
+    fingerprint: a3bc555bbadf75a18d8d5520bf6505d4100a5e58e4667f052008a3013bb2386e
 runner_input: input.json
 oracle: oracle.json
 finding_id: missing-furigana-separator

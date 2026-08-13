@@ -27,7 +27,7 @@ from japanese_anki import (
     validation,
 )
 from japanese_anki.config import ProjectConfig
-from japanese_anki.exporters.anki import build_deck
+from japanese_anki.exporters.anki import FIELD_NAMES, build_deck
 from japanese_anki.inputs import PreparedInput
 from japanese_anki.io import save_records_json
 from japanese_anki.models import VocabularyRecord
@@ -108,6 +108,15 @@ def _model_validate(schema: Any, value: Any, where: str) -> Any:
         return schema.model_validate(value)
     except (TypeError, ValueError) as exc:
         raise hardening.HardeningError(f"Invalid structured data in {where}: {exc}") from exc
+
+
+def _structured_schema(factory: Callable[[], Any], where: str) -> Any:
+    try:
+        return factory()
+    except ImportError as exc:
+        raise hardening.HardeningError(
+            f"{where} needs the AI schema dependency. Install the project with '.[ai]'."
+        ) from exc
 
 
 def _records(value: Any, where: str = "records") -> list[VocabularyRecord]:
@@ -212,7 +221,9 @@ def _candidate_response(data: dict[str, Any], root: Path) -> Any:
     raw_candidates = data.get("candidates")
     if not isinstance(raw_candidates, list):
         raise hardening.HardeningError("candidates must be a JSON list")
-    candidate_type = extract.candidate_schema().model_fields[
+    candidate_type = _structured_schema(
+        extract.candidate_schema, "candidate-response replay"
+    ).model_fields[
         "candidates"
     ].annotation.__args__[0]
     candidate_fields = set(candidate_type.model_fields)
@@ -262,6 +273,10 @@ def _staging_promote(data: dict[str, Any], root: Path) -> Any:
         client: jpdb.JpdbClient | None = None
         transport: _CannedTransport | None = None
         skip = _optional_bool(data, "skip_reading_check")
+        if skip and data.get("responses"):
+            raise hardening.HardeningError(
+                "staging-promote cannot declare responses when skip_reading_check is true"
+            )
         if not skip:
             client, transport = _client(data.get("responses", []))
         outcome = promote.check_readings(
@@ -301,12 +316,39 @@ def _staging_promote(data: dict[str, Any], root: Path) -> Any:
 
 def _validation_qc(data: dict[str, Any], root: Path) -> Any:
     del root
-    _only(data, {"records"}, "validation-qc")
+    _only(data, {"records", "repair_spilled_punctuation"}, "validation-qc")
     records = _records(data.get("records"))
+    if _optional_bool(data, "repair_spilled_punctuation"):
+        records = [
+            dataclass_replace(
+                record,
+                furigana=qc.repair_spilled_punctuation(record.furigana),
+                examples=[
+                    dataclass_replace(
+                        example,
+                        furigana=qc.repair_spilled_punctuation(example.furigana),
+                    )
+                    for example in record.examples
+                ],
+            )
+            for record in records
+        ]
     issues = validation.validate_records(records, "offline-case")
     return {
         "errors": sum(issue.level == "error" for issue in issues),
         "warnings": sum(issue.level == "warning" for issue in issues),
+        "diagnostics": [
+            {"code": issue.code, "level": issue.level, "record_id": issue.record_id}
+            for issue in issues
+        ],
+        "furigana": [
+            {
+                "id": record.id,
+                "record": record.furigana,
+                "examples": [example.furigana for example in record.examples],
+            }
+            for record in records
+        ],
         "spilled_furigana": [
             {
                 "id": record.id,
@@ -378,7 +420,11 @@ def _ai_enrichment(data: dict[str, Any], root: Path) -> Any:
     _only(response, {"parsed", "stop_reason", "refusal"}, "response")
     parsed_raw = response.get("parsed")
     parsed = (
-        _model_validate(enrich.ai_schema(), parsed_raw, "response.parsed")
+        _model_validate(
+            _structured_schema(enrich.ai_schema, "ai-enrichment replay"),
+            parsed_raw,
+            "response.parsed",
+        )
         if parsed_raw is not None
         else None
     )
@@ -424,12 +470,21 @@ def _ai_enrichment(data: dict[str, Any], root: Path) -> Any:
 
 
 def _render_build(data: dict[str, Any], root: Path) -> Any:
-    _only(data, {"records", "cards"}, "render-build")
+    _only(data, {"records", "cards", "observe_fields"}, "render-build")
     records = _records(data.get("records"))
     cards = _mapping(data.get("cards", {"recognition": True}), "cards")
     _only(cards, {"recognition", "production", "reading"}, "cards")
     if not all(isinstance(value, bool) for value in cards.values()):
         raise hardening.HardeningError("cards values must be true or false")
+    observe_fields = _string_list(
+        data.get("observe_fields", ["RecordID"]), "observe_fields"
+    )
+    unknown_fields = sorted(set(observe_fields) - set(FIELD_NAMES))
+    if unknown_fields:
+        raise hardening.HardeningError(
+            "observe_fields names unknown rendered field(s): "
+            + ", ".join(unknown_fields)
+        )
     with tempfile.TemporaryDirectory(prefix="janki-replay-") as temporary:
         temporary_root = Path(temporary)
         (temporary_root / "janki.toml").write_text(
@@ -475,14 +530,24 @@ def _render_build(data: dict[str, Any], root: Path) -> Any:
         try:
             note_count = connection.execute("select count(*) from notes").fetchone()[0]
             card_count = connection.execute("select count(*) from cards").fetchone()[0]
-            field_rows = connection.execute("select flds from notes order by id").fetchall()
+            field_rows = connection.execute("select flds from notes").fetchall()
         finally:
             connection.close()
+    rendered = []
+    for row in field_rows:
+        values = dict(zip(FIELD_NAMES, row[0].split("\x1f"), strict=True))
+        rendered.append(
+            {
+                "record_id": values["RecordID"],
+                "fields": {name: values[name] for name in observe_fields},
+            }
+        )
     return {
         "notes": note_count,
         "cards": card_count,
         "record_count": result.note_count,
-        "field_rows": [row[0].split("\x1f") for row in field_rows],
+        "record_ids": list(result.record_ids),
+        "rendered": sorted(rendered, key=lambda item: item["record_id"]),
         "package_entries": names,
     }
 

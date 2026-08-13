@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -39,6 +40,20 @@ def test_runner_inputs_reject_unknown_fields() -> None:
         )
 
 
+def test_missing_structured_schema_dependency_is_a_clean_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def missing() -> object:
+        raise ImportError("pydantic is absent")
+
+    monkeypatch.setattr(hardening_replay.extract, "candidate_schema", missing)
+
+    with pytest.raises(hardening.HardeningError, match=r"Install.*\.\[ai\]"):
+        hardening_replay.RUNNERS["candidate-response"](
+            {"candidates": [], "observe": []}, ROOT
+        )
+
+
 @pytest.mark.parametrize(
     "content",
     [b'{"records": [], "records": []}', b'{"value": NaN}'],
@@ -63,6 +78,11 @@ def test_every_registered_runner_calls_its_production_boundary() -> None:
                     "id": "word:話す:はなす",
                     "expression": "話す",
                     "reading": "はなす",
+                },
+                {
+                    "id": "word:読む:",
+                    "expression": "読む",
+                    "reading": "",
                 }
             ],
             "metadata": {"source_file": "synthetic.json"},
@@ -96,6 +116,7 @@ def test_every_registered_runner_calls_its_production_boundary() -> None:
                 }
             ],
             "cards": {"recognition": True, "production": False, "reading": False},
+            "observe_fields": ["Expression", "Furigana"],
         },
         ROOT,
     )
@@ -104,9 +125,16 @@ def test_every_registered_runner_calls_its_production_boundary() -> None:
 
     assert candidate["record_ids"] == []
     assert staging["promoted_ids"] == ["word:話す:はなす"]
+    assert staging["round_trip_record_ids"] == ["word:話す:はなす", "word:読む:"]
     assert validation["errors"] == 0
     assert render["notes"] == 1
     assert render["cards"] == 1
+    assert render["rendered"] == [
+        {
+            "record_id": "word:話す:はなす",
+            "fields": {"Expression": "話す", "Furigana": "話[はな]す"},
+        }
+    ]
     assert dictionary.passed
     assert ai.passed
 
@@ -124,7 +152,53 @@ def test_default_replay_never_opens_a_network_transport(
 
 def test_replay_reads_only_declared_case_fixtures_not_a_private_source(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
+    case_dir = tmp_path / "quality" / "cases" / "private-case"
+    case_dir.mkdir(parents=True)
+    input_bytes = b'{"candidates": [], "observe": []}\n'
+    oracle_bytes = b'{"records": [], "record_ids": [], "unusable": 0}\n'
+    (case_dir / "input.json").write_bytes(input_bytes)
+    (case_dir / "oracle.json").write_bytes(oracle_bytes)
+    private_source = tmp_path / "data" / "inbox" / "private.png"
+    private_source.parent.mkdir(parents=True)
+    private_source.write_bytes(b"private pixels")
+    case = hardening.HardeningCase(
+        path=case_dir / "case.yaml",
+        relative_path="quality/cases/private-case/case.yaml",
+        id="private-case",
+        purpose="coverage",
+        gating=True,
+        runner="candidate-response",
+        pipeline_boundary="extraction-normalization",
+        source_archetype="scan",
+        redistributable=False,
+        fixture_basis="agent-created-synthetic",
+        fixtures=(
+            hardening.CaseFixture(
+                "input.json", hashlib.sha256(input_bytes).hexdigest()
+            ),
+            hardening.CaseFixture(
+                "oracle.json", hashlib.sha256(oracle_bytes).hexdigest()
+            ),
+        ),
+        runner_input="input.json",
+        oracle="oracle.json",
+        finding_id=None,
+        pilot_id="private-pilot",
+        unit_oracle_id="private-oracle",
+        source=hardening.CaseSource(
+            kind="private_inbox_ref",
+            path="data/inbox/private.png",
+            fingerprint=hashlib.sha256(b"private pixels").hexdigest(),
+            live_eval=hardening.LiveEvalRequest(
+                provider="anthropic",
+                models=("approved-model",),
+                purpose="hardening-eval",
+                approval=None,
+            ),
+        ),
+    )
     original = hardening.read_verified_bytes
     read_paths: list[Path] = []
 
@@ -135,7 +209,7 @@ def test_replay_reads_only_declared_case_fixtures_not_a_private_source(
 
     monkeypatch.setattr(hardening, "read_verified_bytes", capture)
 
-    assert hardening_replay.replay(ROOT, ["pos-precedence"])[0].passed
+    assert hardening_replay.replay_case(tmp_path, case).passed
     assert {path.name for path in read_paths} == {"input.json", "oracle.json"}
 
 
@@ -144,7 +218,7 @@ def test_replay_reads_only_declared_case_fixtures_not_a_private_source(
     [
         ("pos-precedence", jpdb, lambda _codes: "adverb"),
         ("impossible-character-furigana", kanji, lambda _info, _reading: True),
-        ("missing-furigana-separator", qc, lambda _furigana: ()),
+        ("missing-furigana-separator", qc, lambda furigana: furigana),
         ("ai-no-writable-change", enrich, lambda _result: []),
     ],
 )
@@ -157,7 +231,7 @@ def test_each_seeded_case_kills_a_production_mutant(
     names = {
         "pos-precedence": "pos_to_part_of_speech",
         "impossible-character-furigana": "assigns_a_known_reading",
-        "missing-furigana-separator": "spilled_furigana_groups",
+        "missing-furigana-separator": "repair_spilled_punctuation",
         "ai-no-writable-change": "format_ai_no_changes",
     }
     monkeypatch.setattr(target, names[case_id], replacement)

@@ -31,7 +31,7 @@ findings:
     symptom: Punctuation and a following word entered one furigana group.
     invariant: A furigana group must not consume leading punctuation from an earlier token.
     evidence:
-      - fingerprint: 59a0cebf2afd3a4a4d1ad74f2e4e44c1513ecd04253079711e5ab7c14d06df0a
+      - fingerprint: 0ab89b453179775c61a3b67059c29579d8c3355fd3ef692692bef32ceabf296d
         locator: quality/cases/missing-furigana-separator/input.json
     recurrences: []
     case_ids: [missing-furigana-separator]
