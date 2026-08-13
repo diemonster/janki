@@ -267,6 +267,7 @@ def atomic_write_text_bound(
                 handle.write(text)
                 handle.flush()
                 os.fsync(handle.fileno())
+            bound_state: tuple[int, int, int, int] | None = None
             try:
                 current_fd = os.open(
                     target.name,
@@ -285,10 +286,16 @@ def atomic_write_text_bound(
                     current_details = os.fstat(current_fd)
                     if expected_absent or not stat.S_ISREG(current_details.st_mode):
                         raise DataError(f"Bound target changed before replace: {target}")
-                    if expected_identity is not None and (
+                    bound_state = (
                         current_details.st_dev,
                         current_details.st_ino,
-                    ) != expected_identity:
+                        current_details.st_size,
+                        current_details.st_mtime_ns,
+                    )
+                    if (
+                        expected_identity is not None
+                        and bound_state[:2] != expected_identity
+                    ):
                         raise DataError(f"Bound target changed identity: {target}")
                     if expected_revision is not None:
                         digest = hashlib.sha256()
@@ -296,8 +303,35 @@ def atomic_write_text_bound(
                             digest.update(current_chunk)
                         if digest.hexdigest() != expected_revision:
                             raise DataError(f"Bound target changed content: {target}")
+                    after_hash = os.fstat(current_fd)
+                    if (
+                        after_hash.st_dev,
+                        after_hash.st_ino,
+                        after_hash.st_size,
+                        after_hash.st_mtime_ns,
+                    ) != bound_state:
+                        raise DataError(f"Bound target changed content: {target}")
                 finally:
                     os.close(current_fd)
+            try:
+                final_details = os.stat(
+                    target.name,
+                    dir_fd=directory_fd,
+                    follow_symlinks=False,
+                )
+            except FileNotFoundError:
+                if bound_state is not None:
+                    raise DataError(
+                        f"Bound target changed before replace: {target}"
+                    ) from None
+            else:
+                if bound_state is None or (
+                    final_details.st_dev,
+                    final_details.st_ino,
+                    final_details.st_size,
+                    final_details.st_mtime_ns,
+                ) != bound_state:
+                    raise DataError(f"Bound target changed before replace: {target}")
             os.replace(
                 temporary_name,
                 target.name,
@@ -355,8 +389,41 @@ def unlink_path_bound(
                 digest.update(chunk)
             if digest.hexdigest() != expected_revision:
                 raise DataError(f"Bound removal target changed content: {target}")
+            after_hash = os.fstat(descriptor)
+            if (
+                after_hash.st_dev,
+                after_hash.st_ino,
+                after_hash.st_size,
+                after_hash.st_mtime_ns,
+            ) != (
+                details.st_dev,
+                details.st_ino,
+                details.st_size,
+                details.st_mtime_ns,
+            ):
+                raise DataError(f"Bound removal target changed content: {target}")
         finally:
             os.close(descriptor)
+        try:
+            final_details = os.stat(
+                target.name,
+                dir_fd=directory_fd,
+                follow_symlinks=False,
+            )
+        except OSError as exc:
+            raise DataError(f"Bound removal target changed: {target}") from exc
+        if (
+            final_details.st_dev,
+            final_details.st_ino,
+            final_details.st_size,
+            final_details.st_mtime_ns,
+        ) != (
+            details.st_dev,
+            details.st_ino,
+            details.st_size,
+            details.st_mtime_ns,
+        ):
+            raise DataError(f"Bound removal target changed before removal: {target}")
         os.unlink(target.name, dir_fd=directory_fd)
         os.fsync(directory_fd)
     except DataError:

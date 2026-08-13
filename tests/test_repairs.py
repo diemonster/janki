@@ -12,6 +12,7 @@ import pytest
 import yaml
 
 from japanese_anki import cli, repairs
+from japanese_anki import io as data_io
 from japanese_anki.io import DataError, load_records, save_records_json
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
 
@@ -337,6 +338,38 @@ def test_apply_refuses_an_identity_swap_after_its_compare(
     with pytest.raises(DataError, match="changed identity"):
         repairs.write_safe_document(document, plan.intended_text)
     assert document.path.read_text(encoding="utf-8") == attacker_text
+
+
+def test_bound_replace_rechecks_the_path_after_it_hashes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "target.json"
+    original = "old\n"
+    attacker = "attacker\n"
+    target.write_text(original, encoding="utf-8")
+    details = target.stat()
+    original_stat = data_io.os.stat
+    calls = 0
+
+    def swap_on_final_stat(*args: Any, **kwargs: Any) -> Any:
+        nonlocal calls
+        if kwargs.get("dir_fd") is not None and kwargs.get("follow_symlinks") is False:
+            calls += 1
+            if calls == 2:
+                target.rename(target.with_suffix(".original"))
+                target.write_text(attacker, encoding="utf-8")
+        return original_stat(*args, **kwargs)
+
+    monkeypatch.setattr(data_io.os, "stat", swap_on_final_stat)
+
+    with pytest.raises(DataError, match="changed before replace"):
+        data_io.atomic_write_text_bound(
+            target,
+            "new\n",
+            expected_revision=repairs.bytes_fingerprint(original),
+            expected_identity=(details.st_dev, details.st_ino),
+        )
+    assert target.read_text(encoding="utf-8") == attacker
 
 
 def test_safe_reader_rejects_outside_traversal_symlink_and_directory(tmp_path: Path) -> None:
