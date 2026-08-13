@@ -28,7 +28,7 @@ from dataclasses import dataclass, replace
 
 from japanese_anki import jpdb
 from japanese_anki.conjugation import conjugate, polite_stem
-from japanese_anki.identifiers import normalize_identity_part
+from japanese_anki.identifiers import contains_kanji, normalize_identity_part
 from japanese_anki.models import ExampleSentence
 from japanese_anki.romaji import kana_to_romaji
 
@@ -38,6 +38,7 @@ __all__ = [
     "furigana_base",
     "furigana_pairs",
     "furigana_reading",
+    "impossible_character_furigana",
     "parse_pairs",
     "regenerate_example_romaji",
     "target_forms",
@@ -129,6 +130,32 @@ def furigana_pairs(furigana: str) -> tuple[tuple[str, str], ...]:
     return tuple(
         (normalize_identity_part(match.group(1)), normalize_identity_part(match.group(2)))
         for match in _GROUP.finditer(furigana)
+    )
+
+
+def impossible_character_furigana(
+    furigana: str, kanji_store: object | None
+) -> tuple[tuple[str, str], ...]:
+    """Generated one-kanji groups that claim an unknown character reading.
+
+    A multi-kanji group states only the reading of the whole word. A one-kanji
+    group makes the stronger claim that this character has this reading. Use
+    the same KANJIDIC rule as dictionary enrichment. An empty store is not a
+    disagreement.
+    """
+    if not furigana or kanji_store is None:
+        return ()
+    entries = getattr(kanji_store, "entries", None)
+    if not isinstance(entries, dict):
+        return ()
+    from japanese_anki.kanji import assigns_a_known_reading
+
+    return tuple(
+        (text, reading)
+        for text, reading in furigana_pairs(furigana)
+        if len(text) == 1
+        and contains_kanji(text)
+        and not assigns_a_known_reading(entries.get(text), reading)
     )
 
 

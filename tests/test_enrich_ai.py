@@ -28,6 +28,7 @@ from japanese_anki.enrich import (
 from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.io import merge_records
 from japanese_anki.jpdb import JpdbClient
+from japanese_anki.kanji import KanjiInfo, KanjiStore, Reading
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
 from japanese_anki.staging import read_staging
 
@@ -280,6 +281,46 @@ def test_an_unchecked_example_is_flagged_the_same_way() -> None:
     )
 
     assert outcome.unverified == ["話します。"]
+
+
+def test_an_impossible_character_group_cannot_drive_romaji() -> None:
+    source = VocabularyRecord(
+        id="word:画面:がめん",
+        expression="画面",
+        reading="がめん",
+        meanings=["screen"],
+        examples=[ExampleSentence(japanese="二本指で画面を広げます。")],
+        usage_notes="A common noun.",
+    )
+    store = KanjiStore(
+        entries={
+            "指": KanjiInfo(
+                character="指",
+                readings=(Reading(kind="kun", reading="ゆび"),),
+            )
+        }
+    )
+
+    outcome = apply_ai_result(
+        source,
+        answer(
+            generated(
+                "二本指で画面を広げます。",
+                furigana="二本 指[にほんゆび]で 画面[がめん]を 広[ひろ]げます。",
+                english="Use two fingers to enlarge the screen.",
+            )
+        ),
+        kanji_store=store,
+    )
+
+    kept = outcome.record.examples[0]
+    assert kept.furigana == ""
+    assert kept.romaji == ""
+    assert kept.english == "Use two fingers to enlarge the screen."
+    assert outcome.unverified == []
+    assert outcome.impossible_furigana == [
+        ("二本指で画面を広げます。", (("指", "にほんゆび"),))
+    ]
 
 
 def test_the_flag_appends_rather_than_replacing() -> None:

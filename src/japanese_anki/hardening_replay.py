@@ -780,6 +780,17 @@ def _repair_plan(data: dict[str, Any], root: Path) -> Any:
     }
 
 
+def _fixture_kanji_store(raw_kanji: Any, where: str) -> Any:
+    if not isinstance(raw_kanji, dict):
+        raise hardening.HardeningError(f"{where} must be a JSON object")
+    with tempfile.TemporaryDirectory(prefix="janki-replay-") as temporary:
+        store_path = Path(temporary) / "kanji.json"
+        store_path.write_text(
+            json.dumps(raw_kanji, ensure_ascii=False), encoding="utf-8"
+        )
+        return kanji.load_store(store_path)
+
+
 def _dictionary_enrichment(data: dict[str, Any], root: Path) -> Any:
     del root
     _only(
@@ -789,15 +800,7 @@ def _dictionary_enrichment(data: dict[str, Any], root: Path) -> Any:
     )
     records = _records(data.get("records"))
     client, transport = _client(data.get("responses", []))
-    raw_kanji = data.get("kanji", {})
-    if not isinstance(raw_kanji, dict):
-        raise hardening.HardeningError("kanji must be a JSON object")
-    with tempfile.TemporaryDirectory(prefix="janki-replay-") as temporary:
-        store_path = Path(temporary) / "kanji.json"
-        store_path.write_text(
-            json.dumps(raw_kanji, ensure_ascii=False), encoding="utf-8"
-        )
-        store = kanji.load_store(store_path)
+    store = _fixture_kanji_store(data.get("kanji", {}), "kanji")
     outcome = enrich.enrich_records(
         client,
         records,
@@ -829,6 +832,7 @@ def _ai_enrichment(data: dict[str, Any], root: Path) -> Any:
             "model",
             "response",
             "sentence_responses",
+            "kanji",
             "force_fields",
             "observe",
         },
@@ -864,6 +868,11 @@ def _ai_enrichment(data: dict[str, Any], root: Path) -> Any:
     transport: _CannedTransport | None = None
     if "sentence_responses" in data:
         client, transport = _client(data["sentence_responses"])
+    store = (
+        _fixture_kanji_store(data["kanji"], "kanji")
+        if "kanji" in data
+        else None
+    )
     result = enrich.AiResult(records=list(records), looked_up=1)
     enrich.absorb_ai_call(
         result,
@@ -874,6 +883,7 @@ def _ai_enrichment(data: dict[str, Any], root: Path) -> Any:
         recent=[],
         force_fields=tuple(_string_list(data.get("force_fields", []), "force_fields")),
         jpdb_client=client,
+        kanji_store=store,
     )
     if transport is not None:
         transport.finish()

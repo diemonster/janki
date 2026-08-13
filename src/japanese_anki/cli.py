@@ -1421,6 +1421,7 @@ def _enrich_ai(
         force_fields=force_fields,
         ids=args.ids or None,
         jpdb_client=jpdb.JpdbClient(jpdb.api_key_from_env()),
+        kanji_store=kanji.load_store(config.kanji_file),
         taught=taught,
         parse_call=(
             codex_client.parse_call
@@ -2154,6 +2155,7 @@ def _batch_fetch(
         force_fields=force_fields,
         only=retry,
         jpdb_client=jpdb.JpdbClient(jpdb.api_key_from_env()),
+        kanji_store=kanji.load_store(config.kanji_file),
     )
     result = outcome.result
 

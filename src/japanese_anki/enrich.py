@@ -984,6 +984,9 @@ class AiOutcome:
     changes: dict[str, tuple[Any, Any]] = field(default_factory=dict)
     rejected: list[str] = field(default_factory=list)
     unverified: list[str] = field(default_factory=list)
+    impossible_furigana: list[tuple[str, tuple[tuple[str, str], ...]]] = field(
+        default_factory=list
+    )
 
 
 def _words_of(parse: Any) -> list[str]:
@@ -1052,6 +1055,7 @@ def apply_ai_result(
     *,
     force_fields: Sequence[str] = (),
     parses: Mapping[str, Any] | None = None,
+    kanji_store: Any | None = None,
 ) -> AiOutcome:
     """Put a model's answer through the mechanical checks, then the fill rules.
 
@@ -1110,6 +1114,16 @@ def apply_ai_result(
                     example.furigana, _words_of((parses or {}).get(example.japanese))
                 ),
             )
+            impossible = qc.impossible_character_furigana(
+                example.furigana, kanji_store
+            )
+            if impossible:
+                outcome.impossible_furigana.append(
+                    (example.japanese, impossible)
+                )
+                # Keep the reviewed Japanese and the safe annotations. The
+                # rejected reading cannot drive romaji or sentence audio.
+                example = replace(example, furigana="", romaji="")
         if not qc.example_contains_target(example, record.expression, record.verb_group):
             outcome.rejected.append(example.japanese)
             continue
@@ -1461,6 +1475,7 @@ def enrich_ai(
     parse_call: Any | None = None,
     call_options: Mapping[str, Any] | None = None,
     jpdb_client: jpdb.JpdbClient | None = None,
+    kanji_store: Any | None = None,
     taught: str = "",
 ) -> AiResult:
     """Write examples and usage notes for the records that lack them.
@@ -1498,6 +1513,7 @@ def enrich_ai(
             recent=recent,
             force_fields=force_fields,
             jpdb_client=jpdb_client,
+            kanji_store=kanji_store,
         )
         position = positions[record.id]
         current = result.records[position]
@@ -1523,6 +1539,7 @@ def enrich_ai(
             recent=recent,
             force_fields=force_fields,
             jpdb_client=jpdb_client,
+            kanji_store=kanji_store,
         )
         retry_wrote_examples = bool(result.records[position].examples)
         retry_reported_rejection = record.id in result.rejected
@@ -1547,6 +1564,7 @@ def absorb_ai_call(
     recent: list[str],
     force_fields: Sequence[str] = (),
     jpdb_client: jpdb.JpdbClient | None = None,
+    kanji_store: Any | None = None,
 ) -> None:
     """Put one model answer through the checks and fold it into ``result``.
 
@@ -1580,6 +1598,7 @@ def absorb_ai_call(
         parsed,
         force_fields=force_fields,
         parses=_verify_parses(jpdb_client, sentences),
+        kanji_store=kanji_store,
     )
     if outcome.rejected:
         result.rejected[record.id] = outcome.rejected
@@ -1592,6 +1611,19 @@ def absorb_ai_call(
         result.warnings.append(
             f"{record.id}: {len(outcome.unverified)} example(s) have furigana "
             "jpdb did not confirm; kept and flagged for review."
+        )
+    if outcome.impossible_furigana:
+        groups = sorted(
+            {
+                f"{text}[{reading}]"
+                for _sentence, pairs in outcome.impossible_furigana
+                for text, reading in pairs
+            }
+        )
+        result.warnings.append(
+            f"{record.id}: rejected impossible generated furigana group(s): "
+            f"{', '.join(groups)}. Stored no furigana or derived romaji for "
+            "those examples."
         )
     if outcome.changes:
         result.records[positions[record.id]] = outcome.record
@@ -2018,6 +2050,7 @@ def apply_batch_results(
     force_fields: Sequence[str] = (),
     only: Sequence[str] = (),
     jpdb_client: jpdb.JpdbClient | None = None,
+    kanji_store: Any | None = None,
 ) -> BatchApplyResult:
     """Fold a finished batch into the records, through the live path's checks.
 
@@ -2108,6 +2141,7 @@ def apply_batch_results(
             recent=recent,
             force_fields=force_fields,
             jpdb_client=jpdb_client,
+            kanji_store=kanji_store,
         )
 
     for record_id in pending_ids:

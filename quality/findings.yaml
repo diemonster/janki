@@ -1,16 +1,17 @@
 version: 1
 findings:
   - id: ai-impossible-character-furigana
-    state: open
+    state: fixed
     pipeline_stage: ai-enrichment
     source_archetypes: [camera]
     symptom: AI enrichment assigned a compound's full reading to one kanji in a per-character furigana group, so derived romaji contained the compound twice.
-    invariant: A generated per-character split must agree with stored KANJIDIC readings; an impossible AI group cannot produce stored furigana, romaji, or audio input.
+    invariant: A generated per-character split must agree with stored KANJIDIC readings; an impossible AI group is reported and cannot produce stored furigana, romaji, or audio input.
     evidence:
       - fingerprint: 8853be75fe83cd9e59dca532a8e216ac43759755e64d913b16bb1f0247cec9ac
         locator: quality/cases/ai-impossible-character-furigana/input.json
     recurrences: []
     case_ids: [ai-impossible-character-furigana]
+    fix_ref: src/japanese_anki/enrich.py#apply_ai_result
   - id: anki-deck-membership-overlap
     state: fixed
     pipeline_stage: deck-membership

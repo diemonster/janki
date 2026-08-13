@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SEEDED_CASES = (
     "ai-exact-headword-spelling",
     "ai-existing-example-annotations",
+    "ai-impossible-character-furigana",
     "ai-no-writable-change",
     "ai-rejected-example-retry",
     "deck-membership-partition",
