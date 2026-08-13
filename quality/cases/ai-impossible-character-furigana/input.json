@@ -1,0 +1,44 @@
+{
+  "records": [
+    {
+      "id": "word:画面:がめん",
+      "expression": "画面",
+      "reading": "がめん",
+      "meanings": ["screen"],
+      "examples": [
+        {
+          "japanese": "二本指で画面を広げます。"
+        }
+      ],
+      "usage_notes": "A common noun."
+    }
+  ],
+  "model": "offline-model",
+  "kanji": {
+    "指": {
+      "readings": [
+        {"kind": "kun", "reading": "ゆび"}
+      ]
+    }
+  },
+  "response": {
+    "parsed": {
+      "examples": [
+        {
+          "japanese": "二本指で画面を広げます。",
+          "speech_level": "polite",
+          "furigana": "二本 指[にほんゆび]で 画面[がめん]を 広[ひろ]げます。",
+          "english": "Use two fingers to enlarge the screen."
+        }
+      ],
+      "usage_notes": ""
+    },
+    "stop_reason": "end_turn"
+  },
+  "observe": [
+    {
+      "id": "word:画面:がめん",
+      "fields": ["examples", "usage_notes"]
+    }
+  ]
+}

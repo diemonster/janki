@@ -1,0 +1,17 @@
+version: 1
+id: ai-impossible-character-furigana
+purpose: regression
+gating: false
+runner: ai-enrichment
+pipeline_boundary: ai-enrichment
+source_archetype: camera
+redistributable: true
+fixture_basis: agent-created-synthetic
+fixtures:
+  - path: input.json
+    fingerprint: 8853be75fe83cd9e59dca532a8e216ac43759755e64d913b16bb1f0247cec9ac
+  - path: oracle.json
+    fingerprint: 86c9c354b9be3519308762026ca83e0f08e1e60bb28f1cf62b638e3543c34a15
+runner_input: input.json
+oracle: oracle.json
+finding_id: ai-impossible-character-furigana

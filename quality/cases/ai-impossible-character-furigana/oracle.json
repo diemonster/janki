@@ -1,0 +1,28 @@
+{
+  "records": [
+    {
+      "id": "word:画面:がめん",
+      "fields": {
+        "examples": [
+          {
+            "japanese": "二本指で画面を広げます。",
+            "furigana": "",
+            "romaji": "",
+            "english": "Use two fingers to enlarge the screen.",
+            "audio": "",
+            "register": "polite"
+          }
+        ],
+        "usage_notes": "A common noun."
+      }
+    }
+  ],
+  "changes": {
+    "word:画面:がめん": ["examples"]
+  },
+  "no_changes": [],
+  "report": [],
+  "rejected_ids": [],
+  "unverified_ids": [],
+  "warning_count": 1
+}
