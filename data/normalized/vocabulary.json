@@ -1277,18 +1277,18 @@
     "examples": [
       {
         "japanese": "バスはすぐ来ますから、大丈夫です。",
-        "furigana": "バスは すぐ 来[き]ますから、 大丈夫[だいじょうぶ]です。",
-        "romaji": "basuha sugukimasukara, daijoubudesu.",
+        "furigana": "バスはすぐ 来[き]ますから、 大丈夫[だいじょうぶ]です。",
+        "romaji": "basuhasugukimasukara, daijoubudesu.",
         "english": "The bus will come soon, so it's fine.",
         "audio": "audio/janki-0ef1b5e5e8d7.mp3",
         "register": "polite"
       },
       {
-        "japanese": "ごめん、今から すぐ行くんだ。",
-        "furigana": "ごめん、今[いま]から すぐ 行[い]くんだ。",
-        "romaji": "imakara suguikunda.",
+        "japanese": "ごめん、今からすぐ行くんだ。",
+        "furigana": "ごめん、 今[いま]からすぐ 行[い]くんだ。",
+        "romaji": "gomen, imakarasuguikunda.",
         "english": "Sorry — I'm heading over right now.",
-        "audio": "audio/janki-e1f205c2fe96.mp3",
+        "audio": "",
         "register": "casual"
       }
     ],
@@ -1316,7 +1316,7 @@
         "anki_Front": "<div>すぐ</div>",
         "anki_Back": "<div>すぐ</div><div>Soon, almost</div><div><br /></div>",
         "anki_Add Reverse": "",
-        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"}]"
+        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\",\"examples[1].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]"
       }
     }
   },
@@ -4547,8 +4547,8 @@
       },
       {
         "japanese": "ねえ、明日の祭り、行くの？",
-        "furigana": "ねえ、 明日[あした]の 祭[まつ]り、行[い]くの？",
-        "romaji": "nee, ashitanomatsuikuno?",
+        "furigana": "ねえ、 明日[あした]の 祭[まつ]り、 行[い]くの？",
+        "romaji": "nee, ashitanomatsuri, ikuno?",
         "english": "Hey, are you going to tomorrow's festival?",
         "audio": "audio/janki-0f6dea7a580e.mp3",
         "register": "casual"
@@ -4578,7 +4578,7 @@
         "anki_Front": "<div>祭り</div>",
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>まつり</div><div>Festival</div></span>",
         "anki_Add Reverse": "y",
-        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[1].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"}]"
+        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[1].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[1].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]"
       }
     }
   },
