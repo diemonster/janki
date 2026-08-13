@@ -73,7 +73,10 @@ PDF, JPEG, PNG and HEIC. A file outside `data/inbox/` is copied into
 `data/inbox/scans/`; a file already in the durable inbox stays where it is. That
 durable file, not the path you typed, is what every record cites. Each input
 gets one staging file that holds one candidate per word with its source page and
-line.
+line. Two different durable files cannot use one basename because staging and
+pattern review use that basename as their key. Janki refuses the collision
+before it calls a model; give each source a unique name before you put it in the
+inbox.
 
 Nothing reaches your collection yet. Open the staging file, fix what is wrong,
 delete what is not worth a card, then:

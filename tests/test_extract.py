@@ -590,6 +590,18 @@ def project(tmp_path: Path, records: list[VocabularyRecord] | None = None) -> Pa
     return tmp_path
 
 
+def default_inbox_project(tmp_path: Path) -> Path:
+    root = project(tmp_path)
+    config = root / "janki.toml"
+    config.write_text(
+        config.read_text(encoding="utf-8").replace(
+            'scan_inbox = "inbox"\n', ""
+        ),
+        encoding="utf-8",
+    )
+    return root
+
+
 def source_pdf(tmp_path: Path, name: str = "lesson.pdf") -> Path:
     path = tmp_path / "desk" / name
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -727,6 +739,61 @@ def test_extract_writes_one_staging_file_per_input(
     assert (root / "staging" / "lesson.pdf.yaml").is_file()
     assert (root / "staging" / "lesson2.pdf.yaml").is_file()
     assert "Wrote 2 staging file(s)" in capsys.readouterr().out
+
+
+def test_cli_reuses_a_source_in_the_default_parent_inbox(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = default_inbox_project(tmp_path)
+    source = root / "data" / "inbox" / "lesson.pdf"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(PDF)
+    call = FakeCall(ok(candidate()))
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
+
+    code = cli.main(["--root", str(root), "extract", str(source)])
+
+    assert code == 0
+    assert len(call.calls) == 1
+    assert not (root / "data" / "inbox" / "scans").exists()
+    assert (root / "staging" / "lesson.pdf.yaml").is_file()
+
+
+def test_cli_custom_scan_inbox_remains_its_own_durable_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = project(tmp_path)
+    source = source_pdf(tmp_path)
+    monkeypatch.setattr(
+        cli.extract.claude_client, "parse_call", FakeCall(ok(candidate()))
+    )
+
+    assert cli.main(["--root", str(root), "extract", str(source)]) == 0
+
+    assert (root / "inbox" / "lesson.pdf").read_bytes() == PDF
+
+
+def test_cli_refuses_cross_run_durable_basename_collisions_before_the_model(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = default_inbox_project(tmp_path)
+    source = root / "data" / "inbox" / "lesson.pdf"
+    existing = root / "data" / "inbox" / "scans" / "lesson.pdf"
+    source.parent.mkdir(parents=True)
+    existing.parent.mkdir(parents=True)
+    source.write_bytes(PDF + b" root")
+    existing.write_bytes(PDF + b" scan")
+    call = FakeCall(ok(candidate()))
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
+
+    code = cli.main(["--root", str(root), "extract", "--force", str(source)])
+
+    assert code == 1
+    assert call.calls == []
+    assert not (root / "staging" / "lesson.pdf.yaml").exists()
+    assert "same basename" in capsys.readouterr().err
 
 
 def test_the_staging_file_is_the_pinned_shape(

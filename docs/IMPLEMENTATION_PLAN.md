@@ -1073,7 +1073,10 @@ copied a root-level inbox file again and changed its durable locator. (3) A name
 already taken by *different* content earns a fingerprint suffix rather than an
 overwrite: every phone writes `IMG_0001`, and overwriting one with the other
 destroys the evidence behind every record extracted from it. Identical bytes
-reuse the existing copy. (4) Duplicates in one call are kept. Passing the same
+reuse the existing copy. Two different files already inside the durable inbox
+cannot receive a suffix without renaming an immutable source. They are refused
+when their basenames collide because staging and pattern review key on that
+basename. (4) Duplicates in one call are kept. Passing the same
 photo twice costs tokens, but dropping the second is the silent discard this
 project refuses everywhere else. (5) An unreadable path or unsupported suffix
 stops the whole batch — extracting a subset would leave the user to notice it

@@ -1,5 +1,5 @@
 version: 1
-id: input-parent-inbox-provenance
+id: input-parent-inbox-name-collision
 purpose: regression
 gating: true
 runner: input-provenance
@@ -9,9 +9,9 @@ redistributable: true
 fixture_basis: agent-created-synthetic
 fixtures:
   - path: input.json
-    fingerprint: a716ef050fbe29aa2e89ce3af014be0e3611553618dff527b2c894759eca6f16
+    fingerprint: 56d641060d32ec0f9d588e2dbfff5e4ffb447a84f8f2349442ffa14fad7851a2
   - path: oracle.json
-    fingerprint: 69a2d946cc13f074c47e5b19c3d77e9cb18ce51e119835249554dc12011f762b
+    fingerprint: 81eed49a0efb9665b030f001f03713e279a1b255693922436b56690cdacc535d
 runner_input: input.json
 oracle: oracle.json
 finding_id: input-parent-inbox-provenance

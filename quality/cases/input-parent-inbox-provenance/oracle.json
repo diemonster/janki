@@ -1,7 +1,9 @@
 {
+  "exit_code": 0,
   "origin_relative_path": "data/inbox/lesson.pdf",
   "scan_copy_exists": false,
   "stored_files": [
     "data/inbox/lesson.pdf"
-  ]
+  ],
+  "error_has_name_collision": false
 }

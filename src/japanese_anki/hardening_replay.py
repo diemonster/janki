@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import re
 import sqlite3
@@ -20,7 +22,6 @@ from japanese_anki import (
     enrich,
     extract,
     hardening,
-    inputs,
     jpdb,
     kanji,
     promote,
@@ -408,11 +409,16 @@ def _candidate_response(data: dict[str, Any], root: Path) -> Any:
 
 
 def _input_provenance(data: dict[str, Any], root: Path) -> Any:
-    """Observe whether a source in the parent inbox is copied again."""
+    """Run the real CLI over a source in the parent inbox."""
     del root
-    _only(data, {"source_name", "content"}, "input-provenance")
+    _only(
+        data,
+        {"source_name", "content", "scan_content"},
+        "input-provenance",
+    )
     source_name = data.get("source_name")
     content = data.get("content")
+    scan_content = data.get("scan_content")
     if (
         not isinstance(source_name, str)
         or not source_name
@@ -425,27 +431,72 @@ def _input_provenance(data: dict[str, Any], root: Path) -> Any:
         raise hardening.HardeningError(
             "input-provenance.content must be non-empty text"
         )
+    if scan_content is not None and (
+        not isinstance(scan_content, str) or not scan_content
+    ):
+        raise hardening.HardeningError(
+            "input-provenance.scan_content must be non-empty text when present"
+        )
     with tempfile.TemporaryDirectory() as directory:
+        # Import here because cli imports this replay module. At execution time
+        # both modules are complete, so the local import does not form a cycle.
+        from japanese_anki import cli
+
         project = Path(directory)
         inbox = project / "data" / "inbox"
         scan_inbox = inbox / "scans"
         inbox.mkdir(parents=True)
         source = inbox / source_name
         source.write_text(content, encoding="utf-8")
-        [prepared] = inputs.prepare_inputs(
-            [source], scan_inbox, inbox_root=inbox
+        if scan_content is not None:
+            scan_inbox.mkdir(parents=True)
+            (scan_inbox / source_name).write_text(
+                scan_content, encoding="utf-8"
+            )
+        (project / "janki.toml").write_text(
+            '[project]\nname = "Input provenance replay"\n', encoding="utf-8"
         )
+        docs = project / "docs"
+        docs.mkdir()
+        (docs / "JAPANESE_STYLE_GUIDE.md").write_text(
+            "Use the stored source.", encoding="utf-8"
+        )
+
+        observed_origins: list[Path] = []
+        real_extract = extract.extract_candidates
+
+        def offline_extract(prepared: PreparedInput, **_kwargs: Any) -> Any:
+            observed_origins.append(prepared.origin_path)
+            return extract.ExtractionResult((), (), 0)
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        extract.extract_candidates = offline_extract
+        try:
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(
+                stderr
+            ):
+                exit_code = cli.main(
+                    ["--root", str(project), "extract", str(source)]
+                )
+        finally:
+            extract.extract_candidates = real_extract
+
         stored_files = sorted(
             path.relative_to(project).as_posix()
             for path in inbox.rglob("*")
             if path.is_file()
         )
         return {
-            "origin_relative_path": prepared.origin_path.relative_to(
-                project
-            ).as_posix(),
+            "exit_code": exit_code,
+            "origin_relative_path": (
+                observed_origins[0].relative_to(project).as_posix()
+                if observed_origins
+                else None
+            ),
             "scan_copy_exists": (scan_inbox / source_name).exists(),
             "stored_files": stored_files,
+            "error_has_name_collision": "same basename" in stderr.getvalue(),
         }
 
 

@@ -183,14 +183,16 @@ findings:
     pipeline_stage: input-provenance
     source_archetypes: [camera, printed-ruby, bilingual-layout]
     symptom: A source already stored in the durable inbox root was copied again into the configured scan subdirectory before extraction.
-    invariant: A regular source anywhere under the durable inbox root is used where it lies; only a source outside that root gets a new provenance copy.
+    invariant: A regular source anywhere under the durable inbox root is used where it lies unless another durable source has the same basename and different bytes; that collision is refused before model or staging work.
     evidence:
       - fingerprint: cb0c156163da379db2b4f02da5f66771e973a44c9e716827a3de1d703936b7ef
         locator: data/inbox/IMG_4563.jpg
       - fingerprint: a716ef050fbe29aa2e89ce3af014be0e3611553618dff527b2c894759eca6f16
         locator: quality/cases/input-parent-inbox-provenance/input.json
-    recurrences: []
-    case_ids: [input-parent-inbox-provenance]
+    recurrences:
+      - fingerprint: 56d641060d32ec0f9d588e2dbfff5e4ffb447a84f8f2349442ffa14fad7851a2
+        locator: quality/cases/input-parent-inbox-name-collision/input.json
+    case_ids: [input-parent-inbox-name-collision, input-parent-inbox-provenance]
     fix_ref: src/japanese_anki/inputs.py#_copy_into_inbox
   - id: missing-furigana-separator
     state: fixed

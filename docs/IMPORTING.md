@@ -210,6 +210,11 @@ already anywhere in the durable inbox is used where it lies. This durable path
 — never a desktop path — is what every extracted record cites. A desktop path
 will not exist in six months; the evidence behind a card has to.
 
+Staging and pattern review use the source basename as their key. If two
+different files under the durable inbox have one basename, janki refuses them
+before it calls a model or writes staging. Give each source a unique name
+before you put it in the inbox.
+
 PDFs, JPEG, PNG and HEIC are accepted (HEIC converts through macOS's `sips`).
 Each input produces one staging file named for it, `data/staging/lesson-3.pdf.yaml`,
 holding one candidate per word with the page it was read from, the line it was

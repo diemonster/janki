@@ -21,6 +21,7 @@ SEEDED_CASES = (
     "extraction-selection-target-binding",
     "extraction-unit-accounting",
     "impossible-character-furigana",
+    "input-parent-inbox-name-collision",
     "input-parent-inbox-provenance",
     "m7-mixed-tsumori-coverage",
     "m7-native-teform-table-coverage",
@@ -168,9 +169,11 @@ def test_every_registered_runner_calls_its_production_boundary() -> None:
 
     assert candidate["record_ids"] == []
     assert input_provenance == {
+        "exit_code": 0,
         "origin_relative_path": "data/inbox/lesson.pdf",
         "scan_copy_exists": False,
         "stored_files": ["data/inbox/lesson.pdf"],
+        "error_has_name_collision": False,
     }
     assert extraction_prompt["prompt_has_unit_keys"] is True
     assert staging["promoted_ids"] == ["word:話す:はなす"]

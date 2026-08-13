@@ -175,6 +175,65 @@ def test_a_relative_parent_inbox_path_is_used_where_it_lies(
     assert not scan_inbox.exists()
 
 
+def test_different_durable_files_with_one_basename_are_refused(
+    tmp_path: Path,
+) -> None:
+    inbox = tmp_path / "data" / "inbox"
+    scan_inbox = inbox / "scans"
+    source = write(inbox / "lesson.pdf", PDF + b" root")
+    existing = write(scan_inbox / "lesson.pdf", PDF + b" scan")
+
+    with pytest.raises(InputError, match="same basename") as excinfo:
+        prepare_inputs([source], scan_inbox, inbox_root=inbox)
+
+    message = str(excinfo.value)
+    assert str(source) in message
+    assert str(existing) in message
+    assert source.read_bytes() == PDF + b" root"
+    assert existing.read_bytes() == PDF + b" scan"
+
+
+def test_durable_name_collision_treats_glob_characters_as_filename_text(
+    tmp_path: Path,
+) -> None:
+    inbox = tmp_path / "data" / "inbox"
+    scan_inbox = inbox / "scans"
+    source = write(inbox / "[lesson].pdf", PDF + b" root")
+    write(scan_inbox / "[lesson].pdf", PDF + b" scan")
+
+    with pytest.raises(InputError, match="same basename"):
+        prepare_inputs([source], scan_inbox, inbox_root=inbox)
+
+
+def test_same_durable_file_bytes_under_one_basename_are_not_a_conflict(
+    tmp_path: Path,
+) -> None:
+    inbox = tmp_path / "data" / "inbox"
+    scan_inbox = inbox / "scans"
+    source = write(inbox / "lesson.pdf", PDF)
+    write(scan_inbox / "lesson.pdf", PDF)
+
+    [item] = prepare_inputs([source], scan_inbox, inbox_root=inbox)
+
+    assert item.origin_path == source
+
+
+def test_an_external_basename_collision_gets_a_fingerprinted_copy(
+    tmp_path: Path,
+) -> None:
+    inbox = tmp_path / "data" / "inbox"
+    scan_inbox = inbox / "scans"
+    existing = write(inbox / "lesson.pdf", PDF + b" root")
+    source = write(tmp_path / "desk" / "lesson.pdf", PDF + b" incoming")
+
+    [item] = prepare_inputs([source], scan_inbox, inbox_root=inbox)
+
+    assert item.origin_path.parent == scan_inbox
+    assert item.origin_path.name.startswith("lesson-")
+    assert item.origin_path.read_bytes() == PDF + b" incoming"
+    assert existing.read_bytes() == PDF + b" root"
+
+
 def test_parent_traversal_does_not_make_an_outside_file_look_durable(
     tmp_path: Path,
 ) -> None:
