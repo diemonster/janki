@@ -3,17 +3,18 @@
 ``janki extract`` (M3.3) accepts PDFs and phone photos. This module is the step
 between "a path the user typed" and "a block the Claude API accepts": it works
 out what kind of file it is, converts the one format the API cannot read, and —
-importantly — makes sure a copy of the original lives under ``data/inbox/``
-before anything reads it.
+importantly — makes sure the original lives under ``data/inbox/`` before
+anything reads it.
 
-**The inbox copy is the provenance.** A record extracted from a photo is only
+**The inbox file is the provenance.** A record extracted from a photo is only
 as trustworthy as the ability to go back and look at the photo, and the path
 the user typed is on their desktop, in a Downloads folder, or on a phone —
-somewhere that will not exist in six months. So a file from outside the inbox
-is copied into it first and the *copy* is what every downstream record points
-at. Nothing here ever writes to a file that already exists in the inbox
-(AGENTS.md: "Never modify files under ``data/inbox/``"); a name collision with
-different content gets a fingerprint suffix rather than an overwrite.
+somewhere that will not exist in six months. So a file from outside the durable
+inbox root is copied into its scan directory first. A file already anywhere in
+that root is used where it lies. Nothing here ever writes to a file that
+already exists in the inbox (AGENTS.md: "Never modify files under
+``data/inbox/``"); a name collision with different content gets a fingerprint
+suffix rather than an overwrite.
 
 HEIC is the one format that cannot be sent as-is. It converts through ``sips``,
 which is macOS-only — an accepted scope limit (IMPLEMENTATION_PLAN dependency
@@ -76,11 +77,11 @@ _CONVERTED_MEDIA_TYPE = "image/jpeg"
 class PreparedInput:
     """One file, ready to send, and the path a record should cite for it.
 
-    ``origin_path`` is the copy inside the inbox — never the path the user
-    typed — because that is the one that will still be there when someone asks
-    where a word came from. For a HEIC it points at the *original*, not the
-    JPEG that was actually sent: the JPEG is a rendering, and the camera's file
-    is the evidence.
+    ``origin_path`` is the durable file inside the inbox. It can be the path the
+    user supplied when that path is already in the inbox. Otherwise it is the
+    new scan-inbox copy. For a HEIC it points at the *original*, not the JPEG
+    that was actually sent: the JPEG is a rendering, and the camera's file is
+    the evidence.
     """
 
     kind: str
@@ -147,15 +148,35 @@ def _read(path: Path) -> bytes:
         raise InputError(f"Could not read {path}: {exc}") from exc
 
 
-def _copy_into_inbox(source: Path, scan_inbox: Path, data: bytes) -> Path:
+def _inside(source: Path, root: Path) -> bool:
+    """Return whether an existing source resolves inside ``root``."""
+    try:
+        return source.resolve(strict=True).is_relative_to(root.resolve())
+    except OSError:
+        return False
+
+
+def _occupied(path: Path) -> bool:
+    """Return whether a path entry exists, including a broken symlink."""
+    return path.exists() or path.is_symlink()
+
+
+def _copy_into_inbox(
+    source: Path,
+    scan_inbox: Path,
+    data: bytes,
+    *,
+    inbox_root: Path | None = None,
+) -> Path:
     """Return the inbox copy of ``source``, making one if it is not there yet.
 
-    A file already under ``scan_inbox`` is used where it lies — re-running an
-    extraction over an inbox file must not copy it again. Otherwise the copy
-    lands under its own name, and a name already taken by *different* content
-    earns a suffix: two photos both called ``IMG_0001.HEIC`` are two photos,
-    and overwriting one with the other would destroy the evidence behind every
-    record extracted from it.
+    A file already under the durable ``inbox_root`` is used where it lies —
+    re-running an extraction over any inbox file must not copy it again. The
+    root defaults to ``scan_inbox`` for callers that have only one inbox
+    directory. Otherwise the copy lands under its own name, and a name already
+    taken by *different* content earns a suffix: two photos both called
+    ``IMG_0001.HEIC`` are two photos, and overwriting one with the other would
+    destroy the evidence behind every record extracted from it.
 
     **The suffix is a fingerprint of the bytes, never of the source path.** A
     path is not an identity: the same Downloads filename holds a different
@@ -167,20 +188,21 @@ def _copy_into_inbox(source: Path, scan_inbox: Path, data: bytes) -> Path:
     name already holds exactly these bytes.
     """
     scan_inbox = Path(scan_inbox)
-    if source.is_relative_to(scan_inbox):
+    durable_root = Path(inbox_root) if inbox_root is not None else scan_inbox
+    if _inside(source, durable_root):
         return source
 
     scan_inbox.mkdir(parents=True, exist_ok=True)
     target = scan_inbox / source.name
-    if target.exists():
-        if _read(target) == data:
+    if _occupied(target):
+        if _inside(target, durable_root) and _read(target) == data:
             return target
         # Content-addressed, via the project's one fingerprint helper: the hex
         # digest goes through it rather than a second hashing scheme.
         stamp = short_fingerprint(hashlib.sha256(data).hexdigest(), length=8)
         target = scan_inbox / f"{source.stem}-{stamp}{source.suffix}"
-        if target.exists():
-            if _read(target) == data:
+        if _occupied(target):
+            if _inside(target, durable_root) and _read(target) == data:
                 return target
             raise InputError(
                 f"Cannot store {source}: {target} already holds different content "
@@ -274,10 +296,11 @@ def prepare_inputs(
     paths: Sequence[Path],
     scan_inbox: Path,
     *,
+    inbox_root: Path | None = None,
     run: Callable[..., Any] = subprocess.run,
     platform: str | None = None,
 ) -> list[PreparedInput]:
-    """Every path, copied into the inbox and encoded for the API.
+    """Every path, made durable in the inbox and encoded for the API.
 
     Order is the caller's, and duplicates are kept: passing the same photo
     twice costs tokens, but silently dropping the second one is the kind of
@@ -285,7 +308,9 @@ def prepare_inputs(
     an unsupported suffix stops the whole batch rather than extracting a subset
     the user would have to notice was short.
 
-    ``run`` and ``platform`` are injectable so tests never shell out
+    ``inbox_root`` names the full durable root when ``scan_inbox`` is one
+    subdirectory of it. It defaults to ``scan_inbox``. ``run`` and ``platform``
+    are injectable so tests never shell out
     (IMPLEMENTATION_PLAN rule 6 in spirit: the one impure dependency is faked).
     """
     where = platform if platform is not None else sys.platform
@@ -303,7 +328,9 @@ def prepare_inputs(
         kind, media_type, convert = _classify(source)
         data = _read(source)
         source_sha256 = hashlib.sha256(data).hexdigest()
-        stored = _copy_into_inbox(source, scan_inbox, data)
+        stored = _copy_into_inbox(
+            source, scan_inbox, data, inbox_root=inbox_root
+        )
         if convert:
             data = _heic_to_jpeg(stored, run, where)
 

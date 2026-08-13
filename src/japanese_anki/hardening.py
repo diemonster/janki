@@ -53,6 +53,7 @@ ORACLE_TYPES = ("exhaustive", "selection")
 UNIT_DISPOSITIONS = ("candidate", "duplicate", "non-vocabulary", "unreadable")
 CASE_PURPOSES = ("regression", "coverage")
 RUNNER_BOUNDARIES = {
+    "input-provenance": "input-provenance",
     "candidate-response": "extraction-normalization",
     "extraction-prompt": "extraction-prompt",
     "staging-promote": "staging-promote",

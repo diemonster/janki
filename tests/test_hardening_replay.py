@@ -21,6 +21,7 @@ SEEDED_CASES = (
     "extraction-selection-target-binding",
     "extraction-unit-accounting",
     "impossible-character-furigana",
+    "input-parent-inbox-provenance",
     "m7-mixed-tsumori-coverage",
     "m7-native-teform-table-coverage",
     "missing-furigana-separator",
@@ -100,6 +101,9 @@ def test_every_registered_runner_calls_its_production_boundary() -> None:
     candidate = hardening_replay.RUNNERS["candidate-response"](
         {"candidates": [], "observe": []}, ROOT
     )
+    input_provenance = hardening_replay.RUNNERS["input-provenance"](
+        {"source_name": "lesson.pdf", "content": "%PDF-1.7 synthetic"}, ROOT
+    )
     extraction_prompt = hardening_replay.RUNNERS["extraction-prompt"](
         {
             "source_name": "lesson.pdf",
@@ -163,6 +167,11 @@ def test_every_registered_runner_calls_its_production_boundary() -> None:
     ai = hardening_replay.replay(ROOT, ["ai-no-writable-change"])[0]
 
     assert candidate["record_ids"] == []
+    assert input_provenance == {
+        "origin_relative_path": "data/inbox/lesson.pdf",
+        "scan_copy_exists": False,
+        "stored_files": ["data/inbox/lesson.pdf"],
+    }
     assert extraction_prompt["prompt_has_unit_keys"] is True
     assert staging["promoted_ids"] == ["word:話す:はなす"]
     assert staging["round_trip_record_ids"] == ["word:話す:はなす", "word:読む:"]

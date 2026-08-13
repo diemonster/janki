@@ -1,0 +1,17 @@
+version: 1
+id: input-parent-inbox-provenance
+purpose: regression
+gating: true
+runner: input-provenance
+pipeline_boundary: input-provenance
+source_archetype: camera
+redistributable: true
+fixture_basis: agent-created-synthetic
+fixtures:
+  - path: input.json
+    fingerprint: a716ef050fbe29aa2e89ce3af014be0e3611553618dff527b2c894759eca6f16
+  - path: oracle.json
+    fingerprint: 65b78200746f44d62e963584cefa975f6f55d915ae04d16a7aaa5ecd829bd772
+runner_input: input.json
+oracle: oracle.json
+finding_id: input-parent-inbox-provenance

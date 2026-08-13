@@ -20,6 +20,7 @@ from japanese_anki import (
     enrich,
     extract,
     hardening,
+    inputs,
     jpdb,
     kanji,
     promote,
@@ -404,6 +405,48 @@ def _candidate_response(data: dict[str, Any], root: Path) -> Any:
             )
         }
     return output
+
+
+def _input_provenance(data: dict[str, Any], root: Path) -> Any:
+    """Observe whether a source in the parent inbox is copied again."""
+    del root
+    _only(data, {"source_name", "content"}, "input-provenance")
+    source_name = data.get("source_name")
+    content = data.get("content")
+    if (
+        not isinstance(source_name, str)
+        or not source_name
+        or Path(source_name).name != source_name
+    ):
+        raise hardening.HardeningError(
+            "input-provenance.source_name must be one filename"
+        )
+    if not isinstance(content, str) or not content:
+        raise hardening.HardeningError(
+            "input-provenance.content must be non-empty text"
+        )
+    with tempfile.TemporaryDirectory() as directory:
+        project = Path(directory)
+        inbox = project / "data" / "inbox"
+        scan_inbox = inbox / "scans"
+        inbox.mkdir(parents=True)
+        source = inbox / source_name
+        source.write_text(content, encoding="utf-8")
+        [prepared] = inputs.prepare_inputs(
+            [source], scan_inbox, inbox_root=inbox
+        )
+        stored_files = sorted(
+            path.relative_to(project).as_posix()
+            for path in inbox.rglob("*")
+            if path.is_file()
+        )
+        return {
+            "origin_relative_path": prepared.origin_path.relative_to(
+                project
+            ).as_posix(),
+            "scan_copy_exists": (scan_inbox / source_name).exists(),
+            "stored_files": stored_files,
+        }
 
 
 def _extraction_prompt(data: dict[str, Any], root: Path) -> Any:
@@ -1002,6 +1045,7 @@ def _render_build(data: dict[str, Any], root: Path) -> Any:
 
 
 RUNNERS: dict[str, Callable[[dict[str, Any], Path], Any]] = {
+    "input-provenance": _input_provenance,
     "candidate-response": _candidate_response,
     "extraction-prompt": _extraction_prompt,
     "staging-promote": _staging_promote,

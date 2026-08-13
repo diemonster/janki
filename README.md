@@ -69,10 +69,11 @@ an import fills empty fields and reports conflicts instead of resolving them.
 janki extract ~/Downloads/lesson-3.pdf ~/Desktop/IMG_0421.HEIC
 ```
 
-PDF, JPEG, PNG and HEIC. Each file is copied into `data/inbox/scans/` — that
-copy, not the path you typed, is what every record cites — and read into one
-staging file per input, holding one candidate per word with the page and line it
-came from.
+PDF, JPEG, PNG and HEIC. A file outside `data/inbox/` is copied into
+`data/inbox/scans/`; a file already in the durable inbox stays where it is. That
+durable file, not the path you typed, is what every record cites. Each input
+gets one staging file that holds one candidate per word with its source page and
+line.
 
 Nothing reaches your collection yet. Open the staging file, fix what is wrong,
 delete what is not worth a card, then:

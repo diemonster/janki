@@ -1066,11 +1066,10 @@ Files: new `src/japanese_anki/claude_client.py`, `pyproject.toml`,
 camera's file is the evidence and the JPEG is a rendering of it. The conversion
 goes to a temporary directory and is thrown away, so `data/inbox/` keeps what
 the camera produced rather than a derived file sitting beside it looking like a
-second source. (2) "Already under `data/inbox/`" is implemented as "already
-under `scan_inbox`", because the signature supplies only `scan_inbox` — and
-that is the test that makes a re-run idempotent. A photo dropped directly in
-`data/inbox/` is therefore copied into `scans/`, which is a copy and not a
-modification, so AGENTS.md's never-modify-the-inbox rule still holds. (3) A name
+second source. (2) "Already under `data/inbox/`" uses the explicit durable
+inbox root that the CLI supplies. A file anywhere in that root stays where it
+is. A later M7.6 camera pilot exposed that limiting the test to `scan_inbox`
+copied a root-level inbox file again and changed its durable locator. (3) A name
 already taken by *different* content earns a fingerprint suffix rather than an
 overwrite: every phone writes `IMG_0001`, and overwriting one with the other
 destroys the evidence behind every record extracted from it. Identical bytes

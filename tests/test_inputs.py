@@ -148,6 +148,102 @@ def test_a_file_already_in_the_inbox_is_used_where_it_lies(tmp_path: Path) -> No
     assert list(inbox.iterdir()) == [source]
 
 
+def test_a_file_in_the_parent_inbox_is_used_where_it_lies(tmp_path: Path) -> None:
+    inbox = tmp_path / "data" / "inbox"
+    scan_inbox = inbox / "scans"
+    source = write(inbox / "lesson.pdf", PDF)
+
+    [item] = prepare_inputs([source], scan_inbox, inbox_root=inbox)
+
+    assert item.origin_path == source
+    assert not scan_inbox.exists()
+
+
+def test_a_relative_parent_inbox_path_is_used_where_it_lies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    inbox = tmp_path / "data" / "inbox"
+    scan_inbox = inbox / "scans"
+    write(inbox / "lesson.pdf", PDF)
+    monkeypatch.chdir(tmp_path)
+
+    [item] = prepare_inputs(
+        [Path("data/inbox/lesson.pdf")], scan_inbox, inbox_root=inbox
+    )
+
+    assert item.origin_path == Path("data/inbox/lesson.pdf")
+    assert not scan_inbox.exists()
+
+
+def test_parent_traversal_does_not_make_an_outside_file_look_durable(
+    tmp_path: Path,
+) -> None:
+    inbox = tmp_path / "data" / "inbox"
+    scan_inbox = inbox / "scans"
+    actual = write(tmp_path / "data" / "desk" / "lesson.pdf", PDF)
+    inbox.mkdir(parents=True)
+    traversing = inbox / ".." / "desk" / "lesson.pdf"
+    assert traversing.is_file()
+
+    [item] = prepare_inputs([traversing], scan_inbox, inbox_root=inbox)
+
+    assert item.origin_path == scan_inbox / "lesson.pdf"
+    assert item.origin_path.read_bytes() == actual.read_bytes()
+
+
+def test_an_inbox_symlink_to_an_outside_file_gets_a_durable_copy(
+    tmp_path: Path,
+) -> None:
+    inbox = tmp_path / "data" / "inbox"
+    scan_inbox = inbox / "scans"
+    outside = write(tmp_path / "desk" / "lesson.pdf", PDF)
+    inbox.mkdir(parents=True)
+    source = inbox / "linked.pdf"
+    source.symlink_to(outside)
+
+    [item] = prepare_inputs([source], scan_inbox, inbox_root=inbox)
+
+    assert item.origin_path == scan_inbox / "linked.pdf"
+    assert item.origin_path.read_bytes() == PDF
+
+
+def test_a_scan_inbox_symlink_to_an_outside_file_gets_a_fingerprinted_copy(
+    tmp_path: Path,
+) -> None:
+    inbox = tmp_path / "data" / "inbox"
+    scan_inbox = inbox / "scans"
+    outside = write(tmp_path / "desk" / "lesson.pdf", PDF)
+    scan_inbox.mkdir(parents=True)
+    source = scan_inbox / "lesson.pdf"
+    source.symlink_to(outside)
+
+    [item] = prepare_inputs([source], scan_inbox, inbox_root=inbox)
+
+    assert item.origin_path.parent == scan_inbox
+    assert item.origin_path != source
+    assert item.origin_path.name.startswith("lesson-")
+    assert item.origin_path.read_bytes() == PDF
+
+
+def test_a_broken_scan_inbox_symlink_is_not_followed_or_overwritten(
+    tmp_path: Path,
+) -> None:
+    inbox = tmp_path / "data" / "inbox"
+    scan_inbox = inbox / "scans"
+    source = write(tmp_path / "desk" / "lesson.pdf", PDF)
+    outside = tmp_path / "outside" / "missing.pdf"
+    scan_inbox.mkdir(parents=True)
+    collision = scan_inbox / "lesson.pdf"
+    collision.symlink_to(outside)
+
+    [item] = prepare_inputs([source], scan_inbox, inbox_root=inbox)
+
+    assert collision.is_symlink()
+    assert not outside.exists()
+    assert item.origin_path != collision
+    assert item.origin_path.read_bytes() == PDF
+
+
 def test_re_preparing_the_same_file_copies_it_once(tmp_path: Path) -> None:
     inbox = tmp_path / "inbox"
     source = write(tmp_path / "desk" / "lesson.pdf", PDF)

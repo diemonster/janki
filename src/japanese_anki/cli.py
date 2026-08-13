@@ -83,6 +83,19 @@ def _load_config(args: argparse.Namespace) -> ProjectConfig:
     return ProjectConfig.load(root)
 
 
+def _durable_inbox_root(config: ProjectConfig) -> Path:
+    """The full provenance root for the configured scan directory."""
+    standard = config.root / "data" / "inbox"
+    try:
+        if config.scan_inbox.resolve().is_relative_to(standard.resolve()):
+            return standard
+    except OSError:
+        pass
+    # A project can configure one standalone inbox instead of the standard
+    # data/inbox/scans subtree. In that shape the scan directory is the root.
+    return config.scan_inbox
+
+
 def _print_issues(issues: list) -> None:
     for issue in issues:
         print(issue.format())
@@ -2544,7 +2557,11 @@ def command_extract(args: argparse.Namespace) -> int:
     config = _load_config(args)
     style_guide = claude_client.read_style_guide(config.root)
     model = args.model or config.extract_model
-    prepared = prepare_inputs([path for path in args.files], config.scan_inbox)
+    prepared = prepare_inputs(
+        [path for path in args.files],
+        config.scan_inbox,
+        inbox_root=_durable_inbox_root(config),
+    )
 
     existing = (
         load_records(config.normalized_file)
@@ -4150,7 +4167,11 @@ def command_patterns(args: argparse.Namespace) -> int:
             print("No documents read yet. Pass a PDF or image to read one.")
         return 0
 
-    prepared_inputs = prepare_inputs(args.files, config.scan_inbox)
+    prepared_inputs = prepare_inputs(
+        args.files,
+        config.scan_inbox,
+        inbox_root=_durable_inbox_root(config),
+    )
     # The store is keyed by basename, so two inputs named chart.pdf in different
     # directories claim one entry: the first is read, paid for, printed as read
     # — and then overwritten by the second when the store is saved. Refused by

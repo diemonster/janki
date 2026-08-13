@@ -205,9 +205,10 @@ export ANTHROPIC_API_KEY='...'
 janki extract ~/Downloads/lesson-3.pdf ~/Desktop/IMG_0421.HEIC
 ```
 
-Each file is copied into `data/inbox/scans/` first, and that copy — never the
-path you typed — is what every extracted record cites. A desktop path will not
-exist in six months; the evidence behind a card has to.
+A file outside `data/inbox/` is copied into `data/inbox/scans/` first. A file
+already anywhere in the durable inbox is used where it lies. This durable path
+— never a desktop path — is what every extracted record cites. A desktop path
+will not exist in six months; the evidence behind a card has to.
 
 PDFs, JPEG, PNG and HEIC are accepted (HEIC converts through macOS's `sips`).
 Each input produces one staging file named for it, `data/staging/lesson-3.pdf.yaml`,

@@ -49,6 +49,7 @@ and oracle must link back to the case.
 
 The runner names and production boundaries are:
 
+- `input-provenance` → durable inbox selection and copy behavior
 - `candidate-response` → extraction and normalization
 - `staging-promote` → staging round-trip and promotion
 - `validation-qc` → record validation and deterministic QC repair

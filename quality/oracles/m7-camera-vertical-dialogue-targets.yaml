@@ -15,23 +15,23 @@ targets:
   - identity: word:探求:たんきゅう
     locator: page-1/panel-1/left-narration
   - identity: word:祝福:しゅくふく
-    locator: page-1/panel-2/upper-balloon
+    locator: page-1/panel-3/upper-balloon
   - identity: word:導き:みちびき
-    locator: page-1/panel-2/upper-balloon
+    locator: page-1/panel-3/upper-balloon
   - identity: word:祈祷:きとう
-    locator: page-1/panel-3/right-upper-balloon
+    locator: page-1/panel-2/right-upper-balloon
   - identity: word:興味:きょうみ
-    locator: page-1/panel-3/right-middle-balloon
+    locator: page-1/panel-2/right-middle-balloon
   - identity: word:新来:しんらい
-    locator: page-1/panel-3/right-lower-balloon
+    locator: page-1/panel-2/right-lower-balloon
   - identity: word:差し支え:さしつかえ
-    locator: page-1/panel-3/left-narration
+    locator: page-1/panel-2/left-narration
   - identity: word:修復:しゅうふく
-    locator: page-1/panel-3/left-narration
+    locator: page-1/panel-2/left-narration
   - identity: word:貴方:あなた
-    locator: page-1/panel-3/left-narration
+    locator: page-1/panel-2/left-narration
   - identity: word:見解:けんかい
-    locator: page-1/panel-3/left-narration
+    locator: page-1/panel-2/left-narration
 selection_rubric: >-
   Select exactly the 14 intermediate content words in targets from the vertical
   dialogue and narration. Preserve the printed spelling and ruby reading. Use
