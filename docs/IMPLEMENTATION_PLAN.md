@@ -2868,8 +2868,10 @@ additional and may point at the same minimized evidence.
 
 *Preparation 2026-08-13: inventoried an owner-provided phone photo and added an
 approved 14-target camera oracle. The owner also approved the exact private
-Anthropic evaluation scope. No model call has occurred. The distinct real scan
-and the ambiguous/unreadable-unit evidence are still open.*
+Anthropic evaluation scope. The first live extraction returned all 14 approved
+identities and readings; source-context review and validation passed. Promotion
+has not started. The distinct real scan and the ambiguous/unreadable-unit
+evidence are still open.*
 
 Depends on: M7.4, M7.5
 Files: two new immutable source copies placed under `data/inbox/` by the input
