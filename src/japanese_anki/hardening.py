@@ -1398,6 +1398,26 @@ def load_oracles(root: Path) -> tuple[UnitOracle, ...]:
     return tuple(sorted(oracles, key=lambda item: item.id))
 
 
+def load_oracle_file(root: Path, path: Path) -> UnitOracle:
+    """Load one named repository oracle with the same strict schema and checks."""
+    root = root.resolve()
+    candidate = path if path.is_absolute() else root / path
+    oracle_root = (root / "quality" / "oracles").resolve()
+    try:
+        candidate.relative_to(oracle_root)
+    except ValueError as exc:
+        raise HardeningError(
+            f"Coverage oracle must be under quality/oracles: {path}"
+        ) from exc
+    if candidate.parent != oracle_root:
+        raise HardeningError(
+            f"Coverage oracle must be directly under quality/oracles: {path}"
+        )
+    if candidate.suffix.lower() not in {".yaml", ".yml"}:
+        raise HardeningError(f"Coverage oracle must be YAML: {path}")
+    return _parse_oracle(_read_yaml(candidate, root), candidate, root)
+
+
 def _parse_redistribution_approval(
     value: Any, where: str
 ) -> RedistributionApproval:

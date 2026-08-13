@@ -10,6 +10,7 @@ from japanese_anki import enrich, hardening, hardening_replay, jpdb, kanji, qc
 ROOT = Path(__file__).resolve().parents[1]
 SEEDED_CASES = (
     "ai-no-writable-change",
+    "extraction-unit-accounting",
     "impossible-character-furigana",
     "missing-furigana-separator",
     "pos-precedence",

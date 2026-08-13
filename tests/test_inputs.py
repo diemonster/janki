@@ -7,6 +7,7 @@ depends on running on macOS.
 from __future__ import annotations
 
 import base64
+import hashlib
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -58,6 +59,7 @@ def test_a_pdf_becomes_a_document_block(tmp_path: Path) -> None:
     assert item.kind == "document"
     assert item.media_type == "application/pdf"
     assert decoded(item) == PDF
+    assert item.source_sha256 == hashlib.sha256(PDF).hexdigest()
 
 
 @pytest.mark.parametrize(

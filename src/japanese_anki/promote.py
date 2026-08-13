@@ -28,11 +28,14 @@ no history to orphan.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Container, Iterable, Sequence
 from dataclasses import dataclass, field, replace
+from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
-from japanese_anki import enrich, jpdb
+from japanese_anki import enrich, extract, hardening, jpdb
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import contains_kanji, stable_record_id
 from japanese_anki.models import VocabularyRecord
@@ -42,6 +45,7 @@ from japanese_anki.staging import (
     HOLD_UNKNOWN_READING,
     HOLD_UNVERIFIABLE_ID,
     annotate,
+    require_resolved_coverage,
 )
 
 __all__ = [
@@ -52,6 +56,7 @@ __all__ = [
     "PromoteError",
     "PromoteResult",
     "check_readings",
+    "check_coverage",
     "remint",
 ]
 
@@ -64,6 +69,151 @@ __all__ = [
 
 class PromoteError(JankiError):
     pass
+
+
+def check_coverage(meta: dict[str, Any], root: Path | None = None) -> None:
+    """Apply the coverage gate before promotion can read clients or write data."""
+    try:
+        require_resolved_coverage(meta)
+    except JankiError as exc:
+        raise PromoteError(str(exc)) from exc
+    block = meta.get("coverage")
+    if not isinstance(block, dict):
+        return
+    oracle_id = block.get("oracle_id")
+    status = block.get("status")
+    if status in {"matched", "mismatch"} and not oracle_id:
+        raise PromoteError(
+            "[coverage-oracle-missing] exhaustive coverage has no oracle ID"
+        )
+    if not oracle_id:
+        return
+    if root is None:
+        raise PromoteError(
+            "[coverage-oracle-unverified] repository root is needed to verify the "
+            "coverage oracle"
+        )
+    try:
+        matches = [
+            oracle
+            for oracle in hardening.load_oracles(root)
+            if oracle.id == oracle_id
+        ]
+    except JankiError as exc:
+        raise PromoteError(f"[coverage-oracle-invalid] {exc}") from exc
+    if len(matches) != 1:
+        raise PromoteError(
+            f"[coverage-oracle-missing] coverage oracle {oracle_id!r} was not found"
+        )
+    oracle = matches[0]
+    expected_oracle_fingerprint = hardening.oracle_content_fingerprint(oracle)
+    if not oracle.approved:
+        raise PromoteError(
+            f"[coverage-oracle-unapproved] coverage oracle {oracle.id!r} is a draft"
+        )
+    if (
+        oracle.source_fingerprint != block.get("source_fingerprint")
+        or oracle.type != block.get("oracle_type")
+        or expected_oracle_fingerprint != block.get("oracle_content_fingerprint")
+    ):
+        raise PromoteError(
+            "[coverage-oracle-stale] coverage does not match the approved oracle's "
+            "source, type, and content fingerprint"
+        )
+    _verify_coverage_facts(meta, block, oracle, expected_oracle_fingerprint)
+
+
+def _verify_coverage_facts(
+    meta: dict[str, Any],
+    block: dict[str, Any],
+    oracle: hardening.UnitOracle,
+    oracle_fingerprint: str,
+) -> None:
+    raw_units = block.get("source_units")
+    if not isinstance(raw_units, list):
+        raise PromoteError(
+            "[coverage-block-invalid] coverage source_units must be a list"
+        )
+    units: list[extract.SourceUnit] = []
+    try:
+        for raw in raw_units:
+            if not isinstance(raw, dict):
+                raise TypeError
+            page = raw["page"]
+            ordinal = raw["ordinal"]
+            section = raw["section"]
+            context = raw["context"]
+            disposition = raw["disposition"]
+            reason = raw.get("reason", "")
+            if (
+                isinstance(page, bool)
+                or not isinstance(page, int)
+                or page < 1
+                or isinstance(ordinal, bool)
+                or not isinstance(ordinal, int)
+                or ordinal < 1
+                or not isinstance(section, str)
+                or not re.fullmatch(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", section)
+                or not isinstance(context, str)
+                or not extract.normalize_context(context)
+                or disposition not in extract.SOURCE_UNIT_DISPOSITIONS
+                or not isinstance(reason, str)
+                or (disposition != "candidate" and not reason.strip())
+            ):
+                raise ValueError
+            units.append(
+                extract.SourceUnit(
+                    page=page,
+                    section=section,
+                    ordinal=ordinal,
+                    context=context,
+                    context_fingerprint=extract.context_fingerprint(context),
+                    disposition=disposition,
+                    reason=reason.strip(),
+                )
+            )
+        prose_count = int(block.get("prose_candidate_count", 0))
+        reported_count = int(block.get("model_reported_unit_count", 0))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise PromoteError(
+            "[coverage-block-invalid] coverage source-unit facts are malformed"
+        ) from exc
+    if prose_count < 0 or reported_count < 0:
+        raise PromoteError(
+            "[coverage-block-invalid] coverage counts must be non-negative"
+        )
+    mode_value = None
+    provenance = meta.get("prompt_provenance")
+    if isinstance(provenance, dict):
+        mode_value = provenance.get("mode")
+    mode = None if mode_value in {None, "auto"} else str(mode_value)
+    if mode not in {None, *extract.MODES}:
+        raise PromoteError("[coverage-block-invalid] coverage has an invalid mode")
+    # Coverage only needs to know how many candidates came from prose. The
+    # source-unit/candidate link was checked before staging was written.
+    candidates = tuple(SimpleNamespace(source_kind="prose") for _ in range(prose_count))
+    regenerated = extract.coverage_block(
+        extract.ExtractionResult(tuple(candidates), tuple(units), reported_count),
+        source_sha256=str(block.get("source_fingerprint", "")),
+        mode=mode,
+        oracle=oracle,
+        oracle_fingerprint=oracle_fingerprint,
+    )
+    stored_facts = {
+        key: value
+        for key, value in block.items()
+        if key not in {"approval", "coverage_block_fingerprint"}
+    }
+    regenerated_facts = {
+        key: value
+        for key, value in regenerated.items()
+        if key != "coverage_block_fingerprint"
+    }
+    if stored_facts != regenerated_facts:
+        raise PromoteError(
+            "[coverage-facts-stale] coverage facts do not match the stored source "
+            "units and approved oracle"
+        )
 
 
 @dataclass(slots=True)

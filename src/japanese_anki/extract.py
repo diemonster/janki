@@ -21,7 +21,12 @@ mixing them in would bury the new words the extraction was run for.
 from __future__ import annotations
 
 import functools
+import hashlib
+import json
+import re
+import unicodedata
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -34,12 +39,22 @@ from japanese_anki.staging import annotate
 
 __all__ = [
     "CONFIDENCE_LEVELS",
+    "EXTRACTION_SCHEMA_VERSION",
     "MODES",
+    "SOURCE_UNIT_DISPOSITIONS",
     "ExtractError",
+    "ExtractionResult",
+    "SourceUnit",
     "build_records",
     "candidate_schema",
+    "context_fingerprint",
+    "coverage_block",
     "extract_candidates",
+    "normalize_context",
+    "normalize_response",
+    "prompt_provenance",
     "prompt_for",
+    "source_fingerprint",
     "staging_path",
     "staging_targets",
     "system_prompt",
@@ -55,9 +70,78 @@ MODES: tuple[str, ...] = ("table", "prose")
 #: reading top to bottom meets the shakiest guesses first.
 CONFIDENCE_LEVELS: tuple[str, ...] = ("high", "medium", "low")
 
+SOURCE_UNIT_DISPOSITIONS: tuple[str, ...] = (
+    "candidate",
+    "duplicate",
+    "non-vocabulary",
+    "unreadable",
+)
+
+# Increment this when the structured response contract changes. It is stored
+# with prompt provenance, so a later model drift report can separate a prompt
+# change from a parser or schema change.
+EXTRACTION_SCHEMA_VERSION = 2
+
 
 class ExtractError(JankiError):
-    pass
+    """A deterministic extraction failure with a stable case identity."""
+
+    def __init__(self, message: str, *, code: str = "extract-error") -> None:
+        super().__init__(message)
+        self.code = code
+
+    def __str__(self) -> str:
+        return f"[{self.code}] {super().__str__()}"
+
+
+@dataclass(frozen=True, slots=True)
+class SourceUnit:
+    """One table/list source row, including rows that do not make a card."""
+
+    page: int
+    section: str
+    ordinal: int
+    context: str
+    context_fingerprint: str
+    disposition: str
+    reason: str
+
+    @property
+    def key(self) -> tuple[int, str, int]:
+        return self.page, self.section, self.ordinal
+
+    def fact(self) -> dict[str, Any]:
+        return {
+            "page": self.page,
+            "section": self.section,
+            "ordinal": self.ordinal,
+            "context_fingerprint": self.context_fingerprint,
+            "disposition": self.disposition,
+        }
+
+    def staging_value(self) -> dict[str, Any]:
+        value = self.fact()
+        value["context"] = self.context
+        if self.reason:
+            value["reason"] = self.reason
+        return value
+
+
+@dataclass(frozen=True, slots=True)
+class ExtractionResult:
+    """Normalized model output before candidates become records."""
+
+    candidates: tuple[Any, ...]
+    source_units: tuple[SourceUnit, ...]
+    model_reported_unit_count: int
+
+    @property
+    def prose_candidates(self) -> tuple[Any, ...]:
+        return tuple(
+            candidate
+            for candidate in self.candidates
+            if str(getattr(candidate, "source_kind", "prose")) == "prose"
+        )
 
 
 @functools.cache
@@ -108,18 +192,74 @@ def candidate_schema() -> Any:
             default="",
             description="In prose mode, why this word is worth a card.",
         )
+        source_kind: Literal["table", "prose"] = Field(
+            default="prose",
+            description=(
+                "Whether this candidate comes from a table/list source unit or "
+                "from prose selection."
+            ),
+        )
+        section: str = Field(
+            default="",
+            description=(
+                "Stable lowercase section slug. Required for a table candidate."
+            ),
+        )
+        ordinal: int = Field(
+            default=0,
+            ge=0,
+            description=(
+                "One-based row ordinal within the section. Required for a table "
+                "candidate."
+            ),
+        )
+
+    class SourceUnitRecord(BaseModel):
+        page: int = Field(ge=1, description="One-based page number.")
+        section: str = Field(
+            min_length=1,
+            description="Stable lowercase slug for the table or list section.",
+        )
+        ordinal: int = Field(
+            ge=1, description="One-based row ordinal within the section."
+        )
+        context: str = Field(
+            min_length=1, description="The complete source row or cell text, verbatim."
+        )
+        disposition: Literal[
+            "candidate", "duplicate", "non-vocabulary", "unreadable"
+        ]
+        reason: str = Field(
+            default="",
+            description=(
+                "Required when disposition is not candidate. Explain why the row "
+                "does not make a candidate."
+            ),
+        )
 
     class Extraction(BaseModel):
         candidates: list[CandidateRecord] = Field(default_factory=list)
+        source_units: list[SourceUnitRecord] = Field(default_factory=list)
+        model_reported_unit_count: int = Field(
+            default=0,
+            ge=0,
+            description=(
+                "Diagnostic count only. Janki derives coverage from source units."
+            ),
+        )
 
     return Extraction
 
 
 _TABLE_RULES = """\
-This page is a vocabulary list or table. Transcribe it faithfully: every row is
-a candidate, in the order it appears. Do not add words that are not on the
-page, do not merge rows, and do not correct what the source says — if a reading
-looks wrong, transcribe it and mark the candidate low confidence."""
+This page is a vocabulary list or table. Account for every row in source_units,
+in source order. Give each row a stable page, section slug, and ordinal. Copy
+its full text to context. Give it exactly one disposition: candidate,
+duplicate, non-vocabulary, or unreadable. A candidate unit must have exactly one
+table candidate with the same page, section, ordinal, and context. Every other
+unit must give a reason and must not have a candidate. Keep repeated rows as
+separate units. Do not add, merge, or correct rows. If a reading looks wrong,
+transcribe it and mark the candidate low confidence."""
 
 _PROSE_RULES = """\
 This page is running text. Pick out the vocabulary worth making a card for and
@@ -128,9 +268,13 @@ word in the known-words list below. Quote the sentence you found each word in
 as its context."""
 
 _AUTO_RULES = """\
-Judge each page for itself: a vocabulary list or table is transcribed
-faithfully row by row, and running text is mined for the words worth a card.
-One document may contain both."""
+Judge each page for itself. For each vocabulary list or table, account for every
+row in source_units. Give each row a stable page, section slug, ordinal,
+verbatim context, and one disposition: candidate, duplicate, non-vocabulary,
+or unreadable. Link each candidate unit to exactly one candidate with the same
+key and context. Keep repeated rows as separate units. For running text, select
+the words worth a card. Set source_kind to table or prose on every candidate.
+One document may contain both. Prose selection is not exhaustive."""
 
 _ALWAYS = """\
 Report the page number and the verbatim line each candidate came from, so a
@@ -151,7 +295,8 @@ def system_prompt(mode: str | None) -> str:
     else:
         raise ExtractError(
             f"Unknown mode '{mode}'. Use one of: {', '.join(MODES)}, or omit "
-            "--mode to let the model judge each page."
+            "--mode to let the model judge each page.",
+            code="extract-mode-unknown",
         )
     return (
         "You are reading Japanese study material and proposing vocabulary "
@@ -175,6 +320,57 @@ def prompt_for(source_name: str, known: Sequence[str] = ()) -> str:
     return "\n".join(lines)
 
 
+_SPACE = re.compile(r"\s+")
+_SECTION = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
+
+
+def normalize_context(value: str) -> str:
+    """Normalize source context once for both model output and human oracles."""
+    normalized = unicodedata.normalize("NFC", str(value)).replace("\r\n", "\n")
+    return _SPACE.sub(" ", normalized).strip()
+
+
+def context_fingerprint(value: str) -> str:
+    return hashlib.sha256(normalize_context(value).encode("utf-8")).hexdigest()
+
+
+def source_fingerprint(path: Path) -> str:
+    """Return the SHA-256 of one prepared, immutable inbox source."""
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _text_fingerprint(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def prompt_provenance(
+    prepared: PreparedInput,
+    *,
+    model: str,
+    style_guide: str,
+    mode: str | None,
+    known: Sequence[str] = (),
+    source_sha256: str | None = None,
+) -> dict[str, Any]:
+    """The stable inputs needed to explain a later model-output change."""
+    system = system_prompt(mode)
+    user = prompt_for(prepared.origin_path.name, known)
+    return {
+        "source_sha256": source_sha256 or source_fingerprint(prepared.origin_path),
+        "mode": mode or "auto",
+        "provider": "anthropic",
+        "model": model,
+        "response_schema_version": EXTRACTION_SCHEMA_VERSION,
+        "system_prompt_fingerprint": _text_fingerprint(system),
+        "style_guide_fingerprint": _text_fingerprint(style_guide),
+        "user_prompt_fingerprint": _text_fingerprint(user),
+    }
+
+
 def extract_candidates(
     prepared: PreparedInput,
     *,
@@ -183,8 +379,8 @@ def extract_candidates(
     mode: str | None = None,
     known: Sequence[str] = (),
     client: Any | None = None,
-) -> list[Any]:
-    """The candidates one file yields, or an error explaining why none did.
+) -> ExtractionResult:
+    """The normalized response one file yields, or a stable diagnostic.
 
     Both incomplete outcomes are refused rather than salvaged. A refusal is
     reported with the category the API gave, because "it was declined" without
@@ -193,15 +389,25 @@ def extract_candidates(
     extraction and the rest would be lost silently, which is the one failure
     this whole command is arranged to avoid.
     """
-    parsed, stop_reason, refusal = claude_client.parse_call(
-        model,
-        claude_client.system_blocks(style_guide, system_prompt(mode)),
-        [prepared.content_block(), {"type": "text", "text": prompt_for(
-            prepared.origin_path.name, known
-        )}],
-        candidate_schema(),
-        client,
-    )
+    try:
+        parsed, stop_reason, refusal = claude_client.parse_call(
+            model,
+            claude_client.system_blocks(style_guide, system_prompt(mode)),
+            [
+                prepared.content_block(),
+                {
+                    "type": "text",
+                    "text": prompt_for(prepared.origin_path.name, known),
+                },
+            ],
+            candidate_schema(),
+            client,
+        )
+    except JankiError as exc:
+        raise ExtractError(
+            f"{prepared.origin_path.name}: {exc}",
+            code="extract-model-call-failed",
+        ) from exc
 
     if stop_reason == "refusal":
         detail = ""
@@ -211,21 +417,268 @@ def extract_candidates(
             )
         raise ExtractError(
             f"{model} declined to read {prepared.origin_path.name}{detail}. "
-            "Nothing was written."
+            "Nothing was written.",
+            code="extract-model-refusal",
         )
     if stop_reason == "max_tokens":
         raise ExtractError(
             f"{model} ran out of room part-way through {prepared.origin_path.name}, "
             "so the answer is cut off and janki will not write a half-read file. "
             "Give it less to read at once: split a long document and run the parts "
-            "separately, or crop a dense photo to the section you want."
+            "separately, or crop a dense photo to the section you want.",
+            code="extract-response-truncated",
         )
     if parsed is None:
         raise ExtractError(
             f"{model} returned nothing usable for {prepared.origin_path.name} "
-            f"(stop reason: {stop_reason}). Nothing was written."
+            f"(stop reason: {stop_reason}). Nothing was written.",
+            code="extract-response-missing",
         )
-    return list(parsed.candidates)
+    return normalize_response(parsed, mode, prepared.origin_path.name)
+
+
+def _candidate_key(candidate: Any) -> tuple[int, str, int]:
+    return (
+        int(getattr(candidate, "page", 0) or 0),
+        str(getattr(candidate, "section", "") or "").strip(),
+        int(getattr(candidate, "ordinal", 0) or 0),
+    )
+
+
+def normalize_response(
+    parsed: Any, mode: str | None, source_name: str
+) -> ExtractionResult:
+    candidates = tuple(parsed.candidates)
+    units: list[SourceUnit] = []
+    for index, raw in enumerate(parsed.source_units, start=1):
+        section = str(raw.section).strip()
+        if not _SECTION.fullmatch(section):
+            raise ExtractError(
+                f"{source_name}: source unit {index} has section {section!r}; use a "
+                "stable lowercase slug such as 'lesson-3-table'.",
+                code="extract-unit-section-invalid",
+            )
+        context = str(raw.context)
+        if not normalize_context(context):
+            raise ExtractError(
+                f"{source_name}: source unit {raw.page}/{section}/{raw.ordinal} "
+                "has empty context.",
+                code="extract-unit-context-missing",
+            )
+        disposition = str(raw.disposition)
+        reason = str(raw.reason or "").strip()
+        if disposition != "candidate" and not reason:
+            raise ExtractError(
+                f"{source_name}: source unit {raw.page}/{section}/{raw.ordinal} is "
+                f"{disposition} but has no reason.",
+                code="extract-unit-reason-missing",
+            )
+        units.append(
+            SourceUnit(
+                page=int(raw.page),
+                section=section,
+                ordinal=int(raw.ordinal),
+                context=context,
+                context_fingerprint=context_fingerprint(context),
+                disposition=disposition,
+                reason=reason,
+            )
+        )
+
+    table_candidates = tuple(
+        candidate
+        for candidate in candidates
+        if str(getattr(candidate, "source_kind", "prose")) == "table"
+    )
+    prose_candidates = tuple(
+        candidate
+        for candidate in candidates
+        if str(getattr(candidate, "source_kind", "prose")) == "prose"
+    )
+    if mode == "table" and prose_candidates:
+        raise ExtractError(
+            f"{source_name}: table mode returned {len(prose_candidates)} prose "
+            "candidate(s).",
+            code="extract-table-prose-candidate",
+        )
+    if mode == "prose" and (units or table_candidates):
+        raise ExtractError(
+            f"{source_name}: prose mode returned table source units or candidates.",
+            code="extract-prose-table-unit",
+        )
+
+    candidate_units = [unit for unit in units if unit.disposition == "candidate"]
+    candidate_keys = sorted(_candidate_key(candidate) for candidate in table_candidates)
+    unit_keys = sorted(unit.key for unit in candidate_units)
+    if candidate_keys != unit_keys:
+        raise ExtractError(
+            f"{source_name}: table candidate keys do not match candidate source-unit "
+            "keys one-to-one.",
+            code="extract-candidate-unit-link",
+        )
+    unit_contexts: dict[tuple[int, str, int], list[str]] = {}
+    for unit in candidate_units:
+        unit_contexts.setdefault(unit.key, []).append(unit.context_fingerprint)
+    for candidate in table_candidates:
+        key = _candidate_key(candidate)
+        fingerprint = context_fingerprint(str(getattr(candidate, "context", "") or ""))
+        expected = unit_contexts.get(key, [])
+        if fingerprint not in expected:
+            raise ExtractError(
+                f"{source_name}: table candidate {key[0]}/{key[1]}/{key[2]} does "
+                "not copy its source unit context.",
+                code="extract-candidate-context-mismatch",
+            )
+        expected.remove(fingerprint)
+
+    return ExtractionResult(
+        candidates=candidates,
+        source_units=tuple(units),
+        model_reported_unit_count=int(parsed.model_reported_unit_count),
+    )
+
+
+def _unit_sort(value: dict[str, Any]) -> tuple[int, str, int, str]:
+    return (
+        int(value.get("page", 0)),
+        str(value.get("section", "")),
+        int(value.get("ordinal", 0)),
+        str(value.get("disposition", "")),
+    )
+
+
+def _key_value(key: tuple[int, str, int]) -> dict[str, Any]:
+    return {"page": key[0], "section": key[1], "ordinal": key[2]}
+
+
+def _canonical_fingerprint(value: Any) -> str:
+    encoded = json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def coverage_block(
+    result: ExtractionResult,
+    *,
+    source_sha256: str,
+    mode: str | None,
+    oracle: Any | None = None,
+    oracle_fingerprint: str | None = None,
+) -> dict[str, Any]:
+    """Compare exact source-unit facts and return durable staging metadata."""
+    actual = list(result.source_units)
+    by_key: dict[tuple[int, str, int], SourceUnit] = {}
+    duplicate_keys: list[dict[str, Any]] = []
+    for unit in actual:
+        if unit.key in by_key:
+            duplicate_keys.append(_key_value(unit.key))
+        else:
+            by_key[unit.key] = unit
+
+    missing: list[dict[str, Any]] = []
+    unexpected: list[dict[str, Any]] = []
+    context_mismatches: list[dict[str, Any]] = []
+    disposition_mismatches: list[dict[str, Any]] = []
+    oracle_type = str(getattr(oracle, "type", "")) if oracle is not None else ""
+    if oracle_type == "exhaustive":
+        expected_by_key = {unit.key: unit for unit in oracle.units}
+        for key in sorted(expected_by_key.keys() - by_key.keys()):
+            unit = expected_by_key[key]
+            missing.append(
+                {
+                    **_key_value(key),
+                    "context_fingerprint": unit.context_fingerprint,
+                    "disposition": unit.disposition,
+                }
+            )
+        for key in sorted(by_key.keys() - expected_by_key.keys()):
+            unexpected.append(by_key[key].fact())
+        for key in sorted(by_key.keys() & expected_by_key.keys()):
+            expected = expected_by_key[key]
+            observed = by_key[key]
+            if expected.context_fingerprint != observed.context_fingerprint:
+                context_mismatches.append(
+                    {
+                        **_key_value(key),
+                        "expected": expected.context_fingerprint,
+                        "observed": observed.context_fingerprint,
+                    }
+                )
+            if expected.disposition != observed.disposition:
+                disposition_mismatches.append(
+                    {
+                        **_key_value(key),
+                        "expected": expected.disposition,
+                        "observed": observed.disposition,
+                    }
+                )
+
+        expected_candidates = {
+            unit.key for unit in oracle.units if unit.disposition == "candidate"
+        }
+        observed_candidates = {
+            unit.key for unit in actual if unit.disposition == "candidate"
+        }
+        omissions = [
+            _key_value(key) for key in sorted(expected_candidates - observed_candidates)
+        ]
+        mismatch = any(
+            (
+                missing,
+                unexpected,
+                duplicate_keys,
+                context_mismatches,
+                disposition_mismatches,
+            )
+        )
+        status = "mismatch" if mismatch else "matched"
+        blocking = mismatch
+    elif oracle_type == "selection":
+        omissions = []
+        # A selection oracle measures prose targets only. In an auto-mode file
+        # it must not make table units look exhaustive.
+        has_table = bool(actual) or mode == "table"
+        status = "unmeasured" if has_table else "selection"
+        blocking = has_table
+    else:
+        omissions = []
+        has_table = bool(actual) or mode == "table"
+        status = "unmeasured" if has_table else "selection"
+        blocking = has_table
+
+    dispositions = {
+        name.replace("-", "_") + "_units": sorted(
+            [unit.fact() for unit in actual if unit.disposition == name],
+            key=_unit_sort,
+        )
+        for name in SOURCE_UNIT_DISPOSITIONS
+    }
+    block: dict[str, Any] = {
+        "version": 1,
+        "status": status,
+        "blocking": blocking,
+        "source_fingerprint": source_sha256,
+        "oracle_id": getattr(oracle, "id", None),
+        "oracle_type": oracle_type or None,
+        "oracle_content_fingerprint": oracle_fingerprint,
+        "model_reported_unit_count": result.model_reported_unit_count,
+        "observed_unit_count": len(actual),
+        "prose_candidate_count": len(result.prose_candidates),
+        "prose_coverage": "unmeasured" if result.prose_candidates else "not-applicable",
+        "source_units": [unit.staging_value() for unit in actual],
+        "missing_units": sorted(missing, key=_unit_sort),
+        "unexpected_units": sorted(unexpected, key=_unit_sort),
+        "duplicate_keys": sorted(duplicate_keys, key=_unit_sort),
+        "context_mismatched_units": sorted(context_mismatches, key=_unit_sort),
+        "disposition_mismatched_units": sorted(
+            disposition_mismatches, key=_unit_sort
+        ),
+        "omission_units": sorted(omissions, key=_unit_sort),
+        **dispositions,
+    }
+    block["coverage_block_fingerprint"] = _canonical_fingerprint(block)
+    return block
 
 
 def _raw_fields(candidate: Any, prepared: PreparedInput) -> dict[str, str]:
@@ -264,6 +717,7 @@ def build_records(
     known = set(known_ids)
     fresh: list[VocabularyRecord] = []
     seen: list[VocabularyRecord] = []
+    produced: set[str] = set()
 
     for candidate in candidates:
         expression = str(getattr(candidate, "expression", "") or "").strip()
@@ -288,6 +742,11 @@ def build_records(
                 raw_fields=_raw_fields(candidate, prepared),
             ),
         )
+        # Repeated source rows stay visible as separate source units. They do
+        # not become duplicate canonical notes with the same deterministic ID.
+        if record.id in produced:
+            continue
+        produced.add(record.id)
         if record.id in known:
             seen.append(annotate(record, already_known=True))
         else:
@@ -399,7 +858,10 @@ def staging_path(staging_dir: Path, source_name: str) -> Path:
 
 
 def staging_targets(
-    staging_dir: Path, prepared: Sequence[PreparedInput]
+    staging_dir: Path,
+    prepared: Sequence[PreparedInput],
+    *,
+    force: bool = False,
 ) -> list[Path]:
     """Every input's staging file, refusing a batch where two would collide.
 
@@ -421,7 +883,15 @@ def staging_targets(
             raise ExtractError(
                 f"{seen[target]} and {item.origin_path.name} would both be written "
                 f"to {target}. Extract them separately, or rename one — janki will "
-                "not overwrite one file's candidates with another's."
+                "not overwrite one file's candidates with another's.",
+                code="extract-staging-target-collision",
             )
         seen[target] = item.origin_path.name
+        if target.exists() and not force:
+            raise ExtractError(
+                f"Staging file already exists: {target}. It may hold review edits "
+                "you have not committed; move it aside or re-run with force to "
+                "overwrite.",
+                code="extract-staging-exists",
+            )
     return targets

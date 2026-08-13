@@ -149,6 +149,41 @@ promotion.
 The allowlist can grow only through a reviewed contract change with a concrete
 invariant and adversarial fixtures.
 
+## Extraction coverage gate
+
+Table extraction writes a `coverage` block to its staging file. The block
+stores every source unit and the exact comparison with an exhaustive human
+oracle. A model-reported count is diagnostic only. It cannot make coverage
+complete.
+
+Use this form to bind an approved oracle:
+
+```console
+janki extract page.pdf --mode table --coverage-oracle quality/oracles/page.yaml
+```
+
+The coverage status has these meanings:
+
+- `matched`: The exact unit keys, context fingerprints, and dispositions match
+  the approved exhaustive oracle.
+- `mismatch`: At least one exact fact does not match.
+- `unmeasured`: A table has no exhaustive oracle.
+- `selection`: The result contains prose selection only. It does not claim
+  exhaustive coverage.
+
+`mismatch` and `unmeasured` block promotion. The repository owner can accept
+the exact state after a source review. Add `coverage.approval` with these
+fields: `authority`, `source_fingerprint`, `coverage_block_fingerprint`,
+`accepted_dispositions`, `accepted_mismatches`, `unmeasured`, `reason`, and
+`approved_at`. The first field must be `repository-owner`. The two accepted
+mappings and the unmeasured value must repeat the current coverage block
+exactly. A source-unit or oracle change makes the approval stale.
+
+Promotion keeps the approval in `data/staging/done/`. For an oracle result,
+promotion also reloads the current approved oracle and recomputes the coverage
+facts before it writes records or the ledger. A staging file from before M7.4
+has no coverage block. It stays valid as a legacy unmeasured file.
+
 ## Decisions that belong to the user
 
 An agent can prepare evidence and a draft. It must not infer, generate, or grant

@@ -1,5 +1,17 @@
 version: 1
 findings:
+  - id: extraction-unit-accounting
+    state: fixed
+    pipeline_stage: extraction
+    source_archetypes: [native-pdf-table]
+    symptom: A plausible candidate list did not prove that every source row was handled.
+    invariant: Exact source-unit keys, contexts, and dispositions expose omitted or repeated rows.
+    evidence:
+      - fingerprint: ee9e1403462cca625692ec7c3b8bfcea544010592d38d053efd75e630f54cb58
+        locator: quality/cases/extraction-unit-accounting/input.json
+    recurrences: []
+    case_ids: [extraction-unit-accounting]
+    fix_ref: docs/IMPLEMENTATION_PLAN.md
   - id: ai-no-writable-change
     state: fixed
     pipeline_stage: ai-enrichment

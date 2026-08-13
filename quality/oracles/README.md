@@ -11,8 +11,9 @@ approval. The approval must repeat the source fingerprint, oracle ID, oracle
 type, selection rubric when present, and the normalized oracle-content
 fingerprint that `japanese_anki.hardening.oracle_content_fingerprint` returns.
 
-The four initial cases are downstream synthetic cases. They do not reproduce a
-model reading source pixels, so they do not need a human unit oracle.
+The initial downstream cases and the extraction-accounting regression case are
+synthetic. They do not reproduce a model reading private source pixels, so they
+do not need a human unit oracle.
 
 ## Exhaustive oracle
 
@@ -25,6 +26,11 @@ Use these fields:
 Each unit has `page`, `section`, `ordinal`, `context_fingerprint`, and one
 disposition: `candidate`, `duplicate`, `non-vocabulary`, or `unreadable`.
 Unit keys must be unique.
+
+Create `context_fingerprint` with
+`japanese_anki.extract.context_fingerprint`. This production function applies
+Unicode NFC, changes each whitespace run to one space, and removes whitespace
+at both ends. Extraction uses the same function before it compares an oracle.
 
 ## Selection oracle
 
@@ -47,3 +53,7 @@ An owner approval has `authority: repository-owner`, `oracle_id`,
 Run `janki harden status`. Its draft-oracle output gives the content
 fingerprint that the owner must review. A content change makes an existing
 approval stale.
+
+Pass approved oracles to extraction with `--coverage-oracle FILE`. Repeat the
+option for a multi-input run. Each oracle must match exactly one prepared
+source SHA-256. Janki checks all bindings before the first model call.

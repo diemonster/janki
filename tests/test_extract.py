@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 import yaml
 
-from japanese_anki import cli, extract
+from japanese_anki import cli, extract, hardening
 from japanese_anki.claude_client import CallResult, Refusal
 from japanese_anki.extract import ExtractError, build_records, known_ids, system_prompt
 from japanese_anki.inputs import PreparedInput
@@ -37,6 +38,9 @@ def candidate(**overrides: Any) -> Any:
         "context": "話す　はなす　to speak",
         "confidence": "high",
         "inclusion_reason": "",
+        "source_kind": "prose",
+        "section": "",
+        "ordinal": 0,
     }
     fields.update(overrides)
     return schema.model_fields["candidates"].annotation.__args__[0](**fields)
@@ -44,6 +48,29 @@ def candidate(**overrides: Any) -> Any:
 
 def extraction(*candidates: Any) -> Any:
     return extract.candidate_schema()(candidates=list(candidates))
+
+
+def source_unit(**overrides: Any) -> Any:
+    schema = extract.candidate_schema()
+    fields: dict[str, Any] = {
+        "page": 12,
+        "section": "vocabulary",
+        "ordinal": 1,
+        "context": "話す　はなす　to speak",
+        "disposition": "candidate",
+        "reason": "",
+    }
+    fields.update(overrides)
+    unit_type = schema.model_fields["source_units"].annotation.__args__[0]
+    return unit_type(**fields)
+
+
+def table_extraction(*candidates: Any, units: list[Any] | None = None, count: int = 0) -> Any:
+    return extract.candidate_schema()(
+        candidates=list(candidates),
+        source_units=units or [],
+        model_reported_unit_count=count,
+    )
 
 
 def prepared(tmp_path: Path, name: str = "lesson.pdf") -> PreparedInput:
@@ -89,6 +116,12 @@ def ok(*candidates: Any) -> CallResult:
     return CallResult(extraction(*candidates), "end_turn", None)
 
 
+def table_ok(*candidates: Any, units: list[Any] | None = None, count: int = 0) -> CallResult:
+    return CallResult(
+        table_extraction(*candidates, units=units, count=count), "end_turn", None
+    )
+
+
 # --- the prompt --------------------------------------------------------------
 
 
@@ -97,13 +130,20 @@ def test_each_mode_gets_its_own_rules() -> None:
     prose = system_prompt("prose")
     auto = system_prompt(None)
 
-    assert "Transcribe it faithfully" in table
+    assert "Account for every row" in table
     assert "worth making a card for" in prose
     assert "Judge each page for itself" in auto
     # The rule that matters most is in all three: an invented reading becomes a
     # permanent, uncorrectable record ID.
     for text in (table, prose, auto):
         assert "Never invent a reading" in text
+
+
+def test_context_normalization_is_one_stable_production_rule() -> None:
+    assert extract.normalize_context(" 話す\r\n\tはなす  ") == "話す はなす"
+    assert extract.context_fingerprint("話す  はなす") == extract.context_fingerprint(
+        " 話す\nはなす "
+    )
 
 
 def test_an_unknown_mode_is_refused() -> None:
@@ -226,6 +266,165 @@ def test_any_other_incomplete_stop_is_also_refused(
     assert "pause_turn" in str(excinfo.value)
 
 
+# --- source-unit accounting -------------------------------------------------
+
+
+def table_result(
+    *units: extract.SourceUnit,
+    candidates: tuple[Any, ...] = (),
+    reported: int = 0,
+) -> extract.ExtractionResult:
+    return extract.ExtractionResult(candidates, units, reported)
+
+
+def normalized_unit(
+    ordinal: int,
+    *,
+    context: str | None = None,
+    disposition: str = "candidate",
+    reason: str = "",
+) -> extract.SourceUnit:
+    text = context or f"row {ordinal}"
+    return extract.SourceUnit(
+        page=1,
+        section="vocabulary",
+        ordinal=ordinal,
+        context=text,
+        context_fingerprint=extract.context_fingerprint(text),
+        disposition=disposition,
+        reason=reason,
+    )
+
+
+def exhaustive_oracle(*units: extract.SourceUnit) -> Any:
+    return SimpleNamespace(
+        id="lesson-table",
+        type="exhaustive",
+        units=tuple(
+            hardening.OracleUnit(
+                page=unit.page,
+                section=unit.section,
+                ordinal=unit.ordinal,
+                context_fingerprint=unit.context_fingerprint,
+                disposition=unit.disposition,
+            )
+            for unit in units
+        ),
+    )
+
+
+def test_exact_coverage_ignores_the_models_wrong_self_count() -> None:
+    one = normalized_unit(1)
+    two = normalized_unit(2, disposition="unreadable", reason="ink is hidden")
+
+    block = extract.coverage_block(
+        table_result(one, two, reported=99),
+        source_sha256="a" * 64,
+        mode="table",
+        oracle=exhaustive_oracle(one, two),
+        oracle_fingerprint="b" * 64,
+    )
+
+    assert block["status"] == "matched"
+    assert block["blocking"] is False
+    assert block["observed_unit_count"] == 2
+    assert block["model_reported_unit_count"] == 99
+    assert block["unreadable_units"] == [two.fact()]
+
+
+def test_an_omitted_row_cannot_be_replaced_by_a_duplicate_or_invented_row() -> None:
+    one = normalized_unit(1)
+    two = normalized_unit(2)
+    repeated_one = normalized_unit(1, disposition="duplicate", reason="repeated")
+    invented = normalized_unit(3)
+
+    block = extract.coverage_block(
+        table_result(one, repeated_one, invented),
+        source_sha256="a" * 64,
+        mode="table",
+        oracle=exhaustive_oracle(one, two),
+        oracle_fingerprint="b" * 64,
+    )
+
+    assert block["status"] == "mismatch"
+    assert block["missing_units"][0]["ordinal"] == 2
+    assert block["unexpected_units"][0]["ordinal"] == 3
+    assert block["duplicate_keys"] == [
+        {"page": 1, "section": "vocabulary", "ordinal": 1}
+    ]
+    assert block["omission_units"][0]["ordinal"] == 2
+
+
+def test_context_and_disposition_mismatches_are_exact_facts() -> None:
+    expected = normalized_unit(1, context="話す はなす")
+    observed = normalized_unit(
+        1,
+        context="話す はなし",
+        disposition="unreadable",
+        reason="last kana is hidden",
+    )
+
+    block = extract.coverage_block(
+        table_result(observed),
+        source_sha256="a" * 64,
+        mode="table",
+        oracle=exhaustive_oracle(expected),
+        oracle_fingerprint="b" * 64,
+    )
+
+    assert block["context_mismatched_units"] == [
+        {
+            "page": 1,
+            "section": "vocabulary",
+            "ordinal": 1,
+            "expected": expected.context_fingerprint,
+            "observed": observed.context_fingerprint,
+        }
+    ]
+    assert block["disposition_mismatched_units"][0]["observed"] == "unreadable"
+    assert block["unreadable_units"] == [observed.fact()]
+
+
+def test_table_candidates_must_link_to_source_units_one_to_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    call = FakeCall(
+        table_ok(
+            candidate(
+                source_kind="table",
+                section="vocabulary",
+                ordinal=2,
+            ),
+            units=[source_unit(ordinal=1)],
+        )
+    )
+    monkeypatch.setattr(extract.claude_client, "parse_call", call)
+
+    with pytest.raises(ExtractError) as excinfo:
+        extract.extract_candidates(
+            prepared(tmp_path), model="claude-opus-5", style_guide="S", mode="table"
+        )
+
+    assert excinfo.value.code == "extract-candidate-unit-link"
+
+
+def test_auto_mode_reports_table_and_prose_coverage_separately() -> None:
+    unit = normalized_unit(1)
+    result = table_result(
+        unit,
+        candidates=(candidate(inclusion_reason="new grammar", source_kind="prose"),),
+    )
+
+    block = extract.coverage_block(
+        result, source_sha256="a" * 64, mode=None
+    )
+
+    assert block["status"] == "unmeasured"
+    assert block["blocking"] is True
+    assert block["prose_candidate_count"] == 1
+    assert block["prose_coverage"] == "unmeasured"
+
+
 # --- candidates to records ---------------------------------------------------
 
 
@@ -283,6 +482,14 @@ def test_already_known_candidates_are_marked_and_sorted_last(
     assert records[1].source.raw_fields["already_known"] == "true"
 
 
+def test_repeated_candidate_rows_do_not_create_duplicate_canonical_records(
+    tmp_path: Path,
+) -> None:
+    records = build_records([candidate(), candidate()], prepared(tmp_path))
+
+    assert [record.id for record in records] == ["word:話す:はなす"]
+
+
 def test_a_record_whose_stored_id_drifted_still_counts_as_known() -> None:
     # A hand-written record may carry an id that no longer matches what its
     # expression and reading would mint today; a candidate matching either is
@@ -326,6 +533,71 @@ def source_pdf(tmp_path: Path, name: str = "lesson.pdf") -> Path:
     return path
 
 
+def write_approved_oracle(
+    root: Path,
+    *,
+    source_sha256: str,
+    units: tuple[extract.SourceUnit, ...],
+    oracle_id: str = "lesson-table",
+    approved: bool = True,
+) -> Path:
+    path = root / "quality" / "oracles" / f"{oracle_id}.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    oracle_units = tuple(
+        hardening.OracleUnit(
+            unit.page,
+            unit.section,
+            unit.ordinal,
+            unit.context_fingerprint,
+            unit.disposition,
+        )
+        for unit in units
+    )
+    oracle = hardening.UnitOracle(
+        path=path,
+        relative_path=f"quality/oracles/{path.name}",
+        id=oracle_id,
+        source_fingerprint=source_sha256,
+        type="exhaustive",
+        case_ids=(),
+        units=oracle_units,
+        targets=(),
+        selection_rubric=None,
+        approval=None,
+    )
+    content_fingerprint = hardening.oracle_content_fingerprint(oracle)
+    payload: dict[str, Any] = {
+        "version": 1,
+        "id": oracle_id,
+        "source_fingerprint": source_sha256,
+        "type": "exhaustive",
+        "case_ids": [],
+        "units": [
+            {
+                "page": unit.page,
+                "section": unit.section,
+                "ordinal": unit.ordinal,
+                "context_fingerprint": unit.context_fingerprint,
+                "disposition": unit.disposition,
+            }
+            for unit in oracle_units
+        ],
+    }
+    if approved:
+        payload["approval"] = {
+            "authority": "repository-owner",
+            "oracle_id": oracle_id,
+            "source_fingerprint": source_sha256,
+            "oracle_type": "exhaustive",
+            "oracle_content_fingerprint": content_fingerprint,
+            "approved_at": "2026-08-12",
+        }
+    path.write_text(
+        yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
+    return path
+
+
 def test_extract_writes_one_staging_file_per_input(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -361,6 +633,158 @@ def test_the_staging_file_is_the_pinned_shape(
     # The basename, not an absolute path: this file is committed, and an
     # absolute path is stale on any other clone.
     assert meta["source_file"] == "lesson.pdf"
+
+
+def test_an_approved_oracle_and_prompt_provenance_are_persisted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = project(tmp_path)
+    source = source_pdf(tmp_path)
+    unit = normalized_unit(1, context="話す　はなす　to speak")
+    # The model page is 12 in this fixture.
+    unit = extract.SourceUnit(
+        12,
+        unit.section,
+        unit.ordinal,
+        unit.context,
+        unit.context_fingerprint,
+        unit.disposition,
+        unit.reason,
+    )
+    oracle = write_approved_oracle(
+        root,
+        source_sha256=extract.source_fingerprint(source),
+        units=(unit,),
+    )
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "must-not-be-stored")
+    monkeypatch.setattr(
+        cli.extract.claude_client,
+        "parse_call",
+        FakeCall(
+            table_ok(
+                candidate(source_kind="table", section="vocabulary", ordinal=1),
+                units=[source_unit()],
+                count=17,
+            )
+        ),
+    )
+
+    code = cli.main(
+        [
+            "--root",
+            str(root),
+            "extract",
+            str(source),
+            "--mode",
+            "table",
+            "--coverage-oracle",
+            str(oracle),
+        ]
+    )
+
+    assert code == 0
+    _records, meta = read_staging(root / "staging" / "lesson.pdf.yaml")
+    assert meta["coverage"]["status"] == "matched"
+    assert meta["coverage"]["oracle_id"] == "lesson-table"
+    assert meta["coverage"]["model_reported_unit_count"] == 17
+    provenance = meta["prompt_provenance"]
+    assert provenance["provider"] == "anthropic"
+    assert provenance["response_schema_version"] == extract.EXTRACTION_SCHEMA_VERSION
+    serialized = json.dumps(meta, ensure_ascii=False)
+    assert "must-not-be-stored" not in serialized
+    assert str(root) not in serialized
+    # Promotion reloads the approved oracle and recomputes these facts. A
+    # hand-edited "matched" label cannot bypass that check.
+    assert (
+        cli.main(
+            [
+                "--root",
+                str(root),
+                "promote",
+                str(root / "staging" / "lesson.pdf.yaml"),
+                "--skip-reading-check",
+            ]
+        )
+        == 0
+    )
+    _archived, archived_meta = read_staging(
+        root / "staging" / "done" / "lesson.pdf.yaml"
+    )
+    assert archived_meta["coverage"]["oracle_id"] == "lesson-table"
+
+
+def test_oracle_binding_errors_happen_before_the_first_paid_call(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = project(tmp_path)
+    one = source_pdf(tmp_path)
+    two = source_pdf(tmp_path, "lesson2.pdf")
+    # Both fixtures have the same bytes. One oracle would bind to two sources.
+    oracle = write_approved_oracle(
+        root,
+        source_sha256=extract.source_fingerprint(one),
+        units=(normalized_unit(1),),
+    )
+    call = FakeCall(ok(candidate()), ok(candidate()))
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
+
+    code = cli.main(
+        [
+            "--root",
+            str(root),
+            "extract",
+            str(one),
+            str(two),
+            "--coverage-oracle",
+            str(oracle),
+        ]
+    )
+
+    assert code == 1
+    assert call.calls == []
+
+
+def test_a_draft_oracle_is_refused_before_the_model_call(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = project(tmp_path)
+    source = source_pdf(tmp_path)
+    oracle = write_approved_oracle(
+        root,
+        source_sha256=extract.source_fingerprint(source),
+        units=(normalized_unit(1),),
+        approved=False,
+    )
+    call = FakeCall(ok(candidate()))
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
+
+    code = cli.main(
+        [
+            "--root",
+            str(root),
+            "extract",
+            str(source),
+            "--coverage-oracle",
+            str(oracle),
+        ]
+    )
+
+    assert code == 1
+    assert call.calls == []
+
+
+def test_prompt_fingerprints_change_with_the_prompt_not_the_path(tmp_path: Path) -> None:
+    item = prepared(tmp_path)
+    base = extract.prompt_provenance(
+        item, model="m", style_guide="style", mode="prose", known=()
+    )
+    changed = extract.prompt_provenance(
+        item, model="m", style_guide="style", mode="prose", known=("話す",)
+    )
+
+    assert base["system_prompt_fingerprint"] == changed["system_prompt_fingerprint"]
+    assert base["user_prompt_fingerprint"] != changed["user_prompt_fingerprint"]
+    assert str(tmp_path) not in json.dumps(base)
 
 
 def test_the_input_is_copied_into_the_inbox_and_cited(
@@ -439,7 +863,14 @@ def test_known_words_are_only_listed_for_prose(
     root = project(
         tmp_path, [VocabularyRecord(id="word:話す:はなす", expression="話す", reading="はなす")]
     )
-    call = FakeCall(ok(candidate()), ok(candidate()))
+    call = FakeCall(
+        table_ok(
+            candidate(source_kind="table", section="vocabulary", ordinal=1),
+            units=[source_unit()],
+            count=1,
+        ),
+        ok(candidate()),
+    )
     monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
 
     cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path)), "--mode", "table"])

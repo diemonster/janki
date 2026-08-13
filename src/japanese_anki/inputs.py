@@ -87,6 +87,7 @@ class PreparedInput:
     media_type: str
     data_b64: str
     origin_path: Path
+    source_sha256: str = ""
 
     def content_block(self) -> dict[str, Any]:
         """The API content block for this input.
@@ -301,6 +302,7 @@ def prepare_inputs(
         # — that is a supported format, and keeping its copy is right.)
         kind, media_type, convert = _classify(source)
         data = _read(source)
+        source_sha256 = hashlib.sha256(data).hexdigest()
         stored = _copy_into_inbox(source, scan_inbox, data)
         if convert:
             data = _heic_to_jpeg(stored, run, where)
@@ -311,6 +313,7 @@ def prepare_inputs(
                 media_type=media_type,
                 data_b64=_encode(data),
                 origin_path=stored,
+                source_sha256=source_sha256,
             )
         )
     return prepared

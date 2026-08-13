@@ -2564,7 +2564,7 @@ deliberate production mutant at each seeded boundary that makes its
 corresponding case fail. No runner may make a live network call or read a
 private visual source.
 
-### [ ] M7.4 Extraction accounting and prompt provenance
+### [x] M7.4 Extraction accounting and prompt provenance
 
 Depends on: M7.2, M7.3
 Files: `src/japanese_anki/extract.py`, `src/japanese_anki/staging.py`,

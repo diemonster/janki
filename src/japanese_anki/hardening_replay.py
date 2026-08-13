@@ -217,21 +217,60 @@ def _client(responses: Any) -> tuple[jpdb.JpdbClient, _CannedTransport]:
 
 def _candidate_response(data: dict[str, Any], root: Path) -> Any:
     del root
-    _only(data, {"candidates", "source_name", "known_ids", "observe"}, "candidate-response")
+    _only(
+        data,
+        {
+            "candidates",
+            "source_units",
+            "model_reported_unit_count",
+            "mode",
+            "source_name",
+            "source_fingerprint",
+            "oracle_units",
+            "observe_coverage",
+            "known_ids",
+            "observe",
+        },
+        "candidate-response",
+    )
     raw_candidates = data.get("candidates")
     if not isinstance(raw_candidates, list):
         raise hardening.HardeningError("candidates must be a JSON list")
-    candidate_type = _structured_schema(
+    response_type = _structured_schema(
         extract.candidate_schema, "candidate-response replay"
-    ).model_fields[
-        "candidates"
-    ].annotation.__args__[0]
+    )
+    candidate_type = response_type.model_fields["candidates"].annotation.__args__[0]
     candidate_fields = set(candidate_type.model_fields)
     candidates = []
     for index, item in enumerate(raw_candidates):
         candidate = _mapping(item, f"candidates[{index}]")
         _only(candidate, candidate_fields, f"candidates[{index}]")
         candidates.append(_model_validate(candidate_type, candidate, f"candidates[{index}]"))
+    raw_units = data.get("source_units", [])
+    if not isinstance(raw_units, list):
+        raise hardening.HardeningError("source_units must be a JSON list")
+    unit_type = response_type.model_fields["source_units"].annotation.__args__[0]
+    unit_fields = set(unit_type.model_fields)
+    units = []
+    for index, item in enumerate(raw_units):
+        unit = _mapping(item, f"source_units[{index}]")
+        _only(unit, unit_fields, f"source_units[{index}]")
+        units.append(_model_validate(unit_type, unit, f"source_units[{index}]"))
+    mode = data.get("mode")
+    if mode not in {None, *extract.MODES}:
+        raise hardening.HardeningError("mode must be table, prose, or null")
+    response = _model_validate(
+        response_type,
+        {
+            "candidates": candidates,
+            "source_units": units,
+            "model_reported_unit_count": data.get("model_reported_unit_count", 0),
+        },
+        "candidate-response",
+    )
+    result = extract.normalize_response(
+        response, mode, str(data.get("source_name", "offline-fixture.png"))
+    )
     known_ids = _string_list(data.get("known_ids", []), "known_ids")
     prepared = PreparedInput(
         kind="image",
@@ -239,12 +278,103 @@ def _candidate_response(data: dict[str, Any], root: Path) -> Any:
         data_b64="",
         origin_path=Path(str(data.get("source_name", "offline-fixture.png"))),
     )
-    records = extract.build_records(candidates, prepared, known_ids)
-    return {
+    records = extract.build_records(result.candidates, prepared, known_ids)
+    output = {
         "records": _observed_records(records, data.get("observe", [])),
         "record_ids": [record.id for record in records],
-        "unusable": len(extract.unusable(candidates)),
+        "unusable": len(extract.unusable(result.candidates)),
     }
+    if _optional_bool(data, "observe_coverage"):
+        raw_oracle_units = data.get("oracle_units")
+        if not isinstance(raw_oracle_units, list) or not raw_oracle_units:
+            raise hardening.HardeningError(
+                "observe_coverage requires a non-empty oracle_units list"
+            )
+        oracle_units: list[hardening.OracleUnit] = []
+        allowed = {
+            "page",
+            "section",
+            "ordinal",
+            "context_fingerprint",
+            "disposition",
+        }
+        for index, item in enumerate(raw_oracle_units):
+            raw = _mapping(item, f"oracle_units[{index}]")
+            _only(raw, allowed, f"oracle_units[{index}]")
+            page = raw.get("page")
+            ordinal = raw.get("ordinal")
+            if (
+                isinstance(page, bool)
+                or not isinstance(page, int)
+                or page < 1
+                or isinstance(ordinal, bool)
+                or not isinstance(ordinal, int)
+                or ordinal < 1
+            ):
+                raise hardening.HardeningError(
+                    f"oracle_units[{index}] page and ordinal must be positive integers"
+                )
+            section = raw.get("section")
+            fingerprint = raw.get("context_fingerprint")
+            disposition = raw.get("disposition")
+            if not isinstance(section, str) or not section:
+                raise hardening.HardeningError(
+                    f"oracle_units[{index}].section must be text"
+                )
+            if (
+                not isinstance(fingerprint, str)
+                or len(fingerprint) != 64
+                or any(character not in "0123456789abcdef" for character in fingerprint)
+            ):
+                raise hardening.HardeningError(
+                    f"oracle_units[{index}].context_fingerprint must be SHA-256"
+                )
+            if disposition not in hardening.UNIT_DISPOSITIONS:
+                raise hardening.HardeningError(
+                    f"oracle_units[{index}].disposition is invalid"
+                )
+            oracle_units.append(
+                hardening.OracleUnit(
+                    page, section, ordinal, fingerprint, disposition
+                )
+            )
+        oracle = hardening.UnitOracle(
+            path=Path("offline-oracle.yaml"),
+            relative_path="offline-oracle.yaml",
+            id="offline-oracle",
+            source_fingerprint=str(data.get("source_fingerprint", "a" * 64)),
+            type="exhaustive",
+            case_ids=(),
+            units=tuple(oracle_units),
+            targets=(),
+            selection_rubric=None,
+            approval=None,
+        )
+        block = extract.coverage_block(
+            result,
+            source_sha256=oracle.source_fingerprint,
+            mode=mode,
+            oracle=oracle,
+            oracle_fingerprint=hardening.oracle_content_fingerprint(oracle),
+        )
+        output["coverage"] = {
+            key: block[key]
+            for key in (
+                "status",
+                "model_reported_unit_count",
+                "observed_unit_count",
+                "missing_units",
+                "unexpected_units",
+                "duplicate_keys",
+                "context_mismatched_units",
+                "disposition_mismatched_units",
+                "candidate_units",
+                "duplicate_units",
+                "omission_units",
+                "unreadable_units",
+            )
+        }
+    return output
 
 
 def _staging_promote(data: dict[str, Any], root: Path) -> Any:

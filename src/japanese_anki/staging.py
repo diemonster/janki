@@ -20,7 +20,10 @@ passes ``force=True``. In-place annotation of a file under review (M2.6's
 
 from __future__ import annotations
 
+import hashlib
 import io
+import json
+import re
 import sys
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from dataclasses import replace
@@ -75,7 +78,14 @@ NON_READING_HOLDS: frozenset[str] = frozenset({HOLD_UNVERIFIABLE_ID})
 # hands back every non-``records`` key it finds, so a note a reviewer added by
 # hand has to survive a round trip. What the warning catches is a *writer*
 # inventing a key nothing downstream reads.
-META_KEYS: tuple[str, ...] = ("source_file", "extracted_at", "model", "review_notes")
+META_KEYS: tuple[str, ...] = (
+    "source_file",
+    "extracted_at",
+    "model",
+    "review_notes",
+    "coverage",
+    "prompt_provenance",
+)
 
 _RECORDS_KEY = "records"
 
@@ -83,6 +93,148 @@ _RECORDS_KEY = "records"
 # written under any other suffix would be write-only: the write succeeds and
 # every read of it fails.
 STAGING_SUFFIXES: tuple[str, ...] = (".yaml", ".yml")
+
+_SHA256 = re.compile(r"[0-9a-f]{64}\Z")
+_COVERAGE_DISPOSITIONS = (
+    "candidate_units",
+    "duplicate_units",
+    "non_vocabulary_units",
+    "unreadable_units",
+)
+_COVERAGE_MISMATCHES = (
+    "missing_units",
+    "unexpected_units",
+    "duplicate_keys",
+    "context_mismatched_units",
+    "disposition_mismatched_units",
+    "omission_units",
+)
+
+
+def coverage_block_fingerprint(block: Mapping[str, Any]) -> str:
+    """Fingerprint coverage facts without the fingerprint or owner approval."""
+    payload = {
+        str(key): value
+        for key, value in block.items()
+        if key not in {"coverage_block_fingerprint", "approval"}
+    }
+    encoded = json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def coverage_acceptance_requirements(block: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the exact coverage facts an owner approval must repeat."""
+    return {
+        "accepted_dispositions": {
+            key: block.get(key, []) for key in _COVERAGE_DISPOSITIONS
+        },
+        "accepted_mismatches": {
+            key: block.get(key, []) for key in _COVERAGE_MISMATCHES
+        },
+        "unmeasured": block.get("status") == "unmeasured",
+    }
+
+
+def require_resolved_coverage(meta: Mapping[str, Any]) -> None:
+    """Refuse an unresolved M7.4 coverage block; allow legacy files."""
+    if "coverage" not in meta:
+        return
+    block = meta["coverage"]
+    if not isinstance(block, Mapping):
+        raise StagingError("[coverage-block-invalid] coverage must be a mapping")
+    fingerprint = block.get("coverage_block_fingerprint")
+    expected_fingerprint = coverage_block_fingerprint(block)
+    if not isinstance(fingerprint, str) or not _SHA256.fullmatch(fingerprint):
+        raise StagingError(
+            "[coverage-block-invalid] coverage has no valid block fingerprint"
+        )
+    if fingerprint != expected_fingerprint:
+        raise StagingError(
+            "[coverage-block-stale] coverage facts changed; the coverage-block "
+            f"fingerprint must be {expected_fingerprint}"
+        )
+    source_fingerprint = block.get("source_fingerprint")
+    if not isinstance(source_fingerprint, str) or not _SHA256.fullmatch(
+        source_fingerprint
+    ):
+        raise StagingError(
+            "[coverage-block-invalid] coverage has no valid source fingerprint"
+        )
+    status = block.get("status")
+    if status not in {"matched", "mismatch", "unmeasured", "selection"}:
+        raise StagingError(
+            "[coverage-block-invalid] coverage status must be matched, mismatch, "
+            "unmeasured, or selection"
+        )
+    should_block = status in {"mismatch", "unmeasured"}
+    if block.get("blocking") is not should_block:
+        raise StagingError(
+            "[coverage-block-invalid] coverage blocking state does not match its status"
+        )
+    if not should_block:
+        return
+
+    approval = block.get("approval")
+    if not isinstance(approval, Mapping):
+        raise StagingError(
+            f"[coverage-unresolved] coverage is {status}; repository-owner approval "
+            f"must name source {source_fingerprint} and coverage block {fingerprint}"
+        )
+    allowed = {
+        "authority",
+        "source_fingerprint",
+        "coverage_block_fingerprint",
+        "accepted_dispositions",
+        "accepted_mismatches",
+        "unmeasured",
+        "reason",
+        "approved_at",
+    }
+    if set(approval) != allowed:
+        raise StagingError(
+            "[coverage-approval-invalid] coverage approval fields do not match the "
+            "required owner-approval schema"
+        )
+    if approval.get("authority") != "repository-owner":
+        raise StagingError(
+            "[coverage-approval-invalid] coverage approval authority must be "
+            "repository-owner"
+        )
+    if (
+        approval.get("source_fingerprint") != source_fingerprint
+        or approval.get("coverage_block_fingerprint") != fingerprint
+    ):
+        raise StagingError(
+            "[coverage-approval-stale] coverage approval does not match the source "
+            "and coverage-block fingerprints"
+        )
+    requirements = coverage_acceptance_requirements(block)
+    for key, value in requirements.items():
+        if approval.get(key) != value:
+            raise StagingError(
+                f"[coverage-approval-stale] coverage approval must repeat {key} exactly"
+            )
+    reason = approval.get("reason")
+    approved_at = approval.get("approved_at")
+    if not isinstance(reason, str) or not reason.strip():
+        raise StagingError(
+            "[coverage-approval-invalid] coverage approval needs a non-empty reason"
+        )
+    if not isinstance(approved_at, str):
+        raise StagingError(
+            "[coverage-approval-invalid] coverage approval needs an ISO approval date"
+        )
+    try:
+        from datetime import date
+
+        if date.fromisoformat(approved_at).isoformat() != approved_at:
+            raise ValueError
+    except ValueError as exc:
+        raise StagingError(
+            "[coverage-approval-invalid] coverage approval date must use YYYY-MM-DD"
+        ) from exc
 
 
 def _stringify(value: Any) -> str:

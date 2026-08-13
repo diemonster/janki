@@ -2445,6 +2445,86 @@ def _polish_meanings(config: ProjectConfig, args: argparse.Namespace) -> int:
     return 0
 
 
+def _bind_coverage_oracles(
+    root: Path,
+    prepared: Sequence[Any],
+    oracle_paths: Sequence[Path],
+    mode: str | None,
+) -> tuple[list[str], dict[int, hardening.UnitOracle]]:
+    """Bind approved oracles to exactly one prepared source before any model call."""
+    fingerprints = [
+        item.source_sha256 or extract.source_fingerprint(item.origin_path)
+        for item in prepared
+    ]
+    bindings: dict[int, hardening.UnitOracle] = {}
+    seen_paths: set[Path] = set()
+    seen_ids: set[str] = set()
+    seen_sources: set[str] = set()
+    for path in oracle_paths:
+        candidate = path if path.is_absolute() else root / path
+        lexical = candidate.absolute()
+        if lexical in seen_paths:
+            raise extract.ExtractError(
+                f"Coverage oracle {path} was supplied more than once.",
+                code="extract-oracle-duplicate",
+            )
+        seen_paths.add(lexical)
+        try:
+            oracle = hardening.load_oracle_file(root, path)
+        except hardening.HardeningError as exc:
+            raise extract.ExtractError(
+                str(exc), code="extract-oracle-invalid"
+            ) from exc
+        if not oracle.approved:
+            raise extract.ExtractError(
+                f"Coverage oracle {oracle.relative_path} is a draft. It needs a "
+                "repository-owner approval for content fingerprint "
+                f"{hardening.oracle_content_fingerprint(oracle)}.",
+                code="extract-oracle-unapproved",
+            )
+        if oracle.id in seen_ids or oracle.source_fingerprint in seen_sources:
+            raise extract.ExtractError(
+                f"Coverage oracle {oracle.id} duplicates an oracle ID or source "
+                "binding in this run.",
+                code="extract-oracle-duplicate-binding",
+            )
+        seen_ids.add(oracle.id)
+        seen_sources.add(oracle.source_fingerprint)
+        matches = [
+            index
+            for index, fingerprint in enumerate(fingerprints)
+            if fingerprint == oracle.source_fingerprint
+        ]
+        if len(matches) != 1:
+            detail = "no prepared source" if not matches else f"{len(matches)} sources"
+            raise extract.ExtractError(
+                f"Coverage oracle {oracle.id} binds to {detail}; it must bind to "
+                "exactly one source by SHA-256.",
+                code="extract-oracle-source-binding",
+            )
+        if mode == "table" and oracle.type != "exhaustive":
+            raise extract.ExtractError(
+                f"Coverage oracle {oracle.id} is a prose selection oracle and "
+                "cannot measure table mode.",
+                code="extract-oracle-mode-mismatch",
+            )
+        if mode == "prose" and oracle.type != "selection":
+            raise extract.ExtractError(
+                f"Coverage oracle {oracle.id} is exhaustive and cannot make prose "
+                "selection exhaustive.",
+                code="extract-oracle-mode-mismatch",
+            )
+        index = matches[0]
+        if index in bindings:
+            raise extract.ExtractError(
+                f"More than one coverage oracle binds to "
+                f"{prepared[index].origin_path.name}.",
+                code="extract-oracle-duplicate-binding",
+            )
+        bindings[index] = oracle
+    return fingerprints, bindings
+
+
 def command_extract(args: argparse.Namespace) -> int:
     """Read vocabulary off PDFs and photos into staging files for review.
 
@@ -2481,18 +2561,40 @@ def command_extract(args: argparse.Namespace) -> int:
 
     # Every target resolved before the first API call: a batch that would write
     # two inputs to one file is refused now rather than after paying for both.
-    targets = extract.staging_targets(config.staging_dir, prepared)
+    targets = extract.staging_targets(
+        config.staging_dir, prepared, force=args.force
+    )
+    source_fingerprints, oracle_bindings = _bind_coverage_oracles(
+        config.root,
+        prepared,
+        args.coverage_oracle or (),
+        args.mode,
+    )
 
     written = 0
-    for item, target in zip(prepared, targets, strict=True):
-        candidates = extract.extract_candidates(
+    for index, (item, target) in enumerate(
+        zip(prepared, targets, strict=True)
+    ):
+        result = extract.extract_candidates(
             item,
             model=model,
             style_guide=style_guide,
             mode=args.mode,
             known=skip_list,
         )
+        candidates = result.candidates
         records = extract.build_records(candidates, item, known)
+        oracle = oracle_bindings.get(index)
+        oracle_fingerprint = (
+            hardening.oracle_content_fingerprint(oracle) if oracle is not None else None
+        )
+        coverage = extract.coverage_block(
+            result,
+            source_sha256=source_fingerprints[index],
+            mode=args.mode,
+            oracle=oracle,
+            oracle_fingerprint=oracle_fingerprint,
+        )
         target.parent.mkdir(parents=True, exist_ok=True)
         meta = {
             # The basename, like every other writer of this key. An absolute
@@ -2500,6 +2602,15 @@ def command_extract(args: argparse.Namespace) -> int:
             "source_file": item.origin_path.name,
             "extracted_at": date.today().isoformat(),
             "model": model,
+            "prompt_provenance": extract.prompt_provenance(
+                item,
+                model=model,
+                style_guide=style_guide,
+                mode=args.mode,
+                known=skip_list,
+                source_sha256=source_fingerprints[index],
+            ),
+            "coverage": coverage,
         }
         # Held back into the file, not just onto the terminal: the staging file
         # is what a reviewer reads later, and a count that lives only in
@@ -2513,9 +2624,10 @@ def command_extract(args: argparse.Namespace) -> int:
             1 for record in records if "already_known" in record.source.raw_fields
         )
         note = f", {len(held)} unusable" if held else ""
+        coverage_note = f", coverage {coverage['status']}"
         print(
             f"{item.origin_path.name}: {len(records)} candidate(s) "
-            f"({already} already known{note}) -> {target}"
+            f"({already} already known{note}{coverage_note}) -> {target}"
         )
 
     if not written:
@@ -2753,6 +2865,10 @@ def command_promote(args: argparse.Namespace) -> int:
         )
 
     records, meta = read_staging(path)
+    # Coverage is an owner-review gate. Check it before a reading client is
+    # created and before records, ledger, archive, or staging content can move.
+    # A file written before M7.4 has no block and remains valid.
+    promote.check_coverage(meta, config.root)
     if not records:
         print(f"{path} holds no records; nothing to promote.")
         return 0
@@ -4679,6 +4795,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--model",
         metavar="ID",
         help="Override the configured extract model for this run.",
+    )
+    extract_parser.add_argument(
+        "--coverage-oracle",
+        action="append",
+        type=_path,
+        metavar="FILE",
+        help=(
+            "Bind an approved human coverage oracle to one input by SHA-256. "
+            "Repeat for a multi-input run."
+        ),
     )
     extract_parser.add_argument(
         "--force",

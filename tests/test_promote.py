@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 import yaml
 
-from japanese_anki import cli, enrich, promote
+from japanese_anki import cli, enrich, extract, promote
 from japanese_anki.jpdb import JpdbClient
 from japanese_anki.models import SourceReference, VocabularyRecord
 from japanese_anki.promote import (
@@ -26,7 +26,13 @@ from japanese_anki.promote import (
     check_readings,
     remint,
 )
-from japanese_anki.staging import annotate, read_staging, write_staging
+from japanese_anki.staging import (
+    annotate,
+    coverage_acceptance_requirements,
+    coverage_block_fingerprint,
+    read_staging,
+    write_staging,
+)
 
 # One vocabulary row, in the order /parse answers its default fields in.
 HANASU = [1562350, 4280520068, "話す", "はなす", ["LHLL"], 200, ["vt", "v5s"]]
@@ -531,6 +537,116 @@ def test_the_archive_records_where_the_rows_came_from(
     )
     assert archived["source_file"] == "lesson.pdf"
     assert "Promoted 1 record(s)" in archived["review_notes"]
+
+
+# --- the extraction coverage gate ------------------------------------------
+
+
+def unmeasured_coverage() -> dict[str, Any]:
+    result = extract.ExtractionResult(candidates=(), source_units=(), model_reported_unit_count=0)
+    return extract.coverage_block(
+        result, source_sha256="a" * 64, mode="table"
+    )
+
+
+def approve_coverage(block: dict[str, Any]) -> None:
+    requirements = coverage_acceptance_requirements(block)
+    block["approval"] = {
+        "authority": "repository-owner",
+        "source_fingerprint": block["source_fingerprint"],
+        "coverage_block_fingerprint": block["coverage_block_fingerprint"],
+        **requirements,
+        "reason": "I checked every row against the source page.",
+        "approved_at": "2026-08-12",
+    }
+
+
+def test_unresolved_coverage_blocks_promotion_before_any_mutation(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = project(tmp_path, [])
+    staged = root / "staging" / "blocked.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    coverage = unmeasured_coverage()
+    write_staging(staged, [record()], {"source_file": "lesson.pdf", "coverage": coverage})
+    before = staged.read_bytes()
+
+    code = cli.main(
+        ["--root", str(root), "promote", str(staged), "--skip-reading-check"]
+    )
+
+    assert code == 1
+    assert staged.read_bytes() == before
+    assert not (root / "ledger.json").exists()
+    assert not (root / "staging" / "done").exists()
+    assert json.loads((root / "vocabulary.json").read_text(encoding="utf-8")) == []
+    assert "coverage-unresolved" in capsys.readouterr().err
+
+
+def test_exact_reasoned_coverage_acceptance_survives_in_the_archive(
+    tmp_path: Path,
+) -> None:
+    root = project(tmp_path, [])
+    staged = root / "staging" / "accepted.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    coverage = unmeasured_coverage()
+    approve_coverage(coverage)
+    write_staging(staged, [record()], {"source_file": "lesson.pdf", "coverage": coverage})
+
+    code = cli.main(
+        ["--root", str(root), "promote", str(staged), "--skip-reading-check"]
+    )
+
+    assert code == 0
+    _records, meta = read_staging(root / "staging" / "done" / "accepted.yaml")
+    assert meta["coverage"]["approval"]["reason"] == (
+        "I checked every row against the source page."
+    )
+    assert meta["coverage"]["coverage_block_fingerprint"] == coverage[
+        "coverage_block_fingerprint"
+    ]
+
+
+def test_a_coverage_approval_for_an_old_block_is_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = project(tmp_path, [])
+    staged = root / "staging" / "stale.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    coverage = unmeasured_coverage()
+    approve_coverage(coverage)
+    coverage["approval"]["source_fingerprint"] = "b" * 64
+    write_staging(staged, [record()], {"source_file": "lesson.pdf", "coverage": coverage})
+
+    code = cli.main(
+        ["--root", str(root), "promote", str(staged), "--skip-reading-check"]
+    )
+
+    assert code == 1
+    assert "coverage-approval-stale" in capsys.readouterr().err
+    assert json.loads((root / "vocabulary.json").read_text(encoding="utf-8")) == []
+
+
+def test_a_bare_matched_label_cannot_bypass_the_oracle(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = project(tmp_path, [])
+    staged = root / "staging" / "fake-matched.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    coverage = unmeasured_coverage()
+    coverage["status"] = "matched"
+    coverage["blocking"] = False
+    # This simulates a hand edit, including a correctly recomputed block hash.
+    coverage["coverage_block_fingerprint"] = coverage_block_fingerprint(coverage)
+    write_staging(staged, [record()], {"source_file": "lesson.pdf", "coverage": coverage})
+
+    code = cli.main(
+        ["--root", str(root), "promote", str(staged), "--skip-reading-check"]
+    )
+
+    assert code == 1
+    assert "coverage-oracle-missing" in capsys.readouterr().err
+    assert json.loads((root / "vocabulary.json").read_text(encoding="utf-8")) == []
 
 
 # --- what the file says after a partial promote ------------------------------
