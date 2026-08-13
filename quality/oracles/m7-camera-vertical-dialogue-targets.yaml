@@ -38,3 +38,17 @@ selection_rubric: >-
   the named panel region to find each occurrence. Exclude sound effects,
   character-title lettering, names, basic function words, and all words outside
   the target list. Return one candidate per identity when a word repeats.
+approval:
+  authority: repository-owner
+  oracle_id: m7-camera-vertical-dialogue-targets
+  source_fingerprint: cb0c156163da379db2b4f02da5f66771e973a44c9e716827a3de1d703936b7ef
+  oracle_type: selection
+  oracle_content_fingerprint: 70b1172f545c1e372c179e1b885b0dd4ecf0b354186e9388ee73d3aa0751a003
+  selection_rubric: >-
+    Select exactly the 14 intermediate content words in targets from the
+    vertical dialogue and narration. Preserve the printed spelling and ruby
+    reading. Use the named panel region to find each occurrence. Exclude sound
+    effects, character-title lettering, names, basic function words, and all
+    words outside the target list. Return one candidate per identity when a
+    word repeats.
+  approved_at: 2026-08-13

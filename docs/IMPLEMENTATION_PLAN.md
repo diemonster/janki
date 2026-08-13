@@ -2866,10 +2866,10 @@ additional and may point at the same minimized evidence.
 
 ### [ ] M7.6B Pilot pair — scans and camera captures
 
-*Preparation 2026-08-13: inventoried an owner-provided phone photo and added a
-draft 14-target camera oracle. No model call or owner approval has occurred.
-The distinct real scan and the ambiguous/unreadable-unit evidence are still
-open.*
+*Preparation 2026-08-13: inventoried an owner-provided phone photo and added an
+approved 14-target camera oracle. The owner also approved the exact private
+Anthropic evaluation scope. No model call has occurred. The distinct real scan
+and the ambiguous/unreadable-unit evidence are still open.*
 
 Depends on: M7.4, M7.5
 Files: two new immutable source copies placed under `data/inbox/` by the input
@@ -2892,10 +2892,11 @@ content and declare whether the pixels may be committed.
 ### [ ] M7.6C Pilot pair — adversarial visual language
 
 *Preparation 2026-08-13: inventoried distinct printed-ruby and bilingual-layout
-sources. Added draft oracles for 34 exhaustive ruby rows and 19 selected
-bilingual worksheet targets. The worksheet keeps `明日` unbound to a reading
-so the required owner identity decision can occur in staging. No model call or
-owner approval has occurred.*
+sources. Added approved oracles for 34 exhaustive ruby rows and 19 selected
+bilingual worksheet targets. The owner also approved both exact private
+Anthropic evaluation scopes. The worksheet keeps `明日` unbound to a reading so
+the required owner identity decision can occur in staging. No model call has
+occurred.*
 
 Depends on: M7.4, M7.5
 Files: two new immutable source copies placed under `data/inbox/` by the input

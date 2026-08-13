@@ -174,3 +174,10 @@ units:
     ordinal: 2
     context_fingerprint: eb5f70d772b55751bc87c8ed9066717785f9a42d6acdfa1c4d198ac6a67cd23a
     disposition: candidate
+approval:
+  authority: repository-owner
+  oracle_id: m7-printed-ruby-kanji-units
+  source_fingerprint: 4c8d08e2d84a8557063a51383714e13546a60b5527cbf9476c772e888a8df932
+  oracle_type: exhaustive
+  oracle_content_fingerprint: b29bfcbfd3ea2f1af576d1bd27546c3e128f39e71e17cf9b5a55fd6cd4df2d0c
+  approved_at: 2026-08-13

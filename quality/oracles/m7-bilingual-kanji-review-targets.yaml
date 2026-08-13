@@ -49,3 +49,18 @@ selection_rubric: >-
   occurrence. Exclude instructions, blank lines, English glosses, emoji,
   punctuation, hotel and transport names, prices, and all entries outside the
   target list. The empty 明日 reading must remain held for owner review.
+approval:
+  authority: repository-owner
+  oracle_id: m7-bilingual-kanji-review-targets
+  source_fingerprint: d75967df4e7becbcdde3ba6abac5f685df7b760d8a7f234a38d7667d102473b0
+  oracle_type: selection
+  oracle_content_fingerprint: 36a483171db7105462ddbe3c03823b0448c988ee6aed7c9f92224a17f1ea76d2
+  selection_rubric: >-
+    Select exactly the 19 target entries from the Japanese answer clues and
+    hotel guide. Preserve each target identity, including the empty reading for
+    明日, and use the locator to quote its source context. Use only the first
+    listed あめ occurrence. Exclude instructions, blank lines, English glosses,
+    emoji, punctuation, hotel and transport names, prices, and all entries
+    outside the target list. The empty 明日 reading must remain held for owner
+    review.
+  approved_at: 2026-08-13
