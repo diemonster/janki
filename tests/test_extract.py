@@ -425,6 +425,17 @@ def test_auto_mode_reports_table_and_prose_coverage_separately() -> None:
     assert block["prose_coverage"] == "unmeasured"
 
 
+def test_prose_coverage_is_unmeasured_even_when_no_candidate_is_selected() -> None:
+    block = extract.coverage_block(
+        table_result(), source_sha256="a" * 64, mode="prose"
+    )
+
+    assert block["status"] == "selection"
+    assert block["prose_candidate_count"] == 0
+    assert block["prose_coverage"] == "unmeasured"
+    assert block["blocking"] is False
+
+
 # --- candidates to records ---------------------------------------------------
 
 

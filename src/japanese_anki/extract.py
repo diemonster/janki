@@ -663,6 +663,11 @@ def coverage_block(
         )
         for name in SOURCE_UNIT_DISPOSITIONS
     }
+    prose_is_present = (
+        mode == "prose"
+        or oracle_type == "selection"
+        or bool(result.prose_candidates)
+    )
     block: dict[str, Any] = {
         "version": 1,
         "status": status,
@@ -674,7 +679,7 @@ def coverage_block(
         "model_reported_unit_count": result.model_reported_unit_count,
         "observed_unit_count": len(actual),
         "prose_candidate_count": len(result.prose_candidates),
-        "prose_coverage": "unmeasured" if result.prose_candidates else "not-applicable",
+        "prose_coverage": "unmeasured" if prose_is_present else "not-applicable",
         "source_units": [unit.staging_value() for unit in actual],
         "missing_units": sorted(missing, key=_unit_sort),
         "unexpected_units": sorted(unexpected, key=_unit_sort),

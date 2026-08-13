@@ -238,9 +238,9 @@ def _validate_coverage_block(block: Mapping[str, Any]) -> None:
         raise StagingError(
             "[coverage-block-invalid] prose_coverage must be unmeasured or not-applicable"
         )
-    if (block.get("prose_candidate_count") > 0) is not (
-        block.get("prose_coverage") == "unmeasured"
-    ):
+    if block.get("prose_candidate_count") > 0 and block.get(
+        "prose_coverage"
+    ) != "unmeasured":
         raise StagingError(
             "[coverage-block-invalid] prose coverage does not match its candidate count"
         )
