@@ -127,6 +127,16 @@ _COVERAGE_REQUIRED = {
 }
 _UNIT_DISPOSITIONS = {"candidate", "duplicate", "non-vocabulary", "unreadable"}
 _SECTION = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
+_PROMPT_PROVENANCE_FIELDS = {
+    "source_sha256",
+    "mode",
+    "provider",
+    "model",
+    "response_schema_version",
+    "system_prompt_fingerprint",
+    "style_guide_fingerprint",
+    "user_prompt_fingerprint",
+}
 
 
 def coverage_block_fingerprint(block: Mapping[str, Any]) -> str:
@@ -356,6 +366,48 @@ def _validate_coverage_block(block: Mapping[str, Any]) -> None:
             )
 
 
+def _validate_prompt_provenance(
+    meta: Mapping[str, Any], block: Mapping[str, Any]
+) -> None:
+    provenance = meta.get("prompt_provenance")
+    if not isinstance(provenance, Mapping) or set(provenance) != (
+        _PROMPT_PROVENANCE_FIELDS
+    ):
+        raise StagingError(
+            "[prompt-provenance-invalid] an M7.4 coverage block needs the exact "
+            "prompt provenance schema"
+        )
+    if provenance.get("source_sha256") != block.get("source_fingerprint"):
+        raise StagingError(
+            "[prompt-provenance-stale] prompt provenance and coverage name different sources"
+        )
+    if provenance.get("mode") not in {"auto", "table", "prose"}:
+        raise StagingError(
+            "[prompt-provenance-invalid] extraction mode must be auto, table, or prose"
+        )
+    for name in ("provider", "model"):
+        value = provenance.get(name)
+        if not isinstance(value, str) or not value.strip():
+            raise StagingError(
+                f"[prompt-provenance-invalid] {name} must be non-empty text"
+            )
+    version = provenance.get("response_schema_version")
+    if isinstance(version, bool) or not isinstance(version, int) or version < 1:
+        raise StagingError(
+            "[prompt-provenance-invalid] response schema version must be a positive integer"
+        )
+    for name in (
+        "system_prompt_fingerprint",
+        "style_guide_fingerprint",
+        "user_prompt_fingerprint",
+    ):
+        value = provenance.get(name)
+        if not isinstance(value, str) or not _SHA256.fullmatch(value):
+            raise StagingError(
+                f"[prompt-provenance-invalid] {name} must be SHA-256"
+            )
+
+
 def require_resolved_coverage(meta: Mapping[str, Any]) -> None:
     """Refuse an unresolved M7.4 coverage block; allow legacy files."""
     if "coverage" not in meta:
@@ -364,6 +416,7 @@ def require_resolved_coverage(meta: Mapping[str, Any]) -> None:
     if not isinstance(block, Mapping):
         raise StagingError("[coverage-block-invalid] coverage must be a mapping")
     _validate_coverage_block(block)
+    _validate_prompt_provenance(meta, block)
     fingerprint = block.get("coverage_block_fingerprint")
     expected_fingerprint = coverage_block_fingerprint(block)
     if not isinstance(fingerprint, str) or not _SHA256.fullmatch(fingerprint):

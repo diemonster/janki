@@ -561,6 +561,23 @@ def approve_coverage(block: dict[str, Any]) -> None:
     }
 
 
+def extraction_meta(coverage: dict[str, Any], *, mode: str = "table") -> dict[str, Any]:
+    return {
+        "source_file": "lesson.pdf",
+        "coverage": coverage,
+        "prompt_provenance": {
+            "source_sha256": coverage["source_fingerprint"],
+            "mode": mode,
+            "provider": "anthropic",
+            "model": "test-model",
+            "response_schema_version": 2,
+            "system_prompt_fingerprint": "b" * 64,
+            "style_guide_fingerprint": "c" * 64,
+            "user_prompt_fingerprint": "d" * 64,
+        },
+    }
+
+
 def test_unresolved_coverage_blocks_promotion_before_any_mutation(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -568,7 +585,7 @@ def test_unresolved_coverage_blocks_promotion_before_any_mutation(
     staged = root / "staging" / "blocked.yaml"
     staged.parent.mkdir(parents=True, exist_ok=True)
     coverage = unmeasured_coverage()
-    write_staging(staged, [record()], {"source_file": "lesson.pdf", "coverage": coverage})
+    write_staging(staged, [record()], extraction_meta(coverage))
     before = staged.read_bytes()
 
     code = cli.main(
@@ -591,7 +608,7 @@ def test_exact_reasoned_coverage_acceptance_survives_in_the_archive(
     staged.parent.mkdir(parents=True, exist_ok=True)
     coverage = unmeasured_coverage()
     approve_coverage(coverage)
-    write_staging(staged, [record()], {"source_file": "lesson.pdf", "coverage": coverage})
+    write_staging(staged, [record()], extraction_meta(coverage))
 
     code = cli.main(
         ["--root", str(root), "promote", str(staged), "--skip-reading-check"]
@@ -616,7 +633,7 @@ def test_a_coverage_approval_for_an_old_block_is_refused(
     coverage = unmeasured_coverage()
     approve_coverage(coverage)
     coverage["approval"]["source_fingerprint"] = "b" * 64
-    write_staging(staged, [record()], {"source_file": "lesson.pdf", "coverage": coverage})
+    write_staging(staged, [record()], extraction_meta(coverage))
 
     code = cli.main(
         ["--root", str(root), "promote", str(staged), "--skip-reading-check"]
@@ -641,7 +658,7 @@ def test_a_bare_matched_label_cannot_bypass_the_oracle(
     coverage["oracle_content_fingerprint"] = "b" * 64
     # This simulates a hand edit, including a correctly recomputed block hash.
     coverage["coverage_block_fingerprint"] = coverage_block_fingerprint(coverage)
-    write_staging(staged, [record()], {"source_file": "lesson.pdf", "coverage": coverage})
+    write_staging(staged, [record()], extraction_meta(coverage))
 
     code = cli.main(
         ["--root", str(root), "promote", str(staged), "--skip-reading-check"]
@@ -670,7 +687,7 @@ def test_an_incomplete_or_mistyped_coverage_block_is_refused(
     coverage = unmeasured_coverage()
     damage(coverage)
     coverage["coverage_block_fingerprint"] = coverage_block_fingerprint(coverage)
-    write_staging(staged, [record()], {"source_file": "lesson.pdf", "coverage": coverage})
+    write_staging(staged, [record()], extraction_meta(coverage))
 
     code = cli.main(
         ["--root", str(root), "promote", str(staged), "--skip-reading-check"]
@@ -679,6 +696,53 @@ def test_an_incomplete_or_mistyped_coverage_block_is_refused(
     assert code == 1
     assert "coverage-block-invalid" in capsys.readouterr().err
     assert json.loads((root / "vocabulary.json").read_text(encoding="utf-8")) == []
+
+
+def test_owner_approval_cannot_make_inconsistent_coverage_facts_valid(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = project(tmp_path, [])
+    staged = root / "staging" / "inconsistent.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    coverage = unmeasured_coverage()
+    coverage["candidate_units"] = [
+        {
+            "page": 1,
+            "section": "vocabulary",
+            "ordinal": 1,
+            "context_fingerprint": "e" * 64,
+            "disposition": "candidate",
+        }
+    ]
+    coverage["coverage_block_fingerprint"] = coverage_block_fingerprint(coverage)
+    approve_coverage(coverage)
+    write_staging(staged, [record()], extraction_meta(coverage))
+
+    code = cli.main(
+        ["--root", str(root), "promote", str(staged), "--skip-reading-check"]
+    )
+
+    assert code == 1
+    assert "coverage-facts-stale" in capsys.readouterr().err
+    assert json.loads((root / "vocabulary.json").read_text(encoding="utf-8")) == []
+
+
+def test_an_m7_4_block_without_prompt_provenance_is_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = project(tmp_path, [])
+    staged = root / "staging" / "no-provenance.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    coverage = unmeasured_coverage()
+    approve_coverage(coverage)
+    write_staging(staged, [record()], {"source_file": "lesson.pdf", "coverage": coverage})
+
+    code = cli.main(
+        ["--root", str(root), "promote", str(staged), "--skip-reading-check"]
+    )
+
+    assert code == 1
+    assert "prompt-provenance-invalid" in capsys.readouterr().err
 
 
 # --- what the file says after a partial promote ------------------------------

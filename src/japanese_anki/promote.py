@@ -87,6 +87,7 @@ def check_coverage(meta: dict[str, Any], root: Path | None = None) -> None:
             "[coverage-oracle-missing] exhaustive coverage has no oracle ID"
         )
     if not oracle_id:
+        _verify_coverage_facts(meta, block, None, None)
         return
     if root is None:
         raise PromoteError(
@@ -131,8 +132,8 @@ def check_coverage(meta: dict[str, Any], root: Path | None = None) -> None:
 def _verify_coverage_facts(
     meta: dict[str, Any],
     block: dict[str, Any],
-    oracle: hardening.UnitOracle,
-    oracle_fingerprint: str,
+    oracle: hardening.UnitOracle | None,
+    oracle_fingerprint: str | None,
 ) -> None:
     raw_units = block.get("source_units")
     if not isinstance(raw_units, list):
