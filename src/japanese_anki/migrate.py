@@ -43,6 +43,7 @@ from typing import Any
 
 import yaml
 
+from japanese_anki import status
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import resolve_deck_records
@@ -330,10 +331,6 @@ def _repo_path(path: Path, root: Path) -> str:
         return str(path)
 
 
-def _deck_files(config: ProjectConfig) -> list[Path]:
-    return sorted([*config.deck_dir.glob("*.yaml"), *config.deck_dir.glob("*.yml")])
-
-
 def _inline_ids(raw: dict[str, Any]) -> list[str]:
     """The record id of every inline note, in file order, without duplicates.
 
@@ -432,7 +429,7 @@ def _guard_other_decks(
     """
     guards: list[DeckGuard] = []
     warnings: list[str] = []
-    for other in _deck_files(config):
+    for other in status.deck_files(config):
         if other.resolve() == deck_path:
             continue
         try:

@@ -11,7 +11,7 @@ fixtures:
   - path: input.json
     fingerprint: ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356
   - path: oracle.json
-    fingerprint: 4ea531d1b30d4910cc7fa5d79500cf2cfa02411ebd4141768787826110224464
+    fingerprint: 3cfef0c4edb7269df77b546b29064e6cbb7e32897c25213a5d8d7f370ba466bb
 runner_input: input.json
 oracle: oracle.json
 finding_id: anki-deck-membership-overlap

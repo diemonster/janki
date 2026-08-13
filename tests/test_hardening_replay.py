@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -176,6 +177,59 @@ def test_replay_json_rejects_duplicate_keys_and_non_finite_numbers(
         hardening_replay._json_bytes(content, "case input")
 
 
+def test_deck_membership_accepts_one_nonempty_word_deck(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "project"
+    deck_path = root / "data/decks/only.yaml"
+    deck_path.parent.mkdir(parents=True)
+    deck_path.touch()
+    config = SimpleNamespace(root=root, deck_dir=deck_path.parent)
+    monkeypatch.setattr(
+        hardening_replay.ProjectConfig,
+        "load",
+        lambda _root: config,
+    )
+    monkeypatch.setattr(
+        hardening_replay.status,
+        "deck_files",
+        lambda _config: [deck_path],
+    )
+    monkeypatch.setattr(hardening_replay, "deck_kind", lambda _path: "vocabulary")
+    monkeypatch.setattr(
+        hardening_replay,
+        "resolve_deck_records",
+        lambda _path: ({}, [SimpleNamespace(id="word:一:いち")]),
+    )
+
+    assert hardening_replay.RUNNERS["deck-membership"]({}, root) == {
+        "decks": ["data/decks/only.yaml"],
+        "empty_decks": [],
+        "overlaps": {},
+    }
+
+
+def test_deck_membership_rejects_an_external_deck_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    outside = tmp_path / "shared-decks"
+    outside.mkdir()
+    config = SimpleNamespace(root=root, deck_dir=outside)
+    monkeypatch.setattr(
+        hardening_replay.ProjectConfig,
+        "load",
+        lambda _root: config,
+    )
+
+    with pytest.raises(
+        hardening.HardeningError,
+        match="configured deck directory must be inside the repository",
+    ):
+        hardening_replay.RUNNERS["deck-membership"]({}, root)
+
+
 def test_every_registered_runner_calls_its_production_boundary() -> None:
     assert set(hardening_replay.RUNNERS) == set(hardening.RUNNER_BOUNDARIES)
 
@@ -253,6 +307,13 @@ def test_every_registered_runner_calls_its_production_boundary() -> None:
 
     assert candidate["record_ids"] == []
     assert deck_membership == {
+        "decks": [
+            "data/decks/m7-camera-vertical-dialogue.yaml",
+            "data/decks/m7-mixed-tsumori.yaml",
+            "data/decks/m7-native-teform-table.yaml",
+            "data/decks/verbs.yaml",
+            "data/decks/yotsuba.yaml",
+        ],
         "empty_decks": [],
         "overlaps": {},
     }

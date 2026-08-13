@@ -1140,19 +1140,33 @@ def _deck_membership(data: dict[str, Any], root: Path) -> Any:
     """Report empty word decks and stable IDs claimed by more than one."""
     _only(data, set(), "deck-membership")
     config = ProjectConfig.load(root)
+    project_root = config.root.resolve()
+    deck_root = config.deck_dir.resolve()
+    if not deck_root.is_relative_to(project_root):
+        raise hardening.HardeningError(
+            "deck-membership configured deck directory must be inside the "
+            f"repository: {config.deck_dir}"
+        )
     deck_paths = [
         path
         for path in status.deck_files(config)
         if deck_kind(path) in {"", "vocabulary"}
     ]
-    if len(deck_paths) < 2:
+    if not deck_paths:
         raise hardening.HardeningError(
-            "deck-membership needs at least two discovered vocabulary decks"
+            "deck-membership found no vocabulary decks under the configured "
+            f"deck directory: {config.deck_dir}"
         )
 
     memberships: dict[str, set[str]] = {}
     for path in deck_paths:
-        value = path.relative_to(root).as_posix()
+        resolved_path = path.resolve()
+        if not resolved_path.is_relative_to(project_root):
+            raise hardening.HardeningError(
+                "deck-membership discovered a deck outside the repository "
+                f"through {config.deck_dir}: {path}"
+            )
+        value = resolved_path.relative_to(project_root).as_posix()
         _, records = resolve_deck_records(path)
         memberships[value] = {record.id for record in records}
 
@@ -1164,6 +1178,7 @@ def _deck_membership(data: dict[str, Any], root: Path) -> Any:
             if shared:
                 overlaps[f"{left} <> {right}"] = shared
     return {
+        "decks": sorted(memberships),
         "empty_decks": sorted(
             name for name, record_ids in memberships.items() if not record_ids
         ),

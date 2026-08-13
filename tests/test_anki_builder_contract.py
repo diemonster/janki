@@ -86,12 +86,27 @@ def test_word_decks_are_nonempty_and_do_not_share_stable_ids() -> None:
         for path in status.deck_files(config)
         if anki.deck_kind(path) in {"", "vocabulary"}
     ]
+    assert len(paths) >= 2, [path.as_posix() for path in paths]
     memberships: dict[str, set[str]] = {}
     for path in paths:
-        name = path.name
+        name = path.relative_to(config.root).as_posix()
         _, records = anki.resolve_deck_records(path)
         memberships[name] = {record.id for record in records}
         assert memberships[name], name
 
     for left, right in combinations(memberships, 2):
         assert memberships[left].isdisjoint(memberships[right]), f"{left} <> {right}"
+
+
+def test_deck_files_discovers_nested_yaml(tmp_path: Path) -> None:
+    deck_dir = tmp_path / "decks"
+    nested = deck_dir / "pilots" / "camera.yaml"
+    nested.parent.mkdir(parents=True)
+    nested.write_text("name: Camera\n", encoding="utf-8")
+    top_level = deck_dir / "verbs.yml"
+    top_level.write_text("name: Verbs\n", encoding="utf-8")
+    (deck_dir / "README.md").write_text("not a deck\n", encoding="utf-8")
+
+    config = SimpleNamespace(deck_dir=deck_dir)
+
+    assert status.deck_files(config) == [nested, top_level]

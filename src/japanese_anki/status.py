@@ -112,7 +112,12 @@ class RecordUniverse:
 
 
 def deck_files(config: ProjectConfig) -> list[Path]:
-    return sorted([*config.deck_dir.glob("*.yaml"), *config.deck_dir.glob("*.yml")])
+    """Return every deck definition under the configured deck tree."""
+    return sorted(
+        path
+        for pattern in ("*.yaml", "*.yml")
+        for path in config.deck_dir.rglob(pattern)
+    )
 
 
 def collect_records(config: ProjectConfig) -> RecordUniverse:

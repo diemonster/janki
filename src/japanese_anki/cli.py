@@ -3323,9 +3323,7 @@ def command_validate(args: argparse.Namespace) -> int:
     if args.path:
         paths = [args.path.resolve()]
     else:
-        paths = sorted(
-            [*config.deck_dir.glob("*.yaml"), *config.deck_dir.glob("*.yml")]
-        )
+        paths = status.deck_files(config)
         if not paths:
             print(f"No deck files found under {config.deck_dir}", file=sys.stderr)
             return 1
@@ -3654,9 +3652,7 @@ def command_build(args: argparse.Namespace) -> int:
                 "--output names one file; it cannot be combined with --all. "
                 "Each deck's own 'output:' key names its file."
             )
-        deck_paths = sorted(
-            [*config.deck_dir.glob("*.yaml"), *config.deck_dir.glob("*.yml")]
-        )
+        deck_paths = status.deck_files(config)
         if not deck_paths:
             raise AnkiBuildError(f"No deck files found under {config.deck_dir}")
         built = False
@@ -3809,7 +3805,7 @@ def _collection_lines(config: ProjectConfig) -> list[str]:
         return [f"warning: {note}"] if note else []
     decks = []
     lines = []
-    for deck_path in sorted([*config.deck_dir.glob("*.yaml"), *config.deck_dir.glob("*.yml")]):
+    for deck_path in status.deck_files(config):
         try:
             model_id, model_name, fields = deck_notetype(deck_path, config)
         except JankiError as exc:
@@ -4497,9 +4493,7 @@ def _shipping_records(config: ProjectConfig) -> list[VocabularyRecord]:
     shipping *differently* is two, and both are reviewed: the store is keyed by
     content, so each deck's version is answered on its own terms.
     """
-    deck_paths = sorted(
-        [*config.deck_dir.glob("*.yaml"), *config.deck_dir.glob("*.yml")]
-    )
+    deck_paths = status.deck_files(config)
     if not deck_paths:
         # No decks yet — review the collection, so a project can be checked
         # before its first deck file exists.
