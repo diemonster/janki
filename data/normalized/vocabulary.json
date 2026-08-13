@@ -1284,11 +1284,11 @@
         "register": "polite"
       },
       {
-        "japanese": "ごめん、今からすぐ行くんだ。",
+        "japanese": "ごめん、今から すぐ行くんだ。",
         "furigana": "ごめん、 今[いま]からすぐ 行[い]くんだ。",
         "romaji": "gomen, imakarasuguikunda.",
         "english": "Sorry — I'm heading over right now.",
-        "audio": "",
+        "audio": "audio/janki-e1f205c2fe96.mp3",
         "register": "casual"
       }
     ],
