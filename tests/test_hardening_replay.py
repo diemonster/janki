@@ -184,8 +184,8 @@ def test_every_registered_runner_calls_its_production_boundary() -> None:
     )
     deck_membership = hardening_replay.RUNNERS["deck-membership"](
         {
-            "primary_deck": "data/decks/verbs.yaml",
-            "separate_decks": [
+            "decks": [
+                "data/decks/verbs.yaml",
                 "data/decks/m7-camera-vertical-dialogue.yaml"
             ],
         },
@@ -258,7 +258,13 @@ def test_every_registered_runner_calls_its_production_boundary() -> None:
 
     assert candidate["record_ids"] == []
     assert deck_membership == {
-        "overlaps": {"data/decks/m7-camera-vertical-dialogue.yaml": []}
+        "membership_counts": {
+            "data/decks/verbs.yaml": 20,
+            "data/decks/m7-camera-vertical-dialogue.yaml": 14,
+        },
+        "overlaps": {
+            "data/decks/verbs.yaml <> data/decks/m7-camera-vertical-dialogue.yaml": []
+        },
     }
     assert input_provenance == {
         "exit_code": 0,

@@ -9,9 +9,9 @@ redistributable: true
 fixture_basis: agent-created-synthetic
 fixtures:
   - path: input.json
-    fingerprint: 1265d8cf038291cfe6f503b7b6902cca4df65ad3d819a13aa6790f8dfdab3d57
+    fingerprint: 1fc715368c254ba839602c87a38cecb508c5458b2d269b3e41b4a04753f135f8
   - path: oracle.json
-    fingerprint: 9e777fd167d21037e274af3ce136c62f0aaab660b526c3a630d780955fee4b8e
+    fingerprint: ab082e9a74abd036cb65890a621b0dd4d7c725be533854234b83a475f29d9d20
 runner_input: input.json
 oracle: oracle.json
 finding_id: anki-deck-membership-overlap

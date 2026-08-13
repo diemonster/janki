@@ -1,7 +1,21 @@
 {
+  "membership_counts": {
+    "data/decks/verbs.yaml": 20,
+    "data/decks/yotsuba.yaml": 38,
+    "data/decks/m7-camera-vertical-dialogue.yaml": 14,
+    "data/decks/m7-mixed-tsumori.yaml": 19,
+    "data/decks/m7-native-teform-table.yaml": 6
+  },
   "overlaps": {
-    "data/decks/m7-camera-vertical-dialogue.yaml": [],
-    "data/decks/m7-mixed-tsumori.yaml": [],
-    "data/decks/m7-native-teform-table.yaml": []
+    "data/decks/verbs.yaml <> data/decks/yotsuba.yaml": [],
+    "data/decks/verbs.yaml <> data/decks/m7-camera-vertical-dialogue.yaml": [],
+    "data/decks/verbs.yaml <> data/decks/m7-mixed-tsumori.yaml": [],
+    "data/decks/verbs.yaml <> data/decks/m7-native-teform-table.yaml": [],
+    "data/decks/yotsuba.yaml <> data/decks/m7-camera-vertical-dialogue.yaml": [],
+    "data/decks/yotsuba.yaml <> data/decks/m7-mixed-tsumori.yaml": [],
+    "data/decks/yotsuba.yaml <> data/decks/m7-native-teform-table.yaml": [],
+    "data/decks/m7-camera-vertical-dialogue.yaml <> data/decks/m7-mixed-tsumori.yaml": [],
+    "data/decks/m7-camera-vertical-dialogue.yaml <> data/decks/m7-native-teform-table.yaml": [],
+    "data/decks/m7-mixed-tsumori.yaml <> data/decks/m7-native-teform-table.yaml": []
   }
 }

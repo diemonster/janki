@@ -57,9 +57,10 @@ notes: >-
   The final extraction returned all 20 approved target identities and no extra
   identity. Promotion temporarily held two valid する compounds, then promoted
   them after the reading-check fix. Nineteen records were new; とる merged its
-  pilot tag into an existing curated record. Six systemic defects were fixed
-  with gating cases. Final review passed after the pitch recheck removed false
-  blocking findings. One direct gloss was corrected after review. Audio
-  produced 17 word clips and 20 example clips.
+  pilot tag into an existing curated record. The native te-form pilot deck owns
+  the shared stable ID, so this deck excludes とる and exports 19 records. Six
+  systemic defects were fixed with gating cases. Final review passed after the
+  pitch recheck removed false blocking findings. One direct gloss was corrected
+  after review. Audio produced 17 word clips and 20 example clips.
   Three word clips remain absent because jpdb supplied pitch patterns for a
   different reading length; the safe audio gate did not guess.

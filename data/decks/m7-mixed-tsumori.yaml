@@ -1,7 +1,7 @@
 deck:
   name: "Brandon Japanese::Hardening Pilots::Mixed Tsumori Plans"
   deck_id: 2059400117
-  description: "Twenty reviewed targets from the M7.6A mixed-layout PDF pilot."
+  description: "Nineteen owned records from twenty reviewed M7.6A targets; とる remains in the native te-form pilot deck."
   output: "m7-mixed-tsumori.apkg"
   cards:
     recognition: true
@@ -9,3 +9,4 @@ deck:
     reading: false
   source: ../normalized/vocabulary.json
   include_tags: [m7-mixed-tsumori]
+  exclude_ids: ["word:とる:とる"]

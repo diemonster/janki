@@ -1,6 +1,7 @@
 {
-  "primary_deck": "data/decks/verbs.yaml",
-  "separate_decks": [
+  "decks": [
+    "data/decks/verbs.yaml",
+    "data/decks/yotsuba.yaml",
     "data/decks/m7-camera-vertical-dialogue.yaml",
     "data/decks/m7-mixed-tsumori.yaml",
     "data/decks/m7-native-teform-table.yaml"

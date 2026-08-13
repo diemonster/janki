@@ -1131,17 +1131,12 @@ def _render_build(data: dict[str, Any], root: Path) -> Any:
 
 
 def _deck_membership(data: dict[str, Any], root: Path) -> Any:
-    """Observe stable-ID overlap between one deck and named separate decks."""
-    _only(data, {"primary_deck", "separate_decks"}, "deck-membership")
-    primary = data.get("primary_deck")
-    separate = _string_list(data.get("separate_decks"), "separate_decks")
-    if not isinstance(primary, str) or not primary:
+    """Observe stable-ID membership and every overlap in named word decks."""
+    _only(data, {"decks"}, "deck-membership")
+    decks = _string_list(data.get("decks"), "decks")
+    if len(decks) < 2:
         raise hardening.HardeningError(
-            "deck-membership.primary_deck must be non-empty text"
-        )
-    if not separate:
-        raise hardening.HardeningError(
-            "deck-membership.separate_decks must not be empty"
+            "deck-membership.decks must contain at least two paths"
         )
 
     deck_root = (root / "data" / "decks").resolve()
@@ -1161,15 +1156,24 @@ def _deck_membership(data: dict[str, Any], root: Path) -> Any:
             )
         return path
 
-    primary_path = deck_path(primary, "deck-membership.primary_deck")
-    _, primary_records = resolve_deck_records(primary_path)
-    primary_ids = {record.id for record in primary_records}
-    overlaps: dict[str, list[str]] = {}
-    for index, value in enumerate(separate):
-        path = deck_path(value, f"deck-membership.separate_decks[{index}]")
+    memberships: dict[str, set[str]] = {}
+    for index, value in enumerate(decks):
+        path = deck_path(value, f"deck-membership.decks[{index}]")
         _, records = resolve_deck_records(path)
-        overlaps[value] = sorted(primary_ids & {record.id for record in records})
-    return {"overlaps": overlaps}
+        memberships[value] = {record.id for record in records}
+
+    overlaps: dict[str, list[str]] = {}
+    for left_index, left in enumerate(decks):
+        for right in decks[left_index + 1 :]:
+            overlaps[f"{left} <> {right}"] = sorted(
+                memberships[left] & memberships[right]
+            )
+    return {
+        "membership_counts": {
+            name: len(record_ids) for name, record_ids in memberships.items()
+        },
+        "overlaps": overlaps,
+    }
 
 
 RUNNERS: dict[str, Callable[[dict[str, Any], Path], Any]] = {

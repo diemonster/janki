@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from itertools import combinations
 from pathlib import Path
 from types import SimpleNamespace
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -77,14 +78,19 @@ def test_builder_wires_templates_fields_and_stable_guids(tmp_path, monkeypatch) 
         assert "collection.anki2" in archive.namelist()
 
 
-def test_general_verbs_do_not_claim_hardening_pilot_records() -> None:
-    _, verbs = anki.resolve_deck_records(PROJECT_ROOT / "data/decks/verbs.yaml")
-    verb_ids = {record.id for record in verbs}
-
-    for name in (
+def test_word_decks_are_nonempty_and_do_not_share_stable_ids() -> None:
+    names = (
+        "verbs.yaml",
+        "yotsuba.yaml",
         "m7-mixed-tsumori.yaml",
         "m7-native-teform-table.yaml",
         "m7-camera-vertical-dialogue.yaml",
-    ):
-        _, pilot = anki.resolve_deck_records(PROJECT_ROOT / "data/decks" / name)
-        assert verb_ids.isdisjoint(record.id for record in pilot), name
+    )
+    memberships: dict[str, set[str]] = {}
+    for name in names:
+        _, records = anki.resolve_deck_records(PROJECT_ROOT / "data/decks" / name)
+        memberships[name] = {record.id for record in records}
+        assert memberships[name], name
+
+    for left, right in combinations(names, 2):
+        assert memberships[left].isdisjoint(memberships[right]), f"{left} <> {right}"
