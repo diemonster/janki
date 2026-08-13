@@ -11,7 +11,7 @@ fixtures:
   - path: input.json
     fingerprint: d9eca4b30d53f1780c519835581181a9d195559249465dcfcb1ad248e962a7b9
   - path: oracle.json
-    fingerprint: 3b588229ab86a0307e37690c95521a92b7c51c64e84e55240ebee93a268186a8
+    fingerprint: d9fc2d18e8b2c369173e6032b9cb17458753509bea98d59c6caabf5f5b07fb2d
 runner_input: input.json
 oracle: oracle.json
 finding_id: input-parent-inbox-provenance

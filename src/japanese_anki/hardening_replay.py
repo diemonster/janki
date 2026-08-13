@@ -439,9 +439,13 @@ def _input_provenance(data: dict[str, Any], root: Path) -> Any:
         raise hardening.HardeningError(
             "input-provenance.content must be non-empty text"
         )
-    if not isinstance(scan_source_name, str) or not scan_source_name:
+    if (
+        not isinstance(scan_source_name, str)
+        or not scan_source_name
+        or Path(scan_source_name).name != scan_source_name
+    ):
         raise hardening.HardeningError(
-            "input-provenance.scan_source_name must be non-empty text"
+            "input-provenance.scan_source_name must be one filename"
         )
     if scan_content is not None and (
         not isinstance(scan_content, str) or not scan_content
@@ -511,6 +515,12 @@ def _input_provenance(data: dict[str, Any], root: Path) -> Any:
             for path in inbox.rglob("*")
             if path.is_file()
         )
+        error = stderr.getvalue()
+        error_named_files = sorted(
+            path.relative_to(project).as_posix()
+            for path in inbox.rglob("*")
+            if path.is_file() and str(path) in error
+        )
         return {
             "exit_code": exit_code,
             "origin_relative_path": (
@@ -520,7 +530,8 @@ def _input_provenance(data: dict[str, Any], root: Path) -> Any:
             ),
             "scan_copy_exists": (scan_inbox / scan_source_name).exists(),
             "stored_files": stored_files,
-            "error_has_name_collision": "same basename" in stderr.getvalue(),
+            "error_has_name_collision": "same basename" in error,
+            "error_named_files": error_named_files,
         }
 
 

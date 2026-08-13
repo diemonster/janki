@@ -6,5 +6,8 @@
     "data/inbox/lesson.pdf",
     "data/inbox/scans/lesson.pdf"
   ],
-  "error_has_name_collision": true
+  "error_has_name_collision": true,
+  "error_named_files": [
+    "data/inbox/lesson.pdf"
+  ]
 }

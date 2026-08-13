@@ -61,6 +61,25 @@ def test_runner_inputs_reject_unknown_fields() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "scan_source_name",
+    ("../lesson.pdf", "/tmp/lesson.pdf", "sub/lesson.pdf"),
+)
+def test_input_provenance_runner_requires_one_scan_filename(
+    scan_source_name: str,
+) -> None:
+    with pytest.raises(hardening.HardeningError, match="must be one filename"):
+        hardening_replay.RUNNERS["input-provenance"](
+            {
+                "source_name": "lesson.pdf",
+                "content": "%PDF-1.7 source",
+                "scan_source_name": scan_source_name,
+                "scan_content": "%PDF-1.7 scan",
+            },
+            ROOT,
+        )
+
+
 def test_candidate_runner_rejects_unused_oracle_fields() -> None:
     with pytest.raises(hardening.HardeningError, match="require observe_coverage"):
         hardening_replay.RUNNERS["candidate-response"](
@@ -176,6 +195,7 @@ def test_every_registered_runner_calls_its_production_boundary() -> None:
         "scan_copy_exists": False,
         "stored_files": ["data/inbox/lesson.pdf"],
         "error_has_name_collision": False,
+        "error_named_files": [],
     }
     assert extraction_prompt["prompt_has_unit_keys"] is True
     assert staging["promoted_ids"] == ["word:話す:はなす"]

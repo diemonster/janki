@@ -816,7 +816,9 @@ def test_cli_refuses_case_only_durable_name_collisions_before_the_model(
     assert code == 1
     assert call.calls == []
     assert not (root / "staging" / "Lesson.pdf.yaml").exists()
-    assert "same basename" in capsys.readouterr().err
+    error = capsys.readouterr().err
+    assert "same basename" in error
+    assert str(first) in error
 
 
 def test_cli_does_not_duplicate_an_external_source_in_a_colliding_inbox(

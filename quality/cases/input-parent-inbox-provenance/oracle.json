@@ -5,5 +5,6 @@
   "stored_files": [
     "data/inbox/lesson.pdf"
   ],
-  "error_has_name_collision": false
+  "error_has_name_collision": false,
+  "error_named_files": []
 }

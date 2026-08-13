@@ -211,10 +211,12 @@ def test_durable_name_collision_ignores_case(
     inbox = tmp_path / "data" / "inbox"
     scan_inbox = inbox / "scans"
     source = write(inbox / "Lesson.pdf", PDF + b" root")
-    write(scan_inbox / "lesson.pdf", PDF + b" scan")
+    existing = write(scan_inbox / "lesson.pdf", PDF + b" scan")
 
-    with pytest.raises(InputError, match="same basename"):
+    with pytest.raises(InputError, match="same basename") as excinfo:
         prepare_inputs([source], scan_inbox, inbox_root=inbox)
+
+    assert str(existing) in str(excinfo.value)
 
 
 def test_same_durable_file_bytes_under_one_basename_are_not_a_conflict(
