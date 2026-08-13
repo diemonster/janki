@@ -322,7 +322,6 @@ def _validation_qc(data: dict[str, Any], root: Path) -> Any:
         records = [
             dataclass_replace(
                 record,
-                furigana=qc.repair_spilled_punctuation(record.furigana),
                 examples=[
                     dataclass_replace(
                         example,
