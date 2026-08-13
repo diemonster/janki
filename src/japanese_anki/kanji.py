@@ -238,18 +238,38 @@ def assigns_a_known_reading(info: KanjiInfo | None, reading: str) -> bool:
     the split gives 明→あ where the store holds あ(かり), and requiring the whole
     reading would reject every ordinary kun reading in the language. The store
     keeps readings in display form — ``あ(かり)``, ``〜あ(け)`` — so the stem is
-    what precedes the parenthesis, position markers removed.
+    what precedes the parenthesis, position markers removed. Common compound
+    sound changes also count: initial rendaku (口[ぐち] from くち) and a final
+    sokuon that replaces a listed final mora (学[がっ] from がく).
     """
     if info is None:
         return True
     wanted = _to_hiragana(reading.strip())
     if not wanted:
         return True
+    unvoiced = {
+        "が": "か", "ぎ": "き", "ぐ": "く", "げ": "け", "ご": "こ",
+        "ざ": "さ", "じ": "し", "ず": "す", "ぜ": "せ", "ぞ": "そ",
+        "だ": "た", "ぢ": "ち", "づ": "つ", "で": "て", "ど": "と",
+        "ば": "は", "び": "ひ", "ぶ": "ふ", "べ": "へ", "ぼ": "ほ",
+        "ぱ": "は", "ぴ": "ひ", "ぷ": "ふ", "ぺ": "へ", "ぽ": "ほ",
+    }
+    wanted_forms = {wanted}
+    if wanted[0] in unvoiced:
+        wanted_forms.add(unvoiced[wanted[0]] + wanted[1:])
     for item in info.readings:
         text = item.reading.replace("〜", "").replace("-", "").strip()
         stem = _to_hiragana(text.split("(")[0].split(".")[0].strip())
-        if wanted in {_match_key(text), stem}:
-            return True
+        for known in {_match_key(text), stem}:
+            if known in wanted_forms:
+                return True
+            if any(
+                form.endswith("っ")
+                and len(form) == len(known)
+                and known.startswith(form[:-1])
+                for form in wanted_forms
+            ):
+                return True
     return False
 
 

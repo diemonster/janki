@@ -984,9 +984,9 @@ class AiOutcome:
     changes: dict[str, tuple[Any, Any]] = field(default_factory=dict)
     rejected: list[str] = field(default_factory=list)
     unverified: list[str] = field(default_factory=list)
-    impossible_furigana: list[tuple[str, tuple[tuple[str, str], ...]]] = field(
-        default_factory=list
-    )
+    impossible_furigana: list[
+        tuple[str, str, tuple[tuple[str, str], ...]]
+    ] = field(default_factory=list)
 
 
 def _words_of(parse: Any) -> list[str]:
@@ -1114,21 +1114,22 @@ def apply_ai_result(
                     example.furigana, _words_of((parses or {}).get(example.japanese))
                 ),
             )
-            impossible = qc.impossible_character_furigana(
-                example.furigana, kanji_store
-            )
-            if impossible:
-                outcome.impossible_furigana.append(
-                    (example.japanese, impossible)
-                )
-                # Keep the reviewed Japanese and the safe annotations. The
-                # rejected reading cannot drive romaji or sentence audio.
-                example = replace(example, furigana="", romaji="")
         if not qc.example_contains_target(example, record.expression, record.verb_group):
             outcome.rejected.append(example.japanese)
             continue
+        impossible = qc.impossible_character_furigana(
+            example.furigana, kanji_store
+        )
+        if impossible:
+            outcome.impossible_furigana.append(
+                (example.japanese, example.furigana, impossible)
+            )
         parse = (parses or {}).get(example.japanese)
-        if parse is None or not qc.verify_example_furigana(example, parse):
+        if (
+            impossible
+            or parse is None
+            or not qc.verify_example_furigana(example, parse)
+        ):
             outcome.unverified.append(example.japanese)
         kept.append(qc.regenerate_example_romaji(example))
 
@@ -1146,6 +1147,14 @@ def apply_ai_result(
         if merged_examples != record.examples:
             changes["examples"] = (record.examples, merged_examples)
             updated = replace(record, examples=merged_examples)
+        landed = {
+            (example.japanese, example.furigana) for example in merged_examples
+        }
+        outcome.impossible_furigana = [
+            item
+            for item in outcome.impossible_furigana
+            if (item[0], item[1]) in landed
+        ]
         updated, other_changes = _apply(
             updated,
             proposals,
@@ -1175,6 +1184,7 @@ def apply_ai_result(
         # no key. The rejections still stand; those were the model's sentences
         # either way.
         outcome.unverified = []
+        outcome.impossible_furigana = []
     outcome.record = updated
     outcome.changes = changes
     return outcome
@@ -1616,14 +1626,14 @@ def absorb_ai_call(
         groups = sorted(
             {
                 f"{text}[{reading}]"
-                for _sentence, pairs in outcome.impossible_furigana
+                for _sentence, _furigana, pairs in outcome.impossible_furigana
                 for text, reading in pairs
             }
         )
         result.warnings.append(
-            f"{record.id}: rejected impossible generated furigana group(s): "
-            f"{', '.join(groups)}. Stored no furigana or derived romaji for "
-            "those examples."
+            f"{record.id}: generated furigana group(s) need review: "
+            f"{', '.join(groups)}. The examples were kept and marked "
+            "unverified; sentence audio remains blocked."
         )
     if outcome.changes:
         result.records[positions[record.id]] = outcome.record

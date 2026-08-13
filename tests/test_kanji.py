@@ -17,6 +17,8 @@ from japanese_anki.kanji import (
     KANJIVG,
     KanjiError,
     KanjiInfo,
+    Reading,
+    assigns_a_known_reading,
     fetch_kanji,
     kanji_in,
     load_store,
@@ -68,6 +70,21 @@ def test_kanji_are_returned_in_the_order_they_are_written() -> None:
     assert kanji_in("使用") == ["使", "用"]
     assert kanji_in("前線と名前") == ["前", "線", "名"], "and each only once"
     assert kanji_in("する") == [], "kana carries no character block"
+
+
+@pytest.mark.parametrize(
+    ("listed", "surface"),
+    [("ガク", "がっ"), ("ニチ", "にっ"), ("くち", "ぐち"), ("かみ", "がみ")],
+)
+def test_known_reading_accepts_compound_sound_changes(
+    listed: str, surface: str
+) -> None:
+    info = KanjiInfo(
+        character="字",
+        readings=(Reading(kind="on", reading=listed),),
+    )
+
+    assert assigns_a_known_reading(info, surface)
 
 
 # --- ranking the examples ---------------------------------------------------

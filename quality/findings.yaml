@@ -4,8 +4,8 @@ findings:
     state: fixed
     pipeline_stage: ai-enrichment
     source_archetypes: [camera]
-    symptom: AI enrichment assigned a compound's full reading to one kanji in a per-character furigana group, so derived romaji contained the compound twice.
-    invariant: A generated per-character split must agree with stored KANJIDIC readings; an impossible AI group is reported and cannot produce stored furigana, romaji, or audio input.
+    symptom: AI enrichment assigned a compound's full reading to one kanji in a per-character furigana group, so the reconstructed sentence reading contained the compound twice.
+    invariant: A generated per-character split accounts for common rendaku and sokuon before it is compared with stored KANJIDIC readings; a remaining disagreement is preserved, reported, marked unverified, and blocked from sentence audio until review.
     evidence:
       - fingerprint: 8853be75fe83cd9e59dca532a8e216ac43759755e64d913b16bb1f0247cec9ac
         locator: quality/cases/ai-impossible-character-furigana/input.json

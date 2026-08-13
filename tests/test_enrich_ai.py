@@ -283,7 +283,7 @@ def test_an_unchecked_example_is_flagged_the_same_way() -> None:
     assert outcome.unverified == ["話します。"]
 
 
-def test_an_impossible_character_group_cannot_drive_romaji() -> None:
+def test_an_impossible_character_group_is_kept_flagged_and_reported() -> None:
     source = VocabularyRecord(
         id="word:画面:がめん",
         expression="画面",
@@ -314,13 +314,61 @@ def test_an_impossible_character_group_cannot_drive_romaji() -> None:
     )
 
     kept = outcome.record.examples[0]
-    assert kept.furigana == ""
+    assert kept.furigana == "二本 指[にほんゆび]で 画面[がめん]を 広[ひろ]げます。"
     assert kept.romaji == ""
     assert kept.english == "Use two fingers to enlarge the screen."
-    assert outcome.unverified == []
+    assert outcome.unverified == ["二本指で画面を広げます。"]
     assert outcome.impossible_furigana == [
-        ("二本指で画面を広げます。", (("指", "にほんゆび"),))
+        (
+            "二本指で画面を広げます。",
+            "二本 指[にほんゆび]で 画面[がめん]を 広[ひろ]げます。",
+            (("指", "にほんゆび"),),
+        )
     ]
+
+
+def test_an_impossible_group_is_not_reported_when_curated_furigana_wins() -> None:
+    source = VocabularyRecord(
+        id="word:画面:がめん",
+        expression="画面",
+        reading="がめん",
+        meanings=["screen"],
+        examples=[
+            ExampleSentence(
+                japanese="二本指で画面を広げます。",
+                furigana="二本指[にほんゆび]で 画面[がめん]を 広[ひろ]げます。",
+                romaji="nihon'yubidegamen'ohirogemasu.",
+                english="Use two fingers to enlarge the screen.",
+                register="polite",
+            )
+        ],
+    )
+    store = KanjiStore(
+        entries={
+            "指": KanjiInfo(
+                character="指",
+                readings=(Reading(kind="kun", reading="ゆび"),),
+            )
+        }
+    )
+
+    outcome = apply_ai_result(
+        source,
+        answer(
+            generated(
+                "二本指で画面を広げます。",
+                furigana="二本 指[にほんゆび]で 画面[がめん]を 広[ひろ]げます。",
+                english="Use two fingers to enlarge the screen.",
+            ),
+            usage_notes="Pinch gestures use two fingers.",
+        ),
+        kanji_store=store,
+    )
+
+    assert outcome.record.examples == source.examples
+    assert outcome.impossible_furigana == []
+    assert outcome.unverified == []
+    assert outcome.record.usage_notes == "Pinch gestures use two fingers."
 
 
 def test_the_flag_appends_rather_than_replacing() -> None:
