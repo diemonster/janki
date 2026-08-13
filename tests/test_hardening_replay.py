@@ -230,6 +230,30 @@ def test_deck_membership_rejects_an_external_deck_directory(
         hardening_replay.RUNNERS["deck-membership"]({}, root)
 
 
+def test_deck_membership_rejects_two_paths_to_one_deck(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "project"
+    deck_dir = root / "data/decks"
+    deck_dir.mkdir(parents=True)
+    original = deck_dir / "only.yaml"
+    original.touch()
+    alias = deck_dir / "alias.yaml"
+    alias.symlink_to(original.name)
+    config = SimpleNamespace(root=root, deck_dir=deck_dir)
+    monkeypatch.setattr(
+        hardening_replay.ProjectConfig,
+        "load",
+        lambda _root: config,
+    )
+
+    with pytest.raises(
+        hardening.HardeningError,
+        match=r"two paths for the same deck file:.*alias\.yaml.*only\.yaml",
+    ):
+        hardening_replay.RUNNERS["deck-membership"]({}, root)
+
+
 def test_every_registered_runner_calls_its_production_boundary() -> None:
     assert set(hardening_replay.RUNNERS) == set(hardening.RUNNER_BOUNDARIES)
 

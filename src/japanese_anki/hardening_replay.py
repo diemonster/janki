@@ -1147,9 +1147,25 @@ def _deck_membership(data: dict[str, Any], root: Path) -> Any:
             "deck-membership configured deck directory must be inside the "
             f"repository: {config.deck_dir}"
         )
+    discovered_paths = status.deck_files(config)
+    resolved_paths: dict[Path, Path] = {}
+    for path in discovered_paths:
+        resolved_path = path.resolve()
+        if not resolved_path.is_relative_to(project_root):
+            raise hardening.HardeningError(
+                "deck-membership discovered a deck outside the repository "
+                f"through {config.deck_dir}: {path}"
+            )
+        previous = resolved_paths.get(resolved_path)
+        if previous is not None:
+            raise hardening.HardeningError(
+                "deck-membership discovered two paths for the same deck file: "
+                f"{previous} and {path}"
+            )
+        resolved_paths[resolved_path] = path
     deck_paths = [
         path
-        for path in status.deck_files(config)
+        for path in discovered_paths
         if deck_kind(path) in {"", "vocabulary"}
     ]
     if not deck_paths:
@@ -1160,13 +1176,7 @@ def _deck_membership(data: dict[str, Any], root: Path) -> Any:
 
     memberships: dict[str, set[str]] = {}
     for path in deck_paths:
-        resolved_path = path.resolve()
-        if not resolved_path.is_relative_to(project_root):
-            raise hardening.HardeningError(
-                "deck-membership discovered a deck outside the repository "
-                f"through {config.deck_dir}: {path}"
-            )
-        value = resolved_path.relative_to(project_root).as_posix()
+        value = path.relative_to(project_root).as_posix()
         _, records = resolve_deck_records(path)
         memberships[value] = {record.id for record in records}
 

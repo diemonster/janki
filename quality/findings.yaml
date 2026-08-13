@@ -5,7 +5,7 @@ findings:
     pipeline_stage: deck-membership
     source_archetypes: [camera, mixed-layout-pdf, native-pdf-table]
     symptom: The unfiltered general verbs deck also claimed records assigned to dedicated hardening-pilot decks, so packages exported the same stable Anki GUIDs under different deck IDs.
-    invariant: Every vocabulary deck under the configured repository deck tree is discovered recursively, named in the gate result, is nonempty, and enters an automatic all-pairs stable-ID check; no record belongs to more than one word deck unless an explicit reviewed migration plan says otherwise.
+    invariant: Every deck under the configured repository deck tree has a unique stem and resolves to a unique in-repository file; every vocabulary deck is discovered recursively, named in the gate result, is nonempty, and enters an automatic all-pairs stable-ID check; no record belongs to more than one word deck unless an explicit reviewed migration plan says otherwise.
     evidence:
       - fingerprint: ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356
         locator: quality/cases/deck-membership-partition/input.json

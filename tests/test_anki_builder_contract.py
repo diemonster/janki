@@ -5,8 +5,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from zipfile import ZIP_DEFLATED, ZipFile
 
+import pytest
+
 from japanese_anki import status
 from japanese_anki.config import ProjectConfig
+from japanese_anki.errors import JankiError
 from japanese_anki.exporters import anki
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -110,3 +113,19 @@ def test_deck_files_discovers_nested_yaml(tmp_path: Path) -> None:
     config = SimpleNamespace(deck_dir=deck_dir)
 
     assert status.deck_files(config) == [nested, top_level]
+
+
+def test_deck_files_rejects_duplicate_stems(tmp_path: Path) -> None:
+    deck_dir = tmp_path / "decks"
+    left = deck_dir / "pilots" / "verbs.yaml"
+    right = deck_dir / "archive" / "Verbs.yml"
+    left.parent.mkdir(parents=True)
+    right.parent.mkdir(parents=True)
+    left.touch()
+    right.touch()
+
+    with pytest.raises(JankiError, match=r"duplicate stems: verbs") as error:
+        status.deck_files(SimpleNamespace(deck_dir=deck_dir))
+
+    assert str(left) in str(error.value)
+    assert str(right) in str(error.value)

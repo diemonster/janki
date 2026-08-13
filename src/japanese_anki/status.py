@@ -113,11 +113,29 @@ class RecordUniverse:
 
 def deck_files(config: ProjectConfig) -> list[Path]:
     """Return every deck definition under the configured deck tree."""
-    return sorted(
+    paths = sorted(
         path
         for pattern in ("*.yaml", "*.yml")
         for path in config.deck_dir.rglob(pattern)
     )
+    by_stem: dict[str, list[Path]] = {}
+    for path in paths:
+        # Package filenames and repository clones can live on a
+        # case-insensitive filesystem even when this check runs on Linux.
+        by_stem.setdefault(path.stem.casefold(), []).append(path)
+    duplicates = {
+        stem: matches for stem, matches in by_stem.items() if len(matches) > 1
+    }
+    if duplicates:
+        details = "; ".join(
+            f"{stem}: {', '.join(str(path) for path in matches)}"
+            for stem, matches in sorted(duplicates.items())
+        )
+        raise JankiError(
+            "Deck file stems must be unique under "
+            f"{config.deck_dir}; duplicate stems: {details}"
+        )
+    return paths
 
 
 def collect_records(config: ProjectConfig) -> RecordUniverse:

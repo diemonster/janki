@@ -3346,7 +3346,7 @@ def command_validate(args: argparse.Namespace) -> int:
 
 
 def resolve_deck_path(deck: Path, config: ProjectConfig) -> Path:
-    """A deck argument as a path, or as a bare name under ``deck_dir``.
+    """A deck argument as a path, or as a bare name in ``deck_dir``.
 
     `janki build verbs` is what a person types; requiring
     `data/decks/verbs.yaml` every time is friction with no safety in it, since
@@ -3357,13 +3357,22 @@ def resolve_deck_path(deck: Path, config: ProjectConfig) -> Path:
     if deck.exists():
         return deck.resolve()
     if deck.parent == Path("") or deck.parent == Path("."):
-        for suffix in ("", ".yaml", ".yml"):
-            candidate = config.deck_dir / f"{deck.name}{suffix}"
-            if candidate.exists():
-                return candidate.resolve()
+        wanted_stem = (
+            deck.stem if deck.suffix.lower() in {".yaml", ".yml"} else deck.name
+        )
+        candidates = [
+            path for path in status.deck_files(config) if path.stem == wanted_stem
+        ]
+        if len(candidates) == 1:
+            return candidates[0].resolve()
+        if len(candidates) > 1:  # Defensive if discovery becomes less strict.
+            names = ", ".join(str(path) for path in candidates)
+            raise AnkiBuildError(
+                f"Deck name {deck} is ambiguous; use one of these paths: {names}"
+            )
     raise AnkiBuildError(
         f"No such deck: {deck}. Give a path to a deck file, or the bare name "
-        f"of one under {config.deck_dir}."
+        f"of one anywhere under {config.deck_dir}."
     )
 
 

@@ -298,6 +298,26 @@ def test_a_bare_deck_name_resolves_under_the_deck_dir(tmp_path: Path) -> None:
     assert (root / "dist" / "verbs.apkg").exists()
 
 
+def test_a_bare_deck_name_resolves_in_a_nested_deck_directory(
+    tmp_path: Path,
+) -> None:
+    root = _project(tmp_path, [_record("橋", "はし")])
+    top_level = root / "decks/verbs.yaml"
+    nested = root / "decks/pilots/verbs.yaml"
+    nested.parent.mkdir()
+    nested.write_text(
+        top_level.read_text(encoding="utf-8").replace(
+            "../vocabulary.json", "../../vocabulary.json"
+        ),
+        encoding="utf-8",
+    )
+    top_level.unlink()
+
+    assert _run(root, "build", "verbs") == 0
+
+    assert (root / "dist" / "verbs.apkg").exists()
+
+
 def test_a_path_that_exists_wins_over_a_same_named_deck(tmp_path: Path) -> None:
     """A file the user can see and point at is never shadowed by one under
     `deck_dir` that happens to share its name."""
