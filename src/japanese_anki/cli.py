@@ -1074,6 +1074,7 @@ def _recheck_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
         # Off when a human is already doing the vouching, and off when the
         # config names no model.
         adjudicate_model="" if (args.accept or args.no_adjudicate) else config.adjudicate_model,
+        kanji_store=None if args.accept else kanji.load_store(config.kanji_file),
     )
 
     cleared = sum(len(items) for items in result.cleared.values())

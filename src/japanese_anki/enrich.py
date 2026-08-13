@@ -1155,6 +1155,14 @@ def apply_ai_result(
             for item in outcome.impossible_furigana
             if (item[0], item[1]) in landed
         ]
+        outcome.unverified = list(
+            dict.fromkeys(
+                [
+                    *landed_unverified,
+                    *(item[0] for item in outcome.impossible_furigana),
+                ]
+            )
+        )
         updated, other_changes = _apply(
             updated,
             proposals,
@@ -1166,7 +1174,6 @@ def apply_ai_result(
             ],
         )
         changes.update(other_changes)
-        outcome.unverified = landed_unverified
     else:
         writable = [
             name
@@ -1182,7 +1189,6 @@ def apply_ai_result(
         # answer matched what is already there. Nothing was flagged, so nothing
         # may be reported as flagged: a reviewer told to check a key would find
         # no key. The rejections still stand; those were the model's sentences
-        # either way.
         outcome.unverified = []
         outcome.impossible_furigana = []
     outcome.record = updated
@@ -1314,6 +1320,7 @@ def recheck_furigana(
     accept: bool = False,
     adjudicate_model: str = "",
     ai_client: Any | None = None,
+    kanji_store: Any | None = None,
 ) -> RecheckResult:
     """Re-ask jpdb whether each flagged example's furigana is right.
 
@@ -1379,6 +1386,21 @@ def recheck_furigana(
             if accept:
                 cleared.append(sentence)
                 flagged.discard(fingerprint)
+                continue
+            impossible = qc.impossible_character_furigana(
+                example.furigana, kanji_store
+            )
+            if impossible:
+                groups = ", ".join(
+                    f"{text}[{reading}]" for text, reading in impossible
+                )
+                result.differing.setdefault(record.id, []).append(
+                    (
+                        sentence,
+                        "generated furigana still assigns an unknown "
+                        f"character reading: {groups}",
+                    )
+                )
                 continue
             try:
                 parse = jpdb_client.parse(sentence)

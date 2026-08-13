@@ -17,6 +17,7 @@ import pytest
 from japanese_anki import cli, enrich
 from japanese_anki.errors import JankiError
 from japanese_anki.jpdb import JpdbError
+from japanese_anki.kanji import KanjiInfo, KanjiStore, Reading
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
 
 SENTENCE = "橋を渡る。"
@@ -123,6 +124,35 @@ def test_a_parse_failure_clears_nothing_and_is_reported() -> None:
     assert result.unparsed == [SENTENCE]
     assert result.cleared == {}
     assert result.records[0].source.raw_fields["furigana_unverified"], "the flag survives"
+
+
+def test_an_impossible_character_group_survives_dictionary_recheck() -> None:
+    sentence = "明日は晴れます。"
+    example = ExampleSentence(
+        japanese=sentence,
+        furigana="明[あ] 日[した]は 晴[は]れます。",
+    )
+    subject = record(example, flagged=fingerprint(sentence))
+    client = FakeJpdb(
+        {sentence: parse_of(["明日", "あした"], "は", ["晴", "は"], "れます")}
+    )
+    store = KanjiStore(
+        entries={
+            "日": KanjiInfo(
+                character="日",
+                readings=(Reading(kind="on", reading="ニチ"),),
+            )
+        }
+    )
+
+    result = enrich.recheck_furigana(
+        [subject], jpdb_client=client, kanji_store=store
+    )
+
+    assert result.cleared == {}
+    assert client.asked == []
+    assert "日[した]" in result.differing[subject.id][0][1]
+    assert result.records[0].source.raw_fields["furigana_unverified"]
 
 
 def test_an_id_that_names_no_record_is_refused() -> None:

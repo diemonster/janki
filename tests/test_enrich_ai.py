@@ -371,6 +371,47 @@ def test_an_impossible_group_is_not_reported_when_curated_furigana_wins() -> Non
     assert outcome.record.usage_notes == "Pinch gestures use two fingers."
 
 
+def test_a_stored_impossible_group_is_flagged_when_ai_fills_english() -> None:
+    invalid = "二本 指[にほんゆび]で 画面[がめん]を 広[ひろ]げます。"
+    source = VocabularyRecord(
+        id="word:画面:がめん",
+        expression="画面",
+        reading="がめん",
+        meanings=["screen"],
+        examples=[
+            ExampleSentence(
+                japanese="二本指で画面を広げます。",
+                furigana=invalid,
+            )
+        ],
+        usage_notes="A common noun.",
+    )
+    store = KanjiStore(
+        entries={
+            "指": KanjiInfo(
+                character="指",
+                readings=(Reading(kind="kun", reading="ゆび"),),
+            )
+        }
+    )
+
+    outcome = apply_ai_result(
+        source,
+        answer(
+            generated(
+                "二本指で画面を広げます。",
+                furigana=invalid,
+                english="Use two fingers to enlarge the screen.",
+            )
+        ),
+        kanji_store=store,
+    )
+
+    assert outcome.unverified == ["二本指で画面を広げます。"]
+    assert outcome.impossible_furigana
+    assert UNVERIFIED_KEY in outcome.record.source.raw_fields
+
+
 def test_the_flag_appends_rather_than_replacing() -> None:
     already = record(
         source=SourceReference(raw_fields={UNVERIFIED_KEY: "deadbeef"}),
