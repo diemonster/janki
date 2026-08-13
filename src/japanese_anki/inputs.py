@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import base64
 import contextlib
-import glob
 import hashlib
 import shutil
 import subprocess
@@ -162,23 +161,26 @@ def _occupied(path: Path) -> bool:
     return path.exists() or path.is_symlink()
 
 
-def _different_durable_namesakes(
+def _durable_namesakes(
     name: str,
     durable_root: Path,
     data: bytes,
     *,
     exclude: Path | None = None,
-) -> list[Path]:
-    """Other durable files with this basename and different bytes."""
+) -> tuple[list[Path], list[Path]]:
+    """Durable files with this case-insensitive basename, split by content."""
     try:
         excluded_real = exclude.resolve(strict=True) if exclude is not None else None
-        candidates = tuple(durable_root.rglob(glob.escape(name)))
+        candidates = tuple(durable_root.rglob("*"))
     except OSError as exc:
         raise InputError(
             f"Could not check durable inbox names for {name}: {exc}"
         ) from exc
+    matches: list[Path] = []
     conflicts: list[Path] = []
     for candidate in candidates:
+        if candidate.name.casefold() != name.casefold():
+            continue
         try:
             same_file = (
                 excluded_real is not None
@@ -188,9 +190,24 @@ def _different_durable_namesakes(
             continue
         if same_file or not candidate.is_file() or not _inside(candidate, durable_root):
             continue
-        if _read(candidate) != data:
+        if _read(candidate) == data:
+            matches.append(candidate)
+        else:
             conflicts.append(candidate)
-    return sorted(conflicts, key=lambda path: path.as_posix())
+    return (
+        sorted(matches, key=lambda path: path.as_posix()),
+        sorted(conflicts, key=lambda path: path.as_posix()),
+    )
+
+
+def _durable_name_collision(source: Path, conflicts: list[Path]) -> InputError:
+    names = ", ".join(str(path) for path in conflicts)
+    return InputError(
+        f"Cannot use {source}: it and durable inbox file(s) {names} would be "
+        "stored under one name because they have the same basename but "
+        "different content. Give each source a unique filename before you put "
+        "it in the inbox."
+    )
 
 
 def _copy_into_inbox(
@@ -222,35 +239,26 @@ def _copy_into_inbox(
     scan_inbox = Path(scan_inbox)
     durable_root = Path(inbox_root) if inbox_root is not None else scan_inbox
     if _inside(source, durable_root):
-        conflicts = _different_durable_namesakes(
+        _, conflicts = _durable_namesakes(
             source.name, durable_root, data, exclude=source
         )
         if conflicts:
-            names = ", ".join(str(path) for path in conflicts)
-            raise InputError(
-                f"Cannot use {source}: it and durable inbox file(s) {names} "
-                "would be stored under one name because they have the same "
-                "basename but different content. Give each source a unique "
-                "filename before you put it in the inbox."
-            )
+            raise _durable_name_collision(source, conflicts)
         return source
 
     scan_inbox.mkdir(parents=True, exist_ok=True)
     target = scan_inbox / source.name
-    conflicts = _different_durable_namesakes(source.name, durable_root, data)
-    if (
-        _occupied(target)
-        and not conflicts
-        and _inside(target, durable_root)
-        and _read(target) == data
-    ):
-        return target
+    matches, conflicts = _durable_namesakes(source.name, durable_root, data)
+    if matches and conflicts:
+        raise _durable_name_collision(source, conflicts)
+    if matches:
+        return target if target in matches else matches[0]
     if conflicts or _occupied(target):
         # Content-addressed, via the project's one fingerprint helper: the hex
         # digest goes through it rather than a second hashing scheme.
         stamp = short_fingerprint(hashlib.sha256(data).hexdigest(), length=8)
         target = scan_inbox / f"{source.stem}-{stamp}{source.suffix}"
-        fingerprint_conflicts = _different_durable_namesakes(
+        fingerprint_matches, fingerprint_conflicts = _durable_namesakes(
             target.name, durable_root, data
         )
         if fingerprint_conflicts:
@@ -259,6 +267,10 @@ def _copy_into_inbox(
                 f"Cannot store {source}: durable inbox file(s) {names} have "
                 "different content under the fingerprint of these bytes. Move "
                 "those files aside; janki will not overwrite inbox evidence."
+            )
+        if fingerprint_matches:
+            return (
+                target if target in fingerprint_matches else fingerprint_matches[0]
             )
         if _occupied(target):
             if _inside(target, durable_root) and _read(target) == data:

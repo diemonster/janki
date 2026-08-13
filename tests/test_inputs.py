@@ -205,6 +205,18 @@ def test_durable_name_collision_treats_glob_characters_as_filename_text(
         prepare_inputs([source], scan_inbox, inbox_root=inbox)
 
 
+def test_durable_name_collision_ignores_case(
+    tmp_path: Path,
+) -> None:
+    inbox = tmp_path / "data" / "inbox"
+    scan_inbox = inbox / "scans"
+    source = write(inbox / "Lesson.pdf", PDF + b" root")
+    write(scan_inbox / "lesson.pdf", PDF + b" scan")
+
+    with pytest.raises(InputError, match="same basename"):
+        prepare_inputs([source], scan_inbox, inbox_root=inbox)
+
+
 def test_same_durable_file_bytes_under_one_basename_are_not_a_conflict(
     tmp_path: Path,
 ) -> None:
@@ -232,6 +244,35 @@ def test_an_external_basename_collision_gets_a_fingerprinted_copy(
     assert item.origin_path.name.startswith("lesson-")
     assert item.origin_path.read_bytes() == PDF + b" incoming"
     assert existing.read_bytes() == PDF + b" root"
+
+
+def test_an_external_source_does_not_duplicate_an_existing_colliding_copy(
+    tmp_path: Path,
+) -> None:
+    inbox = tmp_path / "data" / "inbox"
+    scan_inbox = inbox / "scans"
+    write(inbox / "lesson.pdf", PDF + b" root")
+    existing = write(scan_inbox / "lesson.pdf", PDF + b" scan")
+    source = write(tmp_path / "desk" / "lesson.pdf", PDF + b" scan")
+
+    with pytest.raises(InputError, match="same basename"):
+        prepare_inputs([source], scan_inbox, inbox_root=inbox)
+
+    assert list(scan_inbox.iterdir()) == [existing]
+
+
+def test_an_external_source_reuses_a_case_only_same_content_copy(
+    tmp_path: Path,
+) -> None:
+    inbox = tmp_path / "data" / "inbox"
+    scan_inbox = inbox / "scans"
+    existing = write(scan_inbox / "lesson.pdf", PDF)
+    source = write(tmp_path / "desk" / "Lesson.pdf", PDF)
+
+    [item] = prepare_inputs([source], scan_inbox, inbox_root=inbox)
+
+    assert item.origin_path == existing
+    assert list(scan_inbox.iterdir()) == [existing]
 
 
 def test_parent_traversal_does_not_make_an_outside_file_look_durable(

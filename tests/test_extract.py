@@ -796,6 +796,55 @@ def test_cli_refuses_cross_run_durable_basename_collisions_before_the_model(
     assert "same basename" in capsys.readouterr().err
 
 
+def test_cli_refuses_case_only_durable_name_collisions_before_the_model(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = default_inbox_project(tmp_path)
+    first = root / "data" / "inbox" / "Lesson.pdf"
+    source = root / "data" / "inbox" / "scans" / "lesson.pdf"
+    first.parent.mkdir(parents=True)
+    source.parent.mkdir(parents=True)
+    first.write_bytes(PDF + b" root")
+    source.write_bytes(PDF + b" scan")
+    call = FakeCall(ok(candidate()))
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
+
+    code = cli.main(["--root", str(root), "extract", "--force", str(source)])
+
+    assert code == 1
+    assert call.calls == []
+    assert not (root / "staging" / "Lesson.pdf.yaml").exists()
+    assert "same basename" in capsys.readouterr().err
+
+
+def test_cli_does_not_duplicate_an_external_source_in_a_colliding_inbox(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = default_inbox_project(tmp_path)
+    first = root / "data" / "inbox" / "lesson.pdf"
+    existing = root / "data" / "inbox" / "scans" / "lesson.pdf"
+    source = tmp_path / "desk" / "lesson.pdf"
+    first.parent.mkdir(parents=True)
+    existing.parent.mkdir(parents=True)
+    source.parent.mkdir(parents=True)
+    first.write_bytes(PDF + b" root")
+    existing.write_bytes(PDF + b" scan")
+    source.write_bytes(PDF + b" scan")
+    call = FakeCall(ok(candidate()))
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
+
+    code = cli.main(["--root", str(root), "extract", str(source)])
+
+    assert code == 1
+    assert call.calls == []
+    assert list(existing.parent.iterdir()) == [existing]
+    assert "same basename" in capsys.readouterr().err
+
+
 def test_the_staging_file_is_the_pinned_shape(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

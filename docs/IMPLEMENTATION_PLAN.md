@@ -1076,7 +1076,8 @@ destroys the evidence behind every record extracted from it. Identical bytes
 reuse the existing copy. Two different files already inside the durable inbox
 cannot receive a suffix without renaming an immutable source. They are refused
 when their basenames collide because staging and pattern review key on that
-basename. (4) Duplicates in one call are kept. Passing the same
+basename. The comparison ignores letter case so it is safe on the supported
+macOS filesystems. (4) Duplicates in one call are kept. Passing the same
 photo twice costs tokens, but dropping the second is the silent discard this
 project refuses everywhere else. (5) An unreadable path or unsupported suffix
 stops the whole batch — extracting a subset would leave the user to notice it

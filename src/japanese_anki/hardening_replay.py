@@ -413,12 +413,20 @@ def _input_provenance(data: dict[str, Any], root: Path) -> Any:
     del root
     _only(
         data,
-        {"source_name", "content", "scan_content"},
+        {
+            "source_name",
+            "content",
+            "scan_content",
+            "scan_source_name",
+            "external_content",
+        },
         "input-provenance",
     )
     source_name = data.get("source_name")
     content = data.get("content")
     scan_content = data.get("scan_content")
+    scan_source_name = data.get("scan_source_name", source_name)
+    external_content = data.get("external_content")
     if (
         not isinstance(source_name, str)
         or not source_name
@@ -431,11 +439,21 @@ def _input_provenance(data: dict[str, Any], root: Path) -> Any:
         raise hardening.HardeningError(
             "input-provenance.content must be non-empty text"
         )
+    if not isinstance(scan_source_name, str) or not scan_source_name:
+        raise hardening.HardeningError(
+            "input-provenance.scan_source_name must be non-empty text"
+        )
     if scan_content is not None and (
         not isinstance(scan_content, str) or not scan_content
     ):
         raise hardening.HardeningError(
             "input-provenance.scan_content must be non-empty text when present"
+        )
+    if external_content is not None and (
+        not isinstance(external_content, str) or not external_content
+    ):
+        raise hardening.HardeningError(
+            "input-provenance.external_content must be non-empty text when present"
         )
     with tempfile.TemporaryDirectory() as directory:
         # Import here because cli imports this replay module. At execution time
@@ -450,9 +468,15 @@ def _input_provenance(data: dict[str, Any], root: Path) -> Any:
         source.write_text(content, encoding="utf-8")
         if scan_content is not None:
             scan_inbox.mkdir(parents=True)
-            (scan_inbox / source_name).write_text(
+            (scan_inbox / scan_source_name).write_text(
                 scan_content, encoding="utf-8"
             )
+        command_source = source
+        if external_content is not None:
+            desk = project / "desk"
+            desk.mkdir()
+            command_source = desk / source_name
+            command_source.write_text(external_content, encoding="utf-8")
         (project / "janki.toml").write_text(
             '[project]\nname = "Input provenance replay"\n', encoding="utf-8"
         )
@@ -477,7 +501,7 @@ def _input_provenance(data: dict[str, Any], root: Path) -> Any:
                 stderr
             ):
                 exit_code = cli.main(
-                    ["--root", str(project), "extract", str(source)]
+                    ["--root", str(project), "extract", str(command_source)]
                 )
         finally:
             extract.extract_candidates = real_extract
@@ -494,7 +518,7 @@ def _input_provenance(data: dict[str, Any], root: Path) -> Any:
                 if observed_origins
                 else None
             ),
-            "scan_copy_exists": (scan_inbox / source_name).exists(),
+            "scan_copy_exists": (scan_inbox / scan_source_name).exists(),
             "stored_files": stored_files,
             "error_has_name_collision": "same basename" in stderr.getvalue(),
         }

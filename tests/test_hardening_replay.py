@@ -21,6 +21,8 @@ SEEDED_CASES = (
     "extraction-selection-target-binding",
     "extraction-unit-accounting",
     "impossible-character-furigana",
+    "input-external-existing-name-collision",
+    "input-parent-inbox-casefold-collision",
     "input-parent-inbox-name-collision",
     "input-parent-inbox-provenance",
     "m7-mixed-tsumori-coverage",

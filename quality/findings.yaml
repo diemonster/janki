@@ -183,7 +183,7 @@ findings:
     pipeline_stage: input-provenance
     source_archetypes: [camera, printed-ruby, bilingual-layout]
     symptom: A source already stored in the durable inbox root was copied again into the configured scan subdirectory before extraction.
-    invariant: A regular source anywhere under the durable inbox root is used where it lies unless another durable source has the same basename and different bytes; that collision is refused before model or staging work.
+    invariant: A regular source anywhere under the durable inbox root is used where it lies unless another durable source has the same case-insensitive basename and different bytes; that collision is refused before model or staging work and an external copy cannot bypass it.
     evidence:
       - fingerprint: cb0c156163da379db2b4f02da5f66771e973a44c9e716827a3de1d703936b7ef
         locator: data/inbox/IMG_4563.jpg
@@ -192,7 +192,15 @@ findings:
     recurrences:
       - fingerprint: 56d641060d32ec0f9d588e2dbfff5e4ffb447a84f8f2349442ffa14fad7851a2
         locator: quality/cases/input-parent-inbox-name-collision/input.json
-    case_ids: [input-parent-inbox-name-collision, input-parent-inbox-provenance]
+      - fingerprint: d9eca4b30d53f1780c519835581181a9d195559249465dcfcb1ad248e962a7b9
+        locator: quality/cases/input-parent-inbox-casefold-collision/input.json
+      - fingerprint: f7d1b6b093cb4c49e313d29257f5b2930423417d0c2dc80973a0b5dcc108018c
+        locator: quality/cases/input-external-existing-name-collision/input.json
+    case_ids:
+      - input-external-existing-name-collision
+      - input-parent-inbox-casefold-collision
+      - input-parent-inbox-name-collision
+      - input-parent-inbox-provenance
     fix_ref: src/japanese_anki/inputs.py#_copy_into_inbox
   - id: missing-furigana-separator
     state: fixed
