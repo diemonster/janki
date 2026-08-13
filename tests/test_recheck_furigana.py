@@ -255,6 +255,62 @@ def test_the_command_reports_a_kanjidic_block_without_calling_jpdb(
     assert "jpdb reads these differently" not in output
 
 
+def test_the_command_names_both_kanjidic_blocks_and_jpdb_differences(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    blocked, blocked_sentence = _impossible_example()
+    differing = ExampleSentence(
+        japanese=OTHER,
+        furigana="川[かわ]に 橋[きょう]がある。",
+    )
+    blocked.examples.append(differing)
+    blocked.source.raw_fields["furigana_unverified"] = ",".join(
+        [fingerprint(blocked_sentence), fingerprint(OTHER)]
+    )
+    root = _project(tmp_path, [blocked])
+    _write_day_store(root)
+    client = FakeJpdb(
+        {OTHER: parse_of(["川", "かわ"], "に", ["橋", "はし"], "がある")}
+    )
+    monkeypatch.setattr(cli.jpdb, "JpdbClient", lambda *a, **k: client)
+    monkeypatch.setattr(cli.jpdb, "api_key_from_env", lambda *a, **k: "test-key")
+
+    assert cli.main(["--root", str(root), "enrich", "--recheck-furigana"]) == 0
+
+    output = capsys.readouterr().out
+    assert "differ from jpdb's parse or are blocked" in output
+    assert "Still unconfirmed (1)" in output
+    assert "Still blocked (1)" in output
+    assert client.asked == [OTHER]
+
+
+def test_a_kanjidic_verdict_keeps_a_partial_jpdb_outage_nonfatal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    blocked, blocked_sentence = _impossible_example()
+    unparsed = ExampleSentence(
+        japanese=SENTENCE,
+        furigana="橋[はし]を 渡[わた]る。",
+    )
+    blocked.examples.append(unparsed)
+    blocked.source.raw_fields["furigana_unverified"] = ",".join(
+        [fingerprint(blocked_sentence), fingerprint(SENTENCE)]
+    )
+    root = _project(tmp_path, [blocked])
+    _write_day_store(root)
+    client = FakeJpdb({})
+    monkeypatch.setattr(cli.jpdb, "JpdbClient", lambda *a, **k: client)
+    monkeypatch.setattr(cli.jpdb, "api_key_from_env", lambda *a, **k: "test-key")
+
+    assert cli.main(["--root", str(root), "enrich", "--recheck-furigana"]) == 0
+
+    captured = capsys.readouterr()
+    assert "stored KANJIDIC evidence" in captured.out
+    assert "could not parse any" not in captured.err
+    assert "could not parse" in captured.err
+    assert client.asked == [SENTENCE]
+
+
 def test_human_accept_bypasses_the_kanjidic_block_and_jpdb(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

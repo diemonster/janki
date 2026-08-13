@@ -1117,7 +1117,7 @@ def _recheck_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
             f"Confirmed {cleared} example(s) across {len(result.cleared)} record(s) "
             f"on {vouched}; their audio is no longer held back."
         )
-    elif result.unparsed and not result.differing:
+    elif result.unparsed and not result.differing and not result.blocked:
         # jpdb answered nothing at all — an expired key, or the API down. Saying
         # "not vouched for yet" asserts a judgment that was never obtained.
         print(
@@ -1125,12 +1125,17 @@ def _recheck_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
             "example(s), so nothing was confirmed or ruled out.",
             file=sys.stderr,
         )
+    elif result.differing and result.blocked:
+        print(
+            "Nothing to confirm: checked examples differ from jpdb's parse or "
+            "are blocked by stored KANJIDIC readings."
+        )
     elif result.differing:
-        print("Nothing to confirm: jpdb reads every flagged example differently.")
+        print("Nothing to confirm: each parsed example differs from jpdb's reading.")
     elif result.blocked:
         print(
             "Nothing to confirm: stored KANJIDIC evidence requires human "
-            "review for every flagged example."
+            "review for the blocked example(s)."
         )
     else:
         print("Nothing to confirm: no example carries an unverified-furigana flag.")
@@ -1163,7 +1168,12 @@ def _recheck_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
                 print(f"    {why}")
     for sentence in result.unparsed:
         print(f"warning: jpdb could not parse: {sentence}", file=sys.stderr)
-    if result.unparsed and not cleared and not result.differing:
+    if (
+        result.unparsed
+        and not cleared
+        and not result.differing
+        and not result.blocked
+    ):
         return 1
     if ledger_error is not None:
         _report_enrichment_ledger_failure(
