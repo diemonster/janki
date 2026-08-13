@@ -1,0 +1,11 @@
+deck:
+  name: "Brandon Japanese::Hardening Pilots::Camera Vertical Dialogue"
+  deck_id: 2059400118
+  description: "Fourteen reviewed targets from the M7.6B camera-photo pilot."
+  output: "m7-camera-vertical-dialogue.apkg"
+  cards:
+    recognition: true
+    production: true
+    reading: false
+  source: ../normalized/vocabulary.json
+  include_tags: [m7-camera-vertical-dialogue]

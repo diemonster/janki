@@ -34,6 +34,7 @@ coverage:
   non_vocabulary_units: []
   unreadable_units: []
   coverage_block_fingerprint: 25acf03ff3c110a964dd04ff04f608a2bdec0f43e2156e44c7d050af994c489f
+review_notes: Promoted 14 record(s) from this file.
 records:
 - id: word:初めて:はじめて
   expression: 初めて
@@ -53,7 +54,8 @@ records:
     audio: ''
     register: ''
   conjugations: {}
-  tags: []
+  tags:
+  - m7-camera-vertical-dialogue
   usage_notes: ''
   audio: ''
   image: ''
@@ -91,7 +93,8 @@ records:
     audio: ''
     register: ''
   conjugations: {}
-  tags: []
+  tags:
+  - m7-camera-vertical-dialogue
   usage_notes: ''
   audio: ''
   image: ''
@@ -130,7 +133,8 @@ records:
     audio: ''
     register: ''
   conjugations: {}
-  tags: []
+  tags:
+  - m7-camera-vertical-dialogue
   usage_notes: ''
   audio: ''
   image: ''
@@ -168,7 +172,8 @@ records:
     audio: ''
     register: ''
   conjugations: {}
-  tags: []
+  tags:
+  - m7-camera-vertical-dialogue
   usage_notes: ''
   audio: ''
   image: ''
@@ -207,7 +212,8 @@ records:
     audio: ''
     register: ''
   conjugations: {}
-  tags: []
+  tags:
+  - m7-camera-vertical-dialogue
   usage_notes: ''
   audio: ''
   image: ''
@@ -245,7 +251,8 @@ records:
     audio: ''
     register: ''
   conjugations: {}
-  tags: []
+  tags:
+  - m7-camera-vertical-dialogue
   usage_notes: ''
   audio: ''
   image: ''
@@ -283,7 +290,8 @@ records:
     audio: ''
     register: ''
   conjugations: {}
-  tags: []
+  tags:
+  - m7-camera-vertical-dialogue
   usage_notes: ''
   audio: ''
   image: ''
@@ -321,7 +329,8 @@ records:
     audio: ''
     register: ''
   conjugations: {}
-  tags: []
+  tags:
+  - m7-camera-vertical-dialogue
   usage_notes: ''
   audio: ''
   image: ''
@@ -359,7 +368,8 @@ records:
     audio: ''
     register: ''
   conjugations: {}
-  tags: []
+  tags:
+  - m7-camera-vertical-dialogue
   usage_notes: ''
   audio: ''
   image: ''
@@ -397,7 +407,8 @@ records:
     audio: ''
     register: ''
   conjugations: {}
-  tags: []
+  tags:
+  - m7-camera-vertical-dialogue
   usage_notes: ''
   audio: ''
   image: ''
@@ -436,7 +447,8 @@ records:
     audio: ''
     register: ''
   conjugations: {}
-  tags: []
+  tags:
+  - m7-camera-vertical-dialogue
   usage_notes: ''
   audio: ''
   image: ''
@@ -474,7 +486,8 @@ records:
     audio: ''
     register: ''
   conjugations: {}
-  tags: []
+  tags:
+  - m7-camera-vertical-dialogue
   usage_notes: ''
   audio: ''
   image: ''
@@ -511,7 +524,8 @@ records:
     audio: ''
     register: ''
   conjugations: {}
-  tags: []
+  tags:
+  - m7-camera-vertical-dialogue
   usage_notes: ''
   audio: ''
   image: ''
@@ -550,7 +564,8 @@ records:
     audio: ''
     register: ''
   conjugations: {}
-  tags: []
+  tags:
+  - m7-camera-vertical-dialogue
   usage_notes: ''
   audio: ''
   image: ''
