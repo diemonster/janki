@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from japanese_anki import claude_client
+from japanese_anki import claude_client, repairs
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import stable_record_id
 from japanese_anki.inputs import PreparedInput
@@ -764,7 +764,8 @@ def build_records(
         if record.id in known:
             seen.append(annotate(record, already_known=True))
         else:
-            fresh.append(record)
+            repaired, _changes = repairs.apply_ingest_safe([record])
+            fresh.append(repaired[0])
     return fresh + seen
 
 

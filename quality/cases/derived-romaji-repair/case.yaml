@@ -1,0 +1,17 @@
+version: 1
+id: derived-romaji-repair
+purpose: regression
+gating: true
+runner: repair-plan
+pipeline_boundary: repair-plan
+source_archetype: bilingual-layout
+redistributable: true
+fixture_basis: agent-created-synthetic
+fixtures:
+  - path: input.json
+    fingerprint: d516f0c2d854fe123c46e70e7037373ed46c1b33f568b3015c42ea53a0ecb253
+  - path: oracle.json
+    fingerprint: 29d6fc806ddc0ef1928bee91b2342181a62899ef5659f7fedf61dd574f131493
+runner_input: input.json
+oracle: oracle.json
+finding_id: derived-romaji-repair

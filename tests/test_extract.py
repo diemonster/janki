@@ -490,7 +490,11 @@ def test_already_known_candidates_are_marked_and_sorted_last(
 
     assert [record.expression for record in records] == ["食べる", "話す"]
     assert "already_known" not in records[0].source.raw_fields
+    assert records[0].romaji == "taberu"
+    assert "record-romaji-from-reading" in records[0].source.raw_fields["janki_repairs"]
     assert records[1].source.raw_fields["already_known"] == "true"
+    assert records[1].romaji == ""
+    assert "janki_repairs" not in records[1].source.raw_fields
 
 
 def test_repeated_candidate_rows_do_not_create_duplicate_canonical_records(

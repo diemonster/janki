@@ -2632,7 +2632,7 @@ missing or mismatched coverage approval; legacy staging compatibility; mixed
 table/prose reporting; prompt fingerprint changes; and no secrets or absolute
 paths in metadata.
 
-### [ ] M7.5 Named safe-repair registry + staged proposals
+### [x] M7.5 Named safe-repair registry + staged proposals
 
 Depends on: M7.2, M7.3
 Files: new `src/japanese_anki/repairs.py`, `src/japanese_anki/cli.py`,

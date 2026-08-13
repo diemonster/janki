@@ -59,6 +59,7 @@ RUNNER_BOUNDARIES = {
     "render-build": "render-build",
     "dictionary-enrichment": "dictionary-enrichment",
     "ai-enrichment": "ai-enrichment",
+    "repair-plan": "repair-plan",
 }
 
 _SLUG = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")

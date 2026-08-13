@@ -6,9 +6,11 @@ import dataclasses
 import hashlib
 import json
 import os
+import secrets
 import stat
 import tempfile
 from collections.abc import Iterable, Sequence
+from contextlib import ExitStack
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -109,6 +111,25 @@ def exclusive_path_lock(path: Path) -> Iterable[None]:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
+@contextlib.contextmanager
+def exclusive_path_locks(paths: Iterable[Path]) -> Iterable[None]:
+    """Lock several targets in one canonical order.
+
+    A transaction that touches records, staging, an archive, and a journal must
+    never choose a different lock order from another transaction. Real paths
+    are deduplicated before sorting, so aliases cannot acquire the same lock
+    twice or reverse two locks.
+    """
+    targets = sorted(
+        {Path(os.path.realpath(path)) for path in paths},
+        key=lambda path: os.fsencode(path),
+    )
+    with ExitStack() as stack:
+        for target in targets:
+            stack.enter_context(exclusive_path_lock(target))
+        yield
+
+
 @dataclass(frozen=True, slots=True)
 class RecordsRevision:
     """The exact records-file content a read-modify-write pass started from."""
@@ -187,6 +208,114 @@ def atomic_write_text(path: Path, text: str) -> None:
     except OSError as exc:
         # exc may name the random temp file; report the target the caller asked for.
         raise DataError(f"Could not write {path}: {exc.strerror or exc}") from exc
+
+
+def atomic_write_text_bound(
+    path: Path,
+    text: str,
+    *,
+    expected_revision: str | None = None,
+    expected_identity: tuple[int, int] | None = None,
+    expected_absent: bool = False,
+) -> None:
+    """Atomically replace the named path without following the target symlink.
+
+    Safe repair operations bind a repository path before they show a plan. They
+    must replace that name, not a symlink target introduced after the plan. A
+    directory file descriptor keeps the temporary file and final replace bound
+    to the same parent directory.
+    """
+    if expected_revision is not None and expected_absent:
+        raise DataError("A bound write cannot expect content and absence together")
+    target = Path(path).absolute()
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+        directory_flags |= getattr(os, "O_NOFOLLOW", 0)
+        directory_fd = os.open(target.parent, directory_flags)
+    except OSError as exc:
+        raise DataError(f"Could not open target directory for {target}: {exc}") from exc
+    temporary_name = ""
+    try:
+        try:
+            details = os.stat(target.name, dir_fd=directory_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            current_umask = os.umask(0)
+            os.umask(current_umask)
+            mode = 0o666 & ~current_umask
+        else:
+            if stat.S_ISLNK(details.st_mode) or not stat.S_ISREG(details.st_mode):
+                raise DataError(f"Refusing to replace non-regular target {target}")
+            mode = stat.S_IMODE(details.st_mode)
+        descriptor = -1
+        for _attempt in range(20):
+            temporary_name = f".{target.name}.{secrets.token_hex(8)}.tmp"
+            try:
+                descriptor = os.open(
+                    temporary_name,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    mode,
+                    dir_fd=directory_fd,
+                )
+                break
+            except FileExistsError:
+                continue
+        if descriptor < 0:
+            raise DataError(f"Could not allocate a temporary file for {target}")
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(text)
+                handle.flush()
+                os.fsync(handle.fileno())
+            try:
+                current_fd = os.open(
+                    target.name,
+                    os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+                    dir_fd=directory_fd,
+                )
+            except FileNotFoundError:
+                if not expected_absent and (
+                    expected_revision is not None or expected_identity is not None
+                ):
+                    raise DataError(
+                        f"Bound target changed before replace: {target}"
+                    ) from None
+            else:
+                try:
+                    current_details = os.fstat(current_fd)
+                    if expected_absent or not stat.S_ISREG(current_details.st_mode):
+                        raise DataError(f"Bound target changed before replace: {target}")
+                    if expected_identity is not None and (
+                        current_details.st_dev,
+                        current_details.st_ino,
+                    ) != expected_identity:
+                        raise DataError(f"Bound target changed identity: {target}")
+                    if expected_revision is not None:
+                        digest = hashlib.sha256()
+                        while current_chunk := os.read(current_fd, 1024 * 1024):
+                            digest.update(current_chunk)
+                        if digest.hexdigest() != expected_revision:
+                            raise DataError(f"Bound target changed content: {target}")
+                finally:
+                    os.close(current_fd)
+            os.replace(
+                temporary_name,
+                target.name,
+                src_dir_fd=directory_fd,
+                dst_dir_fd=directory_fd,
+            )
+            temporary_name = ""
+            os.fsync(directory_fd)
+        finally:
+            if temporary_name:
+                with contextlib.suppress(OSError):
+                    os.unlink(temporary_name, dir_fd=directory_fd)
+    except DataError:
+        raise
+    except OSError as exc:
+        raise DataError(f"Could not write {target}: {exc.strerror or exc}") from exc
+    finally:
+        os.close(directory_fd)
 
 
 def load_structured(path: Path) -> Any:

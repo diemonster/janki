@@ -20,12 +20,13 @@ passes ``force=True``. In-place annotation of a file under review (M2.6's
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import io
 import json
 import re
 import sys
-from collections.abc import Iterable, Mapping, MutableMapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, MutableMapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -34,12 +35,23 @@ import yaml
 from ruamel.yaml import YAML, YAMLError
 
 from japanese_anki.errors import JankiError
-from japanese_anki.io import atomic_write_text, load_structured
+from japanese_anki.io import atomic_write_text, exclusive_path_lock, load_structured
 from japanese_anki.models import VocabularyRecord
 
 
 class StagingError(JankiError):
     pass
+
+
+def _path_locked(function: Callable[..., Any]) -> Callable[..., Any]:
+    """Run a complete staging read-modify-write pass under its path lock."""
+
+    @functools.wraps(function)
+    def locked(path: Path, *args: Any, **kwargs: Any) -> Any:
+        with exclusive_path_lock(Path(path)):
+            return function(path, *args, **kwargs)
+
+    return locked
 
 
 # Review annotations, stored stringified in ``source.raw_fields``.
@@ -544,6 +556,7 @@ def annotations(record: VocabularyRecord) -> dict[str, str]:
     return {key: raw_fields[key] for key in ANNOTATION_KEYS if key in raw_fields}
 
 
+@_path_locked
 def write_staging(
     path: Path,
     records: Iterable[VocabularyRecord],
@@ -670,6 +683,7 @@ def _apply_changes(
         target[key] = new_value
 
 
+@_path_locked
 def rewrite_staging(path: Path, records: Sequence[VocabularyRecord]) -> Path:
     """Update an existing staging file in place, preserving what janki does not own.
 
@@ -728,6 +742,7 @@ def rewrite_staging(path: Path, records: Sequence[VocabularyRecord]) -> Path:
     return path
 
 
+@_path_locked
 def prune_staging(path: Path, keep: Sequence[bool]) -> int:
     """Drop rows from a staging file, keeping the surviving ones verbatim.
 

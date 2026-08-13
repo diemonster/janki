@@ -5,11 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from japanese_anki import enrich, hardening, hardening_replay, jpdb, kanji, qc
+from japanese_anki import enrich, hardening, hardening_replay, jpdb, kanji, qc, repairs
 
 ROOT = Path(__file__).resolve().parents[1]
 SEEDED_CASES = (
     "ai-no-writable-change",
+    "derived-romaji-repair",
     "extraction-unit-accounting",
     "impossible-character-furigana",
     "missing-furigana-separator",
@@ -233,6 +234,11 @@ def test_replay_reads_only_declared_case_fixtures_not_a_private_source(
         ("impossible-character-furigana", kanji, lambda _info, _reading: True),
         ("missing-furigana-separator", qc, lambda furigana: furigana),
         ("ai-no-writable-change", enrich, lambda _result: []),
+        (
+            "derived-romaji-repair",
+            repairs,
+            lambda records, _declarations, **_kwargs: (list(records), []),
+        ),
     ],
 )
 def test_each_seeded_case_kills_a_production_mutant(
@@ -246,6 +252,7 @@ def test_each_seeded_case_kills_a_production_mutant(
         "impossible-character-furigana": "assigns_a_known_reading",
         "missing-furigana-separator": "repair_spilled_punctuation",
         "ai-no-writable-change": "format_ai_no_changes",
+        "derived-romaji-repair": "apply_declarations",
     }
     monkeypatch.setattr(target, names[case_id], replacement)
 

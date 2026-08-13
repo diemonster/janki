@@ -285,6 +285,21 @@ promote time. These records have never been in Anki, so there is no review
 history to orphan — which is exactly why this is the only place an ID may
 change.
 
+### Registered repairs
+
+Use `janki repair PATH` to check a registered repair. The command shows the
+input revision, each old and new value, and the repair-plan fingerprint. It does
+not change the file.
+
+Use `--apply CODE --expected-plan SHA256` for a non-interactive, derived-field
+repair. The fingerprint must match the new plan. Direct apply cannot change an
+ID or a protected content field.
+
+A protected content repair uses `--propose CODE`. This command writes a
+fingerprinted file to active staging. It does not change the source record. Run
+`janki promote FILE --accept-proposals` in a terminal. The command asks for a
+`y`, `n`, or `q` decision for each field.
+
 Then build as usual:
 
 ```bash

@@ -1,0 +1,18 @@
+{
+  "records": [
+    {
+      "id": "word:ねこ:ねこ",
+      "expression": "ねこ",
+      "reading": "ねこ",
+      "romaji": "wrong",
+      "meanings": ["cat"]
+    }
+  ],
+  "codes": ["record-romaji-from-reading"],
+  "observe": [
+    {
+      "id": "word:ねこ:ねこ",
+      "fields": ["romaji"]
+    }
+  ]
+}

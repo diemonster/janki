@@ -24,6 +24,7 @@ from japanese_anki import (
     kanji,
     promote,
     qc,
+    repairs,
     staging,
     validation,
 )
@@ -515,6 +516,25 @@ def _validation_qc(data: dict[str, Any], root: Path) -> Any:
     }
 
 
+def _repair_plan(data: dict[str, Any], root: Path) -> Any:
+    del root
+    _only(data, {"records", "codes", "observe"}, "repair-plan")
+    records = _records(data.get("records"))
+    codes = _string_list(data.get("codes", []), "codes")
+    declarations = repairs.REGISTRY.select(codes)
+    updated, changes = repairs.apply_declarations(
+        records,
+        declarations,
+        modes=frozenset({"ingest-safe"}),
+    )
+    issues = validation.validate_records(updated, "offline-case")
+    return {
+        "records": _observed_records(updated, data.get("observe", [])),
+        "changes": [change.to_dict() for change in changes],
+        "errors": sum(issue.level == "error" for issue in issues),
+    }
+
+
 def _dictionary_enrichment(data: dict[str, Any], root: Path) -> Any:
     del root
     _only(
@@ -715,6 +735,7 @@ RUNNERS: dict[str, Callable[[dict[str, Any], Path], Any]] = {
     "render-build": _render_build,
     "dictionary-enrichment": _dictionary_enrichment,
     "ai-enrichment": _ai_enrichment,
+    "repair-plan": _repair_plan,
 }
 
 

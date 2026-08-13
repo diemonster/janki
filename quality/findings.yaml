@@ -1,5 +1,17 @@
 version: 1
 findings:
+  - id: derived-romaji-repair
+    state: fixed
+    pipeline_stage: repair-plan
+    source_archetypes: [bilingual-layout]
+    symptom: A repeated derived-field correction had no named and reviewable production path.
+    invariant: A repair uses a versioned declaration, declared inputs, field limits, and exact diffs.
+    evidence:
+      - fingerprint: d516f0c2d854fe123c46e70e7037373ed46c1b33f568b3015c42ea53a0ecb253
+        locator: quality/cases/derived-romaji-repair/input.json
+    recurrences: []
+    case_ids: [derived-romaji-repair]
+    fix_ref: docs/IMPLEMENTATION_PLAN.md#m7.5
   - id: extraction-unit-accounting
     state: fixed
     pipeline_stage: extraction
