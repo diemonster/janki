@@ -3515,6 +3515,15 @@
           ],
           "kind": "jpdb",
           "model": "jpdb"
+        },
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
         }
       ],
       "exports": {},
@@ -3699,6 +3708,15 @@
           ],
           "kind": "jpdb",
           "model": "jpdb"
+        },
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
         }
       ],
       "exports": {},
@@ -3956,6 +3974,15 @@
           ],
           "kind": "jpdb",
           "model": "jpdb"
+        },
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
         }
       ],
       "exports": {},
@@ -4348,6 +4375,15 @@
           ],
           "kind": "jpdb",
           "model": "jpdb"
+        },
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
         }
       ],
       "exports": {},
@@ -4372,6 +4408,15 @@
           ],
           "kind": "jpdb",
           "model": "jpdb"
+        },
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
         }
       ],
       "exports": {},
@@ -4783,6 +4828,15 @@
           ],
           "kind": "jpdb",
           "model": "jpdb"
+        },
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
         }
       ],
       "exports": {},
@@ -4807,6 +4861,15 @@
           ],
           "kind": "jpdb",
           "model": "jpdb"
+        },
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
         }
       ],
       "exports": {},
@@ -5431,6 +5494,15 @@
           ],
           "kind": "jpdb",
           "model": "jpdb"
+        },
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
         }
       ],
       "exports": {},
@@ -5456,6 +5528,15 @@
           ],
           "kind": "jpdb",
           "model": "jpdb"
+        },
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
         }
       ],
       "exports": {},
@@ -5626,6 +5707,15 @@
           ],
           "kind": "jpdb",
           "model": "jpdb"
+        },
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
         }
       ],
       "exports": {},
@@ -5733,6 +5823,23 @@
             "frequency_rank",
             "furigana",
             "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        },
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "furigana_unverified"
           ],
           "kind": "jpdb",
           "model": "jpdb"
@@ -5928,6 +6035,15 @@
           ],
           "kind": "jpdb",
           "model": "jpdb"
+        },
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
         }
       ],
       "exports": {},
@@ -6188,7 +6304,17 @@
     "word:貴方:あなた": {
       "added_at": "2026-08-13",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -6596,6 +6722,15 @@
           ],
           "kind": "jpdb",
           "model": "jpdb"
+        },
+        {
+          "at": "2026-08-13",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "gpt-5.6-sol"
         }
       ],
       "exports": {},

@@ -1278,7 +1278,7 @@
       {
         "japanese": "バスはすぐ来ますから、大丈夫です。",
         "furigana": "バスは すぐ 来[き]ますから、 大丈夫[だいじょうぶ]です。",
-        "romaji": "basuha sugukidaijoubudesu.",
+        "romaji": "basuha sugukimasukara, daijoubudesu.",
         "english": "The bus will come soon, so it's fine.",
         "audio": "audio/janki-0ef1b5e5e8d7.mp3",
         "register": "polite"
@@ -1315,7 +1315,8 @@
         "anki_tags": "Yotsubato1",
         "anki_Front": "<div>すぐ</div>",
         "anki_Back": "<div>すぐ</div><div>Soon, almost</div><div><br /></div>",
-        "anki_Add Reverse": ""
+        "anki_Add Reverse": "",
+        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -1479,7 +1480,7 @@
       {
         "japanese": "そう言えば、来週の休みに京都へ行くつもりです。",
         "furigana": "そう 言[い]えば、 来週[らいしゅう]の 休[やす]みに 京都[きょうと]へ 行[い]くつもりです。",
-        "romaji": "souiraishuunoyasuminikyoutoheikutsumoridesu.",
+        "romaji": "souieba, raishuunoyasuminikyoutoheikutsumoridesu.",
         "english": "Speaking of which, I'm planning to go to Kyoto on next week's day off.",
         "audio": "audio/janki-41439a7faf2b.mp3",
         "register": "polite"
@@ -1516,7 +1517,8 @@
         "anki_tags": "Yotsubato1",
         "anki_Front": "<div>そう言えば</div>",
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>そういえば　「そういや」</div><div>“Speaking of which”</div></span>",
-        "anki_Add Reverse": "y"
+        "anki_Add Reverse": "y",
+        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -2131,7 +2133,7 @@
       {
         "japanese": "もう帰るね。明日は朝が早いんだ。",
         "furigana": "もう 帰[かえ]るね。 明日[あした]は 朝[あさ]が 早[はや]いんだ。",
-        "romaji": "moukaeashitahaasagahayainda.",
+        "romaji": "moukaerune. ashitahaasagahayainda.",
         "english": "I'm heading home soon. I have an early morning tomorrow, you see.",
         "audio": "audio/janki-cc665b5c2d69.mp3",
         "register": "casual"
@@ -2163,7 +2165,8 @@
         "anki_tags": "Yotsubato1",
         "anki_Front": "<div>もう</div>",
         "anki_Back": "<div>もう</div><div>Soon, shortly</div>",
-        "anki_Add Reverse": ""
+        "anki_Add Reverse": "",
+        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[1].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -2347,7 +2350,7 @@
       {
         "japanese": "見て、空に星が一杯だよ。",
         "furigana": "見[み]て、 空[そら]に 星[ほし]が 一杯[いっぱい]だよ。",
-        "romaji": "misoranihoshigaippaidayo.",
+        "romaji": "mite, soranihoshigaippaidayo.",
         "english": "Look, the sky is full of stars.",
         "audio": "audio/janki-71d8d2c1c1cf.mp3",
         "register": "casual"
@@ -2377,7 +2380,8 @@
         "anki_tags": "Yotsubato1",
         "anki_Front": "<div>一杯</div>",
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>いっぱい</div><div>A lot, a full container</div></span>",
-        "anki_Add Reverse": "y"
+        "anki_Add Reverse": "y",
+        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[1].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -2706,18 +2710,18 @@
     "examples": [
       {
         "japanese": "黄金律の修復について",
-        "furigana": "",
-        "romaji": "",
-        "english": "",
+        "furigana": "黄金律[おうごんりつ]の 修復[しゅうふく]について",
+        "romaji": "ougonritsunoshuufukunitsuite",
+        "english": "About the restoration of the Golden Rule",
         "audio": "",
-        "register": ""
+        "register": "polite"
       }
     ],
     "conjugations": {},
     "tags": [
       "m7-camera-vertical-dialogue"
     ],
-    "usage_notes": "",
+    "usage_notes": "修復する means “to restore” or “to repair,” especially by returning something damaged—such as a building, artwork, or data—to its former condition. 修理する is more common for fixing everyday machines and appliances.",
     "audio": "",
     "image": "",
     "pitch_accent": [
@@ -2873,18 +2877,18 @@
     "examples": [
       {
         "japanese": "円卓へようこそ！",
-        "furigana": "",
-        "romaji": "",
-        "english": "",
+        "furigana": "円卓[えんたく]へようこそ！",
+        "romaji": "entakuheyoukoso!",
+        "english": "Welcome to the round table!",
         "audio": "",
-        "register": ""
+        "register": "polite"
       }
     ],
     "conjugations": {},
     "tags": [
       "m7-camera-vertical-dialogue"
     ],
-    "usage_notes": "",
+    "usage_notes": "円卓 is somewhat formal or literary. It often appears in expressions such as 円卓会議 (“round-table conference”) and 円卓の騎士 (“Knights of the Round Table”).",
     "audio": "",
     "image": "",
     "pitch_accent": [
@@ -3108,18 +3112,18 @@
     "examples": [
       {
         "japanese": "初めてのおかたでしょう？",
-        "furigana": "",
-        "romaji": "",
-        "english": "",
+        "furigana": "初[はじ]めてのおかたでしょう？",
+        "romaji": "hajimetenookatadeshou?",
+        "english": "It’s your first time, isn’t it?",
         "audio": "",
-        "register": ""
+        "register": "polite"
       }
     ],
     "conjugations": {},
     "tags": [
       "m7-camera-vertical-dialogue"
     ],
-    "usage_notes": "",
+    "usage_notes": "初めて means “for the first time.” Before a noun, use 初めての, as in 初めてのおかた (“someone who is here for the first time”). おかた is a respectful way to say “person.”",
     "audio": "",
     "image": "",
     "pitch_accent": [
@@ -3138,7 +3142,8 @@
         "context": "初めてのおかたでしょう？ コリンと申します",
         "inclusion_reason": "Common adverb used here as a modifier (初めてのおかた); worth reinforcing the の-modifier usage.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:34e32a8e77cfbf56d057b9f81e568c3b0d706904424f825b01750486688817d8"
+        "janki_pitch_accent_source": "jpdb:34e32a8e77cfbf56d057b9f81e568c3b0d706904424f825b01750486688817d8",
+        "furigana_unverified": "5d1bf91c5c1e"
       }
     }
   },
@@ -3451,18 +3456,18 @@
     "examples": [
       {
         "japanese": "ときに貴方 祝福の導きは？",
-        "furigana": "",
-        "romaji": "",
-        "english": "",
+        "furigana": "ときに 貴方[あなた] 祝福[しゅくふく]の 導[みちび]きは？",
+        "romaji": "tokinianatashukufukunomichibikiha?",
+        "english": "By the way, what about the guidance of grace?",
         "audio": "",
-        "register": ""
+        "register": "casual"
       }
     ],
     "conjugations": {},
     "tags": [
       "m7-camera-vertical-dialogue"
     ],
-    "usage_notes": "",
+    "usage_notes": "導き is the noun form of 導く (“to guide”). It often has a literary, spiritual, or fantasy-like tone, as in 神の導き (“divine guidance”) or 祝福の導き (“the guidance of grace”).",
     "audio": "",
     "image": "",
     "pitch_accent": [
@@ -3503,18 +3508,18 @@
     "examples": [
       {
         "japanese": "その前に差し支えなければ",
-        "furigana": "",
-        "romaji": "",
-        "english": "",
+        "furigana": "その 前[まえ]に 差[さ]し 支[つか]えなければ",
+        "romaji": "sonomaenisashitsukaenakereba",
+        "english": "Before that, if you don't mind...",
         "audio": "",
-        "register": ""
+        "register": "polite"
       }
     ],
     "conjugations": {},
     "tags": [
       "m7-camera-vertical-dialogue"
     ],
-    "usage_notes": "",
+    "usage_notes": "「差し支えなければ」は「もし不都合でなければ／よろしければ」という丁寧でやや改まった表現で、質問や依頼の前によく使います。",
     "audio": "",
     "image": "",
     "pitch_accent": [
@@ -3871,18 +3876,18 @@
     "examples": [
       {
         "japanese": "私は聖職者として黄金律の探求をしています",
-        "furigana": "",
-        "romaji": "",
-        "english": "",
+        "furigana": "私[わたし]は 聖職者[せいしょくしゃ]として 黄金律[おうごんりつ]の 探求[たんきゅう]をしています",
+        "romaji": "watashihaseishokushatoshiteougonritsunotankyuuoshiteimasu",
+        "english": "As a member of the clergy, I am pursuing the Golden Rule.",
         "audio": "",
-        "register": ""
+        "register": "polite"
       }
     ],
     "conjugations": {},
     "tags": [
       "m7-camera-vertical-dialogue"
     ],
-    "usage_notes": "",
+    "usage_notes": "探求 is a relatively formal word for the sustained pursuit or investigation of an idea, truth, or knowledge. Common combinations include 真理の探求 (“the pursuit of truth”) and 知識の探求 (“the pursuit of knowledge”).",
     "audio": "",
     "image": "",
     "pitch_accent": [
@@ -3901,7 +3906,8 @@
         "context": "私は聖職者として黄金律の探求をしています",
         "inclusion_reason": "Useful suru-noun for abstract pursuit; common in written Japanese.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:a087f1945a9f64e4a562e72a5826f29e360d48b6d4d55d00f4ab0f91ce9a39d2"
+        "janki_pitch_accent_source": "jpdb:a087f1945a9f64e4a562e72a5826f29e360d48b6d4d55d00f4ab0f91ce9a39d2",
+        "furigana_unverified": "029b8cf639c8"
       }
     }
   },
@@ -3921,18 +3927,18 @@
     "examples": [
       {
         "japanese": "新来のかたにはぜひお伝えしたいのです",
-        "furigana": "",
-        "romaji": "",
-        "english": "",
+        "furigana": "新来[しんらい]のかたにはぜひお 伝[つた]えしたいのです",
+        "romaji": "shinrainokatanihazehiotsutaeshitainodesu",
+        "english": "This is something I definitely want to tell newcomers.",
         "audio": "",
-        "register": ""
+        "register": "polite"
       }
     ],
     "conjugations": {},
     "tags": [
       "m7-camera-vertical-dialogue"
     ],
-    "usage_notes": "",
+    "usage_notes": "新来 is chiefly used with の before a person or group, as in 新来のかた (“newly arrived people; newcomers”).",
     "audio": "",
     "image": "",
     "pitch_accent": [
@@ -3951,7 +3957,8 @@
         "context": "新来のかたにはぜひお伝えしたいのです 役に立ちます",
         "inclusion_reason": "Compound of 新 + 来 that is transparent but not obvious to a learner.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:25c0c759d35178e9575a6e745e6f3282f3681a89bd0f8ceeb41f521ec1b2d181"
+        "janki_pitch_accent_source": "jpdb:25c0c759d35178e9575a6e745e6f3282f3681a89bd0f8ceeb41f521ec1b2d181",
+        "furigana_unverified": "4588b9ac2da5"
       }
     }
   },
@@ -4432,18 +4439,18 @@
     "examples": [
       {
         "japanese": "それと実は祈祷の示教もしておりまして",
-        "furigana": "",
-        "romaji": "",
-        "english": "",
+        "furigana": "それと 実[じつ]は 祈祷[きとう]の 示教[しきょう]もしておりまして",
+        "romaji": "soretojitsuhakitounoshikyoumoshiteorimashite",
+        "english": "And actually, I also provide instruction in prayer.",
         "audio": "",
-        "register": ""
+        "register": "polite"
       }
     ],
     "conjugations": {},
     "tags": [
       "m7-camera-vertical-dialogue"
     ],
-    "usage_notes": "",
+    "usage_notes": "祈祷 is a formal or religious term for prayer or ritual invocation, often used as 祈祷する (“to pray” or “to perform a prayer ritual”).",
     "audio": "",
     "image": "",
     "pitch_accent": [
@@ -4462,7 +4469,8 @@
         "context": "それと実は祈祷の示教もしておりましてどうでしょう？",
         "inclusion_reason": "Ruby-glossed noun central to the dialogue; less common than 祈り so worth a card.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:9576d7e74a78949f147e1dd18f9539fa46fa9e2d80a85253ff6d396f5b9481b4"
+        "janki_pitch_accent_source": "jpdb:9576d7e74a78949f147e1dd18f9539fa46fa9e2d80a85253ff6d396f5b9481b4",
+        "furigana_unverified": "124dce21f4b4"
       }
     }
   },
@@ -4482,18 +4490,18 @@
     "examples": [
       {
         "japanese": "ときに貴方 祝福の導きは？",
-        "furigana": "",
-        "romaji": "",
-        "english": "",
+        "furigana": "ときに 貴方[あなた] 祝福[しゅくふく]の 導[みちび]きは？",
+        "romaji": "tokinianatashukufukunomichibikiha?",
+        "english": "By the way, what guidance does the blessing offer you?",
         "audio": "",
-        "register": ""
+        "register": "casual"
       }
     ],
     "conjugations": {},
     "tags": [
       "m7-camera-vertical-dialogue"
     ],
-    "usage_notes": "",
+    "usage_notes": "「祝福」は「祝福する」（to bless）、「祝福を受ける」（to receive a blessing）などの形でよく使います。この例文は古風で芝居がかった言い方です。",
     "audio": "",
     "image": "",
     "pitch_accent": [
@@ -4540,7 +4548,7 @@
       {
         "japanese": "ねえ、明日の祭り、行くの？",
         "furigana": "ねえ、 明日[あした]の 祭[まつ]り、行[い]くの？",
-        "romaji": "ashitanomatsuikuno?",
+        "romaji": "nee, ashitanomatsuikuno?",
         "english": "Hey, are you going to tomorrow's festival?",
         "audio": "audio/janki-0f6dea7a580e.mp3",
         "register": "casual"
@@ -4569,7 +4577,8 @@
         "anki_tags": "Yotsubato1",
         "anki_Front": "<div>祭り</div>",
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>まつり</div><div>Festival</div></span>",
-        "anki_Add Reverse": "y"
+        "anki_Add Reverse": "y",
+        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[1].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -4645,18 +4654,18 @@
     "examples": [
       {
         "japanese": "私は聖職者として黄金律の探求をしています",
-        "furigana": "",
-        "romaji": "",
-        "english": "",
+        "furigana": "私[わたし]は 聖職者[せいしょくしゃ]として 黄金律[おうごんりつ]の 探求[たんきゅう]をしています",
+        "romaji": "watashihaseishokushatoshiteougonritsunotankyuuoshiteimasu",
+        "english": "As a member of the clergy, I am exploring the Golden Rule.",
         "audio": "",
-        "register": ""
+        "register": "polite"
       }
     ],
     "conjugations": {},
     "tags": [
       "m7-camera-vertical-dialogue"
     ],
-    "usage_notes": "",
+    "usage_notes": "聖職者 is a broad, relatively formal term for a member of the clergy. More specific titles include 神父 (Catholic priest), 牧師 (Protestant minister), and 僧侶 (Buddhist monk or priest).",
     "audio": "",
     "image": "",
     "pitch_accent": [
@@ -4675,7 +4684,8 @@
         "context": "私は聖職者として黄金律の探求をしています",
         "inclusion_reason": "Religious-role noun built on useful kanji (聖・職・者).",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:123a2375056234a819b9de1356f15a8a49c396be63a69d03f43b59e2075e96f3"
+        "janki_pitch_accent_source": "jpdb:123a2375056234a819b9de1356f15a8a49c396be63a69d03f43b59e2075e96f3",
+        "furigana_unverified": "029b8cf639c8"
       }
     }
   },
@@ -4765,18 +4775,18 @@
     "examples": [
       {
         "japanese": "二本指様の祈祷にご興味は？",
-        "furigana": "",
-        "romaji": "",
-        "english": "",
+        "furigana": "二本指[にほんゆび]様[さま]の 祈祷[きとう]にご 興味[きょうみ]は？",
+        "romaji": "nihon'yubisamanokitounigokyoumiha?",
+        "english": "Are you interested in the Two Fingers’ incantations?",
         "audio": "",
-        "register": ""
+        "register": "polite"
       }
     ],
     "conjugations": {},
     "tags": [
       "m7-camera-vertical-dialogue"
     ],
-    "usage_notes": "",
+    "usage_notes": "「〜に興味がある」 means “to be interested in something.” 「ご興味は？」 is a polite, honorific abbreviation of 「ご興味はありますか」.",
     "audio": "",
     "image": "",
     "pitch_accent": [
@@ -4795,7 +4805,7 @@
         "page": "1",
         "context": "二本指様の祈祷にご興味は？",
         "inclusion_reason": "High-frequency noun with the ～に興味がある pattern.",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:3ef2ccb06d2be21b40ce805bbb34c92444288f773d0de5f4c85ccd18b23c4ccf"
       }
     }
@@ -4947,18 +4957,18 @@
     "examples": [
       {
         "japanese": "貴方の見解を伺いたく",
-        "furigana": "",
-        "romaji": "",
-        "english": "",
+        "furigana": "貴方[あなた]の 見解[けんかい]を 伺[うかが]いたく",
+        "romaji": "anatanokenkaioukagaitaku",
+        "english": "I would like to hear your point of view.",
         "audio": "",
-        "register": ""
+        "register": "polite"
       }
     ],
     "conjugations": {},
     "tags": [
       "m7-camera-vertical-dialogue"
     ],
-    "usage_notes": "",
+    "usage_notes": "見解 is more formal than 意見 and is often used for considered views on an issue. Common expressions include 見解を述べる (“state one’s view”), 見解を示す (“express one’s view”), and 見解を伺う (“ask someone’s view”).",
     "audio": "",
     "image": "",
     "pitch_accent": [
@@ -5192,18 +5202,18 @@
     "examples": [
       {
         "japanese": "貴方の見解を伺いたく",
-        "furigana": "",
-        "romaji": "",
-        "english": "",
+        "furigana": "貴方[あなた]の 見解[けんかい]を 伺[うかが]いたく",
+        "romaji": "anatanokenkaioukagaitaku",
+        "english": "I would like to hear your opinion.",
         "audio": "",
-        "register": ""
+        "register": "polite"
       }
     ],
     "conjugations": {},
     "tags": [
       "m7-camera-vertical-dialogue"
     ],
-    "usage_notes": "",
+    "usage_notes": "貴方 is an uncommon kanji spelling of あなた, mostly seen in formal or literary writing. In ordinary conversation, using a person’s name or title—or omitting “you”—often sounds more natural. The example is a formal elliptical phrase; 伺いたく implies that more wording follows or has been omitted.",
     "audio": "",
     "image": "",
     "pitch_accent": [],
@@ -5551,18 +5561,18 @@
     "examples": [
       {
         "japanese": "私は聖職者として黄金律の探求をしています",
-        "furigana": "",
-        "romaji": "",
-        "english": "",
+        "furigana": "私[わたし]は 聖職者[せいしょくしゃ]として 黄金律[おうごんりつ]の 探求[たんきゅう]をしています",
+        "romaji": "watashihaseishokushatoshiteougonritsunotankyuuoshiteimasu",
+        "english": "As a member of the clergy, I am exploring the Golden Rule.",
         "audio": "",
-        "register": ""
+        "register": "polite"
       }
     ],
     "conjugations": {},
     "tags": [
       "m7-camera-vertical-dialogue"
     ],
-    "usage_notes": "",
+    "usage_notes": "A formal noun often used for the ethical principle of treating others as one would like to be treated. It can also mean a fundamental rule in a particular field.",
     "audio": "",
     "image": "",
     "pitch_accent": [
@@ -5581,7 +5591,8 @@
         "context": "私は聖職者として黄金律の探求をしています",
         "inclusion_reason": "Key setting term repeated on the page; teaches 黄金 plus 律.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:a9fd729e984f1e24776a64435e219806505f4bf0204e54ee9c15709ad21cbb8a"
+        "janki_pitch_accent_source": "jpdb:a9fd729e984f1e24776a64435e219806505f4bf0204e54ee9c15709ad21cbb8a",
+        "furigana_unverified": "029b8cf639c8"
       }
     }
   }
