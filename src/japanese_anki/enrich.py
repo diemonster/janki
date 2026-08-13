@@ -32,12 +32,13 @@ from __future__ import annotations
 
 import functools
 import hashlib
+import json
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, is_dataclass, replace
 from dataclasses import fields as dc_fields
 from typing import Any
 
-from japanese_anki import claude_client, jpdb, qc
+from japanese_anki import claude_client, jpdb, pitch, qc
 from japanese_anki.conjugation import conjugate
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import contains_kanji, short_fingerprint
@@ -58,6 +59,7 @@ __all__ = [
     "STAGING_THRESHOLD",
     "UNVERIFIED_KEY",
     "ai_prompt",
+    "ai_retry_prompt",
     "ai_schema",
     "ai_targets",
     "absorb_ai_call",
@@ -281,10 +283,38 @@ class DictionaryReadings:
 
     primary: str
     all_readings: frozenset[str]
+    supports_suru_suffix: bool = False
+
+
+def _supports_suru_suffix(
+    expression: str, reading: str, entry: Mapping[str, Any]
+) -> bool:
+    """Whether jpdb's stem entry proves this exact ``Xする`` identity."""
+    entry_spelling = str(entry.get("spelling") or "").strip()
+    entry_reading = str(entry.get("reading") or "").strip()
+    part_of_speech = entry.get("part_of_speech")
+    pos_codes = (
+        {
+            str(item).strip()
+            for item in part_of_speech
+            if isinstance(item, str) and item.strip()
+        }
+        if isinstance(part_of_speech, Sequence)
+        and not isinstance(part_of_speech, str)
+        else set()
+    )
+    return (
+        expression.endswith("する")
+        and reading.endswith("する")
+        and bool(expression[:-2])
+        and entry_spelling == expression[:-2]
+        and entry_reading == reading[:-2]
+        and any(code == "vs" or code.startswith("vs-") for code in pos_codes)
+    )
 
 
 def dictionary_readings(
-    client: jpdb.JpdbClient, expression: str
+    client: jpdb.JpdbClient, expression: str, reading: str = ""
 ) -> DictionaryReadings | None:
     """Every reading jpdb lists for ``expression``, or ``None`` if it cannot say.
 
@@ -298,13 +328,15 @@ def dictionary_readings(
     "the dictionary disagrees" and "the dictionary has no opinion" deserve
     different answers.
     """
-    found = _parse(client, expression)
+    found = _parse(client, expression, reading)
     if found is None:
         return None
     entry = found[1]
+    entry_reading = str(entry.get("reading") or "").strip()
     return DictionaryReadings(
-        primary=str(entry.get("reading") or "").strip(),
+        primary=entry_reading,
         all_readings=frozenset(_readings_for(client, entry)),
+        supports_suru_suffix=_supports_suru_suffix(expression, reading, entry),
     )
 
 
@@ -372,9 +404,27 @@ def _proposals(
         "conjugations": conjugate(
             record.expression, record.reading, verb_group or part_of_speech
         ),
-        "pitch_accent": jpdb.accent_patterns(entry.get("pitch_accent")),
+        "pitch_accent": _compatible_pitch_patterns(
+            record.reading, entry.get("pitch_accent")
+        )[0],
         "frequency_rank": jpdb.frequency_rank(entry.get("frequency_rank")),
     }
+
+
+def _compatible_pitch_patterns(
+    reading: str, value: Any
+) -> tuple[list[str], list[str]]:
+    """Split jpdb patterns into compatible and unusable values."""
+    valid: list[str] = []
+    invalid: list[str] = []
+    for pattern in jpdb.accent_patterns(value):
+        try:
+            pitch.to_aquestalk(reading, pattern)
+        except pitch.PitchError:
+            invalid.append(pattern)
+        else:
+            valid.append(pattern)
+    return valid, invalid
 
 
 def _wanted(record: VocabularyRecord, force_fields: Sequence[str]) -> list[str]:
@@ -458,6 +508,7 @@ def enrich_records(
             continue
         token, entry = found
         jpdb_reading = str(entry.get("reading") or "").strip()
+        entry_spelling = str(entry.get("spelling", "")).strip()
         if not record.reading and str(entry.get("spelling", "")).strip() != (
             record.expression
         ):
@@ -474,9 +525,34 @@ def enrich_records(
                 "written; fill in the reading first."
             )
             continue
+        if (
+            record.reading
+            and record.reading != jpdb_reading
+            and entry_spelling != record.expression
+        ):
+            # An all-kana expression can tokenize as a different, more common
+            # word. Do not use that unrelated entry to reject the reviewed
+            # identity. Retry with the stored reading before any dictionary
+            # field is trusted. The ordinary exact-spelling homograph path
+            # below still checks the entry's declared reading set first.
+            pinned = _parse(client, record.expression, record.reading)
+            if pinned is not None:
+                pinned_token, pinned_entry = pinned
+                pinned_reading = str(pinned_entry.get("reading") or "").strip()
+                if _supports_suru_suffix(
+                    record.expression, record.reading, pinned_entry
+                ) or (
+                    pinned_reading == record.reading
+                    or record.reading in _readings_for(client, pinned_entry)
+                ):
+                    token, entry = pinned_token, pinned_entry
+                    jpdb_reading = pinned_reading
         if record.reading and record.reading != jpdb_reading:
             known = _readings_for(client, entry)
-            if record.reading not in known:
+            supports_suru_suffix = _supports_suru_suffix(
+                record.expression, record.reading, entry
+            )
+            if record.reading not in known and not supports_suru_suffix:
                 listed = ", ".join(sorted(known)) or jpdb_reading or "none"
                 result.warnings.append(
                     f"{record_id}: janki reads {record.expression} as "
@@ -484,20 +560,28 @@ def enrich_records(
                     "the reading is part of the record ID and is never auto-fixed."
                 )
                 continue
-            # janki's reading is one jpdb knows, so the first parse simply
-            # picked the other homograph. Ask again, pinned to this one.
-            found = _parse(client, record.expression, record.reading)
-            if found is None:
-                result.warnings.append(
-                    f"{record_id}: jpdb did not parse {record.expression} as one word "
-                    f"when given the reading {record.reading}; nothing was written"
-                )
-                continue
-            token, entry = found
+            if not supports_suru_suffix:
+                # janki's reading is one jpdb knows, so the first parse simply
+                # picked the other homograph. Ask again, pinned to this one.
+                found = _parse(client, record.expression, record.reading)
+                if found is None:
+                    result.warnings.append(
+                        f"{record_id}: jpdb did not parse {record.expression} as one word "
+                        f"when given the reading {record.reading}; nothing was written"
+                    )
+                    continue
+                token, entry = found
 
-        updated, changes = _apply(
-            record, _proposals(record, token, entry, kanji_store), writable
+        proposals = _proposals(record, token, entry, kanji_store)
+        _valid_pitch, invalid_pitch = _compatible_pitch_patterns(
+            record.reading, entry.get("pitch_accent")
         )
+        if invalid_pitch:
+            result.warnings.append(
+                f"{record_id}: jpdb pitch pattern(s) {', '.join(invalid_pitch)} "
+                f"do not fit reading {record.reading}; pitch accent was not written"
+            )
+        updated, changes = _apply(record, proposals, writable)
         if changes:
             result.records[by_id[record_id]] = updated
             result.changes[record_id] = changes
@@ -802,7 +886,7 @@ def ai_prompt(
     sentence forced into a pattern that does not suit the word is worse than one
     in ordinary Japanese, and the block says so.
     """
-    lines = [f"Word: {record.expression}"]
+    lines = [f"Expression: {record.expression}"]
     if record.reading:
         lines.append(f"Reading: {record.reading}")
     if record.meanings:
@@ -814,6 +898,22 @@ def ai_prompt(
     ):
         if value:
             lines.append(f"{label}: {value}")
+    incomplete = [
+        example
+        for example in record.examples
+        if example.needs_ai_annotations()
+    ]
+    if incomplete:
+        lines.append(
+            "\nExisting reviewed examples need annotations. Return each listed "
+            "Japanese string exactly; do not replace it or add a different "
+            "sentence. Fill only its empty English, furigana, and speech_level "
+            "values:\n"
+            + "\n".join(
+                f"- {json.dumps(example.japanese, ensure_ascii=False)}"
+                for example in incomplete
+            )
+        )
     if taught:
         lines.append("\n" + taught)
     if recent:
@@ -824,9 +924,36 @@ def ai_prompt(
     return "\n".join(lines)
 
 
+def ai_retry_prompt(
+    record: VocabularyRecord,
+    recent: Sequence[str] = (),
+    taught: str = "",
+) -> str:
+    """A second request after every proposed example missed the headword.
+
+    The accepted forms come from the same deterministic conjugation rules as
+    the quality check. The retry therefore narrows the model's choice without
+    weakening the check or guessing a new spelling.
+    """
+    forms = ", ".join(qc.target_forms(record.expression, record.verb_group))
+    return (
+        ai_prompt(record, recent, taught)
+        + "\n\nYour first examples failed the exact headword spelling check.\n"
+        + "Use one permitted written target form in each japanese field. "
+        + "Keep the kana or kanji spelling shown here; do not substitute a "
+        + "different spelling.\n"
+        + f"Permitted written target forms: {forms}"
+    )
+
+
 AI_INSTRUCTIONS = """\
 Write **two** example sentences for the word, and a usage note if there is
 something worth saying.
+
+If the record prompt lists existing reviewed examples that need annotations,
+return those exact Japanese strings instead of writing new examples. Fill their
+empty English, furigana, and speech_level values. Do not rewrite, replace, or
+add a Japanese sentence in that case.
 
 The first sentence is polite (〜ます / 〜です); set its speech_level to
 "polite". The second is the same kind of everyday sentence in **casual** plain
@@ -837,6 +964,8 @@ mechanical de-politening teaches none of that.
 
 Both must contain the word itself, conjugated if that reads more naturally, and
 both must be simple enough for a beginner working through Genki-style grammar.
+Use the exact spelling shown in Expression. You can conjugate it, but do not
+replace a kana-only expression with kanji or replace its kanji with kana.
 Give each sentence's furigana in Anki notation, with a space before every
 bracketed group that follows kana. Do not fill in romaji — janki generates that
 from the furigana and discards whatever you send.
@@ -877,6 +1006,42 @@ def _words_of(parse: Any) -> list[str]:
         if spelling:
             words.append(spelling)
     return words
+
+
+def _fill_existing_example_annotations(
+    stored: Sequence[ExampleSentence],
+    generated: Sequence[ExampleSentence],
+    unverified: Sequence[str],
+) -> tuple[list[ExampleSentence], list[str]]:
+    """Fill holes only when generated Japanese exactly matches stored text."""
+    by_japanese: dict[str, ExampleSentence] = {}
+    for example in generated:
+        by_japanese.setdefault(example.japanese, example)
+    flagged = set(unverified)
+    landed_unverified: list[str] = []
+    merged: list[ExampleSentence] = []
+    for old in stored:
+        incoming = by_japanese.get(old.japanese)
+        if incoming is None:
+            merged.append(old)
+            continue
+        wrote_furigana = not old.furigana and bool(incoming.furigana)
+        updated = replace(
+            old,
+            furigana=old.furigana or incoming.furigana,
+            english=old.english or incoming.english,
+            register=(
+                old.register
+                if old.register in {"polite", "casual"}
+                else incoming.register
+            ),
+        )
+        if updated.furigana or not contains_kanji(updated.japanese):
+            updated = qc.regenerate_example_romaji(updated)
+        if wrote_furigana and incoming.japanese in flagged:
+            landed_unverified.append(incoming.japanese)
+        merged.append(updated)
+    return merged, landed_unverified
 
 
 def apply_ai_result(
@@ -956,15 +1121,37 @@ def apply_ai_result(
         "examples": kept,
         "usage_notes": str(getattr(parsed, "usage_notes", "") or "").strip(),
     }
-    writable = [
-        name
-        for name in AI_FIELDS
-        if name in force_fields or is_empty(getattr(record, name))
-    ]
-    updated, changes = _apply(record, proposals, writable)
+    if record.examples and "examples" not in force_fields:
+        merged_examples, landed_unverified = _fill_existing_example_annotations(
+            record.examples, kept, unverified
+        )
+        updated = record
+        changes: dict[str, tuple[Any, Any]] = {}
+        if merged_examples != record.examples:
+            changes["examples"] = (record.examples, merged_examples)
+            updated = replace(record, examples=merged_examples)
+        updated, other_changes = _apply(
+            updated,
+            proposals,
+            [
+                name
+                for name in AI_FIELDS
+                if name != "examples"
+                and (name in force_fields or is_empty(getattr(record, name)))
+            ],
+        )
+        changes.update(other_changes)
+        outcome.unverified = landed_unverified
+    else:
+        writable = [
+            name
+            for name in AI_FIELDS
+            if name in force_fields or is_empty(getattr(record, name))
+        ]
+        updated, changes = _apply(record, proposals, writable)
     if "examples" in changes:
-        if unverified:
-            updated = _flag_unverified(updated, unverified)
+        if outcome.unverified:
+            updated = _flag_unverified(updated, outcome.unverified)
     else:
         # The examples were not written — the field was not writable, or the
         # answer matched what is already there. Nothing was flagged, so nothing
@@ -1276,10 +1463,10 @@ def enrich_ai(
 ) -> AiResult:
     """Write examples and usage notes for the records that lack them.
 
-    One call per record, so a refusal or a truncation costs that record and not
-    the run. Both are refused rather than salvaged, on the same reasoning the
-    extractor uses: a half-written example is not a shorter example, it is a
-    sentence that stops mid-word, and accepting one would put it on a card.
+    One initial call per record keeps failures local to that record. If every
+    proposed example fails only the exact-headword check and the record still
+    has no examples, one limited retry supplies the deterministic forms that
+    the check accepts. Refusals and truncated answers are never salvaged.
     """
     result = AiResult(records=list(records))
     positions = {record.id: index for index, record in enumerate(result.records)}
@@ -1291,6 +1478,7 @@ def enrich_ai(
 
     for record in targets:
         result.looked_up += 1
+        warning_start = len(result.warnings)
         call = caller(
             model,
             blocks,
@@ -1309,6 +1497,41 @@ def enrich_ai(
             force_fields=force_fields,
             jpdb_client=jpdb_client,
         )
+        position = positions[record.id]
+        current = result.records[position]
+        if record.examples or record.id not in result.rejected or current.examples:
+            continue
+
+        first_warning_end = len(result.warnings)
+        first_rejected = result.rejected.pop(record.id)
+        retry = caller(
+            model,
+            blocks,
+            ai_retry_prompt(current, recent[-VARIETY_EXAMPLES:], taught),
+            ai_schema(),
+            client,
+            **options,
+        )
+        absorb_ai_call(
+            result,
+            current,
+            retry,
+            model=model,
+            positions=positions,
+            recent=recent,
+            force_fields=force_fields,
+            jpdb_client=jpdb_client,
+        )
+        retry_wrote_examples = bool(result.records[position].examples)
+        retry_reported_rejection = record.id in result.rejected
+        if retry_wrote_examples or retry_reported_rejection:
+            del result.warnings[warning_start:first_warning_end]
+        else:
+            result.rejected[record.id] = first_rejected
+        if retry_wrote_examples:
+            result.no_changes = [
+                item for item in result.no_changes if item != record.id
+            ]
     return result
 
 
@@ -1370,11 +1593,14 @@ def absorb_ai_call(
         )
     if outcome.changes:
         result.records[positions[record.id]] = outcome.record
-        result.changes[record.id] = outcome.changes
+        result.changes[record.id] = {
+            **result.changes.get(record.id, {}),
+            **outcome.changes,
+        }
         recent.extend(
             example.japanese for example in outcome.record.examples if example.japanese
         )
-    else:
+    elif record.id not in result.changes and record.id not in result.no_changes:
         result.no_changes.append(record.id)
 
 

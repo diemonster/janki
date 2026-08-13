@@ -384,7 +384,11 @@ def _dictionary_verdict(
     client: jpdb.JpdbClient, record: VocabularyRecord
 ) -> tuple[str, str]:
     """``("pass" | "held", warning)`` for one record's reading."""
-    readings = enrich.dictionary_readings(client, record.expression)
+    # Bind the reviewed reading during tokenization. An unforced kana parse can
+    # resolve a visually similar or normalized form to another dictionary
+    # entry, which makes the reading check reject the value it was meant to
+    # verify.
+    readings = enrich.dictionary_readings(client, record.expression, record.reading)
     if readings is None:
         # jpdb has no opinion — it did not resolve the spelling to one entry.
         # That is not disagreement, and holding a record back because the
@@ -395,6 +399,12 @@ def _dictionary_verdict(
             "entry, so its reading could not be checked; promoted unchecked."
         )
     if record.reading == readings.primary:
+        return "pass", ""
+    if readings.supports_suru_suffix:
+        # jpdb represents many ordinary Xする verbs as the X dictionary entry
+        # with the `vs` part-of-speech marker. The exact stem spelling, stem
+        # reading, suffix, and POS all have to agree; a loose "ends in する"
+        # rule would approve an arbitrary phrase.
         return "pass", ""
     if record.reading in readings.all_readings:
         return "pass", (

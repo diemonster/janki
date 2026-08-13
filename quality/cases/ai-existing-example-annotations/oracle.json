@@ -1,0 +1,28 @@
+{
+  "records": [
+    {
+      "id": "word:ほん:ほん",
+      "fields": {
+        "examples": [
+          {
+            "japanese": "ほんをよむつもりです。",
+            "furigana": "ほんをよむつもりです。",
+            "romaji": "hon'oyomutsumoridesu.",
+            "english": "I plan to read a book.",
+            "audio": "audio/source.mp3",
+            "register": "polite"
+          }
+        ],
+        "usage_notes": "A common noun."
+      }
+    }
+  ],
+  "changes": {
+    "word:ほん:ほん": ["examples"]
+  },
+  "no_changes": [],
+  "report": [],
+  "rejected_ids": [],
+  "unverified_ids": ["word:ほん:ほん"],
+  "warning_count": 1
+}

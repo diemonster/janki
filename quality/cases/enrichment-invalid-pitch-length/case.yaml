@@ -1,0 +1,17 @@
+version: 1
+id: enrichment-invalid-pitch-length
+purpose: regression
+gating: true
+runner: dictionary-enrichment
+pipeline_boundary: dictionary-enrichment
+source_archetype: mixed-layout-pdf
+redistributable: true
+fixture_basis: agent-created-synthetic
+fixtures:
+  - path: input.json
+    fingerprint: aa4091ede856c7421e841029877091db145e48b94e47043125dc415fcf48410a
+  - path: oracle.json
+    fingerprint: d4404a8b40fd0c1fa9b3bdeaae4975ba3668aa85e57254d29dae07b03f4d4bfd
+runner_input: input.json
+oracle: oracle.json
+finding_id: enrichment-invalid-pitch-length

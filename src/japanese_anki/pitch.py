@@ -43,6 +43,7 @@ __all__ = [
     "ACCENT_MARK",
     "PitchError",
     "morae",
+    "pattern_facts",
     "render_pitch_html",
     "select_pattern",
     "to_aquestalk",
@@ -201,6 +202,22 @@ def select_pattern(record: VocabularyRecord) -> str | None:
         if pattern.strip():
             return pattern.strip().upper()
     return None
+
+
+def pattern_facts(reading: str, patterns: Sequence[str]) -> str:
+    """Return the exact mora-level interpretation of stored raw patterns."""
+    lines: list[str] = []
+    for pattern in patterns:
+        raw = pattern.strip().upper()
+        if not raw:
+            continue
+        per_mora, particle = _levels(reading, raw)
+        units = morae(reading)
+        rendered = ", ".join(
+            f"{unit}={level}" for unit, level in zip(units, per_mora, strict=True)
+        )
+        lines.append(f"raw {raw}; morae {rendered}; following particle={particle}")
+    return "\n".join(lines)
 
 
 def render_pitch_html(reading: str, patterns: Sequence[str]) -> str:

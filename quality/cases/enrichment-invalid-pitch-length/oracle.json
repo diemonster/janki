@@ -1,0 +1,15 @@
+{
+  "records": [
+    {
+      "id": "word:日本語:にほんご",
+      "fields": {
+        "pitch_accent": []
+      }
+    }
+  ],
+  "changes": {},
+  "looked_up": 1,
+  "skipped": 0,
+  "warning_count": 1,
+  "calls": ["parse"]
+}

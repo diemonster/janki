@@ -1,0 +1,17 @@
+version: 1
+id: ai-exact-headword-spelling
+purpose: regression
+gating: true
+runner: ai-enrichment-prompt
+pipeline_boundary: ai-enrichment
+source_archetype: native-pdf-table
+redistributable: true
+fixture_basis: agent-created-synthetic
+fixtures:
+  - path: input.json
+    fingerprint: 46f44e594c406bfe0ef54598caddf3f8d932829cb4ef93c09eb4d9d29e958e8e
+  - path: oracle.json
+    fingerprint: d4f5843f8affe5a8a37ad6a74d92a674bd8f67ce85ff6eee645dbe01d37b133a
+runner_input: input.json
+oracle: oracle.json
+finding_id: ai-exact-headword-spelling

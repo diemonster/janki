@@ -922,6 +922,21 @@ def test_no_cap_shows_everything() -> None:
     assert "sense 17" in card_prompt(card, max_meanings=0)
 
 
+def test_pitch_recheck_binds_source_authority_and_mechanical_facts() -> None:
+    """A semantic reader cannot safely replace dictionary accent from memory."""
+    from japanese_anki.review import pitch_recheck_prompt
+
+    card = record(reading="ねる", pitch_accent=["LHH"])
+    text = pitch_recheck_prompt(
+        card,
+        [Finding("pitch_accent", "ねる should use HLL", "error")],
+    )
+
+    assert "raw LHH; morae ね=L, る=H; following particle=H" in text
+    assert "source-bound dictionary data" in text
+    assert "do not replace a valid lexical pattern from model memory" in text
+
+
 def test_a_force_re_read_of_the_same_card_keeps_its_acceptance() -> None:
     """`--force` produces the same version, so dropping the acceptance made
     someone re-type a reason they had already given about text that had not

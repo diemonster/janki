@@ -305,14 +305,58 @@ def system_prompt(mode: str | None) -> str:
     )
 
 
-def prompt_for(source_name: str, known: Sequence[str] = ()) -> str:
+def prompt_for(
+    source_name: str,
+    known: Sequence[str] = (),
+    source_unit_keys: Sequence[tuple[int, str, int]] = (),
+    selection_targets: Sequence[tuple[str, str]] = (),
+    selection_rubric: str = "",
+) -> str:
     """The user-turn text for one file.
 
     The known-word list rides here rather than in the system blocks on purpose:
     it changes every time the collection grows, and anything above the cache
     breakpoint that changes invalidates the cached style guide for every run.
     """
+    if source_unit_keys and selection_targets:
+        raise ExtractError(
+            "An extraction prompt cannot bind exhaustive unit keys and prose "
+            "selection targets at the same time.",
+            code="extract-oracle-prompt-conflict",
+        )
+    if bool(selection_targets) != bool(selection_rubric.strip()):
+        raise ExtractError(
+            "Prose selection targets and their rubric must be supplied together.",
+            code="extract-selection-prompt-incomplete",
+        )
     lines = [f"Extract vocabulary from {source_name}."]
+    if source_unit_keys:
+        lines.append(
+            "\nA person inventoried these table or list source-unit keys. "
+            "Return exactly one source_units entry for every key, in this order. "
+            "Use each key exactly as written. Do not add keys for titles, headings, "
+            "labels, watermarks, or other page furniture. The keys do not supply "
+            "context or disposition; read those facts from the source:\n"
+            + "\n".join(
+                f"page={page} section={section} ordinal={ordinal}"
+                for page, section, ordinal in source_unit_keys
+            )
+        )
+    if selection_targets:
+        lines.append(
+            "\nA person approved these exact prose-selection targets and source "
+            "locators. Return exactly one prose candidate for every target and "
+            "do not add other prose candidates. Keep each identity exactly as "
+            "written: the text between the first and last colon is Expression, "
+            "and the text after the last colon is Reading. Do not replace kana "
+            "with kanji or kanji with kana. Use the locator to find the source "
+            "occurrence and quote its context.\n"
+            f"Selection rubric: {selection_rubric.strip()}\n"
+            + "\n".join(
+                f"identity={identity} locator={locator}"
+                for identity, locator in selection_targets
+            )
+        )
     if known:
         lines.append(
             "\nWords janki already has — skip these unless the page says "
@@ -355,11 +399,20 @@ def prompt_provenance(
     style_guide: str,
     mode: str | None,
     known: Sequence[str] = (),
+    source_unit_keys: Sequence[tuple[int, str, int]] = (),
+    selection_targets: Sequence[tuple[str, str]] = (),
+    selection_rubric: str = "",
     source_sha256: str | None = None,
 ) -> dict[str, Any]:
     """The stable inputs needed to explain a later model-output change."""
     system = system_prompt(mode)
-    user = prompt_for(prepared.origin_path.name, known)
+    user = prompt_for(
+        prepared.origin_path.name,
+        known,
+        source_unit_keys,
+        selection_targets,
+        selection_rubric,
+    )
     return {
         "source_sha256": source_sha256 or source_fingerprint(prepared.origin_path),
         "mode": mode or "auto",
@@ -379,6 +432,9 @@ def extract_candidates(
     style_guide: str,
     mode: str | None = None,
     known: Sequence[str] = (),
+    source_unit_keys: Sequence[tuple[int, str, int]] = (),
+    selection_targets: Sequence[tuple[str, str]] = (),
+    selection_rubric: str = "",
     client: Any | None = None,
 ) -> ExtractionResult:
     """The normalized response one file yields, or a stable diagnostic.
@@ -398,7 +454,13 @@ def extract_candidates(
                 prepared.content_block(),
                 {
                     "type": "text",
-                    "text": prompt_for(prepared.origin_path.name, known),
+                    "text": prompt_for(
+                        prepared.origin_path.name,
+                        known,
+                        source_unit_keys,
+                        selection_targets,
+                        selection_rubric,
+                    ),
                 },
             ],
             candidate_schema(),

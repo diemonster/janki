@@ -1,0 +1,17 @@
+version: 1
+id: review-pitch-fact-recheck
+purpose: regression
+gating: true
+runner: semantic-review-recheck
+pipeline_boundary: final-review
+source_archetype: mixed-layout-pdf
+redistributable: true
+fixture_basis: agent-created-synthetic
+fixtures:
+  - path: input.json
+    fingerprint: 1789e8f300b42ab38fd47e6afc5c6484392b602c6329937df4fa5a805275e501
+  - path: oracle.json
+    fingerprint: a252ed65ea57581c433e634fde19c39dc55ddc5a01810c6358aa09299cc4f2c3
+runner_input: input.json
+oracle: oracle.json
+finding_id: review-pitch-fact-recheck

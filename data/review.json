@@ -1,4 +1,12 @@
 {
+  "004d15392901": {
+    "record_id": "word:あそぶ:あそぶ",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "008438f2ed3a": {
     "record_id": "word:思う:おもう",
     "at": "2026-08-10",
@@ -20,6 +28,14 @@
       }
     ]
   },
+  "0192f2327b55": {
+    "record_id": "word:しゃしん:しゃしん",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "027acfef1723": {
     "record_id": "word:分かる:わかる",
     "at": "2026-08-10",
@@ -34,6 +50,29 @@
         "suggestion": "Trim to a compact set such as \"to understand\", \"to know\", \"to become clear\", and move the colloquial \"I know, right!\" use to usage_notes if it is worth keeping."
       }
     ]
+  },
+  "03050acdda39": {
+    "record_id": "word:うみ:うみ",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "meanings[2]",
+        "problem": "\"beach\" is not a sense of うみ — the word means the body of water; a beach is 浜/砂浜/ビーチ. It reads as English-side idiom (海に行く ≈ \"go to the beach\") promoted to a dictionary gloss, and on the production card it invites the learner to answer うみ for the prompt \"beach.\"",
+        "severity": "note",
+        "suggestion": "Drop \"beach\" from meanings, leaving \"sea; ocean\", and keep the beach-going idiom where it already is, in the usage note."
+      }
+    ]
+  },
+  "042adc7cf002": {
+    "record_id": "word:映画:えいが",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
   },
   "043c530294f1": {
     "record_id": "word:飲む:のむ",
@@ -78,6 +117,14 @@
   "0da3e0688305": {
     "record_id": "word:知る:しる",
     "at": "2026-08-10",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "0dab598bf6b3": {
+    "record_id": "word:勉強する:べんきょうする",
+    "at": "2026-08-13",
     "accepted": false,
     "accepted_because": "",
     "accepted_marks": [],
@@ -150,6 +197,30 @@
       }
     ]
   },
+  "15c05740f467": {
+    "record_id": "word:日本語:にほんご",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "163d5ef7b7e4": {
+    "record_id": "word:おきる:おきる",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "18ba56d53ade": {
+    "record_id": "word:とる:とる",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "19e46d943776": {
     "record_id": "word:もう:もう",
     "at": "2026-08-11",
@@ -164,6 +235,35 @@
         "suggestion": "Deduplicate to the two distinct patterns, primary first: HLL, LHH."
       }
     ]
+  },
+  "1c1ac7d600df": {
+    "record_id": "word:うじ:うじ",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "expression / examples[0]",
+        "problem": "The headword is given in bare hiragana うじ even though the card's own usage note says the place is normally written 宇治, and the example sentence follows suit (「うじに行くつもりです」). In running Japanese a place name in kana looks wrong, and bare うじ is more readily read as 氏 or 蛆 than as the Kyoto city, so the sentence does not model how the word is actually written.",
+        "severity": "note",
+        "suggestion": "Use 宇治 as the expression with reading うじ (furigana 宇治[うじ]) and write the example as 「それから、宇治に行くつもりです。」"
+      },
+      {
+        "where": "usage_notes",
+        "problem": "The second sentence only restates the general behaviour of に/へ/で with any destination noun; it teaches nothing specific to this word, and the style guide asks for usage notes only when they teach something useful.",
+        "severity": "note",
+        "suggestion": "Keep the note about the 宇治 spelling and drop the generic particle guidance, or replace it with something word-specific (e.g. Uji's association with green tea and Byōdō-in)."
+      }
+    ]
+  },
+  "20de99d8fbf7": {
+    "record_id": "word:車:くるま",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
   },
   "226f55723b9b": {
     "record_id": "word:手:て",
@@ -185,6 +285,29 @@
         "suggestion": "Either add the sense to meanings (e.g. \"hand\", \"move\", \"tactic\") or replace one example with a sentence using 手 as a body part, e.g. 手を洗ってから食べます。"
       }
     ]
+  },
+  "23e69687a3c3": {
+    "record_id": "word:とる:とる",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0]",
+        "problem": "「旅行にカメラをとる」 does not mean \"take a camera on a trip\": とる (取る) means to grasp/pick up/obtain, not to bring something along. The Japanese would be understood as picking up a camera (or misread as 撮る, \"photograph a camera\"), and it is exactly the false-friend use of English \"take\" that the card's own usage note warns against.",
+        "severity": "error",
+        "suggestion": "Replace with a sentence using a real とる sense, e.g. 「旅行の 写真[しゃしん]をたくさんとるつもりです。」 \"I plan to take lots of photos on the trip.\" or 「そのペンをとってください。」 \"Please pass/pick up that pen.\""
+      }
+    ]
+  },
+  "27439ff14e0f": {
+    "record_id": "word:映画:えいが",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
   },
   "28526e396a36": {
     "record_id": "word:お父さん:おとうさん",
@@ -210,6 +333,14 @@
   "2c28231d0441": {
     "record_id": "word:来る:くる",
     "at": "2026-08-10",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "2cb43c15c545": {
+    "record_id": "word:ごろごろ:ごろごろ",
+    "at": "2026-08-13",
     "accepted": false,
     "accepted_because": "",
     "accepted_marks": [],
@@ -293,6 +424,14 @@
     "accepted_marks": [],
     "findings": []
   },
+  "408a82e9de14": {
+    "record_id": "word:ほん:ほん",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "40e667588618": {
     "record_id": "word:食べる:たべる",
     "at": "2026-08-10",
@@ -300,6 +439,21 @@
     "accepted_because": "",
     "accepted_marks": [],
     "findings": []
+  },
+  "45c47ddb077a": {
+    "record_id": "word:かんじ:かんじ",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0]",
+        "problem": "The sentence writes the target word in hiragana (かんじ) while spelling 勉強 in kanji, which is unnatural orthography; in real Japanese this would be 漢字を勉強するつもりです。Written in kana, かんじ also reads most naturally as 感じ ('feeling'), so the sentence is ambiguous for exactly the word it is meant to illustrate.",
+        "severity": "note",
+        "suggestion": "Use 漢字を勉強するつもりです。 for the example (and consider making the headword 漢字 with reading かんじ, as the usage note itself says the word is usually written in kanji)."
+      }
+    ]
   },
   "4cc62e4477ac": {
     "record_id": "word:する:する",
@@ -339,6 +493,14 @@
       }
     ]
   },
+  "4fd2796a2a3e": {
+    "record_id": "word:ほん:ほん",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "5014c3e5af52": {
     "record_id": "word:読む:よむ",
     "at": "2026-08-10",
@@ -346,6 +508,21 @@
     "accepted_because": "",
     "accepted_marks": [],
     "findings": []
+  },
+  "529714f409cd": {
+    "record_id": "word:しごと:しごと",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "verb_group",
+        "problem": "The card lists part of speech \"noun\" but also assigns verb group \"suru\", which suggests しごと inflects as a する-verb (しごとします). The usage note beside it correctly says the verbal form is しごとをする, so the two fields contradict each other.",
+        "severity": "note",
+        "suggestion": "Drop the verb group field for this noun (or reserve it for a separate しごとする entry) so the card does not imply a conjugation pattern the usage note denies."
+      }
+    ]
   },
   "52a5e66fd0c9": {
     "record_id": "word:どこ:どこ",
@@ -454,6 +631,14 @@
     "accepted_marks": [],
     "findings": []
   },
+  "5ee7086cd608": {
+    "record_id": "word:おてら:おてら",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "6089834d6ff5": {
     "record_id": "word:そう言えば:そういえば",
     "at": "2026-08-11",
@@ -487,6 +672,22 @@
   "6615a936ef8c": {
     "record_id": "word:使う:つかう",
     "at": "2026-08-10",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "6a39accfc4c4": {
+    "record_id": "word:ひこうき:ひこうき",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "6b83b69160e7": {
+    "record_id": "word:まつ:まつ",
+    "at": "2026-08-13",
     "accepted": false,
     "accepted_because": "",
     "accepted_marks": [],
@@ -542,9 +743,32 @@
       }
     ]
   },
+  "6d344a6448d0": {
+    "record_id": "word:うじ:うじ",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "expression / examples[0]",
+        "problem": "The headword and the example sentence spell the place name in hiragana (うじ) even though the usage note states it is normally written 宇治; bare うじ is far more likely to be read as 蛆 \"maggot\", and a recognition card fronted with うじ trains the wrong association (the Shirabe/jpdb lookups for うじ will also return the maggot entry).",
+        "severity": "note",
+        "suggestion": "Use 宇治 as the expression with reading うじ (furigana 宇治[うじ]) and write the sentence as それから、宇治[うじ]に行[い]くつもりです。"
+      }
+    ]
+  },
   "6d6eff9e91c9": {
     "record_id": "word:夏休み:なつやすみ",
     "at": "2026-08-11",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "6d9232b8b70b": {
+    "record_id": "word:うみ:うみ",
+    "at": "2026-08-13",
     "accepted": false,
     "accepted_because": "",
     "accepted_marks": [],
@@ -557,6 +781,21 @@
     "accepted_because": "",
     "accepted_marks": [],
     "findings": []
+  },
+  "7286d7a47321": {
+    "record_id": "word:うみ:うみ",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "meanings[2]",
+        "problem": "“beach” is not a sense of うみ (that is 浜/海岸/ビーチ); it only arises idiomatically in phrases like うみに行く, so listing it as a bare dictionary gloss risks the production card teaching うみ as the word for “beach.”",
+        "severity": "note",
+        "suggestion": "Keep meanings as “sea; ocean” and leave the seaside/beach nuance to the usage note, which already states it correctly."
+      }
+    ]
   },
   "72e046d7c08d": {
     "record_id": "word:する:する",
@@ -632,6 +871,14 @@
       }
     ]
   },
+  "774da1c5af6e": {
+    "record_id": "word:およぐ:およぐ",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "77af723df6e8": {
     "record_id": "word:なる:なる",
     "at": "2026-08-10",
@@ -642,9 +889,33 @@
     ],
     "findings": []
   },
+  "784f709e77bc": {
+    "record_id": "word:うんどうする:うんどうする",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "7dd62cde4774": {
+    "record_id": "word:晩ご飯:ばんごはん",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "80d97ba134ab": {
     "record_id": "word:うす:うす",
     "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "8169f5d3c648": {
+    "record_id": "word:おんせん:おんせん",
+    "at": "2026-08-13",
     "accepted": false,
     "accepted_because": "",
     "accepted_marks": [],
@@ -738,6 +1009,21 @@
       }
     ]
   },
+  "87adb29b46db": {
+    "record_id": "word:かんじ:かんじ",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0]",
+        "problem": "The example writes the word in hiragana (かんじを勉強するつもりです), which contradicts the card's own usage note that it is \"usually written 漢字\"; 漢字 is essentially never written in kana in real Japanese, so the sentence looks orthographically unnatural.",
+        "severity": "note",
+        "suggestion": "Write the example with the standard form and furigana: 漢字[かんじ]を 勉強[べんきょう]するつもりです。 while keeping the headword in kana if the deck wants a kana-first entry."
+      }
+    ]
+  },
   "882af7950d34": {
     "record_id": "word:よつば:よつば",
     "at": "2026-08-11",
@@ -780,6 +1066,14 @@
       }
     ]
   },
+  "8ef46d8f9a0d": {
+    "record_id": "word:ひこうき:ひこうき",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "9085503c8ff2": {
     "record_id": "word:飲む:のむ",
     "at": "2026-08-10",
@@ -818,9 +1112,40 @@
     "accepted_marks": [],
     "findings": []
   },
+  "9bff79e603a0": {
+    "record_id": "word:しぬ:しぬ",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0] and examples[1]",
+        "problem": "The example sentences write the verb in kana (しにます / しぬ) while the usage note writes it as 死ぬ; in normal Japanese text this verb is written with the kanji, so the sentences model non-standard orthography and disagree with the note beside them.",
+        "severity": "note",
+        "suggestion": "Write the sentences as 「この魚は、水がないと死にます。」 and 「このゲーム、何回も死ぬの？」 with furigana 死[し]にます / 死[し]ぬ, or drop the kanji from the usage note so the card is internally consistent."
+      }
+    ]
+  },
+  "9c0381acab4e": {
+    "record_id": "word:日本語:にほんご",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "9e9ef3d2c731": {
     "record_id": "word:お前:おまえ",
     "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "a17f1a264a69": {
+    "record_id": "word:しんかんせん:しんかんせん",
+    "at": "2026-08-13",
     "accepted": false,
     "accepted_because": "",
     "accepted_marks": [],
@@ -875,6 +1200,14 @@
   "a7a45fbd7cb8": {
     "record_id": "word:いる:いる",
     "at": "2026-08-10",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "a7c022ee9846": {
+    "record_id": "word:勉強する:べんきょうする",
+    "at": "2026-08-13",
     "accepted": false,
     "accepted_because": "",
     "accepted_marks": [],
@@ -945,6 +1278,14 @@
       }
     ]
   },
+  "b09ddd9180fc": {
+    "record_id": "word:ねる:ねる",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "b1721f34a6aa": {
     "record_id": "word:お姉ちゃん:おねえちゃん",
     "at": "2026-08-12",
@@ -1007,6 +1348,14 @@
       }
     ]
   },
+  "bbe4dfd77438": {
+    "record_id": "word:しんかんせん:しんかんせん",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "bc1d5560f4b8": {
     "record_id": "word:家:いえ",
     "at": "2026-08-11",
@@ -1046,6 +1395,36 @@
     "accepted_marks": [],
     "findings": []
   },
+  "bdad0ecba27e": {
+    "record_id": "word:すむ:すむ",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "usage_notes vs examples[0], examples[1]",
+        "problem": "The usage note states that in this sense the word is usually written 住む, but both example sentences render it in kana (すむつもりです / すんでるの), which is the less natural orthography the note itself warns against.",
+        "severity": "note",
+        "suggestion": "Write the examples with the kanji the note recommends — 来年、京都に住むつもりです。 / 今、だれと住んでるの？ — keeping the kana headword if that is the deck's convention."
+      }
+    ]
+  },
+  "c121adfcf8a2": {
+    "record_id": "word:しごと:しごと",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "verb_group",
+        "problem": "The note is tagged part of speech \"noun\" yet carries a verb group of \"suru\"; a plain noun has no verb group, and the label invites the learner to treat しごと itself as a conjugable verb (the card's own usage note correctly says the verb is しごとをする).",
+        "severity": "note",
+        "suggestion": "Drop the verb group for this noun, or reclassify it explicitly as a suru-compatible noun (e.g. part of speech \"noun (suru-verb)\") so the two fields agree."
+      }
+    ]
+  },
   "c4b39126e8e9": {
     "record_id": "word:見る:みる",
     "at": "2026-08-10",
@@ -1066,6 +1445,21 @@
         "problem": "The meaning list is a raw JMdict dump for a beginner card: five bundled sense groups, several of which (\"to come to be, to become, to get, to grow, to continue\", \"to come from, to be caused by\") are not illustrated by either example, and the last entry \"to come to (i.e. \\\"when it comes to spinach ...\\\")\" is a dictionary meta-gloss rather than an English meaning, which will read as noise on the production card.",
         "severity": "note",
         "suggestion": "Trim to compact senses actually taught here, e.g. \"to come\", \"to arrive\", and move the auxiliary 〜てくる sense (already explained in usage_notes) out of the meanings field."
+      }
+    ]
+  },
+  "c728c0b6b3b1": {
+    "record_id": "word:しゃしん:しゃしん",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "Usage notes",
+        "problem": "The note writes the collocation in mixed script (しゃしんを撮る) on a card whose headword is deliberately kana-only, so the learner is shown a kanji (撮) the card does not teach or gloss right where it is meant to learn the kana form.",
+        "severity": "note",
+        "suggestion": "Write the collocation consistently with the card, e.g. \"しゃしんをとる (写真を撮る) means 'to take a photograph.'\""
       }
     ]
   },
@@ -1095,6 +1489,30 @@
   "d0bef3945b20": {
     "record_id": "word:あんまり:あんまり",
     "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "d35a32f12e64": {
+    "record_id": "word:おてら:おてら",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "d40b0a93f569": {
+    "record_id": "word:ねる:ねる",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "d42bc00b5e73": {
+    "record_id": "word:うんどうする:うんどうする",
+    "at": "2026-08-13",
     "accepted": false,
     "accepted_because": "",
     "accepted_marks": [],
@@ -1146,6 +1564,14 @@
         "suggestion": "Label it as な-adjective/noun (adv only as a secondary sense), or add an adverbial example such as お腹一杯食べました so the stated part of speech matches what the sentences show."
       }
     ]
+  },
+  "dcbac11cffa7": {
+    "record_id": "word:ごろごろ:ごろごろ",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
   },
   "dccc71759d77": {
     "record_id": "word:祭り:まつり",
@@ -1253,6 +1679,29 @@
       }
     ]
   },
+  "f064734116d6": {
+    "record_id": "word:晩ご飯:ばんごはん",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "f0c7330761dd": {
+    "record_id": "word:おきる:おきる",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0]",
+        "problem": "The sentence 「あさはやくおきないつもりです。」 demonstrates the word only in the negative and hangs it on 〜ないつもり, an intention-to-refrain construction that is both later-course grammar and an odd fit for waking up; the card's own usage note (time marked with に, as in 七時におきる) is not illustrated at all.",
+        "severity": "note",
+        "suggestion": "Use a plain affirmative example that shows the core sense and the に time marking, e.g. 「まいあさ ろくじに おきます。」 (\"I get up at six every morning.\")"
+      }
+    ]
+  },
   "f4fa6eac8d4a": {
     "record_id": "word:くれる:くれる",
     "at": "2026-08-12",
@@ -1290,6 +1739,22 @@
         "suggestion": "Rephrase without the source reference, e.g. \"Often contracted to 「そりゃ」 in casual speech.\""
       }
     ]
+  },
+  "fed6fba004c6": {
+    "record_id": "word:車:くるま",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "ff81a2a9fbd1": {
+    "record_id": "word:おんせん:おんせん",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
   },
   "ffbdae53a06b": {
     "record_id": "word:元気:げんき",

@@ -167,6 +167,12 @@ def test_the_prompt_carries_what_janki_knows_about_the_word() -> None:
 
     assert "話す" in text and "はなす" in text and "to speak" in text
     assert "godan" in text
+    assert "Expression: 話す" in text
+
+
+def test_the_instructions_preserve_the_exact_headword_spelling() -> None:
+    assert "Use the exact spelling shown in Expression" in enrich.AI_INSTRUCTIONS
+    assert "do not\nreplace a kana-only expression with kanji" in enrich.AI_INSTRUCTIONS
 
 
 def test_recent_sentences_ride_along_as_variety_pressure() -> None:
@@ -191,6 +197,18 @@ def test_the_patterns_the_learner_is_studying_ride_along_too() -> None:
 
 def test_no_reviewed_patterns_leaves_the_prompt_as_it_was() -> None:
     assert "currently studying" not in ai_prompt(record())
+
+
+def test_the_prompt_binds_an_incomplete_reviewed_example_exactly() -> None:
+    source_example = record(
+        examples=[ExampleSentence(japanese="日本語を話します。")]
+    )
+
+    text = ai_prompt(source_example)
+
+    assert "Existing reviewed examples need annotations" in text
+    assert '"日本語を話します。"' in text
+    assert "do not replace it" in text
 
 
 # --- the QC gate --------------------------------------------------------------
@@ -377,6 +395,73 @@ def test_variety_pressure_grows_as_the_run_goes(
 
     assert "毎日話します。" not in call.calls[0]["content"]
     assert "毎日話します。" in call.calls[1]["content"]
+
+
+def test_all_rejected_examples_get_one_constrained_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    waiting = record(
+        id="word:まつ:まつ",
+        expression="まつ",
+        reading="まつ",
+        meanings=["to wait"],
+    )
+    call = FakeCall(
+        CallResult(
+            answer(
+                generated("友達を待ちます。"),
+                usage_notes="The particle を can mark the person awaited.",
+            ),
+            "end_turn",
+            None,
+        ),
+        CallResult(
+            answer(
+                generated("友達をまちます。"),
+                generated("ここでまつの？"),
+            ),
+            "end_turn",
+            None,
+        ),
+    )
+    monkeypatch.setattr(enrich.claude_client, "parse_call", call)
+
+    result = enrich.enrich_ai([waiting], model="m", style_guide="S")
+
+    assert len(call.calls) == 2
+    assert "Permitted written target forms:" in call.calls[1]["content"]
+    assert "まちます" in call.calls[1]["content"]
+    assert [example.japanese for example in result.records[0].examples] == [
+        "友達をまちます。",
+        "ここでまつの？",
+    ]
+    assert result.records[0].usage_notes == (
+        "The particle を can mark the person awaited."
+    )
+    assert result.rejected == {}
+    assert result.no_changes == []
+    assert set(result.changes[waiting.id]) == {"examples", "usage_notes"}
+
+
+def test_one_accepted_example_does_not_trigger_the_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    call = FakeCall(
+        CallResult(
+            answer(generated("話します。"), generated("友達に言います。")),
+            "end_turn",
+            None,
+        )
+    )
+    monkeypatch.setattr(enrich.claude_client, "parse_call", call)
+
+    result = enrich.enrich_ai([record()], model="m", style_guide="S")
+
+    assert len(call.calls) == 1
+    assert [example.japanese for example in result.records[0].examples] == [
+        "話します。"
+    ]
+    assert result.rejected == {"word:話す:はなす": ["友達に言います。"]}
 
 
 # --- the CLI ------------------------------------------------------------------

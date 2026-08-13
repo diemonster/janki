@@ -49,7 +49,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from japanese_anki import claude_client
+from japanese_anki import claude_client, pitch
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.io import atomic_write_text
@@ -344,6 +344,36 @@ Judge only the card in front of you. Do not report a field as missing: whether
 a card needs an image or a fourth example is the deck's decision, not yours."""
 
 
+def _is_pitch_finding(finding: Finding) -> bool:
+    where = " ".join(finding.where.replace("_", " ").lower().split())
+    return where.startswith("pitch")
+
+
+def pitch_recheck_prompt(
+    record: VocabularyRecord,
+    findings: Sequence[Finding],
+    max_meanings: int = 0,
+) -> str:
+    """Ask once more with the deterministic interpretation of raw pitch data."""
+    concerns = "\n".join(f"- {finding.problem}" for finding in findings)
+    facts = pitch.pattern_facts(record.reading, record.pitch_accent)
+    return (
+        card_prompt(record, max_meanings)
+        + "\n\nRecheck only the pitch-accent concerns from the first review:\n"
+        + concerns
+        + "\n\nMechanical pitch facts:\n"
+        + facts
+        + "\nRaw jpdb patterns have one slot per kana plus the following particle. "
+        "A small kana has a raw slot but joins the preceding kana into one mora. "
+        "The stored lexical pattern is source-bound dictionary data that has "
+        "already passed deterministic shape checks. This semantic review is not "
+        "an accent dictionary: do not replace a valid lexical pattern from model "
+        "memory. Use the mechanical facts above, and do not claim that the stored "
+        "raw value is a different value. Return a pitch finding only for an "
+        "internal inconsistency that the mechanical facts demonstrate."
+    )
+
+
 @functools.cache
 def review_schema() -> Any:
     """The shape a card review must take."""
@@ -419,6 +449,7 @@ def review_records(
     card_design: str = "",
     max_meanings: int = 0,
     client: Any | None = None,
+    parse_call: Any | None = None,
 ) -> tuple[dict[str, CardReview], list[str]]:
     """Read each card, and say what is wrong with it.
 
@@ -441,12 +472,13 @@ def review_records(
         *(text for text in (style_guide, card_design, INSTRUCTIONS) if text),
         cache_ttl="1h",
     )
+    caller = parse_call or claude_client.parse_call
     now = datetime.now(UTC).strftime("%Y-%m-%d")
     reviewed: dict[str, CardReview] = {}
     failures: list[str] = []
     for record in records:
         try:
-            call = claude_client.parse_call(
+            call = caller(
                 model,
                 blocks,
                 [{"type": "text", "text": card_prompt(record, max_meanings)}],
@@ -482,6 +514,45 @@ def review_records(
             )
             for item in (getattr(call.parsed, "findings", []) or [])
         )
+        pitch_findings = tuple(finding for finding in findings if _is_pitch_finding(finding))
+        if pitch_findings and record.pitch_accent:
+            try:
+                recheck = caller(
+                    model,
+                    blocks,
+                    [
+                        {
+                            "type": "text",
+                            "text": pitch_recheck_prompt(
+                                record, pitch_findings, max_meanings
+                            ),
+                        }
+                    ],
+                    review_schema(),
+                    client,
+                    max_tokens=8000,
+                )
+            except (JankiError, pitch.PitchError):
+                recheck = None
+            if recheck is not None and recheck.parsed is not None:
+                checked_pitch = tuple(
+                    Finding.from_dict(
+                        {
+                            "where": getattr(item, "where", ""),
+                            "problem": getattr(item, "problem", ""),
+                            "severity": getattr(item, "severity", "note"),
+                            "suggestion": getattr(item, "suggestion", ""),
+                        }
+                    )
+                    for item in (getattr(recheck.parsed, "findings", []) or [])
+                )
+                findings = tuple(
+                    finding for finding in findings if not _is_pitch_finding(finding)
+                ) + tuple(
+                    finding
+                    for finding in checked_pitch
+                    if _is_pitch_finding(finding)
+                )
         reviewed[card_fingerprint(record)] = CardReview(
             record_id=record.id,
             content_fp=card_fingerprint(record),

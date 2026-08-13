@@ -2818,7 +2818,15 @@ evidence change during the prompts; a `proposal-only` direct-apply attempt; two
 transactions with one shared target; and every invalid recovery-state
 combination.
 
-### [ ] M7.6A Pilot pair — born-digital structure
+### [x] M7.6A Pilot pair — born-digital structure
+
+*Done 2026-08-13. Built a 12-unit native PDF table pilot and a 20-target
+mixed-layout PDF pilot through extraction, oracle review, promotion,
+dictionary and AI enrichment, safe audio generation, final semantic review,
+and deck build. The pilots exposed ten systemic corrections. Each correction
+has a fixed finding and a passing offline case. Both approved private-source
+coverage cases remain available for M7.7 live evaluation. Generated `.apkg`
+files remain outside version control.*
 
 Depends on: M7.4, M7.5
 Files: two new immutable source copies placed under `data/inbox/` by the input

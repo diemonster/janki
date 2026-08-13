@@ -1,0 +1,65 @@
+version: 1
+id: m7-mixed-tsumori-targets
+source_fingerprint: fd1df356665ab684217ea0172919095250910e40293352bb9ca8ba8413d7dce5
+type: selection
+case_ids:
+  - m7-mixed-tsumori-coverage
+targets:
+  - identity: word:ほん:ほん
+    locator: page-1/person-a-monday
+  - identity: word:しごと:しごと
+    locator: page-1/person-b-monday
+  - identity: word:晩ご飯:ばんごはん
+    locator: page-1/person-a-tuesday
+  - identity: word:日本語:にほんご
+    locator: page-1/person-b-tuesday
+  - identity: word:勉強する:べんきょうする
+    locator: page-1/person-b-tuesday
+  - identity: word:映画:えいが
+    locator: page-1/person-b-wednesday
+  - identity: word:かんじ:かんじ
+    locator: page-1/person-a-thursday
+  - identity: word:うんどうする:うんどうする
+    locator: page-1/person-a-friday
+  - identity: word:車:くるま
+    locator: page-1/person-b-friday
+  - identity: word:ごろごろ:ごろごろ
+    locator: page-1/person-b-saturday
+  - identity: word:おきる:おきる
+    locator: page-1/person-a-sunday
+  - identity: word:ねる:ねる
+    locator: page-1/person-b-sunday
+  - identity: word:しゃしん:しゃしん
+    locator: page-3/kyoto-plan
+  - identity: word:とる:とる
+    locator: page-3/kyoto-plan
+  - identity: word:うじ:うじ
+    locator: page-3/kyoto-plan
+  - identity: word:しんかんせん:しんかんせん
+    locator: page-3/transportation
+  - identity: word:おんせん:おんせん
+    locator: page-4/nagano-plan
+  - identity: word:おてら:おてら
+    locator: page-4/nagano-plan
+  - identity: word:うみ:うみ
+    locator: page-4/okinawa-plan
+  - identity: word:ひこうき:ひこうき
+    locator: page-4/transportation
+selection_rubric: >-
+  Select the 20 beginner content words in targets from the Japanese plan cells
+  and travel-plan prose on pages 1, 3, and 4. Use the source spelling and the
+  dictionary reading. Exclude weekday names, grammar-only forms, names, brand
+  names, the English-only table on page 2, and words outside the target list.
+approval:
+  authority: repository-owner
+  oracle_id: m7-mixed-tsumori-targets
+  source_fingerprint: fd1df356665ab684217ea0172919095250910e40293352bb9ca8ba8413d7dce5
+  oracle_type: selection
+  oracle_content_fingerprint: 62eee4b68ea836b22ab5f3a9272cd523e754a6f2f24adf32c37b75297c79e735
+  selection_rubric: >-
+    Select the 20 beginner content words in targets from the Japanese plan
+    cells and travel-plan prose on pages 1, 3, and 4. Use the source spelling
+    and the dictionary reading. Exclude weekday names, grammar-only forms,
+    names, brand names, the English-only table on page 2, and words outside the
+    target list.
+  approved_at: 2026-08-13

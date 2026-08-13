@@ -1,0 +1,17 @@
+version: 1
+id: enrichment-forced-kana-reading
+purpose: regression
+gating: true
+runner: dictionary-enrichment
+pipeline_boundary: dictionary-enrichment
+source_archetype: native-pdf-table
+redistributable: true
+fixture_basis: agent-created-synthetic
+fixtures:
+  - path: input.json
+    fingerprint: fbd66fd9525f40c2b6844a2f10e08dc00955562cff6248adb615212ce28d730d
+  - path: oracle.json
+    fingerprint: ea0059b9bf23cf96d1bdb0910e7e48c238acdf58615ee379806ee36d83d797fd
+runner_input: input.json
+oracle: oracle.json
+finding_id: enrichment-forced-kana-reading

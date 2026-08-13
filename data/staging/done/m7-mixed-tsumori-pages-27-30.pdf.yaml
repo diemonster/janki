@@ -1,0 +1,819 @@
+source_file: m7-mixed-tsumori-pages-27-30.pdf
+extracted_at: '2026-08-13'
+model: claude-opus-5
+prompt_provenance:
+  source_sha256: fd1df356665ab684217ea0172919095250910e40293352bb9ca8ba8413d7dce5
+  mode: prose
+  provider: anthropic
+  model: claude-opus-5
+  response_schema_version: 2
+  system_prompt_fingerprint: a7a3008e71bba768cb2a2d29d755aaedb3c07287b385526feed720d93f0da936
+  style_guide_fingerprint: 418704c8197845d87af002df9934b484661bd161134543418ed1273419944b9b
+  user_prompt_fingerprint: 1dbdc9bb1ee18b56b58925939c10d7b399f1591eea31ac85349c6d3d9350fc6c
+coverage:
+  version: 1
+  status: selection
+  blocking: false
+  source_fingerprint: fd1df356665ab684217ea0172919095250910e40293352bb9ca8ba8413d7dce5
+  oracle_id: m7-mixed-tsumori-targets
+  oracle_type: selection
+  oracle_content_fingerprint: 62eee4b68ea836b22ab5f3a9272cd523e754a6f2f24adf32c37b75297c79e735
+  model_reported_unit_count: 20
+  observed_unit_count: 0
+  prose_candidate_count: 20
+  prose_coverage: unmeasured
+  source_units: []
+  missing_units: []
+  unexpected_units: []
+  duplicate_keys: []
+  context_mismatched_units: []
+  disposition_mismatched_units: []
+  omission_units: []
+  candidate_units: []
+  duplicate_units: []
+  non_vocabulary_units: []
+  unreadable_units: []
+  coverage_block_fingerprint: 4d617a13fee8dad8062c6b19d45cdab80f5670f96a0124b939aef029a2ac2b31
+review_notes: Promoted 20 record(s) from this file.
+records:
+- id: word:ほん:ほん
+  expression: ほん
+  reading: ほん
+  furigana: ''
+  romaji: hon
+  meanings:
+  - book
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: ほんをよむつもりです。
+    furigana: ''
+    romaji: hon'oyomutsumoridesu.
+    english: ''
+    audio: ''
+    register: ''
+  conjugations: {}
+  tags:
+  - m7-mixed-tsumori
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-30.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-30.pdf
+      confidence: high
+      page: '1'
+      context: 月曜日 ほんをよむつもりです。
+      inclusion_reason: Core beginner noun used in the plan cell.
+      janki_repairs: '[{"code":"example-romaji-from-furigana","evidence":{"algorithm":"japanese_anki.qc.regenerate_example_romaji"},"fields":["examples[0].romaji"],"provenance":"Derived
+        example romaji from stored Japanese and furigana.","version":"1.0.0"},{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:しごと:しごと
+  expression: しごと
+  reading: しごと
+  furigana: ''
+  romaji: shigoto
+  meanings:
+  - work
+  - job
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: しごとにいかないつもりです
+    furigana: ''
+    romaji: shigotoniikanaitsumoridesu
+    english: ''
+    audio: ''
+    register: ''
+  conjugations: {}
+  tags:
+  - m7-mixed-tsumori
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-30.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-30.pdf
+      confidence: high
+      page: '1'
+      context: 月曜日 ほんをよむつもりです。 しごとにいかないつもりです
+      inclusion_reason: Everyday noun appearing in the Monday plan cell.
+      janki_repairs: '[{"code":"example-romaji-from-furigana","evidence":{"algorithm":"japanese_anki.qc.regenerate_example_romaji"},"fields":["examples[0].romaji"],"provenance":"Derived
+        example romaji from stored Japanese and furigana.","version":"1.0.0"},{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:晩ご飯:ばんごはん
+  expression: 晩ご飯
+  reading: ばんごはん
+  furigana: ''
+  romaji: bangohan
+  meanings:
+  - dinner
+  - evening meal
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 友達と晩ご飯を食べるつもりです。
+    furigana: ''
+    romaji: ''
+    english: ''
+    audio: ''
+    register: ''
+  conjugations: {}
+  tags:
+  - m7-mixed-tsumori
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-30.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-30.pdf
+      confidence: high
+      page: '1'
+      context: 火曜日 友達と晩ご飯を食べるつもりです。
+      inclusion_reason: Common meal noun written in kanji in the source.
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:日本語:にほんご
+  expression: 日本語
+  reading: にほんご
+  furigana: ''
+  romaji: nihongo
+  meanings:
+  - Japanese language
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 日本語を勉強するつもりです。
+    furigana: ''
+    romaji: ''
+    english: ''
+    audio: ''
+    register: ''
+  conjugations: {}
+  tags:
+  - m7-mixed-tsumori
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-30.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-30.pdf
+      confidence: high
+      page: '1'
+      context: 火曜日 友達と晩ご飯を食べるつもりです。 日本語を勉強するつもりです。
+      inclusion_reason: Basic noun with kanji reading worth reinforcing.
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:映画:えいが
+  expression: 映画
+  reading: えいが
+  furigana: ''
+  romaji: eiga
+  meanings:
+  - movie
+  - film
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 映画をみるつもりです。
+    furigana: ''
+    romaji: ''
+    english: ''
+    audio: ''
+    register: ''
+  conjugations: {}
+  tags:
+  - m7-mixed-tsumori
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-30.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-30.pdf
+      confidence: high
+      page: '1'
+      context: 水曜日 あそびにいかないつもりです。 映画をみるつもりです。
+      inclusion_reason: Common noun with kanji reading.
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:かんじ:かんじ
+  expression: かんじ
+  reading: かんじ
+  furigana: ''
+  romaji: kanji
+  meanings:
+  - kanji
+  - Chinese characters
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: かんじを勉強するつもりです。
+    furigana: ''
+    romaji: ''
+    english: ''
+    audio: ''
+    register: ''
+  conjugations: {}
+  tags:
+  - m7-mixed-tsumori
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-30.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-30.pdf
+      confidence: high
+      page: '1'
+      context: 木曜日 かんじを勉強するつもりです。
+      inclusion_reason: Study-related noun used in the Thursday cell.
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:車:くるま
+  expression: 車
+  reading: くるま
+  furigana: ''
+  romaji: kuruma
+  meanings:
+  - car
+  - vehicle
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: トヨタの車を買うつもりです。
+    furigana: ''
+    romaji: ''
+    english: ''
+    audio: ''
+    register: ''
+  conjugations: {}
+  tags:
+  - m7-mixed-tsumori
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-30.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-30.pdf
+      confidence: high
+      page: '1'
+      context: 金曜日 うんどうするつもりです。 トヨタ䛾車を買うつもりです。
+      inclusion_reason: Basic kanji noun in the Friday plan cell.
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:ごろごろ:ごろごろ
+  expression: ごろごろ
+  reading: ごろごろ
+  furigana: ''
+  romaji: gorogoro
+  meanings:
+  - lazing around
+  - idling about
+  part_of_speech: adverb (onomatopoeic)
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: うちでごろごろするつもりです。
+    furigana: ''
+    romaji: uchidegorogorosurutsumoridesu.
+    english: ''
+    audio: ''
+    register: ''
+  conjugations: {}
+  tags:
+  - m7-mixed-tsumori
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-30.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-30.pdf
+      confidence: high
+      page: '1'
+      context: 土曜日 ともだち䛾いえにとまるつもりです。 うちでごろごろするつもりです。
+      inclusion_reason: Colloquial mimetic expression worth learning as a set phrase with する.
+      janki_repairs: '[{"code":"example-romaji-from-furigana","evidence":{"algorithm":"japanese_anki.qc.regenerate_example_romaji"},"fields":["examples[0].romaji"],"provenance":"Derived
+        example romaji from stored Japanese and furigana.","version":"1.0.0"},{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:おきる:おきる
+  expression: おきる
+  reading: おきる
+  furigana: ''
+  romaji: okiru
+  meanings:
+  - to get up
+  - to wake up
+  part_of_speech: verb (ru-verb)
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: あさはやくおきないつもりです。
+    furigana: ''
+    romaji: asahayakuokinaitsumoridesu.
+    english: ''
+    audio: ''
+    register: ''
+  conjugations: {}
+  tags:
+  - m7-mixed-tsumori
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-30.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-30.pdf
+      confidence: high
+      page: '1'
+      context: 日曜日 あさ䛿やくおきないつもりです。
+      inclusion_reason: Core daily-routine verb, shown here in negative form.
+      janki_repairs: '[{"code":"example-romaji-from-furigana","evidence":{"algorithm":"japanese_anki.qc.regenerate_example_romaji"},"fields":["examples[0].romaji"],"provenance":"Derived
+        example romaji from stored Japanese and furigana.","version":"1.0.0"},{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:ねる:ねる
+  expression: ねる
+  reading: ねる
+  furigana: ''
+  romaji: neru
+  meanings:
+  - to sleep
+  - to go to bed
+  part_of_speech: verb (ru-verb)
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 夜おそくにねるつもりです。
+    furigana: ''
+    romaji: ''
+    english: ''
+    audio: ''
+    register: ''
+  conjugations: {}
+  tags:
+  - m7-mixed-tsumori
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-30.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-30.pdf
+      confidence: high
+      page: '1'
+      context: 日曜日 あさ䛿やくおきないつもりです。 夜おそくに䛽るつもりです。
+      inclusion_reason: Core daily-routine verb paired with おきる.
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:しゃしん:しゃしん
+  expression: しゃしん
+  reading: しゃしん
+  furigana: ''
+  romaji: shashin
+  meanings:
+  - photograph
+  - picture
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: たくさんしゃしんをとるつもりです。
+    furigana: ''
+    romaji: takusanshashin'otorutsumoridesu.
+    english: ''
+    audio: ''
+    register: ''
+  conjugations: {}
+  tags:
+  - m7-mixed-tsumori
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-30.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-30.pdf
+      confidence: high
+      page: '3'
+      context: 'B: たくさんしゃしんをとるつもりです。'
+      inclusion_reason: Travel vocabulary noun used in the example dialogue.
+      janki_repairs: '[{"code":"example-romaji-from-furigana","evidence":{"algorithm":"japanese_anki.qc.regenerate_example_romaji"},"fields":["examples[0].romaji"],"provenance":"Derived
+        example romaji from stored Japanese and furigana.","version":"1.0.0"},{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:うじ:うじ
+  expression: うじ
+  reading: うじ
+  furigana: ''
+  romaji: uji
+  meanings:
+  - Uji (city in Kyoto Prefecture)
+  part_of_speech: noun (place name)
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: それから、うじに行くつもりです。
+    furigana: ''
+    romaji: ''
+    english: ''
+    audio: ''
+    register: ''
+  conjugations: {}
+  tags:
+  - m7-mixed-tsumori
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-30.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-30.pdf
+      confidence: medium
+      page: '3'
+      context: それから、うじに行くつもりです。
+      inclusion_reason: Place name appearing in the travel plan dialogue; approved target.
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:しんかんせん:しんかんせん
+  expression: しんかんせん
+  reading: しんかんせん
+  furigana: ''
+  romaji: shinkansen
+  meanings:
+  - Shinkansen
+  - bullet train
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: しんかんせんで行くつもりです。
+    furigana: ''
+    romaji: ''
+    english: ''
+    audio: ''
+    register: ''
+  conjugations: {}
+  tags:
+  - m7-mixed-tsumori
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-30.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-30.pdf
+      confidence: high
+      page: '3'
+      context: 'B: しんかんせんで行くつもりです。'
+      inclusion_reason: Key transportation noun for travel in Japan.
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:おんせん:おんせん
+  expression: おんせん
+  reading: おんせん
+  furigana: ''
+  romaji: onsen
+  meanings:
+  - hot spring
+  - hot spring bath
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: おんせんにはいるつもりです
+    furigana: ''
+    romaji: onsennihairutsumoridesu
+    english: ''
+    audio: ''
+    register: ''
+  conjugations: {}
+  tags:
+  - m7-mixed-tsumori
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-30.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-30.pdf
+      confidence: high
+      page: '4'
+      context: ・おんせんに䛿いるつもりです
+      inclusion_reason: Travel-in-Japan noun in the Nagano plan memo.
+      janki_repairs: '[{"code":"example-romaji-from-furigana","evidence":{"algorithm":"japanese_anki.qc.regenerate_example_romaji"},"fields":["examples[0].romaji"],"provenance":"Derived
+        example romaji from stored Japanese and furigana.","version":"1.0.0"},{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:おてら:おてら
+  expression: おてら
+  reading: おてら
+  furigana: ''
+  romaji: otera
+  meanings:
+  - Buddhist temple
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: おてらを見るつもりです
+    furigana: ''
+    romaji: ''
+    english: ''
+    audio: ''
+    register: ''
+  conjugations: {}
+  tags:
+  - m7-mixed-tsumori
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-30.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-30.pdf
+      confidence: high
+      page: '4'
+      context: ・おてらを見るつもりです
+      inclusion_reason: Sightseeing noun in the Nagano plan memo.
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:うみ:うみ
+  expression: うみ
+  reading: うみ
+  furigana: ''
+  romaji: umi
+  meanings:
+  - sea
+  - ocean
+  - beach
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: うみでおよぐつもりです。
+    furigana: ''
+    romaji: umideoyogutsumoridesu.
+    english: ''
+    audio: ''
+    register: ''
+  conjugations: {}
+  tags:
+  - m7-mixed-tsumori
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-30.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-30.pdf
+      confidence: high
+      page: '4'
+      context: ・うみでおよぐつもりです。
+      inclusion_reason: Basic nature noun in the Okinawa plan memo.
+      janki_repairs: '[{"code":"example-romaji-from-furigana","evidence":{"algorithm":"japanese_anki.qc.regenerate_example_romaji"},"fields":["examples[0].romaji"],"provenance":"Derived
+        example romaji from stored Japanese and furigana.","version":"1.0.0"},{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:ひこうき:ひこうき
+  expression: ひこうき
+  reading: ひこうき
+  furigana: ''
+  romaji: hikouki
+  meanings:
+  - airplane
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: ひこうきでいくつもりです。
+    furigana: ''
+    romaji: hikoukideikutsumoridesu.
+    english: ''
+    audio: ''
+    register: ''
+  conjugations: {}
+  tags:
+  - m7-mixed-tsumori
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-30.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-30.pdf
+      confidence: high
+      page: '4'
+      context: ひこうきでいくつもりです。
+      inclusion_reason: Transportation noun needed for travel plans.
+      janki_repairs: '[{"code":"example-romaji-from-furigana","evidence":{"algorithm":"japanese_anki.qc.regenerate_example_romaji"},"fields":["examples[0].romaji"],"provenance":"Derived
+        example romaji from stored Japanese and furigana.","version":"1.0.0"},{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:とる:とる
+  expression: とる
+  reading: とる
+  furigana: ''
+  romaji: ''
+  meanings:
+  - to take (a photo)
+  part_of_speech: verb (u-verb)
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: たくさんしゃしんをとるつもりです。
+    furigana: ''
+    romaji: ''
+    english: ''
+    audio: ''
+    register: ''
+  conjugations: {}
+  tags:
+  - m7-mixed-tsumori
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-30.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-30.pdf
+      confidence: high
+      page: '3'
+      context: 'B: たくさんしゃしんをとるつもりです。'
+      inclusion_reason: Highlighted verb in the model dialogue, collocates with しゃしん.
+- id: word:勉強する:べんきょうする
+  expression: 勉強する
+  reading: べんきょうする
+  furigana: ''
+  romaji: benkyousuru
+  meanings:
+  - to study
+  part_of_speech: verb (suru)
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 日本語を勉強するつもりです。
+    furigana: ''
+    romaji: ''
+    english: ''
+    audio: ''
+    register: ''
+  conjugations: {}
+  tags:
+  - m7-mixed-tsumori
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-30.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-30.pdf
+      confidence: high
+      page: '1'
+      context: 火曜日 友達と晩ご飯を食べるつもりです。 日本語を勉強するつもりです。
+      inclusion_reason: High-frequency suru verb in the plan cells.
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:うんどうする:うんどうする
+  expression: うんどうする
+  reading: うんどうする
+  furigana: ''
+  romaji: undousuru
+  meanings:
+  - to exercise
+  - to work out
+  part_of_speech: verb (suru)
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: うんどうするつもりです。
+    furigana: ''
+    romaji: undousurutsumoridesu.
+    english: ''
+    audio: ''
+    register: ''
+  conjugations: {}
+  tags:
+  - m7-mixed-tsumori
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-30.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-30.pdf
+      confidence: high
+      page: '1'
+      context: 金曜日 うんどうするつもりです。
+      inclusion_reason: Useful daily-activity suru verb.
+      janki_repairs: '[{"code":"example-romaji-from-furigana","evidence":{"algorithm":"japanese_anki.qc.regenerate_example_romaji"},"fields":["examples[0].romaji"],"provenance":"Derived
+        example romaji from stored Japanese and furigana.","version":"1.0.0"},{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'

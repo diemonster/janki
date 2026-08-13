@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from japanese_anki.errors import JankiError
-from japanese_anki.identifiers import stable_record_id
+from japanese_anki.identifiers import contains_kanji, stable_record_id
 
 
 class ModelError(JankiError):
@@ -121,6 +121,14 @@ class ExampleSentence:
     #: they are not interchangeable — a textbook teaches ます first and a friend
     #: never uses it — so a card that shows only one teaches half the word.
     register: str = ""
+
+    def needs_ai_annotations(self) -> bool:
+        """Whether a reviewed extracted sentence still has visible holes."""
+        return bool(self.japanese) and (
+            not self.english
+            or self.register not in {"polite", "casual"}
+            or (contains_kanji(self.japanese) and not self.furigana)
+        )
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> ExampleSentence:

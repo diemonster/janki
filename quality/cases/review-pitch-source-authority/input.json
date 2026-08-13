@@ -1,0 +1,35 @@
+{
+  "records": [
+    {
+      "id": "word:ねる:ねる",
+      "expression": "ねる",
+      "reading": "ねる",
+      "meanings": ["to sleep", "to go to bed"],
+      "part_of_speech": "verb (ru-verb)",
+      "verb_group": "ichidan",
+      "pitch_accent": ["LHH"]
+    }
+  ],
+  "model": "offline-model",
+  "responses": [
+    {
+      "parsed": {
+        "findings": [
+          {
+            "where": "pitch_accent",
+            "problem": "The stored LHH pattern is flat, but model memory says ねる is HLL.",
+            "severity": "error",
+            "suggestion": "Replace LHH with HLL."
+          }
+        ]
+      },
+      "stop_reason": "end_turn"
+    },
+    {
+      "parsed": {
+        "findings": []
+      },
+      "stop_reason": "end_turn"
+    }
+  ]
+}

@@ -54,11 +54,15 @@ UNIT_DISPOSITIONS = ("candidate", "duplicate", "non-vocabulary", "unreadable")
 CASE_PURPOSES = ("regression", "coverage")
 RUNNER_BOUNDARIES = {
     "candidate-response": "extraction-normalization",
+    "extraction-prompt": "extraction-prompt",
     "staging-promote": "staging-promote",
     "validation-qc": "validation-qc",
     "render-build": "render-build",
     "dictionary-enrichment": "dictionary-enrichment",
     "ai-enrichment": "ai-enrichment",
+    "ai-enrichment-retry": "ai-enrichment",
+    "ai-enrichment-prompt": "ai-enrichment",
+    "semantic-review-recheck": "final-review",
     "repair-plan": "repair-plan",
 }
 

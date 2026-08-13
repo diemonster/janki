@@ -1,5 +1,133 @@
 version: 1
 findings:
+  - id: ai-existing-example-annotations
+    state: fixed
+    pipeline_stage: ai-enrichment
+    source_archetypes: [mixed-layout-pdf]
+    symptom: AI enrichment kept reviewed source sentences but could not fill their empty English, furigana, or register fields.
+    invariant: AI can fill empty annotations only when its Japanese sentence matches the reviewed stored sentence exactly; it preserves Japanese text, audio, and existing annotations.
+    evidence:
+      - fingerprint: 26bf29f64985ac036953289040f6ed56b29bac1609d12eaf70c7a628296ef92e
+        locator: quality/cases/ai-existing-example-annotations/input.json
+    recurrences: []
+    case_ids: [ai-existing-example-annotations]
+    fix_ref: src/japanese_anki/enrich.py#_fill_existing_example_annotations
+  - id: ai-exact-headword-spelling
+    state: fixed
+    pipeline_stage: ai-enrichment
+    source_archetypes: [native-pdf-table]
+    symptom: AI enrichment replaced kana headwords with kanji spellings, so the exact-target check rejected every example.
+    invariant: Each generated example uses the record expression exactly as written, including a kana-only spelling, in a natural inflected form; one limited retry supplies the permitted forms when every first-pass example fails this check.
+    evidence:
+      - fingerprint: 46f44e594c406bfe0ef54598caddf3f8d932829cb4ef93c09eb4d9d29e958e8e
+        locator: quality/cases/ai-exact-headword-spelling/input.json
+    recurrences:
+      - fingerprint: 1c4b2a599b99466d19012701032f949008ca22c2b93d1b572451b5662a70c811
+        locator: quality/cases/ai-rejected-example-retry/input.json
+    case_ids: [ai-exact-headword-spelling, ai-rejected-example-retry]
+    fix_ref: src/japanese_anki/enrich.py#ai_retry_prompt
+  - id: enrichment-forced-kana-reading
+    state: fixed
+    pipeline_stage: dictionary-enrichment
+    source_archetypes: [native-pdf-table]
+    symptom: Dictionary enrichment refused kana しぬ after an unforced parse resolved it as unrelated する.
+    invariant: When an unforced entry has another spelling, enrichment retries with the reviewed reading before it rejects or writes dictionary fields.
+    evidence:
+      - fingerprint: fbd66fd9525f40c2b6844a2f10e08dc00955562cff6248adb615212ce28d730d
+        locator: quality/cases/enrichment-forced-kana-reading/input.json
+    recurrences: []
+    case_ids: [enrichment-forced-kana-reading]
+    fix_ref: src/japanese_anki/enrich.py#enrich_records
+  - id: enrichment-invalid-pitch-length
+    state: fixed
+    pipeline_stage: dictionary-enrichment
+    source_archetypes: [mixed-layout-pdf]
+    symptom: Dictionary enrichment stored jpdb pitch patterns that did not fit the record reading, so word audio could not use them safely.
+    invariant: Enrichment writes a pitch pattern only when the shared pitch parser proves that it fits the stored reading.
+    evidence:
+      - fingerprint: aa4091ede856c7421e841029877091db145e48b94e47043125dc415fcf48410a
+        locator: quality/cases/enrichment-invalid-pitch-length/input.json
+    recurrences: []
+    case_ids: [enrichment-invalid-pitch-length]
+    fix_ref: src/japanese_anki/enrich.py#_compatible_pitch_patterns
+  - id: enrichment-suru-compound
+    state: fixed
+    pipeline_stage: dictionary-enrichment
+    source_archetypes: [mixed-layout-pdf]
+    symptom: Dictionary enrichment rejected valid する compounds after jpdb resolved the exact suru-verb stem.
+    invariant: Enrichment uses an exact X stem only when spelling, reading, する suffix, and jpdb's suru-verb marker all agree.
+    evidence:
+      - fingerprint: 1269a5308b0f263eb806215cd2e1c4ebd91391dd9a410de5c86c72d6bb2ba6da
+        locator: quality/cases/enrichment-suru-compound/input.json
+    recurrences: []
+    case_ids: [enrichment-suru-compound]
+    fix_ref: src/japanese_anki/enrich.py#enrich_records
+  - id: reading-check-forced-furigana
+    state: fixed
+    pipeline_stage: staging-promote
+    source_archetypes: [native-pdf-table]
+    symptom: The reading check held kana しぬ because an unforced parse resolved it as unrelated する.
+    invariant: The reading check binds the reviewed reading, and a batched parse sends one furigana list for each input text.
+    evidence:
+      - fingerprint: d8f97240a7147a361acd69b43ba1b877759683c59bf6b7d97bd01640c6399c63
+        locator: quality/cases/reading-check-forced-furigana/input.json
+    recurrences: []
+    case_ids: [reading-check-forced-furigana]
+    fix_ref: src/japanese_anki/promote.py#_dictionary_verdict
+  - id: reading-check-suru-compound
+    state: fixed
+    pipeline_stage: staging-promote
+    source_archetypes: [mixed-layout-pdf]
+    symptom: The reading check held valid する compounds because jpdb resolved the dictionary entry for the noun stem.
+    invariant: A reviewed Xする identity passes when jpdb resolves exact stem X with reading X and marks that entry as a suru verb.
+    evidence:
+      - fingerprint: b710ae47059e94af44066d88425d0570c548e98399658af31cb05cc1db45ca03
+        locator: quality/cases/reading-check-suru-compound/input.json
+    recurrences: []
+    case_ids: [reading-check-suru-compound]
+    fix_ref: src/japanese_anki/enrich.py#dictionary_readings
+  - id: review-pitch-fact-recheck
+    state: fixed
+    pipeline_stage: final-review
+    source_archetypes: [mixed-layout-pdf]
+    symptom: Final review raised blocking pitch findings after it misread the stored raw pattern, counted a small kana as a separate mora, or replaced valid dictionary accent from model memory.
+    invariant: A pitch finding gets one independent recheck with the exact raw pattern, its deterministic mora-level rendering, and the source-authority boundary; non-pitch findings remain unchanged.
+    evidence:
+      - fingerprint: 1789e8f300b42ab38fd47e6afc5c6484392b602c6329937df4fa5a805275e501
+        locator: quality/cases/review-pitch-fact-recheck/input.json
+    recurrences:
+      - fingerprint: 4b5beae857f510f21adeaa4250a7f9bfe01e55f429a7936a166bd68fcb1e78d7
+        locator: quality/cases/review-pitch-source-authority/input.json
+    case_ids: [review-pitch-fact-recheck, review-pitch-source-authority]
+    fix_ref: src/japanese_anki/review.py#pitch_recheck_prompt
+  - id: extraction-oracle-key-binding
+    state: fixed
+    pipeline_stage: extraction-prompt
+    source_archetypes: [native-pdf-table]
+    symptom: A table extraction invented unit keys because its prompt did not contain the approved oracle keys.
+    invariant: An exhaustive oracle supplies the exact unit keys before extraction while the model still reads contexts and dispositions from the source.
+    evidence:
+      - fingerprint: 8e148720f2ee01cbb5c6e52bb0e65d5ec9dedcad340f85d807ec3e1c2ef28de6
+        locator: quality/cases/extraction-oracle-key-binding/input.json
+      - fingerprint: 3e160209f00d896d5803198ac7bafd785c004378aaae4c1797b0f19c6c0f0273
+        locator: data/staging/done/m7-native-teform-table-initial-mismatch.yaml
+    recurrences: []
+    case_ids: [extraction-oracle-key-binding]
+    fix_ref: src/japanese_anki/extract.py#prompt_for
+  - id: extraction-selection-target-binding
+    state: fixed
+    pipeline_stage: extraction-prompt
+    source_archetypes: [mixed-layout-pdf]
+    symptom: A mixed-layout extraction did not receive the approved prose targets, so it omitted targets, changed source spellings, and added out-of-scope words.
+    invariant: A selection oracle supplies its exact identities, locators, and rubric before extraction; known-word filtering does not suppress an approved target.
+    evidence:
+      - fingerprint: 2975d9bd44b6bf76cb546d0f67e2a7313068cee1a6a920f99bd1daf8ec6ec580
+        locator: quality/cases/extraction-selection-target-binding/input.json
+      - fingerprint: 2b7f1900236323590c583516cc23cd98de5865ddd16b2116279e141593aa2311
+        locator: data/staging/done/m7-mixed-tsumori-initial-mismatch.yaml
+    recurrences: []
+    case_ids: [extraction-selection-target-binding]
+    fix_ref: src/japanese_anki/extract.py#prompt_for
   - id: derived-romaji-repair
     state: fixed
     pipeline_stage: repair-plan

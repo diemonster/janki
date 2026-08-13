@@ -1,0 +1,37 @@
+{
+  "records": [
+    {
+      "id": "word:日本語:にほんご",
+      "expression": "日本語",
+      "reading": "にほんご",
+      "furigana": "日本語[にほんご]",
+      "romaji": "nihongo",
+      "meanings": ["Japanese language"],
+      "part_of_speech": "noun",
+      "frequency_rank": 4800
+    }
+  ],
+  "responses": [
+    {
+      "endpoint": "parse",
+      "body": {
+        "text": ["日本語"],
+        "token_fields": ["vocabulary_index", "furigana"],
+        "vocabulary_fields": ["vid", "sid", "spelling", "reading", "pitch_accent", "frequency_rank", "part_of_speech"]
+      },
+      "payload": {
+        "tokens": [[[0, [["日本語", "にほんご"]]]]],
+        "vocabulary": [[1580700, 1882584280, "日本語", "にほんご", ["LHHHHH"], 4800, ["n"]]]
+      }
+    }
+  ],
+  "kanji": {},
+  "force_fields": [],
+  "ids": ["word:日本語:にほんご"],
+  "observe": [
+    {
+      "id": "word:日本語:にほんご",
+      "fields": ["pitch_accent"]
+    }
+  ]
+}

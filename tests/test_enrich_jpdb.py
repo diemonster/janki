@@ -102,7 +102,7 @@ class FakeApi:
     def _parse(self, body: dict[str, Any]) -> dict[str, Any]:
         text = body["text"][0]
         if "furigana" in body:
-            reading = body["furigana"][0][2]
+            reading = body["furigana"][0][0][2]
             key = (text, reading)
             if key not in self.forced:
                 raise AssertionError(f"fake has no forced parse for {key}")
@@ -316,13 +316,33 @@ def test_a_homograph_is_re_parsed_with_the_stored_reading_forced() -> None:
     assert len(parses) == 2
     assert "furigana" not in parses[0]
     # The whole-expression span, in the encoding the same request declares.
-    assert parses[1]["furigana"] == [[0, 2, "ついたち"]]
+    assert parses[1]["furigana"] == [[[0, 2, "ついたち"]]]
     assert parses[1]["position_length_encoding"] == "utf16"
     enriched = result.records[0]
     assert enriched.furigana == "一日[ついたち]"
-    assert enriched.pitch_accent == ["LHHL"]
+    assert enriched.pitch_accent == []
     assert enriched.frequency_rank == 1400
+    assert len(result.warnings) == 1
+    assert "do not fit reading ついたち" in result.warnings[0]
+
+
+def test_an_unrelated_kana_parse_retries_with_the_stored_reading() -> None:
+    suru = vocab(1157170, 460825390, "する", "する", ["LHH"], 100, ["vs"])
+    shinu = vocab(1310730, 851331686, "しぬ", "しぬ", ["LHH"], 30800, ["v5n"])
+    api = FakeApi(
+        unforced={"しぬ": parse_response((None, suru))},
+        forced={("しぬ", "しぬ"): parse_response((None, shinu))},
+    )
+    item = record(id="word:しぬ:しぬ", expression="しぬ", reading="しぬ")
+
+    result = enrich_records(client_for(api), [item])
+
+    assert result.records[0].frequency_rank == 30800
     assert result.warnings == []
+    parses = api.calls("parse")
+    assert len(parses) == 2
+    assert "furigana" not in parses[0]
+    assert parses[1]["furigana"] == [[[0, 2, "しぬ"]]]
 
 
 def test_the_reading_set_is_gathered_across_the_entrys_other_senses() -> None:

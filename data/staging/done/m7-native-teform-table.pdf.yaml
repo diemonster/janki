@@ -1,0 +1,358 @@
+source_file: m7-native-teform-table.pdf
+extracted_at: '2026-08-13'
+model: claude-opus-5
+prompt_provenance:
+  source_sha256: 3e17252290c6a86eaa47d0e2a933084cfe990a5e383a3397fc85f7831a4a1bf6
+  mode: table
+  provider: anthropic
+  model: claude-opus-5
+  response_schema_version: 2
+  system_prompt_fingerprint: 5a7f323cd7b577741c55c1cba45d2b54729241fc0f007ccef85b9da6ad1c9078
+  style_guide_fingerprint: 418704c8197845d87af002df9934b484661bd161134543418ed1273419944b9b
+  user_prompt_fingerprint: b844096e7aa6179919404fc70df9af2dc0e7473cefbe3def811cae364a4e89f1
+coverage:
+  version: 1
+  status: matched
+  blocking: false
+  source_fingerprint: 3e17252290c6a86eaa47d0e2a933084cfe990a5e383a3397fc85f7831a4a1bf6
+  oracle_id: m7-native-teform-table-units
+  oracle_type: exhaustive
+  oracle_content_fingerprint: 8d20f8a3498d12fa61c51069345fe1e31f35495a99decdf131ce3876629c3bb4
+  model_reported_unit_count: 12
+  observed_unit_count: 12
+  prose_candidate_count: 0
+  prose_coverage: not-applicable
+  source_units:
+  - page: 1
+    section: te-form-grid
+    ordinal: 1
+    context_fingerprint: 019d453fd38a5a99e97ee396a4d56dfb805e37d7231578e88bdae85ae0e65a8a
+    disposition: candidate
+    context: かう → って
+  - page: 1
+    section: te-form-grid
+    ordinal: 2
+    context_fingerprint: bb372ef6967e203a17eb27f150cf6946253cfad24b8f29d567294b129694d4b1
+    disposition: candidate
+    context: まつ → って
+  - page: 1
+    section: te-form-grid
+    ordinal: 3
+    context_fingerprint: 8859cfd4b80f0b0b66ab066278413c85dfe5eee56df88ea0f80c5b1fdd71dcea
+    disposition: candidate
+    context: とる → って
+  - page: 1
+    section: te-form-grid
+    ordinal: 4
+    context_fingerprint: b00a678d041a80127e8abc220de295e610a0532d35df7b3aaa529d0b22f5f645
+    disposition: candidate
+    context: すむ → んで
+  - page: 1
+    section: te-form-grid
+    ordinal: 5
+    context_fingerprint: 4ff4a26232ad830f7009734802e74242c5f90d6d04b439a30e552acf043c3f0e
+    disposition: candidate
+    context: あそぶ → んで
+  - page: 1
+    section: te-form-grid
+    ordinal: 6
+    context_fingerprint: 4882163ad4274c0290ed702b798c5e9b189312bf27222109e2982c392216e48e
+    disposition: candidate
+    context: しぬ → んで
+  - page: 1
+    section: te-form-grid
+    ordinal: 7
+    context_fingerprint: 11d41f477bceffc361933c4045e688319e641d595b58bbff698c7973af62c0cf
+    disposition: candidate
+    context: かく → いて
+  - page: 1
+    section: te-form-grid
+    ordinal: 8
+    context_fingerprint: 02c624bc2f937732a349cab0b6cf12749d1f85507be59fc986b7112ec05274ad
+    disposition: candidate
+    context: およぐ → いで
+  - page: 1
+    section: te-form-grid
+    ordinal: 9
+    context_fingerprint: 7a5bda0d4cb63cf7b02669eb14d3a53e5c7f86932f029c2eded81fa95a5f09b5
+    disposition: candidate
+    context: はなす → して
+  - page: 1
+    section: te-form-grid
+    ordinal: 10
+    context_fingerprint: f5a90157fba25e9856d11fb92e0b6129c84717987713803c8fbebd7132cef00b
+    disposition: candidate
+    context: くる → きて
+  - page: 1
+    section: te-form-grid
+    ordinal: 11
+    context_fingerprint: 7c69c9f1a93cfde16552f2730950b58662dc2e0e1ece8fa42b093f7421b2d759
+    disposition: candidate
+    context: する → して
+  - page: 1
+    section: te-form-grid
+    ordinal: 12
+    context_fingerprint: b4bd27730117af2faa6abb6a355723c9d9a34dd3ff6f706ccace380d989adc57
+    disposition: candidate
+    context: いく → いって
+  missing_units: []
+  unexpected_units: []
+  duplicate_keys: []
+  context_mismatched_units: []
+  disposition_mismatched_units: []
+  omission_units: []
+  candidate_units:
+  - page: 1
+    section: te-form-grid
+    ordinal: 1
+    context_fingerprint: 019d453fd38a5a99e97ee396a4d56dfb805e37d7231578e88bdae85ae0e65a8a
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 2
+    context_fingerprint: bb372ef6967e203a17eb27f150cf6946253cfad24b8f29d567294b129694d4b1
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 3
+    context_fingerprint: 8859cfd4b80f0b0b66ab066278413c85dfe5eee56df88ea0f80c5b1fdd71dcea
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 4
+    context_fingerprint: b00a678d041a80127e8abc220de295e610a0532d35df7b3aaa529d0b22f5f645
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 5
+    context_fingerprint: 4ff4a26232ad830f7009734802e74242c5f90d6d04b439a30e552acf043c3f0e
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 6
+    context_fingerprint: 4882163ad4274c0290ed702b798c5e9b189312bf27222109e2982c392216e48e
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 7
+    context_fingerprint: 11d41f477bceffc361933c4045e688319e641d595b58bbff698c7973af62c0cf
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 8
+    context_fingerprint: 02c624bc2f937732a349cab0b6cf12749d1f85507be59fc986b7112ec05274ad
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 9
+    context_fingerprint: 7a5bda0d4cb63cf7b02669eb14d3a53e5c7f86932f029c2eded81fa95a5f09b5
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 10
+    context_fingerprint: f5a90157fba25e9856d11fb92e0b6129c84717987713803c8fbebd7132cef00b
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 11
+    context_fingerprint: 7c69c9f1a93cfde16552f2730950b58662dc2e0e1ece8fa42b093f7421b2d759
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 12
+    context_fingerprint: b4bd27730117af2faa6abb6a355723c9d9a34dd3ff6f706ccace380d989adc57
+    disposition: candidate
+  duplicate_units: []
+  non_vocabulary_units: []
+  unreadable_units: []
+  coverage_block_fingerprint: cfbd480c73e7e1e6de201cce582d3acfee553c1561ebe16880120b5f68ba55f9
+review_notes: Promoted 6 record(s) from this file.
+records:
+- id: word:まつ:まつ
+  expression: まつ
+  reading: まつ
+  furigana: ''
+  romaji: matsu
+  meanings:
+  - to wait
+  part_of_speech: godan verb (u-verb)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - m7-native-teform-table
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-native-teform-table.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-native-teform-table.pdf
+      confidence: high
+      page: '1'
+      context: まつ → って
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:とる:とる
+  expression: とる
+  reading: とる
+  furigana: ''
+  romaji: toru
+  meanings:
+  - to take
+  part_of_speech: godan verb (u-verb)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - m7-native-teform-table
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-native-teform-table.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-native-teform-table.pdf
+      confidence: high
+      page: '1'
+      context: とる → って
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:すむ:すむ
+  expression: すむ
+  reading: すむ
+  furigana: ''
+  romaji: sumu
+  meanings:
+  - to live
+  - to reside
+  part_of_speech: godan verb (u-verb)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - m7-native-teform-table
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-native-teform-table.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-native-teform-table.pdf
+      confidence: high
+      page: '1'
+      context: すむ → んで
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:あそぶ:あそぶ
+  expression: あそぶ
+  reading: あそぶ
+  furigana: ''
+  romaji: asobu
+  meanings:
+  - to play
+  - to hang out
+  part_of_speech: godan verb (u-verb)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - m7-native-teform-table
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-native-teform-table.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-native-teform-table.pdf
+      confidence: high
+      page: '1'
+      context: あそぶ → んで
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:およぐ:およぐ
+  expression: およぐ
+  reading: およぐ
+  furigana: ''
+  romaji: oyogu
+  meanings:
+  - to swim
+  part_of_speech: godan verb (u-verb)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - m7-native-teform-table
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-native-teform-table.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-native-teform-table.pdf
+      confidence: high
+      page: '1'
+      context: およぐ → いで
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:しぬ:しぬ
+  expression: しぬ
+  reading: しぬ
+  furigana: ''
+  romaji: shinu
+  meanings:
+  - to die
+  part_of_speech: godan verb (u-verb)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - m7-native-teform-table
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-native-teform-table.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-native-teform-table.pdf
+      confidence: high
+      page: '1'
+      context: しぬ → んで
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'

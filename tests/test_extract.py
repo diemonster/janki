@@ -179,6 +179,55 @@ def test_the_known_word_list_rides_in_the_user_turn_not_the_system_blocks(
     assert "食べる" in user_text
 
 
+def test_an_exhaustive_oracle_binds_exact_unit_keys_in_the_user_turn(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    call = FakeCall(ok())
+    monkeypatch.setattr(extract.claude_client, "parse_call", call)
+
+    extract.extract_candidates(
+        prepared(tmp_path),
+        model="claude-opus-5",
+        style_guide="STYLE",
+        mode="table",
+        source_unit_keys=((1, "lesson-table", 1), (1, "lesson-table", 2)),
+    )
+
+    user_text = " ".join(
+        block["text"]
+        for block in call.calls[0]["content"]
+        if block.get("type") == "text"
+    )
+    assert "page=1 section=lesson-table ordinal=1" in user_text
+    assert "page=1 section=lesson-table ordinal=2" in user_text
+    assert "Do not add keys for titles" in user_text
+
+
+def test_a_selection_oracle_binds_exact_targets_and_its_rubric(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    call = FakeCall(ok())
+    monkeypatch.setattr(extract.claude_client, "parse_call", call)
+
+    extract.extract_candidates(
+        prepared(tmp_path),
+        model="claude-opus-5",
+        style_guide="STYLE",
+        mode="prose",
+        selection_targets=(("word:ほん:ほん", "page-1/person-a-monday"),),
+        selection_rubric="Keep the source spelling.",
+    )
+
+    user_text = " ".join(
+        block["text"]
+        for block in call.calls[0]["content"]
+        if block.get("type") == "text"
+    )
+    assert "identity=word:ほん:ほん locator=page-1/person-a-monday" in user_text
+    assert "Selection rubric: Keep the source spelling." in user_text
+    assert "do not add other prose candidates" in user_text
+
+
 def test_the_file_is_sent_as_its_content_block(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -613,6 +662,56 @@ def write_approved_oracle(
     return path
 
 
+def write_approved_selection_oracle(
+    root: Path,
+    *,
+    source_sha256: str,
+    targets: tuple[hardening.SelectionTarget, ...],
+    selection_rubric: str,
+    oracle_id: str = "lesson-selection",
+) -> Path:
+    path = root / "quality" / "oracles" / f"{oracle_id}.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    oracle = hardening.UnitOracle(
+        path=path,
+        relative_path=f"quality/oracles/{path.name}",
+        id=oracle_id,
+        source_fingerprint=source_sha256,
+        type="selection",
+        case_ids=(),
+        units=(),
+        targets=targets,
+        selection_rubric=selection_rubric,
+        approval=None,
+    )
+    content_fingerprint = hardening.oracle_content_fingerprint(oracle)
+    payload = {
+        "version": 1,
+        "id": oracle_id,
+        "source_fingerprint": source_sha256,
+        "type": "selection",
+        "case_ids": [],
+        "targets": [
+            {"identity": target.identity, "locator": target.locator}
+            for target in targets
+        ],
+        "selection_rubric": selection_rubric,
+        "approval": {
+            "authority": "repository-owner",
+            "oracle_id": oracle_id,
+            "source_fingerprint": source_sha256,
+            "oracle_type": "selection",
+            "oracle_content_fingerprint": content_fingerprint,
+            "selection_rubric": selection_rubric,
+            "approved_at": "2026-08-13",
+        },
+    }
+    path.write_text(
+        yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
+    return path
+
+
 def test_extract_writes_one_staging_file_per_input(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -731,6 +830,65 @@ def test_an_approved_oracle_and_prompt_provenance_are_persisted(
     assert archived_meta["coverage"]["oracle_id"] == "lesson-table"
 
 
+def test_selection_targets_override_the_known_word_skip_list(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    existing = VocabularyRecord(
+        id="word:ほん:ほん", expression="ほん", reading="ほん"
+    )
+    root = project(tmp_path, [existing])
+    source = source_pdf(tmp_path)
+    rubric = "Select only the named word and keep the source spelling."
+    oracle = write_approved_selection_oracle(
+        root,
+        source_sha256=extract.source_fingerprint(source),
+        targets=(
+            hardening.SelectionTarget(
+                "word:ほん:ほん", "page-1/person-a-monday"
+            ),
+        ),
+        selection_rubric=rubric,
+    )
+    call = FakeCall(
+        ok(
+            candidate(
+                expression="ほん",
+                reading="ほん",
+                page=1,
+                context="ほんをよむつもりです。",
+                inclusion_reason="Approved target.",
+            )
+        )
+    )
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
+
+    code = cli.main(
+        [
+            "--root",
+            str(root),
+            "extract",
+            str(source),
+            "--mode",
+            "prose",
+            "--coverage-oracle",
+            str(oracle),
+        ]
+    )
+
+    assert code == 0
+    user_text = " ".join(
+        block["text"]
+        for block in call.calls[0]["content"]
+        if block.get("type") == "text"
+    )
+    assert "identity=word:ほん:ほん locator=page-1/person-a-monday" in user_text
+    assert rubric in user_text
+    assert "Words janki already has" not in user_text
+    _records, meta = read_staging(root / "staging" / "lesson.pdf.yaml")
+    assert meta["coverage"]["status"] == "selection"
+    assert meta["coverage"]["blocking"] is False
+
+
 def test_oracle_binding_errors_happen_before_the_first_paid_call(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -827,9 +985,26 @@ def test_prompt_fingerprints_change_with_the_prompt_not_the_path(tmp_path: Path)
     changed = extract.prompt_provenance(
         item, model="m", style_guide="style", mode="prose", known=("話す",)
     )
+    keyed = extract.prompt_provenance(
+        item,
+        model="m",
+        style_guide="style",
+        mode="table",
+        source_unit_keys=((1, "lesson-table", 1),),
+    )
+    selected = extract.prompt_provenance(
+        item,
+        model="m",
+        style_guide="style",
+        mode="prose",
+        selection_targets=(("word:ほん:ほん", "page-1/person-a-monday"),),
+        selection_rubric="Keep the source spelling.",
+    )
 
     assert base["system_prompt_fingerprint"] == changed["system_prompt_fingerprint"]
     assert base["user_prompt_fingerprint"] != changed["user_prompt_fingerprint"]
+    assert base["user_prompt_fingerprint"] != keyed["user_prompt_fingerprint"]
+    assert base["user_prompt_fingerprint"] != selected["user_prompt_fingerprint"]
     assert str(tmp_path) not in json.dumps(base)
 
 

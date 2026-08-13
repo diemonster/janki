@@ -1,0 +1,17 @@
+version: 1
+id: ai-rejected-example-retry
+purpose: regression
+gating: true
+runner: ai-enrichment-retry
+pipeline_boundary: ai-enrichment
+source_archetype: native-pdf-table
+redistributable: true
+fixture_basis: agent-created-synthetic
+fixtures:
+  - path: input.json
+    fingerprint: 1c4b2a599b99466d19012701032f949008ca22c2b93d1b572451b5662a70c811
+  - path: oracle.json
+    fingerprint: cf8484885866210370638a982fb49e6035cec7f1cab0b4222c00e4ad3a05bfd9
+runner_input: input.json
+oracle: oracle.json
+finding_id: ai-exact-headword-spelling

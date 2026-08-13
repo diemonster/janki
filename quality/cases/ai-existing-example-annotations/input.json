@@ -1,0 +1,38 @@
+{
+  "records": [
+    {
+      "id": "word:ほん:ほん",
+      "expression": "ほん",
+      "reading": "ほん",
+      "meanings": ["book"],
+      "examples": [
+        {
+          "japanese": "ほんをよむつもりです。",
+          "audio": "audio/source.mp3"
+        }
+      ],
+      "usage_notes": "A common noun."
+    }
+  ],
+  "model": "offline-model",
+  "response": {
+    "parsed": {
+      "examples": [
+        {
+          "japanese": "ほんをよむつもりです。",
+          "speech_level": "polite",
+          "furigana": "ほんをよむつもりです。",
+          "english": "I plan to read a book."
+        }
+      ],
+      "usage_notes": ""
+    },
+    "stop_reason": "end_turn"
+  },
+  "observe": [
+    {
+      "id": "word:ほん:ほん",
+      "fields": ["examples", "usage_notes"]
+    }
+  ]
+}

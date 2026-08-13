@@ -2577,16 +2577,37 @@ def command_extract(args: argparse.Namespace) -> int:
     for index, (item, target) in enumerate(
         zip(prepared, targets, strict=True)
     ):
+        oracle = oracle_bindings.get(index)
+        selection_targets = (
+            tuple((entry.identity, entry.locator) for entry in oracle.targets)
+            if oracle is not None and oracle.type == "selection"
+            else ()
+        )
+        selection_rubric = (
+            oracle.selection_rubric or "" if selection_targets else ""
+        )
+        # An approved selection target wins over the general known-word skip
+        # list. The oracle may deliberately include a known identity to measure
+        # this source, and telling the model both "return it" and "skip it"
+        # makes the prompt self-contradictory.
+        known_for_item = () if selection_targets else skip_list
         result = extract.extract_candidates(
             item,
             model=model,
             style_guide=style_guide,
             mode=args.mode,
-            known=skip_list,
+            known=known_for_item,
+            source_unit_keys=(
+                tuple(unit.key for unit in oracle_bindings[index].units)
+                if index in oracle_bindings
+                and oracle_bindings[index].type == "exhaustive"
+                else ()
+            ),
+            selection_targets=selection_targets,
+            selection_rubric=selection_rubric,
         )
         candidates = result.candidates
         records = extract.build_records(candidates, item, known)
-        oracle = oracle_bindings.get(index)
         oracle_fingerprint = (
             hardening.oracle_content_fingerprint(oracle) if oracle is not None else None
         )
@@ -2609,7 +2630,14 @@ def command_extract(args: argparse.Namespace) -> int:
                 model=model,
                 style_guide=style_guide,
                 mode=args.mode,
-                known=skip_list,
+                known=known_for_item,
+                source_unit_keys=(
+                    tuple(unit.key for unit in oracle.units)
+                    if oracle is not None and oracle.type == "exhaustive"
+                    else ()
+                ),
+                selection_targets=selection_targets,
+                selection_rubric=selection_rubric,
                 source_sha256=source_fingerprints[index],
             ),
             "coverage": coverage,

@@ -1,0 +1,12 @@
+{
+  "call_count": 2,
+  "responses_remaining": 0,
+  "example_texts": [
+    "明日、友達をまちます。",
+    "ここでまつの？"
+  ],
+  "usage_notes": "The particle を can mark the person or thing awaited.",
+  "rejected_ids": [],
+  "no_changes": [],
+  "retry_prompt_has_allowed_forms": true
+}

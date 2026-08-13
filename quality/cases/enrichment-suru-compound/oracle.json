@@ -1,0 +1,34 @@
+{
+  "records": [
+    {
+      "id": "word:勉強する:べんきょうする",
+      "fields": {
+        "verb_group": "suru",
+        "conjugations": {
+          "plain": "勉強する",
+          "negative": "勉強しない",
+          "past": "勉強した",
+          "past_negative": "勉強しなかった",
+          "te_form": "勉強して",
+          "potential": "勉強できる",
+          "passive": "勉強される"
+        },
+        "pitch_accent": [],
+        "frequency_rank": 1000
+      }
+    }
+  ],
+  "changes": {
+    "word:勉強する:べんきょうする": [
+      "conjugations",
+      "frequency_rank",
+      "furigana",
+      "part_of_speech",
+      "verb_group"
+    ]
+  },
+  "looked_up": 1,
+  "skipped": 0,
+  "warning_count": 1,
+  "calls": ["parse", "parse", "lookup-vocabulary"]
+}

@@ -419,7 +419,7 @@ def test_parse_sends_forced_furigana_with_the_encoding_it_is_measured_in() -> No
     )
 
     body = transport.bodies[0]
-    assert body["furigana"] == [[0, 2, "はなす"]]
+    assert body["furigana"] == [[[0, 2, "はなす"]]]
     assert body["position_length_encoding"] == "utf16"
 
 

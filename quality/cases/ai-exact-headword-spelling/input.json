@@ -1,0 +1,11 @@
+{
+  "records": [
+    {
+      "id": "word:あそぶ:あそぶ",
+      "expression": "あそぶ",
+      "reading": "あそぶ",
+      "meanings": ["to play"],
+      "verb_group": "godan"
+    }
+  ]
+}

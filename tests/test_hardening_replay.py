@@ -9,12 +9,26 @@ from japanese_anki import enrich, hardening, hardening_replay, jpdb, kanji, qc, 
 
 ROOT = Path(__file__).resolve().parents[1]
 SEEDED_CASES = (
+    "ai-exact-headword-spelling",
+    "ai-existing-example-annotations",
     "ai-no-writable-change",
+    "ai-rejected-example-retry",
     "derived-romaji-repair",
+    "enrichment-forced-kana-reading",
+    "enrichment-invalid-pitch-length",
+    "enrichment-suru-compound",
+    "extraction-oracle-key-binding",
+    "extraction-selection-target-binding",
     "extraction-unit-accounting",
     "impossible-character-furigana",
+    "m7-mixed-tsumori-coverage",
+    "m7-native-teform-table-coverage",
     "missing-furigana-separator",
     "pos-precedence",
+    "reading-check-forced-furigana",
+    "reading-check-suru-compound",
+    "review-pitch-fact-recheck",
+    "review-pitch-source-authority",
 )
 DISCOVERED_CASES = hardening_replay.discover_cases(ROOT)
 
@@ -85,6 +99,16 @@ def test_every_registered_runner_calls_its_production_boundary() -> None:
     candidate = hardening_replay.RUNNERS["candidate-response"](
         {"candidates": [], "observe": []}, ROOT
     )
+    extraction_prompt = hardening_replay.RUNNERS["extraction-prompt"](
+        {
+            "source_name": "lesson.pdf",
+            "known": [],
+            "unit_keys": [
+                {"page": 1, "section": "lesson-table", "ordinal": 1}
+            ],
+        },
+        ROOT,
+    )
     staging = hardening_replay.RUNNERS["staging-promote"](
         {
             "records": [
@@ -138,6 +162,7 @@ def test_every_registered_runner_calls_its_production_boundary() -> None:
     ai = hardening_replay.replay(ROOT, ["ai-no-writable-change"])[0]
 
     assert candidate["record_ids"] == []
+    assert extraction_prompt["prompt_has_unit_keys"] is True
     assert staging["promoted_ids"] == ["word:話す:はなす"]
     assert staging["round_trip_record_ids"] == ["word:話す:はなす", "word:読む:"]
     assert validation["errors"] == 0

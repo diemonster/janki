@@ -25,6 +25,7 @@ from japanese_anki import (
     promote,
     qc,
     repairs,
+    review,
     staging,
     validation,
 )
@@ -405,6 +406,115 @@ def _candidate_response(data: dict[str, Any], root: Path) -> Any:
     return output
 
 
+def _extraction_prompt(data: dict[str, Any], root: Path) -> Any:
+    """Observe whether extraction binds the applicable human oracle facts."""
+    del root
+    _only(
+        data,
+        {
+            "source_name",
+            "known",
+            "unit_keys",
+            "selection_targets",
+            "selection_rubric",
+        },
+        "extraction-prompt",
+    )
+    source_name = data.get("source_name")
+    if not isinstance(source_name, str) or not source_name:
+        raise hardening.HardeningError("source_name must be non-empty text")
+    known = _string_list(data.get("known", []), "known")
+    raw_keys = data.get("unit_keys", [])
+    raw_targets = data.get("selection_targets", [])
+    if bool(raw_keys) == bool(raw_targets):
+        raise hardening.HardeningError(
+            "extraction-prompt requires exactly one of unit_keys or selection_targets"
+        )
+    if not isinstance(raw_keys, list):
+        raise hardening.HardeningError("unit_keys must be a JSON list")
+    unit_keys: list[tuple[int, str, int]] = []
+    for index, value in enumerate(raw_keys):
+        item = _mapping(value, f"unit_keys[{index}]")
+        _only(item, {"page", "section", "ordinal"}, f"unit_keys[{index}]")
+        page = item.get("page")
+        section = item.get("section")
+        ordinal = item.get("ordinal")
+        if (
+            isinstance(page, bool)
+            or not isinstance(page, int)
+            or page < 1
+            or not isinstance(section, str)
+            or not re.fullmatch(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", section)
+            or isinstance(ordinal, bool)
+            or not isinstance(ordinal, int)
+            or ordinal < 1
+        ):
+            raise hardening.HardeningError(
+                f"unit_keys[{index}] must contain a positive page and ordinal "
+                "and a lowercase section slug"
+            )
+        unit_keys.append((page, section, ordinal))
+    if len(set(unit_keys)) != len(unit_keys):
+        raise hardening.HardeningError("unit_keys contains duplicate keys")
+    if unit_keys != sorted(unit_keys):
+        raise hardening.HardeningError("unit_keys must be in source order")
+
+    if unit_keys:
+        prompt = extract.prompt_for(source_name, known, unit_keys)
+        expected = [
+            f"page={page} section={section} ordinal={ordinal}"
+            for page, section, ordinal in unit_keys
+        ]
+        return {
+            "prompt_has_unit_keys": all(key in prompt for key in expected),
+        }
+
+    if not isinstance(raw_targets, list) or not raw_targets:
+        raise hardening.HardeningError(
+            "selection_targets must be a non-empty JSON list"
+        )
+    targets: list[tuple[str, str]] = []
+    for index, value in enumerate(raw_targets):
+        item = _mapping(value, f"selection_targets[{index}]")
+        _only(item, {"identity", "locator"}, f"selection_targets[{index}]")
+        identity = item.get("identity")
+        locator = item.get("locator")
+        if not isinstance(identity, str) or not identity.startswith("word:"):
+            raise hardening.HardeningError(
+                f"selection_targets[{index}].identity must be a word identity"
+            )
+        if not isinstance(locator, str) or not locator:
+            raise hardening.HardeningError(
+                f"selection_targets[{index}].locator must be non-empty text"
+            )
+        targets.append((identity, locator))
+    if len(set(targets)) != len(targets):
+        raise hardening.HardeningError("selection_targets contains duplicates")
+    rubric = data.get("selection_rubric")
+    if not isinstance(rubric, str) or not rubric.strip():
+        raise hardening.HardeningError(
+            "selection_rubric must be non-empty text"
+        )
+    try:
+        prompt = extract.prompt_for(
+            source_name,
+            known,
+            selection_targets=targets,
+            selection_rubric=rubric,
+        )
+    except TypeError as exc:
+        if "unexpected keyword argument" not in str(exc):
+            raise
+        prompt = extract.prompt_for(source_name, known)
+    return {
+        "prompt_has_selection_targets": all(
+            f"identity={identity} locator={locator}" in prompt
+            for identity, locator in targets
+        ),
+        "prompt_has_selection_rubric": rubric in prompt,
+    }
+
+
 def _staging_promote(data: dict[str, Any], root: Path) -> Any:
     del root
     _only(
@@ -645,6 +755,168 @@ def _ai_enrichment(data: dict[str, Any], root: Path) -> Any:
     }
 
 
+def _ai_enrichment_prompt(data: dict[str, Any], root: Path) -> Any:
+    """Observe the spelling contract sent to the AI enrichment model."""
+    del root
+    _only(data, {"records"}, "ai-enrichment-prompt")
+    records = _records(data.get("records"))
+    if len(records) != 1:
+        raise hardening.HardeningError(
+            "ai-enrichment-prompt requires exactly one record"
+        )
+    combined = enrich.AI_INSTRUCTIONS + "\n" + enrich.ai_prompt(records[0])
+    return {
+        "exact_spelling_required": (
+            "Use the exact spelling shown in Expression" in combined
+        ),
+        "expression_in_prompt": records[0].expression in combined,
+    }
+
+
+def _semantic_review_recheck(data: dict[str, Any], root: Path) -> Any:
+    """Replay an initial review and any production-managed recheck."""
+    del root
+    _only(data, {"records", "model", "responses"}, "semantic-review-recheck")
+    records = _records(data.get("records"))
+    if len(records) != 1:
+        raise hardening.HardeningError(
+            "semantic-review-recheck requires exactly one record"
+        )
+    raw_responses = data.get("responses")
+    if not isinstance(raw_responses, list):
+        raise hardening.HardeningError("responses must be a JSON list")
+    responses = list(raw_responses)
+    prompts: list[str] = []
+
+    def canned_call(
+        model: str,
+        blocks: Any,
+        content: Any,
+        schema: Any,
+        client: Any = None,
+        **options: Any,
+    ) -> claude_client.CallResult:
+        del model, blocks, schema, client, options
+        if not responses:
+            raise hardening.HardeningError(
+                "Canned review responses ended before the review finished"
+            )
+        prompts.append(json.dumps(content, ensure_ascii=False, sort_keys=True))
+        raw = _mapping(responses.pop(0), "responses entry")
+        _only(raw, {"parsed", "stop_reason"}, "responses entry")
+        parsed_raw = raw.get("parsed")
+        parsed = (
+            _model_validate(
+                _structured_schema(review.review_schema, "semantic review replay"),
+                parsed_raw,
+                "responses entry.parsed",
+            )
+            if parsed_raw is not None
+            else None
+        )
+        return claude_client.CallResult(parsed, raw.get("stop_reason"), None)
+
+    reviewed, failures = review.review_records(
+        records,
+        model=str(data.get("model", "offline-model")),
+        style_guide="Offline hardening replay.",
+        parse_call=canned_call,
+    )
+    entry = next(iter(reviewed.values()), None)
+    return {
+        "call_count": len(prompts),
+        "responses_remaining": len(responses),
+        "recheck_prompt_has_pitch_facts": (
+            len(prompts) > 1 and "Mechanical pitch facts:" in prompts[1]
+        ),
+        "recheck_prompt_binds_source_authority": (
+            len(prompts) > 1
+            and "source-bound dictionary data" in prompts[1]
+            and "do not replace a valid lexical pattern from model memory" in prompts[1]
+        ),
+        "findings": [finding.to_dict() for finding in entry.findings] if entry else [],
+        "failures": failures,
+    }
+
+
+def _ai_enrichment_retry(data: dict[str, Any], root: Path) -> Any:
+    """Replay a sequence of structured AI answers through the full pass."""
+    del root
+    _only(data, {"records", "model", "responses"}, "ai-enrichment-retry")
+    records = _records(data.get("records"))
+    if len(records) != 1:
+        raise hardening.HardeningError(
+            "ai-enrichment-retry requires exactly one record"
+        )
+    raw_responses = data.get("responses")
+    if not isinstance(raw_responses, list):
+        raise hardening.HardeningError("responses must be a JSON list")
+    responses = list(raw_responses)
+    prompts: list[str] = []
+
+    def canned_call(
+        model: str,
+        blocks: Any,
+        content: str,
+        schema: Any,
+        client: Any = None,
+        **options: Any,
+    ) -> claude_client.CallResult:
+        del model, blocks, schema, client, options
+        if not responses:
+            raise hardening.HardeningError(
+                "Canned AI responses ended before the enrichment pass finished"
+            )
+        prompts.append(content)
+        raw = _mapping(responses.pop(0), "responses entry")
+        _only(raw, {"parsed", "stop_reason", "refusal"}, "responses entry")
+        parsed_raw = raw.get("parsed")
+        parsed = (
+            _model_validate(
+                _structured_schema(enrich.ai_schema, "ai-enrichment retry replay"),
+                parsed_raw,
+                "responses entry.parsed",
+            )
+            if parsed_raw is not None
+            else None
+        )
+        refusal_raw = raw.get("refusal")
+        refusal = None
+        if refusal_raw is not None:
+            refusal_data = _mapping(refusal_raw, "responses entry.refusal")
+            _only(
+                refusal_data,
+                {"category", "explanation"},
+                "responses entry.refusal",
+            )
+            try:
+                refusal = claude_client.Refusal(**refusal_data)
+            except TypeError as exc:
+                raise hardening.HardeningError(
+                    f"Invalid structured data in responses entry.refusal: {exc}"
+                ) from exc
+        return claude_client.CallResult(parsed, raw.get("stop_reason"), refusal)
+
+    result = enrich.enrich_ai(
+        records,
+        model=str(data.get("model", "offline-model")),
+        style_guide="Offline hardening replay.",
+        parse_call=canned_call,
+    )
+    record = result.records[0]
+    return {
+        "call_count": len(prompts),
+        "responses_remaining": len(responses),
+        "example_texts": [example.japanese for example in record.examples],
+        "usage_notes": record.usage_notes,
+        "rejected_ids": sorted(result.rejected),
+        "no_changes": result.no_changes,
+        "retry_prompt_has_allowed_forms": (
+            len(prompts) > 1 and "Permitted written target forms:" in prompts[1]
+        ),
+    }
+
+
 def _render_build(data: dict[str, Any], root: Path) -> Any:
     _only(data, {"records", "cards", "observe_fields"}, "render-build")
     records = _records(data.get("records"))
@@ -730,11 +1002,15 @@ def _render_build(data: dict[str, Any], root: Path) -> Any:
 
 RUNNERS: dict[str, Callable[[dict[str, Any], Path], Any]] = {
     "candidate-response": _candidate_response,
+    "extraction-prompt": _extraction_prompt,
     "staging-promote": _staging_promote,
     "validation-qc": _validation_qc,
     "render-build": _render_build,
     "dictionary-enrichment": _dictionary_enrichment,
     "ai-enrichment": _ai_enrichment,
+    "ai-enrichment-retry": _ai_enrichment_retry,
+    "ai-enrichment-prompt": _ai_enrichment_prompt,
+    "semantic-review-recheck": _semantic_review_recheck,
     "repair-plan": _repair_plan,
 }
 

@@ -37,6 +37,7 @@ from japanese_anki.staging import (
 # One vocabulary row, in the order /parse answers its default fields in.
 HANASU = [1562350, 4280520068, "話す", "はなす", ["LHLL"], 200, ["vt", "v5s"]]
 ICHINICHI = [1579110, 111, "一日", "いちにち", ["LHHH"], 900, ["n"]]
+BENKYOU = [1512670, 1424808594, "勉強", "べんきょう", ["LHHHHH"], 1000, ["n", "vs"]]
 
 
 class FakeJpdb:
@@ -49,8 +50,10 @@ class FakeJpdb:
     ) -> None:
         self.parses = parses or {}
         self.senses = senses or {}
+        self.bodies: list[dict[str, Any]] = []
 
     def __call__(self, url: str, body: dict[str, Any], headers: dict[str, str]) -> Any:
+        self.bodies.append(body)
         endpoint = url.rsplit("/api/v1/", 1)[-1]
         if endpoint == "parse":
             text = body["text"][0]
@@ -117,6 +120,14 @@ def test_a_primary_reading_passes_without_comment() -> None:
     assert result.warnings == []
 
 
+def test_the_reading_check_forces_the_reviewed_reading() -> None:
+    api = hanasu_jpdb()
+
+    check_readings([record()], client=client_for(api))
+
+    assert api.bodies[0]["furigana"] == [[[0, 2, "はなす"]]]
+
+
 def test_a_real_alternate_reading_passes_with_a_warning() -> None:
     # A homograph is a real thing and the reviewer chose it; jpdb's preference
     # is not evidence they were wrong.
@@ -139,6 +150,39 @@ def test_a_reading_no_entry_lists_is_held_back() -> None:
     assert held_reason(result.held[0]) == HOLD_UNKNOWN_READING
     assert result.keep == [True]
     assert "はなす" in result.warnings[0]
+
+
+def test_a_suru_compound_passes_when_jpdb_lists_the_exact_stem_as_vs() -> None:
+    studying = record(
+        id="word:勉強する:べんきょうする",
+        expression="勉強する",
+        reading="べんきょうする",
+    )
+    api = FakeJpdb(
+        {"勉強する": BENKYOU},
+        {(1512670, 1424808594): {"reading": "べんきょう", "alt_sids": []}},
+    )
+
+    result = check_readings([studying], client=client_for(api))
+
+    assert [item.id for item in result.promoted] == [studying.id]
+    assert result.held == []
+
+
+def test_a_suru_suffix_does_not_pass_without_the_vs_dictionary_marker() -> None:
+    invented = record(
+        id="word:本する:ほんする", expression="本する", reading="ほんする"
+    )
+    noun = [1, 2, "本", "ほん", ["HL"], 10, ["n"]]
+    api = FakeJpdb(
+        {"本する": noun},
+        {(1, 2): {"reading": "ほん", "alt_sids": []}},
+    )
+
+    result = check_readings([invented], client=client_for(api))
+
+    assert result.promoted == []
+    assert held_reason(result.held[0]) == HOLD_UNKNOWN_READING
 
 
 def test_a_spelling_jpdb_cannot_resolve_is_promoted_unchecked() -> None:

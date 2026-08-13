@@ -1227,6 +1227,12 @@ class Ledger:
             for record in records
             if not any(example.japanese.strip() for example in record.examples)
             or not record.usage_notes.strip()
+            or (
+                record.source.type == "extract"
+                and any(
+                    example.needs_ai_annotations() for example in record.examples
+                )
+            )
         ]
 
 

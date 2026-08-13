@@ -863,6 +863,19 @@ def test_an_empty_example_does_not_count_as_enrichment(tmp_path: Path) -> None:
     assert book.missing_enrichment([record]) == [record.id]
 
 
+def test_an_extracted_example_with_annotation_holes_still_needs_ai(
+    tmp_path: Path,
+) -> None:
+    book = ledger_module.load(tmp_path / "ledger.json")
+    record = _record(
+        examples=[ExampleSentence(japanese="日本語を話します。")],
+        usage_notes="A useful sentence.",
+    )
+    record.source.type = "extract"
+
+    assert book.missing_enrichment([record]) == [record.id]
+
+
 def test_the_word_audio_fingerprint_uses_pitch_select_pattern() -> None:
     """One definition of "which pattern does audio use". The fingerprint is
     computed *over* that choice, so a second definition would mean audio

@@ -540,7 +540,10 @@ class JpdbClient:
         if forced_furigana is not None or _POSITIONAL_TOKEN_FIELDS & set(tokens):
             body["position_length_encoding"] = _encoding_name(encoding)
         if forced_furigana is not None:
-            body["furigana"] = [list(span) for span in forced_furigana]
+            # ``text`` uses the batched one-item form, so ``furigana`` must use
+            # the same outer shape: one span list for each input text. The API
+            # rejects a batched text with an inline span list.
+            body["furigana"] = [[list(span) for span in forced_furigana]]
         payload = self._request("parse", body)
         return ParseResult(
             tokens=_zip_rows(_tokens_of(payload.get("tokens")), tokens, "parse tokens"),

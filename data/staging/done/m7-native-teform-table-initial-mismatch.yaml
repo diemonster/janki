@@ -1,0 +1,721 @@
+source_file: m7-native-teform-table.pdf
+extracted_at: '2026-08-13'
+model: claude-opus-5
+prompt_provenance:
+  source_sha256: 3e17252290c6a86eaa47d0e2a933084cfe990a5e383a3397fc85f7831a4a1bf6
+  mode: table
+  provider: anthropic
+  model: claude-opus-5
+  response_schema_version: 2
+  system_prompt_fingerprint: 5a7f323cd7b577741c55c1cba45d2b54729241fc0f007ccef85b9da6ad1c9078
+  style_guide_fingerprint: 418704c8197845d87af002df9934b484661bd161134543418ed1273419944b9b
+  user_prompt_fingerprint: 1b75464fe28a8ab08487e49793f2af0332843be08431e067d20beeb1d57ff0f4
+coverage:
+  version: 1
+  status: mismatch
+  blocking: true
+  source_fingerprint: 3e17252290c6a86eaa47d0e2a933084cfe990a5e383a3397fc85f7831a4a1bf6
+  oracle_id: m7-native-teform-table-units
+  oracle_type: exhaustive
+  oracle_content_fingerprint: 8d20f8a3498d12fa61c51069345fe1e31f35495a99decdf131ce3876629c3bb4
+  model_reported_unit_count: 14
+  observed_unit_count: 14
+  prose_candidate_count: 0
+  prose_coverage: not-applicable
+  source_units:
+  - page: 1
+    section: te-form-song
+    ordinal: 1
+    context_fingerprint: 07e051740db0b5730b31972d39f9cfb3622b58f6451c78ba04206a069d160196
+    disposition: candidate
+    context: かう ➡ って
+  - page: 1
+    section: te-form-song
+    ordinal: 2
+    context_fingerprint: b49d73ac947f4b903cc71ff9ec7963886d56919457f180883c415994544ddffe
+    disposition: candidate
+    context: まつ ➡ って
+  - page: 1
+    section: te-form-song
+    ordinal: 3
+    context_fingerprint: dfe88f67cb973b47782d10293a44845ff07954dabe59e0b8811613c7c96a7190
+    disposition: candidate
+    context: とる ➡ って
+  - page: 1
+    section: te-form-song
+    ordinal: 4
+    context_fingerprint: 169f929dcd2f07e44b124d3b6273c96c1e7701840680e5ff1379fc7e2b372f02
+    disposition: candidate
+    context: すむ ➡ んで
+  - page: 1
+    section: te-form-song
+    ordinal: 5
+    context_fingerprint: 38d089be84e7769623047dfb2dadac1246f057271281e8f6806b85e3431fc568
+    disposition: candidate
+    context: あそぶ ➡ んで
+  - page: 1
+    section: te-form-song
+    ordinal: 6
+    context_fingerprint: 589767dcf9c2a89d9bbe22598d547f3d9e629212c93365fd4917848d3c3a357e
+    disposition: candidate
+    context: しぬ ➡ んで
+  - page: 1
+    section: te-form-song
+    ordinal: 7
+    context_fingerprint: 9ca1ade05fe853733903a1b269b78b275036fdc4b021988638a672dcf93a3696
+    disposition: candidate
+    context: かく ➡ いて
+  - page: 1
+    section: te-form-song
+    ordinal: 8
+    context_fingerprint: 683f623502ef4403495c5f14153103fe64923eec634768244ac6f0098a085c58
+    disposition: candidate
+    context: およぐ ➡ いで
+  - page: 1
+    section: te-form-song
+    ordinal: 9
+    context_fingerprint: 6a8acbc06a4a9e935bd72e0e5882fc07ccaf2a3463bfbbabfd042ec88c6c9c53
+    disposition: candidate
+    context: はなす ➡ して
+  - page: 1
+    section: te-form-song
+    ordinal: 10
+    context_fingerprint: e51f2dec1b9c8bf99236b7d6b296e04f0403696ad4361bae1edd636d763c0cf4
+    disposition: candidate
+    context: くる ➡ きて
+  - page: 1
+    section: te-form-song
+    ordinal: 11
+    context_fingerprint: 6ac1e8e9d58b03549cff8be46b08ecf9979f0f190c8890db15d7fcd4a79764bd
+    disposition: candidate
+    context: する ➡ して
+  - page: 1
+    section: te-form-song
+    ordinal: 12
+    context_fingerprint: 877bb71fb72a697f16ab25acaceed601d40ef0d5547f3ae743d933cce7bb5ca0
+    disposition: candidate
+    context: いく ➡ いって
+  - page: 1
+    section: page-furniture
+    ordinal: 1
+    context_fingerprint: db763e6a9618e3618c7401cae4ab4a3921a860238a2b9521bb661ee92c35e38f
+    disposition: non-vocabulary
+    context: Te-form Song
+    reason: Chart title, not a vocabulary entry.
+  - page: 1
+    section: page-furniture
+    ordinal: 2
+    context_fingerprint: 399e6db5807047e744799560da1ad8c34c97a6d62d57286373d50868108eaf5a
+    disposition: non-vocabulary
+    context: NIHONGODEKITA
+    reason: Source/brand watermark, not a vocabulary entry.
+  missing_units:
+  - page: 1
+    section: te-form-grid
+    ordinal: 1
+    context_fingerprint: 019d453fd38a5a99e97ee396a4d56dfb805e37d7231578e88bdae85ae0e65a8a
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 2
+    context_fingerprint: bb372ef6967e203a17eb27f150cf6946253cfad24b8f29d567294b129694d4b1
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 3
+    context_fingerprint: 8859cfd4b80f0b0b66ab066278413c85dfe5eee56df88ea0f80c5b1fdd71dcea
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 4
+    context_fingerprint: b00a678d041a80127e8abc220de295e610a0532d35df7b3aaa529d0b22f5f645
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 5
+    context_fingerprint: 4ff4a26232ad830f7009734802e74242c5f90d6d04b439a30e552acf043c3f0e
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 6
+    context_fingerprint: 4882163ad4274c0290ed702b798c5e9b189312bf27222109e2982c392216e48e
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 7
+    context_fingerprint: 11d41f477bceffc361933c4045e688319e641d595b58bbff698c7973af62c0cf
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 8
+    context_fingerprint: 02c624bc2f937732a349cab0b6cf12749d1f85507be59fc986b7112ec05274ad
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 9
+    context_fingerprint: 7a5bda0d4cb63cf7b02669eb14d3a53e5c7f86932f029c2eded81fa95a5f09b5
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 10
+    context_fingerprint: f5a90157fba25e9856d11fb92e0b6129c84717987713803c8fbebd7132cef00b
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 11
+    context_fingerprint: 7c69c9f1a93cfde16552f2730950b58662dc2e0e1ece8fa42b093f7421b2d759
+    disposition: candidate
+  - page: 1
+    section: te-form-grid
+    ordinal: 12
+    context_fingerprint: b4bd27730117af2faa6abb6a355723c9d9a34dd3ff6f706ccace380d989adc57
+    disposition: candidate
+  unexpected_units:
+  - page: 1
+    section: page-furniture
+    ordinal: 1
+    context_fingerprint: db763e6a9618e3618c7401cae4ab4a3921a860238a2b9521bb661ee92c35e38f
+    disposition: non-vocabulary
+  - page: 1
+    section: page-furniture
+    ordinal: 2
+    context_fingerprint: 399e6db5807047e744799560da1ad8c34c97a6d62d57286373d50868108eaf5a
+    disposition: non-vocabulary
+  - page: 1
+    section: te-form-song
+    ordinal: 1
+    context_fingerprint: 07e051740db0b5730b31972d39f9cfb3622b58f6451c78ba04206a069d160196
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 2
+    context_fingerprint: b49d73ac947f4b903cc71ff9ec7963886d56919457f180883c415994544ddffe
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 3
+    context_fingerprint: dfe88f67cb973b47782d10293a44845ff07954dabe59e0b8811613c7c96a7190
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 4
+    context_fingerprint: 169f929dcd2f07e44b124d3b6273c96c1e7701840680e5ff1379fc7e2b372f02
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 5
+    context_fingerprint: 38d089be84e7769623047dfb2dadac1246f057271281e8f6806b85e3431fc568
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 6
+    context_fingerprint: 589767dcf9c2a89d9bbe22598d547f3d9e629212c93365fd4917848d3c3a357e
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 7
+    context_fingerprint: 9ca1ade05fe853733903a1b269b78b275036fdc4b021988638a672dcf93a3696
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 8
+    context_fingerprint: 683f623502ef4403495c5f14153103fe64923eec634768244ac6f0098a085c58
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 9
+    context_fingerprint: 6a8acbc06a4a9e935bd72e0e5882fc07ccaf2a3463bfbbabfd042ec88c6c9c53
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 10
+    context_fingerprint: e51f2dec1b9c8bf99236b7d6b296e04f0403696ad4361bae1edd636d763c0cf4
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 11
+    context_fingerprint: 6ac1e8e9d58b03549cff8be46b08ecf9979f0f190c8890db15d7fcd4a79764bd
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 12
+    context_fingerprint: 877bb71fb72a697f16ab25acaceed601d40ef0d5547f3ae743d933cce7bb5ca0
+    disposition: candidate
+  duplicate_keys: []
+  context_mismatched_units: []
+  disposition_mismatched_units: []
+  omission_units:
+  - page: 1
+    section: te-form-grid
+    ordinal: 1
+  - page: 1
+    section: te-form-grid
+    ordinal: 2
+  - page: 1
+    section: te-form-grid
+    ordinal: 3
+  - page: 1
+    section: te-form-grid
+    ordinal: 4
+  - page: 1
+    section: te-form-grid
+    ordinal: 5
+  - page: 1
+    section: te-form-grid
+    ordinal: 6
+  - page: 1
+    section: te-form-grid
+    ordinal: 7
+  - page: 1
+    section: te-form-grid
+    ordinal: 8
+  - page: 1
+    section: te-form-grid
+    ordinal: 9
+  - page: 1
+    section: te-form-grid
+    ordinal: 10
+  - page: 1
+    section: te-form-grid
+    ordinal: 11
+  - page: 1
+    section: te-form-grid
+    ordinal: 12
+  candidate_units:
+  - page: 1
+    section: te-form-song
+    ordinal: 1
+    context_fingerprint: 07e051740db0b5730b31972d39f9cfb3622b58f6451c78ba04206a069d160196
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 2
+    context_fingerprint: b49d73ac947f4b903cc71ff9ec7963886d56919457f180883c415994544ddffe
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 3
+    context_fingerprint: dfe88f67cb973b47782d10293a44845ff07954dabe59e0b8811613c7c96a7190
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 4
+    context_fingerprint: 169f929dcd2f07e44b124d3b6273c96c1e7701840680e5ff1379fc7e2b372f02
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 5
+    context_fingerprint: 38d089be84e7769623047dfb2dadac1246f057271281e8f6806b85e3431fc568
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 6
+    context_fingerprint: 589767dcf9c2a89d9bbe22598d547f3d9e629212c93365fd4917848d3c3a357e
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 7
+    context_fingerprint: 9ca1ade05fe853733903a1b269b78b275036fdc4b021988638a672dcf93a3696
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 8
+    context_fingerprint: 683f623502ef4403495c5f14153103fe64923eec634768244ac6f0098a085c58
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 9
+    context_fingerprint: 6a8acbc06a4a9e935bd72e0e5882fc07ccaf2a3463bfbbabfd042ec88c6c9c53
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 10
+    context_fingerprint: e51f2dec1b9c8bf99236b7d6b296e04f0403696ad4361bae1edd636d763c0cf4
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 11
+    context_fingerprint: 6ac1e8e9d58b03549cff8be46b08ecf9979f0f190c8890db15d7fcd4a79764bd
+    disposition: candidate
+  - page: 1
+    section: te-form-song
+    ordinal: 12
+    context_fingerprint: 877bb71fb72a697f16ab25acaceed601d40ef0d5547f3ae743d933cce7bb5ca0
+    disposition: candidate
+  duplicate_units: []
+  non_vocabulary_units:
+  - page: 1
+    section: page-furniture
+    ordinal: 1
+    context_fingerprint: db763e6a9618e3618c7401cae4ab4a3921a860238a2b9521bb661ee92c35e38f
+    disposition: non-vocabulary
+  - page: 1
+    section: page-furniture
+    ordinal: 2
+    context_fingerprint: 399e6db5807047e744799560da1ad8c34c97a6d62d57286373d50868108eaf5a
+    disposition: non-vocabulary
+  unreadable_units: []
+  coverage_block_fingerprint: 9d5f5e5e514fc722135f9f2055c91cded7f78e28f7f6e0bd830d334728937cf8
+records:
+- id: word:かう:かう
+  expression: かう
+  reading: かう
+  furigana: ''
+  romaji: kau
+  meanings:
+  - to buy
+  part_of_speech: verb (godan, u-ending)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-native-teform-table.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-native-teform-table.pdf
+      confidence: high
+      page: '1'
+      context: かう ➡ って
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:まつ:まつ
+  expression: まつ
+  reading: まつ
+  furigana: ''
+  romaji: matsu
+  meanings:
+  - to wait
+  part_of_speech: verb (godan, tsu-ending)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-native-teform-table.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-native-teform-table.pdf
+      confidence: high
+      page: '1'
+      context: まつ ➡ って
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:とる:とる
+  expression: とる
+  reading: とる
+  furigana: ''
+  romaji: toru
+  meanings:
+  - to take
+  part_of_speech: verb (godan, ru-ending)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-native-teform-table.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-native-teform-table.pdf
+      confidence: high
+      page: '1'
+      context: とる ➡ って
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:すむ:すむ
+  expression: すむ
+  reading: すむ
+  furigana: ''
+  romaji: sumu
+  meanings:
+  - to live
+  - to reside
+  part_of_speech: verb (godan, mu-ending)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-native-teform-table.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-native-teform-table.pdf
+      confidence: high
+      page: '1'
+      context: すむ ➡ んで
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:あそぶ:あそぶ
+  expression: あそぶ
+  reading: あそぶ
+  furigana: ''
+  romaji: asobu
+  meanings:
+  - to play
+  - to have fun
+  part_of_speech: verb (godan, bu-ending)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-native-teform-table.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-native-teform-table.pdf
+      confidence: high
+      page: '1'
+      context: あそぶ ➡ んで
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:しぬ:しぬ
+  expression: しぬ
+  reading: しぬ
+  furigana: ''
+  romaji: shinu
+  meanings:
+  - to die
+  part_of_speech: verb (godan, nu-ending)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-native-teform-table.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-native-teform-table.pdf
+      confidence: high
+      page: '1'
+      context: しぬ ➡ んで
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:かく:かく
+  expression: かく
+  reading: かく
+  furigana: ''
+  romaji: kaku
+  meanings:
+  - to write
+  part_of_speech: verb (godan, ku-ending)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-native-teform-table.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-native-teform-table.pdf
+      confidence: high
+      page: '1'
+      context: かく ➡ いて
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:およぐ:およぐ
+  expression: およぐ
+  reading: およぐ
+  furigana: ''
+  romaji: oyogu
+  meanings:
+  - to swim
+  part_of_speech: verb (godan, gu-ending)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-native-teform-table.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-native-teform-table.pdf
+      confidence: high
+      page: '1'
+      context: およぐ ➡ いで
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:はなす:はなす
+  expression: はなす
+  reading: はなす
+  furigana: ''
+  romaji: hanasu
+  meanings:
+  - to speak
+  - to talk
+  part_of_speech: verb (godan, su-ending)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-native-teform-table.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-native-teform-table.pdf
+      confidence: high
+      page: '1'
+      context: はなす ➡ して
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:くる:くる
+  expression: くる
+  reading: くる
+  furigana: ''
+  romaji: kuru
+  meanings:
+  - to come
+  part_of_speech: verb (irregular)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-native-teform-table.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-native-teform-table.pdf
+      confidence: high
+      page: '1'
+      context: くる ➡ きて
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:いく:いく
+  expression: いく
+  reading: いく
+  furigana: ''
+  romaji: iku
+  meanings:
+  - to go
+  part_of_speech: verb (godan, irregular te-form)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-native-teform-table.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-native-teform-table.pdf
+      confidence: high
+      page: '1'
+      context: いく ➡ いって
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:する:する
+  expression: する
+  reading: する
+  furigana: ''
+  romaji: ''
+  meanings:
+  - to do
+  part_of_speech: verb (irregular)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-native-teform-table.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-native-teform-table.pdf
+      confidence: high
+      page: '1'
+      context: する ➡ して
+      already_known: 'true'

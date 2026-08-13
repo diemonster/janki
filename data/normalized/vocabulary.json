@@ -1,5 +1,61 @@
 [
   {
+    "id": "word:あそぶ:あそぶ",
+    "expression": "あそぶ",
+    "reading": "あそぶ",
+    "furigana": "",
+    "romaji": "asobu",
+    "meanings": [
+      "to play",
+      "to hang out"
+    ],
+    "part_of_speech": "godan verb (u-verb)",
+    "verb_group": "godan",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "明日、公園であそぶの？",
+        "furigana": "明日[あした]、 公園[こうえん]であそぶの？",
+        "romaji": "ashita, kouendeasobuno?",
+        "english": "Are you going to play at the park tomorrow?",
+        "audio": "audio/janki-36988c9b7f02.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "あそぶ",
+      "negative": "あそばない",
+      "past": "あそんだ",
+      "past_negative": "あそばなかった",
+      "te_form": "あそんで",
+      "potential": "あそべる",
+      "passive": "あそばれる"
+    },
+    "tags": [
+      "m7-native-teform-table"
+    ],
+    "usage_notes": "遊ぶ can mean either “to play” or “to spend time having fun / hang out.” Use 人と遊ぶ for hanging out with someone and 場所で遊ぶ for playing or spending time somewhere. For specific games or sports, Japanese commonly uses ～をする, as in ゲームをする or サッカーをする.",
+    "audio": "audio/janki-42dd98e0f259.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 21000,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-native-teform-table.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-native-teform-table.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "あそぶ → んで",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:ある:ある",
     "expression": "ある",
     "reading": "ある",
@@ -191,6 +247,54 @@
     }
   },
   {
+    "id": "word:うじ:うじ",
+    "expression": "うじ",
+    "reading": "うじ",
+    "furigana": "",
+    "romaji": "uji",
+    "meanings": [
+      "Uji (city in Kyoto Prefecture)"
+    ],
+    "part_of_speech": "noun (place name)",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "それから、うじに行くつもりです。",
+        "furigana": "それから、うじに 行[い]くつもりです。",
+        "romaji": "sorekara, ujiniikutsumoridesu.",
+        "english": "After that, I plan to go to Uji.",
+        "audio": "audio/janki-806b63452bfd.mp3",
+        "register": "polite"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "m7-mixed-tsumori"
+    ],
+    "usage_notes": "A place name usually written 宇治. Use うじに or うじへ for going to Uji, and うじで for an action that takes place there.",
+    "audio": "audio/janki-c318fd8ec975.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 26500,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-mixed-tsumori-pages-27-30.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-mixed-tsumori-pages-27-30.pdf",
+        "confidence": "medium",
+        "page": "3",
+        "context": "それから、うじに行くつもりです。",
+        "inclusion_reason": "Place name appearing in the travel plan dialogue; approved target.",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:うす:うす",
     "expression": "うす",
     "reading": "うす",
@@ -236,6 +340,327 @@
         "anki_Front": "<div>うす</div>",
         "anki_Back": "<div>うす</div><div>Very casual greeting</div>",
         "anki_Add Reverse": ""
+      }
+    }
+  },
+  {
+    "id": "word:うみ:うみ",
+    "expression": "うみ",
+    "reading": "うみ",
+    "furigana": "",
+    "romaji": "umi",
+    "meanings": [
+      "sea",
+      "ocean"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "うみでおよぐつもりです。",
+        "furigana": "うみでおよぐつもりです。",
+        "romaji": "umideoyogutsumoridesu.",
+        "english": "I’m planning to swim in the ocean.",
+        "audio": "audio/janki-98056d0fbb37.mp3",
+        "register": "polite"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "m7-mixed-tsumori"
+    ],
+    "usage_notes": "うみ primarily means “sea” or “ocean.” In expressions such as うみに行く, it naturally means going to the seaside or beach.",
+    "audio": "audio/janki-5134a84c8b8f.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 27900,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-mixed-tsumori-pages-27-30.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-mixed-tsumori-pages-27-30.pdf",
+        "confidence": "high",
+        "page": "4",
+        "context": "・うみでおよぐつもりです。",
+        "inclusion_reason": "Basic nature noun in the Okinawa plan memo.",
+        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"},{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:うんどうする:うんどうする",
+    "expression": "うんどうする",
+    "reading": "うんどうする",
+    "furigana": "",
+    "romaji": "undousuru",
+    "meanings": [
+      "to exercise",
+      "to work out"
+    ],
+    "part_of_speech": "verb (suru)",
+    "verb_group": "suru",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "うんどうするつもりです。",
+        "furigana": "うんどうするつもりです。",
+        "romaji": "undousurutsumoridesu.",
+        "english": "I’m planning to exercise.",
+        "audio": "audio/janki-972e4cdc6b0b.mp3",
+        "register": "polite"
+      }
+    ],
+    "conjugations": {
+      "plain": "うんどうする",
+      "negative": "うんどうしない",
+      "past": "うんどうした",
+      "past_negative": "うんどうしなかった",
+      "te_form": "うんどうして",
+      "potential": "うんどうできる",
+      "passive": "うんどうされる"
+    },
+    "tags": [
+      "m7-mixed-tsumori"
+    ],
+    "usage_notes": "うんどうする refers to physical exercise in general. うんどうをする is also grammatical, but うんどうする is more concise and very common.",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": 75100,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-mixed-tsumori-pages-27-30.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-mixed-tsumori-pages-27-30.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "金曜日 うんどうするつもりです。",
+        "inclusion_reason": "Useful daily-activity suru verb.",
+        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"},{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:おきる:おきる",
+    "expression": "おきる",
+    "reading": "おきる",
+    "furigana": "",
+    "romaji": "okiru",
+    "meanings": [
+      "to get up",
+      "to wake up"
+    ],
+    "part_of_speech": "verb (ru-verb)",
+    "verb_group": "ichidan",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "あさはやくおきないつもりです。",
+        "furigana": "あさはやくおきないつもりです。",
+        "romaji": "asahayakuokinaitsumoridesu.",
+        "english": "I’m not planning to get up early in the morning.",
+        "audio": "audio/janki-46ad85085ddb.mp3",
+        "register": "polite"
+      }
+    ],
+    "conjugations": {
+      "plain": "おきる",
+      "negative": "おきない",
+      "past": "おきた",
+      "past_negative": "おきなかった",
+      "te_form": "おきて",
+      "potential": "おきられる",
+      "passive": "おきられる"
+    },
+    "tags": [
+      "m7-mixed-tsumori"
+    ],
+    "usage_notes": "おきる is an ichidan verb. A specific waking time is commonly marked with に, as in 七時におきる.",
+    "audio": "audio/janki-72a954d78a1e.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 13300,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-mixed-tsumori-pages-27-30.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-mixed-tsumori-pages-27-30.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "日曜日 あさ䛿やくおきないつもりです。",
+        "inclusion_reason": "Core daily-routine verb, shown here in negative form.",
+        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"},{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:おてら:おてら",
+    "expression": "おてら",
+    "reading": "おてら",
+    "furigana": "",
+    "romaji": "otera",
+    "meanings": [
+      "Buddhist temple"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "おてらを見るつもりです",
+        "furigana": "おてらを 見[み]るつもりです",
+        "romaji": "oteraomirutsumoridesu",
+        "english": "I'm planning to see the Buddhist temple.",
+        "audio": "audio/janki-792a532ffa71.mp3",
+        "register": "polite"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "m7-mixed-tsumori"
+    ],
+    "usage_notes": "The prefix お makes てら sound polite and respectful; おてら is common in everyday speech. It refers to a Buddhist temple, whereas じんじゃ refers to a Shinto shrine.",
+    "audio": "audio/janki-6e8a64d89a97.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 148300,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-mixed-tsumori-pages-27-30.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-mixed-tsumori-pages-27-30.pdf",
+        "confidence": "high",
+        "page": "4",
+        "context": "・おてらを見るつもりです",
+        "inclusion_reason": "Sightseeing noun in the Nagano plan memo.",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:およぐ:およぐ",
+    "expression": "およぐ",
+    "reading": "およぐ",
+    "furigana": "",
+    "romaji": "oyogu",
+    "meanings": [
+      "to swim"
+    ],
+    "part_of_speech": "godan verb (u-verb)",
+    "verb_group": "godan",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "夏休みに、沖縄の海でおよぐつもりです。",
+        "furigana": "夏休[なつやす]みに、 沖縄[おきなわ]の 海[うみ]でおよぐつもりです。",
+        "romaji": "natsuyasumini, okinawanoumideoyogutsumoridesu.",
+        "english": "I’m planning to swim in the ocean in Okinawa during summer vacation.",
+        "audio": "audio/janki-3055ccdb2fd7.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "今日、プールでおよぐの？",
+        "furigana": "今日[きょう]、プールでおよぐの？",
+        "romaji": "kyou, puurudeoyoguno?",
+        "english": "Are you swimming at the pool today?",
+        "audio": "audio/janki-a209ae1670fc.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "およぐ",
+      "negative": "およがない",
+      "past": "およいだ",
+      "past_negative": "およがなかった",
+      "te_form": "およいで",
+      "potential": "およげる",
+      "passive": "およがれる"
+    },
+    "tags": [
+      "m7-native-teform-table"
+    ],
+    "usage_notes": "Often written 泳ぐ. The place where someone swims is marked with で, as in 海で泳ぐ (“swim in the ocean”). Its て-form is 泳いで, not 泳って.",
+    "audio": "audio/janki-d8da2004541b.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 59100,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-native-teform-table.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-native-teform-table.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "およぐ → いで",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:おんせん:おんせん",
+    "expression": "おんせん",
+    "reading": "おんせん",
+    "furigana": "",
+    "romaji": "onsen",
+    "meanings": [
+      "hot spring",
+      "hot spring bath"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "おんせんにはいるつもりです",
+        "furigana": "おんせんにはいるつもりです",
+        "romaji": "onsennihairutsumoridesu",
+        "english": "I'm planning to take a hot spring bath.",
+        "audio": "audio/janki-51eb23dc4155.mp3",
+        "register": "polite"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "m7-mixed-tsumori"
+    ],
+    "usage_notes": "Commonly written 温泉. Use おんせんに入る for “to take a hot-spring bath” and おんせんに行く for “to go to a hot spring.”",
+    "audio": "audio/janki-6e34949dd6e5.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 89500,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-mixed-tsumori-pages-27-30.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-mixed-tsumori-pages-27-30.pdf",
+        "confidence": "high",
+        "page": "4",
+        "context": "・おんせんに䛿いるつもりです",
+        "inclusion_reason": "Travel-in-Japan noun in the Nagano plan memo.",
+        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"},{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -404,6 +829,55 @@
     }
   },
   {
+    "id": "word:かんじ:かんじ",
+    "expression": "かんじ",
+    "reading": "かんじ",
+    "furigana": "",
+    "romaji": "kanji",
+    "meanings": [
+      "kanji",
+      "Chinese characters"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "かんじを勉強するつもりです。",
+        "furigana": "かんじを 勉強[べんきょう]するつもりです。",
+        "romaji": "kanjiobenkyousurutsumoridesu.",
+        "english": "I’m planning to study kanji.",
+        "audio": "audio/janki-16e953d6419a.mp3",
+        "register": "polite"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "m7-mixed-tsumori"
+    ],
+    "usage_notes": "Usually written 漢字. It refers to the Chinese-derived characters used in Japanese, as distinct from hiragana and katakana.",
+    "audio": "audio/janki-c8070f38509a.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 26500,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-mixed-tsumori-pages-27-30.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-mixed-tsumori-pages-27-30.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "木曜日 かんじを勉強するつもりです。",
+        "inclusion_reason": "Study-related noun used in the Thursday cell.",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:くれる:くれる",
     "expression": "くれる",
     "reading": "くれる",
@@ -527,6 +1001,267 @@
     }
   },
   {
+    "id": "word:ごろごろ:ごろごろ",
+    "expression": "ごろごろ",
+    "reading": "ごろごろ",
+    "furigana": "",
+    "romaji": "gorogoro",
+    "meanings": [
+      "lazing around",
+      "idling about"
+    ],
+    "part_of_speech": "adverb (onomatopoeic)",
+    "verb_group": "suru",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "うちでごろごろするつもりです。",
+        "furigana": "うちでごろごろするつもりです。",
+        "romaji": "uchidegorogorosurutsumoridesu.",
+        "english": "I’m planning to laze around at home.",
+        "audio": "audio/janki-c27084bc35fd.mp3",
+        "register": "polite"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "m7-mixed-tsumori"
+    ],
+    "usage_notes": "For “lazing around,” ごろごろ is commonly followed by する, often in the pattern 家でごろごろする (“laze around at home”). It can also represent rumbling or objects rolling, depending on context.",
+    "audio": "audio/janki-35bfad89fa62.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLLLL",
+      "LHHHL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 9500,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-mixed-tsumori-pages-27-30.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-mixed-tsumori-pages-27-30.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "土曜日 ともだち䛾いえにとまるつもりです。 うちでごろごろするつもりです。",
+        "inclusion_reason": "Colloquial mimetic expression worth learning as a set phrase with する.",
+        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"},{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:しごと:しごと",
+    "expression": "しごと",
+    "reading": "しごと",
+    "furigana": "",
+    "romaji": "shigoto",
+    "meanings": [
+      "work",
+      "job"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "suru",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "しごとにいかないつもりです",
+        "furigana": "しごとにいかないつもりです",
+        "romaji": "shigotoniikanaitsumoridesu",
+        "english": "I’m not planning to go to work.",
+        "audio": "audio/janki-bdc1f8b176ee.mp3",
+        "register": "polite"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "m7-mixed-tsumori"
+    ],
+    "usage_notes": "しごと is a noun, but しごとをする means “to work.” In casual conversation, しごとなの？ can ask whether someone has work or whether something is work-related.",
+    "audio": "audio/janki-19200cadbecd.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 32400,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-mixed-tsumori-pages-27-30.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-mixed-tsumori-pages-27-30.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "月曜日 ほんをよむつもりです。 しごとにいかないつもりです",
+        "inclusion_reason": "Everyday noun appearing in the Monday plan cell.",
+        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"},{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:しぬ:しぬ",
+    "expression": "しぬ",
+    "reading": "しぬ",
+    "furigana": "",
+    "romaji": "shinu",
+    "meanings": [
+      "to die"
+    ],
+    "part_of_speech": "godan verb (u-verb)",
+    "verb_group": "godan",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "この魚は、水がないとしにます。",
+        "furigana": "この 魚[さかな]は、 水[みず]がないとしにます。",
+        "romaji": "konosakanaha, mizuganaitoshinimasu.",
+        "english": "This fish will die without water.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "このゲーム、何回もしぬの？",
+        "furigana": "このゲーム、 何回[なんかい]もしぬの？",
+        "romaji": "konogeemu, nankaimoshinuno?",
+        "english": "Do you die a lot in this game?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "しぬ",
+      "negative": "しなない",
+      "past": "しんだ",
+      "past_negative": "しななかった",
+      "te_form": "しんで",
+      "potential": "しねる",
+      "passive": "しなれる"
+    },
+    "tags": [
+      "m7-native-teform-table"
+    ],
+    "usage_notes": "死ぬ is a godan verb with the forms 死んで (て-form) and 死んだ (plain past). It can sound direct or blunt when referring to a person; 亡くなる is often preferred as a gentler, more respectful alternative.",
+    "audio": "audio/janki-67c320e1c683.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 30800,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-native-teform-table.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-native-teform-table.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "しぬ → んで",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "furigana_unverified": "ef0a4c83abc8,5213b1026206"
+      }
+    }
+  },
+  {
+    "id": "word:しゃしん:しゃしん",
+    "expression": "しゃしん",
+    "reading": "しゃしん",
+    "furigana": "",
+    "romaji": "shashin",
+    "meanings": [
+      "photograph",
+      "picture"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "たくさんしゃしんをとるつもりです。",
+        "furigana": "たくさんしゃしんをとるつもりです。",
+        "romaji": "takusanshashin'otorutsumoridesu.",
+        "english": "I’m planning to take lots of pictures.",
+        "audio": "audio/janki-e8c807a408fc.mp3",
+        "register": "polite"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "m7-mixed-tsumori"
+    ],
+    "usage_notes": "Usually written 写真. The common phrase しゃしんを撮る means “to take a photograph.”",
+    "audio": "audio/janki-2a897f0becd1.wav",
+    "image": "",
+    "pitch_accent": [
+      "LLHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 95100,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-mixed-tsumori-pages-27-30.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-mixed-tsumori-pages-27-30.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "B: たくさんしゃしんをとるつもりです。",
+        "inclusion_reason": "Travel vocabulary noun used in the example dialogue.",
+        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"},{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:しんかんせん:しんかんせん",
+    "expression": "しんかんせん",
+    "reading": "しんかんせん",
+    "furigana": "",
+    "romaji": "shinkansen",
+    "meanings": [
+      "Shinkansen",
+      "bullet train"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "しんかんせんで行くつもりです。",
+        "furigana": "しんかんせんで 行[い]くつもりです。",
+        "romaji": "shinkansendeikutsumoridesu.",
+        "english": "I plan to go by Shinkansen.",
+        "audio": "audio/janki-7c99640614d6.mp3",
+        "register": "polite"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "m7-mixed-tsumori"
+    ],
+    "usage_notes": "Usually written 新幹線. Use しんかんせんに乗る for “ride/take the Shinkansen” and しんかんせんで行く for “go by Shinkansen.”",
+    "audio": "audio/janki-7f9f35da1566.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHLLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 200500,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-mixed-tsumori-pages-27-30.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-mixed-tsumori-pages-27-30.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "B: しんかんせんで行くつもりです。",
+        "inclusion_reason": "Key transportation noun for travel in Japan.",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:すぐ:すぐ",
     "expression": "すぐ",
     "reading": "すぐ",
@@ -581,6 +1316,71 @@
         "anki_Front": "<div>すぐ</div>",
         "anki_Back": "<div>すぐ</div><div>Soon, almost</div><div><br /></div>",
         "anki_Add Reverse": ""
+      }
+    }
+  },
+  {
+    "id": "word:すむ:すむ",
+    "expression": "すむ",
+    "reading": "すむ",
+    "furigana": "",
+    "romaji": "sumu",
+    "meanings": [
+      "to live",
+      "to reside"
+    ],
+    "part_of_speech": "godan verb (u-verb)",
+    "verb_group": "godan",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "来年、京都にすむつもりです。",
+        "furigana": "来年[らいねん]、 京都[きょうと]にすむつもりです。",
+        "romaji": "rainen, kyoutonisumutsumoridesu.",
+        "english": "I’m planning to live in Kyoto next year.",
+        "audio": "audio/janki-89dc906272fb.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "今、だれとすんでるの？",
+        "furigana": "今[いま]、だれとすんでるの？",
+        "romaji": "ima, daretosunderuno?",
+        "english": "Who are you living with now?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "すむ",
+      "negative": "すまない",
+      "past": "すんだ",
+      "past_negative": "すまなかった",
+      "te_form": "すんで",
+      "potential": "すめる",
+      "passive": "すまれる"
+    },
+    "tags": [
+      "m7-native-teform-table"
+    ],
+    "usage_notes": "For “to live/reside,” すむ is usually written 住む. Mark the place of residence with に: 東京に住む (“to live in Tokyo”), not 東京で住む. 住んでいる (casually, 住んでる) describes where someone currently lives.",
+    "audio": "audio/janki-3186c61f0654.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 700,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-native-teform-table.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-native-teform-table.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "すむ → んで",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "furigana_unverified": "aa0ec8da88dc"
       }
     }
   },
@@ -844,6 +1644,71 @@
     }
   },
   {
+    "id": "word:とる:とる",
+    "expression": "とる",
+    "reading": "とる",
+    "furigana": "",
+    "romaji": "toru",
+    "meanings": [
+      "to take"
+    ],
+    "part_of_speech": "godan verb (u-verb)",
+    "verb_group": "godan",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "旅行の写真をたくさんとるつもりです。",
+        "furigana": "旅行[りょこう]の 写真[しゃしん]をたくさんとるつもりです。",
+        "romaji": "ryokounoshashin'otakusantorutsumoridesu.",
+        "english": "I plan to take many photos on the trip.",
+        "audio": "audio/janki-d3e8943846f7.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "その写真、だれがとったの？",
+        "furigana": "その 写真[しゃしん]、だれがとったの？",
+        "romaji": "sonoshashin, daregatottano?",
+        "english": "Who took that photo?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "とる",
+      "negative": "とらない",
+      "past": "とった",
+      "past_negative": "とらなかった",
+      "te_form": "とって",
+      "potential": "とれる",
+      "passive": "とられる"
+    },
+    "tags": [
+      "m7-mixed-tsumori",
+      "m7-native-teform-table"
+    ],
+    "usage_notes": "The kanji depends on the meaning: 取る is used for taking, getting, or picking up something, while 撮る is used for taking photos or recording video. English “take” is broader than とる, so some expressions use other Japanese verbs.",
+    "audio": "audio/janki-f3d0be3f58d8.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 500,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-native-teform-table.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-native-teform-table.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "とる → って",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "furigana_unverified": "b97883c00df0"
+      }
+    }
+  },
+  {
     "id": "word:どこ:どこ",
     "expression": "どこ",
     "reading": "どこ",
@@ -974,6 +1839,111 @@
     }
   },
   {
+    "id": "word:ねる:ねる",
+    "expression": "ねる",
+    "reading": "ねる",
+    "furigana": "",
+    "romaji": "neru",
+    "meanings": [
+      "to sleep",
+      "to go to bed"
+    ],
+    "part_of_speech": "verb (ru-verb)",
+    "verb_group": "ichidan",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "夜おそくにねるつもりです。",
+        "furigana": "夜[よる]おそくにねるつもりです。",
+        "romaji": "yoruosokuninerutsumoridesu.",
+        "english": "I’m planning to go to bed late tonight.",
+        "audio": "audio/janki-a8909bdea688.mp3",
+        "register": "polite"
+      }
+    ],
+    "conjugations": {
+      "plain": "ねる",
+      "negative": "ねない",
+      "past": "ねた",
+      "past_negative": "ねなかった",
+      "te_form": "ねて",
+      "potential": "ねられる",
+      "passive": "ねられる"
+    },
+    "tags": [
+      "m7-mixed-tsumori"
+    ],
+    "usage_notes": "ねる can mean either “to sleep” or “to go to bed,” depending on context. To describe someone who is currently asleep, use ねている.",
+    "audio": "audio/janki-878f2b36576f.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 7600,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-mixed-tsumori-pages-27-30.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-mixed-tsumori-pages-27-30.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "日曜日 あさ䛿やくおきないつもりです。 夜おそくに䛽るつもりです。",
+        "inclusion_reason": "Core daily-routine verb paired with おきる.",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:ひこうき:ひこうき",
+    "expression": "ひこうき",
+    "reading": "ひこうき",
+    "furigana": "",
+    "romaji": "hikouki",
+    "meanings": [
+      "airplane"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "ひこうきでいくつもりです。",
+        "furigana": "ひこうきでいくつもりです。",
+        "romaji": "hikoukideikutsumoridesu.",
+        "english": "I’m planning to go by airplane.",
+        "audio": "audio/janki-82c2be2c84ae.mp3",
+        "register": "polite"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "m7-mixed-tsumori"
+    ],
+    "usage_notes": "Commonly written 飛行機. Use ひこうきで for “by airplane” and ひこうきに乗る for “to take/board an airplane.”",
+    "audio": "audio/janki-b9db7c6bcc3c.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 95900,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-mixed-tsumori-pages-27-30.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-mixed-tsumori-pages-27-30.pdf",
+        "confidence": "high",
+        "page": "4",
+        "context": "ひこうきでいくつもりです。",
+        "inclusion_reason": "Transportation noun needed for travel plans.",
+        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"},{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:ほら:ほら",
     "expression": "ほら",
     "reading": "ほら",
@@ -1030,6 +2000,109 @@
         "anki_Front": "<div>ほら　「ほーら」</div>",
         "anki_Back": "<div>ほら　「ほーら」</div><div>“Take a look;” “See”&nbsp;</div>",
         "anki_Add Reverse": ""
+      }
+    }
+  },
+  {
+    "id": "word:ほん:ほん",
+    "expression": "ほん",
+    "reading": "ほん",
+    "furigana": "",
+    "romaji": "hon",
+    "meanings": [
+      "book"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "ほんをよむつもりです。",
+        "furigana": "ほんをよむつもりです。",
+        "romaji": "hon'oyomutsumoridesu.",
+        "english": "I’m planning to read a book.",
+        "audio": "audio/janki-8caf17617ccc.mp3",
+        "register": "polite"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "m7-mixed-tsumori"
+    ],
+    "usage_notes": "Usually written 本. The pronunciation ほん is also used for the counter 本, but here it means “book.”",
+    "audio": "audio/janki-a40ae63e2050.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 10100,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-mixed-tsumori-pages-27-30.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-mixed-tsumori-pages-27-30.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "月曜日 ほんをよむつもりです。",
+        "inclusion_reason": "Core beginner noun used in the plan cell.",
+        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"},{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:まつ:まつ",
+    "expression": "まつ",
+    "reading": "まつ",
+    "furigana": "",
+    "romaji": "matsu",
+    "meanings": [
+      "to wait"
+    ],
+    "part_of_speech": "godan verb (u-verb)",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "駅で友だちをまつつもりです。",
+        "furigana": "駅[えき]で 友[とも]だちをまつつもりです。",
+        "romaji": "ekidetomodachiomatsutsumoridesu.",
+        "english": "I’m planning to wait for my friend at the station.",
+        "audio": "audio/janki-a9f367f6c880.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "ここでまつの？",
+        "furigana": "ここでまつの？",
+        "romaji": "kokodematsuno?",
+        "english": "Are you going to wait here?",
+        "audio": "audio/janki-2f468d711fdb.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "m7-native-teform-table"
+    ],
+    "usage_notes": "Usually written 待つ. The person or thing being waited for takes を (友達を待つ), while the place where someone waits takes で (駅で待つ). ちょっと待って is a common way to say “Wait a moment.”",
+    "audio": "audio/janki-13f36852d8a9.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 25100,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-native-teform-table.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-native-teform-table.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "まつ → って",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -1921,6 +2994,60 @@
     }
   },
   {
+    "id": "word:勉強する:べんきょうする",
+    "expression": "勉強する",
+    "reading": "べんきょうする",
+    "furigana": "勉[べん] 強[きょう]する",
+    "romaji": "benkyousuru",
+    "meanings": [
+      "to study"
+    ],
+    "part_of_speech": "verb (suru)",
+    "verb_group": "suru",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "日本語を勉強するつもりです。",
+        "furigana": "日本語[にほんご]を 勉強[べんきょう]するつもりです。",
+        "romaji": "nihongoobenkyousurutsumoridesu.",
+        "english": "I’m planning to study Japanese.",
+        "audio": "audio/janki-829a374ffd4e.mp3",
+        "register": "polite"
+      }
+    ],
+    "conjugations": {
+      "plain": "勉強する",
+      "negative": "勉強しない",
+      "past": "勉強した",
+      "past_negative": "勉強しなかった",
+      "te_form": "勉強して",
+      "potential": "勉強できる",
+      "passive": "勉強される"
+    },
+    "tags": [
+      "m7-mixed-tsumori"
+    ],
+    "usage_notes": "The subject being studied is commonly marked with を, as in 日本語を勉強する (“to study Japanese”). 勉強する can also be used without an object when the subject is clear.",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": 1000,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-mixed-tsumori-pages-27-30.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-mixed-tsumori-pages-27-30.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "火曜日 友達と晩ご飯を食べるつもりです。 日本語を勉強するつもりです。",
+        "inclusion_reason": "High-frequency suru verb in the plan cells.",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:危ない:あぶない",
     "expression": "危ない",
     "reading": "あぶない",
@@ -2477,6 +3604,52 @@
     }
   },
   {
+    "id": "word:日本語:にほんご",
+    "expression": "日本語",
+    "reading": "にほんご",
+    "furigana": "日本語[にほんご]",
+    "romaji": "nihongo",
+    "meanings": [
+      "Japanese language"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "日本語を勉強するつもりです。",
+        "furigana": "日本語[にほんご]を 勉強[べんきょう]するつもりです。",
+        "romaji": "nihongoobenkyousurutsumoridesu.",
+        "english": "I plan to study Japanese.",
+        "audio": "audio/janki-da51e9a0736d.mp3",
+        "register": "polite"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "m7-mixed-tsumori"
+    ],
+    "usage_notes": "Use 日本語で to mean “in Japanese,” as in 日本語で話す (“to speak in Japanese”). Use 日本語を when Japanese is the object of an action, as in 日本語を勉強する (“to study Japanese”).",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": 4800,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-mixed-tsumori-pages-27-30.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-mixed-tsumori-pages-27-30.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "火曜日 友達と晩ご飯を食べるつもりです。 日本語を勉強するつもりです。",
+        "inclusion_reason": "Basic noun with kanji reading worth reinforcing.",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:明日:あした",
     "expression": "明日",
     "reading": "あした",
@@ -2523,6 +3696,105 @@
         "anki_Front": "<div>明日</div>",
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>あした</div><div>Tomorrow</div></span>",
         "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:映画:えいが",
+    "expression": "映画",
+    "reading": "えいが",
+    "furigana": "映[えい] 画[が]",
+    "romaji": "eiga",
+    "meanings": [
+      "movie",
+      "film"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "映画をみるつもりです。",
+        "furigana": "映画[えいが]をみるつもりです。",
+        "romaji": "eigaomirutsumoridesu.",
+        "english": "I’m planning to watch a movie.",
+        "audio": "audio/janki-4f70a7484b17.mp3",
+        "register": "polite"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "m7-mixed-tsumori"
+    ],
+    "usage_notes": "The usual collocation is 映画を見る (“to watch/see a movie”). A movie theater is 映画館（えいがかん）.",
+    "audio": "audio/janki-d133719324d2.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHH",
+      "HLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 2200,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-mixed-tsumori-pages-27-30.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-mixed-tsumori-pages-27-30.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "水曜日 あそびにいかないつもりです。 映画をみるつもりです。",
+        "inclusion_reason": "Common noun with kanji reading.",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:晩ご飯:ばんごはん",
+    "expression": "晩ご飯",
+    "reading": "ばんごはん",
+    "furigana": "晩[ばん]ご 飯[はん]",
+    "romaji": "bangohan",
+    "meanings": [
+      "dinner",
+      "evening meal"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "友達と晩ご飯を食べるつもりです。",
+        "furigana": "友達[ともだち]と 晩[ばん]ご 飯[はん]を 食[た]べるつもりです。",
+        "romaji": "tomodachitobangohan'otaberutsumoridesu.",
+        "english": "I’m planning to have dinner with my friends.",
+        "audio": "audio/janki-31579c24cb8f.mp3",
+        "register": "polite"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "m7-mixed-tsumori"
+    ],
+    "usage_notes": "ご飯 can mean either “cooked rice” or “a meal”; in 晩ご飯, it means “dinner” or “the evening meal.” 晩ご飯 is common in everyday conversation.",
+    "audio": "audio/janki-1f2d01d8db84.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 14800,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-mixed-tsumori-pages-27-30.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-mixed-tsumori-pages-27-30.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "火曜日 友達と晩ご飯を食べるつもりです。",
+        "inclusion_reason": "Common meal noun written in kanji in the source.",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -3362,6 +4634,55 @@
         "sid": "2721851026",
         "deck": "Anki Test - Top 20 Verbs",
         "card_state": "locked,new"
+      }
+    }
+  },
+  {
+    "id": "word:車:くるま",
+    "expression": "車",
+    "reading": "くるま",
+    "furigana": "車[くるま]",
+    "romaji": "kuruma",
+    "meanings": [
+      "car",
+      "vehicle"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "トヨタの車を買うつもりです。",
+        "furigana": "トヨタの 車[くるま]を 買[か]うつもりです。",
+        "romaji": "toyotanokurumaokautsumoridesu.",
+        "english": "I’m planning to buy a Toyota car.",
+        "audio": "audio/janki-871e80fce1de.mp3",
+        "register": "polite"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "m7-mixed-tsumori"
+    ],
+    "usage_notes": "車 usually means “car” in everyday conversation. Common patterns include 車で行く (“go by car”), 車に乗る (“get in/ride in a car”), and 車を運転する (“drive a car”).",
+    "audio": "audio/janki-60636d5bd723.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 1000,
+    "source": {
+      "type": "extract",
+      "imported_from": "m7-mixed-tsumori-pages-27-30.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "m7-mixed-tsumori-pages-27-30.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "金曜日 うんどうするつもりです。 トヨタ䛾車を買うつもりです。",
+        "inclusion_reason": "Basic kanji noun in the Friday plan cell.",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
