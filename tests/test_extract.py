@@ -695,6 +695,9 @@ def test_an_approved_oracle_and_prompt_provenance_are_persisted(
     assert str(root) not in serialized
     # Promotion reloads the approved oracle and recomputes these facts. A
     # hand-edited "matched" label cannot bypass that check.
+    (root / "quality" / "oracles" / "unrelated.yaml").write_text(
+        "not: a valid oracle\n", encoding="utf-8"
+    )
     assert (
         cli.main(
             [
@@ -754,6 +757,34 @@ def test_a_draft_oracle_is_refused_before_the_model_call(
         source_sha256=extract.source_fingerprint(source),
         units=(normalized_unit(1),),
         approved=False,
+    )
+    call = FakeCall(ok(candidate()))
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
+
+    code = cli.main(
+        [
+            "--root",
+            str(root),
+            "extract",
+            str(source),
+            "--coverage-oracle",
+            str(oracle),
+        ]
+    )
+
+    assert code == 1
+    assert call.calls == []
+
+
+def test_a_source_oracle_hash_mismatch_is_refused_before_the_model_call(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = project(tmp_path)
+    source = source_pdf(tmp_path)
+    oracle = write_approved_oracle(
+        root,
+        source_sha256="f" * 64,
+        units=(normalized_unit(1),),
     )
     call = FakeCall(ok(candidate()))
     monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)

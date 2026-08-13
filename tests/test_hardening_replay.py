@@ -41,6 +41,18 @@ def test_runner_inputs_reject_unknown_fields() -> None:
         )
 
 
+def test_candidate_runner_rejects_unused_oracle_fields() -> None:
+    with pytest.raises(hardening.HardeningError, match="require observe_coverage"):
+        hardening_replay.RUNNERS["candidate-response"](
+            {
+                "candidates": [],
+                "oracle_units": [],
+                "observe": [],
+            },
+            ROOT,
+        )
+
+
 def test_missing_structured_schema_dependency_is_a_clean_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

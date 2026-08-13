@@ -93,19 +93,24 @@ def check_coverage(meta: dict[str, Any], root: Path | None = None) -> None:
             "[coverage-oracle-unverified] repository root is needed to verify the "
             "coverage oracle"
         )
+    if not isinstance(oracle_id, str) or not re.fullmatch(
+        r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", oracle_id
+    ):
+        raise PromoteError("[coverage-oracle-invalid] coverage oracle ID is invalid")
+    oracle_paths = [
+        path
+        for suffix in (".yaml", ".yml")
+        if (path := root / "quality" / "oracles" / f"{oracle_id}{suffix}").exists()
+    ]
+    if len(oracle_paths) != 1:
+        raise PromoteError(
+            f"[coverage-oracle-missing] coverage oracle {oracle_id!r} must have "
+            "exactly one .yaml or .yml file"
+        )
     try:
-        matches = [
-            oracle
-            for oracle in hardening.load_oracles(root)
-            if oracle.id == oracle_id
-        ]
+        oracle = hardening.load_oracle_file(root, oracle_paths[0])
     except JankiError as exc:
         raise PromoteError(f"[coverage-oracle-invalid] {exc}") from exc
-    if len(matches) != 1:
-        raise PromoteError(
-            f"[coverage-oracle-missing] coverage oracle {oracle_id!r} was not found"
-        )
-    oracle = matches[0]
     expected_oracle_fingerprint = hardening.oracle_content_fingerprint(oracle)
     if not oracle.approved:
         raise PromoteError(

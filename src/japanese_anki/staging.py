@@ -109,6 +109,24 @@ _COVERAGE_MISMATCHES = (
     "disposition_mismatched_units",
     "omission_units",
 )
+_COVERAGE_REQUIRED = {
+    "version",
+    "status",
+    "blocking",
+    "source_fingerprint",
+    "oracle_id",
+    "oracle_type",
+    "oracle_content_fingerprint",
+    "model_reported_unit_count",
+    "observed_unit_count",
+    "prose_candidate_count",
+    "prose_coverage",
+    "source_units",
+    *_COVERAGE_DISPOSITIONS,
+    *_COVERAGE_MISMATCHES,
+}
+_UNIT_DISPOSITIONS = {"candidate", "duplicate", "non-vocabulary", "unreadable"}
+_SECTION = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 
 
 def coverage_block_fingerprint(block: Mapping[str, Any]) -> str:
@@ -137,6 +155,207 @@ def coverage_acceptance_requirements(block: Mapping[str, Any]) -> dict[str, Any]
     }
 
 
+def _positive_integer(value: Any) -> bool:
+    return not isinstance(value, bool) and isinstance(value, int) and value > 0
+
+
+def _coverage_fact(
+    value: Any,
+    *,
+    fields: set[str],
+    where: str,
+    disposition: str | None = None,
+) -> None:
+    if not isinstance(value, Mapping) or set(value) != fields:
+        raise StagingError(
+            f"[coverage-block-invalid] {where} must have exactly: "
+            + ", ".join(sorted(fields))
+        )
+    if not _positive_integer(value.get("page")) or not _positive_integer(
+        value.get("ordinal")
+    ):
+        raise StagingError(
+            f"[coverage-block-invalid] {where} page and ordinal must be positive integers"
+        )
+    section = value.get("section")
+    if not isinstance(section, str) or not _SECTION.fullmatch(section):
+        raise StagingError(
+            f"[coverage-block-invalid] {where} section must be a lowercase slug"
+        )
+    for name in fields & {"context_fingerprint", "expected", "observed"}:
+        item = value.get(name)
+        # Disposition mismatch entries use disposition names in these two
+        # fields. Context mismatch entries use SHA-256 values.
+        if name in {"expected", "observed"} and item in _UNIT_DISPOSITIONS:
+            continue
+        if not isinstance(item, str) or not _SHA256.fullmatch(item):
+            raise StagingError(
+                f"[coverage-block-invalid] {where}.{name} must be SHA-256 or a disposition"
+            )
+    if "disposition" in fields:
+        actual = value.get("disposition")
+        if actual not in _UNIT_DISPOSITIONS or (
+            disposition is not None and actual != disposition
+        ):
+            raise StagingError(
+                f"[coverage-block-invalid] {where} has an invalid disposition"
+            )
+
+
+def _validate_coverage_block(block: Mapping[str, Any]) -> None:
+    fields = set(block)
+    allowed = _COVERAGE_REQUIRED | {"coverage_block_fingerprint", "approval"}
+    required = _COVERAGE_REQUIRED | {"coverage_block_fingerprint"}
+    if fields - allowed or required - fields:
+        raise StagingError(
+            "[coverage-block-invalid] coverage fields do not match schema version 1"
+        )
+    version = block.get("version")
+    if isinstance(version, bool) or version != 1:
+        raise StagingError("[coverage-block-invalid] coverage version must be integer 1")
+    if not isinstance(block.get("blocking"), bool):
+        raise StagingError("[coverage-block-invalid] coverage blocking must be boolean")
+    for name in (
+        "model_reported_unit_count",
+        "observed_unit_count",
+        "prose_candidate_count",
+    ):
+        value = block.get(name)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise StagingError(
+                f"[coverage-block-invalid] coverage {name} must be a non-negative integer"
+            )
+    for name in (*_COVERAGE_DISPOSITIONS, *_COVERAGE_MISMATCHES, "source_units"):
+        if not isinstance(block.get(name), list):
+            raise StagingError(
+                f"[coverage-block-invalid] coverage {name} must be a list"
+            )
+    if block.get("observed_unit_count") != len(block["source_units"]):
+        raise StagingError(
+            "[coverage-block-invalid] observed_unit_count must match source_units"
+        )
+    if block.get("prose_coverage") not in {"unmeasured", "not-applicable"}:
+        raise StagingError(
+            "[coverage-block-invalid] prose_coverage must be unmeasured or not-applicable"
+        )
+    if (block.get("prose_candidate_count") > 0) is not (
+        block.get("prose_coverage") == "unmeasured"
+    ):
+        raise StagingError(
+            "[coverage-block-invalid] prose coverage does not match its candidate count"
+        )
+
+    oracle_id = block.get("oracle_id")
+    oracle_type = block.get("oracle_type")
+    oracle_fingerprint = block.get("oracle_content_fingerprint")
+    if oracle_id is None:
+        if oracle_type is not None or oracle_fingerprint is not None:
+            raise StagingError(
+                "[coverage-block-invalid] coverage has partial oracle identity"
+            )
+    elif (
+        not isinstance(oracle_id, str)
+        or not _SECTION.fullmatch(oracle_id)
+        or oracle_type not in {"exhaustive", "selection"}
+        or not isinstance(oracle_fingerprint, str)
+        or not _SHA256.fullmatch(oracle_fingerprint)
+    ):
+        raise StagingError("[coverage-block-invalid] coverage oracle identity is invalid")
+
+    status = block.get("status")
+    if status in {"matched", "mismatch"} and oracle_type != "exhaustive":
+        raise StagingError(
+            "[coverage-block-invalid] matched or mismatched coverage needs an exhaustive oracle"
+        )
+    if status == "selection" and oracle_type not in {None, "selection"}:
+        raise StagingError(
+            "[coverage-block-invalid] selection coverage cannot use an exhaustive oracle"
+        )
+    if status == "unmeasured" and oracle_type not in {None, "selection"}:
+        raise StagingError(
+            "[coverage-block-invalid] unmeasured coverage cannot use an exhaustive oracle"
+        )
+
+    fact_fields = {
+        "page",
+        "section",
+        "ordinal",
+        "context_fingerprint",
+        "disposition",
+    }
+    for name in _COVERAGE_DISPOSITIONS:
+        disposition = name.removesuffix("_units").replace("_", "-")
+        for index, value in enumerate(block[name]):
+            _coverage_fact(
+                value,
+                fields=fact_fields,
+                where=f"coverage.{name}[{index}]",
+                disposition=disposition,
+            )
+    for name in ("missing_units", "unexpected_units"):
+        for index, value in enumerate(block[name]):
+            _coverage_fact(
+                value, fields=fact_fields, where=f"coverage.{name}[{index}]"
+            )
+    key_fields = {"page", "section", "ordinal"}
+    for name in ("duplicate_keys", "omission_units"):
+        for index, value in enumerate(block[name]):
+            _coverage_fact(
+                value, fields=key_fields, where=f"coverage.{name}[{index}]"
+            )
+    mismatch_fields = {"page", "section", "ordinal", "expected", "observed"}
+    for name in ("context_mismatched_units", "disposition_mismatched_units"):
+        for index, value in enumerate(block[name]):
+            _coverage_fact(
+                value, fields=mismatch_fields, where=f"coverage.{name}[{index}]"
+            )
+            expected = value["expected"]
+            observed = value["observed"]
+            if name == "context_mismatched_units" and not (
+                isinstance(expected, str)
+                and _SHA256.fullmatch(expected)
+                and isinstance(observed, str)
+                and _SHA256.fullmatch(observed)
+            ):
+                raise StagingError(
+                    f"[coverage-block-invalid] coverage.{name}[{index}] needs two SHA-256 values"
+                )
+            if name == "disposition_mismatched_units" and not (
+                expected in _UNIT_DISPOSITIONS and observed in _UNIT_DISPOSITIONS
+            ):
+                raise StagingError(
+                    f"[coverage-block-invalid] coverage.{name}[{index}] needs two dispositions"
+                )
+    source_fields = fact_fields | {"context"}
+    for index, value in enumerate(block["source_units"]):
+        if not isinstance(value, Mapping):
+            raise StagingError(
+                f"[coverage-block-invalid] coverage.source_units[{index}] must be a mapping"
+            )
+        allowed_source = source_fields | {"reason"}
+        if not source_fields <= set(value) or set(value) - allowed_source:
+            raise StagingError(
+                f"[coverage-block-invalid] coverage.source_units[{index}] fields are invalid"
+            )
+        _coverage_fact(
+            {key: value[key] for key in fact_fields},
+            fields=fact_fields,
+            where=f"coverage.source_units[{index}]",
+        )
+        context = value.get("context")
+        reason = value.get("reason", "")
+        if not isinstance(context, str) or not context.strip():
+            raise StagingError(
+                f"[coverage-block-invalid] coverage.source_units[{index}] needs context"
+            )
+        if not isinstance(reason, str) or (
+            value.get("disposition") != "candidate" and not reason.strip()
+        ):
+            raise StagingError(
+                f"[coverage-block-invalid] coverage.source_units[{index}] needs a reason"
+            )
+
+
 def require_resolved_coverage(meta: Mapping[str, Any]) -> None:
     """Refuse an unresolved M7.4 coverage block; allow legacy files."""
     if "coverage" not in meta:
@@ -144,6 +363,7 @@ def require_resolved_coverage(meta: Mapping[str, Any]) -> None:
     block = meta["coverage"]
     if not isinstance(block, Mapping):
         raise StagingError("[coverage-block-invalid] coverage must be a mapping")
+    _validate_coverage_block(block)
     fingerprint = block.get("coverage_block_fingerprint")
     expected_fingerprint = coverage_block_fingerprint(block)
     if not isinstance(fingerprint, str) or not _SHA256.fullmatch(fingerprint):

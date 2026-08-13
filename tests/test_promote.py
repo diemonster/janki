@@ -636,6 +636,9 @@ def test_a_bare_matched_label_cannot_bypass_the_oracle(
     coverage = unmeasured_coverage()
     coverage["status"] = "matched"
     coverage["blocking"] = False
+    coverage["oracle_id"] = "fake-oracle"
+    coverage["oracle_type"] = "exhaustive"
+    coverage["oracle_content_fingerprint"] = "b" * 64
     # This simulates a hand edit, including a correctly recomputed block hash.
     coverage["coverage_block_fingerprint"] = coverage_block_fingerprint(coverage)
     write_staging(staged, [record()], {"source_file": "lesson.pdf", "coverage": coverage})
@@ -646,6 +649,35 @@ def test_a_bare_matched_label_cannot_bypass_the_oracle(
 
     assert code == 1
     assert "coverage-oracle-missing" in capsys.readouterr().err
+    assert json.loads((root / "vocabulary.json").read_text(encoding="utf-8")) == []
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        lambda block: block.pop("omission_units"),
+        lambda block: block.__setitem__("model_reported_unit_count", True),
+    ],
+)
+def test_an_incomplete_or_mistyped_coverage_block_is_refused(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    damage: Any,
+) -> None:
+    root = project(tmp_path, [])
+    staged = root / "staging" / "invalid-block.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    coverage = unmeasured_coverage()
+    damage(coverage)
+    coverage["coverage_block_fingerprint"] = coverage_block_fingerprint(coverage)
+    write_staging(staged, [record()], {"source_file": "lesson.pdf", "coverage": coverage})
+
+    code = cli.main(
+        ["--root", str(root), "promote", str(staged), "--skip-reading-check"]
+    )
+
+    assert code == 1
+    assert "coverage-block-invalid" in capsys.readouterr().err
     assert json.loads((root / "vocabulary.json").read_text(encoding="utf-8")) == []
 
 

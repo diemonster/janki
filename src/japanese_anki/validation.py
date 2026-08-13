@@ -82,7 +82,8 @@ class ValidationIssue:
         location = self.source
         if self.record_id:
             location = f"{location}:{self.record_id}" if location else self.record_id
-        prefix = f"[{self.level.upper()}]"
+        identity = f" {self.code}" if self.code else ""
+        prefix = f"[{self.level.upper()}{identity}]"
         return f"{prefix} {location}: {self.message}" if location else f"{prefix} {self.message}"
 
 

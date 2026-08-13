@@ -3010,7 +3010,14 @@ def _validate_path(
         # malformed — an unterminated quote, a tab, a merge marker — and its own
         # unreadability used to cancel the sweep before a single deck was
         # reported, with no "Validated N records" line at all.
-        return [ValidationIssue("error", str(exc), source=str(path))], 0
+        return [
+            ValidationIssue(
+                "error",
+                str(exc),
+                source=str(path),
+                code="validation-input-unreadable",
+            )
+        ], 0
     # `exporters.anki.deck_kind`, so this, the build and `status` cannot drift
     # about what a kind is. On truthiness alone a typo — or a deliberate
     # `kind: vocabulary` — sent an ordinary deck down the pattern path, which
@@ -3027,7 +3034,14 @@ def _validate_path(
             # Reported as this file's error rather than raised, so a sweep still
             # validates every other deck — the rule this command follows for a
             # deck it cannot read.
-            return [ValidationIssue("error", str(exc), source=str(path))], 0
+            return [
+                ValidationIssue(
+                    "error",
+                    str(exc),
+                    source=str(path),
+                    code="validation-deck-kind-invalid",
+                )
+            ], 0
     else:
         kind = ""
     if kind in ("pattern", "conjugation"):
@@ -3043,9 +3057,21 @@ def _validate_path(
                 path, store() if store else None, config
             )
         except JankiError as exc:
-            return [ValidationIssue("error", str(exc), source=str(path))], 0
+            return [
+                ValidationIssue(
+                    "error",
+                    str(exc),
+                    source=str(path),
+                    code="validation-pattern-input-unreadable",
+                )
+            ], 0
         return [
-            ValidationIssue("error", problem, source=str(path))
+            ValidationIssue(
+                "error",
+                problem,
+                source=str(path),
+                code="validation-pattern-deck-invalid",
+            )
             for problem in problems
         ], 0
 
@@ -3059,7 +3085,14 @@ def _validate_path(
         # unparseable collection used to escape to `main`, so the deck naming it
         # — first by name in `data/decks/` — cancelled the sweep, and the one
         # line printed named the collection but not the deck that pointed at it.
-        return [ValidationIssue("error", str(exc), source=str(path))], 0
+        return [
+            ValidationIssue(
+                "error",
+                str(exc),
+                source=str(path),
+                code="validation-records-unreadable",
+            )
+        ], 0
     issues = validate_records(records, path)
     return issues, len(records)
 

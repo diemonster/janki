@@ -11,7 +11,7 @@ findings:
         locator: quality/cases/extraction-unit-accounting/input.json
     recurrences: []
     case_ids: [extraction-unit-accounting]
-    fix_ref: docs/IMPLEMENTATION_PLAN.md
+    fix_ref: commit:b68f910
   - id: ai-no-writable-change
     state: fixed
     pipeline_stage: ai-enrichment

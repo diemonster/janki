@@ -256,10 +256,11 @@ This page is a vocabulary list or table. Account for every row in source_units,
 in source order. Give each row a stable page, section slug, and ordinal. Copy
 its full text to context. Give it exactly one disposition: candidate,
 duplicate, non-vocabulary, or unreadable. A candidate unit must have exactly one
-table candidate with the same page, section, ordinal, and context. Every other
-unit must give a reason and must not have a candidate. Keep repeated rows as
-separate units. Do not add, merge, or correct rows. If a reading looks wrong,
-transcribe it and mark the candidate low confidence."""
+candidate with source_kind set to table and with the same page, section,
+ordinal, and context. Every other unit must give a reason and must not have a
+candidate. Keep repeated rows as separate units. Do not add, merge, or correct
+rows. If a reading looks wrong, transcribe it and mark the candidate low
+confidence."""
 
 _PROSE_RULES = """\
 This page is running text. Pick out the vocabulary worth making a card for and
@@ -403,6 +404,14 @@ def extract_candidates(
             candidate_schema(),
             client,
         )
+    except ExtractError:
+        raise
+    except ImportError as exc:
+        raise ExtractError(
+            f"{prepared.origin_path.name}: extraction needs the AI schema "
+            "dependencies. Install the project with '.[ai]'.",
+            code="extract-schema-dependency-missing",
+        ) from exc
     except JankiError as exc:
         raise ExtractError(
             f"{prepared.origin_path.name}: {exc}",

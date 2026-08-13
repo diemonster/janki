@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import tempfile
 from collections.abc import Callable
@@ -233,6 +234,13 @@ def _candidate_response(data: dict[str, Any], root: Path) -> Any:
         },
         "candidate-response",
     )
+    observe_coverage = _optional_bool(data, "observe_coverage")
+    if not observe_coverage and (
+        "oracle_units" in data or "source_fingerprint" in data
+    ):
+        raise hardening.HardeningError(
+            "candidate-response oracle fields require observe_coverage"
+        )
     raw_candidates = data.get("candidates")
     if not isinstance(raw_candidates, list):
         raise hardening.HardeningError("candidates must be a JSON list")
@@ -284,7 +292,7 @@ def _candidate_response(data: dict[str, Any], root: Path) -> Any:
         "record_ids": [record.id for record in records],
         "unusable": len(extract.unusable(result.candidates)),
     }
-    if _optional_bool(data, "observe_coverage"):
+    if observe_coverage:
         raw_oracle_units = data.get("oracle_units")
         if not isinstance(raw_oracle_units, list) or not raw_oracle_units:
             raise hardening.HardeningError(
@@ -321,6 +329,10 @@ def _candidate_response(data: dict[str, Any], root: Path) -> Any:
                 raise hardening.HardeningError(
                     f"oracle_units[{index}].section must be text"
                 )
+            if not re.fullmatch(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", section):
+                raise hardening.HardeningError(
+                    f"oracle_units[{index}].section must be a lowercase slug"
+                )
             if (
                 not isinstance(fingerprint, str)
                 or len(fingerprint) != 64
@@ -338,11 +350,26 @@ def _candidate_response(data: dict[str, Any], root: Path) -> Any:
                     page, section, ordinal, fingerprint, disposition
                 )
             )
+        oracle_keys = [unit.key for unit in oracle_units]
+        if len(set(oracle_keys)) != len(oracle_keys):
+            raise hardening.HardeningError("oracle_units has duplicate unit keys")
+        if oracle_keys != sorted(oracle_keys):
+            raise hardening.HardeningError(
+                "oracle_units must use page, section, ordinal order"
+            )
+        source_fingerprint = data.get("source_fingerprint")
+        if (
+            not isinstance(source_fingerprint, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", source_fingerprint)
+        ):
+            raise hardening.HardeningError(
+                "observe_coverage requires a SHA-256 source_fingerprint"
+            )
         oracle = hardening.UnitOracle(
             path=Path("offline-oracle.yaml"),
             relative_path="offline-oracle.yaml",
             id="offline-oracle",
-            source_fingerprint=str(data.get("source_fingerprint", "a" * 64)),
+            source_fingerprint=source_fingerprint,
             type="exhaustive",
             case_ids=(),
             units=tuple(oracle_units),

@@ -4,11 +4,25 @@ from dataclasses import replace
 import pytest
 
 from japanese_anki.models import VocabularyRecord
-from japanese_anki.validation import has_errors, validate_records
+from japanese_anki.validation import ValidationIssue, has_errors, validate_records
 
 
 def _issue_messages(record: VocabularyRecord) -> list[str]:
     return [issue.message for issue in validate_records([record])]
+
+
+def test_formatted_validation_output_includes_the_stable_code_and_location() -> None:
+    issue = ValidationIssue(
+        "error",
+        "reading is missing",
+        record_id="word:話す:はなす",
+        source="lesson.yaml",
+        code="missing-reading",
+    )
+
+    assert issue.format() == (
+        "[ERROR missing-reading] lesson.yaml:word:話す:はなす: reading is missing"
+    )
 
 
 def test_validation_requires_reading_for_kanji() -> None:
