@@ -166,6 +166,17 @@ findings:
     recurrences: []
     case_ids: [derived-romaji-repair]
     fix_ref: docs/IMPLEMENTATION_PLAN.md#m7.5
+  - id: example-romaji-invalid-furigana
+    state: open
+    pipeline_stage: repair-plan
+    source_archetypes: [camera]
+    symptom: The automatic example-romaji repair derived a lossy value from furigana that the validator had already marked as structurally invalid.
+    invariant: The automatic example-romaji repair preserves the existing value when furigana has a reported spilled group or stray notation space; it derives romaji only after those structural defects are corrected.
+    evidence:
+      - fingerprint: 643375818ce75a5e16bba8d2e7493a38426d5d8af46bc9841df5ee0d0d975371
+        locator: quality/cases/example-romaji-invalid-furigana/input.json
+    recurrences: []
+    case_ids: [example-romaji-invalid-furigana]
   - id: extraction-unit-accounting
     state: fixed
     pipeline_stage: extraction

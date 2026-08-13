@@ -1,0 +1,25 @@
+{
+  "records": [
+    {
+      "id": "word:祭り:まつり",
+      "expression": "祭り",
+      "reading": "まつり",
+      "meanings": ["festival"],
+      "examples": [
+        {
+          "japanese": "ねえ、明日の祭り、行くの？",
+          "furigana": "ねえ、 明日[あした]の 祭[まつ]り、行[い]くの？",
+          "romaji": "keep-this-reviewed-value",
+          "english": "Hey, are you going to tomorrow's festival?"
+        }
+      ]
+    }
+  ],
+  "codes": ["example-romaji-from-furigana"],
+  "observe": [
+    {
+      "id": "word:祭り:まつり",
+      "fields": ["examples"]
+    }
+  ]
+}
