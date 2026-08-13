@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
 from pathlib import Path
 
@@ -78,6 +79,63 @@ def test_input_provenance_runner_requires_one_scan_filename(
             },
             ROOT,
         )
+
+
+def test_input_provenance_runner_resolves_a_temporary_root_alias(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real = tmp_path / "unrelated-real-name"
+    real.mkdir()
+    alias = tmp_path / "short-alias"
+    alias.symlink_to(real, target_is_directory=True)
+    monkeypatch.setattr(
+        hardening_replay.tempfile,
+        "TemporaryDirectory",
+        lambda: contextlib.nullcontext(str(alias)),
+    )
+
+    observed = hardening_replay.RUNNERS["input-provenance"](
+        {
+            "source_name": "lesson.pdf",
+            "content": "%PDF-1.7 source",
+            "scan_content": "%PDF-1.7 conflicting scan",
+        },
+        ROOT,
+    )
+
+    assert observed["error_named_files"] == [
+        "data/inbox/lesson.pdf",
+        "data/inbox/scans/lesson.pdf",
+    ]
+
+
+def test_input_provenance_runner_relativizes_a_copied_path_through_an_alias(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real = tmp_path / "different-real-name"
+    real.mkdir()
+    alias = tmp_path / "copy-alias"
+    alias.symlink_to(real, target_is_directory=True)
+    monkeypatch.setattr(
+        hardening_replay.tempfile,
+        "TemporaryDirectory",
+        lambda: contextlib.nullcontext(str(alias)),
+    )
+
+    observed = hardening_replay.RUNNERS["input-provenance"](
+        {
+            "source_name": "lesson.pdf",
+            "content": "%PDF-1.7 source",
+            "external_content": "%PDF-1.7 external",
+        },
+        ROOT,
+    )
+
+    assert observed["exit_code"] == 0
+    assert observed["origin_relative_path"].startswith(
+        "data/inbox/scans/lesson-"
+    )
+    assert observed["origin_relative_path"].endswith(".pdf")
 
 
 def test_candidate_runner_rejects_unused_oracle_fields() -> None:

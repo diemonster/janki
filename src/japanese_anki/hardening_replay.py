@@ -464,7 +464,7 @@ def _input_provenance(data: dict[str, Any], root: Path) -> Any:
         # both modules are complete, so the local import does not form a cycle.
         from japanese_anki import cli
 
-        project = Path(directory)
+        project = Path(directory).resolve()
         inbox = project / "data" / "inbox"
         scan_inbox = inbox / "scans"
         inbox.mkdir(parents=True)
