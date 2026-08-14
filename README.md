@@ -38,13 +38,10 @@ would settle a disagreement between them is what those buy — without it the
 disagreement stays flagged.
 
 Every AI pass uses your Anthropic key. Codex remains a supported provider for
-`enrich --ai`; install and authenticate its CLI only if you set
-`enrich_provider = "codex"`:
+`enrich --ai`, and needs `codex login` once — only if you set
+`enrich_provider = "codex"`.
 
-```bash
-```
-
-The remaining provider credentials are environment variables:
+Provider credentials are environment variables:
 
 ```bash
 export ANTHROPIC_API_KEY='...'   # every AI pass: extract, patterns,

@@ -33,7 +33,6 @@ from japanese_anki.identifiers import (
 )
 from japanese_anki.models import (
     ExampleSentence,
-    VocabularyRecord,
 )
 from japanese_anki.romaji import kana_to_romaji
 
@@ -193,9 +192,7 @@ _POLITE_FORMULAS = (
 _CONDITIONAL_STEM = "けせてねへめれげぜでべぺえ"
 
 
-def example_content_holds(
-    record: VocabularyRecord, example: ExampleSentence
-) -> list[tuple[str, str, str]]:
+def example_content_holds(example: ExampleSentence) -> list[tuple[str, str, str]]:
     """Teaching-suitability holds for one example: ``(code, level, why)``.
 
     The M7.6T camera pilot showed source fragments and false register labels
@@ -205,11 +202,7 @@ def example_content_holds(
     check here fires only on evidence that cannot be read another way, and
     everything subtler is left for the residual AI review. Shared by
     ``validation`` (which reports holds at their level) and the audio command
-    (which refuses to voice any held example), so the two gates cannot drift
-    — and the record comes with the example so the learner-load flag lookup
-    cannot be dropped by omission at a new call site. A load hold is a
-    ``warning``: the sentence awaits a person's decision, which is not the
-    same certainty as a fragment — but audio refuses both alike.
+    (which refuses to voice any held example), so the two gates cannot drift.
 
     The text is NFKC-normalized first: camera transcription writes half-width
     ｡ and ｣, and a gate the source's own punctuation can blind is no gate.

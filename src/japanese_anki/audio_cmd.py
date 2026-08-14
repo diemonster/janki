@@ -303,7 +303,7 @@ def _example_audio(
         # cached voice. Checked *before* the unverified flag, because the
         # hold is the stronger refusal — an example carrying both must still
         # lose its stale clip.
-        if holds := qc.example_content_holds(record, example):
+        if holds := qc.example_content_holds(example):
             result.held.append(f"{record.id}: {example.japanese} ({holds[0][0]})")
             if example.audio:
                 example = replace(example, audio="")

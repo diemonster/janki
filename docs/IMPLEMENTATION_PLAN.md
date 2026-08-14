@@ -2889,6 +2889,15 @@ additional and may point at the same minimized evidence.
 
 ### [x] M7.6T Trust-boundary repair — source evidence versus study content
 
+> **Partly superseded by M7.6V (2026-08-14).** Every mention below of the
+> learner-load bound — rule 4's "bounded learner load", the coverage line
+> naming a learner-load hold, and the summary clauses about the batch path and
+> `validate` — describes code that no longer exists. The bound was deleted on
+> measurement: it held 0 of 155 examples, did not fire on 逡巡, 邂逅 or 憂鬱
+> either, and read a segmentation that was not the sentence. This block is left
+> as written because it records what M7.6T delivered; it is not a description of
+> the current tree. Nothing else here is affected.
+
 *Added 2026-08-13 after the camera pilot. This task blocks more M7.6B and M7.6C
 source runs. The camera extraction found the approved identities and source
 context, but the first final semantic review still found five content errors
@@ -3287,7 +3296,7 @@ Use these slices, each a finding plus a reproducing case plus a fix, ordered so
    and it does not fire on genuinely hard vocabulary either: 逡巡 (rank 9100),
    邂逅 (16600) and 憂鬱 (6900) all pass, because the limit was rank 20000, a
    level a model writing from the style guide never reaches. It was not broken
-   — canned ranks of 48000, null and 61000 held correctly — it was calibrated
+   — canned ranks of 45000, null and 52000 held correctly — it was calibrated
    to a threshold nothing meets.
 
    Its input was wrong as well, which is what slice 6 was originally to fix:
@@ -3321,7 +3330,7 @@ Use these slices, each a finding plus a reproducing case plus a fix, ordered so
    jpdb's sentence boundaries — measured wrong on three of five colloquial
    sentences. A repair that has never fired, driven by boundaries that are
    sometimes wrong, could only ever introduce the error it was written to
-   prevent. `_learner_load_excess` is now the last consumer of the parse.
+   prevent. `_learner_load_excess` was then the last consumer of the parse; it has since been deleted, so nothing consumes it.
 9. Update `docs/HARDENING.md`, full replay, `make gates`, one local review
    cycle.
 

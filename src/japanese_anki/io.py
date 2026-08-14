@@ -538,9 +538,8 @@ MERGEABLE_FIELDS: tuple[str, ...] = tuple(
 # record's origin, mapped to the field they describe. ``source`` otherwise
 # belongs to whoever saw the record first, which is right for provenance and
 # wrong for these: ``furigana_unverified`` says "nobody checked the segmentation
-# of these examples" and ``learner_load_hold`` says "audio must not voice
-# these", so if the examples travel and the key does not, the store ends up
-# holding unchecked — or held — sentences with nothing saying so, and M5.3
+# of these examples", so if the examples travel and the key does not, the store
+# ends up holding unchecked sentences with nothing saying so, and M5.3
 # reads exactly these keys before it generates audio. Carried only when the
 # merge actually wrote the field, because a flag describing examples that were
 # not kept is a lie in the other direction. Every key here holds a
@@ -654,7 +653,7 @@ def _carried_annotations(
 ) -> dict[str, str]:
     """The ``CONTENT_ANNOTATIONS`` the incoming record's fields brought with them.
 
-    Values are unioned rather than replaced: both keys in this table hold a
+    Values are unioned rather than replaced: every key in this table holds a
     comma-joined list of example fingerprints, and a record can collect flagged
     examples across several passes.
     """

@@ -717,6 +717,31 @@ def _staging_promote(data: dict[str, Any], root: Path) -> Any:
     }
 
 
+def _model_request(data: dict[str, Any], root: Path) -> Any:
+    """Whether a model is sent ``output_config.effort``, and at what level.
+
+    The body itself, not the helper: `effort_for` deciding correctly is worth
+    nothing if a call site resolves it from the configured model while
+    ``--model`` sends another, which is how this defect shipped.
+    """
+    del root
+    _only(data, {"models"}, "model-request")
+    observed = []
+    for model in _string_list(data.get("models"), "models"):
+        body = claude_client._request_body(
+            model,
+            [],
+            "x",
+            enrich.ai_schema(),
+            claude_client.DEFAULT_MAX_TOKENS,
+            claude_client.effort_for(model),
+        )
+        observed.append(
+            {"model": model, "effort": body["output_config"].get("effort")}
+        )
+    return {"requests": observed}
+
+
 def _review_readiness(data: dict[str, Any], root: Path) -> Any:
     """Which cards the paid review holds back, and why.
 
@@ -1267,6 +1292,7 @@ RUNNERS: dict[str, Callable[[dict[str, Any], Path], Any]] = {
     "candidate-response": _candidate_response,
     "extraction-prompt": _extraction_prompt,
     "staging-promote": _staging_promote,
+    "model-request": _model_request,
     "review-readiness": _review_readiness,
     "validation-qc": _validation_qc,
     "render-build": _render_build,

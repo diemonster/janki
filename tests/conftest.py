@@ -1,7 +1,7 @@
 """Suite-wide guards.
 
-One rule so far, and it is about the machine rather than the code: **no test
-touches the developer's real Anki collection.**
+Two rules, both about the machine rather than the code: **no test touches the
+developer's real Anki collection**, and **no test opens a billed API client.**
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from japanese_anki import collection, status
+from japanese_anki import claude_client, collection, status
 
 
 @pytest.fixture(scope="session")
@@ -53,3 +53,35 @@ def _no_real_anki_collection(
     monkeypatch.setattr(collection, "default_anki_root", lambda: _empty_anki_root)
     monkeypatch.setattr(status, "default_anki_root", lambda: _empty_anki_root)
     return _empty_anki_root
+
+
+@pytest.fixture(autouse=True)
+def _no_billed_client(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> None:
+    """Refuse to build a real Anthropic client.
+
+    `build_client` is the only path that opens a billed connection, so a test
+    that fakes `parse_call` or injects a client never reaches this. What it
+    catches is the gap that opens when a *default* moves: the enrichment
+    provider default changed from codex to anthropic, and a helper that
+    patched only `codex_client.parse_call` silently began routing twelve tests
+    at the live API. That does not fail — it bills, and it blocks.
+
+    A convention cannot catch that, because the test that breaks is one nobody
+    edited. This can: the next default change turns twelve silent live calls
+    into twelve loud errors naming the fixture that needs updating.
+
+    Tests that legitimately construct a client opt out with
+    ``@pytest.mark.allow_build_client``.
+    """
+    if request.node.get_closest_marker("allow_build_client"):
+        return
+
+    def refuse(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError(
+            "This test reached claude_client.build_client(), which opens a "
+            "billed connection. Patch the parse_call your code path actually "
+            "uses — both providers if a config default decides it — or mark "
+            "the test @pytest.mark.allow_build_client if it means to."
+        )
+
+    monkeypatch.setattr(claude_client, "build_client", refuse)

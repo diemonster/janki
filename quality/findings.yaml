@@ -300,6 +300,20 @@ findings:
     recurrences: []
     case_ids: [ai-uncurated-example-pinning]
     fix_ref: src/japanese_anki/enrich.py#ai_prompt
+  # 2026-08-14 (M7.6V): the invariant below was narrowed on the repository
+  # owner's decision. The removed clause read "learner load is bounded from
+  # parsed and known-vocabulary data when that data is offered"; the bound it
+  # named is deleted. Measured first: it held 0 of 155 examples across 97
+  # records, and did not fire on 逡巡 (jpdb rank 9100), 邂逅 (16600) or 憂鬱
+  # (6900) either, because its limit was rank 20000 — a level a model writing
+  # from the style guide never reaches. It worked; it was calibrated to a
+  # threshold nothing meets. Its input was also wrong: reading jpdb's sentence
+  # segmentation it counted とする on 今、だれとすんでるの？, absent from that
+  # sentence, while 住む — the word actually inside すんでる — went uncounted.
+  # The clause was never observable by this finding's case, which supplies no
+  # parse and no known-vocabulary data, so the narrowing moved the invariant
+  # closer to what is proved. What replaces the bound is the paid review,
+  # judging difficulty as language rather than by rank.
   - id: example-teaching-suitability
     state: fixed
     pipeline_stage: validation-qc
@@ -336,3 +350,16 @@ findings:
     recurrences: []
     case_ids: [review-holds-back-an-unreadable-card]
     fix_ref: src/japanese_anki/review.py#unready
+  - id: model-request-unsupported-effort
+    state: fixed
+    pipeline_stage: model-request
+    source_archetypes: [native-pdf-table]
+    symptom: Reasoning depth was resolved from the provider rather than the model, so `janki review --model claude-haiku-4-5` sent output_config.effort to a family that answers it with a 400; enrichment's call is not inside a try, so the run aborted on the first record. The first fix listed the families that reject effort, which had the direction wrong — xhigh arrived with Opus 4.7, so it then sent an invalid level to Opus 4.6, Opus 4.5, Sonnet 4.6 and Sonnet 4.5 as well, and adjudicate_reading turns any of those 400s into a permanent "unsure" with nothing printed.
+    invariant: The effort key is present only for models known to accept it at that level, is resolved from the model actually sent rather than from the provider or the configured model, and is absent for any unrecognized id.
+    evidence:
+      - fingerprint: 16000b089458ee8dc915d0cc3e3703252bcb373b3d409f9b381141909b284334
+        locator: quality/cases/model-request-effort-support/input.json
+    recurrences: []
+    case_ids: [model-request-effort-support]
+    fix_ref: src/japanese_anki/claude_client.py#effort_for
+

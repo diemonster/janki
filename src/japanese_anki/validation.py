@@ -58,13 +58,11 @@ def _stray_furigana_spaces(furigana: str) -> tuple[str, ...]:
     return qc.stray_furigana_spaces(furigana)
 
 
-def _content_holds(
-    record: VocabularyRecord, example: object
-) -> list[tuple[str, str, str]]:
+def _content_holds(example: object) -> list[tuple[str, str, str]]:
     """Delegates to :func:`japanese_anki.qc.example_content_holds` (same rule)."""
     from japanese_anki import qc
 
-    return qc.example_content_holds(record, example)
+    return qc.example_content_holds(example)
 
 
 def _kana(reading: str) -> str:
@@ -224,7 +222,7 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
         # own level: the certain shapes (fragments, false register labels)
         # are errors that stop a build, the camera pilot's exact gap — and
         # they are *visible* here, not only at the audio gate.
-        for code, level, why in _content_holds(record, example):
+        for code, level, why in _content_holds(example):
             add(level, code, f"example {index} {why}")
         if example.japanese and not example.english:
             add(

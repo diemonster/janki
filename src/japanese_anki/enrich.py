@@ -1122,9 +1122,6 @@ class AiOutcome:
     changes: dict[str, tuple[Any, Any]] = field(default_factory=dict)
     rejected: list[str] = field(default_factory=list)
     unverified: list[str] = field(default_factory=list)
-    #: Sentences kept but held for learner load (M7.6T): more unknown, uncommon
-    #: words than a beginner example may carry. Held, not rejected — the hold is
-    #: a reviewable flag, and audio refuses to voice it.
     #: True when generated examples were discarded to preserve stored ones —
     #: the preserve decision itself, carried first-class so the caller's
     #: warning reports what this function did rather than re-deriving it from
@@ -1140,36 +1137,6 @@ class AiOutcome:
     #: which field to look at, and this one is decidable offline, so it is the
     #: one failure that can always be named exactly.
     rewritten_furigana: list[tuple[str, str, str]] = field(default_factory=list)
-
-
-def _parsed_entries(parse: Any) -> list[Mapping[str, Any]]:
-    """Each token's dictionary entry, in token order, defensively.
-
-    One walk for every consumer of a parse's word list — the furigana repair
-    and the learner-load bound must not disagree about which words a sentence
-    contains. Empty for a parse that is missing or shaped unexpectedly: a
-    caller with no boundaries to work from must leave its input alone, not
-    guess at it. ``bool`` is rejected the way ``ParseResult.vocabulary_for``
-    rejects it — ``True`` is an ``int`` in Python and would silently resolve
-    to entry #1.
-    """
-    tokens = getattr(parse, "tokens", None)
-    vocabulary = getattr(parse, "vocabulary", None)
-    if not isinstance(tokens, list) or not isinstance(vocabulary, list):
-        return []
-    entries: list[Mapping[str, Any]] = []
-    for token in tokens:
-        if not isinstance(token, Mapping):
-            continue
-        index = token.get("vocabulary_index")
-        if isinstance(index, bool) or not isinstance(index, int):
-            continue
-        if not 0 <= index < len(vocabulary):
-            continue
-        entry = vocabulary[index]
-        if isinstance(entry, Mapping):
-            entries.append(entry)
-    return entries
 
 
 def _fill_existing_example_annotations(
@@ -1234,14 +1201,9 @@ def apply_ai_result(
     not a pass: it means nobody checked, and the example is flagged the same
     way a mismatch is, because "unverified" is exactly what it is.
 
-    learner-load bound: a kept sentence whose parse shows too many words that
-    are neither known nor common is held — flagged like an unverified one, so
-    audio refuses it — rather than shipped as beginner material. ``None``
-    means no collection data was offered, and no check runs on a guess.
-    """
+"""
     outcome = AiOutcome(record=record)
     kept: list[ExampleSentence] = []
-    # Loop-invariant, and not free: target_forms builds a conjugation table.
 
     for item in getattr(parsed, "examples", []) or []:
         register = str(getattr(item, "speech_level", "") or "").strip().lower()
@@ -1645,7 +1607,6 @@ class AiResult:
     changes: dict[str, dict[str, tuple[Any, Any]]] = field(default_factory=dict)
     rejected: dict[str, list[str]] = field(default_factory=dict)
     unverified: dict[str, list[str]] = field(default_factory=dict)
-    #: ``record id -> [sentence]`` held by the learner-load bound (M7.6T).
     warnings: list[str] = field(default_factory=list)
     no_changes: list[str] = field(default_factory=list)
     looked_up: int = 0

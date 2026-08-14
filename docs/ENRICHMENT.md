@@ -76,7 +76,7 @@ sources, which is the point. But jpdb is not always right: its parse reads
 leaves a correct sentence unvoiced forever, since `janki audio` will not speak
 a flagged example.
 
-So a disagreement is *adjudicated*. A cheap model is shown both readings and
+So a disagreement is *adjudicated*. A model is shown both readings and
 asked which one a native speaker uses for that sentence — a much narrower
 question than "what is the reading", and one it never answers by proposing a
 third. `unsure` is an answer it is told to give, and it leaves the flag alone.

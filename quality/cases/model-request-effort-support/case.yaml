@@ -1,0 +1,17 @@
+version: 1
+id: model-request-effort-support
+purpose: regression
+gating: true
+runner: model-request
+pipeline_boundary: model-request
+source_archetype: native-pdf-table
+redistributable: true
+fixture_basis: agent-created-synthetic
+fixtures:
+  - path: input.json
+    fingerprint: 16000b089458ee8dc915d0cc3e3703252bcb373b3d409f9b381141909b284334
+  - path: oracle.json
+    fingerprint: 6075d7ba63b43d2512b90265aa3d61f3a835325f81cb6694bea657417da8a5fe
+runner_input: input.json
+oracle: oracle.json
+finding_id: model-request-unsupported-effort

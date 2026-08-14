@@ -38,6 +38,7 @@ SEEDED_CASES = (
     "m7-mixed-tsumori-coverage",
     "m7-native-teform-table-coverage",
     "missing-furigana-separator",
+    "model-request-effort-support",
     "pos-precedence",
     "reading-check-forced-furigana",
     "reading-check-suru-compound",
