@@ -1349,6 +1349,11 @@ def apply_ai_result(
                 (example.japanese, example.furigana, rewritten)
             )
         parse = (parses or {}).get(example.japanese)
+        # `rewritten` is redundant here today and deliberately kept: with no
+        # parse the disjunct below already flags, and with one
+        # `verify_example_furigana` runs the same check itself. It becomes the
+        # only route to the flag when M7.6V slice 7 removes `parse is None`,
+        # which is where it gets the test it cannot have while unreachable.
         if (
             impossible
             or rewritten

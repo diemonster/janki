@@ -3093,7 +3093,14 @@ against jpdb. `verify_example_furigana` flags 38 of 155 examples with **zero**
 true positives. Recorded AI furigana *reading* errors: zero. Of 22 blocking
 review findings only 11 touch fields the AI writes; 10 of those are
 gpt-5.6-sol's, and three of the ten are camera excerpts M7.6T already fixed.
-Opus authored 37 records with no language error.
+Opus authored 37 records and drew **no blocking finding** on a field it
+wrote — but seven note-level ones across five records, including `第1話`
+glossed only "Chapter 1" while an example uses it in the episode-of-a-series
+sense. That is the same sense-mismatch class this task cites against
+gpt-5.6-sol, and unlike the 手 case it is real: 手's meanings already listed
+"move" and "tactic", so the finding quoted against it had been answered before
+this milestone began. The model change narrows the failure class; it does not
+close it, and the reviewer that catches it is the one this task keeps.
 
 **Model change.** Set `enrich_provider = "anthropic"` and
 `enrich_model = "claude-opus-5"`. Already wired: `cli.py:1475` selects
@@ -3111,8 +3118,9 @@ rejects it with a 400 — and `adjudicate_reading` swallows every exception into
 `return "unsure", ...`, so an unconditional `effort` would make adjudication
 fail forever with no error surface. Give `_request_body` an `effort` parameter
 defaulting to `None`, omit the key when unset, and thread it exactly as
-`max_tokens` is already threaded. Pass `"xhigh"` for review, extract, polish
-and enrichment; pass nothing for adjudication. The anti-drift guarantee is
+`max_tokens` is already threaded. Resolve it from the **model**, not the
+provider or the config: `--model` overrides the model alone, so a depth guarded
+by anything else guards something the caller did not just override. The anti-drift guarantee is
 unaffected — live and batch still build one body for the same call — and
 `tests/test_enrich_batch.py:253` proves it.
 
@@ -3273,7 +3281,12 @@ Use these slices, each a finding plus a reproducing case plus a fix, ordered so
    bound onto LLM words ranked by memoized jpdb word lookups.
 7. Retire the oracle, `recheck_furigana`, `adjudicate_reading` and the
    `parse is None` disjunct together, with their tests and docs, in one commit
-   so the tree never references a deleted symbol.
+   so the tree never references a deleted symbol. **`impossible` is not then
+   the sole source of the unverified flag** — `rewritten` is the other, and it
+   is redundant while `parse is None` stands, so deleting that disjunct is what
+   makes it load-bearing. Pin it with a test in the same commit, or a furigana
+   that rewrites its sentence stops being flagged the moment its only other
+   route to the flag disappears.
 8. *Done 2026-08-14, taken ahead of 6 and 7 because it removes a parse
    consumer.* Measured over all 158 examples carrying furigana, including the
    five regenerated with Opus: `repair_from_word_boundaries` changed
