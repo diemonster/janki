@@ -2913,8 +2913,17 @@ bounds learner load from canned-able parser data, and a shipping build reports
 local failures before the review store answers. `docs/HARDENING.md` gained the
 "Study-content trust boundaries" contract, including the legacy-record and
 pre-boundary staging-file migration posture. Full gating replay (32 cases) and
-`make gates` pass. M7.6B and M7.6C can resume; their next paid semantic review
-is the milestone measurement of this boundary.*
+`make gates` pass. The slice-5 local review cycle (ten offline finder angles)
+then found and fixed real boundary defects before any live use: the merge now
+carries every authority key with the field it describes, example acceptance
+became explicit and fingerprint-bound (typed by the reviewer, bound by
+promote) with unaccepted and legacy examples preserved-and-unpinned rather
+than replaceable, mark-clears persist, the learner-load bound covers the
+batch path and is visible to `validate`, reconciliation demands the exact
+entry spelling (kana homographs, suru stems), and the fragment/register
+checks gained the stem-morphology guards that keep 励ました, そば, and
+何について？ out of the gate. M7.6B and M7.6C can resume; their next paid
+semantic review is the milestone measurement of this boundary.*
 
 Depends on: M7.4, M7.5, M7.6A
 Files: `src/japanese_anki/extract.py`, `src/japanese_anki/enrich.py`,

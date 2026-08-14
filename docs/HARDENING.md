@@ -168,23 +168,30 @@ now belongs to exactly one of them:
   identity match, shows the change in its diff, and clears the resolved mark;
   a near match, absent entry, different reading, or missing reading holds the
   claim with a named warning. A stale mark is cleared, never obeyed.
-- **Study content** passed its field-specific authority. An example on an
-  extract-sourced record is curated only when promotion stamped
-  `raw_fields["example_authority"]` — the durable trace of a reviewer writing
-  the sentence into `examples` during staging review. Non-extract sources
-  (imports, hand-written records) are the user's own data, curated by arrival.
-  Enrichment pins an example's exact Japanese only when it is curated;
-  otherwise it generates fresh pedagogic sentences and the machine copy is
-  replaced.
+- **Study content** passed its field-specific authority. On an
+  extract-sourced record, example acceptance is explicit and per sentence:
+  the reviewer types `example_authority: staging-review` into the staging row
+  — presence of an example proves nothing, since the large AI-enrichment
+  route stages model sentences on extract rows too — and promotion replaces
+  the sentinel with the accepted sentences' content fingerprints, so the
+  durable stamp covers exactly the Japanese the reviewer read. Non-extract
+  sources (imports, hand-written records) are the user's own data, curated by
+  arrival. Enrichment pins an example's exact Japanese only when acceptance
+  covers it; an unaccepted stored sentence is never described to the model,
+  never silently replaced, and changes only on an explicit `--force-fields
+  examples` request.
 
 Promotion, oracle acceptance, and a structurally valid record approve nothing
 semantic. The local gates enforce teaching suitability before anything paid or
-audible: `validate` errors on certain fragments and false register labels
-(`qc.example_content_holds` — certainties only, no grammar model), the AI pass
-bounds learner load from its jpdb parses and the collection's own expressions
-(`raw_fields["learner_load_hold"]`), the audio command refuses to voice a held
-or failing example, and a shipping build reports local validation failures on
-their own before the review store is consulted.
+audible: `validate` errors on certain fragments and false register labels and
+warns on learner-load holds (`qc.example_content_holds` — one judgment,
+certainties only, no grammar model), the AI pass bounds learner load from its
+jpdb parses and the collection's own expressions on the synchronous and batch
+paths alike (`raw_fields["learner_load_hold"]`), the audio command refuses to
+voice any held or failing example, every one of these keys and the provisional
+marker travels through the merge with the field it describes, and a shipping
+build — word or drill deck — reports local validation failures on their own
+before the review store is consulted.
 
 The final AI review stays read-only and residual. It runs only after every
 local gate passes for a complete release candidate, sees the canonical record
@@ -192,11 +199,13 @@ and a compact authority summary rather than the original PDF or image, cannot
 establish authority or mutate a record, and a second broad pass needs explicit
 repository-owner approval.
 
-Records promoted before these boundaries carry no authority keys and are
-treated as curated everywhere — they are not rewritten just because provenance
-now exists. A staging file written before the boundary may still hold
-machine-copied examples; re-extract such a file rather than promoting it, or
-the copies would be stamped as reviewer acceptances.
+Records promoted before these boundaries carry no authority keys, and their
+examples take the same posture as any unaccepted sentence: preserved, never
+pinned, never rewritten without an explicit `--force-fields` request —
+provenance existing now is not a reason to touch them. A staging file written
+before the boundary may still hold machine-copied examples; promoting it
+cannot mint acceptance (no reviewer typed the sentinel), so its examples land
+preserved-but-unaccepted — re-extracting is still the cleaner path.
 
 ## Extraction coverage gate
 
