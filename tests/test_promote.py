@@ -17,7 +17,7 @@ import yaml
 
 from japanese_anki import cli, enrich, extract, promote
 from japanese_anki.jpdb import JpdbClient
-from japanese_anki.models import SourceReference, VocabularyRecord
+from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
 from japanese_anki.promote import (
     HOLD_MISSING_READING,
     HOLD_READING_KANJI,
@@ -240,6 +240,47 @@ def test_skipping_the_dictionary_check_does_not_skip_the_kana_rule() -> None:
 
     assert result.promoted == []
     assert len(result.held) == 2
+
+
+# --- field-level example acceptance ------------------------------------------
+
+
+def test_a_reviewer_placed_example_is_stamped_as_accepted_at_promotion() -> None:
+    # Extraction never writes `examples`, so a sentence on an extract-type row
+    # at this gate is the reviewer's own staging edit — the explicit
+    # field-level acceptance. The stamp is its durable provenance; `enrich`
+    # reads it to decide whether the sentence may be pinned as curated.
+    reviewed = record(
+        examples=[ExampleSentence(japanese="友達と日本語を話します。")]
+    )
+
+    result = check_readings([reviewed], skip_reading_check=True)
+
+    [promoted] = result.promoted
+    assert promoted.source.raw_fields["example_authority"] == "staging-review"
+
+
+def test_a_record_without_examples_gets_no_acceptance_stamp() -> None:
+    # Promotion itself approves nothing — that inference is the trust failure
+    # M7.6T exists to remove. No example, no field-level acceptance.
+    result = check_readings([record()], skip_reading_check=True)
+
+    [promoted] = result.promoted
+    assert "example_authority" not in promoted.source.raw_fields
+
+
+def test_a_non_extract_row_is_not_stamped() -> None:
+    # A Shirabe export's example is the user's own data, curated by arrival.
+    # Stamping it would claim a staging review that never happened.
+    imported = record(
+        source=SourceReference(type="shirabe", imported_from="export.csv"),
+        examples=[ExampleSentence(japanese="友達と日本語を話します。")],
+    )
+
+    result = check_readings([imported], skip_reading_check=True)
+
+    [promoted] = result.promoted
+    assert "example_authority" not in promoted.source.raw_fields
 
 
 # --- the sanctioned ID re-mint ----------------------------------------------

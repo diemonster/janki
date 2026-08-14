@@ -123,7 +123,12 @@ class ExampleSentence:
     register: str = ""
 
     def needs_ai_annotations(self) -> bool:
-        """Whether a reviewed extracted sentence still has visible holes."""
+        """Whether a curated sentence still has visible holes.
+
+        Completeness only — whether this example's text may be *pinned* for
+        annotation is an authority question the sentence cannot answer about
+        itself; ``enrich.examples_curated`` reads that off the record.
+        """
         return bool(self.japanese) and (
             not self.english
             or self.register not in {"polite", "casual"}

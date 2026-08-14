@@ -16,6 +16,7 @@ SEEDED_CASES = (
     "ai-impossible-character-furigana",
     "ai-no-writable-change",
     "ai-rejected-example-retry",
+    "ai-uncurated-example-pinning",
     "deck-membership-partition",
     "derived-romaji-repair",
     "enrichment-forced-kana-reading",

@@ -46,7 +46,12 @@ from japanese_anki.io import is_empty
 from japanese_anki.ledger import Ledger
 from japanese_anki.models import ExampleSentence, VocabularyRecord
 from japanese_anki.romaji import kana_to_romaji
-from japanese_anki.staging import NON_READING_HOLDS, annotate, annotations
+from japanese_anki.staging import (
+    EXAMPLE_AUTHORITY_KEY,
+    NON_READING_HOLDS,
+    annotate,
+    annotations,
+)
 
 __all__ = [
     "ENRICHABLE_FIELDS",
@@ -870,6 +875,23 @@ def ai_targets(
     return [record for record in records if record.id in needed]
 
 
+def examples_curated(record: VocabularyRecord) -> bool:
+    """Whether this record's examples may be treated as accepted teaching content.
+
+    The trust rule the camera pilot forced into words: an example on an
+    **extract**-sourced record is a model-era artifact unless the staging
+    reviewer's field-level acceptance (``promote._accept_examples``) stamped
+    it, because extraction itself never writes ``examples``. Every other
+    source type — a Shirabe export, an Anki import, a hand-written record —
+    is the user's own data, curated by arrival; janki has never been allowed
+    to overwrite it and is not allowed to start now. A record carrying no
+    examples has nothing to defend, so it answers true vacuously.
+    """
+    if not record.examples or record.source.type != "extract":
+        return True
+    return bool(record.source.raw_fields.get(EXAMPLE_AUTHORITY_KEY, "").strip())
+
+
 def ai_prompt(
     record: VocabularyRecord,
     recent: Sequence[str] = (),
@@ -900,14 +922,19 @@ def ai_prompt(
     ):
         if value:
             lines.append(f"{label}: {value}")
-    incomplete = [
-        example
-        for example in record.examples
-        if example.needs_ai_annotations()
-    ]
+    # Pinning an existing sentence is a claim of authority — "someone accepted
+    # this Japanese, annotate it" — so it is made only for curated examples.
+    # An uncurated one (a machine-copied excerpt on an extract record) gets no
+    # mention: the model writes fresh pedagogic sentences instead, exactly as
+    # it would for a record with no examples at all.
+    incomplete = (
+        [example for example in record.examples if example.needs_ai_annotations()]
+        if examples_curated(record)
+        else []
+    )
     if incomplete:
         lines.append(
-            "\nExisting reviewed examples need annotations. Return each listed "
+            "\nExisting curated examples need annotations. Return each listed "
             "Japanese string exactly; do not replace it or add a different "
             "sentence. Fill only its empty English, furigana, and speech_level "
             "values:\n"
@@ -952,7 +979,7 @@ AI_INSTRUCTIONS = """\
 Write **two** example sentences for the word, and a usage note if there is
 something worth saying.
 
-If the record prompt lists existing reviewed examples that need annotations,
+If the record prompt lists existing curated examples that need annotations,
 return those exact Japanese strings instead of writing new examples. Fill their
 empty English, furigana, and speech_level values. Do not rewrite, replace, or
 add a Japanese sentence in that case.
@@ -1138,7 +1165,14 @@ def apply_ai_result(
         "examples": kept,
         "usage_notes": str(getattr(parsed, "usage_notes", "") or "").strip(),
     }
-    if record.examples and "examples" not in force_fields:
+    # The annotate-in-place path exists to protect accepted content, so it is
+    # entered only for curated examples. An uncurated one — a machine-copied
+    # excerpt on an extract record that no acceptance ever stamped — is not
+    # content to protect but the thing being replaced: the generated pair
+    # lands through the ordinary writable path below, and the excerpt itself
+    # survives as source evidence in ``raw_fields``, where extraction put it.
+    curated = examples_curated(record)
+    if record.examples and "examples" not in force_fields and curated:
         merged_examples, landed_unverified = _fill_existing_example_annotations(
             record.examples, kept, unverified
         )
@@ -1178,7 +1212,9 @@ def apply_ai_result(
         writable = [
             name
             for name in AI_FIELDS
-            if name in force_fields or is_empty(getattr(record, name))
+            if name in force_fields
+            or is_empty(getattr(record, name))
+            or (name == "examples" and not curated)
         ]
         updated, changes = _apply(record, proposals, writable)
     if "examples" in changes:

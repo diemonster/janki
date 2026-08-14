@@ -200,16 +200,50 @@ def test_no_reviewed_patterns_leaves_the_prompt_as_it_was() -> None:
     assert "currently studying" not in ai_prompt(record())
 
 
-def test_the_prompt_binds_an_incomplete_reviewed_example_exactly() -> None:
+def test_the_prompt_binds_an_incomplete_curated_example_exactly() -> None:
+    # The default helper record is a Shirabe import: the user's own data,
+    # curated by arrival, so its incomplete example is pinned for annotation.
     source_example = record(
         examples=[ExampleSentence(japanese="日本語を話します。")]
     )
 
     text = ai_prompt(source_example)
 
-    assert "Existing reviewed examples need annotations" in text
+    assert "Existing curated examples need annotations" in text
     assert '"日本語を話します。"' in text
     assert "do not replace it" in text
+
+
+def test_the_prompt_does_not_pin_an_uncurated_extracted_example() -> None:
+    # The camera pilot's second trust failure: an example a model copied off
+    # the page was described to the next model as reviewed. Without the
+    # promote-time acceptance stamp, the prompt must not mention the sentence
+    # at all — the model writes fresh pedagogic examples instead.
+    excerpt = record(
+        source=SourceReference(type="extract", imported_from="page.jpg"),
+        examples=[ExampleSentence(japanese="やくそくのとおりに")],
+    )
+
+    text = ai_prompt(excerpt)
+
+    assert "need annotations" not in text
+    assert "やくそくのとおりに" not in text
+
+
+def test_the_prompt_pins_an_extracted_example_the_reviewer_accepted() -> None:
+    accepted = record(
+        source=SourceReference(
+            type="extract",
+            imported_from="page.jpg",
+            raw_fields={"example_authority": "staging-review"},
+        ),
+        examples=[ExampleSentence(japanese="日本語を話します。")],
+    )
+
+    text = ai_prompt(accepted)
+
+    assert "Existing curated examples need annotations" in text
+    assert '"日本語を話します。"' in text
 
 
 # --- the QC gate --------------------------------------------------------------
@@ -242,6 +276,70 @@ def test_romaji_is_always_regenerated_never_taken() -> None:
     )
 
     assert outcome.record.examples[0].romaji == "hanashimasu."
+
+
+def test_generated_examples_replace_an_uncurated_extracted_example() -> None:
+    # The excerpt was never accepted as teaching content, so it is not content
+    # to protect: the fresh pair lands and the excerpt survives only as the
+    # source evidence extraction kept in raw_fields.
+    excerpt = record(
+        source=SourceReference(
+            type="extract",
+            imported_from="page.jpg",
+            raw_fields={"example": "話すのとおりに"},
+        ),
+        examples=[ExampleSentence(japanese="話すのとおりに")],
+    )
+
+    outcome = apply_ai_result(
+        excerpt,
+        answer(
+            generated(
+                "毎日日本語を話します。",
+                furigana="毎日[まいにち] 日本語[にほんご]を 話[はな]します。",
+            ),
+            generated(
+                "昨日友達と話した。",
+                furigana="昨日[きのう] 友達[ともだち]と 話[はな]した。",
+            ),
+        ),
+    )
+
+    assert [ex.japanese for ex in outcome.record.examples] == [
+        "毎日日本語を話します。",
+        "昨日友達と話した。",
+    ]
+    assert "examples" in outcome.changes
+    assert outcome.record.source.raw_fields["example"] == "話すのとおりに"
+
+
+def test_an_accepted_extracted_example_is_annotated_in_place_not_replaced() -> None:
+    accepted = record(
+        source=SourceReference(
+            type="extract",
+            imported_from="page.jpg",
+            raw_fields={"example_authority": "staging-review"},
+        ),
+        examples=[ExampleSentence(japanese="日本語を話します。")],
+    )
+
+    outcome = apply_ai_result(
+        accepted,
+        answer(
+            generated(
+                "日本語を話します。",
+                furigana="日本語[にほんご]を 話[はな]します。",
+                english="I speak Japanese.",
+            ),
+            generated(
+                "昨日友達と話した。",
+                furigana="昨日[きのう] 友達[ともだち]と 話[はな]した。",
+            ),
+        ),
+    )
+
+    assert [ex.japanese for ex in outcome.record.examples] == ["日本語を話します。"]
+    assert outcome.record.examples[0].english == "I speak Japanese."
 
 
 def test_furigana_jpdb_confirms_is_not_flagged(tmp_path: Path) -> None:

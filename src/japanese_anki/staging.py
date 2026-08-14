@@ -74,6 +74,18 @@ HOLD_UNKNOWN_READING = "reading not in the dictionary"
 #: is committed, until a run can prove the id is free.
 HOLD_UNVERIFIABLE_ID = "cannot check this id against the whole collection"
 
+#: Field-level acceptance provenance for an extract-sourced record's examples,
+#: written into ``source.raw_fields`` by ``promote`` when a reviewer's staging
+#: edit put a sentence into ``examples``. It lives here for the same reason the
+#: holds do: ``promote`` writes it and ``enrich`` reads it, and without the
+#: shared constant the trust boundary would be a string convention two modules
+#: could drift apart on. Extraction itself never writes ``examples`` (the
+#: excerpt stays evidence in ``raw_fields``), so on an extract-type record this
+#: key is what separates "a person accepted this sentence as teaching content"
+#: from "a model copied it off the page".
+EXAMPLE_AUTHORITY_KEY = "example_authority"
+EXAMPLE_AUTHORITY_STAGING = "staging-review"
+
 #: The holds that are *not* about the reading — a deny-list, not an allow-list,
 #: and the direction matters. A staging file is hand-edited: a reviewer may type
 #: ``hold_reason: check the okurigana`` into one, and the importers write their

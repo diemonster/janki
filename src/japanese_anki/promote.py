@@ -40,6 +40,8 @@ from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import contains_kanji, stable_record_id
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.staging import (
+    EXAMPLE_AUTHORITY_KEY,
+    EXAMPLE_AUTHORITY_STAGING,
     HOLD_MISSING_READING,
     HOLD_READING_KANJI,
     HOLD_UNKNOWN_READING,
@@ -323,7 +325,7 @@ def check_readings(
                 result.keep.append(True)
                 continue
 
-        resolved = _resolved(record)
+        resolved = _accept_examples(_resolved(record))
         # `remint_blocked` means the set is *incomplete*, not wrong: an id in it
         # was positively proved present, and `remint` would leave that row alone
         # whatever the unreadable deck turns out to hold. Holding it would block
@@ -362,6 +364,26 @@ def _resolved(record: VocabularyRecord) -> VocabularyRecord:
     return annotate(
         record, hold_reason=None, suggested_reading=None, already_known=None
     )
+
+
+def _accept_examples(record: VocabularyRecord) -> VocabularyRecord:
+    """Record the reviewer's field-level acceptance of an extracted example.
+
+    Extraction never writes ``examples`` — the source excerpt stays evidence in
+    ``raw_fields`` — so a sentence present on an extract-type row at this gate
+    can only have been written in by the reviewer during staging review. That
+    hand edit is the explicit field-level acceptance M7.6T requires, and this
+    stamp is its durable provenance: it travels into ``vocabulary.json``, where
+    ``enrich`` reads it to decide whether an example's exact Japanese may be
+    pinned as curated content. Promotion itself approves nothing — a record
+    with no examples gets no stamp, and non-extract sources (a Shirabe export,
+    a hand-written record) are the user's own data, curated by arrival.
+    """
+    if record.source.type != "extract" or not record.examples:
+        return record
+    raw_fields = dict(record.source.raw_fields)
+    raw_fields[EXAMPLE_AUTHORITY_KEY] = EXAMPLE_AUTHORITY_STAGING
+    return replace(record, source=replace(record.source, raw_fields=raw_fields))
 
 
 def _structural_hold(record: VocabularyRecord) -> str | None:

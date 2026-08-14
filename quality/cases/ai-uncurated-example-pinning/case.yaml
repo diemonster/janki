@@ -1,7 +1,7 @@
 version: 1
 id: ai-uncurated-example-pinning
 purpose: regression
-gating: false
+gating: true
 runner: ai-enrichment
 pipeline_boundary: ai-enrichment
 source_archetype: camera
