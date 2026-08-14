@@ -1190,15 +1190,6 @@ def _known_expressions(records: Sequence[VocabularyRecord]) -> frozenset[str]:
     )
 
 
-def _words_of(parse: Any) -> list[str]:
-    """The spellings jpdb segmented a sentence into, in order."""
-    return [
-        spelling
-        for entry in _parsed_entries(parse)
-        if (spelling := str(entry.get("spelling", "")))
-    ]
-
-
 #: One example may introduce at most this many words that are neither in the
 #: learner's collection nor common. Two is a deliberate allowance, not a
 #: measurement: a sentence teaching one new word alongside two more strangers
@@ -1338,17 +1329,6 @@ def apply_ai_result(
         if example.furigana:
             example = replace(
                 example, furigana=qc.repair_spilled_punctuation(example.furigana)
-            )
-            # Then the spills that repair will not touch, using jpdb's own
-            # segmentation of this very sentence — already fetched below to
-            # verify the readings, and until now thrown away afterwards. The
-            # boundary is a dictionary fact; the readings, grouping and
-            # punctuation stay the writer's. No extra call, no model.
-            example = replace(
-                example,
-                furigana=qc.repair_from_word_boundaries(
-                    example.furigana, _words_of((parses or {}).get(example.japanese))
-                ),
             )
         if not qc.example_contains_target(example, record.expression, record.verb_group):
             outcome.rejected.append(example.japanese)

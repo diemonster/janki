@@ -22,7 +22,6 @@ from japanese_anki.qc import (
     furigana_reading,
     parse_pairs,
     regenerate_example_romaji,
-    repair_from_word_boundaries,
     repair_spilled_punctuation,
     spilled_furigana_groups,
     stray_furigana_spaces,
@@ -560,7 +559,6 @@ def test_a_spill_that_would_need_a_guess_is_left_alone() -> None:
     Repairing it would also destroy the evidence: the run would then start with
     a Han character, which `spilled_furigana_groups` never flags, so a reported
     defect would become an unreportable one in a field that now looks tidy."""
-    from japanese_anki.qc import spilled_furigana_groups
 
     # No space before 日本語 — that is the whole point. With one, `_GROUP` gives
     # the group the run 日本語 and there is no spill to leave alone, so the test
@@ -585,7 +583,6 @@ def test_correct_furigana_is_returned_unchanged(written: str) -> None:
 def test_the_repaired_field_no_longer_reports_a_spill() -> None:
     """The two functions have to agree, or `enrich` repairs something `validate`
     still condemns."""
-    from japanese_anki.qc import spilled_furigana_groups
 
     repaired = repair_spilled_punctuation("週末[しゅうまつ]、何[なに]するの？")
 
@@ -627,7 +624,6 @@ def test_punctuation_followed_by_a_swallowed_particle_is_left_alone() -> None:
     Inserting the separator after the comma alone gives `、 と日本語[にほんご]`,
     which is still a spill — it would rewrite the record without fixing it, and
     make the field look attended to. Left for a human, and still reported."""
-    from japanese_anki.qc import spilled_furigana_groups
 
     written = "毎日[まいにち]、と日本語[にほんご]を 話[はな]す"
 
@@ -765,39 +761,3 @@ def test_a_space_at_the_field_edge_is_reported_whatever_is_beside_it(
     it too" reason cannot apply — and the comment above the code said as much
     while the ASCII neighbour silenced it anyway."""
     assert stray_furigana_spaces(written) == expected
-
-
-def test_a_swallowed_word_is_separated_using_the_dictionary_boundaries() -> None:
-    """The spill `repair_spilled_punctuation` will not touch: the group took a
-    particle and the noun before it, and deciding where the word starts is
-    segmentation. It is not guessed here either — the boundaries are jpdb's own
-    parse of the same sentence, which the AI pass already fetches to verify the
-    readings and then discarded."""
-    spilled = "バスは すぐ 来[き]ますから、大丈夫[だいじょうぶ]です。"
-    words = ["バス", "は", "すぐ", "来ます", "から", "大丈夫", "です"]
-
-    repaired = repair_from_word_boundaries(spilled, words)
-
-    assert repaired == "バスは すぐ 来[き]ますから、 大丈夫[だいじょうぶ]です。"
-    assert not spilled_furigana_groups(repaired)
-    # The sentence itself is untouched: same characters, same punctuation.
-    assert repaired.replace(" ", "").replace("[き]", "").replace("[だいじょうぶ]", "") == (
-        "バスはすぐ来ますから、大丈夫です。"
-    )
-
-
-def test_the_repair_does_nothing_without_boundaries() -> None:
-    """No parse means no dictionary said where the words are, and a repair with
-    nothing to work from must leave the field alone rather than guess."""
-    spilled = "バスは すぐ 来[き]ますから、大丈夫[だいじょうぶ]です。"
-
-    assert repair_from_word_boundaries(spilled, []) == spilled
-
-
-def test_the_repair_leaves_a_correctly_spaced_field_alone() -> None:
-    """Every group already starts where a word does, so there is nothing to
-    separate — and inserting anything would put a gap in the sentence."""
-    clean = "毎日[まいにち] 妻[つま]と 話[はな]します。"
-    words = ["毎日", "妻", "と", "話します"]
-
-    assert repair_from_word_boundaries(clean, words) == clean

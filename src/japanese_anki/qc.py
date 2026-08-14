@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
 from japanese_anki import jpdb
@@ -462,47 +461,6 @@ def spilled_furigana_groups(furigana: str) -> tuple[tuple[str, str], ...]:
     # Reported verbatim: a message quoting the NFKC-folded run names a string
     # the record does not contain, so nobody can find what to fix.
     return tuple(spilled)
-
-
-def repair_from_word_boundaries(furigana: str, words: Sequence[str]) -> str:
-    """Insert the separators a dictionary's word boundaries say are missing.
-
-    The spill :func:`repair_spilled_punctuation` will not touch: a group that
-    swallowed a particle or the noun before it — ``来[き]ますから、大丈夫[だい
-    じょうぶ]`` draws だいじょうぶ across ``ますから、大丈夫``. Deciding where the
-    word starts is segmentation, which this project does not guess at.
-
-    So it is not guessed here either: ``words`` is jpdb's own segmentation of
-    the same sentence, which `enrich --ai` and `--recheck-furigana` already
-    fetch to verify the readings and then discard. Where a group's text ends
-    with a word jpdb found, the separator goes in front of that word. The
-    readings, the grouping and the punctuation stay exactly as written — only
-    the notation separator Anki needs is added.
-
-    jpdb's furigana itself is *not* usable for this: it drops every comma and
-    splits 大丈夫 into three ruby groups. Its boundaries are a dictionary fact;
-    its rendering is not what the card should say.
-
-    Anything it cannot place is left for :func:`spilled_furigana_groups` to
-    report, as before.
-    """
-    if not words:
-        return furigana
-
-    def separate(match: re.Match[str]) -> str:
-        raw, reading = match.group(1), match.group(2)
-        # The longest word that ends this run, and is not the whole of it: what
-        # precedes it belongs to the group before, whatever that group was.
-        candidates = [word for word in words if word and raw.endswith(word) and word != raw]
-        if not candidates:
-            return match.group(0)
-        word = max(candidates, key=len)
-        before = raw[: -len(word)]
-        if not before or before.endswith(" "):
-            return match.group(0)
-        return f"{before} {word}[{reading}]"
-
-    return _GROUP.sub(separate, furigana)
 
 
 def repair_spilled_punctuation(furigana: str) -> str:
