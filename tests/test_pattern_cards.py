@@ -991,6 +991,35 @@ def test_a_drill_deck_reports_local_failures_before_the_review_gate(
     assert "not ready to ship" not in err
 
 
+def test_a_drill_output_build_still_validates_its_records(tmp_path: Path) -> None:
+    """An `--output` build skips the CLI's shipping gates by design — so the
+    exporter itself is the backstop, exactly as build_deck is for word decks.
+    Without it a throwaway drill build packaged invalid records with zero
+    checks anywhere."""
+    from dataclasses import replace as dc_replace
+
+    from japanese_anki import cli
+    from japanese_anki.models import ExampleSentence
+
+    broken = dc_replace(
+        verb("買う", "かう", "godan"),
+        examples=[
+            ExampleSentence(
+                japanese="明日、九時に買います。", english="x", register="casual"
+            )
+        ],
+    )
+    deck = cli_project(tmp_path, [broken])
+
+    code = cli.main(
+        ["--root", str(tmp_path), "build", str(deck), "--output",
+         str(tmp_path / "throwaway.apkg")]
+    )
+
+    assert code == 1
+    assert not (tmp_path / "throwaway.apkg").exists()
+
+
 def test_the_gate_asks_only_about_records_the_deck_can_ship(tmp_path: Path) -> None:
     """A noun has no verb class, so no drill card could ever carry it, and a
     record `exclude_ids` holds back is one the deck has already declined.

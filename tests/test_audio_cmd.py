@@ -197,6 +197,29 @@ def test_a_fragment_example_is_held_and_not_voiced(tmp_path: Path) -> None:
     assert result.records[0].examples[1].audio.startswith("audio/")
 
 
+def test_a_held_example_keeps_no_stale_clip_reference(tmp_path: Path) -> None:
+    # A recording made before the gate existed is the held question already
+    # turned into a recording: the reference is cleared so the card stops
+    # playing it and --prune can sweep the file.
+    fragment = "古い橋の工事について"
+    held = record(
+        examples=[
+            ExampleSentence(
+                japanese=fragment,
+                english="x",
+                register="polite",
+                audio="audio/janki-stale.mp3",
+            )
+        ]
+    )
+
+    result, provider, _ = run([held], tmp_path, words=False, examples=True)
+
+    assert provider.said == []
+    assert result.held == [f"word:橋:はし: {fragment} (example-fragment)"]
+    assert result.records[0].examples[0].audio == ""
+
+
 def test_a_learner_load_held_example_is_not_voiced(tmp_path: Path) -> None:
     from japanese_anki.identifiers import short_fingerprint
 

@@ -22,7 +22,7 @@ from japanese_anki.kanji import load_store as load_kanji_store
 from japanese_anki.kanji import render_kanji_html
 from japanese_anki.models import ModelError, VocabularyRecord
 from japanese_anki.pitch import PitchError, render_pitch_html
-from japanese_anki.validation import has_errors, validate_records
+from japanese_anki.validation import has_errors, refusal_text, validate_records
 
 
 class AnkiBuildError(JankiError):
@@ -738,8 +738,7 @@ def build_deck(
     deck_config, records = resolve_deck_records(deck_path)
     issues = validate_records(records, deck_path)
     if has_errors(issues):
-        formatted = "\n".join(issue.format() for issue in issues)
-        raise AnkiBuildError(f"Deck validation failed:\n{formatted}")
+        raise AnkiBuildError(refusal_text(deck_path.name, issues))
 
     if include_ids is not None:
         records = [record for record in records if record.id in include_ids]

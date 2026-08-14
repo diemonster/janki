@@ -249,8 +249,6 @@ def _word_audio(
     return replace(record, audio=media_relative(audio_dir / name, media_dir))
 
 
-
-
 def _example_audio(
     record: VocabularyRecord,
     *,

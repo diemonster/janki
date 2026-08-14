@@ -56,6 +56,7 @@ from japanese_anki.patterns import (
     check_pattern_rules,
     verb_pairs_in,
 )
+from japanese_anki.validation import has_errors, refusal_text, validate_records
 
 __all__ = [
     "PatternCard",
@@ -862,7 +863,16 @@ def build_conjugation_deck(
     # bare string became a set of single characters and excluded nothing — the
     # record the user held back shipped — while `include_ids: []` filtered
     # everything out and blamed a missing verb_group.
-    cards = drill_cards(shipping_records(deck_path, records, form), form)
+    shipping = shipping_records(deck_path, records, form)
+    # The same internal backstop build_deck has (exporters/anki.py): a drill
+    # card carries the expression, reading and a meaning straight off the
+    # record, and without this an `--output` build — which skips the CLI's
+    # shipping gates by design — packaged records that fail validation with
+    # zero checks anywhere.
+    issues = validate_records(list(shipping), deck_path)
+    if has_errors(issues):
+        raise PatternDeckError(refusal_text(deck_path.name, issues))
+    cards = drill_cards(shipping, form)
     if not cards:
         raise PatternDeckError(
             f"{deck_path}: no record janki can conjugate into a {form}. A verb "

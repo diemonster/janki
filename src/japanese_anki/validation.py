@@ -302,3 +302,20 @@ def validate_records(
 
 def has_errors(issues: list[ValidationIssue]) -> bool:
     return any(issue.level == "error" for issue in issues)
+
+
+def refusal_text(deck_name: str, issues: list[ValidationIssue]) -> str:
+    """The one refusal a build states when local validation fails.
+
+    Every issue, warnings included: a refused build is the moment the person
+    is looking, and a warning hidden here (a learner-load hold, a missing
+    translation) ships silently once the errors are fixed. One formatter for
+    every gate — the CLI's shipping pre-gate and the exporters' backstops —
+    so the same broken deck cannot report differently depending on which gate
+    caught it.
+    """
+    formatted = "\n".join(issue.format() for issue in issues)
+    return (
+        f"{deck_name} fails local validation — fix these before any review "
+        f"run:\n{formatted}"
+    )
