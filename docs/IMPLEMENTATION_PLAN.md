@@ -3151,15 +3151,34 @@ caller. Keep, and lift out first:
 `parse is None` must keep meaning "nobody checked" for every check that still
 consumes a parse. Absence must never become a pass.
 
-**What still needs the parse, and must not lose it.**
-`qc.repair_from_word_boundaries` (8.4% of resolved tokens carry a spelling
-absent from the sentence, across 48.4% of sentences) and `_learner_load_excess`
-(whose hold also gates audio) both read jpdb's tokenization. Retiring the
-*oracle* does not retire the *parse*. Removing it would narrow two `fixed`
-findings' invariants by deleting their inputs — invisible to both
-`janki harden status` and `janki harden replay`. If a later task wants the
-parse gone, the LLM's own segmentation is the replacement, and that is its own
-task with its own findings.
+**Then retire the parse itself, by moving segmentation to the LLM.** Two
+consumers still read jpdb's tokenization: `qc.repair_from_word_boundaries`
+(8.4% of resolved tokens carry a spelling absent from the sentence, across
+48.4% of sentences) and `_learner_load_excess`, whose hold also gates audio.
+Both want the same thing — a list of the dictionary words in the sentence — and
+the LLM supplies it better. The repair's own docstring already concedes that
+jpdb's *rendering* is unusable and only its *boundaries* are wanted; but on
+colloquial text those boundaries carry wrong lexemes (ほる, とする, でる), and a
+wrong entry in `words` places a separator in the wrong place. So this is not a
+like-for-like swap, it is a correction.
+
+It is also cheap in the way that matters: `review.card_fingerprint` is a
+whitelist — record fields plus each example's `japanese`, `furigana`,
+`english`, `register` — so adding a segmentation field to the example schema
+invalidates **no** review. Segmentation is machinery, not something a reader
+forms an opinion about, and it must stay out of that whitelist.
+
+Do it after the model switch, for one reason that is not scheduling caution:
+`repair_from_word_boundaries` fixes a *grouping* defect, where a group swallows
+the text before it (`ますから、大丈夫[だいじょうぶ]`). That is a notation error,
+not a reading error, so "zero recorded AI furigana errors" does not cover it.
+Whether the repair should be migrated or **deleted** depends on whether
+Opus-written examples spill at all, and measuring that against the outgoing
+gpt-5.6-sol corpus would answer a question about content we are replacing.
+
+Neither invariant may be narrowed by quietly changing its input — that is
+invisible to `janki harden status` and to `janki harden replay` alike. Each
+gets a finding and a case proving the new source works.
 
 **The review completeness gate — the "not multiple times per deck" half.**
 `command_review` calls `_shipping_records(config)` with no completeness check,
@@ -3213,6 +3232,13 @@ Use these slices, each a finding plus a reproducing case plus a fix:
 3. Effort and the `max_tokens` measurement.
 4. The enrichment provider switch.
 5. Retire the oracle; update `docs/HARDENING.md`; full replay and `make gates`.
+6. Add per-example segmentation to the AI schema and prompt — dictionary forms,
+   kept out of the review fingerprint — and move `_learner_load_excess` onto
+   it, with a finding and a case.
+7. Measure spill on Opus-written examples, then either move
+   `repair_from_word_boundaries` onto the same list or delete it as a proven
+   no-op. Either way jpdb stops seeing sentences, and `_verify_parses` goes
+   with it.
 
 Do not run a paid semantic review as part of this task. The first review after
 it lands is the milestone measurement, and by then the gate should make it one
