@@ -511,12 +511,30 @@ def test_a_candidate_with_no_reading_keeps_its_malformed_id(tmp_path: Path) -> N
     assert record.reading == ""
 
 
-def test_an_example_sentence_becomes_an_example(tmp_path: Path) -> None:
+def test_a_source_excerpt_stays_evidence_and_never_becomes_an_example(
+    tmp_path: Path,
+) -> None:
+    # The camera pilot's trust failure: the excerpt is what the source *shows*,
+    # not a sentence anyone accepted as teaching content. It must survive as
+    # reviewable evidence — a reviewer promotes it by writing it into
+    # `examples` during staging review — but the canonical field stays empty.
     [record] = build_records(
         [candidate(example="日本語を話します。")], prepared(tmp_path)
     )
 
-    assert [ex.japanese for ex in record.examples] == ["日本語を話します。"]
+    assert record.examples == []
+    assert record.source.raw_fields["example"] == "日本語を話します。"
+
+
+def test_a_candidate_without_an_excerpt_records_no_example_evidence(
+    tmp_path: Path,
+) -> None:
+    # An absent key is what "the source showed no sentence" means; an empty
+    # string would read as evidence of an empty cell.
+    [record] = build_records([candidate(example="  ")], prepared(tmp_path))
+
+    assert record.examples == []
+    assert "example" not in record.source.raw_fields
 
 
 def test_a_candidate_with_no_expression_cannot_become_a_record(

@@ -24,6 +24,7 @@ SEEDED_CASES = (
     "example-romaji-invalid-furigana",
     "extraction-oracle-key-binding",
     "extraction-selection-target-binding",
+    "extraction-source-example-promotion",
     "extraction-unit-accounting",
     "impossible-character-furigana",
     "input-external-existing-name-collision",

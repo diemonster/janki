@@ -1,7 +1,7 @@
 version: 1
 id: extraction-source-example-promotion
 purpose: regression
-gating: false
+gating: true
 runner: candidate-response
 pipeline_boundary: extraction-normalization
 source_archetype: camera

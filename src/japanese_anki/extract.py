@@ -771,7 +771,11 @@ def _raw_fields(candidate: Any, prepared: PreparedInput) -> dict[str, str]:
     page = getattr(candidate, "page", 0) or 0
     if page:
         fields["page"] = str(page)
-    for name in ("context", "inclusion_reason"):
+    # `example` rides here and not in `record.examples`: it is what the source
+    # *shows*, not a sentence anyone accepted as teaching content, and the two
+    # must not share a field or the second question is never asked. A reviewer
+    # can still promote it by writing it into `examples` during staging review.
+    for name in ("context", "inclusion_reason", "example"):
         value = str(getattr(candidate, name, "") or "").strip()
         if value:
             fields[name] = value
@@ -800,7 +804,6 @@ def build_records(
         if not expression:
             continue
         reading = str(getattr(candidate, "reading", "") or "").strip()
-        example = str(getattr(candidate, "example", "") or "").strip()
         record = VocabularyRecord(
             id=stable_record_id(expression, reading),
             expression=expression,
@@ -811,7 +814,6 @@ def build_records(
                 if (text := str(item).strip())
             ],
             part_of_speech=str(getattr(candidate, "part_of_speech", "") or "").strip(),
-            examples=_examples(example),
             source=SourceReference(
                 type="extract",
                 imported_from=prepared.origin_path.name,
@@ -898,14 +900,6 @@ def _describe(candidate: Any) -> list[str]:
         if text:
             parts.append(f"{name}: {text}")
     return parts or ["nothing but an empty row"]
-
-
-def _examples(japanese: str) -> list[Any]:
-    if not japanese:
-        return []
-    from japanese_anki.models import ExampleSentence
-
-    return [ExampleSentence(japanese=japanese)]
 
 
 def known_ids(records: Iterable[VocabularyRecord]) -> set[str]:

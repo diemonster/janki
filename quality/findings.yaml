@@ -263,7 +263,7 @@ findings:
     case_ids: [pos-precedence]
     fix_ref: commit:fa575e9
   - id: extraction-source-example-promotion
-    state: open
+    state: fixed
     pipeline_stage: extraction
     source_archetypes: [camera]
     symptom: Extraction copied each source excerpt into the record's examples, so unreviewed source prose became learner-facing study content that AI annotation was later told to preserve as reviewed.
@@ -273,6 +273,7 @@ findings:
         locator: quality/cases/extraction-source-example-promotion/input.json
     recurrences: []
     case_ids: [extraction-source-example-promotion]
+    fix_ref: src/japanese_anki/extract.py#build_records
   - id: enrichment-provisional-precedence
     state: open
     pipeline_stage: dictionary-enrichment
