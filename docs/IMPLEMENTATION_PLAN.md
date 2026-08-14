@@ -3274,10 +3274,17 @@ Use these slices, each a finding plus a reproducing case plus a fix, ordered so
 7. Retire the oracle, `recheck_furigana`, `adjudicate_reading` and the
    `parse is None` disjunct together, with their tests and docs, in one commit
    so the tree never references a deleted symbol.
-8. Measure spill on Opus-written examples, then migrate
-   `repair_from_word_boundaries` onto the LLM word list or delete it as a
-   proven no-op. It has no finding and no gating case, so deleting it retires
-   nothing and needs no approval.
+8. *Done 2026-08-14, taken ahead of 6 and 7 because it removes a parse
+   consumer.* Measured over all 158 examples carrying furigana, including the
+   five regenerated with Opus: `repair_from_word_boundaries` changed
+   **nothing**. Deleted, along with `_words_of`, which had no other caller. It
+   carried no finding and no gating case, so this retired nothing.
+   `spilled_furigana_groups` still *reports* the defect and its validation-qc
+   case still covers it; what is gone is the silent repair, whose input was
+   jpdb's sentence boundaries — measured wrong on three of five colloquial
+   sentences. A repair that has never fired, driven by boundaries that are
+   sometimes wrong, could only ever introduce the error it was written to
+   prevent. `_learner_load_excess` is now the last consumer of the parse.
 9. Update `docs/HARDENING.md`, full replay, `make gates`, one local review
    cycle.
 
