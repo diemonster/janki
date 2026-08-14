@@ -1,0 +1,66 @@
+{
+  "records": [
+    {
+      "id": "word:冒険:ぼうけん",
+      "fields": {
+        "examples": [],
+        "source": {
+          "type": "extract",
+          "imported_from": "synthetic-camera-dialogue.png",
+          "row": null,
+          "raw_fields": {
+            "extracted_from": "synthetic-camera-dialogue.png",
+            "confidence": "high",
+            "page": "1",
+            "context": "「古い地図の冒険について」と語り出した",
+            "inclusion_reason": "Common noun; the dialogue names it only inside a title-style fragment.",
+            "example": "古い地図の冒険について",
+            "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+          }
+        }
+      }
+    },
+    {
+      "id": "word:都合:つごう",
+      "fields": {
+        "examples": [],
+        "source": {
+          "type": "extract",
+          "imported_from": "synthetic-camera-dialogue.png",
+          "row": null,
+          "raw_fields": {
+            "extracted_from": "synthetic-camera-dialogue.png",
+            "confidence": "high",
+            "page": "1",
+            "context": "もし都合がよければ また明日",
+            "inclusion_reason": "Everyday noun; the excerpt is a conditional clause with no main clause.",
+            "example": "もし都合がよければ",
+            "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+          }
+        }
+      }
+    },
+    {
+      "id": "word:出発:しゅっぱつ",
+      "fields": {
+        "examples": [],
+        "source": {
+          "type": "extract",
+          "imported_from": "synthetic-camera-dialogue.png",
+          "row": null,
+          "raw_fields": {
+            "extracted_from": "synthetic-camera-dialogue.png",
+            "confidence": "medium",
+            "page": "1",
+            "context": "ところで君 明日の出発は？",
+            "inclusion_reason": "Common noun; the excerpt is an elliptical spoken question.",
+            "example": "ところで君 明日の出発は？",
+            "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+          }
+        }
+      }
+    }
+  ],
+  "record_ids": ["word:冒険:ぼうけん", "word:都合:つごう", "word:出発:しゅっぱつ"],
+  "unusable": 0
+}

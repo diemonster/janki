@@ -1,0 +1,17 @@
+version: 1
+id: enrichment-provisional-precedence
+purpose: regression
+gating: false
+runner: dictionary-enrichment
+pipeline_boundary: dictionary-enrichment
+source_archetype: camera
+redistributable: true
+fixture_basis: agent-created-synthetic
+fixtures:
+  - path: input.json
+    fingerprint: 913a79d740fb61c372cb5321a42fc581c7777df333770d131a5e178a67106ce4
+  - path: oracle.json
+    fingerprint: e734dea32d68b73f642c4cc836a8068aef098afb56137088fcab2b6106a2d544
+runner_input: input.json
+oracle: oracle.json
+finding_id: enrichment-provisional-precedence

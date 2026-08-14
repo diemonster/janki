@@ -1,0 +1,44 @@
+{
+  "records": [
+    {
+      "id": "word:眩しい:まぶしい",
+      "fields": {
+        "part_of_speech": "i-adjective",
+        "verb_group": "",
+        "conjugations": {
+          "plain": "眩しい",
+          "negative": "眩しくない",
+          "past": "眩しかった",
+          "past_negative": "眩しくなかった",
+          "te_form": "眩しくて"
+        },
+        "source": {
+          "type": "extract",
+          "imported_from": "synthetic-camera-dialogue.png",
+          "row": null,
+          "raw_fields": {
+            "extracted_from": "synthetic-camera-dialogue.png",
+            "confidence": "medium",
+            "page": "1",
+            "context": "眩しい光の中で 彼は目を細めた",
+            "provisional_fields": "meanings",
+            "janki_pitch_accent_source": "jpdb:933541259fc4abc06fbb8a37aa8996c5b7ba9bb409f29c52e622108bc6102859"
+          }
+        }
+      }
+    }
+  ],
+  "changes": {
+    "word:眩しい:まぶしい": [
+      "conjugations",
+      "frequency_rank",
+      "furigana",
+      "part_of_speech",
+      "pitch_accent"
+    ]
+  },
+  "looked_up": 1,
+  "skipped": 0,
+  "warning_count": 0,
+  "calls": ["parse"]
+}

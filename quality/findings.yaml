@@ -262,3 +262,47 @@ findings:
     recurrences: []
     case_ids: [pos-precedence]
     fix_ref: commit:fa575e9
+  - id: extraction-source-example-promotion
+    state: open
+    pipeline_stage: extraction
+    source_archetypes: [camera]
+    symptom: Extraction copied each source excerpt into the record's examples, so unreviewed source prose became learner-facing study content that AI annotation was later told to preserve as reviewed.
+    invariant: An extracted source excerpt is preserved as source evidence under source.raw_fields, and canonical examples stay empty until an explicit field-level acceptance or a validated generated example supplies study content.
+    evidence:
+      - fingerprint: a98e12a0d9bbb5957b6b8ac5b2a6b35a4181b69cf44c91df05421f2c6387fa5a
+        locator: quality/cases/extraction-source-example-promotion/input.json
+    recurrences: []
+    case_ids: [extraction-source-example-promotion]
+  - id: enrichment-provisional-precedence
+    state: open
+    pipeline_stage: dictionary-enrichment
+    source_archetypes: [camera]
+    symptom: Dictionary enrichment fills only empty fields and never revisits meanings, so a provisional model-extracted meaning or part of speech outranked exact dictionary evidence and stayed canonical.
+    invariant: A semantic field named in source.raw_fields provisional_fields yields to an exact dictionary match — the field is rewritten, the marker shrinks to the still-unresolved fields, and the change appears in the enrichment diff — while a field without the marker is treated as curated and preserved; near matches, absent entries, different readings, and conflicts hold or propose instead of writing.
+    evidence:
+      - fingerprint: 913a79d740fb61c372cb5321a42fc581c7777df333770d131a5e178a67106ce4
+        locator: quality/cases/enrichment-provisional-precedence/input.json
+    recurrences: []
+    case_ids: [enrichment-provisional-precedence]
+  - id: enrichment-reviewed-example-claim
+    state: open
+    pipeline_stage: ai-enrichment
+    source_archetypes: [camera]
+    symptom: The AI annotation prompt described extraction-copied examples as reviewed and required their exact Japanese to be preserved, although no person or dictionary had accepted them as teaching examples.
+    invariant: Enrichment pins an example's exact Japanese only when the example carries explicit curated authority; without it, enrichment may generate a new pedagogic example and must not describe the existing text as reviewed.
+    evidence:
+      - fingerprint: 750e9c87857f698210f5daa9f9b3999d77aa7491944821e4df961b6742ddf44d
+        locator: data/staging/done/IMG_4563.jpg.yaml
+    recurrences: []
+    case_ids: []
+  - id: example-teaching-suitability
+    state: open
+    pipeline_stage: validation-qc
+    source_archetypes: [camera]
+    symptom: Local validation checked structure only, so sentence fragments, trailing connectives, and false register labels passed every local gate and reached audio; the late paid AI review was the first check to catch them.
+    invariant: Local validation holds an example that is not a complete sentence or an intentional utterance, and one whose register label contradicts its sentence-final form, while accepting complete polite and casual sentences and intentional short utterances; learner load is bounded from parsed and known-vocabulary data when that data is available.
+    evidence:
+      - fingerprint: 0bf7117a9577b5a1c3a921cee46174162c436d70157c750085adaf16a9fbe66c
+        locator: quality/cases/example-teaching-suitability/input.json
+    recurrences: []
+    case_ids: [example-teaching-suitability]

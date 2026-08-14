@@ -1,0 +1,39 @@
+{
+  "records": [
+    {
+      "id": "word:眩しい:まぶしい",
+      "expression": "眩しい",
+      "reading": "まぶしい",
+      "romaji": "mabushii",
+      "meanings": ["dazzling"],
+      "part_of_speech": "noun",
+      "source": {
+        "type": "extract",
+        "imported_from": "synthetic-camera-dialogue.png",
+        "raw_fields": {
+          "extracted_from": "synthetic-camera-dialogue.png",
+          "confidence": "medium",
+          "page": "1",
+          "context": "眩しい光の中で 彼は目を細めた",
+          "provisional_fields": "meanings,part_of_speech"
+        }
+      }
+    }
+  ],
+  "responses": [
+    {
+      "endpoint": "parse",
+      "payload": {
+        "tokens": [[[0, [["眩", "まぶ"], "し", "い"]]]],
+        "vocabulary": [[101, 1, "眩しい", "まぶしい", ["LHHLL"], 3200, ["adj-i"]]]
+      }
+    }
+  ],
+  "kanji": {},
+  "observe": [
+    {
+      "id": "word:眩しい:まぶしい",
+      "fields": ["part_of_speech", "verb_group", "conjugations", "source"]
+    }
+  ]
+}
