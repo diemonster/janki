@@ -3061,137 +3061,162 @@ advisory review after a slice. Keep the review hooks disabled while the owner
 cost pause is in effect. Do not remove or change the disable marker as part of
 this task.
 
-### [ ] M7.6V Verification authority — repair the parse reading table
+### [ ] M7.6V Authority realignment — the LLM parses, the dictionaries enrich
 
-*Opened 2026-08-14 after the camera pilot deck built with six of its fourteen
-example sentences silent. Three designs were drafted; two were measured and
-rejected, and both rejections are recorded below so they are not re-proposed.
-This is the surviving one. Investigated live against jpdb; no model call was
-made.*
+*Opened 2026-08-14, replacing three discarded drafts of a jpdb-side furigana
+repair. Those drafts all assumed jpdb should adjudicate the AI's readings; the
+owner's decision is that it should not adjudicate anything. jpdb and KANJIDIC
+become reference sources for words the LLM has already identified, and the
+paid review moves to Opus 5 at extra-high effort with a completeness gate so it
+runs once per finished card. Measured live against jpdb and the real corpus; no
+model call was made.*
 
 Depends on: M7.6T
-Files: `src/japanese_anki/qc.py`, `src/japanese_anki/jpdb.py`,
-`src/japanese_anki/enrich.py`, new offline cases and tests.
+Files: `janki.toml`, `src/japanese_anki/claude_client.py`,
+`src/japanese_anki/qc.py`, `src/japanese_anki/enrich.py`,
+`src/japanese_anki/cli.py`, `docs/HARDENING.md`, new cases and tests.
 
-**The measured defect.** `qc.verify_example_furigana` compares an example's
-furigana against jpdb's rendering of the sentence. On the real corpus it flags
-38 of 155 examples and every one is a false positive — zero true positives.
-The oracle's *logic* is sound; the data it reads is corrupt, in two repairable
-ways and one that must simply be tolerated:
+**The line.** The LLM reads the source, segments it, assigns readings *in
+context*, spots usage patterns, and writes the sentences. jpdb answers one
+question about words it is handed — what does the dictionary say — and
+KANJIDIC answers one about characters. Neither judges the LLM's output. The
+paid review remains the only reviewer, and it reviews language, not mechanics.
 
-1. **Dictionary-form fallback.** jpdb sends `furigana: null` for an all-kana
-   token, so `qc.token_text` substitutes the entry's dictionary form and
-   あります renders as ある. **Nine of the eleven** live flags are purely this.
-   Fix: request `position`/`length` and slice the surface form out of the
-   sentence — the repair `verify_example_furigana`'s own docstring specifies
-   and defers. Confirmed live that the fields return and that slicing recovers
-   `あります` (`pos=10 len=4`); `jpdb.py` already sends
-   `position_length_encoding` when positional fields are requested.
-2. **Endpoint inconsistency.** For the *same* vid+sid, `/parse` and
-   `/lookup-vocabulary` disagree: 日本語 reads にっぽんご from the parse and
-   にほんご from the word endpoint; 富士山 gives ふじやま versus ふじさん. In
-   both the word endpoint agrees with the writer. Fix: resolve a *disputed*
-   token's reading through the word endpoint before reporting a disagreement.
-   This is where the owner's "jpdb is reliable about words" holds literally —
-   the word endpoint is the trustworthy one — and it clears the remaining two.
-3. **Wrong lexeme on colloquial text.** `ほんをよむ` resolves 本 to ほる;
-   `だれとすんでる` becomes とする / でる; `何回もしぬの` reads しぬ as する.
-   Three of five sentences tested returned a wrong lexeme. Not repairable from
-   our side; it is why the oracle must stay advisory-with-recheck rather than
-   becoming stricter.
+**The evidence for it, measured this session.**
 
-Together (1) and (2) clear all eleven live flags while the oracle keeps every
-true positive. This is the earliest production boundary that can state the
-rule, which `docs/HARDENING.md` requires the fix to target.
+- jpdb's *sentence* tokenizer returns a **wrong lexeme**, not merely a wrong
+  split, on kana-heavy or colloquial text: `ほんをよむ` resolves 本 to ほる;
+  `だれとすんでる` becomes とする / でる; `何回もしぬの` reads しぬ as する.
+  Three of five real sentences tested.
+- Its per-character furigana produced the one recorded jukujikun break
+  (`明[あ] 日[した]`), which is why `enrich.py` already carries a KANJIDIC guard
+  against jpdb. The AI wrote that same word correctly.
+- `verify_example_furigana` flags 38 of 155 examples and **every one is a false
+  positive** — zero true positives measured.
+- Recorded AI furigana errors on example sentences: **zero**.
+- Of 22 blocking review findings, only 11 land on fields the AI pass can write
+  (`AI_FIELDS = ("examples", "usage_notes")`); the rest are jpdb's or the
+  importer's. Of those 11, **10 are gpt-5.6-sol's** and three of those ten are
+  the camera excerpts M7.6T already fixed. Opus wrote examples and notes for 37
+  records with **no** authored language error.
 
-**Rejected design A — retire the oracle, keep only KANJIDIC and notation.**
-`verify_example_furigana` also holds an offline `furigana_base`-versus-sentence
-check with no other caller, which catches a model rewriting the sentence
-inside the furigana field (`本[ほん]が 読[よ]む。` for 本を読む。).
-`impossible_character_furigana` inspects single-kanji groups only: the store
-holds 33 characters, example ruby uses 205 distinct ones, and 124 of those
-appear *only* in examples and can never be fetched because `janki kanji` walks
-`record.expression` alone. It is silent on 52.3% of single-kanji group
-occurrences and on 70% of naive two-kanji splits.
+**Model changes.** Both are already supported; neither needs new plumbing.
 
-**Rejected design B — the AI segments, jpdb verifies each group as a word.**
-Measured on the corpus: **a furigana group is not a word.** `行[い]` claims the
-character reading い while the jpdb word 行 is こう; whether a stem verifies is
-an accident of whether jpdb carries a noun homograph (見[み] verifies, 食[た]
-flags, 買[か] skips — same shape, three verdicts). Result: 66 of 155 examples
-flagged, 56 of them passing today; only 32.3% fully verified; the camera pilot
-goes from 6 silent to 5 silent **while newly silencing three sentences that
-speak correctly now**. Cost rises from 155 requests to ~339 (+119%), because
-jpdb has no spelling-keyed endpoint — reaching a vid requires a `/parse`
-anyway. Per-word memoization is also unsound: 話 carries はな/はなし/わ with
-different verdicts, so a per-word cache returns an order-dependent answer.
+1. *Enrichment moves to Opus.* Set `enrich_provider = "anthropic"` and
+   `enrich_model = "claude-opus-5"`. The dispatch at `cli.py:1475` already
+   selects `claude_client.parse_call` for any non-codex provider, `config.py`
+   already accepts `"anthropic"` and already defaults that provider's model to
+   `claude-opus-5`, and `--batch-submit` already *requires* it. This retires
+   the register and sense errors above — the model that writes and the standard
+   it is judged against become the same model. `enrich_reasoning_effort`
+   ("ultra") is a Codex knob with no Claude meaning; leave it for the codex
+   path and do not map it onto `effort`.
+2. *Every Claude pass runs at extra-high effort.* `_request_body` already sends
+   an `output_config`; add `"effort": "xhigh"` beside `"format"`. Because that
+   body is shared, the live and batch paths cannot drift — which is the whole
+   point of the helper.
 
-**Rejected premise.** An earlier draft argued the AI never errs on language,
-so local checks could yield to the paid review. False: `data/review.json`
-holds 96 content findings, 22 blocking, many on AI-written fields — a wrong
-sense (祝福 glossed "grace"), examples using 手 in a sense the card does not
-teach, a fabricated grammar rule, 花火祭り for 花火大会. Separately, the
-argument that the context-reading class has "zero recorded occurrences" is
-survivorship: zero is what a working check produces. Planted against this
-corpus the word-level probe accepts 105 realizable wrong readings (明日→あす,
-見→けん, 今日→こんにち, 上手→うわて) that the current oracle catches 71 of 71
-of, and KANJIDIC catches none of.
+**The one real hazard, and it is not the effort value.** On Opus 5 thinking is
+on by default and `max_tokens` bounds **thinking plus response together** —
+`claude_client.py:67` already says so. `DEFAULT_MAX_TOKENS` is 16000 and was
+chosen to stay under the SDK's non-streaming timeout ceiling, and truncation
+arrives as `stop_reason == "max_tokens"`, which is deliberately absent from
+`COMPLETE_STOP_REASONS` and therefore a hard failure. Raising effort raises
+thinking spend, so this budget must be revisited in the same change or reviews
+will start failing outright rather than degrading. The two paths differ:
 
-**What must not change.** The sentence parse stays: it also feeds
+- *Batch* has no HTTP timeout, so it can simply carry a larger `max_tokens`.
+- *Synchronous* cannot: above roughly 16K the SDK refuses the non-streaming
+  call rather than risking a dropped connection. Either keep the synchronous
+  budget where it is and confirm by measurement that a single card's review
+  fits, or move that path to `messages.stream(...)` with `.get_final_message()`
+  — a different call shape, and a deliberate decision rather than a side
+  effect.
+
+Measure before choosing: run one card at `xhigh` and read `usage`. Do not raise
+the synchronous budget past the streaming threshold without switching shape.
+
+**Retire the sentence oracle, keep the offline checks.** Delete
+`verify_example_furigana`'s comparison against jpdb's rendering, together with
+`qc.token_text`, `qc._render`, and `qc.parse_pairs`, which have no other
+caller. Keep, and lift out first:
+
+- the `furigana_base`-versus-sentence check, which needs no dictionary, catches
+  a model rewriting the sentence inside the furigana field, and is **currently
+  unreachable** whenever no parse exists because Python short-circuits the
+  `parse is None` disjunct before the call;
+- `impossible_character_furigana`, unchanged;
+- the notation checks and `example_content_holds`, unchanged.
+
+`parse is None` must keep meaning "nobody checked" for every check that still
+consumes a parse. Absence must never become a pass.
+
+**What still needs the parse, and must not lose it.**
 `qc.repair_from_word_boundaries` (8.4% of resolved tokens carry a spelling
-absent from the sentence, across 48.4% of sentences) and
-`_learner_load_excess`, whose hold also gates audio. Removing it would narrow
-two `fixed` findings' invariants by deleting their inputs — invisible to both
-`janki harden status` and `janki harden replay`. The `parse is None` disjunct
-in `apply_ai_result` stays: absence must keep meaning "nobody checked", or a
-run without a jpdb key silently voices everything. The audio coupling and the
-adjudicator stay; the adjudicator takes `verdict.expected`, which *is* the
-sentence rendering, so it cannot outlive the parse anyway.
+absent from the sentence, across 48.4% of sentences) and `_learner_load_excess`
+(whose hold also gates audio) both read jpdb's tokenization. Retiring the
+*oracle* does not retire the *parse*. Removing it would narrow two `fixed`
+findings' invariants by deleting their inputs — invisible to both
+`janki harden status` and `janki harden replay`. If a later task wants the
+parse gone, the LLM's own segmentation is the replacement, and that is its own
+task with its own findings.
+
+**The review completeness gate — the "not multiple times per deck" half.**
+`command_review` calls `_shipping_records(config)` with no completeness check,
+so any later enrich or repair pass touching a fingerprinted field invalidates a
+paid read. Measured on `data/review.json`: **181 reads for 97 records**, 73
+cards read more than once and 61 of those the same day; of 84 superseded reads
+only **13 followed a blocking finding**, so **71 were waste — 86% overhead**.
+M7.6T rule 7 already requires review to run only on a complete release
+candidate, and `docs/HARDENING.md` repeats it, but nothing enforces it —
+an enforce-don't-document gap. Gate `command_review` so a card is only sent
+when every local gate passes for it and no pending enrichment would change its
+`review.card_fingerprint`, and refuse with the list of cards that are not
+ready. This is justified by input-determinism alone: the same card yields the
+same verdict, so a second read buys nothing.
+
+**Keep the human override.** Do not auto-accept findings and do not remove
+`--accept ... --because`. `review-pitch-fact-recheck` is a fixed finding
+recording the review raising *false blocking* pitch findings after misreading a
+stored pattern and miscounting mora; the override is what rescued that. The
+reviewer is trusted for language and fenced off from mechanical facts, which is
+the same line this task draws everywhere else.
 
 Make these production changes:
 
-1. Lift the `furigana_base`-versus-sentence comparison into a standalone
-   offline check first. Today Python short-circuits `parse is None` before
-   `verify_example_furigana` runs, so this check is unreachable whenever no
-   parse exists; lifting it makes it always run.
-2. Slice each token's surface form out of the sentence via `position`/`length`
-   in `qc.token_text`, instead of falling back to the entry's dictionary
-   spelling. Keep the `〈?〉` mark for a token with neither an entry nor usable
-   offsets.
-3. When a token's reading is what a comparison would fail on, resolve that
-   token through `/lookup-vocabulary` by vid+sid before reporting a
-   disagreement, batching per sentence.
+1. Lift the base-versus-sentence check into a standalone offline check, so it
+   runs even with no parse.
+2. Add `effort` to `_request_body`, and settle the `max_tokens` question by
+   measurement before shipping it.
+3. Switch `janki.toml` to `enrich_provider = "anthropic"` /
+   `enrich_model = "claude-opus-5"`.
+4. Retire the sentence-reading oracle and its dead helpers, leaving the parse's
+   other consumers untouched.
+5. Gate `command_review` on completeness.
 
 Tests must cover:
 
-- the null-furigana artifact (`あります` against a dictionary-form `ある`),
-  asserting the example verifies;
-- the endpoint inconsistency (日本語 にほんご where `/parse` says にっぽんご),
-  asserting it verifies after word-endpoint resolution;
-- a genuinely wrong reading (`会議室[ぎんこう]`) and a context-wrong one
-  (`一日[いちにち]` where the sentence means ついたち), both still flagged;
-- the lifted base check (`本[ほん]が` for 本を), flagged even with no parse;
+- the lifted base check flagging `本[ほん]が` for 本を **with no parse supplied**;
 - an impossible character reading still flagged and still blocked from audio;
-  and
-- no more than one parse plus one batched lookup per sentence.
+- the three jpdb defects (`ほんをよむ`, `あります`, 日本語) no longer flagging;
+- `repair_from_word_boundaries` and the learner-load hold still receiving a
+  parse, asserted through the canned transport;
+- `effort` present and identical on the live and batch request bodies;
+- a review refused when a card has pending enrichment, and sent once when it
+  does not — with the paid client asserted called exactly once per card.
 
-Use these slices:
+Use these slices, each a finding plus a reproducing case plus a fix:
 
-1. Lift the offline base check; add its case.
-2. Open the finding and failing cases from the live shapes captured here.
-3. Apply the `position`/`length` repair; confirm nine of the eleven clear.
-4. Add word-endpoint resolution; confirm the last two clear and `janki audio`
-   voices all eleven.
-5. Run the full replay and `make gates`, then one local review cycle.
+1. Lift the offline base check.
+2. The review completeness gate — it removes no gate, needs no owner risk
+   decision, and pays for itself immediately, so land it first among the rest.
+3. Effort and the `max_tokens` measurement.
+4. The enrichment provider switch.
+5. Retire the oracle; update `docs/HARDENING.md`; full replay and `make gates`.
 
-Also worth fixing nearby, but not required here: `janki kanji` indexes only
-record expressions, so 124 characters used solely in example ruby can never
-enter the store. Widening it to example sentences would raise
-`impossible_character_furigana` from ~28% coverage to most of the corpus, and
-`enrich._verify_parses` memoizes nothing across records, so the 155 parses per
-run include repeats.
-
-Do not run a paid semantic review as part of this task.
+Do not run a paid semantic review as part of this task. The first review after
+it lands is the milestone measurement, and by then the gate should make it one
+read per card.
 
 ### [ ] M7.6B Pilot pair — scans and camera captures
 
