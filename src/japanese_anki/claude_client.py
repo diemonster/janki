@@ -71,16 +71,39 @@ API_KEY_ENV = "ANTHROPIC_API_KEY"
 #: callers look at.
 DEFAULT_MAX_TOKENS = 16000
 
-#: Reasoning depth for the passes that write or judge study content. Inside
-#: ``output_config`` beside the schema, not a top-level field.
+#: Reasoning depth for every pass. Inside ``output_config`` beside the schema,
+#: not a top-level field.
 #:
-#: **Not a module-wide constant applied to every call.** ``_request_body`` is
-#: shared by five passes and one of them cannot accept this: the adjudicator
-#: runs on Haiku by default, which rejects ``effort`` with a 400 — and
-#: ``adjudicate_reading`` catches every exception and returns "unsure", so an
-#: unconditional value would disable that pass permanently with nothing
-#: printed. Callers pass it; the key is omitted when they do not.
+#: Every janki pass writes or judges study content, so every one of them runs
+#: here: extraction reads a photo and mints identities, enrichment writes the
+#: sentences, the adjudicator settles a reading dispute, and the review is the
+#: last reader before a learner sees the card. There is no pass whose answer is
+#: worth less than the others'.
 DEFAULT_EFFORT = "xhigh"
+
+#: Models that reject ``output_config.effort`` with a 400.
+#:
+#: janki configures Claude Opus 5 everywhere, so this exists for ``--model``,
+#: which overrides the model for one run and cannot override the constant
+#: beside it. Sending the key to a model that refuses it fails the call — and
+#: ``adjudicate_reading`` catches every exception and returns "unsure", so the
+#: failure would be a pass that answers nothing, permanently, with nothing
+#: printed. Matched on the family rather than the exact id because the id
+#: carries a date suffix.
+_NO_EFFORT_FAMILIES = ("haiku",)
+
+
+def effort_for(model: str) -> str | None:
+    """``DEFAULT_EFFORT`` when ``model`` accepts it, otherwise ``None``.
+
+    Resolved from the model rather than from the provider or the config,
+    because ``--model`` changes the model alone: a guard on either of the other
+    two is a guard on something the caller did not just override.
+    """
+    name = model.strip().lower()
+    if any(family in name for family in _NO_EFFORT_FAMILIES):
+        return None
+    return DEFAULT_EFFORT
 
 #: The style guide, relative to the project root. Every AI pass sends it, which
 #: is why it is worth a cache breakpoint.

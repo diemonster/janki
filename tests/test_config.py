@@ -35,11 +35,16 @@ def test_defaults_apply_when_the_new_sections_are_absent(
     assert config.media_dir == root / "data/media"
     assert config.scan_inbox == root / "data/inbox/scans"
     assert config.extract_model == "claude-opus-5"
-    assert config.enrich_provider == "codex"
-    assert config.enrich_model == "gpt-5.6-sol"
-    assert config.enrich_reasoning_effort == "ultra"
+    # One model at one depth across every pass. Codex stays selectable, but a
+    # project that does not name a provider gets the one every other pass uses
+    # — a default that silently routes example writing to a different vendor
+    # than the review judging it is a difference nobody chose.
+    assert config.enrich_provider == "anthropic"
+    assert config.enrich_model == "claude-opus-5"
+    assert config.enrich_reasoning_effort == "ultra"  # codex-only, inert here
     assert config.polish_model == "claude-opus-5"
     assert config.review_model == "claude-opus-5"
+    assert config.adjudicate_model == "claude-opus-5"
     assert config.tts_provider == "voicevox"
     assert config.voicevox_url == "http://localhost:50021"
     assert config.voicevox_speaker == 46

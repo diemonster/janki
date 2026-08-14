@@ -851,7 +851,11 @@ def project(tmp_path: Path, records: list[VocabularyRecord]) -> Path:
 
 def patch_all(monkeypatch: pytest.MonkeyPatch, call: FakeCall, api: FakeJpdb) -> None:
     monkeypatch.setenv("JPDB_API_KEY", "k")
+    # Both providers, whichever the config resolves to. Patching only one let a
+    # default change route these through the real client — which does not fail,
+    # it bills and blocks.
     monkeypatch.setattr(cli.codex_client, "parse_call", call)
+    monkeypatch.setattr(cli.claude_client, "parse_call", call)
     monkeypatch.setattr(cli.jpdb, "JpdbClient", lambda key, *a, **kw: jpdb_for(api))
 
 
@@ -1007,11 +1011,34 @@ def test_the_model_can_be_overridden_per_run(
     patch_all(monkeypatch, call, FakeJpdb({"話します。": HANASHIMASU}))
 
     cli.main(
-        ["--root", str(root), "enrich", "--ai", "--yes", "--model", "gpt-future"]
+        ["--root", str(root), "enrich", "--ai", "--yes", "--model", "claude-future"]
     )
 
-    assert call.calls[0]["model"] == "gpt-future"
-    assert call.calls[0]["reasoning_effort"] == "ultra"
+    assert call.calls[0]["model"] == "claude-future"
+    # Reasoning depth follows the overridden model, not the configured one:
+    # `--model` changes the model alone, so a depth resolved from anything else
+    # is resolved from something the caller did not just override.
+    assert call.calls[0]["effort"] == "xhigh"
+
+
+def test_a_model_that_rejects_effort_is_not_sent_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Haiku answers a request carrying `effort` with a 400, and
+    `adjudicate_reading` turns every exception into "unsure" — so sending it
+    would retire a pass silently rather than loudly."""
+    root = project(tmp_path, [record()])
+    call = FakeCall(ok("話します。", "話[はな]します。"))
+    patch_all(monkeypatch, call, FakeJpdb({"話します。": HANASHIMASU}))
+
+    cli.main(
+        [
+            "--root", str(root), "enrich", "--ai", "--yes",
+            "--model", "claude-haiku-4-5-20251001",
+        ]
+    )
+
+    assert "effort" not in call.calls[0]
 
 
 def test_a_flagged_example_is_reported_and_recorded(
@@ -1113,7 +1140,7 @@ def test_the_staging_file_reads_back_through_the_loader(
         (root / "staging" / "ai-enrichment.yaml").read_text(encoding="utf-8")
     )
 
-    assert raw["model"] == "gpt-5.6-sol"
+    assert raw["model"] == "claude-opus-5"
     assert raw["records"][0]["usage_notes"] == "note"
 
 

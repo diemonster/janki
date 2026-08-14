@@ -1561,7 +1561,16 @@ def adjudicate_reading(
         # had already cleared in that run — and the calls paid for — was thrown
         # away on the way out.
         call = claude_client.parse_call(
-            model, blocks, prompt, adjudication_schema(), client, max_tokens=200
+            model,
+            blocks,
+            prompt,
+            adjudication_schema(),
+            client,
+            # Room to think: this is a language judgement, and the pass runs on
+            # the same model at the same depth as every other. 200 was sized
+            # for a one-word verdict from a model that did not reason first.
+            max_tokens=claude_client.DEFAULT_MAX_TOKENS,
+            effort=claude_client.effort_for(model),
         )
     except Exception as exc:  # noqa: BLE001 — the docstring's contract
         return "unsure", f"the adjudicator could not be reached: {exc}"
@@ -2155,7 +2164,7 @@ def polish_meanings(
                 polish_prompt(record),
                 polish_schema(),
                 client,
-                effort=claude_client.DEFAULT_EFFORT,
+                effort=claude_client.effort_for(model),
             )
         except claude_client.ClaudeRequestError as exc:
             yield PolishOutcome(
@@ -2243,7 +2252,7 @@ def batch_requests(
             blocks,
             ai_prompt(record, taught=taught),
             ai_schema(),
-            effort=claude_client.DEFAULT_EFFORT,
+            effort=claude_client.effort_for(model),
         )
         for record in targets
     ]
@@ -2274,7 +2283,7 @@ def polish_batch_requests(
             blocks,
             polish_prompt(record),
             polish_schema(),
-            effort=claude_client.DEFAULT_EFFORT,
+            effort=claude_client.effort_for(model),
         )
         for record in targets
     ]

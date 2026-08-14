@@ -465,6 +465,7 @@ def extract_candidates(
             ],
             candidate_schema(),
             client,
+            effort=claude_client.effort_for(model),
         )
     except ExtractError:
         raise

@@ -239,7 +239,10 @@ def extract_patterns(
         ],
         pattern_schema(),
         client,
-        max_tokens=4000,
+        # Reading a page at the same depth as everything else, with room to
+        # think first: 4000 was sized for an answer alone.
+        max_tokens=claude_client.DEFAULT_MAX_TOKENS,
+        effort=claude_client.effort_for(model),
     )
     if call.stop_reason == "refusal":
         raise PatternError(

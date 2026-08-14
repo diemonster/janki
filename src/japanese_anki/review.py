@@ -505,7 +505,7 @@ def review_records(
                 # module default instead: unused budget costs nothing, and the
                 # cap is what stands between a long card and a failed read.
                 max_tokens=claude_client.DEFAULT_MAX_TOKENS,
-                effort=claude_client.DEFAULT_EFFORT,
+                effort=claude_client.effort_for(model),
             )
         except JankiError as exc:
             failures.append(f"{record.id}: {exc}")
@@ -549,7 +549,7 @@ def review_records(
                     review_schema(),
                     client,
                     max_tokens=claude_client.DEFAULT_MAX_TOKENS,
-                    effort=claude_client.DEFAULT_EFFORT,
+                    effort=claude_client.effort_for(model),
                 )
             except (JankiError, pitch.PitchError):
                 recheck = None

@@ -1480,7 +1480,13 @@ def _enrich_ai(
         call_options=(
             {"reasoning_effort": config.enrich_reasoning_effort}
             if config.enrich_provider == "codex"
-            else {"effort": claude_client.DEFAULT_EFFORT}
+            # Omitted rather than passed as None, so "this model takes no
+            # effort" looks the same here as it does on the wire.
+            else {
+                name: value
+                for name, value in (("effort", claude_client.effort_for(model)),)
+                if value
+            }
         ),
     )
     if taught:

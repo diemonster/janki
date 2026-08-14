@@ -382,7 +382,7 @@ class ProjectConfig:
             data,
             "ai",
             "enrich_provider",
-            "anthropic" if legacy_ai else "codex",
+            "anthropic",
             ("codex", "anthropic"),
         )
         enrich_model = _str(
@@ -446,9 +446,13 @@ class ProjectConfig:
             ),
             polish_model=_str(data, "ai", "polish_model", legacy_shared_model),
             review_model=_str(data, "ai", "review_model", legacy_shared_model),
-            adjudicate_model=_str(
-                data, "ai", "adjudicate_model", "claude-haiku-4-5-20251001"
-            ),
+            # One model across every pass, at one reasoning depth. A cheaper
+            # model here was a false economy twice over: it decides whether a
+            # reading disagreement stands, which is a language judgement, and
+            # it is the one pass that cannot accept the effort setting the
+            # others run at — so it silently answered "unsure" the moment
+            # effort was applied module-wide.
+            adjudicate_model=_str(data, "ai", "adjudicate_model", "claude-opus-5"),
             tts_provider=_str(data, "tts", "provider", "voicevox"),
             voicevox_url=_str(data, "tts", "voicevox_url", "http://localhost:50021"),
             voicevox_speaker=_int(data, "tts", "voicevox_speaker", 46),
