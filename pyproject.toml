@@ -74,6 +74,9 @@ package-dir = { "" = "src" }
 where = ["src"]
 
 [tool.pytest.ini_options]
+markers = [
+    "allow_build_client: constructs a real Anthropic client on purpose",
+]
 addopts = "-q"
 testpaths = ["tests"]
 

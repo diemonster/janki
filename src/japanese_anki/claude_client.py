@@ -66,8 +66,8 @@ API_KEY_ENV = "ANTHROPIC_API_KEY"
 #: which is a caller's decision and a different call shape.
 #:
 #: Note this is a budget for **thinking plus response**, not response alone:
-#: current models think by default, so a limit sized snugly around the expected
-#: output can truncate mid-answer. That truncation arrives as
+#: every request that asks for effort also asks for adaptive thinking, so a
+#: limit sized snugly around the expected output can truncate mid-answer. That truncation arrives as
 #: ``stop_reason == "max_tokens"``, which is exactly what this module makes
 #: callers look at.
 DEFAULT_MAX_TOKENS = 16000
@@ -322,13 +322,23 @@ def _request_body(
     # send it.
     if effort:
         output_config["effort"] = effort
-    return {
+    body: dict[str, Any] = {
         "model": model,
         "max_tokens": max_tokens,
         "system": list(system_blocks),
         "messages": [{"role": "user", "content": user_content}],
         "output_config": output_config,
     }
+    if effort:
+        # Sent explicitly, not left to the default, because the default differs
+        # across the very models `effort_for` allows. Opus 5, Sonnet 5, Fable 5
+        # and Mythos 5 think when `thinking` is absent; **Opus 4.8 and 4.7 do
+        # not** — for them adaptive is the only on-mode and omitting the key
+        # means no thinking at all. Asking one of those for extra-high effort
+        # and then withholding thinking buys a fraction of what the budget above
+        # was measured against, and does it without erroring.
+        body["thinking"] = {"type": "adaptive"}
+    return body
 
 
 def _result_of(response: Any, schema: Any, model: str) -> CallResult:

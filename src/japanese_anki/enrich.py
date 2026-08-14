@@ -1200,8 +1200,7 @@ def apply_ai_result(
     ``parses`` maps a sentence to its jpdb ``ParseResult``. An absent one is
     not a pass: it means nobody checked, and the example is flagged the same
     way a mismatch is, because "unverified" is exactly what it is.
-
-"""
+    """
     outcome = AiOutcome(record=record)
     kept: list[ExampleSentence] = []
 

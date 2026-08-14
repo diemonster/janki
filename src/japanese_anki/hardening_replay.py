@@ -720,9 +720,12 @@ def _staging_promote(data: dict[str, Any], root: Path) -> Any:
 def _model_request(data: dict[str, Any], root: Path) -> Any:
     """Whether a model is sent ``output_config.effort``, and at what level.
 
-    The body itself, not the helper: `effort_for` deciding correctly is worth
-    nothing if a call site resolves it from the configured model while
-    ``--model`` sends another, which is how this defect shipped.
+    The body rather than the helper alone, so a change to either the allow-list
+    or the omission rule is caught. It does **not** exercise a call site: it
+    resolves effort here and hands the same model to ``_request_body``, so a
+    call site that resolved effort from the configured model while ``--model``
+    sent another would replay green. That half is pinned by tests, and this
+    docstring says so because an earlier version claimed otherwise.
     """
     del root
     _only(data, {"models"}, "model-request")

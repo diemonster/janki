@@ -355,7 +355,7 @@ findings:
     pipeline_stage: model-request
     source_archetypes: [native-pdf-table]
     symptom: Reasoning depth was resolved from the provider rather than the model, so `janki review --model claude-haiku-4-5` sent output_config.effort to a family that answers it with a 400; enrichment's call is not inside a try, so the run aborted on the first record. The first fix listed the families that reject effort, which had the direction wrong — xhigh arrived with Opus 4.7, so it then sent an invalid level to Opus 4.6, Opus 4.5, Sonnet 4.6 and Sonnet 4.5 as well, and adjudicate_reading turns any of those 400s into a permanent "unsure" with nothing printed.
-    invariant: The effort key is present only for models known to accept it at that level, is resolved from the model actually sent rather than from the provider or the configured model, and is absent for any unrecognized id.
+    invariant: A request body carries the effort key only for models known to accept it at that level, and never for an unrecognized id; where effort is asked for, adaptive thinking is asked for with it, because the models that accept effort do not agree on whether thinking is on by default. That every call site resolves effort from the model it actually sends is covered by tests rather than by this case, which builds the body directly.
     evidence:
       - fingerprint: 16000b089458ee8dc915d0cc3e3703252bcb373b3d409f9b381141909b284334
         locator: quality/cases/model-request-effort-support/input.json

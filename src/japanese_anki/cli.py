@@ -4535,7 +4535,11 @@ def command_review(args: argparse.Namespace) -> int:
             for record in sorted(withheld, key=lambda item: item.id):
                 reason = held[review.card_fingerprint(record)]
                 print(f"held back: {record.id} — {reason}", file=sys.stderr)
-            todo = [record for record in todo if record not in withheld]
+            todo = [
+                record
+                for record in todo
+                if review.card_fingerprint(record) not in held
+            ]
 
     if not todo:
         # Reported before the held-back branch, and on both paths. An
@@ -4561,6 +4565,11 @@ def command_review(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
         if blocking or held:
+            # Non-zero only when the run accomplished nothing: every card was
+            # already read and something still stands in the way. When other
+            # cards *were* read, a held one is reported on stderr and the run
+            # succeeds — `build` still refuses the held card as unreviewed, so
+            # nothing ships on the strength of this exit code alone.
             return 1
         print(f"All {len(records)} card(s) already read at their current content.")
         return 0
