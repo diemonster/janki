@@ -70,7 +70,7 @@ from typing import Any
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.io import DataError, atomic_write_text, exclusive_path_lock
-from japanese_anki.models import ExampleSentence, VocabularyRecord
+from japanese_anki.models import ExampleSentence, VocabularyRecord, example_accepted
 
 
 class LedgerError(JankiError):
@@ -1230,7 +1230,15 @@ class Ledger:
             or (
                 record.source.type == "extract"
                 and any(
-                    example.needs_ai_annotations() for example in record.examples
+                    # Only examples the pass may act on: an *unaccepted*
+                    # incomplete example is one the prompt refuses to pin and
+                    # the absorb refuses to overwrite, so selecting on it made
+                    # every run pay a model call that could write nothing —
+                    # forever. Its remedy is a user decision (acceptance or
+                    # --force-fields), not another paid attempt.
+                    example.needs_ai_annotations()
+                    and example_accepted(record, example)
+                    for example in record.examples
                 )
             )
         ]

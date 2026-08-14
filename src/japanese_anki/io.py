@@ -18,12 +18,16 @@ from typing import Any
 import yaml
 
 from japanese_anki.errors import JankiError
-from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.models import (
     EXAMPLE_AUTHORITY_KEY,
+    FURIGANA_UNVERIFIED_KEY,
+    LEARNER_LOAD_HOLD_KEY,
     PROVISIONAL_FIELDS_KEY,
     ModelError,
     VocabularyRecord,
+    add_example_flags,
+    example_accepted,
+    flag_entries,
     join_provisional_entries,
     provisional_entries,
 )
@@ -547,8 +551,8 @@ MERGEABLE_FIELDS: tuple[str, ...] = tuple(
 # matching no sentence blesses nothing, while dropping it un-accepts a
 # reviewer's stamp. See ``_carried_provisional`` and ``_carried_authority``.)
 CONTENT_ANNOTATIONS: dict[str, str] = {
-    "furigana_unverified": "examples",
-    "learner_load_hold": "examples",
+    FURIGANA_UNVERIFIED_KEY: "examples",
+    LEARNER_LOAD_HOLD_KEY: "examples",
 }
 
 _EMPTY_CONTAINERS = (str, bytes, list, tuple, set, frozenset, dict)
@@ -708,12 +712,9 @@ def _carried_authority(old: VocabularyRecord, new: VocabularyRecord) -> str:
     text already matched the store (re-reviewing a legacy record fills
     nothing, and that is the documented remediation path).
     """
-    items = [
-        item
-        for side in (old.source.raw_fields, new.source.raw_fields)
-        for item in side.get(EXAMPLE_AUTHORITY_KEY, "").split(",")
-        if item.strip()
-    ]
+    items = flag_entries(old, EXAMPLE_AUTHORITY_KEY) + flag_entries(
+        new, EXAMPLE_AUTHORITY_KEY
+    )
     return ",".join(dict.fromkeys(items))
 
 
@@ -727,6 +728,18 @@ def _merge_one(
     for name in _CONTENT_FIELDS:
         old_value = getattr(old, name)
         new_value = getattr(new, name)
+        if name == "examples" and new.source.type == "extract":
+            # The mirror of the minting rule below: a machine-era sentence on
+            # an extract row that no reviewer accepted must not fill a
+            # curated-type record's hole, where the merged record's source
+            # type would silently bless it as the user's own data — the exact
+            # false-reviewed laundering M7.6T exists to prevent. Accepted
+            # sentences pass; their stamp travels via the authority carry.
+            new_value = [
+                example
+                for example in new.examples
+                if example_accepted(new, example)
+            ]
         if is_empty(new_value) or old_value == new_value:
             continue
         if is_empty(old_value) or name in prefer_incoming:
@@ -751,24 +764,6 @@ def _merge_one(
         annotations[PROVISIONAL_FIELDS_KEY] = marker
     if authority := _carried_authority(old, new):
         annotations[EXAMPLE_AUTHORITY_KEY] = authority
-    if "examples" in filled and new.source.type != "extract":
-        # An incoming curated source's examples that filled the hole are the
-        # user's own data — curated by arrival, HARDENING.md's words — but the
-        # merged record keeps its first-seen extract origin, which demands a
-        # stamp nobody could type. The fill event itself is the provenance, so
-        # it mints acceptance for exactly those sentences.
-        minted = [
-            item.strip()
-            for example in new.examples
-            if example.japanese
-            for item in (short_fingerprint(example.japanese),)
-        ]
-        combined = [
-            item
-            for item in annotations.get(EXAMPLE_AUTHORITY_KEY, "").split(",")
-            if item.strip()
-        ] + minted
-        annotations[EXAMPLE_AUTHORITY_KEY] = ",".join(dict.fromkeys(combined))
     removals = {key for key, value in annotations.items() if not value}
     if annotations or removals:
         raw_fields = {
@@ -780,6 +775,18 @@ def _merge_one(
             merged = replace(
                 merged, source=replace(merged.source, raw_fields=raw_fields)
             )
+    if "examples" in filled and new.source.type != "extract":
+        # An incoming curated source's examples that filled the hole are the
+        # user's own data — curated by arrival, HARDENING.md's words — but the
+        # merged record keeps its first-seen extract origin, which demands a
+        # stamp nobody could type. The fill event itself is the provenance, so
+        # it mints acceptance for exactly those sentences, through the same
+        # writer every other acceptance goes through.
+        merged = add_example_flags(
+            merged,
+            EXAMPLE_AUTHORITY_KEY,
+            [example.japanese for example in new.examples if example.japanese],
+        )
     if conflicts:
         label = "conflicting"
     elif filled:

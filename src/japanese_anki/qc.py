@@ -135,41 +135,59 @@ _TRAILING_ENCLOSURE = "」』）)】　 \t"
 #: Sentence-final punctuation. Its *presence* marks an intentional utterance
 #: (a greeting, an elliptical question); the checks below never require it,
 #: because four owner-reviewed complete sentences in the current collection
-#: end without any.
-_SENTENCE_FINAL = tuple("。．.！!？?…")
+#: end without any. The katakana middle dot is here for its trailing-off
+#: ellipsis use (・・・, what half-width ･･･ NFKC-folds into): mid-word it is
+#: an interpunct, but these sets are only ever *stripped from the end*, where
+#: an interpunct does not occur.
+_SENTENCE_FINAL = tuple("。．.！!？?…・")
 
-#: Hiragana the polite ます-family can attach to with *certainty*: a godan
+#: Hiragana the polite ます/ました can attach to with *certainty*: a godan
 #: continuative stem ends in an i-column kana (話し→話します), and no plain
 #: form ends [i-column]+ます. The e-column is deliberately absent even though
 #: ichidan polite forms end there (食べます): the kana plain form of a ま-stem
 #: godan verb has the identical surface — はげます (plain) vs 投げます (polite)
 #: — so an e-column ending is undecidable, and undecidable means unflagged.
-#: A kanji before ます is the same undecidable shape. The です family needs no
-#: stem: nothing casual ends in です.
+#: A kanji before ます is the same undecidable shape.
 _POLITE_STEM = "きしちにひみりぎじぢびぴい"
 
-#: Polite sentence-final forms, matched at the very end of the sentence. Only
-#: the unambiguous cases: a sentence ending in one of these and labelled
-#: casual is wrong with certainty, which is the only kind of wrong a local
-#: gate may act on. (ませんでした needs no alternative of its own — every such
-#: ending already ends in でした.)
+#: Polite sentence-final forms, matched at the very end of the sentence, with
+#: an optional sentence-final particle (行きますか, ですね) — only the
+#: unambiguous cases: a sentence ending in one of these and labelled casual is
+#: wrong with certainty, which is the only kind of wrong a local gate may act
+#: on. ません and ましょう need no stem guard, unlike ます/ました: no
+#: dictionary form ends in either, so they are polite whatever precedes them.
+#: (ませんでした needs no alternative of its own — it already ends in でした.)
 _POLITE_FINAL = re.compile(
-    rf"(です|でした|でしょう|(?<=[{_POLITE_STEM}])(ます|ました|ましょう|ません))$"
+    rf"(です|でした|でしょう|ません|ましょう"
+    rf"|(?<=[{_POLITE_STEM}])(ます|ました))[かねよ]?$"
 )
 
 #: Lexicalized politeness formulas used across registers — すみません said to
 #: a friend is still すみません. A bounded list of set phrases, not a grammar
 #: model: each entry is a fixed form whose polite morphology carries no
-#: register information about the sentence around it. ございます covers the
-#: おはよう/ありがとう+ございます greetings.
+#: register information about the sentence around it — and each is listed in
+#: *every spelling it ships in*, the same rule conjugation's honorific table
+#: follows, because the exemption matches surface text while the rule it
+#: excepts matches morphology. The greetings are spelled out in full rather
+#: than by a bare ございます ending, which would also swallow the super-polite
+#: copula でございます — the one です-family form most in need of the check.
 _POLITE_FORMULAS = (
     "すみません",
     "ごめんください",
     "失礼します",
+    "しつれいします",
     "お願いします",
+    "おねがいします",
     "いただきます",
+    "頂きます",
     "いってきます",
-    "ございます",
+    "行ってきます",
+    "ごちそうさま",
+    "ごちそうさまでした",
+    "おはようございます",
+    "ありがとうございます",
+    "ありがとうございました",
+    "おめでとうございます",
 )
 
 #: Hiragana the conditional ば attaches to (-eba): an e-column kana. Without
@@ -199,7 +217,7 @@ def example_content_holds(
     The text is NFKC-normalized first: camera transcription writes half-width
     ｡ and ｣, and a gate the source's own punctuation can blind is no gate.
     """
-    japanese = unicodedata.normalize("NFKC", example.japanese).strip()
+    japanese = normalize_identity_part(example.japanese)
     if not japanese:
         return []
     holds: list[tuple[str, str, str]] = []

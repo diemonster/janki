@@ -1375,26 +1375,27 @@ def command_enrich(args: argparse.Namespace) -> int:
     # One confirmation for everything this run would write — the mark clears
     # are bookkeeping, but they still rewrite the normalized file, and every
     # write this command makes goes through the same y/N.
-    pending = len(result.changes) + sum(
-        1 for record_id in result.cleared if record_id not in result.changes
-    )
+    pending = len(result.changes.keys() | result.cleared.keys())
     if not _confirm_enrich(pending, args.yes):
         print("Aborted: nothing was written.", file=sys.stderr)
         return 1
+    save_records_json(output_path, result.records, expected=output_revision)
     if result.cleared:
+        # After the write it describes, like every other success message here:
+        # a save can refuse (the file changed since it was read), and a
+        # past-tense claim above the error would say the marks were recorded
+        # when nothing was written.
         marks = sum(len(names) for names in result.cleared.values())
         print(
             f"Recorded {marks} provisional-mark update(s) on "
             f"{len(result.cleared)} record(s) in {output_path}."
         )
-
-    save_records_json(output_path, result.records, expected=output_revision)
-    for record_id, changed in result.changes.items():
-        book.record_enriched(record_id, kind="jpdb", model="jpdb", fields=changed)
     if not result.changes:
         # A marks-only save: the records were written, and there is no field
         # change for the ledger to attribute to jpdb.
         return 0
+    for record_id, changed in result.changes.items():
+        book.record_enriched(record_id, kind="jpdb", model="jpdb", fields=changed)
     ledger_error = _save_ledger(book)
 
     print(
@@ -2917,7 +2918,11 @@ def command_audio(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
 
-    if result.file_count:
+    # `cleared_refs` counts too: the hold gate strips a stale clip reference
+    # without writing any file, and a clear that never reaches disk resurrects
+    # the recording — while --prune below deletes the file the saved
+    # collection would still name.
+    if result.file_count or result.cleared_refs:
         save_records_json(output_path, result.records, expected=output_revision)
     ledger_error = _save_ledger(book)
 
@@ -3510,6 +3515,12 @@ def _refuse_invalid(records: Sequence[Any], deck_path: Path) -> None:
     issues = validate_records(records, deck_path)
     if has_errors(issues):
         raise AnkiBuildError(refusal_text(deck_path.name, issues))
+    for issue in issues:
+        # Warnings do not refuse, but a shipping build is the moment the
+        # person is looking: a learner-load hold surfaced only here is the
+        # difference between a deck that ships a silent unvoiced sentence
+        # and one whose owner chose to.
+        print(f"warning: {issue.format()}", file=sys.stderr)
 
 
 def _refuse_unreviewed(

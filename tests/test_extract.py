@@ -19,8 +19,8 @@ from japanese_anki import cli, extract, hardening
 from japanese_anki.claude_client import CallResult, Refusal
 from japanese_anki.extract import ExtractError, build_records, known_ids, system_prompt
 from japanese_anki.inputs import PreparedInput
-from japanese_anki.models import VocabularyRecord
-from japanese_anki.staging import PROVISIONAL_FIELDS_KEY, provisional_fields, read_staging
+from japanese_anki.models import PROVISIONAL_FIELDS_KEY, VocabularyRecord, provisional_fields
+from japanese_anki.staging import read_staging
 
 PDF = b"%PDF-1.7 fake"
 

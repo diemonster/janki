@@ -863,9 +863,28 @@ def test_an_empty_example_does_not_count_as_enrichment(tmp_path: Path) -> None:
     assert book.missing_enrichment([record]) == [record.id]
 
 
-def test_an_extracted_example_with_annotation_holes_still_needs_ai(
+def test_an_accepted_extracted_example_with_annotation_holes_still_needs_ai(
     tmp_path: Path,
 ) -> None:
+    from japanese_anki.identifiers import short_fingerprint
+
+    book = ledger_module.load(tmp_path / "ledger.json")
+    record = _record(
+        examples=[ExampleSentence(japanese="日本語を話します。")],
+        usage_notes="A useful sentence.",
+    )
+    record.source.type = "extract"
+    record.source.raw_fields["example_authority"] = short_fingerprint(
+        "日本語を話します。"
+    )
+
+    assert book.missing_enrichment([record]) == [record.id]
+
+
+def test_an_unaccepted_extracted_example_is_not_a_target(tmp_path: Path) -> None:
+    # The prompt refuses to pin it and the absorb refuses to overwrite it, so
+    # selecting on it made every run pay a model call that could write
+    # nothing — forever. Its remedy is a user decision, not another attempt.
     book = ledger_module.load(tmp_path / "ledger.json")
     record = _record(
         examples=[ExampleSentence(japanese="日本語を話します。")],
@@ -873,7 +892,7 @@ def test_an_extracted_example_with_annotation_holes_still_needs_ai(
     )
     record.source.type = "extract"
 
-    assert book.missing_enrichment([record]) == [record.id]
+    assert book.missing_enrichment([record]) == []
 
 
 def test_the_word_audio_fingerprint_uses_pitch_select_pattern() -> None:

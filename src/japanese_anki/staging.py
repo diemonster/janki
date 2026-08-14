@@ -40,52 +40,7 @@ from japanese_anki.io import (
     exclusive_path_lock,
     load_structured,
 )
-
-# The M7.6T authority keys and marker machinery live in ``models`` (see the
-# "authority provenance" section there for why: ``io``'s merge sits below this
-# module and must carry the marks per field, and ``io`` cannot import this
-# module). Re-exported here — the redundant aliases are how a re-export is
-# spelled so the linter keeps it — because staging review is where humans meet
-# them, and every earlier importer of these names uses this module.
-from japanese_anki.models import (
-    EXAMPLE_AUTHORITY_KEY as EXAMPLE_AUTHORITY_KEY,
-)
-from japanese_anki.models import (
-    EXAMPLE_AUTHORITY_STAGING as EXAMPLE_AUTHORITY_STAGING,
-)
-from japanese_anki.models import (
-    LEARNER_LOAD_HOLD_KEY as LEARNER_LOAD_HOLD_KEY,
-)
-from japanese_anki.models import (
-    PROVISIONAL_FIELDS_KEY as PROVISIONAL_FIELDS_KEY,
-)
-from japanese_anki.models import (
-    PROVISIONAL_SEMANTIC_FIELDS as PROVISIONAL_SEMANTIC_FIELDS,
-)
-from japanese_anki.models import (
-    VocabularyRecord,
-)
-from japanese_anki.models import (
-    accepted_example_fingerprints as accepted_example_fingerprints,
-)
-from japanese_anki.models import (
-    clear_provisional as clear_provisional,
-)
-from japanese_anki.models import (
-    example_accepted as example_accepted,
-)
-from japanese_anki.models import (
-    mark_provisional as mark_provisional,
-)
-from japanese_anki.models import (
-    provisional_entries as provisional_entries,
-)
-from japanese_anki.models import (
-    provisional_fields as provisional_fields,
-)
-from japanese_anki.models import (
-    split_provisional as split_provisional,
-)
+from japanese_anki.models import VocabularyRecord
 
 
 class StagingError(JankiError):

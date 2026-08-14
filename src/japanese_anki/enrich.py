@@ -50,21 +50,17 @@ from japanese_anki.io import is_empty
 from japanese_anki.ledger import Ledger
 from japanese_anki.models import (
     FURIGANA_UNVERIFIED_KEY,
+    LEARNER_LOAD_HOLD_KEY,
     ExampleSentence,
     VocabularyRecord,
     add_example_flags,
-    prune_example_flags,
-)
-from japanese_anki.romaji import kana_to_romaji
-from japanese_anki.staging import (
-    LEARNER_LOAD_HOLD_KEY,
-    NON_READING_HOLDS,
-    annotate,
-    annotations,
     clear_provisional,
     example_accepted,
+    prune_example_flags,
     split_provisional,
 )
+from japanese_anki.romaji import kana_to_romaji
+from japanese_anki.staging import NON_READING_HOLDS, annotate, annotations
 
 __all__ = [
     "ENRICHABLE_FIELDS",
@@ -1130,6 +1126,12 @@ class AiOutcome:
     #: words than a beginner example may carry. Held, not rejected — the hold is
     #: a reviewable flag, and audio refuses to voice it.
     load_held: list[str] = field(default_factory=list)
+    #: True when generated examples were discarded to preserve stored ones —
+    #: the preserve decision itself, carried first-class so the caller's
+    #: warning reports what this function did rather than re-deriving it from
+    #: proxies (which misfired on --force-fields runs whose sentences were
+    #: all rejected).
+    preserved: bool = False
     impossible_furigana: list[
         tuple[str, str, tuple[tuple[str, str], ...]]
     ] = field(default_factory=list)
@@ -1420,6 +1422,7 @@ def apply_ai_result(
             for name in AI_FIELDS
             if name in force_fields or is_empty(getattr(record, name))
         ]
+        outcome.preserved = bool(kept) and "examples" not in writable
         updated, changes = _apply(record, proposals, writable)
     if "examples" in changes:
         landed_sentences = {
@@ -1905,17 +1908,13 @@ def absorb_ai_call(
             "unknown, uncommon words for a beginner; kept, held from audio, "
             "and flagged for review."
         )
-    if (
-        (getattr(parsed, "examples", []) or [])
-        and record.examples
-        and "examples" not in outcome.changes
-        and any(
-            example.japanese and not example_accepted(record, example)
-            for example in record.examples
-        )
+    if outcome.preserved and any(
+        example.japanese and not example_accepted(record, example)
+        for example in record.examples
     ):
         # Silence here would read as completeness: the run generated sentences,
-        # wrote nothing, and the only path forward is a user decision.
+        # discarded them to preserve stored ones, and the only path forward is
+        # a user decision.
         result.warnings.append(
             f"{record.id}: generated examples were not written — the existing "
             "example(s) carry no reviewer acceptance and janki does not replace "

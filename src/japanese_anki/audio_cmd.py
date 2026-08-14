@@ -115,6 +115,11 @@ class AudioResult:
     #: ``validate`` applies — voicing what the build would refuse turns a held
     #: question into a recording.
     held: list[str] = field(default_factory=list)
+    #: Stale clip references the hold gate cleared. Counted so the caller
+    #: knows the records changed even when no file was written — a cleared
+    #: reference that never reaches disk resurrects the recording, and
+    #: ``--prune`` would delete the file the saved collection still names.
+    cleared_refs: int = 0
     warnings: list[str] = field(default_factory=list)
     #: Clips that already existed and were left alone.
     up_to_date: int = 0
@@ -289,24 +294,27 @@ def _example_audio(
         if not example.japanese:
             examples.append(example)
             continue
-        if short_fingerprint(example.japanese) in flagged:
-            # M4.2 flagged this because nobody confirmed its segmentation.
-            # Speaking it would turn an open question into a recording.
-            result.unverified.append(f"{record.id}: {example.japanese}")
-            examples.append(example)
-            continue
         # The same judgment `validate` reports — checked here as well because
         # audio can run on a record the build has never seen: the camera
         # pilot voiced its fragments precisely because the only content gate
         # lived after synthesis. Audio refuses every hold whatever its level,
         # and a held example keeps no clip reference: presenting a recording
         # of a sentence this run refuses to voice is the same failure with a
-        # cached voice.
+        # cached voice. Checked *before* the unverified flag, because the
+        # hold is the stronger refusal — an example carrying both must still
+        # lose its stale clip.
         if holds := qc.example_content_holds(record, example):
             result.held.append(f"{record.id}: {example.japanese} ({holds[0][0]})")
             if example.audio:
                 example = replace(example, audio="")
                 changed = True
+                result.cleared_refs += 1
+            examples.append(example)
+            continue
+        if short_fingerprint(example.japanese) in flagged:
+            # M4.2 flagged this because nobody confirmed its segmentation.
+            # Speaking it would turn an open question into a recording.
+            result.unverified.append(f"{record.id}: {example.japanese}")
             examples.append(example)
             continue
 

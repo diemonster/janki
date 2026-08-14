@@ -38,10 +38,13 @@ from typing import Any
 from japanese_anki import enrich, extract, hardening, jpdb
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import contains_kanji, stable_record_id
-from japanese_anki.models import VocabularyRecord, set_example_flags
-from japanese_anki.staging import (
+from japanese_anki.models import (
     EXAMPLE_AUTHORITY_KEY,
     EXAMPLE_AUTHORITY_STAGING,
+    VocabularyRecord,
+    set_example_flags,
+)
+from japanese_anki.staging import (
     HOLD_MISSING_READING,
     HOLD_READING_KANJI,
     HOLD_UNKNOWN_READING,
@@ -326,6 +329,19 @@ def check_readings(
                 continue
 
         resolved = _accept_examples(_resolved(record))
+        # A near-miss sentinel is an explicit human act about to be silently
+        # voided: the value accepts nothing (it matches no content
+        # fingerprint), but the reviewer believes they accepted. Name it now,
+        # while it is one keystroke to fix, not weeks later as an AI-pass
+        # warning about sentences they already reviewed.
+        leftover = resolved.source.raw_fields.get(EXAMPLE_AUTHORITY_KEY, "")
+        if leftover and not _BOUND_AUTHORITY.fullmatch(leftover):
+            result.warnings.append(
+                f"{record.id}: example_authority is {leftover!r}, which is "
+                f"neither the {EXAMPLE_AUTHORITY_STAGING!r} sentinel nor a "
+                "bound acceptance — it accepts nothing. Retype the sentinel "
+                "exactly to accept this row's examples."
+            )
         # `remint_blocked` means the set is *incomplete*, not wrong: an id in it
         # was positively proved present, and `remint` would leave that row alone
         # whatever the unreadable deck turns out to hold. Holding it would block
@@ -364,6 +380,12 @@ def _resolved(record: VocabularyRecord) -> VocabularyRecord:
     return annotate(
         record, hold_reason=None, suggested_reading=None, already_known=None
     )
+
+
+#: What a promote-time acceptance looks like once bound: comma-joined
+#: 12-hex content fingerprints. Anything else left in the key after
+#: ``_accept_examples`` ran is a value that accepts nothing.
+_BOUND_AUTHORITY = re.compile(r"[0-9a-f]{12}(,[0-9a-f]{12})*")
 
 
 def _accept_examples(record: VocabularyRecord) -> VocabularyRecord:

@@ -625,17 +625,11 @@ def test_a_learner_load_hold_is_visible_to_validate() -> None:
     # ships the sentence silently as study content with nothing reporting why
     # its audio is missing.
     from japanese_anki.identifiers import short_fingerprint
-    from japanese_anki.models import ExampleSentence, SourceReference
+    from japanese_anki.models import SourceReference
 
     sentence = "明日、九時に出発します。"
-    held = VocabularyRecord(
-        id="word:出発:しゅっぱつ",
-        expression="出発",
-        reading="しゅっぱつ",
-        meanings=["departure"],
-        examples=[
-            ExampleSentence(japanese=sentence, english="x", register="polite")
-        ],
+    held = replace(
+        _teaching_record(sentence, register="polite"),
         source=SourceReference(
             type="extract",
             imported_from="page.jpg",
@@ -647,3 +641,43 @@ def test_a_learner_load_hold_is_visible_to_validate() -> None:
     assert [issue.code for issue in issues] == ["example-learner-load"]
     assert [issue.level for issue in issues] == ["warning"]
     assert not has_errors(issues)
+
+
+def test_unambiguous_polite_negatives_and_volitionals_are_held() -> None:
+    # No dictionary form ends in ません or ましょう, so they need no stem
+    # guard — narrowing them alongside ます made 食べません escape while
+    # 食べませんでした was held.
+    assert _codes(_teaching_record("毎日、朝ご飯を食べません。", register="casual")) == [
+        "example-register-mismatch"
+    ]
+    assert _codes(_teaching_record("一緒に食べましょう。", register="casual")) == [
+        "example-register-mismatch"
+    ]
+    assert _codes(_teaching_record("九時に出発しますか。", register="casual")) == [
+        "example-register-mismatch"
+    ]
+
+
+def test_the_super_polite_copula_is_not_a_greeting() -> None:
+    # A bare ございます exemption swallowed でございます — the one です-family
+    # form most in need of the check.
+    assert _codes(
+        _teaching_record("こちらは会議室でございます。", register="casual")
+    ) == ["example-register-mismatch"]
+    assert _codes(_teaching_record("おはようございます", register="casual")) == []
+
+
+def test_the_middle_dot_ellipsis_cannot_blind_the_register_gate() -> None:
+    # ・・・ is the trailing-off ellipsis camera transcription writes (and what
+    # half-width ･･･ NFKC-folds into); it must strip like … does.
+    assert _codes(_teaching_record("頑張ります・・・", register="casual")) == [
+        "example-register-mismatch"
+    ]
+
+
+def test_formula_exemptions_cover_every_spelling_they_ship_in() -> None:
+    # The exemption matches surface text while the rule matches morphology,
+    # so each formula is listed in each spelling — the same rule the
+    # conjugation honorific table follows.
+    assert _codes(_teaching_record("じゃ、行ってきます", register="casual")) == []
+    assert _codes(_teaching_record("お先にしつれいします", register="casual")) == []

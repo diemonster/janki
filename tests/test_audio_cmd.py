@@ -536,6 +536,34 @@ def test_the_command_writes_records_media_and_ledger(
     assert "Wrote 1 clip(s)" in capsys.readouterr().out
 
 
+def test_a_cleared_stale_reference_is_persisted_without_new_clips(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The hold gate strips a stale clip reference without writing any file;
+    gating the save on file_count alone dropped the clear — resurrecting the
+    recording, and letting --prune delete the file the saved collection still
+    named."""
+    fragment = "古い橋の工事について"
+    held = record(
+        pitch_accent=[],
+        examples=[
+            ExampleSentence(
+                japanese=fragment,
+                english="x",
+                register="polite",
+                audio="audio/janki-stale.mp3",
+            )
+        ],
+    )
+    root = project(tmp_path, [held])
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: FakeVoice())
+
+    assert cli.main(["--root", str(root), "audio", "--examples"]) == 0
+
+    stored = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    assert stored[0]["examples"][0]["audio"] == ""
+
+
 def test_azure_is_refused_by_name_rather_than_falling_back(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -34,8 +34,8 @@ from japanese_anki import claude_client, repairs
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import stable_record_id
 from japanese_anki.inputs import PreparedInput
-from japanese_anki.models import SourceReference, VocabularyRecord
-from japanese_anki.staging import annotate, mark_provisional
+from japanese_anki.models import SourceReference, VocabularyRecord, mark_provisional
+from japanese_anki.staging import annotate
 
 __all__ = [
     "CONFIDENCE_LEVELS",

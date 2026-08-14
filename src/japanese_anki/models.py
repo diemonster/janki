@@ -354,14 +354,43 @@ LEARNER_LOAD_HOLD_KEY = "learner_load_hold"
 FURIGANA_UNVERIFIED_KEY = "furigana_unverified"
 
 
+def flag_entries(record: VocabularyRecord, key: str) -> list[str]:
+    """``key``'s fingerprints in stored order — the one parse of the wire form.
+
+    Ordered, because the writers below re-serialize what this returns and a
+    set-shaped read would make the stored value churn between runs.
+    """
+    raw = record.source.raw_fields.get(key, "")
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 def example_flags(record: VocabularyRecord, key: str) -> set[str]:
     """The example content-fingerprints ``key`` flags on this record.
 
     One parser for every comma-joined fingerprint flag, so a format change
     lands in one place instead of six.
     """
-    raw = record.source.raw_fields.get(key, "")
-    return {item.strip() for item in raw.split(",") if item.strip()}
+    return set(flag_entries(record, key))
+
+
+def _write_flags(
+    record: VocabularyRecord, key: str, fingerprints: Iterable[str]
+) -> VocabularyRecord:
+    """The one flag serializer: dedupe in order, remove the key when empty.
+
+    Every public writer is a one-line policy over this core, so the wire form
+    — and the no-empty-value, no-op-identity rules — cannot drift between
+    them.
+    """
+    ordered = [item for item in dict.fromkeys(fingerprints) if item]
+    raw_fields = dict(record.source.raw_fields)
+    if ordered:
+        raw_fields[key] = ",".join(ordered)
+    else:
+        raw_fields.pop(key, None)
+    if raw_fields == record.source.raw_fields:
+        return record
+    return replace(record, source=replace(record.source, raw_fields=raw_fields))
 
 
 def add_example_flags(
@@ -374,11 +403,12 @@ def add_example_flags(
     much later, deciding whether to speak a sentence. Existing flags are kept
     and deduplicated, never replaced: a record collects them across passes.
     """
-    fingerprints = [short_fingerprint(sentence) for sentence in sentences]
-    raw_fields = dict(record.source.raw_fields)
-    existing = [item for item in raw_fields.get(key, "").split(",") if item.strip()]
-    raw_fields[key] = ",".join(dict.fromkeys(existing + fingerprints))
-    return replace(record, source=replace(record.source, raw_fields=raw_fields))
+    return _write_flags(
+        record,
+        key,
+        flag_entries(record, key)
+        + [short_fingerprint(sentence) for sentence in sentences],
+    )
 
 
 def prune_example_flags(
@@ -388,22 +418,11 @@ def prune_example_flags(
 
     A flag fingerprint matching no current example refers to nothing: keeping
     it accumulates dead entries forever and, for a hold, leaves a sentence
-    permanently refusable with no way to un-hold it. Order-preserving, like
-    every writer here.
+    permanently refusable with no way to un-hold it.
     """
-    raw_fields = dict(record.source.raw_fields)
-    kept = [
-        item.strip()
-        for item in raw_fields.get(key, "").split(",")
-        if item.strip() and item.strip() in valid
-    ]
-    if kept:
-        raw_fields[key] = ",".join(dict.fromkeys(kept))
-    else:
-        raw_fields.pop(key, None)
-    if raw_fields == record.source.raw_fields:
-        return record
-    return replace(record, source=replace(record.source, raw_fields=raw_fields))
+    return _write_flags(
+        record, key, [item for item in flag_entries(record, key) if item in valid]
+    )
 
 
 def set_example_flags(
@@ -417,15 +436,9 @@ def set_example_flags(
     the key: a flag list naming nothing is a standing claim waiting to be
     misread.
     """
-    fingerprints = [short_fingerprint(sentence) for sentence in sentences]
-    raw_fields = dict(record.source.raw_fields)
-    if fingerprints:
-        raw_fields[key] = ",".join(dict.fromkeys(fingerprints))
-    else:
-        raw_fields.pop(key, None)
-    if raw_fields == record.source.raw_fields:
-        return record
-    return replace(record, source=replace(record.source, raw_fields=raw_fields))
+    return _write_flags(
+        record, key, [short_fingerprint(sentence) for sentence in sentences]
+    )
 
 #: Authority state for semantic fields a model filled during extraction. The
 #: marker is ``name:fingerprint`` pairs, comma-joined. The fingerprint binds

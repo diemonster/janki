@@ -26,9 +26,10 @@ from japanese_anki.enrich import (
     suggest_readings,
 )
 from japanese_anki.jpdb import JpdbClient
-from japanese_anki.models import SourceReference, VocabularyRecord
-from japanese_anki.staging import (
+from japanese_anki.models import (
     PROVISIONAL_FIELDS_KEY,
+    SourceReference,
+    VocabularyRecord,
     mark_provisional,
     provisional_fields,
 )

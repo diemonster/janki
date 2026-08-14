@@ -677,13 +677,15 @@ def test_a_merge_import_over_a_malformed_file_is_a_clean_error(
 def test_hold_flags_travel_with_the_examples_they_describe() -> None:
     # furigana_unverified says "nobody checked these", learner_load_hold says
     # "audio must not voice these". If the examples land and either key does
-    # not, the store holds sentences with nothing saying so.
+    # not, the store holds sentences with nothing saying so. The incoming row
+    # is the AI staging route's shape: the record's own non-extract source,
+    # carrying the flags the pass wrote.
     bare = replace(_curated(), examples=[])
     flagged = _imported(
         examples=[ExampleSentence(japanese="毎日日本語を話します。")],
         source=SourceReference(
-            type="extract",
-            imported_from="page.jpg",
+            type="shirabe",
+            imported_from="export.csv",
             raw_fields={
                 "furigana_unverified": "aaaa1111",
                 "learner_load_hold": "bbbb2222",
@@ -695,6 +697,40 @@ def test_hold_flags_travel_with_the_examples_they_describe() -> None:
 
     assert merged[0].source.raw_fields["furigana_unverified"] == "aaaa1111"
     assert merged[0].source.raw_fields["learner_load_hold"] == "bbbb2222"
+
+
+def test_an_unaccepted_extract_example_cannot_fill_a_curated_record() -> None:
+    # The mirror of the minting rule: a machine-era sentence on an extract row
+    # must not fill a curated-type record's hole, where the merged record's
+    # source type would silently bless it as the user's own data.
+    from japanese_anki.identifiers import short_fingerprint
+    from japanese_anki.models import example_accepted
+
+    hole = replace(_curated(), examples=[])
+    machine = _imported(
+        examples=[ExampleSentence(japanese="やくそくのとおりに")],
+        source=SourceReference(type="extract", imported_from="page.jpg"),
+    )
+
+    merged, _ = merge_records([hole], [machine])
+
+    assert merged[0].examples == []
+
+    accepted = _imported(
+        examples=[ExampleSentence(japanese="毎日日本語を話します。")],
+        source=SourceReference(
+            type="extract",
+            imported_from="page.jpg",
+            raw_fields={
+                "example_authority": short_fingerprint("毎日日本語を話します。")
+            },
+        ),
+    )
+
+    merged, _ = merge_records([replace(_curated(), examples=[])], [accepted])
+
+    assert [ex.japanese for ex in merged[0].examples] == ["毎日日本語を話します。"]
+    assert example_accepted(merged[0], merged[0].examples[0])
 
 
 def test_hold_flags_do_not_travel_when_the_examples_do_not() -> None:

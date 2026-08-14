@@ -2922,8 +2922,15 @@ than replaceable, mark-clears persist, the learner-load bound covers the
 batch path and is visible to `validate`, reconciliation demands the exact
 entry spelling (kana homographs, suru stems), and the fragment/register
 checks gained the stem-morphology guards that keep 励ました, そば, and
-何について？ out of the gate. M7.6B and M7.6C can resume; their next paid
-semantic review is the milestone measurement of this boundary.*
+何について？ out of the gate. Two review-cycle efficiency notes are accepted
+rather than fixed for now, both bounded and both once-per-record shapes:
+gloss reconciliation issues one lookup-vocabulary call per marked record on
+its first enrich (batchable later; the mark clears on settlement), and a
+record whose provisional mark is provably unresolvable (kana homograph, suru
+stem) re-parses on each enrich run until a person settles it — the repeat is
+the "hold until evidence or review" contract, and a negative-cache marker can
+be added if real batches make it expensive. M7.6B and M7.6C can resume; their
+next paid semantic review is the milestone measurement of this boundary.*
 
 Depends on: M7.4, M7.5, M7.6A
 Files: `src/japanese_anki/extract.py`, `src/japanese_anki/enrich.py`,
