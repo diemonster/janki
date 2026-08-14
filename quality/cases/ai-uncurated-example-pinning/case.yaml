@@ -2,16 +2,16 @@ version: 1
 id: ai-uncurated-example-pinning
 purpose: regression
 gating: true
-runner: ai-enrichment
+runner: ai-enrichment-prompt
 pipeline_boundary: ai-enrichment
 source_archetype: camera
 redistributable: true
 fixture_basis: agent-created-synthetic
 fixtures:
   - path: input.json
-    fingerprint: 9e8ccbce43097dc11ca3b911479454864e184750ca36353a25212c743de49df4
+    fingerprint: 22f08a16bcc157523d2cc3c5a4f2b81087caff19fcdb69e7dff7674c0861d5cf
   - path: oracle.json
-    fingerprint: a892956a01c6452c740a33b1a4a75ca2eec87d78e36bc25e2240d2424f9bfdf0
+    fingerprint: b24a8e1dd889917f38c6d3ff76fcbc990ec7d80c74cbde51cfa324a9f28ec0dc
 runner_input: input.json
 oracle: oracle.json
 finding_id: enrichment-reviewed-example-claim

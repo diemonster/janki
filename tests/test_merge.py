@@ -714,6 +714,29 @@ def test_hold_flags_do_not_travel_when_the_examples_do_not() -> None:
     assert "learner_load_hold" not in merged[0].source.raw_fields
 
 
+def test_a_reviewers_acceptance_travels_with_the_sentence_it_covers() -> None:
+    # The stamp is fingerprint-bound to the accepted sentence, so carrying it
+    # can never bless other text — and dropping it here made the next AI pass
+    # treat the reviewer's own sentence as machine text.
+    from japanese_anki.identifiers import short_fingerprint
+    from japanese_anki.models import example_accepted
+
+    sentence = "毎日日本語を話します。"
+    bare = replace(_curated(), examples=[])
+    accepted = _imported(
+        examples=[ExampleSentence(japanese=sentence)],
+        source=SourceReference(
+            type="extract",
+            imported_from="page.jpg",
+            raw_fields={"example_authority": short_fingerprint(sentence)},
+        ),
+    )
+
+    merged, _ = merge_records([bare], [accepted])
+
+    assert example_accepted(merged[0], merged[0].examples[0])
+
+
 def test_a_provisional_mark_travels_with_the_field_it_binds() -> None:
     # An incoming model claim that filled a hole must stay provisional in the
     # merged record: dropping the mark here is what turned unreviewed model

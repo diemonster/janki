@@ -100,7 +100,13 @@ from japanese_anki.models import (  # noqa: E402
     PROVISIONAL_SEMANTIC_FIELDS as PROVISIONAL_SEMANTIC_FIELDS,
 )
 from japanese_anki.models import (  # noqa: E402
+    accepted_example_fingerprints as accepted_example_fingerprints,
+)
+from japanese_anki.models import (  # noqa: E402
     clear_provisional as clear_provisional,
+)
+from japanese_anki.models import (  # noqa: E402
+    example_accepted as example_accepted,
 )
 from japanese_anki.models import (  # noqa: E402
     mark_provisional as mark_provisional,

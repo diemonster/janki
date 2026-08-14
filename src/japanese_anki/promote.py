@@ -37,7 +37,7 @@ from typing import Any
 
 from japanese_anki import enrich, extract, hardening, jpdb
 from japanese_anki.errors import JankiError
-from japanese_anki.identifiers import contains_kanji, stable_record_id
+from japanese_anki.identifiers import contains_kanji, short_fingerprint, stable_record_id
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.staging import (
     EXAMPLE_AUTHORITY_KEY,
@@ -367,22 +367,39 @@ def _resolved(record: VocabularyRecord) -> VocabularyRecord:
 
 
 def _accept_examples(record: VocabularyRecord) -> VocabularyRecord:
-    """Record the reviewer's field-level acceptance of an extracted example.
+    """Bind the reviewer's explicit example acceptance to the sentences it saw.
 
-    Extraction never writes ``examples`` — the source excerpt stays evidence in
-    ``raw_fields`` — so a sentence present on an extract-type row at this gate
-    can only have been written in by the reviewer during staging review. That
-    hand edit is the explicit field-level acceptance M7.6T requires, and this
-    stamp is its durable provenance: it travels into ``vocabulary.json``, where
-    ``enrich`` reads it to decide whether an example's exact Japanese may be
-    pinned as curated content. Promotion itself approves nothing — a record
-    with no examples gets no stamp, and non-extract sources (a Shirabe export,
-    a hand-written record) are the user's own data, curated by arrival.
+    The acceptance is the reviewer *typing* ``example_authority:
+    staging-review`` into the row during staging review — never inferred from
+    an example merely being present, because presence proves nothing about who
+    wrote it: the large AI-enrichment route stages model-generated sentences
+    on extract-type rows, and a pre-boundary staging file may still hold
+    machine-copied excerpts. Promotion's only job here is to replace the
+    hand-typed sentinel with the accepted sentences' content fingerprints, so
+    the durable stamp covers exactly the Japanese the reviewer read and
+    nothing that arrives later. A row without the sentinel promotes its
+    examples unstamped — preserved, but never pinned as curated. Non-extract
+    sources are the user's own data and need no stamp at all.
     """
-    if record.source.type != "extract" or not record.examples:
+    if record.source.type != "extract":
+        return record
+    if record.source.raw_fields.get(EXAMPLE_AUTHORITY_KEY) != EXAMPLE_AUTHORITY_STAGING:
+        # Absent, already fingerprint-bound (a re-promotion), or junk: nothing
+        # to bind. An unrecognised value covers no real fingerprint, so it can
+        # bless nothing by accident.
         return record
     raw_fields = dict(record.source.raw_fields)
-    raw_fields[EXAMPLE_AUTHORITY_KEY] = EXAMPLE_AUTHORITY_STAGING
+    fingerprints = [
+        short_fingerprint(example.japanese)
+        for example in record.examples
+        if example.japanese
+    ]
+    if fingerprints:
+        raw_fields[EXAMPLE_AUTHORITY_KEY] = ",".join(dict.fromkeys(fingerprints))
+    else:
+        # A sentinel with no sentences accepts nothing; leaving it behind
+        # would be a standing claim waiting for text nobody reviewed.
+        raw_fields.pop(EXAMPLE_AUTHORITY_KEY, None)
     return replace(record, source=replace(record.source, raw_fields=raw_fields))
 
 

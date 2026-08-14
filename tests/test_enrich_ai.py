@@ -235,7 +235,7 @@ def test_the_prompt_pins_an_extracted_example_the_reviewer_accepted() -> None:
         source=SourceReference(
             type="extract",
             imported_from="page.jpg",
-            raw_fields={"example_authority": "staging-review"},
+            raw_fields={"example_authority": short_fingerprint("日本語を話します。")},
         ),
         examples=[ExampleSentence(japanese="日本語を話します。")],
     )
@@ -244,6 +244,28 @@ def test_the_prompt_pins_an_extracted_example_the_reviewer_accepted() -> None:
 
     assert "Existing curated examples need annotations" in text
     assert '"日本語を話します。"' in text
+
+
+def test_acceptance_covers_sentences_not_the_record() -> None:
+    # One accepted, one machine-era: only the covered sentence is pinned. A
+    # record-level stamp would bless text the reviewer never read.
+    accepted, stray = "日本語を話します。", "やくそくのとおりに話す"
+    mixed = record(
+        source=SourceReference(
+            type="extract",
+            imported_from="page.jpg",
+            raw_fields={"example_authority": short_fingerprint(accepted)},
+        ),
+        examples=[
+            ExampleSentence(japanese=accepted),
+            ExampleSentence(japanese=stray),
+        ],
+    )
+
+    text = ai_prompt(mixed)
+
+    assert f'"{accepted}"' in text
+    assert stray not in text
 
 
 # --- the QC gate --------------------------------------------------------------
@@ -278,10 +300,11 @@ def test_romaji_is_always_regenerated_never_taken() -> None:
     assert outcome.record.examples[0].romaji == "hanashimasu."
 
 
-def test_generated_examples_replace_an_uncurated_extracted_example() -> None:
-    # The excerpt was never accepted as teaching content, so it is not content
-    # to protect: the fresh pair lands and the excerpt survives only as the
-    # source evidence extraction kept in raw_fields.
+def test_an_unaccepted_extracted_example_is_preserved_not_replaced() -> None:
+    # Nothing in data distinguishes a machine-era sentence from one a person
+    # curated before the authority keys existed — 39 live records have exactly
+    # this shape — so only the user may decide: without --force-fields the
+    # stored sentence stays, unpinned, and the generated pair is not written.
     excerpt = record(
         source=SourceReference(
             type="extract",
@@ -298,17 +321,35 @@ def test_generated_examples_replace_an_uncurated_extracted_example() -> None:
                 "毎日日本語を話します。",
                 furigana="毎日[まいにち] 日本語[にほんご]を 話[はな]します。",
             ),
-            generated(
-                "昨日友達と話した。",
-                furigana="昨日[きのう] 友達[ともだち]と 話[はな]した。",
-            ),
         ),
     )
 
-    assert [ex.japanese for ex in outcome.record.examples] == [
-        "毎日日本語を話します。",
-        "昨日友達と話した。",
-    ]
+    assert [ex.japanese for ex in outcome.record.examples] == ["話すのとおりに"]
+    assert "examples" not in outcome.changes
+
+
+def test_force_fields_examples_is_the_way_to_replace_an_unaccepted_one() -> None:
+    excerpt = record(
+        source=SourceReference(
+            type="extract",
+            imported_from="page.jpg",
+            raw_fields={"example": "話すのとおりに"},
+        ),
+        examples=[ExampleSentence(japanese="話すのとおりに")],
+    )
+
+    outcome = apply_ai_result(
+        excerpt,
+        answer(
+            generated(
+                "毎日日本語を話します。",
+                furigana="毎日[まいにち] 日本語[にほんご]を 話[はな]します。",
+            ),
+        ),
+        force_fields=("examples",),
+    )
+
+    assert [ex.japanese for ex in outcome.record.examples] == ["毎日日本語を話します。"]
     assert "examples" in outcome.changes
     assert outcome.record.source.raw_fields["example"] == "話すのとおりに"
 
@@ -318,7 +359,7 @@ def test_an_accepted_extracted_example_is_annotated_in_place_not_replaced() -> N
         source=SourceReference(
             type="extract",
             imported_from="page.jpg",
-            raw_fields={"example_authority": "staging-review"},
+            raw_fields={"example_authority": short_fingerprint("日本語を話します。")},
         ),
         examples=[ExampleSentence(japanese="日本語を話します。")],
     )

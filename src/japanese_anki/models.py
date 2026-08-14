@@ -313,9 +313,35 @@ class VocabularyRecord:
 # re-exports these names, so its callers keep their import site.
 
 #: Field-level acceptance provenance for an extract-sourced record's examples.
-#: See ``promote._accept_examples`` for who writes it and what the value means.
+#: The reviewer types the sentinel value (``staging-review``) into a staging
+#: row's ``raw_fields`` — the explicit acceptance M7.6T requires — and
+#: ``promote._accept_examples`` replaces it with the accepted sentences'
+#: content fingerprints, binding the acceptance to the exact Japanese the
+#: reviewer saw. A sentence added or rewritten later carries no covering
+#: fingerprint and is simply not accepted; a stale stamp can never bless text
+#: no reviewer read.
 EXAMPLE_AUTHORITY_KEY = "example_authority"
 EXAMPLE_AUTHORITY_STAGING = "staging-review"
+
+
+def accepted_example_fingerprints(record: VocabularyRecord) -> set[str]:
+    """The example content-fingerprints a reviewer's acceptance covers."""
+    raw = record.source.raw_fields.get(EXAMPLE_AUTHORITY_KEY, "")
+    return {item.strip() for item in raw.split(",") if item.strip()}
+
+
+def example_accepted(record: VocabularyRecord, example: ExampleSentence) -> bool:
+    """Whether this example may be treated as accepted teaching content.
+
+    The per-sentence trust rule the camera pilot forced into words: on an
+    **extract**-sourced record a sentence is accepted only when the reviewer's
+    promote-time acceptance covers its exact Japanese. Every other source type
+    — a Shirabe export, an Anki import, a hand-written record — is the user's
+    own data, curated by arrival.
+    """
+    if record.source.type != "extract":
+        return True
+    return short_fingerprint(example.japanese) in accepted_example_fingerprints(record)
 
 #: Example content-fingerprints the AI pass held for learner load (M7.6T),
 #: comma-joined in ``source.raw_fields``. ``enrich`` writes it; the audio

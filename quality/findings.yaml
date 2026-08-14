@@ -291,15 +291,15 @@ findings:
     pipeline_stage: ai-enrichment
     source_archetypes: [camera]
     symptom: The AI annotation prompt described extraction-copied examples as reviewed and required their exact Japanese to be preserved, although no person or dictionary had accepted them as teaching examples.
-    invariant: Enrichment pins an example's exact Japanese only when the example carries explicit curated authority — a non-extract source or the promote-time staging acceptance stamp; without it, enrichment generates a new pedagogic example and must not describe the existing text as reviewed.
+    invariant: Enrichment pins an example's exact Japanese only when acceptance covers that sentence — a non-extract source, or a reviewer's promote-time stamp bound to its content fingerprint; an unaccepted sentence is never described to the model at all, is preserved rather than silently replaced, and changes only on an explicit --force-fields request.
     evidence:
       - fingerprint: 750e9c87857f698210f5daa9f9b3999d77aa7491944821e4df961b6742ddf44d
         locator: data/staging/done/IMG_4563.jpg.yaml
-      - fingerprint: 9e8ccbce43097dc11ca3b911479454864e184750ca36353a25212c743de49df4
+      - fingerprint: 22f08a16bcc157523d2cc3c5a4f2b81087caff19fcdb69e7dff7674c0861d5cf
         locator: quality/cases/ai-uncurated-example-pinning/input.json
     recurrences: []
     case_ids: [ai-uncurated-example-pinning]
-    fix_ref: src/japanese_anki/enrich.py#examples_curated
+    fix_ref: src/japanese_anki/enrich.py#ai_prompt
   - id: example-teaching-suitability
     state: fixed
     pipeline_stage: validation-qc

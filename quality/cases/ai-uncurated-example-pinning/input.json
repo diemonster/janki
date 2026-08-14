@@ -24,31 +24,5 @@
       }
     }
   ],
-  "model": "offline-model",
-  "response": {
-    "parsed": {
-      "examples": [
-        {
-          "japanese": "ともだちとやくそくをしました。",
-          "speech_level": "polite",
-          "furigana": "ともだちとやくそくをしました。",
-          "english": "I made a promise with a friend."
-        },
-        {
-          "japanese": "ともだちとやくそくした。",
-          "speech_level": "casual",
-          "furigana": "ともだちとやくそくした。",
-          "english": "I promised my friend."
-        }
-      ],
-      "usage_notes": ""
-    },
-    "stop_reason": "end_turn"
-  },
-  "observe": [
-    {
-      "id": "word:やくそく:やくそく",
-      "fields": ["examples"]
-    }
-  ]
+  "observe_example_pinning": true
 }

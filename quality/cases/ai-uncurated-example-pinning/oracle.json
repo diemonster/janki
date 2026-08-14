@@ -1,35 +1,6 @@
 {
-  "records": [
-    {
-      "id": "word:やくそく:やくそく",
-      "fields": {
-        "examples": [
-          {
-            "japanese": "ともだちとやくそくをしました。",
-            "furigana": "ともだちとやくそくをしました。",
-            "romaji": "tomodachitoyakusokuoshimashita.",
-            "english": "I made a promise with a friend.",
-            "audio": "",
-            "register": "polite"
-          },
-          {
-            "japanese": "ともだちとやくそくした。",
-            "furigana": "ともだちとやくそくした。",
-            "romaji": "tomodachitoyakusokushita.",
-            "english": "I promised my friend.",
-            "audio": "",
-            "register": "casual"
-          }
-        ]
-      }
-    }
-  ],
-  "changes": {
-    "word:やくそく:やくそく": ["examples"]
-  },
-  "no_changes": [],
-  "report": [],
-  "rejected_ids": [],
-  "unverified_ids": ["word:やくそく:やくそく"],
-  "warning_count": 1
+  "exact_spelling_required": true,
+  "expression_in_prompt": true,
+  "pins_existing_examples": false,
+  "pinned_sentences": []
 }

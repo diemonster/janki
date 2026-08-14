@@ -542,6 +542,7 @@ MERGEABLE_FIELDS: tuple[str, ...] = tuple(
 # (``provisional_fields`` travels too, but per field name rather than as a
 # blob — see the marker carry in ``_merge_one``.)
 CONTENT_ANNOTATIONS: dict[str, str] = {
+    "example_authority": "examples",
     "furigana_unverified": "examples",
     "learner_load_hold": "examples",
 }

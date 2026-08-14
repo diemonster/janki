@@ -245,33 +245,71 @@ def test_skipping_the_dictionary_check_does_not_skip_the_kana_rule() -> None:
 # --- field-level example acceptance ------------------------------------------
 
 
-def test_a_reviewer_placed_example_is_stamped_as_accepted_at_promotion() -> None:
-    # Extraction never writes `examples`, so a sentence on an extract-type row
-    # at this gate is the reviewer's own staging edit — the explicit
-    # field-level acceptance. The stamp is its durable provenance; `enrich`
-    # reads it to decide whether the sentence may be pinned as curated.
+def test_a_typed_acceptance_is_bound_to_the_sentences_the_reviewer_saw() -> None:
+    # The acceptance is the reviewer *typing* the sentinel into the row —
+    # never inferred from an example being present, because the AI staging
+    # route puts model sentences on extract rows too. Promotion binds the
+    # sentinel to the accepted sentences' fingerprints, so the durable stamp
+    # covers exactly the Japanese the reviewer read.
+    from japanese_anki.identifiers import short_fingerprint
+    from japanese_anki.models import example_accepted
+
+    sentence = "友達と日本語を話します。"
     reviewed = record(
-        examples=[ExampleSentence(japanese="友達と日本語を話します。")]
+        examples=[ExampleSentence(japanese=sentence)],
+        source=SourceReference(
+            type="extract",
+            imported_from="lesson.pdf",
+            raw_fields={"example_authority": "staging-review"},
+        ),
     )
 
     result = check_readings([reviewed], skip_reading_check=True)
 
     [promoted] = result.promoted
-    assert promoted.source.raw_fields["example_authority"] == "staging-review"
+    assert promoted.source.raw_fields["example_authority"] == short_fingerprint(
+        sentence
+    )
+    assert example_accepted(promoted, promoted.examples[0])
+    # The binding is per sentence: text added later carries no coverage.
+    assert not example_accepted(promoted, ExampleSentence(japanese="別の文。"))
 
 
-def test_a_record_without_examples_gets_no_acceptance_stamp() -> None:
-    # Promotion itself approves nothing — that inference is the trust failure
-    # M7.6T exists to remove. No example, no field-level acceptance.
-    result = check_readings([record()], skip_reading_check=True)
+def test_an_example_without_the_typed_sentinel_is_never_stamped() -> None:
+    # The AI staging route's shape: model-generated sentences sitting on an
+    # extract-type row. Presence proves nothing about who wrote them, so
+    # promotion must not mint acceptance out of it — the sentences promote
+    # preserved but unaccepted.
+    machine = record(
+        examples=[ExampleSentence(japanese="友達と日本語を話します。")]
+    )
+
+    result = check_readings([machine], skip_reading_check=True)
 
     [promoted] = result.promoted
     assert "example_authority" not in promoted.source.raw_fields
 
 
-def test_a_non_extract_row_is_not_stamped() -> None:
-    # A Shirabe export's example is the user's own data, curated by arrival.
-    # Stamping it would claim a staging review that never happened.
+def test_a_sentinel_with_no_sentences_accepts_nothing() -> None:
+    # Left behind, it would be a standing claim waiting for text nobody
+    # reviewed.
+    empty = record(
+        source=SourceReference(
+            type="extract",
+            imported_from="lesson.pdf",
+            raw_fields={"example_authority": "staging-review"},
+        ),
+    )
+
+    result = check_readings([empty], skip_reading_check=True)
+
+    [promoted] = result.promoted
+    assert "example_authority" not in promoted.source.raw_fields
+
+
+def test_a_non_extract_row_is_left_exactly_as_typed() -> None:
+    # A Shirabe export's example is the user's own data, curated by arrival;
+    # the acceptance machinery has nothing to add or bind there.
     imported = record(
         source=SourceReference(type="shirabe", imported_from="export.csv"),
         examples=[ExampleSentence(japanese="友達と日本語を話します。")],

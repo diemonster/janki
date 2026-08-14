@@ -912,21 +912,34 @@ def _ai_enrichment(data: dict[str, Any], root: Path) -> Any:
 
 
 def _ai_enrichment_prompt(data: dict[str, Any], root: Path) -> Any:
-    """Observe the spelling contract sent to the AI enrichment model."""
+    """Observe the contracts sent to the AI enrichment model."""
     del root
-    _only(data, {"records"}, "ai-enrichment-prompt")
+    _only(data, {"records", "observe_example_pinning"}, "ai-enrichment-prompt")
     records = _records(data.get("records"))
     if len(records) != 1:
         raise hardening.HardeningError(
             "ai-enrichment-prompt requires exactly one record"
         )
     combined = enrich.AI_INSTRUCTIONS + "\n" + enrich.ai_prompt(records[0])
-    return {
+    output = {
         "exact_spelling_required": (
             "Use the exact spelling shown in Expression" in combined
         ),
         "expression_in_prompt": records[0].expression in combined,
     }
+    if _optional_bool(data, "observe_example_pinning"):
+        # The pinning block quotes each pinned sentence as a JSON string; a
+        # sentence quoted that way is one the model was told to preserve
+        # exactly. Opt-in, so cases written before this key keep their shape.
+        pinned = [
+            example.japanese
+            for example in records[0].examples
+            if example.japanese
+            and json.dumps(example.japanese, ensure_ascii=False) in combined
+        ]
+        output["pins_existing_examples"] = bool(pinned)
+        output["pinned_sentences"] = pinned
+    return output
 
 
 def _semantic_review_recheck(data: dict[str, Any], root: Path) -> Any:
