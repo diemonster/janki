@@ -493,8 +493,18 @@ def review_records(
                 client,
                 # Generous, because the model reasons before answering and the
                 # answer itself is short: 2000 cut off a card mid-verdict, and a
-                # budget that truncates turns a clean read into a failed one.
-                max_tokens=8000,
+                # budget that truncates turns a clean read into a failed one —
+                # `max_tokens` is absent from COMPLETE_STOP_REASONS, so that is
+                # a failure rather than a shorter answer.
+                #
+                # Measured at extra-high effort over five real cards: 541, 980,
+                # 1017, 2662, 4106 output tokens. Reading is the expensive pass
+                # — enrichment, which writes examples and notes, used under 700
+                # on the same setting. 8000 left only 1.9x over that peak on a
+                # sample whose spread was already sevenfold, so this follows the
+                # module default instead: unused budget costs nothing, and the
+                # cap is what stands between a long card and a failed read.
+                max_tokens=claude_client.DEFAULT_MAX_TOKENS,
                 effort=claude_client.DEFAULT_EFFORT,
             )
         except JankiError as exc:
@@ -538,7 +548,7 @@ def review_records(
                     ],
                     review_schema(),
                     client,
-                    max_tokens=8000,
+                    max_tokens=claude_client.DEFAULT_MAX_TOKENS,
                     effort=claude_client.DEFAULT_EFFORT,
                 )
             except (JankiError, pitch.PitchError):

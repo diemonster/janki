@@ -3133,6 +3133,14 @@ already records that 2000 cut a card off mid-verdict. Raising
 `DEFAULT_MAX_TOKENS` alone does nothing for it. Size review's budget from a
 measured card and raise `review.py:497` and `:540` in the same change.
 
+*Measured 2026-08-14, extra-high effort, live:* five real cards read at 541,
+980, 1017, 2662 and 4106 output tokens — a sevenfold spread leaving 8000 only
+1.9x over the peak. Three enrichment calls on the same setting used 519, 638
+and 687, so **reading is the expensive pass and writing is not**: enrichment
+sits at 4% of its 16000 budget while the review sat at half of its 8000. Both
+review budgets now follow `DEFAULT_MAX_TOKENS`; unused budget costs nothing,
+and the cap is only ever reached by a card long enough to fail on.
+
 **Streaming: keep the change, fix the reasoning and the call.** The earlier
 claim that the SDK refuses a non-streaming call above ~16K is wrong. The guard
 is a latency estimate — `3600 * max_tokens / 128_000 > 600`, i.e. **21,333**
