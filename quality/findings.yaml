@@ -331,9 +331,8 @@ findings:
     symptom: The paid review read whatever _shipping_records returned, so a card with no example sentence or an unresolved local error was billed for at content that could not be judged or was about to change; measured over data/review.json, 181 reads covered 97 records and 71 of the 84 superseded reads carried no blocking finding.
     invariant: A card carrying a local validation error, and a card with no example sentence, are each held back from the paid review; every other card stays readable in the same run. Readiness is decided per record, so a record shipping in two decks is not failed by the other's copy.
     evidence:
-      - fingerprint: b4134ccc40c1582fca77f236ac073fe5786839dbc2c5daaabdba31c9ab3673e8
+      - fingerprint: 2aa233a3943300eef9eb09650c7e7dc122f1e5628cac03f79051df7c23930924
         locator: quality/cases/review-holds-back-an-unreadable-card/input.json
     recurrences: []
     case_ids: [review-holds-back-an-unreadable-card]
     fix_ref: src/japanese_anki/review.py#unready
-

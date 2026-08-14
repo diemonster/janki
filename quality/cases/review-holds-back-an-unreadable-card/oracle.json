@@ -7,7 +7,13 @@
     {
       "id": "word:話す:はなす",
       "reason": "it has no example sentence to read"
+    },
+    {
+      "id": "word:読む:よむ",
+      "reason": "local validation errors are unresolved"
     }
   ],
-  "readable_ids": ["word:読む:よむ"]
+  "readable_ids": [
+    "word:読む:よむ"
+  ]
 }

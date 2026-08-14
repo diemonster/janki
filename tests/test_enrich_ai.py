@@ -955,22 +955,38 @@ def test_the_model_can_be_overridden_per_run(
     patch_all(monkeypatch, call, FakeJpdb({"話します。": HANASHIMASU}))
 
     cli.main(
-        ["--root", str(root), "enrich", "--ai", "--yes", "--model", "claude-future"]
+        ["--root", str(root), "enrich", "--ai", "--yes", "--model", "claude-opus-5"]
     )
 
-    assert call.calls[0]["model"] == "claude-future"
+    assert call.calls[0]["model"] == "claude-opus-5"
     # Reasoning depth follows the overridden model, not the configured one:
     # `--model` changes the model alone, so a depth resolved from anything else
     # is resolved from something the caller did not just override.
     assert call.calls[0]["effort"] == "xhigh"
 
 
+@pytest.mark.parametrize(
+    "model",
+    # Every one of these answers `effort` — or the `xhigh` level — with a 400.
+    # `xhigh` arrived with Opus 4.7, so the 4.6 pair and Opus 4.5 reject the
+    # level, and Sonnet 4.5 and Haiku 4.5 reject the parameter outright. An
+    # unrecognized id is treated the same way, which is the safe direction.
+    (
+        "claude-haiku-4-5-20251001",
+        "claude-sonnet-4-5",
+        "claude-sonnet-4-6",
+        "claude-opus-4-6",
+        "claude-opus-4-5",
+        "some-model-this-list-has-never-heard-of",
+    ),
+)
 def test_a_model_that_rejects_effort_is_not_sent_it(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    model: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Haiku answers a request carrying `effort` with a 400, and
+    """These answer a request carrying `effort` with a 400, and
     `adjudicate_reading` turns every exception into "unsure" — so sending it
-    would retire a pass silently rather than loudly."""
+    would retire a pass silently rather than loudly. Pinning the *older* models
+    matters most: pinning one is the usual reason to pass --model at all."""
     root = project(tmp_path, [record()])
     call = FakeCall(ok("話します。", "話[はな]します。"))
     patch_all(monkeypatch, call, FakeJpdb({"話します。": HANASHIMASU}))
@@ -978,7 +994,7 @@ def test_a_model_that_rejects_effort_is_not_sent_it(
     cli.main(
         [
             "--root", str(root), "enrich", "--ai", "--yes",
-            "--model", "claude-haiku-4-5-20251001",
+            "--model", model,
         ]
     )
 

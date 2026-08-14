@@ -4,7 +4,9 @@
       "id": "word:読む:よむ",
       "expression": "読む",
       "reading": "よむ",
-      "meanings": ["to read"],
+      "meanings": [
+        "to read"
+      ],
       "part_of_speech": "v5m",
       "examples": [
         {
@@ -19,7 +21,9 @@
       "id": "word:話す:はなす",
       "expression": "話す",
       "reading": "はなす",
-      "meanings": ["to speak"],
+      "meanings": [
+        "to speak"
+      ],
       "part_of_speech": "v5s",
       "examples": [],
       "usage_notes": "A common verb."
@@ -38,6 +42,21 @@
         }
       ],
       "usage_notes": "A common verb."
+    },
+    {
+      "id": "word:読む:よむ",
+      "expression": "読む",
+      "reading": "よむ",
+      "meanings": [],
+      "part_of_speech": "v5m",
+      "examples": [
+        {
+          "japanese": "手紙を読みます。",
+          "furigana": "手紙[てがみ]を 読[よ]みます。",
+          "english": "I read a letter."
+        }
+      ],
+      "usage_notes": "A deck-local override of the same record, with no meanings."
     }
   ]
 }

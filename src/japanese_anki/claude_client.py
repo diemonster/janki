@@ -44,6 +44,7 @@ __all__ = [
     "CallResult",
     "ClaudeRequestError",
     "DEFAULT_MAX_TOKENS",
+    "effort_for",
     "STYLE_GUIDE_PATH",
     "Refusal",
     "batch_request",
@@ -81,29 +82,46 @@ DEFAULT_MAX_TOKENS = 16000
 #: worth less than the others'.
 DEFAULT_EFFORT = "xhigh"
 
-#: Models that reject ``output_config.effort`` with a 400.
+#: Models that accept ``output_config.effort`` at :data:`DEFAULT_EFFORT`.
 #:
-#: janki configures Claude Opus 5 everywhere, so this exists for ``--model``,
-#: which overrides the model for one run and cannot override the constant
-#: beside it. Sending the key to a model that refuses it fails the call — and
-#: ``adjudicate_reading`` catches every exception and returns "unsure", so the
-#: failure would be a pass that answers nothing, permanently, with nothing
-#: printed. Matched on the family rather than the exact id because the id
-#: carries a date suffix.
-_NO_EFFORT_FAMILIES = ("haiku",)
+#: **An allow-list, because the failure is asymmetric.** Sending the key to a
+#: model that refuses it fails the call; withholding it from one that would
+#: accept it costs some reasoning depth. The first is unrecoverable exactly
+#: where it matters most — ``adjudicate_reading`` catches every exception and
+#: returns "unsure", so a 400 there retires that pass permanently with nothing
+#: printed — and the second is merely a weaker answer.
+#:
+#: An earlier form listed the families that *reject* effort, which had the
+#: direction wrong: ``xhigh`` arrived with Opus 4.7, so Opus 4.6 and Sonnet 4.6
+#: take ``low``/``medium``/``high``/``max`` and refuse it, Opus 4.5 takes only
+#: the first three, and Sonnet 4.5 and Haiku 4.5 refuse ``effort`` outright. A
+#: deny-list naming one family sent an invalid level to five others.
+#:
+#: Matched on the family rather than the exact id because ids carry date
+#: suffixes. An unrecognized model — a typo, an alias, one newer than this list
+#: — gets no key, which is the safe direction.
+_XHIGH_MODELS = (
+    "opus-5",
+    "opus-4-8",
+    "opus-4-7",
+    "sonnet-5",
+    "fable-5",
+    "mythos-5",
+)
 
 
 def effort_for(model: str) -> str | None:
-    """``DEFAULT_EFFORT`` when ``model`` accepts it, otherwise ``None``.
+    """:data:`DEFAULT_EFFORT` when ``model`` takes it, otherwise ``None``.
 
     Resolved from the model rather than from the provider or the config,
     because ``--model`` changes the model alone: a guard on either of the other
-    two is a guard on something the caller did not just override.
+    two guards something the caller did not just override — and pinning an
+    older model is the usual reason to pass it.
     """
     name = model.strip().lower()
-    if any(family in name for family in _NO_EFFORT_FAMILIES):
+    if not name:
         return None
-    return DEFAULT_EFFORT
+    return DEFAULT_EFFORT if any(family in name for family in _XHIGH_MODELS) else None
 
 #: The style guide, relative to the project root. Every AI pass sends it, which
 #: is why it is worth a cache breakpoint.

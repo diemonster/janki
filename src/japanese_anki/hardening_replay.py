@@ -730,15 +730,29 @@ def _review_readiness(data: dict[str, Any], root: Path) -> Any:
     records = _records(data.get("records"))
     held = review.unready(
         records,
-        failing_ids=(
-            record.id
+        failing=(
+            review.card_fingerprint(record)
             for record in records
             if validation.has_errors(validation.validate_record(record))
         ),
     )
+    # Per card, not per id, on both sides: one record can ship as two cards, so
+    # collapsing the output by id would report the clean copy as withheld and
+    # hide exactly the behaviour this case exists to pin.
     return {
-        "held": [{"id": key, "reason": held[key]} for key in sorted(held)],
-        "readable_ids": [record.id for record in records if record.id not in held],
+        "held": sorted(
+            (
+                {"id": record.id, "reason": held[review.card_fingerprint(record)]}
+                for record in records
+                if review.card_fingerprint(record) in held
+            ),
+            key=lambda item: (item["id"], item["reason"]),
+        ),
+        "readable_ids": [
+            record.id
+            for record in records
+            if review.card_fingerprint(record) not in held
+        ],
     }
 
 

@@ -1479,3 +1479,29 @@ def test_a_warning_does_not_hold_a_card_back(
 
     assert cli.main(["--root", str(root), "review"]) == 0
     assert len(calls) == 1
+
+def test_an_open_finding_is_reported_even_when_everything_else_is_held(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An unreadable card is unreadable on every run, so gating the findings
+    report behind "nothing was held" silences the whole collection's blocking
+    findings for as long as one headword-only card exists."""
+    clean = record(id="word:読む:よむ", expression="読む", reading="よむ")
+    root = project(tmp_path, [clean, record(examples=[], usage_notes="")])
+    store_path = Path(root) / "review.json"
+    import japanese_anki.review as rm
+    fp = rm.card_fingerprint(clean)
+    store_path.write_text(json.dumps({fp: {
+        "record_id": clean.id, "at": "2026-08-14", "model": "m",
+        "findings": [{"where": "meanings", "problem": "glossed wrong",
+                       "severity": "error", "suggestion": ""}],
+        "accepted": False, "accepted_marks": [],
+    }}), encoding="utf-8")
+    monkeypatch.setattr(review_module.claude_client, "parse_call", reader(Verdict()))
+
+    code = cli.main(["--root", str(root), "review"])
+    err = capsys.readouterr().err
+
+    assert code == 1
+    assert "glossed wrong" in err
+    assert "held back" in err

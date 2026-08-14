@@ -4520,34 +4520,47 @@ def command_review(args: argparse.Namespace) -> int:
         # here legitimately. Readiness is a property of one card.
         held = review.unready(
             todo,
-            failing_ids=(
-                record.id for record in todo if has_errors(validate_record(record))
+            failing=(
+                review.card_fingerprint(record)
+                for record in todo
+                if has_errors(validate_record(record))
             ),
         )
         if held:
-            for record_id, reason in sorted(held.items()):
-                print(f"held back: {record_id} — {reason}", file=sys.stderr)
-            todo = [record for record in todo if record.id not in held]
+            withheld = [
+                record
+                for record in todo
+                if review.card_fingerprint(record) in held
+            ]
+            for record in sorted(withheld, key=lambda item: item.id):
+                reason = held[review.card_fingerprint(record)]
+                print(f"held back: {record.id} — {reason}", file=sys.stderr)
+            todo = [record for record in todo if record not in withheld]
 
-    if not todo and held:
-        # Distinct from the message below, which says every card has been read.
-        # A held card has not been read, and saying otherwise would report the
-        # gate's own refusal as completion.
-        print(
-            f"{len(held)} card(s) held back and nothing else to read.",
-            file=sys.stderr,
-        )
-        return 1
     if not todo:
+        # Reported before the held-back branch, and on both paths. An
+        # unreadable card is unreadable on every run, so gating this behind
+        # "nothing was held" would silence the open findings of the whole
+        # collection for as long as one headword-only card exists — from the
+        # command whose job is to say which cards are not fit to ship.
         blocking = review.open_findings(records, store)
+        for record_id, finding in blocking:
+            print(f"{record_id} — {finding.where}: {finding.problem}", file=sys.stderr)
         if blocking:
-            for record_id, finding in blocking:
-                print(f"{record_id} — {finding.where}: {finding.problem}", file=sys.stderr)
             print(
                 f"{len(blocking)} finding(s) still open. Fix the card and re-run, "
                 "or: janki review --accept <id> --because '<why>'",
                 file=sys.stderr,
             )
+        if held:
+            # Distinct from the message below, which says every card has been
+            # read. A held card has not been, and saying otherwise would report
+            # the gate's own refusal as completion.
+            print(
+                f"{len(held)} card(s) held back and nothing else to read.",
+                file=sys.stderr,
+            )
+        if blocking or held:
             return 1
         print(f"All {len(records)} card(s) already read at their current content.")
         return 0

@@ -668,7 +668,7 @@ def unreviewed(
 
 
 def unready(
-    records: Iterable[VocabularyRecord], *, failing_ids: Iterable[str]
+    records: Iterable[VocabularyRecord], *, failing: Iterable[str]
 ) -> dict[str, str]:
     """Cards not worth paying to read yet, and the reason for each.
 
@@ -687,6 +687,10 @@ def unready(
       already; what a reader is paid for is the Japanese. A card with no
       example has none of it.
 
+    Returned keyed by :func:`card_fingerprint`, the same key the review store
+    uses, because readiness is a property of a card version rather than of a
+    record id.
+
     Two rules that look better and are not, both tried:
 
     *"a record ``enrich --ai`` would target"* cannot clear. ``AI_INSTRUCTIONS``
@@ -703,13 +707,17 @@ def unready(
 
     The caller decides what to do with the result; this only reports.
     """
-    failing = set(failing_ids)
+    failed = set(failing)
     reasons: dict[str, str] = {}
     for record in records:
-        if record.id in failing:
-            reasons[record.id] = "local validation errors are unresolved"
+        # Keyed by fingerprint, not id. `_shipping_records` yields one entry per
+        # *card*, and one record can ship as two — a deck may override a field
+        # inline — so an error in deck A's copy must not withhold deck B's.
+        key = card_fingerprint(record)
+        if key in failed:
+            reasons[key] = "local validation errors are unresolved"
         elif not any(example.japanese.strip() for example in record.examples):
-            reasons[record.id] = "it has no example sentence to read"
+            reasons[key] = "it has no example sentence to read"
     return reasons
 
 
