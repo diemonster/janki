@@ -348,6 +348,61 @@ def test_a_confirming_dictionary_also_reports_its_clear() -> None:
     assert PROVISIONAL_FIELDS_KEY not in updated.source.raw_fields
 
 
+def test_a_kana_homograph_cannot_settle_a_provisional_claim() -> None:
+    # あめ the candy tokenizes to 雨 the rain — spelling different, readings
+    # agreeing all the way. Fine for filling empty fields; not authority to
+    # overwrite a provisional claim about a different word.
+    candy = mark_provisional(
+        record(
+            id="word:あめ:あめ",
+            expression="あめ",
+            reading="あめ",
+            meanings=["candy"],
+            part_of_speech="noun",
+            source=SourceReference(type="extract", imported_from="page.jpg"),
+        )
+    )
+    rain = vocab(1000090, 1, "雨", "あめ", ["HLL"], 250, ["n"])
+    api = FakeApi(unforced={"あめ": parse_response(([["雨", "あめ"]], rain))})
+
+    result = enrich_records(client_for(api), [candy])
+
+    [updated] = result.records
+    assert updated.meanings == ["candy"]
+    assert updated.part_of_speech == "noun"
+    assert provisional_fields(updated) == ["meanings", "part_of_speech"]
+    assert any("stay provisional" in warning for warning in result.warnings)
+    assert api.calls("lookup-vocabulary") == []
+
+
+def test_a_suru_stem_entry_cannot_settle_a_provisional_claim() -> None:
+    # The suru-suffix allowance deliberately accepts 勉強's entry for a
+    # 勉強する record — the stem noun's glosses are not the verb's meanings.
+    compound = mark_provisional(
+        record(
+            id="word:勉強する:べんきょうする",
+            expression="勉強する",
+            reading="べんきょうする",
+            meanings=["to study"],
+            source=SourceReference(type="extract", imported_from="page.jpg"),
+        )
+    )
+    benkyou = vocab(1512670, 1, "勉強", "べんきょう", ["LHHHHH"], 1000, ["n", "vs"])
+    parse = parse_response(([["勉", "べん"], ["強", "きょう"]], benkyou))
+    api = FakeApi(
+        unforced={"勉強する": parse},
+        forced={("勉強する", "べんきょうする"): parse},
+        senses={(1512670, 1): {"reading": "べんきょう", "alt_sids": []}},
+    )
+
+    result = enrich_records(client_for(api), [compound])
+
+    [updated] = result.records
+    assert updated.meanings == ["to study"]
+    assert provisional_fields(updated) == ["meanings"]
+    assert any("stay provisional" in warning for warning in result.warnings)
+
+
 def test_a_record_without_a_reading_holds_reconciliation() -> None:
     # Empty fields still fill from the lemma parse, as they always have, but a
     # provisional claim is never settled against an unconfirmed identity.

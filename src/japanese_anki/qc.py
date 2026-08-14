@@ -129,13 +129,28 @@ _TRAILING_ENCLOSURE = "」』）)】　 \t"
 #: end without any.
 _SENTENCE_FINAL = tuple("。．.！!？?…")
 
+#: Hiragana the polite ます-family can attach to: a verb's continuative stem
+#: ends in an i-column kana (話し→話します) and an ichidan stem in an e-column
+#: one (食べ→食べます). Without this guard the *plain* forms of ま-stem godan
+#: verbs — 励ます, 済ました — end in the literal characters ます/ました and a
+#: correctly-labelled casual sentence gets held; a kanji before ます is the
+#: same undecidable shape and is likewise left alone. The です family needs no
+#: stem: nothing casual ends in です.
+_POLITE_STEM = "きしちにひみりぎじぢびぴいけせてねへめれげぜでべぺえ"
+
 #: Polite sentence-final forms, matched at the very end of the sentence. Only
-#: the unambiguous ます/です family: a sentence ending in one of these and
-#: labelled casual is wrong with certainty, which is the only kind of wrong a
-#: local gate may act on.
+#: the unambiguous cases: a sentence ending in one of these and labelled
+#: casual is wrong with certainty, which is the only kind of wrong a local
+#: gate may act on. (ませんでした needs no alternative of its own — every such
+#: ending already ends in でした.)
 _POLITE_FINAL = re.compile(
-    r"(です|でした|でしょう|ます|ました|ましょう|ません|ませんでした)$"
+    rf"(です|でした|でしょう|(?<=[{_POLITE_STEM}])(ます|ました|ましょう|ません))$"
 )
+
+#: Hiragana the conditional ば attaches to (-eba): an e-column kana. Without
+#: it, a punctuation-less sentence ending in a ば-final noun — そば, ことば —
+#: reads as a dangling conditional.
+_CONDITIONAL_STEM = "けせてねへめれげぜでべぺえ"
 
 
 def example_content_holds(example: ExampleSentence) -> list[tuple[str, str]]:
@@ -156,7 +171,13 @@ def example_content_holds(example: ExampleSentence) -> list[tuple[str, str]]:
     holds: list[tuple[str, str]] = []
     bare = japanese.rstrip(_TRAILING_ENCLOSURE)
     core = bare.rstrip("".join(_SENTENCE_FINAL)).rstrip(_TRAILING_ENCLOSURE)
-    if core.endswith(("について", "については")):
+    # Both fragment shapes require the missing punctuation: 何について？ and
+    # 行けば？ are real elliptical utterances, and the punctuation is what
+    # separates an intentional ellipsis from a clause cut off mid-thought —
+    # the exact camera failure shape.
+    if bare.endswith(_SENTENCE_FINAL):
+        pass
+    elif core.endswith(("について", "については")):
         holds.append(
             (
                 "example-fragment",
@@ -164,10 +185,11 @@ def example_content_holds(example: ExampleSentence) -> list[tuple[str, str]]:
                 "sentence anyone would say",
             )
         )
-    elif core.endswith("ば") and not bare.endswith(_SENTENCE_FINAL):
-        # The dangling conditional needs the missing punctuation too: 行けば？
-        # is a real elliptical suggestion, but a bare 〜ば with nothing after
-        # it is a clause cut off mid-thought — the exact camera failure shape.
+    elif (
+        core.endswith("ば")
+        and len(core) >= 2
+        and core[-2] in _CONDITIONAL_STEM
+    ):
         holds.append(
             (
                 "example-fragment",

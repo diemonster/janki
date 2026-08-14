@@ -616,6 +616,23 @@ def enrich_records(
                     continue
                 token, entry = found
 
+        # Reconciliation demands the exact identity, and the reading checks
+        # above cannot supply it alone: a kana-written word tokenizes to
+        # whichever homograph is more common (あめ the candy resolves to 雨,
+        # readings agreeing all the way), and the suru-suffix allowance
+        # deliberately accepts the stem's entry for a 〜する record. Both are
+        # fine sources for *empty* fields; neither is authority to overwrite a
+        # provisional claim about a different spelling.
+        entry_spelling = str(entry.get("spelling", "")).strip()
+        if reconcile and entry_spelling != record.expression:
+            result.warnings.append(
+                f"{record_id}: jpdb resolved {record.expression} to its entry "
+                f"for {entry_spelling or 'another word'}; provisional "
+                f"{', '.join(reconcile)} are settled only against the exact "
+                "spelling, so they stay provisional"
+            )
+            writable = [name for name in writable if name not in reconcile]
+            reconcile = []
         proposals = _proposals(record, token, entry, kanji_store)
         if "meanings" in reconcile:
             proposals["meanings"] = _dictionary_meanings(client, entry)

@@ -551,3 +551,30 @@ def test_an_elliptical_conditional_question_is_not_held() -> None:
     codes = _codes(_teaching_record("九時に出発すれば？", register="casual"))
 
     assert codes == []
+
+
+def test_a_plain_ma_stem_verb_labelled_casual_is_not_held() -> None:
+    # 励ました is the plain past of 励ます: it ends in the literal characters
+    # ました, and the polite-form check must not read verb spelling as
+    # politeness. A kanji before ます is undecidable, and undecidable means
+    # unflagged.
+    codes = _codes(_teaching_record("コーチが選手を励ました。", register="casual"))
+
+    assert codes == []
+
+
+def test_a_ba_final_noun_without_punctuation_is_not_held() -> None:
+    # そば and ことば end in ば without being conditionals; the collection
+    # legitimately holds complete sentences with no final punctuation.
+    assert _codes(_teaching_record("好きな食べ物はそば", register="casual")) == []
+    assert (
+        _codes(_teaching_record("ありがとうは大切なことば", register="casual")) == []
+    )
+
+
+def test_an_elliptical_topic_question_is_not_held() -> None:
+    # 何について？ is real spoken Japanese, structurally parallel to the
+    # exempted 行けば？ — the punctuation marks the ellipsis as intentional.
+    codes = _codes(_teaching_record("この本は何について？", register="casual"))
+
+    assert codes == []
