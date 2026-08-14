@@ -75,6 +75,7 @@ from japanese_anki.validation import (
     ValidationIssue,
     has_errors,
     refusal_text,
+    validate_record,
     validate_records,
 )
 
@@ -4491,6 +4492,34 @@ def command_review(args: argparse.Namespace) -> int:
                 "No record with id " + ", ".join(sorted(unknown)) + " in any deck."
             )
         records = [record for record in records if record.id in set(args.ids)]
+    else:
+        # Completeness, enforced rather than documented (M7.6T rule 7). A card
+        # a later pass will rewrite is a card this read cannot answer for, and
+        # the read is billed either way. Naming ids is the override, following
+        # `enrich.ai_targets`: an explicit id is a decision, and this refusal
+        # exists to stop the accidental spend, not the deliberate one.
+        # Per record, not `validate_records`: that adds a duplicate-id error
+        # across the sequence, and a record shipping in two decks appears
+        # twice here legitimately. Readiness is a property of one card.
+        unready = review.unready(
+            records,
+            failing_ids=(
+                record.id
+                for record in records
+                if has_errors(validate_record(record))
+            ),
+            pending_ids=(record.id for record in enrich.ai_targets(records)),
+        )
+        if unready:
+            for record_id, reason in sorted(unready.items()):
+                print(f"{record_id} — {reason}", file=sys.stderr)
+            print(
+                f"{len(unready)} card(s) are not finished, and a review is billed "
+                "per card at the content it read. Finish them and re-run, or "
+                "read one anyway by naming it: janki review <id>",
+                file=sys.stderr,
+            )
+            return 1
 
     todo = records if args.force else review.unreviewed(records, store)
     if not todo:

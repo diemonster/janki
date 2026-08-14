@@ -18,7 +18,13 @@ import pytest
 from japanese_anki import cli
 from japanese_anki import review as review_module
 from japanese_anki.claude_client import CallResult
-from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
+from japanese_anki.models import (
+    LEARNER_LOAD_HOLD_KEY,
+    ExampleSentence,
+    SourceReference,
+    VocabularyRecord,
+    add_example_flags,
+)
 from japanese_anki.review import (
     CardReview,
     Finding,
@@ -51,6 +57,10 @@ def record(**overrides: Any) -> VocabularyRecord:
         "reading": "はなす",
         "meanings": ["to speak"],
         "verb_group": "godan",
+        # A finished card, because that is what review operates on: the
+        # completeness gate refuses one an AI pass has not filled yet.
+        "examples": [ExampleSentence(japanese="毎日話します。", english="I speak every day.")],
+        "usage_notes": "A common verb.",
         "source": SourceReference(type="shirabe", imported_from="export.csv"),
     }
     values.update(overrides)
@@ -1386,3 +1396,64 @@ def test_a_mark_that_is_not_a_string_is_refused(tmp_path: Path, mark: object) ->
     # refuses rather than skips, so this prefix is the only thing pointing at
     # which of a few hundred entries to open.
     assert "abc123def456" in str(raised.value)
+
+
+def test_an_unfinished_card_is_not_paid_to_be_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A review is billed per card at the content it read, so a card an AI pass
+    has not filled yet buys an answer about a card that will not ship."""
+    calls: list[str] = []
+    root = project(tmp_path, [record(examples=[], usage_notes="")])
+    monkeypatch.setattr(
+        review_module.claude_client, "parse_call", reader(Verdict(), calls=calls)
+    )
+
+    assert cli.main(["--root", str(root), "review"]) == 1
+    assert calls == []
+
+
+def test_naming_an_unfinished_card_reads_it_anyway(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The refusal exists to stop accidental spend, not deliberate spend: an
+    explicit id is a decision, as it is for enrich --ai."""
+    calls: list[str] = []
+    root = project(tmp_path, [record(examples=[], usage_notes="")])
+    monkeypatch.setattr(
+        review_module.claude_client, "parse_call", reader(Verdict(), calls=calls)
+    )
+
+    assert cli.main(["--root", str(root), "review", "word:話す:はなす"]) == 0
+    assert len(calls) == 1
+
+
+def test_a_card_with_a_local_error_is_not_paid_to_be_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Local failures are fixable for free; a paid read cannot answer for one."""
+    calls: list[str] = []
+    root = project(tmp_path, [record(meanings=[])])
+    monkeypatch.setattr(
+        review_module.claude_client, "parse_call", reader(Verdict(), calls=calls)
+    )
+
+    assert cli.main(["--root", str(root), "review"]) == 1
+    assert calls == []
+
+
+def test_a_learner_load_hold_does_not_block_the_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A hold is a warning, and a held card is still a finished card whose
+    language a reader can judge. Refusing it would strand it between a build
+    that calls it unreviewed and a review that calls it unready."""
+    calls: list[str] = []
+    held = add_example_flags(record(), LEARNER_LOAD_HOLD_KEY, ["毎日話します。"])
+    root = project(tmp_path, [held])
+    monkeypatch.setattr(
+        review_module.claude_client, "parse_call", reader(Verdict(), calls=calls)
+    )
+
+    assert cli.main(["--root", str(root), "review"]) == 0
+    assert len(calls) == 1

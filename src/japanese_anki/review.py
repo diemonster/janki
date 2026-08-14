@@ -655,6 +655,47 @@ def unreviewed(
     ]
 
 
+def unready(
+    records: Iterable[VocabularyRecord],
+    *,
+    failing_ids: Iterable[str],
+    pending_ids: Iterable[str],
+) -> dict[str, str]:
+    """Cards not worth paying to read yet, and the reason for each.
+
+    A review is priced per card and keyed by content, so reading a card that a
+    later pass will rewrite buys an answer about a card that will not ship.
+    Measured before this existed: 181 reads for 97 records, of which 71 were
+    superseded by a later pass without a blocking finding in between.
+
+    Two reasons, and deliberately only two:
+
+    * **A local error.** The same class ``build`` refuses on — not warnings.
+      A learner-load hold is a warning, and a card held for load is still a
+      finished card whose language a reader can judge; refusing to read it
+      would strand it between a build that calls it unreviewed and a review
+      that calls it unready, with no exit.
+    * **A pass with a content rule that currently targets it.** Only
+      ``enrich --ai`` has one (:func:`enrich.ai_targets`, via the ledger).
+      ``--polish-meanings`` deliberately has none — without ids it targets
+      every record — and gating on it would refuse the whole collection
+      forever, so this cannot promise that *no* pass will change a card. It
+      promises the one that rewrites ``examples``, which is most of what a
+      fingerprint is.
+
+    The caller decides what naming ids does; this function only reports.
+    """
+    failing = set(failing_ids)
+    pending = set(pending_ids)
+    reasons: dict[str, str] = {}
+    for record in records:
+        if record.id in failing:
+            reasons[record.id] = "local validation errors are unresolved"
+        elif record.id in pending:
+            reasons[record.id] = "janki enrich --ai has not run on it yet"
+    return reasons
+
+
 def open_findings(
     records: Iterable[VocabularyRecord], store: dict[str, CardReview]
 ) -> list[tuple[str, Finding]]:
