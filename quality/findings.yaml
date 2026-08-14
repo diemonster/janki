@@ -301,13 +301,14 @@ findings:
     case_ids: [ai-uncurated-example-pinning]
     fix_ref: src/japanese_anki/enrich.py#examples_curated
   - id: example-teaching-suitability
-    state: open
+    state: fixed
     pipeline_stage: validation-qc
     source_archetypes: [camera]
     symptom: Local validation checked structure only, so sentence fragments, trailing connectives, and false register labels passed every local gate and reached audio; the late paid AI review was the first check to catch them.
-    invariant: Local validation holds an example that is not a complete sentence or an intentional utterance, and one whose register label contradicts its sentence-final form, while accepting complete polite and casual sentences and intentional short utterances; learner load is bounded from parsed and known-vocabulary data when that data is available.
+    invariant: Local validation holds an example that is certainly not a complete sentence or an intentional utterance, and one whose register label contradicts its sentence-final form, while accepting complete polite and casual sentences and intentional short utterances; the audio command applies the same judgment before voicing, learner load is bounded from parsed and known-vocabulary data when that data is offered, and a shipping build reports local content failures on their own before the review gate is consulted.
     evidence:
       - fingerprint: 0bf7117a9577b5a1c3a921cee46174162c436d70157c750085adaf16a9fbe66c
         locator: quality/cases/example-teaching-suitability/input.json
     recurrences: []
     case_ids: [example-teaching-suitability]
+    fix_ref: src/japanese_anki/qc.py#example_content_holds

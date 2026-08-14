@@ -58,6 +58,13 @@ def _stray_furigana_spaces(furigana: str) -> tuple[str, ...]:
     return qc.stray_furigana_spaces(furigana)
 
 
+def _content_holds(example: object) -> list[tuple[str, str]]:
+    """Delegates to :func:`japanese_anki.qc.example_content_holds` (same rule)."""
+    from japanese_anki import qc
+
+    return qc.example_content_holds(example)
+
+
 def _kana(reading: str) -> str:
     """``reading`` with combining marks composed, which is what a kana count is.
 
@@ -208,6 +215,14 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
                 "this record rather than guess",
             )
     for index, example in enumerate(record.examples, start=1):
+        # The teaching-suitability judgment itself lives in
+        # :func:`japanese_anki.qc.example_content_holds`, because the audio
+        # command applies the same gate before voicing — janki must not hold
+        # two ideas about what a teachable example is. Errors, not warnings:
+        # the camera pilot voiced fragments precisely because nothing local
+        # was allowed to stop the build.
+        for code, why in _content_holds(example):
+            add("error", code, f"example {index} {why}")
         if example.japanese and not example.english:
             add(
                 "warning",

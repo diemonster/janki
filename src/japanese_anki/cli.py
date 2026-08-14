@@ -2880,6 +2880,14 @@ def command_audio(args: argparse.Namespace) -> int:
             "never confirmed and were left unvoiced; check them first.",
             file=sys.stderr,
         )
+    if result.held:
+        print(
+            f"warning: {len(result.held)} example(s) failed the teaching-content "
+            "gate and were left unvoiced; fix the sentence or its register "
+            "first: " + "; ".join(result.held[:3])
+            + (" ..." if len(result.held) > 3 else ""),
+            file=sys.stderr,
+        )
     if result.no_reading:
         print(
             f"warning: {len(result.no_reading)} record(s) have no reading to "
@@ -3582,11 +3590,28 @@ def _build_one(
         # and a pattern deck ships none.
         return False
     _, records = resolve_deck_records(deck_path)
-    # The last gate, and only on a build that ships. A `--output` build is a
+    # The last gates, and only on a build that ships. A `--output` build is a
     # throwaway that records nothing — `make gates` builds one on every run —
     # so holding it to a review nobody asked for would make the gate something
     # to work around rather than something to pass.
+    #
+    # Local validation first, and reported on its own (M7.6T build readiness).
+    # A validation failure is fixable here for free, while the review gate's
+    # remedy can be a paid model run that may only happen after every local
+    # gate passes — reported the other way round, a deck with both problems
+    # said only "run janki review". The order is also what keeps a saved clean
+    # review from answering for a later local failure: the review store is
+    # consulted second, and `build_deck` re-validates regardless.
     if output is None:
+        issues = validate_records(records, deck_path)
+        if has_errors(issues):
+            formatted = "\n".join(
+                issue.format() for issue in issues if issue.level == "error"
+            )
+            raise AnkiBuildError(
+                f"{deck_path.name} fails local validation — fix these before "
+                f"any review run:\n{formatted}"
+            )
         _refuse_unreviewed(records, config, deck_path)
     if only_new:
         # Validated before the "nothing new" shortcut, not after it. A deck

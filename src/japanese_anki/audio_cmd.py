@@ -32,10 +32,11 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from japanese_anki import ledger as ledger_mod
-from japanese_anki import pitch
+from japanese_anki import pitch, qc
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.models import ExampleSentence, VocabularyRecord
+from japanese_anki.staging import LEARNER_LOAD_HOLD_KEY
 from japanese_anki.tts import SpeechProvider
 
 __all__ = [
@@ -105,6 +106,11 @@ class AudioResult:
     no_reading: list[str] = field(default_factory=list)
     #: Examples skipped because their furigana was never confirmed (M4.2's flag).
     unverified: list[str] = field(default_factory=list)
+    #: Examples refused by the teaching-content gate (M7.6T): a fragment, a
+    #: false register label, or a learner-load hold. The same judgment
+    #: ``validate`` applies — voicing what the build would refuse turns a held
+    #: question into a recording.
+    held: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     #: Clips that already existed and were left alone.
     up_to_date: int = 0
@@ -245,6 +251,29 @@ def _unverified_fingerprints(record: VocabularyRecord) -> set[str]:
     return {item.strip() for item in raw.split(",") if item.strip()}
 
 
+def _load_held_fingerprints(record: VocabularyRecord) -> set[str]:
+    """The example fingerprints the AI pass held for learner load (M7.6T)."""
+    raw = record.source.raw_fields.get(LEARNER_LOAD_HOLD_KEY, "")
+    return {item.strip() for item in raw.split(",") if item.strip()}
+
+
+def _content_hold(record: VocabularyRecord, example: ExampleSentence) -> str:
+    """Why this example must not be voiced, or empty.
+
+    The teaching-content judgment is :func:`japanese_anki.qc.example_content_holds`
+    — the same one ``validate`` turns into build errors — plus the AI pass's
+    learner-load flag. Checked here as well because audio can be run on a
+    record the build has never seen: the camera pilot voiced its fragments
+    precisely because the only content gate lived after synthesis.
+    """
+    holds = qc.example_content_holds(example)
+    if holds:
+        return holds[0][0]
+    if short_fingerprint(example.japanese) in _load_held_fingerprints(record):
+        return "example-learner-load"
+    return ""
+
+
 def _example_audio(
     record: VocabularyRecord,
     *,
@@ -289,6 +318,10 @@ def _example_audio(
             # M4.2 flagged this because nobody confirmed its segmentation.
             # Speaking it would turn an open question into a recording.
             result.unverified.append(f"{record.id}: {example.japanese}")
+            examples.append(example)
+            continue
+        if reason := _content_hold(record, example):
+            result.held.append(f"{record.id}: {example.japanese} ({reason})")
             examples.append(example)
             continue
 

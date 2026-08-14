@@ -34,6 +34,7 @@ from japanese_anki.romaji import kana_to_romaji
 
 __all__ = [
     "FuriganaVerdict",
+    "example_content_holds",
     "example_contains_target",
     "furigana_base",
     "furigana_pairs",
@@ -117,6 +118,71 @@ def example_contains_target(
     if not sentence.strip():
         return False
     return any(form in sentence for form in target_forms(expression, verb_group))
+
+
+#: Closing quotes, brackets and spacing an ending check should see through.
+_TRAILING_ENCLOSURE = "」』）)】　 \t"
+
+#: Sentence-final punctuation. Its *presence* marks an intentional utterance
+#: (a greeting, an elliptical question); the checks below never require it,
+#: because four owner-reviewed complete sentences in the current collection
+#: end without any.
+_SENTENCE_FINAL = tuple("。．.！!？?…")
+
+#: Polite sentence-final forms, matched at the very end of the sentence. Only
+#: the unambiguous ます/です family: a sentence ending in one of these and
+#: labelled casual is wrong with certainty, which is the only kind of wrong a
+#: local gate may act on.
+_POLITE_FINAL = re.compile(
+    r"(です|でした|でしょう|ます|ました|ましょう|ません|ませんでした)$"
+)
+
+
+def example_content_holds(example: ExampleSentence) -> list[tuple[str, str]]:
+    """Teaching-suitability holds for one example: ``(code, why)`` pairs.
+
+    The M7.6T camera pilot showed source fragments and false register labels
+    passing every structural check and reaching audio. This is the local gate
+    that stops the *certain* cases — and only those. It is deliberately not a
+    grammar model: a rule that guesses holds good sentences hostage, so each
+    check here fires only on evidence that cannot be read another way, and
+    everything subtler is left for the residual AI review. Shared by
+    ``validation`` (which turns holds into errors) and the audio command
+    (which refuses to voice a held example), so the two gates cannot drift.
+    """
+    japanese = example.japanese.strip()
+    if not japanese:
+        return []
+    holds: list[tuple[str, str]] = []
+    bare = japanese.rstrip(_TRAILING_ENCLOSURE)
+    core = bare.rstrip("".join(_SENTENCE_FINAL)).rstrip(_TRAILING_ENCLOSURE)
+    if core.endswith(("について", "については")):
+        holds.append(
+            (
+                "example-fragment",
+                "ends with について — a topic label copied off a source, not a "
+                "sentence anyone would say",
+            )
+        )
+    elif core.endswith("ば") and not bare.endswith(_SENTENCE_FINAL):
+        # The dangling conditional needs the missing punctuation too: 行けば？
+        # is a real elliptical suggestion, but a bare 〜ば with nothing after
+        # it is a clause cut off mid-thought — the exact camera failure shape.
+        holds.append(
+            (
+                "example-fragment",
+                "ends with the conditional ば and no main clause",
+            )
+        )
+    if example.register.strip().lower() == "casual" and _POLITE_FINAL.search(core):
+        holds.append(
+            (
+                "example-register-mismatch",
+                "is labelled casual but ends in the polite ます/です form, so "
+                "the card would teach the opposite of what it says",
+            )
+        )
+    return holds
 
 
 def furigana_pairs(furigana: str) -> tuple[tuple[str, str], ...]:

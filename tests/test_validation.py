@@ -487,3 +487,67 @@ def test_a_space_no_reading_annotates_is_reported() -> None:
 
 def test_the_notation_spaces_of_an_ordinary_field_are_not_reported() -> None:
     assert _issue_messages(_with_example("毎晩[まいばん]、 音楽[おんがく]を 聞[き]いて")) == []
+
+
+# --- the teaching-content gate (M7.6T) ----------------------------------------
+
+
+def _teaching_record(japanese: str, register: str = "") -> VocabularyRecord:
+    from japanese_anki.models import ExampleSentence
+
+    return VocabularyRecord(
+        id="word:出発:しゅっぱつ",
+        expression="出発",
+        reading="しゅっぱつ",
+        meanings=["departure"],
+        examples=[ExampleSentence(japanese=japanese, english="x", register=register)],
+    )
+
+
+def _codes(record: VocabularyRecord) -> list[str]:
+    return [issue.code for issue in validate_records([record])]
+
+
+def test_a_topic_label_fragment_is_held() -> None:
+    # The camera pilot's shape: a source line copied as an "example". について
+    # is never a sentence-final predicate, so this is certain, not a guess.
+    codes = _codes(_teaching_record("古い地図の出発について", register="polite"))
+
+    assert codes == ["example-fragment"]
+
+
+def test_a_dangling_conditional_is_held() -> None:
+    codes = _codes(_teaching_record("もし出発がよければ", register="casual"))
+
+    assert codes == ["example-fragment"]
+
+
+def test_a_polite_sentence_labelled_casual_is_held() -> None:
+    codes = _codes(_teaching_record("明日、九時に出発します。", register="casual"))
+
+    assert codes == ["example-register-mismatch"]
+
+
+def test_complete_polite_and_casual_sentences_pass() -> None:
+    polite = _teaching_record("明日、九時に出発します。", register="polite")
+    casual = _teaching_record("明日の出発、九時だよ。", register="casual")
+
+    assert _codes(polite) == []
+    assert _codes(casual) == []
+
+
+def test_an_intentional_short_utterance_passes() -> None:
+    # Short and casual is not the same thing as a fragment: a te-form request
+    # is something a person actually says, and holding it would teach the gate
+    # to reject real Japanese.
+    codes = _codes(_teaching_record("ちょっと出発して。", register="casual"))
+
+    assert codes == []
+
+
+def test_an_elliptical_conditional_question_is_not_held() -> None:
+    # 〜ば？ is a real elliptical suggestion; the punctuation is what separates
+    # an intentional ellipsis from a clause cut off mid-thought.
+    codes = _codes(_teaching_record("九時に出発すれば？", register="casual"))
+
+    assert codes == []

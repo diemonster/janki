@@ -567,7 +567,9 @@ def test_only_new_refuses_a_broken_deck_even_with_nothing_new(
 
     assert _run(root, "build", "verbs", "--only-new", "--yes") == 1
 
-    assert "Deck validation failed" in capsys.readouterr().err
+    # The shipping path's readiness gate reports it (M7.6T): local validation
+    # first, on its own, before any review-state answer.
+    assert "fails local validation" in capsys.readouterr().err
 
 
 # --- work the deck will never see -------------------------------------------
@@ -805,7 +807,7 @@ def test_one_broken_deck_does_not_lose_another_decks_exports(
 
     assert _run(root, "build", "--all", "--only-new", "--yes") == 1
 
-    assert "Deck validation failed" in capsys.readouterr().err
+    assert "fails local validation" in capsys.readouterr().err
     assert (root / "ledger.json").exists(), "the ledger was still saved"
     assert _exports(root).get("word:本:ほん", {}).get("nouns"), (
         "the deck that built before the failure kept its export entry"

@@ -177,6 +177,45 @@ def test_an_example_with_unconfirmed_furigana_is_not_voiced(tmp_path: Path) -> N
     assert result.unverified == [f"word:橋:はし: {sentence}"]
 
 
+def test_a_fragment_example_is_held_and_not_voiced(tmp_path: Path) -> None:
+    # The camera pilot voiced source fragments because the only content gate
+    # lived after synthesis. The audio command now applies the same judgment
+    # `validate` does, so a held sentence never becomes a recording.
+    fragment, fine = "古い橋の工事について", "橋が長いです。"
+    held = record(
+        examples=[
+            ExampleSentence(japanese=fragment, english="x", register="polite"),
+            ExampleSentence(japanese=fine, english="y", register="polite"),
+        ]
+    )
+
+    result, provider, _ = run([held], tmp_path, words=False, examples=True)
+
+    assert provider.said == [(fine, False)]
+    assert result.held == [f"word:橋:はし: {fragment} (example-fragment)"]
+    assert result.records[0].examples[0].audio == ""
+    assert result.records[0].examples[1].audio.startswith("audio/")
+
+
+def test_a_learner_load_held_example_is_not_voiced(tmp_path: Path) -> None:
+    from japanese_anki.identifiers import short_fingerprint
+
+    sentence = "橋を渡ります。"
+    held = record(
+        examples=[ExampleSentence(japanese=sentence, english="x", register="polite")],
+        source=SourceReference(
+            type="jpdb",
+            imported_from="deck",
+            raw_fields={"learner_load_hold": short_fingerprint(sentence)},
+        ),
+    )
+
+    result, provider, _ = run([held], tmp_path, words=False, examples=True)
+
+    assert provider.said == []
+    assert result.held == [f"word:橋:はし: {sentence} (example-learner-load)"]
+
+
 def test_a_confirmed_example_beside_a_flagged_one_is_still_voiced(tmp_path: Path) -> None:
     from japanese_anki.identifiers import short_fingerprint
 

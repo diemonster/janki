@@ -268,6 +268,63 @@ def test_an_unreviewed_card_stops_the_build(
     assert "janki review" in err
 
 
+def test_local_validation_failures_are_reported_before_the_review_gate(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """M7.6T build readiness: a deck that fails local validation *and* has
+    unreviewed cards must name the local failure — it is fixable here for
+    free, while the review gate's remedy can be a paid run that may only
+    happen after every local gate passes."""
+    from japanese_anki.models import ExampleSentence
+
+    fragment = record(
+        examples=[
+            ExampleSentence(
+                japanese="古い地図の話について", english="x", register="polite"
+            )
+        ]
+    )
+    root = project(tmp_path, [fragment])
+
+    assert cli.main(["--root", str(root), "build", "verbs"]) == 1
+
+    err = capsys.readouterr().err
+    assert "example-fragment" in err
+    assert "fails local validation" in err
+    assert "have not been read" not in err
+
+
+def test_a_saved_clean_review_cannot_answer_for_a_later_local_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from japanese_anki.models import ExampleSentence
+
+    root = project(tmp_path, [record()])
+    monkeypatch.setattr(review_module.claude_client, "parse_call", reader(Verdict()))
+    assert cli.main(["--root", str(root), "review"]) == 0
+    assert cli.main(["--root", str(root), "build", "verbs"]) == 0
+
+    # A later edit introduces a local content failure. Whatever the review
+    # store still says about this record, the build's answer must come from
+    # validation, not from the saved result.
+    broken = record(
+        examples=[
+            ExampleSentence(
+                japanese="明日、九時に話します。", english="x", register="casual"
+            )
+        ]
+    )
+    (root / "vocabulary.json").write_text(
+        json.dumps([broken.to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+    capsys.readouterr()
+
+    assert cli.main(["--root", str(root), "build", "verbs"]) == 1
+
+    err = capsys.readouterr().err
+    assert "example-register-mismatch" in err
+
+
 def test_accepting_lets_the_build_through(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

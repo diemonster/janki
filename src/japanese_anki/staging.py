@@ -92,6 +92,12 @@ HOLD_UNVERIFIABLE_ID = "cannot check this id against the whole collection"
 EXAMPLE_AUTHORITY_KEY = "example_authority"
 EXAMPLE_AUTHORITY_STAGING = "staging-review"
 
+#: Example content-fingerprints the AI pass held for learner load (M7.6T),
+#: comma-joined in ``source.raw_fields``. ``enrich`` writes it from parsed
+#: words, known-vocabulary and frequency data; the audio command refuses to
+#: voice a held sentence. Shared here for the usual no-drift reason.
+LEARNER_LOAD_HOLD_KEY = "learner_load_hold"
+
 #: Authority state for semantic fields a model filled during extraction. The
 #: marker is ``name:fingerprint`` pairs, comma-joined — ``extract`` writes it,
 #: ``enrich`` resolves it against dictionary evidence, and the shared constant

@@ -48,6 +48,7 @@ from japanese_anki.models import ExampleSentence, VocabularyRecord
 from japanese_anki.romaji import kana_to_romaji
 from japanese_anki.staging import (
     EXAMPLE_AUTHORITY_KEY,
+    LEARNER_LOAD_HOLD_KEY,
     NON_READING_HOLDS,
     annotate,
     annotations,
@@ -1079,6 +1080,10 @@ class AiOutcome:
     changes: dict[str, tuple[Any, Any]] = field(default_factory=dict)
     rejected: list[str] = field(default_factory=list)
     unverified: list[str] = field(default_factory=list)
+    #: Sentences kept but held for learner load (M7.6T): more unknown, uncommon
+    #: words than a beginner example may carry. Held, not rejected — the hold is
+    #: a reviewable flag, and audio refuses to voice it.
+    load_held: list[str] = field(default_factory=list)
     impossible_furigana: list[
         tuple[str, str, tuple[tuple[str, str], ...]]
     ] = field(default_factory=list)
@@ -1106,6 +1111,59 @@ def _words_of(parse: Any) -> list[str]:
         if spelling:
             words.append(spelling)
     return words
+
+
+#: One example may introduce at most this many words that are neither in the
+#: learner's collection nor common. Two is a deliberate allowance, not a
+#: measurement: a sentence teaching one new word alongside two more strangers
+#: is already at the edge of what AGENTS.md's "beginner using Genki-style
+#: grammar" rule tolerates, and three is a wall of unknowns.
+_LEARNER_LOAD_ALLOWED = 2
+
+#: The jpdb rank beyond which a word does not count as common. Coarse on
+#: purpose — the bound exists to catch sentences stacked with genuinely
+#: obscure words, not to litigate rank 19,000 against 21,000.
+_LEARNER_LOAD_RANK_LIMIT = 20000
+
+
+def _learner_load_excess(
+    parse: Any, *, accepted_forms: Sequence[str], known: frozenset[str]
+) -> list[str] | None:
+    """The unknown, uncommon words a parsed sentence loads onto a beginner.
+
+    Empty when the load is within the allowance; ``None`` when the sentence
+    has no usable parse — undecidable, and the unverified-furigana flag
+    already holds an unparsed sentence from audio, so no second hold is
+    invented for it. Words the learner's collection knows and every accepted
+    form of the headword are free: the headword is the one word an example
+    exists to introduce.
+    """
+    tokens = getattr(parse, "tokens", None)
+    vocabulary = getattr(parse, "vocabulary", None)
+    if not isinstance(tokens, list) or not isinstance(vocabulary, list):
+        return None
+    hard: list[str] = []
+    for token in tokens:
+        if not isinstance(token, Mapping):
+            continue
+        index = token.get("vocabulary_index")
+        if not isinstance(index, int) or not 0 <= index < len(vocabulary):
+            continue
+        entry = vocabulary[index]
+        if not isinstance(entry, Mapping):
+            continue
+        spelling = str(entry.get("spelling", ""))
+        if (
+            not spelling
+            or spelling in known
+            or spelling in accepted_forms
+            or spelling in hard
+        ):
+            continue
+        rank = jpdb.frequency_rank(entry.get("frequency_rank"))
+        if rank is None or rank > _LEARNER_LOAD_RANK_LIMIT:
+            hard.append(spelling)
+    return hard if len(hard) > _LEARNER_LOAD_ALLOWED else []
 
 
 def _fill_existing_example_annotations(
@@ -1151,6 +1209,7 @@ def apply_ai_result(
     force_fields: Sequence[str] = (),
     parses: Mapping[str, Any] | None = None,
     kanji_store: Any | None = None,
+    known_expressions: frozenset[str] | None = None,
 ) -> AiOutcome:
     """Put a model's answer through the mechanical checks, then the fill rules.
 
@@ -1169,6 +1228,12 @@ def apply_ai_result(
     ``parses`` maps a sentence to its jpdb ``ParseResult``. An absent one is
     not a pass: it means nobody checked, and the example is flagged the same
     way a mismatch is, because "unverified" is exactly what it is.
+
+    ``known_expressions`` is the learner's collection, for the M7.6T
+    learner-load bound: a kept sentence whose parse shows too many words that
+    are neither known nor common is held — flagged like an unverified one, so
+    audio refuses it — rather than shipped as beginner material. ``None``
+    means no collection data was offered, and no check runs on a guess.
     """
     outcome = AiOutcome(record=record)
     kept: list[ExampleSentence] = []
@@ -1226,6 +1291,14 @@ def apply_ai_result(
             or not qc.verify_example_furigana(example, parse)
         ):
             outcome.unverified.append(example.japanese)
+        if known_expressions is not None and parse is not None:
+            excess = _learner_load_excess(
+                parse,
+                accepted_forms=qc.target_forms(record.expression, record.verb_group),
+                known=known_expressions,
+            )
+            if excess:
+                outcome.load_held.append(example.japanese)
         kept.append(qc.regenerate_example_romaji(example))
 
     unverified = list(outcome.unverified)
@@ -1286,8 +1359,16 @@ def apply_ai_result(
         ]
         updated, changes = _apply(record, proposals, writable)
     if "examples" in changes:
+        landed_sentences = {
+            example.japanese for example in updated.examples if example.japanese
+        }
+        outcome.load_held = [
+            sentence for sentence in outcome.load_held if sentence in landed_sentences
+        ]
         if outcome.unverified:
             updated = _flag_unverified(updated, outcome.unverified)
+        if outcome.load_held:
+            updated = _flag_learner_load(updated, outcome.load_held)
     else:
         # The examples were not written — the field was not writable, or the
         # answer matched what is already there. Nothing was flagged, so nothing
@@ -1295,6 +1376,7 @@ def apply_ai_result(
         # no key. The rejections still stand; those were the model's sentences
         # either way.
         outcome.unverified = []
+        outcome.load_held = []
         outcome.impossible_furigana = []
     outcome.record = updated
     outcome.changes = changes
@@ -1315,6 +1397,26 @@ def _flag_unverified(record: VocabularyRecord, sentences: Sequence[str]) -> Voca
         item for item in raw_fields.get(UNVERIFIED_KEY, "").split(",") if item.strip()
     ]
     raw_fields[UNVERIFIED_KEY] = ",".join(dict.fromkeys(existing + fingerprints))
+    return replace(record, source=replace(record.source, raw_fields=raw_fields))
+
+
+def _flag_learner_load(
+    record: VocabularyRecord, sentences: Sequence[str]
+) -> VocabularyRecord:
+    """Record which examples the learner-load bound held, by content fingerprint.
+
+    The same shape as :func:`_flag_unverified` for the same reader: the audio
+    command refuses to voice a held sentence, and a fingerprint survives a
+    human reordering or deleting neighbours where an index would not.
+    """
+    fingerprints = [short_fingerprint(sentence) for sentence in sentences]
+    raw_fields = dict(record.source.raw_fields)
+    existing = [
+        item
+        for item in raw_fields.get(LEARNER_LOAD_HOLD_KEY, "").split(",")
+        if item.strip()
+    ]
+    raw_fields[LEARNER_LOAD_HOLD_KEY] = ",".join(dict.fromkeys(existing + fingerprints))
     return replace(record, source=replace(record.source, raw_fields=raw_fields))
 
 
@@ -1563,6 +1665,8 @@ class AiResult:
     changes: dict[str, dict[str, tuple[Any, Any]]] = field(default_factory=dict)
     rejected: dict[str, list[str]] = field(default_factory=dict)
     unverified: dict[str, list[str]] = field(default_factory=dict)
+    #: ``record id -> [sentence]`` held by the learner-load bound (M7.6T).
+    load_held: dict[str, list[str]] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     no_changes: list[str] = field(default_factory=list)
     looked_up: int = 0
@@ -1632,6 +1736,11 @@ def enrich_ai(
     caller = parse_call or claude_client.parse_call
     options = dict(call_options or {})
     recent: list[str] = []
+    # The learner's collection, for the learner-load bound: every expression
+    # janki holds a card for is a word an example may use for free.
+    known = frozenset(
+        record.expression for record in result.records if record.expression
+    )
 
     for record in targets:
         result.looked_up += 1
@@ -1654,6 +1763,7 @@ def enrich_ai(
             force_fields=force_fields,
             jpdb_client=jpdb_client,
             kanji_store=kanji_store,
+            known_expressions=known,
         )
         position = positions[record.id]
         current = result.records[position]
@@ -1680,6 +1790,7 @@ def enrich_ai(
             force_fields=force_fields,
             jpdb_client=jpdb_client,
             kanji_store=kanji_store,
+            known_expressions=known,
         )
         retry_wrote_examples = bool(result.records[position].examples)
         retry_reported_rejection = record.id in result.rejected
@@ -1705,6 +1816,7 @@ def absorb_ai_call(
     force_fields: Sequence[str] = (),
     jpdb_client: jpdb.JpdbClient | None = None,
     kanji_store: Any | None = None,
+    known_expressions: frozenset[str] | None = None,
 ) -> None:
     """Put one model answer through the checks and fold it into ``result``.
 
@@ -1739,6 +1851,7 @@ def absorb_ai_call(
         force_fields=force_fields,
         parses=_verify_parses(jpdb_client, sentences),
         kanji_store=kanji_store,
+        known_expressions=known_expressions,
     )
     if outcome.rejected:
         result.rejected[record.id] = outcome.rejected
@@ -1751,6 +1864,13 @@ def absorb_ai_call(
         result.warnings.append(
             f"{record.id}: {len(outcome.unverified)} example(s) have furigana "
             "jpdb did not confirm; kept and flagged for review."
+        )
+    if outcome.load_held:
+        result.load_held[record.id] = outcome.load_held
+        result.warnings.append(
+            f"{record.id}: {len(outcome.load_held)} example(s) carry too many "
+            "unknown, uncommon words for a beginner; kept, held from audio, "
+            "and flagged for review."
         )
     if outcome.impossible_furigana:
         groups = sorted(

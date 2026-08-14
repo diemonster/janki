@@ -24,6 +24,7 @@ SEEDED_CASES = (
     "enrichment-provisional-precedence",
     "enrichment-suru-compound",
     "example-romaji-invalid-furigana",
+    "example-teaching-suitability",
     "extraction-oracle-key-binding",
     "extraction-selection-target-binding",
     "extraction-source-example-promotion",
