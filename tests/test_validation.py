@@ -620,29 +620,6 @@ def test_a_kana_ma_stem_plain_form_is_not_read_as_polite() -> None:
     assert codes == []
 
 
-def test_a_learner_load_hold_is_visible_to_validate() -> None:
-    # Audio refuses a held sentence; validate must *see* it too, or the deck
-    # ships the sentence silently as study content with nothing reporting why
-    # its audio is missing.
-    from japanese_anki.identifiers import short_fingerprint
-    from japanese_anki.models import SourceReference
-
-    sentence = "明日、九時に出発します。"
-    held = replace(
-        _teaching_record(sentence, register="polite"),
-        source=SourceReference(
-            type="extract",
-            imported_from="page.jpg",
-            raw_fields={"learner_load_hold": short_fingerprint(sentence)},
-        ),
-    )
-    issues = validate_records([held])
-
-    assert [issue.code for issue in issues] == ["example-learner-load"]
-    assert [issue.level for issue in issues] == ["warning"]
-    assert not has_errors(issues)
-
-
 def test_unambiguous_polite_negatives_and_volitionals_are_held() -> None:
     # No dictionary form ends in ません or ましょう, so they need no stem
     # guard — narrowing them alongside ます made 食べません escape while

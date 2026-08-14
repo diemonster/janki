@@ -395,62 +395,6 @@ def _canned_parse(*words: tuple[str, int | None]) -> Any:
     )
 
 
-def test_a_sentence_stacked_with_rare_unknown_words_is_held() -> None:
-    # Three words that are neither in the collection nor common is a wall of
-    # unknowns, not a beginner example. Held, not rejected: the sentence
-    # lands flagged, and the audio command refuses to voice it.
-    sentence = "深海の甲冑が古文書と共に話す。"
-    parse = _canned_parse(
-        ("深海", 45000), ("甲冑", None), ("古文書", 52000), ("話す", 200)
-    )
-
-    outcome = apply_ai_result(
-        record(),
-        answer(generated(sentence)),
-        parses={sentence: parse},
-        known_expressions=frozenset({"話す"}),
-    )
-
-    assert outcome.load_held == [sentence]
-    assert "learner_load_hold" in outcome.record.source.raw_fields
-    assert [ex.japanese for ex in outcome.record.examples] == [sentence]
-
-
-def test_known_and_common_words_do_not_count_toward_the_load() -> None:
-    # The same rare words, but one is in the learner's collection: the load is
-    # within the allowance, and a hold here would punish exactly the sentence
-    # that reuses what the learner already studies.
-    sentence = "深海の甲冑が古文書と共に話す。"
-    parse = _canned_parse(
-        ("深海", 45000), ("甲冑", None), ("古文書", 52000), ("話す", 200)
-    )
-
-    outcome = apply_ai_result(
-        record(),
-        answer(generated(sentence)),
-        parses={sentence: parse},
-        known_expressions=frozenset({"話す", "甲冑"}),
-    )
-
-    assert outcome.load_held == []
-    assert "learner_load_hold" not in outcome.record.source.raw_fields
-
-
-def test_no_collection_data_means_no_load_check() -> None:
-    # None says nobody offered collection data; a bound computed against a
-    # guessed vocabulary would hold good sentences at random.
-    sentence = "深海の甲冑が古文書と共に話す。"
-    parse = _canned_parse(
-        ("深海", 45000), ("甲冑", None), ("古文書", 52000), ("話す", 200)
-    )
-
-    outcome = apply_ai_result(
-        record(), answer(generated(sentence)), parses={sentence: parse}
-    )
-
-    assert outcome.load_held == []
-
-
 def test_furigana_jpdb_confirms_is_not_flagged(tmp_path: Path) -> None:
     parse = jpdb_for(FakeJpdb({"話します。": HANASHIMASU})).parse("話します。")
 

@@ -183,12 +183,9 @@ now belongs to exactly one of them:
 
 Promotion, oracle acceptance, and a structurally valid record approve nothing
 semantic. The local gates enforce teaching suitability before anything paid or
-audible: `validate` errors on certain fragments and false register labels and
-warns on learner-load holds (`qc.example_content_holds` — one judgment,
-certainties only, no grammar model), the AI pass bounds learner load from its
-jpdb parses and the collection's own expressions on the synchronous and batch
-paths alike (`raw_fields["learner_load_hold"]`), the audio command refuses to
-voice any held or failing example, every one of these keys and the provisional
+audible: `validate` errors on certain fragments and false register labels
+(`qc.example_content_holds` — one judgment, certainties only, no grammar
+model), the audio command refuses to voice any held or failing example, every one of these keys and the provisional
 marker travels through the merge with the field it describes, and a shipping
 build — word or drill deck — reports local validation failures on their own
 before the review store is consulted.

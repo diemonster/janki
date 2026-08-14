@@ -222,9 +222,8 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
         # command applies the same gate before voicing — janki must not hold
         # two ideas about what a teachable example is. Each hold carries its
         # own level: the certain shapes (fragments, false register labels)
-        # are errors that stop a build, the camera pilot's exact gap; a
-        # learner-load hold is a warning, because it awaits a person's
-        # decision — but it is *visible* here, not only at the audio gate.
+        # are errors that stop a build, the camera pilot's exact gap — and
+        # they are *visible* here, not only at the audio gate.
         for code, level, why in _content_holds(record, example):
             add(level, code, f"example {index} {why}")
         if example.japanese and not example.english:
@@ -308,8 +307,8 @@ def refusal_text(deck_name: str, issues: list[ValidationIssue]) -> str:
     """The one refusal a build states when local validation fails.
 
     Every issue, warnings included: a refused build is the moment the person
-    is looking, and a warning hidden here (a learner-load hold, a missing
-    translation) ships silently once the errors are fixed. One formatter for
+    is looking, and a warning hidden here (a missing translation) ships
+    silently once the errors are fixed. One formatter for
     every gate — the CLI's shipping pre-gate and the exporters' backstops —
     so the same broken deck cannot report differently depending on which gate
     caught it.

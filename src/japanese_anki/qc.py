@@ -30,13 +30,10 @@ from japanese_anki.conjugation import conjugate, polite_stem
 from japanese_anki.identifiers import (
     contains_kanji,
     normalize_identity_part,
-    short_fingerprint,
 )
 from japanese_anki.models import (
-    LEARNER_LOAD_HOLD_KEY,
     ExampleSentence,
     VocabularyRecord,
-    example_flags,
 )
 from japanese_anki.romaji import kana_to_romaji
 
@@ -284,16 +281,6 @@ def example_content_holds(
                 "error",
                 "is labelled casual but ends in the polite ます/です form, so "
                 "the card would teach the opposite of what it says",
-            )
-        )
-    if short_fingerprint(japanese) in example_flags(record, LEARNER_LOAD_HOLD_KEY):
-        holds.append(
-            (
-                "example-learner-load",
-                "warning",
-                "was held by the AI pass for carrying too many unknown, "
-                "uncommon words; review it or regenerate with --force-fields "
-                "examples — audio will not voice it until then",
             )
         )
     return holds

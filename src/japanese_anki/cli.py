@@ -3524,7 +3524,7 @@ def _refuse_invalid(records: Sequence[Any], deck_path: Path) -> None:
         raise AnkiBuildError(refusal_text(deck_path.name, issues))
     for issue in issues:
         # Warnings do not refuse, but a shipping build is the moment the
-        # person is looking: a learner-load hold surfaced only here is the
+        # person is looking: a content warning surfaced only here is the
         # difference between a deck that ships a silent unvoiced sentence
         # and one whose owner chose to.
         print(f"warning: {issue.format()}", file=sys.stderr)

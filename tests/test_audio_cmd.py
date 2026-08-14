@@ -220,25 +220,6 @@ def test_a_held_example_keeps_no_stale_clip_reference(tmp_path: Path) -> None:
     assert result.records[0].examples[0].audio == ""
 
 
-def test_a_learner_load_held_example_is_not_voiced(tmp_path: Path) -> None:
-    from japanese_anki.identifiers import short_fingerprint
-
-    sentence = "橋を渡ります。"
-    held = record(
-        examples=[ExampleSentence(japanese=sentence, english="x", register="polite")],
-        source=SourceReference(
-            type="jpdb",
-            imported_from="deck",
-            raw_fields={"learner_load_hold": short_fingerprint(sentence)},
-        ),
-    )
-
-    result, provider, _ = run([held], tmp_path, words=False, examples=True)
-
-    assert provider.said == []
-    assert result.held == [f"word:橋:はし: {sentence} (example-learner-load)"]
-
-
 def test_a_confirmed_example_beside_a_flagged_one_is_still_voiced(tmp_path: Path) -> None:
     from japanese_anki.identifiers import short_fingerprint
 

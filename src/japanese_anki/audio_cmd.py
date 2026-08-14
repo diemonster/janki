@@ -110,8 +110,8 @@ class AudioResult:
     no_reading: list[str] = field(default_factory=list)
     #: Examples skipped because their furigana was never confirmed (M4.2's flag).
     unverified: list[str] = field(default_factory=list)
-    #: Examples refused by the teaching-content gate (M7.6T): a fragment, a
-    #: false register label, or a learner-load hold. The same judgment
+    #: Examples refused by the teaching-content gate (M7.6T): a fragment or
+    #: a false register label. The same judgment
     #: ``validate`` applies — voicing what the build would refuse turns a held
     #: question into a recording.
     held: list[str] = field(default_factory=list)

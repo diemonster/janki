@@ -19,11 +19,9 @@ from japanese_anki import cli
 from japanese_anki import review as review_module
 from japanese_anki.claude_client import CallResult
 from japanese_anki.models import (
-    LEARNER_LOAD_HOLD_KEY,
     ExampleSentence,
     SourceReference,
     VocabularyRecord,
-    add_example_flags,
 )
 from japanese_anki.review import (
     CardReview,
@@ -1465,22 +1463,16 @@ def test_a_card_with_a_local_error_is_not_paid_to_be_read(
     assert calls == []
 
 
-def test_a_learner_load_hold_does_not_block_the_read(
+def test_a_warning_does_not_hold_a_card_back(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A hold is a warning, and a held card is still a finished card whose
-    language a reader can judge. Refusing it would strand it between a build
-    that calls it unreviewed and a review that calls it unready."""
+    """The gate refuses on the class `build` refuses on. A card carrying only
+    warnings is a finished card whose language a reader can still judge, and
+    holding it back would strand it between a build that calls it unreviewed
+    and a review that calls it unready."""
     calls: list[str] = []
-    # part_of_speech set so the learner-load hold is this record's *only*
-    # warning: without it every fixture also carries verb-group-without-part-of-
-    # speech, and a mutation that refused on warnings would fail this test for
-    # that instead — passing the mutation check while proving nothing about
-    # holds.
-    held = add_example_flags(
-        record(part_of_speech="v5s"), LEARNER_LOAD_HOLD_KEY, ["毎日話します。"]
-    )
-    root = project(tmp_path, [held])
+    # verb_group with no part_of_speech: a warning, and this record's only one.
+    root = project(tmp_path, [record()])
     monkeypatch.setattr(
         review_module.claude_client, "parse_call", reader(Verdict(), calls=calls)
     )

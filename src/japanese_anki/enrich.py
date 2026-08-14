@@ -50,7 +50,6 @@ from japanese_anki.io import is_empty
 from japanese_anki.ledger import Ledger
 from japanese_anki.models import (
     FURIGANA_UNVERIFIED_KEY,
-    LEARNER_LOAD_HOLD_KEY,
     ExampleSentence,
     VocabularyRecord,
     add_example_flags,
@@ -1126,7 +1125,6 @@ class AiOutcome:
     #: Sentences kept but held for learner load (M7.6T): more unknown, uncommon
     #: words than a beginner example may carry. Held, not rejected — the hold is
     #: a reviewable flag, and audio refuses to voice it.
-    load_held: list[str] = field(default_factory=list)
     #: True when generated examples were discarded to preserve stored ones —
     #: the preserve decision itself, carried first-class so the caller's
     #: warning reports what this function did rather than re-deriving it from
@@ -1174,63 +1172,6 @@ def _parsed_entries(parse: Any) -> list[Mapping[str, Any]]:
     return entries
 
 
-def _known_expressions(records: Sequence[VocabularyRecord]) -> frozenset[str]:
-    """The learner's collection, as the learner-load bound compares words.
-
-    One definition for the synchronous and batch passes — the bound must hold
-    (or clear) the same sentence whichever route the reply took. Normalized,
-    because this project's inputs are documented to carry decomposed dakuten
-    and jpdb answers composed spellings: the learner's own 食べる must never
-    count as an unknown word over a normalization form.
-    """
-    return frozenset(
-        normalized
-        for record in records
-        if (normalized := normalize_identity_part(record.expression))
-    )
-
-
-#: One example may introduce at most this many words that are neither in the
-#: learner's collection nor common. Two is a deliberate allowance, not a
-#: measurement: a sentence teaching one new word alongside two more strangers
-#: is already at the edge of what AGENTS.md's "beginner using Genki-style
-#: grammar" rule tolerates, and three is a wall of unknowns.
-_LEARNER_LOAD_ALLOWED = 2
-
-#: The jpdb rank beyond which a word does not count as common. Coarse on
-#: purpose — the bound exists to catch sentences stacked with genuinely
-#: obscure words, not to litigate rank 19,000 against 21,000.
-_LEARNER_LOAD_RANK_LIMIT = 20000
-
-
-def _learner_load_excess(
-    parse: Any, *, accepted_forms: Sequence[str], known: frozenset[str]
-) -> list[str]:
-    """The unknown, uncommon words a parsed sentence loads onto a beginner.
-
-    Empty when the load is within the allowance — and also for a sentence
-    with no usable parse: undecidable means no hold is invented, and the
-    unverified-furigana flag already keeps an unparsed sentence from audio.
-    Words the learner's collection knows and every accepted form of the
-    headword are free: the headword is the one word an example exists to
-    introduce.
-    """
-    hard: list[str] = []
-    for entry in _parsed_entries(parse):
-        spelling = normalize_identity_part(str(entry.get("spelling", "")))
-        if (
-            not spelling
-            or spelling in known
-            or spelling in accepted_forms
-            or spelling in hard
-        ):
-            continue
-        rank = jpdb.frequency_rank(entry.get("frequency_rank"))
-        if rank is None or rank > _LEARNER_LOAD_RANK_LIMIT:
-            hard.append(spelling)
-    return hard if len(hard) > _LEARNER_LOAD_ALLOWED else []
-
-
 def _fill_existing_example_annotations(
     stored: Sequence[ExampleSentence],
     generated: Sequence[ExampleSentence],
@@ -1274,7 +1215,6 @@ def apply_ai_result(
     force_fields: Sequence[str] = (),
     parses: Mapping[str, Any] | None = None,
     kanji_store: Any | None = None,
-    known_expressions: frozenset[str] | None = None,
 ) -> AiOutcome:
     """Put a model's answer through the mechanical checks, then the fill rules.
 
@@ -1294,7 +1234,6 @@ def apply_ai_result(
     not a pass: it means nobody checked, and the example is flagged the same
     way a mismatch is, because "unverified" is exactly what it is.
 
-    ``known_expressions`` is the learner's collection, for the M7.6T
     learner-load bound: a kept sentence whose parse shows too many words that
     are neither known nor common is held — flagged like an unverified one, so
     audio refuses it — rather than shipped as beginner material. ``None``
@@ -1303,7 +1242,6 @@ def apply_ai_result(
     outcome = AiOutcome(record=record)
     kept: list[ExampleSentence] = []
     # Loop-invariant, and not free: target_forms builds a conjugation table.
-    accepted_forms = qc.target_forms(record.expression, record.verb_group)
 
     for item in getattr(parsed, "examples", []) or []:
         register = str(getattr(item, "speech_level", "") or "").strip().lower()
@@ -1361,12 +1299,6 @@ def apply_ai_result(
             or not qc.verify_example_furigana(example, parse)
         ):
             outcome.unverified.append(example.japanese)
-        if known_expressions is not None and parse is not None:
-            excess = _learner_load_excess(
-                parse, accepted_forms=accepted_forms, known=known_expressions
-            )
-            if excess:
-                outcome.load_held.append(example.japanese)
         kept.append(qc.regenerate_example_romaji(example))
 
     unverified = list(outcome.unverified)
@@ -1442,15 +1374,8 @@ def apply_ai_result(
         landed_sentences = {
             example.japanese for example in updated.examples if example.japanese
         }
-        outcome.load_held = [
-            sentence for sentence in outcome.load_held if sentence in landed_sentences
-        ]
         if outcome.unverified:
             updated = add_example_flags(updated, UNVERIFIED_KEY, outcome.unverified)
-        if outcome.load_held:
-            updated = add_example_flags(
-                updated, LEARNER_LOAD_HOLD_KEY, outcome.load_held
-            )
         # Then collect the garbage the write may have orphaned: a fingerprint
         # matching no current example refers to nothing, and pruning here is
         # what gives a hold a lifecycle — regenerating a held sentence with
@@ -1458,7 +1383,7 @@ def apply_ai_result(
         current = frozenset(
             short_fingerprint(sentence) for sentence in landed_sentences
         )
-        for key in (UNVERIFIED_KEY, LEARNER_LOAD_HOLD_KEY):
+        for key in (UNVERIFIED_KEY,):
             updated = prune_example_flags(updated, key, current)
     else:
         # The examples were not written — the field was not writable, or the
@@ -1467,7 +1392,6 @@ def apply_ai_result(
         # no key. The rejections still stand; those were the model's sentences
         # either way.
         outcome.unverified = []
-        outcome.load_held = []
         outcome.impossible_furigana = []
         outcome.rewritten_furigana = []
     outcome.record = updated
@@ -1722,7 +1646,6 @@ class AiResult:
     rejected: dict[str, list[str]] = field(default_factory=dict)
     unverified: dict[str, list[str]] = field(default_factory=dict)
     #: ``record id -> [sentence]`` held by the learner-load bound (M7.6T).
-    load_held: dict[str, list[str]] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     no_changes: list[str] = field(default_factory=list)
     looked_up: int = 0
@@ -1792,7 +1715,6 @@ def enrich_ai(
     caller = parse_call or claude_client.parse_call
     options = dict(call_options or {})
     recent: list[str] = []
-    known = _known_expressions(result.records)
 
     for record in targets:
         result.looked_up += 1
@@ -1815,7 +1737,6 @@ def enrich_ai(
             force_fields=force_fields,
             jpdb_client=jpdb_client,
             kanji_store=kanji_store,
-            known_expressions=known,
         )
         position = positions[record.id]
         current = result.records[position]
@@ -1842,7 +1763,6 @@ def enrich_ai(
             force_fields=force_fields,
             jpdb_client=jpdb_client,
             kanji_store=kanji_store,
-            known_expressions=known,
         )
         retry_wrote_examples = bool(result.records[position].examples)
         retry_reported_rejection = record.id in result.rejected
@@ -1868,7 +1788,6 @@ def absorb_ai_call(
     force_fields: Sequence[str] = (),
     jpdb_client: jpdb.JpdbClient | None = None,
     kanji_store: Any | None = None,
-    known_expressions: frozenset[str] | None = None,
 ) -> None:
     """Put one model answer through the checks and fold it into ``result``.
 
@@ -1903,7 +1822,6 @@ def absorb_ai_call(
         force_fields=force_fields,
         parses=_verify_parses(jpdb_client, sentences),
         kanji_store=kanji_store,
-        known_expressions=known_expressions,
     )
     if outcome.rejected:
         result.rejected[record.id] = outcome.rejected
@@ -1916,13 +1834,6 @@ def absorb_ai_call(
         result.warnings.append(
             f"{record.id}: {len(outcome.unverified)} example(s) have furigana "
             "jpdb did not confirm; kept and flagged for review."
-        )
-    if outcome.load_held:
-        result.load_held[record.id] = outcome.load_held
-        result.warnings.append(
-            f"{record.id}: {len(outcome.load_held)} example(s) carry too many "
-            "unknown, uncommon words for a beginner; kept, held from audio, "
-            "and flagged for review."
         )
     if outcome.preserved and any(
         example.japanese and not example_accepted(record, example)
@@ -2433,7 +2344,6 @@ def apply_batch_results(
     candidates = {str(item) for item in only}
     recent: list[str] = []
     seen: set[str] = set()
-    known = _known_expressions(outcome.result.records)
 
     for entry in entries:
         record_id = keys.get(entry.custom_id)
@@ -2488,7 +2398,6 @@ def apply_batch_results(
             force_fields=force_fields,
             jpdb_client=jpdb_client,
             kanji_store=kanji_store,
-            known_expressions=known,
         )
 
     for record_id in pending_ids:

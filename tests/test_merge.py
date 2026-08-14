@@ -675,9 +675,9 @@ def test_a_merge_import_over_a_malformed_file_is_a_clean_error(
 
 
 def test_hold_flags_travel_with_the_examples_they_describe() -> None:
-    # furigana_unverified says "nobody checked these", learner_load_hold says
-    # "audio must not voice these". If the examples land and either key does
-    # not, the store holds sentences with nothing saying so. The incoming row
+    # furigana_unverified says "nobody checked these". If the examples land
+    # and the key does not, the store holds sentences with nothing saying so.
+    # The incoming row
     # is the AI staging route's shape: the record's own non-extract source,
     # carrying the flags the pass wrote.
     bare = replace(_curated(), examples=[])
@@ -686,17 +686,13 @@ def test_hold_flags_travel_with_the_examples_they_describe() -> None:
         source=SourceReference(
             type="shirabe",
             imported_from="export.csv",
-            raw_fields={
-                "furigana_unverified": "aaaa1111",
-                "learner_load_hold": "bbbb2222",
-            },
+            raw_fields={"furigana_unverified": "aaaa1111"},
         ),
     )
 
     merged, _ = merge_records([bare], [flagged])
 
     assert merged[0].source.raw_fields["furigana_unverified"] == "aaaa1111"
-    assert merged[0].source.raw_fields["learner_load_hold"] == "bbbb2222"
 
 
 def test_an_unaccepted_extract_example_cannot_fill_a_curated_record() -> None:
@@ -741,13 +737,13 @@ def test_hold_flags_do_not_travel_when_the_examples_do_not() -> None:
         source=SourceReference(
             type="extract",
             imported_from="page.jpg",
-            raw_fields={"learner_load_hold": "bbbb2222"},
+            raw_fields={"furigana_unverified": "bbbb2222"},
         ),
     )
 
     merged, _ = merge_records([_curated()], [unfilled])
 
-    assert "learner_load_hold" not in merged[0].source.raw_fields
+    assert "furigana_unverified" not in merged[0].source.raw_fields
 
 
 def test_a_reviewers_acceptance_travels_with_the_sentence_it_covers() -> None:

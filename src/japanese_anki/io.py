@@ -21,7 +21,6 @@ from japanese_anki.errors import JankiError
 from japanese_anki.models import (
     EXAMPLE_AUTHORITY_KEY,
     FURIGANA_UNVERIFIED_KEY,
-    LEARNER_LOAD_HOLD_KEY,
     PROVISIONAL_FIELDS_KEY,
     ModelError,
     VocabularyRecord,
@@ -552,7 +551,6 @@ MERGEABLE_FIELDS: tuple[str, ...] = tuple(
 # reviewer's stamp. See ``_carried_provisional`` and ``_carried_authority``.)
 CONTENT_ANNOTATIONS: dict[str, str] = {
     FURIGANA_UNVERIFIED_KEY: "examples",
-    LEARNER_LOAD_HOLD_KEY: "examples",
 }
 
 _EMPTY_CONTAINERS = (str, bytes, list, tuple, set, frozenset, dict)

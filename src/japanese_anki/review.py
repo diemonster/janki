@@ -681,8 +681,8 @@ def unready(
     clear, which is the constraint that decided them:
 
     * **A local error.** The same class ``build`` refuses on, not warnings. A
-      learner-load hold is a warning, and a held card is still a finished card
-      whose language a reader can judge.
+      warning-level content hold leaves a finished card whose language a
+      reader can still judge.
     * **No sentence to read.** Meanings and a headword are checked by rules
       already; what a reader is paid for is the Japanese. A card with no
       example has none of it.

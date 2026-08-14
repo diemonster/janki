@@ -339,12 +339,6 @@ def example_accepted(record: VocabularyRecord, example: ExampleSentence) -> bool
         record, EXAMPLE_AUTHORITY_KEY
     )
 
-#: Example content-fingerprints the AI pass held for learner load (M7.6T),
-#: comma-joined in ``source.raw_fields``. ``enrich`` writes it; the audio
-#: command refuses to voice a held sentence; ``io``'s merge carries it with
-#: the examples it describes.
-LEARNER_LOAD_HOLD_KEY = "learner_load_hold"
-
 #: Example content-fingerprints whose furigana no dictionary confirmed
 #: (M4.2). Defined beside the other example flags so every reader and writer
 #: names one constant — the audio command used to spell it as a literal.

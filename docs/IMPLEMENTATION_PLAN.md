@@ -3276,24 +3276,33 @@ Use these slices, each a finding plus a reproducing case plus a fix, ordered so
    then raise `DEFAULT_MAX_TOKENS` and `review.py:497`/`:540` from it.
 5. Switch `enrich_provider`/`enrich_model`; update `DESIGN_V2.md` and
    `ENRICHMENT.md`.
-6. Add per-example dictionary forms to the AI schema — transient, defaulted, and
-   kept out of `card_fingerprint` — then move the bound onto LLM words ranked by
-   memoized jpdb word lookups.
+6. *Done 2026-08-14 by deletion, on the owner's decision.* The learner-load
+   bound is gone rather than migrated, and with it `_learner_load_excess`,
+   `_LEARNER_LOAD_ALLOWED`, `_LEARNER_LOAD_RANK_LIMIT`, `LEARNER_LOAD_HOLD_KEY`,
+   `_known_expressions`, the `load_held` channel and its warning, the
+   `known_expressions` parameter through every caller, `qc`'s
+   `example-learner-load` hold, and `io`'s carrying of the flag.
 
-   *Measured 2026-08-14, live.* The defect is not only that the parse is an
-   extra call: **the bound measures a segmentation that is not the sentence**,
-   in both directions. On `今、だれとすんでるの？` jpdb yields `とする`, which
-   the sentence does not contain, while 住む — the actual word inside すんでる —
-   is never counted at all. On `このゲーム、何回もしぬの？` it yields `する` for
-   しぬ. Both mis-parses happen to return common words here, so neither changes
-   a hold today; the input is wrong regardless, and a rarer mis-parse decides a
-   hold on a word that is not there or misses one that is.
+   Measured before deciding. It held **0 of 155 examples across 97 records** —
+   and it does not fire on genuinely hard vocabulary either: 逡巡 (rank 9100),
+   邂逅 (16600) and 憂鬱 (6900) all pass, because the limit was rank 20000, a
+   level a model writing from the style guide never reaches. It was not broken
+   — canned ranks of 48000, null and 61000 held correctly — it was calibrated
+   to a threshold nothing meets.
 
-   This needs its own finding at the `ai-enrichment` boundary before the case
-   can exist: `example-teaching-suitability` carries the learner-load clause but
-   sits at `validation-qc`, and a case's boundary must match its finding's
-   stage. Open the finding on the measurement above, land its red case
-   non-gating, then fix and flip it.
+   Its input was wrong as well, which is what slice 6 was originally to fix:
+   reading jpdb's sentence segmentation, it counted `とする` on
+   `今、だれとすんでるの？` — a word absent from the sentence — while 住む, the
+   word actually inside すんでる, went uncounted. Migrating it would have cost N
+   jpdb word lookups per sentence to feed a check that had never held anything.
+
+   **This narrows `example-teaching-suitability`'s invariant**, whose
+   learner-load clause is removed. Recorded here and in the commit rather than
+   in the finding, because `recurrences` takes only fingerprint/locator pairs
+   and `janki harden status` cannot see prose change either way. What replaces
+   the bound is the paid review, which judges whether a sentence is too hard as
+   a language question rather than by rank — the line this whole task draws.
+
 7. Retire the oracle, `recheck_furigana`, `adjudicate_reading` and the
    `parse is None` disjunct together, with their tests and docs, in one commit
    so the tree never references a deleted symbol. **`impossible` is not then
