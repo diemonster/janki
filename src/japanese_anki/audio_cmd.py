@@ -35,8 +35,13 @@ from japanese_anki import ledger as ledger_mod
 from japanese_anki import pitch, qc
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import short_fingerprint
-from japanese_anki.models import ExampleSentence, VocabularyRecord
-from japanese_anki.staging import LEARNER_LOAD_HOLD_KEY
+from japanese_anki.models import (
+    FURIGANA_UNVERIFIED_KEY,
+    LEARNER_LOAD_HOLD_KEY,
+    ExampleSentence,
+    VocabularyRecord,
+    example_flags,
+)
 from japanese_anki.tts import SpeechProvider
 
 __all__ = [
@@ -245,33 +250,6 @@ def _word_audio(
     return replace(record, audio=media_relative(audio_dir / name, media_dir))
 
 
-def _unverified_fingerprints(record: VocabularyRecord) -> set[str]:
-    """The example fingerprints M4.2 flagged as having unconfirmed furigana."""
-    raw = record.source.raw_fields.get("furigana_unverified", "")
-    return {item.strip() for item in raw.split(",") if item.strip()}
-
-
-def _load_held_fingerprints(record: VocabularyRecord) -> set[str]:
-    """The example fingerprints the AI pass held for learner load (M7.6T)."""
-    raw = record.source.raw_fields.get(LEARNER_LOAD_HOLD_KEY, "")
-    return {item.strip() for item in raw.split(",") if item.strip()}
-
-
-def _content_hold(record: VocabularyRecord, example: ExampleSentence) -> str:
-    """Why this example must not be voiced, or empty.
-
-    The teaching-content judgment is :func:`japanese_anki.qc.example_content_holds`
-    — the same one ``validate`` turns into build errors — plus the AI pass's
-    learner-load flag. Checked here as well because audio can be run on a
-    record the build has never seen: the camera pilot voiced its fragments
-    precisely because the only content gate lived after synthesis.
-    """
-    holds = qc.example_content_holds(example)
-    if holds:
-        return holds[0][0]
-    if short_fingerprint(example.japanese) in _load_held_fingerprints(record):
-        return "example-learner-load"
-    return ""
 
 
 def _example_audio(
@@ -301,7 +279,12 @@ def _example_audio(
     disk, unreferenced, and the next ``--prune`` deletes them — while the run
     reports "the clips written before this are saved".
     """
-    flagged = _unverified_fingerprints(record)
+    flagged = example_flags(record, FURIGANA_UNVERIFIED_KEY)
+    # The same judgment `validate` reports — checked here as well because
+    # audio can run on a record the build has never seen: the camera pilot
+    # voiced its fragments precisely because the only content gate lived
+    # after synthesis. Audio refuses every hold whatever its level.
+    load_held = frozenset(example_flags(record, LEARNER_LOAD_HOLD_KEY))
     examples: list[ExampleSentence] = []
     changed = False
 
@@ -320,8 +303,8 @@ def _example_audio(
             result.unverified.append(f"{record.id}: {example.japanese}")
             examples.append(example)
             continue
-        if reason := _content_hold(record, example):
-            result.held.append(f"{record.id}: {example.japanese} ({reason})")
+        if holds := qc.example_content_holds(example, load_held=load_held):
+            result.held.append(f"{record.id}: {example.japanese} ({holds[0][0]})")
             examples.append(example)
             continue
 

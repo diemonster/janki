@@ -23,12 +23,16 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass, replace
 
 from japanese_anki import jpdb
 from japanese_anki.conjugation import conjugate, polite_stem
-from japanese_anki.identifiers import contains_kanji, normalize_identity_part
+from japanese_anki.identifiers import (
+    contains_kanji,
+    normalize_identity_part,
+    short_fingerprint,
+)
 from japanese_anki.models import ExampleSentence
 from japanese_anki.romaji import kana_to_romaji
 
@@ -153,8 +157,10 @@ _POLITE_FINAL = re.compile(
 _CONDITIONAL_STEM = "けせてねへめれげぜでべぺえ"
 
 
-def example_content_holds(example: ExampleSentence) -> list[tuple[str, str]]:
-    """Teaching-suitability holds for one example: ``(code, why)`` pairs.
+def example_content_holds(
+    example: ExampleSentence, *, load_held: Collection[str] = frozenset()
+) -> list[tuple[str, str, str]]:
+    """Teaching-suitability holds for one example: ``(code, level, why)``.
 
     The M7.6T camera pilot showed source fragments and false register labels
     passing every structural check and reaching audio. This is the local gate
@@ -162,13 +168,19 @@ def example_content_holds(example: ExampleSentence) -> list[tuple[str, str]]:
     grammar model: a rule that guesses holds good sentences hostage, so each
     check here fires only on evidence that cannot be read another way, and
     everything subtler is left for the residual AI review. Shared by
-    ``validation`` (which turns holds into errors) and the audio command
-    (which refuses to voice a held example), so the two gates cannot drift.
+    ``validation`` (which reports holds at their level) and the audio command
+    (which refuses to voice any held example), so the two gates cannot drift.
+
+    ``load_held`` is the record's learner-load flag set
+    (``models.example_flags(record, LEARNER_LOAD_HOLD_KEY)``), passed in
+    because the caller holds the record and can parse the flags once. A load
+    hold is a ``warning``: the sentence needs a person's decision, which is
+    not the same certainty as a fragment — but audio refuses both alike.
     """
     japanese = example.japanese.strip()
     if not japanese:
         return []
-    holds: list[tuple[str, str]] = []
+    holds: list[tuple[str, str, str]] = []
     bare = japanese.rstrip(_TRAILING_ENCLOSURE)
     core = bare.rstrip("".join(_SENTENCE_FINAL)).rstrip(_TRAILING_ENCLOSURE)
     # Both fragment shapes require the missing punctuation: 何について？ and
@@ -181,6 +193,7 @@ def example_content_holds(example: ExampleSentence) -> list[tuple[str, str]]:
         holds.append(
             (
                 "example-fragment",
+                "error",
                 "ends with について — a topic label copied off a source, not a "
                 "sentence anyone would say",
             )
@@ -193,6 +206,7 @@ def example_content_holds(example: ExampleSentence) -> list[tuple[str, str]]:
         holds.append(
             (
                 "example-fragment",
+                "error",
                 "ends with the conditional ば and no main clause",
             )
         )
@@ -200,8 +214,19 @@ def example_content_holds(example: ExampleSentence) -> list[tuple[str, str]]:
         holds.append(
             (
                 "example-register-mismatch",
+                "error",
                 "is labelled casual but ends in the polite ます/です form, so "
                 "the card would teach the opposite of what it says",
+            )
+        )
+    if short_fingerprint(japanese) in load_held:
+        holds.append(
+            (
+                "example-learner-load",
+                "warning",
+                "was held by the AI pass for carrying too many unknown, "
+                "uncommon words; review it or regenerate with --force-fields "
+                "examples — audio will not voice it until then",
             )
         )
     return holds

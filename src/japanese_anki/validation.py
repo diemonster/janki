@@ -6,7 +6,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from japanese_anki.identifiers import contains_kanji
-from japanese_anki.models import VocabularyRecord
+from japanese_anki.models import (
+    LEARNER_LOAD_HOLD_KEY,
+    VocabularyRecord,
+    example_flags,
+)
 
 # An ID minted from an expression with no reading: ``word:話す:``. The reading is
 # part of the ID, so this one cannot be repaired in place once Anki has seen it.
@@ -58,11 +62,13 @@ def _stray_furigana_spaces(furigana: str) -> tuple[str, ...]:
     return qc.stray_furigana_spaces(furigana)
 
 
-def _content_holds(example: object) -> list[tuple[str, str]]:
+def _content_holds(
+    example: object, load_held: frozenset[str]
+) -> list[tuple[str, str, str]]:
     """Delegates to :func:`japanese_anki.qc.example_content_holds` (same rule)."""
     from japanese_anki import qc
 
-    return qc.example_content_holds(example)
+    return qc.example_content_holds(example, load_held=load_held)
 
 
 def _kana(reading: str) -> str:
@@ -214,15 +220,18 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
                 "plus the following particle) and audio generation will skip "
                 "this record rather than guess",
             )
+    load_held = frozenset(example_flags(record, LEARNER_LOAD_HOLD_KEY))
     for index, example in enumerate(record.examples, start=1):
         # The teaching-suitability judgment itself lives in
         # :func:`japanese_anki.qc.example_content_holds`, because the audio
         # command applies the same gate before voicing — janki must not hold
-        # two ideas about what a teachable example is. Errors, not warnings:
-        # the camera pilot voiced fragments precisely because nothing local
-        # was allowed to stop the build.
-        for code, why in _content_holds(example):
-            add("error", code, f"example {index} {why}")
+        # two ideas about what a teachable example is. Each hold carries its
+        # own level: the certain shapes (fragments, false register labels)
+        # are errors that stop a build, the camera pilot's exact gap; a
+        # learner-load hold is a warning, because it awaits a person's
+        # decision — but it is *visible* here, not only at the audio gate.
+        for code, level, why in _content_holds(example, load_held):
+            add(level, code, f"example {index} {why}")
         if example.japanese and not example.english:
             add(
                 "warning",

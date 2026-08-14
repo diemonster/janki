@@ -3489,6 +3489,28 @@ def _confirm_gaps(
     return answer.strip().lower() in {"y", "yes"}
 
 
+def _refuse_invalid(records: Sequence[Any], deck_path: Path) -> None:
+    """Stop a shipping build on a local validation error, before anything else.
+
+    One gate for every shipping branch (M7.6T build readiness). Local failures
+    are reported on their own and first: they are fixable here for free, while
+    the review gate's remedy can be a paid model run that may only happen
+    after every local gate passes — reported the other way round, a deck with
+    both problems said only "run janki review". The order is also what keeps a
+    saved clean review from answering for a later local failure: the review
+    store is consulted second, and `build_deck` re-validates regardless.
+    """
+    issues = validate_records(records, deck_path)
+    if has_errors(issues):
+        formatted = "\n".join(
+            issue.format() for issue in issues if issue.level == "error"
+        )
+        raise AnkiBuildError(
+            f"{deck_path.name} fails local validation — fix these before any "
+            f"review run:\n{formatted}"
+        )
+
+
 def _refuse_unreviewed(
     records: Sequence[Any], config: ProjectConfig, deck_path: Path
 ) -> None:
@@ -3576,16 +3598,16 @@ def _build_one(
                 )
         normalized = pattern_cards.collection_for(deck_path, config)
         records = load_records(normalized)
-        # The same gate a word deck passes, on the records this deck will
+        # The same gates a word deck passes, on the records this deck will
         # actually ship — filtered, and conjugable. A drill card carries the
         # expression, the reading and a meaning straight off the record, so
-        # shipping one janki has not read is the thing the gate exists to stop;
+        # shipping one janki has not read is the thing the gates exist to stop;
         # but gating the whole collection refused the build over nouns no drill
         # card could carry, and over records `exclude_ids` had held back.
         if output is None:
-            _refuse_unreviewed(
-                pattern_cards.shipping_records(deck_path, records), config, deck_path
-            )
+            shipping = pattern_cards.shipping_records(deck_path, records)
+            _refuse_invalid(shipping, deck_path)
+            _refuse_unreviewed(shipping, config, deck_path)
         target, count = pattern_cards.build_conjugation_deck(
             deck_path, config, records, output
         )
@@ -3607,36 +3629,15 @@ def _build_one(
     # The last gates, and only on a build that ships. A `--output` build is a
     # throwaway that records nothing — `make gates` builds one on every run —
     # so holding it to a review nobody asked for would make the gate something
-    # to work around rather than something to pass.
-    #
-    # Local validation first, and reported on its own (M7.6T build readiness).
-    # A validation failure is fixable here for free, while the review gate's
-    # remedy can be a paid model run that may only happen after every local
-    # gate passes — reported the other way round, a deck with both problems
-    # said only "run janki review". The order is also what keeps a saved clean
-    # review from answering for a later local failure: the review store is
-    # consulted second, and `build_deck` re-validates regardless.
+    # to work around rather than something to pass. `--only-new` validates even
+    # with `--output`: a deck whose already-shipped records are broken is a
+    # broken deck, and an incremental build that exits 0 on one a full build
+    # refuses would hide that until the next full build.
+    if output is None or only_new:
+        _refuse_invalid(records, deck_path)
     if output is None:
-        issues = validate_records(records, deck_path)
-        if has_errors(issues):
-            formatted = "\n".join(
-                issue.format() for issue in issues if issue.level == "error"
-            )
-            raise AnkiBuildError(
-                f"{deck_path.name} fails local validation — fix these before "
-                f"any review run:\n{formatted}"
-            )
         _refuse_unreviewed(records, config, deck_path)
     if only_new:
-        # Validated before the "nothing new" shortcut, not after it. A deck
-        # whose already-shipped records are broken is a broken deck, and an
-        # incremental build that exits 0 on one a full build refuses would hide
-        # that until the next full build.
-        issues = validate_records(records, deck_path)
-        if has_errors(issues):
-            formatted = "\n".join(issue.format() for issue in issues)
-            raise AnkiBuildError(f"Deck validation failed:\n{formatted}")
-
         ids = [record.id for record in records]
         new_ids = book.unexported(stem, ids) if book else []
         if book is not None:

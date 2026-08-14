@@ -44,7 +44,12 @@ from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import contains_kanji, short_fingerprint
 from japanese_anki.io import is_empty
 from japanese_anki.ledger import Ledger
-from japanese_anki.models import ExampleSentence, VocabularyRecord
+from japanese_anki.models import (
+    FURIGANA_UNVERIFIED_KEY,
+    ExampleSentence,
+    VocabularyRecord,
+    add_example_flags,
+)
 from japanese_anki.romaji import kana_to_romaji
 from japanese_anki.staging import (
     LEARNER_LOAD_HOLD_KEY,
@@ -887,8 +892,10 @@ def format_field_diff(
 
 #: Where a flagged example is recorded (IMPLEMENTATION_PLAN, Conventions):
 #: a comma-joined list of content fingerprints of the flagged examples'
-#: ``japanese`` text, on the record rather than per example.
-UNVERIFIED_KEY = "furigana_unverified"
+#: ``japanese`` text, on the record rather than per example. The constant
+#: itself lives with the other example flags in ``models``; this name is the
+#: one this module's callers have always imported.
+UNVERIFIED_KEY = FURIGANA_UNVERIFIED_KEY
 
 #: How many other records' examples ride along as variety pressure. Enough to
 #: show the model what it has already written this run, few enough that the
@@ -1102,17 +1109,20 @@ class AiOutcome:
     ] = field(default_factory=list)
 
 
-def _words_of(parse: Any) -> list[str]:
-    """The spellings jpdb segmented a sentence into, in order.
+def _parsed_entries(parse: Any) -> list[Mapping[str, Any]]:
+    """Each token's dictionary entry, in token order, defensively.
 
-    Empty for a parse that is missing or shaped unexpectedly: a repair with no
-    boundaries to work from must leave the furigana alone, not guess at it.
+    One walk for every consumer of a parse's word list — the furigana repair
+    and the learner-load bound must not disagree about which words a sentence
+    contains. Empty for a parse that is missing or shaped unexpectedly: a
+    caller with no boundaries to work from must leave its input alone, not
+    guess at it.
     """
     tokens = getattr(parse, "tokens", None)
     vocabulary = getattr(parse, "vocabulary", None)
     if not isinstance(tokens, list) or not isinstance(vocabulary, list):
         return []
-    words = []
+    entries: list[Mapping[str, Any]] = []
     for token in tokens:
         if not isinstance(token, Mapping):
             continue
@@ -1120,10 +1130,18 @@ def _words_of(parse: Any) -> list[str]:
         if not isinstance(index, int) or not 0 <= index < len(vocabulary):
             continue
         entry = vocabulary[index]
-        spelling = str(entry.get("spelling", "")) if isinstance(entry, Mapping) else ""
-        if spelling:
-            words.append(spelling)
-    return words
+        if isinstance(entry, Mapping):
+            entries.append(entry)
+    return entries
+
+
+def _words_of(parse: Any) -> list[str]:
+    """The spellings jpdb segmented a sentence into, in order."""
+    return [
+        spelling
+        for entry in _parsed_entries(parse)
+        if (spelling := str(entry.get("spelling", "")))
+    ]
 
 
 #: One example may introduce at most this many words that are neither in the
@@ -1141,30 +1159,18 @@ _LEARNER_LOAD_RANK_LIMIT = 20000
 
 def _learner_load_excess(
     parse: Any, *, accepted_forms: Sequence[str], known: frozenset[str]
-) -> list[str] | None:
+) -> list[str]:
     """The unknown, uncommon words a parsed sentence loads onto a beginner.
 
-    Empty when the load is within the allowance; ``None`` when the sentence
-    has no usable parse — undecidable, and the unverified-furigana flag
-    already holds an unparsed sentence from audio, so no second hold is
-    invented for it. Words the learner's collection knows and every accepted
-    form of the headword are free: the headword is the one word an example
-    exists to introduce.
+    Empty when the load is within the allowance — and also for a sentence
+    with no usable parse: undecidable means no hold is invented, and the
+    unverified-furigana flag already keeps an unparsed sentence from audio.
+    Words the learner's collection knows and every accepted form of the
+    headword are free: the headword is the one word an example exists to
+    introduce.
     """
-    tokens = getattr(parse, "tokens", None)
-    vocabulary = getattr(parse, "vocabulary", None)
-    if not isinstance(tokens, list) or not isinstance(vocabulary, list):
-        return None
     hard: list[str] = []
-    for token in tokens:
-        if not isinstance(token, Mapping):
-            continue
-        index = token.get("vocabulary_index")
-        if not isinstance(index, int) or not 0 <= index < len(vocabulary):
-            continue
-        entry = vocabulary[index]
-        if not isinstance(entry, Mapping):
-            continue
+    for entry in _parsed_entries(parse):
         spelling = str(entry.get("spelling", ""))
         if (
             not spelling
@@ -1250,6 +1256,8 @@ def apply_ai_result(
     """
     outcome = AiOutcome(record=record)
     kept: list[ExampleSentence] = []
+    # Loop-invariant, and not free: target_forms builds a conjugation table.
+    accepted_forms = qc.target_forms(record.expression, record.verb_group)
 
     for item in getattr(parsed, "examples", []) or []:
         register = str(getattr(item, "speech_level", "") or "").strip().lower()
@@ -1306,9 +1314,7 @@ def apply_ai_result(
             outcome.unverified.append(example.japanese)
         if known_expressions is not None and parse is not None:
             excess = _learner_load_excess(
-                parse,
-                accepted_forms=qc.target_forms(record.expression, record.verb_group),
-                known=known_expressions,
+                parse, accepted_forms=accepted_forms, known=known_expressions
             )
             if excess:
                 outcome.load_held.append(example.japanese)
@@ -1377,9 +1383,11 @@ def apply_ai_result(
             sentence for sentence in outcome.load_held if sentence in landed_sentences
         ]
         if outcome.unverified:
-            updated = _flag_unverified(updated, outcome.unverified)
+            updated = add_example_flags(updated, UNVERIFIED_KEY, outcome.unverified)
         if outcome.load_held:
-            updated = _flag_learner_load(updated, outcome.load_held)
+            updated = add_example_flags(
+                updated, LEARNER_LOAD_HOLD_KEY, outcome.load_held
+            )
     else:
         # The examples were not written — the field was not writable, or the
         # answer matched what is already there. Nothing was flagged, so nothing
@@ -1394,41 +1402,6 @@ def apply_ai_result(
     return outcome
 
 
-def _flag_unverified(record: VocabularyRecord, sentences: Sequence[str]) -> VocabularyRecord:
-    """Record which examples nobody verified, by content fingerprint.
-
-    A fingerprint of the sentence rather than its index, because an index stops
-    meaning anything the moment a human deletes an example — and this key is
-    read much later, by M5.3, deciding whether to speak a sentence whose
-    segmentation may be wrong.
-    """
-    fingerprints = [short_fingerprint(sentence) for sentence in sentences]
-    raw_fields = dict(record.source.raw_fields)
-    existing = [
-        item for item in raw_fields.get(UNVERIFIED_KEY, "").split(",") if item.strip()
-    ]
-    raw_fields[UNVERIFIED_KEY] = ",".join(dict.fromkeys(existing + fingerprints))
-    return replace(record, source=replace(record.source, raw_fields=raw_fields))
-
-
-def _flag_learner_load(
-    record: VocabularyRecord, sentences: Sequence[str]
-) -> VocabularyRecord:
-    """Record which examples the learner-load bound held, by content fingerprint.
-
-    The same shape as :func:`_flag_unverified` for the same reader: the audio
-    command refuses to voice a held sentence, and a fingerprint survives a
-    human reordering or deleting neighbours where an index would not.
-    """
-    fingerprints = [short_fingerprint(sentence) for sentence in sentences]
-    raw_fields = dict(record.source.raw_fields)
-    existing = [
-        item
-        for item in raw_fields.get(LEARNER_LOAD_HOLD_KEY, "").split(",")
-        if item.strip()
-    ]
-    raw_fields[LEARNER_LOAD_HOLD_KEY] = ",".join(dict.fromkeys(existing + fingerprints))
-    return replace(record, source=replace(record.source, raw_fields=raw_fields))
 
 
 @dataclass(slots=True)

@@ -349,6 +349,38 @@ def example_accepted(record: VocabularyRecord, example: ExampleSentence) -> bool
 #: the examples it describes.
 LEARNER_LOAD_HOLD_KEY = "learner_load_hold"
 
+#: Example content-fingerprints whose furigana no dictionary confirmed
+#: (M4.2). Defined beside the other example flags so every reader and writer
+#: names one constant — the audio command used to spell it as a literal.
+FURIGANA_UNVERIFIED_KEY = "furigana_unverified"
+
+
+def example_flags(record: VocabularyRecord, key: str) -> set[str]:
+    """The example content-fingerprints ``key`` flags on this record.
+
+    One parser for every comma-joined fingerprint flag, so a format change
+    lands in one place instead of six.
+    """
+    raw = record.source.raw_fields.get(key, "")
+    return {item.strip() for item in raw.split(",") if item.strip()}
+
+
+def add_example_flags(
+    record: VocabularyRecord, key: str, sentences: Iterable[str]
+) -> VocabularyRecord:
+    """Flag ``sentences`` under ``key``, by content fingerprint, keeping order.
+
+    A fingerprint rather than an index, because an index stops meaning
+    anything the moment a human deletes an example — and these keys are read
+    much later, deciding whether to speak a sentence. Existing flags are kept
+    and deduplicated, never replaced: a record collects them across passes.
+    """
+    fingerprints = [short_fingerprint(sentence) for sentence in sentences]
+    raw_fields = dict(record.source.raw_fields)
+    existing = [item for item in raw_fields.get(key, "").split(",") if item.strip()]
+    raw_fields[key] = ",".join(dict.fromkeys(existing + fingerprints))
+    return replace(record, source=replace(record.source, raw_fields=raw_fields))
+
 #: Authority state for semantic fields a model filled during extraction. The
 #: marker is ``name:fingerprint`` pairs, comma-joined. The fingerprint binds
 #: the mark to the *value* the model wrote: a human who edits the field
