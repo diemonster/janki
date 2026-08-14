@@ -1,0 +1,17 @@
+version: 1
+id: review-holds-back-an-unreadable-card
+purpose: regression
+gating: true
+runner: review-readiness
+pipeline_boundary: final-review
+source_archetype: native-pdf-table
+redistributable: true
+fixture_basis: agent-created-synthetic
+fixtures:
+  - path: input.json
+    fingerprint: b4134ccc40c1582fca77f236ac073fe5786839dbc2c5daaabdba31c9ab3673e8
+  - path: oracle.json
+    fingerprint: d8cd2e476644f72c59a9d4d9fd2cf20d1df70f3bcb424aee41d3098135d8d5d4
+runner_input: input.json
+oracle: oracle.json
+finding_id: review-reads-an-unreadable-card

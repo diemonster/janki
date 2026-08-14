@@ -41,6 +41,7 @@ SEEDED_CASES = (
     "pos-precedence",
     "reading-check-forced-furigana",
     "reading-check-suru-compound",
+    "review-holds-back-an-unreadable-card",
     "review-pitch-fact-recheck",
     "review-pitch-source-authority",
     "review-pitch-unbound-remains-reviewable",

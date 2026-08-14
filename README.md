@@ -37,18 +37,19 @@ Anthropic key: jpdb re-reads the sentence either way, and the adjudicator that
 would settle a disagreement between them is what those buy — without it the
 disagreement stays flagged.
 
-Immediate `enrich --ai` calls use your Codex CLI login. Install the Codex CLI
-and authenticate it once if needed:
+Every AI pass uses your Anthropic key. Codex remains a supported provider for
+`enrich --ai`; install and authenticate its CLI only if you set
+`enrich_provider = "codex"`:
 
 ```bash
-codex login
 ```
 
 The remaining provider credentials are environment variables:
 
 ```bash
-export ANTHROPIC_API_KEY='...'   # extract, patterns, review,
-                                 # --polish-meanings, and Anthropic batches
+export ANTHROPIC_API_KEY='...'   # every AI pass: extract, patterns,
+                                 # enrich --ai, --polish-meanings,
+                                 # review, and batches
 export JPDB_API_KEY='...'        # every jpdb lookup — import-jpdb, promote's
                                  # reading check, patterns, jpdb ping, and
                                  # enrich --jpdb/--ai/--staging/--recheck-furigana
@@ -210,9 +211,9 @@ max_meanings = 4              # senses per card; 0 shows them all, a deck may
                               # set its own. The record keeps every sense
 
 [ai]
-enrich_provider = "codex"       # or "anthropic"
-enrich_model = "gpt-5.6-sol"
-enrich_reasoning_effort = "ultra"
+enrich_provider = "anthropic"   # or "codex"
+enrich_model = "claude-opus-5"
+enrich_reasoning_effort = "ultra"   # codex only; Anthropic depth is xhigh
 polish_model = "claude-opus-5"  # review_model is independently configurable
 
 [tts]

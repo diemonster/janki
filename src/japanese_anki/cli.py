@@ -4498,36 +4498,46 @@ def command_review(args: argparse.Namespace) -> int:
                 "No record with id " + ", ".join(sorted(unknown)) + " in any deck."
             )
         records = [record for record in records if record.id in set(args.ids)]
-    else:
-        # Completeness, enforced rather than documented (M7.6T rule 7). A card
-        # a later pass will rewrite is a card this read cannot answer for, and
-        # the read is billed either way. Naming ids is the override, following
-        # `enrich.ai_targets`: an explicit id is a decision, and this refusal
-        # exists to stop the accidental spend, not the deliberate one.
-        # Per record, not `validate_records`: that adds a duplicate-id error
-        # across the sequence, and a record shipping in two decks appears
-        # twice here legitimately. Readiness is a property of one card.
-        unready = review.unready(
-            records,
-            failing_ids=(
-                record.id
-                for record in records
-                if has_errors(validate_record(record))
-            ),
-            pending_ids=(record.id for record in enrich.ai_targets(records)),
-        )
-        if unready:
-            for record_id, reason in sorted(unready.items()):
-                print(f"{record_id} — {reason}", file=sys.stderr)
-            print(
-                f"{len(unready)} card(s) are not finished, and a review is billed "
-                "per card at the content it read. Finish them and re-run, or "
-                "read one anyway by naming it: janki review <id>",
-                file=sys.stderr,
-            )
-            return 1
 
     todo = records if args.force else review.unreviewed(records, store)
+    held: dict[str, str] = {}
+    if not args.ids:
+        # Completeness, enforced rather than documented (M7.6T rule 7). A card
+        # a later pass will rewrite is a card this read cannot answer for, and
+        # the read is billed either way.
+        #
+        # Over `todo`, not every shipping record: a card already read at its
+        # current content costs nothing, so an unfinished one among them was
+        # refusing a run that would not have billed for it — and taking the
+        # finished cards down with it.
+        #
+        # Held back rather than refused, for the same reason. One unfinished
+        # card must not stop the other ninety-six being read, and naming ids to
+        # work around that would mean naming ninety-six.
+        #
+        # Per record, not `validate_records`: that adds a duplicate-id error
+        # across the sequence, and a record shipping in two decks appears twice
+        # here legitimately. Readiness is a property of one card.
+        held = review.unready(
+            todo,
+            failing_ids=(
+                record.id for record in todo if has_errors(validate_record(record))
+            ),
+        )
+        if held:
+            for record_id, reason in sorted(held.items()):
+                print(f"held back: {record_id} — {reason}", file=sys.stderr)
+            todo = [record for record in todo if record.id not in held]
+
+    if not todo and held:
+        # Distinct from the message below, which says every card has been read.
+        # A held card has not been read, and saying otherwise would report the
+        # gate's own refusal as completion.
+        print(
+            f"{len(held)} card(s) held back and nothing else to read.",
+            file=sys.stderr,
+        )
+        return 1
     if not todo:
         blocking = review.open_findings(records, store)
         if blocking:

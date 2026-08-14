@@ -668,43 +668,48 @@ def unreviewed(
 
 
 def unready(
-    records: Iterable[VocabularyRecord],
-    *,
-    failing_ids: Iterable[str],
-    pending_ids: Iterable[str],
+    records: Iterable[VocabularyRecord], *, failing_ids: Iterable[str]
 ) -> dict[str, str]:
     """Cards not worth paying to read yet, and the reason for each.
 
     A review is priced per card and keyed by content, so reading a card that a
     later pass will rewrite buys an answer about a card that will not ship.
     Measured before this existed: 181 reads for 97 records, of which 71 were
-    superseded by a later pass without a blocking finding in between.
+    superseded by a later pass with no blocking finding in between.
 
-    Two reasons, and deliberately only two:
+    Two reasons, and deliberately only two — both of which a person can always
+    clear, which is the constraint that decided them:
 
-    * **A local error.** The same class ``build`` refuses on — not warnings.
-      A learner-load hold is a warning, and a card held for load is still a
-      finished card whose language a reader can judge; refusing to read it
-      would strand it between a build that calls it unreviewed and a review
-      that calls it unready, with no exit.
-    * **A pass with a content rule that currently targets it.** Only
-      ``enrich --ai`` has one (:func:`enrich.ai_targets`, via the ledger).
-      ``--polish-meanings`` deliberately has none — without ids it targets
-      every record — and gating on it would refuse the whole collection
-      forever, so this cannot promise that *no* pass will change a card. It
-      promises the one that rewrites ``examples``, which is most of what a
-      fingerprint is.
+    * **A local error.** The same class ``build`` refuses on, not warnings. A
+      learner-load hold is a warning, and a held card is still a finished card
+      whose language a reader can judge.
+    * **No sentence to read.** Meanings and a headword are checked by rules
+      already; what a reader is paid for is the Japanese. A card with no
+      example has none of it.
 
-    The caller decides what naming ids does; this function only reports.
+    Two rules that look better and are not, both tried:
+
+    *"a record ``enrich --ai`` would target"* cannot clear. ``AI_INSTRUCTIONS``
+    tells the model *an empty usage note is a fine answer* and ``_apply`` skips
+    an empty proposal, so a record whose notes are legitimately empty is a
+    target forever — leaving it between a ``build`` that calls it unreviewed
+    and a ``review`` that calls it unfinished, with ``janki refresh`` stopping
+    dead between them.
+
+    *"a record no AI pass has written"* cannot clear either, in the other
+    direction: a hand-curated or imported card is finished and no pass will
+    ever run on it. Holding those back would refuse the collection this project
+    started from.
+
+    The caller decides what to do with the result; this only reports.
     """
     failing = set(failing_ids)
-    pending = set(pending_ids)
     reasons: dict[str, str] = {}
     for record in records:
         if record.id in failing:
             reasons[record.id] = "local validation errors are unresolved"
-        elif record.id in pending:
-            reasons[record.id] = "janki enrich --ai has not run on it yet"
+        elif not any(example.japanese.strip() for example in record.examples):
+            reasons[record.id] = "it has no example sentence to read"
     return reasons
 
 

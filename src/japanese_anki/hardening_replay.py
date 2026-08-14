@@ -718,6 +718,31 @@ def _staging_promote(data: dict[str, Any], root: Path) -> Any:
     }
 
 
+def _review_readiness(data: dict[str, Any], root: Path) -> Any:
+    """Which cards the paid review holds back, and why.
+
+    The composition the CLI performs, not just the predicate: readiness is
+    decided per record — `validate_records` would add a duplicate-id error
+    across the sequence, and a record shipping in two decks appears twice
+    legitimately.
+    """
+    del root
+    _only(data, {"records"}, "review-readiness")
+    records = _records(data.get("records"))
+    held = review.unready(
+        records,
+        failing_ids=(
+            record.id
+            for record in records
+            if validation.has_errors(validation.validate_record(record))
+        ),
+    )
+    return {
+        "held": [{"id": key, "reason": held[key]} for key in sorted(held)],
+        "readable_ids": [record.id for record in records if record.id not in held],
+    }
+
+
 def _validation_qc(data: dict[str, Any], root: Path) -> Any:
     del root
     _only(data, {"records", "repair_spilled_punctuation"}, "validation-qc")
@@ -1248,6 +1273,7 @@ RUNNERS: dict[str, Callable[[dict[str, Any], Path], Any]] = {
     "candidate-response": _candidate_response,
     "extraction-prompt": _extraction_prompt,
     "staging-promote": _staging_promote,
+    "review-readiness": _review_readiness,
     "validation-qc": _validation_qc,
     "render-build": _render_build,
     "dictionary-enrichment": _dictionary_enrichment,

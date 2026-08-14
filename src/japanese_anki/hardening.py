@@ -64,6 +64,7 @@ RUNNER_BOUNDARIES = {
     "ai-enrichment": "ai-enrichment",
     "ai-enrichment-retry": "ai-enrichment",
     "ai-enrichment-prompt": "ai-enrichment",
+    "review-readiness": "final-review",
     "semantic-review-recheck": "final-review",
     "repair-plan": "repair-plan",
 }

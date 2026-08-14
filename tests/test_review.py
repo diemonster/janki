@@ -1398,11 +1398,11 @@ def test_a_mark_that_is_not_a_string_is_refused(tmp_path: Path, mark: object) ->
     assert "abc123def456" in str(raised.value)
 
 
-def test_an_unfinished_card_is_not_paid_to_be_read(
+def test_a_card_with_no_sentence_is_not_paid_to_be_read(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A review is billed per card at the content it read, so a card an AI pass
-    has not filled yet buys an answer about a card that will not ship."""
+    """What a reader is paid for is the Japanese; meanings and headwords are
+    checked by rules already. A card with no example has nothing to read."""
     calls: list[str] = []
     root = project(tmp_path, [record(examples=[], usage_notes="")])
     monkeypatch.setattr(
@@ -1411,6 +1411,29 @@ def test_an_unfinished_card_is_not_paid_to_be_read(
 
     assert cli.main(["--root", str(root), "review"]) == 1
     assert calls == []
+
+
+def test_one_unreadable_card_does_not_hold_up_the_others(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The refusal exists to stop a wasted read, not to stop the run. Refusing
+    everything would mean naming ninety-six ids to get past one."""
+    calls: list[str] = []
+    root = project(
+        tmp_path,
+        [
+            record(id="word:話す:はなす", examples=[], usage_notes=""),
+            record(id="word:読む:よむ", expression="読む", reading="よむ"),
+        ],
+    )
+    monkeypatch.setattr(
+        review_module.claude_client, "parse_call", reader(Verdict(), calls=calls)
+    )
+
+    assert cli.main(["--root", str(root), "review"]) == 0
+    assert len(calls) == 1
+    assert "読む" in calls[0]
+    assert "held back: word:話す:はなす" in capsys.readouterr().err
 
 
 def test_naming_an_unfinished_card_reads_it_anyway(
@@ -1449,7 +1472,14 @@ def test_a_learner_load_hold_does_not_block_the_read(
     language a reader can judge. Refusing it would strand it between a build
     that calls it unreviewed and a review that calls it unready."""
     calls: list[str] = []
-    held = add_example_flags(record(), LEARNER_LOAD_HOLD_KEY, ["毎日話します。"])
+    # part_of_speech set so the learner-load hold is this record's *only*
+    # warning: without it every fixture also carries verb-group-without-part-of-
+    # speech, and a mutation that refused on warnings would fail this test for
+    # that instead — passing the mutation check while proving nothing about
+    # holds.
+    held = add_example_flags(
+        record(part_of_speech="v5s"), LEARNER_LOAD_HOLD_KEY, ["毎日話します。"]
+    )
     root = project(tmp_path, [held])
     monkeypatch.setattr(
         review_module.claude_client, "parse_call", reader(Verdict(), calls=calls)

@@ -1,0 +1,13 @@
+{
+  "held": [
+    {
+      "id": "word:見る:みる",
+      "reason": "local validation errors are unresolved"
+    },
+    {
+      "id": "word:話す:はなす",
+      "reason": "it has no example sentence to read"
+    }
+  ],
+  "readable_ids": ["word:読む:よむ"]
+}
