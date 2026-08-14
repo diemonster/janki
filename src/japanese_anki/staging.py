@@ -35,7 +35,13 @@ import yaml
 from ruamel.yaml import YAML, YAMLError
 
 from japanese_anki.errors import JankiError
-from japanese_anki.io import atomic_write_text, exclusive_path_lock, load_structured
+from japanese_anki.identifiers import short_fingerprint
+from japanese_anki.io import (
+    atomic_write_text,
+    exclusive_path_lock,
+    is_empty,
+    load_structured,
+)
 from japanese_anki.models import VocabularyRecord
 
 
@@ -85,6 +91,109 @@ HOLD_UNVERIFIABLE_ID = "cannot check this id against the whole collection"
 #: from "a model copied it off the page".
 EXAMPLE_AUTHORITY_KEY = "example_authority"
 EXAMPLE_AUTHORITY_STAGING = "staging-review"
+
+#: Authority state for semantic fields a model filled during extraction. The
+#: marker is ``name:fingerprint`` pairs, comma-joined — ``extract`` writes it,
+#: ``enrich`` resolves it against dictionary evidence, and the shared constant
+#: and helpers live here for the same no-drift reason as the example authority
+#: key above. The fingerprint binds the mark to the *value* the model wrote:
+#: a human who edits the field afterwards breaks the binding, and a broken
+#: binding reads as "curated" — the mark must never authorize overwriting an
+#: edit a person made after extraction.
+PROVISIONAL_FIELDS_KEY = "provisional_fields"
+
+#: The only fields extraction may mark provisional. The reading is pointedly
+#: absent: it is half of the record ID, reviewed by a human at staging, and no
+#: dictionary evidence is allowed to rewrite it.
+PROVISIONAL_SEMANTIC_FIELDS: tuple[str, ...] = ("meanings", "part_of_speech")
+
+
+def _provisional_fingerprint(value: Any) -> str:
+    return short_fingerprint(json.dumps(value, ensure_ascii=False))
+
+
+def mark_provisional(record: VocabularyRecord) -> VocabularyRecord:
+    """Stamp the semantic fields a model filled as provisional claims.
+
+    Written at extraction time, because that is the moment the values are
+    known to be model output and nothing else: one step later they sit in a
+    staging file beside human edits and the distinction is unrecoverable. A
+    field the model left empty gets no mark — emptiness is not a claim.
+    """
+    entries = [
+        f"{name}:{_provisional_fingerprint(getattr(record, name))}"
+        for name in PROVISIONAL_SEMANTIC_FIELDS
+        if not is_empty(getattr(record, name))
+    ]
+    if not entries:
+        return record
+    raw_fields = dict(record.source.raw_fields)
+    raw_fields[PROVISIONAL_FIELDS_KEY] = ",".join(entries)
+    return replace(record, source=replace(record.source, raw_fields=raw_fields))
+
+
+def split_provisional(record: VocabularyRecord) -> tuple[list[str], list[str]]:
+    """The marker split into ``(active, stale)`` by its value binding.
+
+    One comparison site on purpose: active and stale are the two halves of a
+    single question — does the field still hold the value the mark was bound
+    to? — and answering it in two places would let the answers drift. A field
+    is *active* (still the model's claim) while the fingerprint matches;
+    an edit after extraction breaks the binding and makes the entry *stale* —
+    curated content wearing a mark that must now be cleared, never obeyed.
+    """
+    active: list[str] = []
+    stale: list[str] = []
+    for name, fingerprint in _provisional_entries(record):
+        matches = _provisional_fingerprint(getattr(record, name)) == fingerprint
+        (active if matches else stale).append(name)
+    return active, stale
+
+
+def provisional_fields(record: VocabularyRecord) -> list[str]:
+    """The fields whose current value is still the model's provisional claim."""
+    return split_provisional(record)[0]
+
+
+def stale_provisional_fields(record: VocabularyRecord) -> list[str]:
+    """Marker entries whose field was edited after extraction."""
+    return split_provisional(record)[1]
+
+
+def clear_provisional(
+    record: VocabularyRecord, names: Iterable[str]
+) -> VocabularyRecord:
+    """Drop resolved or stale names from the marker, removing it when empty."""
+    dropped = set(names)
+    kept = [
+        f"{name}:{fingerprint}"
+        for name, fingerprint in _provisional_entries(record)
+        if name not in dropped
+    ]
+    raw_fields = dict(record.source.raw_fields)
+    if kept:
+        raw_fields[PROVISIONAL_FIELDS_KEY] = ",".join(kept)
+    else:
+        raw_fields.pop(PROVISIONAL_FIELDS_KEY, None)
+    if raw_fields == record.source.raw_fields:
+        return record
+    return replace(record, source=replace(record.source, raw_fields=raw_fields))
+
+
+def _provisional_entries(record: VocabularyRecord) -> list[tuple[str, str]]:
+    """The marker parsed to ``(name, fingerprint)``, unknown names dropped.
+
+    Unknown or malformed entries are ignored rather than errors: the marker
+    rides in hand-editable YAML, and the failure mode to prevent is a stray
+    edit *widening* what a dictionary may overwrite.
+    """
+    raw = record.source.raw_fields.get(PROVISIONAL_FIELDS_KEY, "")
+    entries: list[tuple[str, str]] = []
+    for item in raw.split(","):
+        name, _, fingerprint = item.strip().partition(":")
+        if name in PROVISIONAL_SEMANTIC_FIELDS and fingerprint:
+            entries.append((name, fingerprint))
+    return entries
 
 #: The holds that are *not* about the reading — a deny-list, not an allow-list,
 #: and the direction matters. A staging file is hand-edited: a reviewer may type

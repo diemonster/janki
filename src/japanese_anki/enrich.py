@@ -51,6 +51,9 @@ from japanese_anki.staging import (
     NON_READING_HOLDS,
     annotate,
     annotations,
+    clear_provisional,
+    provisional_fields,
+    stale_provisional_fields,
 )
 
 __all__ = [
@@ -499,7 +502,33 @@ def enrich_records(
 
     for record_id in targets:
         record = result.records[by_id[record_id]]
-        writable = _wanted(record, force_fields)
+        # A marker whose value binding broke is a human edit made after
+        # extraction. The mark is now a lie that would authorize overwriting
+        # that edit, so it is cleared before anything reads it.
+        if stale := stale_provisional_fields(record):
+            record = clear_provisional(record, stale)
+            result.records[by_id[record_id]] = record
+            result.warnings.append(
+                f"{record_id}: {', '.join(stale)} edited since extraction; the "
+                "provisional mark was cleared and the field is kept as curated"
+            )
+        # Provisional fields are revisited even though they are full: a model
+        # claim holds the seat only until dictionary evidence arrives. Without
+        # a reading, though, no entry can be confirmed to be this exact word,
+        # so the claim is held rather than reconciled against a guess.
+        reconcile = [
+            name
+            for name in provisional_fields(record)
+            if name not in force_fields and not is_empty(getattr(record, name))
+        ]
+        if reconcile and not record.reading:
+            result.warnings.append(
+                f"{record_id}: {', '.join(reconcile)} stay provisional — the "
+                "record has no reading, so no dictionary entry can be confirmed "
+                "as this exact word"
+            )
+            reconcile = []
+        writable = [*_wanted(record, force_fields), *reconcile]
         if not writable or not record.expression:
             result.skipped += 1
             continue
@@ -578,6 +607,8 @@ def enrich_records(
                 token, entry = found
 
         proposals = _proposals(record, token, entry, kanji_store)
+        if "meanings" in reconcile:
+            proposals["meanings"] = _dictionary_meanings(client, entry)
         _valid_pitch, invalid_pitch = _compatible_pitch_patterns(
             record.reading, entry.get("pitch_accent")
         )
@@ -589,10 +620,47 @@ def enrich_records(
         updated, changes = _apply(record, proposals, writable)
         if "pitch_accent" in changes:
             updated = pitch.bind_source(updated)
+        # By this point the entry is the exact identity — the spelling matched
+        # and the reading survived the checks above — so a non-empty proposal
+        # settles a provisional claim either way: a different value replaced it
+        # (visible in the diff), an equal one confirmed it. Only a field jpdb
+        # had no answer for stays provisional.
+        resolved = [name for name in reconcile if not is_empty(proposals.get(name))]
+        if resolved:
+            updated = clear_provisional(updated, resolved)
+            if confirmed := [name for name in resolved if name not in changes]:
+                result.warnings.append(
+                    f"{record_id}: dictionary evidence confirmed provisional "
+                    f"{', '.join(confirmed)}; the mark was cleared with no change"
+                )
+        if unresolved := [name for name in reconcile if name not in resolved]:
+            result.warnings.append(
+                f"{record_id}: jpdb had no answer for provisional "
+                f"{', '.join(unresolved)}; the mark stays until evidence or review"
+            )
         if changes:
-            result.records[by_id[record_id]] = updated
             result.changes[record_id] = changes
+        if updated != result.records[by_id[record_id]]:
+            result.records[by_id[record_id]] = updated
     return result
+
+
+def _dictionary_meanings(
+    client: jpdb.JpdbClient, entry: Mapping[str, Any]
+) -> list[str]:
+    """The entry's glosses, fetched only when reconciliation needs them.
+
+    A separate lookup rather than a widened ``/parse``: the parse field list is
+    a pinned contract (M2.1), and glosses matter only to a record whose
+    meanings are a provisional model claim — so the extra call is paid exactly
+    where the question is asked, and every other record costs what it always
+    did.
+    """
+    vid, sid = entry.get("vid"), entry.get("sid")
+    if vid is None or sid is None:
+        return []
+    rows = client.lookup_vocabulary([(vid, sid)], ("meanings_chunks",))
+    return jpdb.meanings_lines(rows[0].get("meanings_chunks") if rows else None)
 
 
 @dataclass(slots=True)

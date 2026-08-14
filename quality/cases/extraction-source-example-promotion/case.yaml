@@ -11,7 +11,7 @@ fixtures:
   - path: input.json
     fingerprint: a98e12a0d9bbb5957b6b8ac5b2a6b35a4181b69cf44c91df05421f2c6387fa5a
   - path: oracle.json
-    fingerprint: 5f917e145b77f85dea7161741fa18b727fd7e9617695a4c5a26bb2b6742eb24d
+    fingerprint: a03ff4ba934ef1ce70b3497cf5a3d2d9e81aa4e0fc72019232b6cb3c896295d0
 runner_input: input.json
 oracle: oracle.json
 finding_id: extraction-source-example-promotion

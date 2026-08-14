@@ -89,28 +89,8 @@ def deck_tag(name: str) -> str:
 
 
 def _meanings(chunks: Any) -> list[str]:
-    """One line per sense, its glosses joined.
-
-    jpdb sends ``meanings_chunks`` as a list of senses, each a list of glosses:
-    ``[["to talk", "to speak"], ["to tell", "to explain"]]``. The exporter
-    renders one ``<br>`` line per list entry, so keeping senses as entries puts
-    each sense on its own line; flattening would spill eleven fragments onto a
-    card that should read as three meanings.
-    """
-    if not isinstance(chunks, Sequence) or isinstance(chunks, str):
-        return []
-    senses: list[str] = []
-    for sense in chunks:
-        if isinstance(sense, str):
-            glosses = [sense]
-        elif isinstance(sense, Sequence):
-            glosses = [str(part).strip() for part in sense if str(part).strip()]
-        else:
-            continue
-        line = ", ".join(gloss for gloss in glosses if gloss)
-        if line:
-            senses.append(line)
-    return senses
+    """One line per sense; the sense-joining rule lives in ``jpdb.meanings_lines``."""
+    return jpdb.meanings_lines(chunks)
 
 
 def _card_state(value: Any) -> str:

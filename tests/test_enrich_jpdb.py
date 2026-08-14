@@ -10,6 +10,7 @@ silently shifting a column.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,11 @@ from japanese_anki.enrich import (
 )
 from japanese_anki.jpdb import JpdbClient
 from japanese_anki.models import SourceReference, VocabularyRecord
+from japanese_anki.staging import (
+    PROVISIONAL_FIELDS_KEY,
+    mark_provisional,
+    provisional_fields,
+)
 
 # The vocabulary row order jpdb answers a default `/parse` in.
 assert jpdb.DEFAULT_VOCABULARY_FIELDS == (
@@ -202,6 +208,125 @@ def test_a_populated_field_is_left_exactly_as_the_human_wrote_it() -> None:
     assert "part_of_speech" not in changed
     assert "pitch_accent" not in changed
     assert "furigana" in changed
+
+
+def provisional_record(**overrides: Any) -> VocabularyRecord:
+    """An extract-sourced record whose meanings and POS are model claims."""
+    values: dict[str, Any] = {
+        "source": SourceReference(type="extract", imported_from="page.jpg"),
+        "meanings": ["to converse"],
+        "part_of_speech": "noun",
+    }
+    values.update(overrides)
+    return mark_provisional(record(**values))
+
+
+def hanasu_senses() -> dict[tuple[int, int], dict[str, Any]]:
+    return {
+        (1562350, 4280520068): {
+            "reading": "はなす",
+            "alt_sids": [],
+            "meanings_chunks": [["to talk", "to speak"], ["to tell"]],
+        }
+    }
+
+
+def test_an_exact_match_replaces_provisional_meanings_and_pos() -> None:
+    # The camera pilot's precedence failure, inverted: the model's gloss and
+    # POS held the seat only until dictionary evidence arrived.
+    api = FakeApi(
+        unforced={"話す": parse_response((HANASU_FURIGANA, HANASU))},
+        senses=hanasu_senses(),
+    )
+
+    result = enrich_records(client_for(api), [provisional_record()])
+
+    [updated] = result.records
+    assert updated.meanings == ["to talk, to speak", "to tell"]
+    assert updated.part_of_speech == "verb"
+    changed = result.changes["word:話す:はなす"]
+    assert "meanings" in changed and "part_of_speech" in changed
+    # Authority resolved: the mark is gone, so a later force or edit cannot be
+    # silently outranked by a rerun of this pass.
+    assert PROVISIONAL_FIELDS_KEY not in updated.source.raw_fields
+    assert api.calls("lookup-vocabulary")[-1]["fields"] == ["meanings_chunks"]
+
+
+def test_a_human_edit_after_extraction_outranks_the_dictionary() -> None:
+    # The value binding is the enforcement: editing the field after extraction
+    # breaks it, and a broken binding reads as curated. The stale mark is
+    # cleared so it can never authorize overwriting the edit later; the
+    # untouched POS claim still reconciles normally.
+    edited = replace(provisional_record(), meanings=["to chat (hand-checked)"])
+    api = FakeApi(
+        unforced={"話す": parse_response((HANASU_FURIGANA, HANASU))},
+        senses=hanasu_senses(),
+    )
+
+    result = enrich_records(client_for(api), [edited])
+
+    [updated] = result.records
+    assert updated.meanings == ["to chat (hand-checked)"]
+    assert updated.part_of_speech == "verb"
+    assert "meanings" not in result.changes["word:話す:はなす"]
+    assert PROVISIONAL_FIELDS_KEY not in updated.source.raw_fields
+    assert any("edited since extraction" in warning for warning in result.warnings)
+
+
+def test_a_different_reading_holds_provisional_fields() -> None:
+    # The reviewed identity does not match what jpdb resolved, so no entry is
+    # confirmed as this word: nothing is written and the claims stay marked.
+    api = FakeApi(
+        unforced={"話す": parse_response((HANASU_FURIGANA, HANASU))},
+        senses={(1562350, 4280520068): {"reading": "はなす", "alt_sids": []}},
+    )
+    held = provisional_record(id="word:話す:はなし", reading="はなし")
+
+    result = enrich_records(client_for(api), [held])
+
+    assert result.changes == {}
+    [updated] = result.records
+    assert updated.meanings == ["to converse"]
+    assert updated.part_of_speech == "noun"
+    assert provisional_fields(updated) == ["meanings", "part_of_speech"]
+
+
+def test_a_silent_dictionary_leaves_the_mark_and_says_so() -> None:
+    api = FakeApi(
+        unforced={"話す": parse_response((HANASU_FURIGANA, HANASU))},
+        senses={
+            (1562350, 4280520068): {
+                "reading": "はなす",
+                "alt_sids": [],
+                "meanings_chunks": [],
+            }
+        },
+    )
+
+    result = enrich_records(client_for(api), [provisional_record()])
+
+    [updated] = result.records
+    assert updated.meanings == ["to converse"]
+    assert updated.part_of_speech == "verb"
+    assert provisional_fields(updated) == ["meanings"]
+    assert any(
+        "no answer for provisional meanings" in warning for warning in result.warnings
+    )
+
+
+def test_a_record_without_a_reading_holds_reconciliation() -> None:
+    # Empty fields still fill from the lemma parse, as they always have, but a
+    # provisional claim is never settled against an unconfirmed identity.
+    api = hanasu_api()
+    unconfirmed = provisional_record(id="word:話す:", reading="")
+
+    result = enrich_records(client_for(api), [unconfirmed])
+
+    [updated] = result.records
+    assert updated.meanings == ["to converse"]
+    assert updated.part_of_speech == "noun"
+    assert provisional_fields(updated) == ["meanings", "part_of_speech"]
+    assert any("stay provisional" in warning for warning in result.warnings)
 
 
 def test_a_record_with_nothing_to_fill_never_reaches_the_network() -> None:

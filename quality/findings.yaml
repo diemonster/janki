@@ -275,16 +275,17 @@ findings:
     case_ids: [extraction-source-example-promotion]
     fix_ref: src/japanese_anki/extract.py#build_records
   - id: enrichment-provisional-precedence
-    state: open
+    state: fixed
     pipeline_stage: dictionary-enrichment
     source_archetypes: [camera]
     symptom: Dictionary enrichment fills only empty fields and never revisits meanings, so a provisional model-extracted meaning or part of speech outranked exact dictionary evidence and stayed canonical.
-    invariant: A semantic field named in source.raw_fields provisional_fields yields to an exact dictionary match — the field is rewritten, the marker shrinks to the still-unresolved fields, and the change appears in the enrichment diff — while a field without the marker is treated as curated and preserved; near matches, absent entries, different readings, and conflicts hold or propose instead of writing.
+    invariant: A semantic field named in source.raw_fields provisional_fields yields to an exact dictionary match — the field is rewritten, the value-bound marker shrinks to the still-unresolved fields, and the change appears in the enrichment diff — while a field without a matching marker binding is treated as curated and preserved; near matches, absent entries, different readings, and missing-reading identities hold with a named warning instead of writing.
     evidence:
-      - fingerprint: 913a79d740fb61c372cb5321a42fc581c7777df333770d131a5e178a67106ce4
+      - fingerprint: bb98a628a0b611dd584787154c93ce0fe60c26766a040bbe111a8e8e05fc7045
         locator: quality/cases/enrichment-provisional-precedence/input.json
     recurrences: []
     case_ids: [enrichment-provisional-precedence]
+    fix_ref: src/japanese_anki/enrich.py#enrich_records
   - id: enrichment-reviewed-example-claim
     state: fixed
     pipeline_stage: ai-enrichment

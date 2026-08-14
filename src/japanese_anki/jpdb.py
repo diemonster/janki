@@ -961,6 +961,33 @@ def accent_patterns(value: Any) -> list[str]:
     return [str(item).strip() for item in value if str(item).strip()]
 
 
+def meanings_lines(chunks: Any) -> list[str]:
+    """jpdb's ``meanings_chunks`` as one janki meaning line per sense.
+
+    The wire form is a list of senses, each a list of glosses:
+    ``[["to talk", "to speak"], ["to tell", "to explain"]]``. The exporter
+    renders one ``<br>`` line per list entry, so keeping senses as entries puts
+    each sense on its own line; flattening would spill eleven fragments onto a
+    card that should read as three meanings. Shared by the importer (which
+    builds records *from* jpdb) and dictionary reconciliation (which replaces a
+    provisional model gloss), so both spell a sense the same way.
+    """
+    if not isinstance(chunks, Sequence) or isinstance(chunks, str):
+        return []
+    senses: list[str] = []
+    for sense in chunks:
+        if isinstance(sense, str):
+            glosses = [sense]
+        elif isinstance(sense, Sequence):
+            glosses = [str(part).strip() for part in sense if str(part).strip()]
+        else:
+            continue
+        line = ", ".join(gloss for gloss in glosses if gloss)
+        if line:
+            senses.append(line)
+    return senses
+
+
 def frequency_rank(value: Any) -> int | None:
     """jpdb's ``frequency_rank`` as an int, or ``None``.
 

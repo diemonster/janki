@@ -15,7 +15,7 @@
           "confidence": "medium",
           "page": "1",
           "context": "眩しい光の中で 彼は目を細めた",
-          "provisional_fields": "meanings,part_of_speech"
+          "provisional_fields": "meanings:888026a51603,part_of_speech:ee6cded62768"
         }
       }
     }
@@ -27,13 +27,23 @@
         "tokens": [[[0, [["眩", "まぶ"], "し", "い"]]]],
         "vocabulary": [[101, 1, "眩しい", "まぶしい", ["LHHLL"], 3200, ["adj-i"]]]
       }
+    },
+    {
+      "endpoint": "lookup-vocabulary",
+      "body": {
+        "list": [[101, 1]],
+        "fields": ["meanings_chunks"]
+      },
+      "payload": {
+        "vocabulary_info": [[[["dazzling", "radiant"], ["dazzlingly bright"]]]]
+      }
     }
   ],
   "kanji": {},
   "observe": [
     {
       "id": "word:眩しい:まぶしい",
-      "fields": ["part_of_speech", "verb_group", "conjugations", "source"]
+      "fields": ["meanings", "part_of_speech", "verb_group", "conjugations", "source"]
     }
   ]
 }

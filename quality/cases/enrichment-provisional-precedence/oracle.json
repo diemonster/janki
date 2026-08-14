@@ -3,6 +3,7 @@
     {
       "id": "word:眩しい:まぶしい",
       "fields": {
+        "meanings": ["dazzling, radiant", "dazzlingly bright"],
         "part_of_speech": "i-adjective",
         "verb_group": "",
         "conjugations": {
@@ -21,7 +22,6 @@
             "confidence": "medium",
             "page": "1",
             "context": "眩しい光の中で 彼は目を細めた",
-            "provisional_fields": "meanings",
             "janki_pitch_accent_source": "jpdb:933541259fc4abc06fbb8a37aa8996c5b7ba9bb409f29c52e622108bc6102859"
           }
         }
@@ -33,6 +33,7 @@
       "conjugations",
       "frequency_rank",
       "furigana",
+      "meanings",
       "part_of_speech",
       "pitch_accent"
     ]
@@ -40,5 +41,5 @@
   "looked_up": 1,
   "skipped": 0,
   "warning_count": 0,
-  "calls": ["parse"]
+  "calls": ["parse", "lookup-vocabulary"]
 }

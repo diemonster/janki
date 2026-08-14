@@ -35,7 +35,7 @@ from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import stable_record_id
 from japanese_anki.inputs import PreparedInput
 from japanese_anki.models import SourceReference, VocabularyRecord
-from japanese_anki.staging import annotate
+from japanese_anki.staging import annotate, mark_provisional
 
 __all__ = [
     "CONFIDENCE_LEVELS",
@@ -820,6 +820,11 @@ def build_records(
                 raw_fields=_raw_fields(candidate, prepared),
             ),
         )
+        # Marked here, at the only moment the values are known to be model
+        # output and nothing else: one step later they sit in a staging file
+        # beside human edits and the distinction is unrecoverable. Dictionary
+        # reconciliation reads the mark to know what it may replace.
+        record = mark_provisional(record)
         # Repeated source rows stay visible as separate source units. They do
         # not become duplicate canonical notes with the same deterministic ID.
         if record.id in produced:

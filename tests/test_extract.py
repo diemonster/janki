@@ -20,7 +20,7 @@ from japanese_anki.claude_client import CallResult, Refusal
 from japanese_anki.extract import ExtractError, build_records, known_ids, system_prompt
 from japanese_anki.inputs import PreparedInput
 from japanese_anki.models import VocabularyRecord
-from japanese_anki.staging import read_staging
+from japanese_anki.staging import PROVISIONAL_FIELDS_KEY, provisional_fields, read_staging
 
 PDF = b"%PDF-1.7 fake"
 
@@ -535,6 +535,25 @@ def test_a_candidate_without_an_excerpt_records_no_example_evidence(
 
     assert record.examples == []
     assert "example" not in record.source.raw_fields
+
+
+def test_extracted_semantic_fields_are_marked_provisional(tmp_path: Path) -> None:
+    # Marked at the only moment the values are known to be model output and
+    # nothing else. The mark is value-bound, so `provisional_fields` reading
+    # it back is also the proof the binding matches what the record holds.
+    [record] = build_records([candidate()], prepared(tmp_path))
+
+    assert provisional_fields(record) == ["meanings", "part_of_speech"]
+
+
+def test_a_candidate_with_no_semantic_claims_is_not_marked(tmp_path: Path) -> None:
+    # Emptiness is not a claim; an empty mark would put every extracted record
+    # under dictionary authority it never needed.
+    [record] = build_records(
+        [candidate(meanings=[], part_of_speech="")], prepared(tmp_path)
+    )
+
+    assert PROVISIONAL_FIELDS_KEY not in record.source.raw_fields
 
 
 def test_a_candidate_with_no_expression_cannot_become_a_record(

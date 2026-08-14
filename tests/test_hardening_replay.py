@@ -21,6 +21,7 @@ SEEDED_CASES = (
     "derived-romaji-repair",
     "enrichment-forced-kana-reading",
     "enrichment-invalid-pitch-length",
+    "enrichment-provisional-precedence",
     "enrichment-suru-compound",
     "example-romaji-invalid-furigana",
     "extraction-oracle-key-binding",
