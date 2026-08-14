@@ -100,12 +100,12 @@ Set `[ai] adjudicate_model = ""` to turn it off entirely.
 `janki enrich --jpdb` fills what jpdb knows. Two more passes write what it does
 not — an example sentence a beginner can read, a note on how the word is
 actually used, better English glosses. Both need the AI extra. Immediate
-example writing uses the authenticated Codex CLI by default; meaning polish,
-extraction, and Anthropic batch submission use an Anthropic key:
+example writing, meaning polish, extraction, and batch submission all use an
+Anthropic key by default. Codex remains a supported provider for the `--ai`
+pass; `codex login` is only needed when `enrich_provider = "codex"`:
 
 ```bash
 python -m pip install -e '.[ai]'
-codex login
 export ANTHROPIC_API_KEY='...'
 ```
 
@@ -294,15 +294,17 @@ model.
 ```toml
 [ai]
 extract_model = "claude-opus-5"
-enrich_provider = "codex"
-enrich_model = "gpt-5.6-sol"
+enrich_provider = "anthropic"
+enrich_model = "claude-opus-5"
 enrich_reasoning_effort = "ultra"
 polish_model = "claude-opus-5"
 review_model = "claude-opus-5"
 ```
 
 The immediate `--ai` pass uses `enrich_provider`, `enrich_model`, and (for
-Codex) `enrich_reasoning_effort`. `--model` overrides the model for one run.
+Codex) `enrich_reasoning_effort` — that key has no Anthropic equivalent, whose
+reasoning depth comes from `claude_client.DEFAULT_EFFORT`. `--model` overrides
+the model for one run.
 Meaning polish and the card review gate remain Anthropic-backed and have their
 own model settings so changing the enrichment provider cannot change them by
 accident.

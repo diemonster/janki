@@ -420,9 +420,10 @@ enrichment mechanism.
   `enrich --ai --polish-meanings` — because meanings are never empty (the
   importer always fills them), so fill-empty semantics can never touch
   them. It always shows old→new per record and requires confirmation.
-- Immediate enrichment defaults to Codex `gpt-5.6-sol` at `ultra` reasoning;
-  provider, model, and reasoning effort are independently configurable.
-  Meaning polish and review retain separate Claude model settings.
+- Immediate enrichment writes with Claude; provider, model, and (for Codex)
+  reasoning effort are independently configurable, and Codex remains a
+  supported provider. Meaning polish and review retain separate Claude model
+  settings, so changing the enrichment provider cannot change them by accident.
 
 **Batch mode** (`enrich --ai --batch-submit` / `--batch-fetch`): the
 Message Batches API halves token cost but jobs can take hours, so it is
@@ -628,8 +629,8 @@ scan_inbox  = "data/inbox/scans"
 
 [ai]
 extract_model = "claude-opus-5"
-enrich_provider = "codex"
-enrich_model = "gpt-5.6-sol"
+enrich_provider = "anthropic"
+enrich_model = "claude-opus-5"
 enrich_reasoning_effort = "ultra"
 polish_model = "claude-opus-5"
 review_model = "claude-opus-5"
