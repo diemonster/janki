@@ -28,7 +28,6 @@ from japanese_anki.claude_client import (
     STYLE_GUIDE_PATH,
     ClaudeRequestError,
     batch_request,
-    build_client,
     load_anthropic,
     parse_call,
     read_style_guide,
@@ -143,6 +142,7 @@ def test_importing_the_module_does_not_import_the_sdk() -> None:
         assert module.DEFAULT_MAX_TOKENS == DEFAULT_MAX_TOKENS
 
 
+@pytest.mark.allow_build_client
 def test_build_client_leaves_key_resolution_to_the_sdk(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -154,8 +154,8 @@ def test_build_client_leaves_key_resolution_to_the_sdk(
     )
     monkeypatch.setitem(sys.modules, "anthropic", fake_sdk)
 
-    build_client()
-    build_client("sk-test")
+    claude_client.build_client()
+    claude_client.build_client("sk-test")
 
     assert seen == [{}, {"api_key": "sk-test"}]
 

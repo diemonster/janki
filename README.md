@@ -210,7 +210,8 @@ max_meanings = 4              # senses per card; 0 shows them all, a deck may
 [ai]
 enrich_provider = "anthropic"   # or "codex"
 enrich_model = "claude-opus-5"
-enrich_reasoning_effort = "ultra"   # codex only; Anthropic depth is xhigh
+enrich_reasoning_effort = "ultra"   # codex only; Anthropic depth follows
+                                    # the model (claude_client.effort_for)
 polish_model = "claude-opus-5"  # review_model is independently configurable
 
 [tts]

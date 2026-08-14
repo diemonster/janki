@@ -3855,6 +3855,14 @@ def command_refresh(args: argparse.Namespace) -> int:
         if getattr(args, f"no_{name}"):
             print(f"— {name}: skipped ({flag})")
             continue
+        if name == "recheck" and args.no_jpdb:
+            # `--recheck-furigana` is a jpdb pass: it re-parses each disputed
+            # sentence and refuses without a key. Running it under --no-jpdb
+            # made that flag mean "no jpdb, except the stage that needs it
+            # most", and made `refresh` demand a network secret from a run
+            # that had just been told not to use one.
+            print("— recheck: skipped (--no-jpdb; it re-parses through jpdb)")
+            continue
         if name == "review" and not requires_review:
             print(f"— {name}: skipped ([review] require = false)")
             continue

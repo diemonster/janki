@@ -2,43 +2,53 @@
   "requests": [
     {
       "model": "claude-opus-5",
-      "effort": "xhigh"
+      "effort": "xhigh",
+      "thinking": "adaptive"
     },
     {
       "model": "claude-opus-4-8",
-      "effort": "xhigh"
+      "effort": "xhigh",
+      "thinking": "adaptive"
     },
     {
       "model": "claude-opus-4-7",
-      "effort": "xhigh"
+      "effort": "xhigh",
+      "thinking": "adaptive"
     },
     {
       "model": "claude-sonnet-5",
-      "effort": "xhigh"
+      "effort": "xhigh",
+      "thinking": "adaptive"
     },
     {
       "model": "claude-opus-4-6",
-      "effort": null
+      "effort": null,
+      "thinking": "adaptive"
     },
     {
       "model": "claude-opus-4-5",
-      "effort": null
+      "effort": null,
+      "thinking": null
     },
     {
       "model": "claude-sonnet-4-6",
-      "effort": null
+      "effort": null,
+      "thinking": "adaptive"
     },
     {
       "model": "claude-sonnet-4-5",
-      "effort": null
+      "effort": null,
+      "thinking": null
     },
     {
       "model": "claude-haiku-4-5-20251001",
-      "effort": null
+      "effort": null,
+      "thinking": null
     },
     {
       "model": "a-model-this-list-has-never-heard-of",
-      "effort": null
+      "effort": null,
+      "thinking": null
     }
   ]
 }

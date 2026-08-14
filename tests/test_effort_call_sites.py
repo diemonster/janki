@@ -195,3 +195,98 @@ def test_asking_for_effort_also_asks_for_thinking() -> None:
     # And not sent otherwise: a model that takes no effort is not being asked
     # to reason harder, and older families reject the pairing differently.
     assert "thinking" not in without
+
+
+@pytest.mark.parametrize("model,expected", [(NEW, "xhigh"), (OLD, None)])
+def test_the_adjudicator_resolves_effort_from_its_own_model(
+    model: str, expected: str | None
+) -> None:
+    """The pass the finding names by name. `adjudicate_reading` catches every
+    exception and returns "unsure", so a bad effort value here retires it
+    permanently with nothing printed — and it was the one site unpinned."""
+    client = _BodyCapture('{"verdict": "writer", "why": "x"}')
+
+    enrich.adjudicate_reading(
+        "毎日話します。",
+        "毎日 話[はな]します。",
+        "毎日 話[わ]します。",
+        model=model,
+        client=client,
+    )
+
+    assert client.bodies, "the adjudicator never called the model"
+    assert client.bodies[0]["output_config"].get("effort") == expected
+
+
+@pytest.mark.parametrize("model,expected", [(NEW, "xhigh"), (OLD, None)])
+def test_meaning_polish_resolves_effort_from_its_own_model(
+    model: str, expected: str | None
+) -> None:
+    client = _BodyCapture('{"meanings": ["to speak"], "why": "x"}')
+
+    list(
+        enrich.polish_meanings(
+            [_record()], model=model, style_guide="g", client=client,
+            ids=["word:話す:はなす"],
+        )
+    )
+
+    assert client.bodies, "polish never called the model"
+    assert client.bodies[0]["output_config"].get("effort") == expected
+
+
+@pytest.mark.parametrize("model,expected", [(NEW, "xhigh"), (OLD, None)])
+def test_a_polish_batch_entry_resolves_effort_from_its_own_model(
+    model: str, expected: str | None
+) -> None:
+    """The other batch builder. An unsupported value here fails every row of a
+    submitted batch at once, hours after anyone was watching."""
+    requests, _ids, _fps = enrich.polish_batch_requests(
+        [_record()], model=model, style_guide="g", ids=["word:話す:はなす"]
+    )
+
+    assert requests
+    assert requests[0]["params"]["output_config"].get("effort") == expected
+
+
+@pytest.mark.parametrize("model,expected", [(NEW, "xhigh"), (OLD, None)])
+def test_the_pitch_recheck_resolves_effort_from_its_own_model(
+    model: str, expected: str | None
+) -> None:
+    """A second call, reached only when the first returns a pitch finding on a
+    record that has an accent — so a recorder that refuses never gets here, and
+    this site sat unpinned behind that."""
+
+    class _PitchThenRecord:
+        def __init__(self) -> None:
+            self.calls: list[dict[str, Any]] = []
+
+        def __call__(self, *args: Any, **kwargs: Any) -> Any:
+            self.calls.append(kwargs)
+            if len(self.calls) == 1:
+                return claude_client.CallResult(
+                    SimpleNamespace(
+                        findings=[
+                            SimpleNamespace(
+                                where="Pitch accent",
+                                problem="HLL draws it as 頭高",
+                                severity="note",
+                                suggestion="",
+                            )
+                        ]
+                    ),
+                    "end_turn",
+                    None,
+                )
+            return claude_client.CallResult(None, "refusal", None)
+
+    caller = _PitchThenRecord()
+    # One mark per kana plus the following particle: はなす is four.
+    accented = replace(_record(), pitch_accent=["LHHH"])
+
+    review.review_records(
+        [accented], model=model, style_guide="g", parse_call=caller
+    )
+
+    assert len(caller.calls) == 2, "the pitch recheck was never reached"
+    assert caller.calls[1].get("effort") == expected

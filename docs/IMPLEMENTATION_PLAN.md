@@ -3122,8 +3122,8 @@ default in prose and must be updated with it.
 
 **Effort must be a parameter, not a constant.** `_request_body` is shared by
 **five** passes, and one of them cannot accept `effort`:
-`config.adjudicate_model` defaults to `claude-haiku-4-5-20251001`, which
-rejects it with a 400 — and `adjudicate_reading` swallows every exception into
+`config.adjudicate_model` defaulted to `claude-haiku-4-5-20251001`, which
+rejects it with a 400 (it now defaults to `claude-opus-5`, which accepts it) — and `adjudicate_reading` swallows every exception into
 `return "unsure", ...`, so an unconditional `effort` would make adjudication
 fail forever with no error surface. Give `_request_body` an `effort` parameter
 defaulting to `None`, omit the key when unset, and thread it exactly as
@@ -3140,8 +3140,8 @@ no single budget to raise:
 
 | pass | `max_tokens` | site |
 |---|---|---|
-| adjudication | 200 | `enrich.py:1563` |
-| patterns | 4000 | `patterns.py:242` |
+| adjudication | `DEFAULT_MAX_TOKENS` (was 200) | `enrich.py` |
+| patterns | `DEFAULT_MAX_TOKENS` (was 4000) | `patterns.py` |
 | **review, and its pitch recheck** | **8000** | `review.py:497`, `review.py:540` |
 | extract / enrich / polish / batch | 16000 | `DEFAULT_MAX_TOKENS` |
 
@@ -3276,7 +3276,7 @@ Use these slices, each a finding plus a reproducing case plus a fix, ordered so
    a standalone offline check, with its case.
 2. The review completeness gate. It removes no gate and needs no risk decision,
    and it stops the waste immediately.
-3. `effort` as a parameter, `"xhigh"` everywhere but adjudication; the
+3. `effort` as a parameter, `"xhigh"` wherever the model accepts it; the
    streaming call shape and the widened exception boundary; fakes updated in
    both test files.
 4. One live `enrich --ai` call at `xhigh` on a named record to read `usage`,
@@ -3328,7 +3328,7 @@ Use these slices, each a finding plus a reproducing case plus a fix, ordered so
    jpdb's sentence boundaries — measured wrong on three of five colloquial
    sentences. A repair that has never fired, driven by boundaries that are
    sometimes wrong, could only ever introduce the error it was written to
-   prevent. `_learner_load_excess` was then the last consumer of the parse; it has since been deleted, so nothing consumes it.
+   prevent. `_learner_load_excess` was then one of two consumers of the parse and has since been deleted; `verify_example_furigana` remains, and retiring it is slice 7.
 9. Update `docs/HARDENING.md`, full replay, `make gates`, one local review
    cycle.
 

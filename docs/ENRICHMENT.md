@@ -274,7 +274,7 @@ thousand tokens — and then one line per record naming the word, its reading an
 what janki already knows. One call per record, every time.
 
 That makes the output the variable, and the part worth measuring rather than
-predicting: current models think before they answer, and thinking is billed as
+predicting: the models janki uses think before they answer, and thinking is billed as
 output. **Run one Anthropic-backed record first and look at the usage in the
 Anthropic console**
 before pointing a pass at a few thousand. A rough floor for planning is a cent or
@@ -303,7 +303,8 @@ review_model = "claude-opus-5"
 
 The immediate `--ai` pass uses `enrich_provider`, `enrich_model`, and (for
 Codex) `enrich_reasoning_effort` — that key has no Anthropic equivalent, whose
-reasoning depth comes from `claude_client.DEFAULT_EFFORT`. `--model` overrides
+reasoning depth comes from `claude_client.effort_for`, which sends it only for
+models that accept it. `--model` overrides
 the model for one run.
 Meaning polish and the card review gate remain Anthropic-backed and have their
 own model settings so changing the enrichment provider cannot change them by

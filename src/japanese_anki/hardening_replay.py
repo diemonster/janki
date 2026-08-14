@@ -740,7 +740,11 @@ def _model_request(data: dict[str, Any], root: Path) -> Any:
             claude_client.effort_for(model),
         )
         observed.append(
-            {"model": model, "effort": body["output_config"].get("effort")}
+            {
+                "model": model,
+                "effort": body["output_config"].get("effort"),
+                "thinking": body.get("thinking", {}).get("type"),
+            }
         )
     return {"requests": observed}
 

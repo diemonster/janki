@@ -109,6 +109,22 @@ _XHIGH_MODELS = (
     "mythos-5",
 )
 
+#: Models where adaptive thinking must be asked for by name.
+#:
+#: A separate list from the one above, because the two properties do not line
+#: up. Opus 4.6 and Sonnet 4.6 take ``thinking`` but not the ``xhigh`` level,
+#: so pairing the key with *effort* left exactly them thinking-off — the same
+#: defect one family down from the one that motivated the pairing. Older
+#: families are absent on purpose: they need ``budget_tokens``, which this
+#: module never sends, so asking them for adaptive thinking would fail.
+_ADAPTIVE_THINKING_MODELS = _XHIGH_MODELS + ("opus-4-6", "sonnet-4-6")
+
+
+def _thinks_adaptively(model: str) -> bool:
+    """Whether ``model`` should be sent ``thinking: {"type": "adaptive"}``."""
+    name = model.strip().lower()
+    return bool(name) and any(f in name for f in _ADAPTIVE_THINKING_MODELS)
+
 
 def effort_for(model: str) -> str | None:
     """:data:`DEFAULT_EFFORT` when ``model`` takes it, otherwise ``None``.
@@ -329,14 +345,15 @@ def _request_body(
         "messages": [{"role": "user", "content": user_content}],
         "output_config": output_config,
     }
-    if effort:
+    if _thinks_adaptively(model):
         # Sent explicitly, not left to the default, because the default differs
-        # across the very models `effort_for` allows. Opus 5, Sonnet 5, Fable 5
-        # and Mythos 5 think when `thinking` is absent; **Opus 4.8 and 4.7 do
-        # not** — for them adaptive is the only on-mode and omitting the key
-        # means no thinking at all. Asking one of those for extra-high effort
-        # and then withholding thinking buys a fraction of what the budget above
-        # was measured against, and does it without erroring.
+        # across the models janki uses. Opus 5, Sonnet 5, Fable 5 and Mythos 5
+        # think when `thinking` is absent; **Opus 4.8, 4.7, 4.6 and Sonnet 4.6
+        # do not** — for them adaptive is the only on-mode and omitting the key
+        # means no thinking at all. Keyed on the model rather than on `effort`:
+        # the 4.6 pair takes thinking but not the `xhigh` level, so pairing it
+        # with effort left exactly those two silently thinking-off, which is the
+        # same defect one family down from the one that motivated the pairing.
         body["thinking"] = {"type": "adaptive"}
     return body
 

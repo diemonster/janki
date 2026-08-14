@@ -33,8 +33,8 @@ reading = false
 extract_model = "claude-opus-5"
 enrich_provider = "anthropic"
 enrich_model = "claude-opus-5"
-# Codex only; ignored while enrich_provider is "anthropic", whose depth is set
-# by claude_client.DEFAULT_EFFORT rather than by a config key.
+# Codex only; ignored while enrich_provider is "anthropic", whose depth comes
+# from claude_client.effort_for(model) rather than from a config key.
 enrich_reasoning_effort = "ultra"
 polish_model = "claude-opus-5"
 review_model = "claude-opus-5"
