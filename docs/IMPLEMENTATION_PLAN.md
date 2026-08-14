@@ -3061,6 +3061,135 @@ advisory review after a slice. Keep the review hooks disabled while the owner
 cost pause is in effect. Do not remove or change the disable marker as part of
 this task.
 
+### [ ] M7.6V Verification authority — repair the parse reading table
+
+*Opened 2026-08-14 after the camera pilot deck was first built and six of its
+fourteen example sentences were silent. The first draft of this task proposed
+retiring the sentence-furigana oracle and decoupling sentence audio from it.
+Three independent adversarial reviews killed that design, and this is the
+corrected form: the oracle is sound, its input is corrupt. Investigated live
+against jpdb with the owner's key; no model call was made.*
+
+Depends on: M7.6T
+Files: `src/japanese_anki/qc.py`, `src/japanese_anki/jpdb.py`,
+`src/japanese_anki/enrich.py`, new offline cases and tests, and
+`docs/HARDENING.md` only if the verification contract changes.
+
+**The measured defect.** `qc.verify_example_furigana` compares an example's
+furigana against jpdb's rendering of the sentence. Across the real 155-example
+corpus it flags 38, and every one is a false positive — zero true positives
+measured. Two mechanical causes, both in jpdb's `/parse` reply rather than in
+the check:
+
+1. **Null-furigana fallback.** jpdb sends `furigana: null` for an all-kana
+   token, so `qc.token_text` substitutes the vocabulary entry's *dictionary*
+   form: あります renders as ある, しています as する. Nine of the eleven
+   currently flagged examples are purely this. The fix is the one
+   `verify_example_furigana`'s own docstring already specifies and defers —
+   request `position`/`length` and slice the surface form out of the sentence.
+   Confirmed live that the fields are returned and that slicing recovers
+   `あります` (`pos=10 len=4`); `jpdb.py` already sends
+   `position_length_encoding` whenever positional fields are requested.
+2. **`/parse` reading-table inconsistency.** For the *same* vid+sid, `/parse`
+   and `/lookup-vocabulary` disagree: 日本語 (vid 1464530, sid 3361009543)
+   reads にっぽんご from `/parse` and にほんご from the word endpoint; 富士山
+   (vid 1496800) reads ふじやま versus ふじさん. In both, the word-level
+   endpoint agrees with the writer and the card is right. Resolving each
+   token's reading through `/lookup-vocabulary` by vid+sid clears the
+   remaining two.
+
+Together these remove the entire false-positive surface this repository has —
+eleven of eleven — while the oracle keeps every true positive it catches
+today. This is the earliest production boundary that can state the rule, which
+`docs/HARDENING.md` requires the fix to target.
+
+**What the adversarial review rejected, recorded so it is not re-proposed:**
+
+- *Retiring the oracle.* `verify_example_furigana` holds a second, entirely
+  offline check nothing else performs: `furigana_base(furigana)` against the
+  sentence text, which catches a model rewriting the sentence inside the
+  furigana field (`本[ほん]が 読[よ]む。` for 本を読む。, and `行[いき]ます`
+  which renders as 行ます). `qc.furigana_base` has no other caller.
+- *Relying on the surviving offline checks.* `impossible_character_furigana`
+  inspects single-kanji groups only, by design. Measured over the real corpus,
+  159 of 396 ruby groups are multi-kanji and are never inspected, and of the
+  237 single-kanji groups only 113 have their character in `data/kanji.json` —
+  28.5% reading coverage, 39.4% at best after `janki kanji --refresh`, because
+  `command_kanji` walks record expressions and never example sentences.
+- *A word-level reading-set check as the replacement.* Prototyped: it clears
+  all six camera sentences but catches only 5 of 11 planted compound errors
+  (一人[いちにん], 大人[だいじん], 今朝[こんちょう], 東京[とうけい],
+  眼鏡[がんきょう] all pass), because an attested-but-unusual reading is
+  legitimately in the word's set. It is strictly weaker than the repaired
+  oracle.
+- *Decoupling sentence audio from the flag.* `ai-impossible-character-furigana`
+  is `fixed` and its invariant ends "…marked unverified, and blocked from
+  sentence audio until review." Decoupling makes that clause false, which
+  reopens a fixed finding — and no gating case covers the audio half of it
+  (there is no `audio` runner in `hardening_replay.RUNNERS`), so the change
+  would be invisible to `janki harden replay`. Retiring a gate is in substance
+  an accepted risk, and only the repository owner may approve one.
+- *The premise the first draft argued from.* "Every AI defect this repository
+  has recorded is a mechanical-fact error" is **false**. `quality/findings.yaml`
+  registers janki's *code* defects; `data/review.json` registers *content*
+  defects, and it holds 96 findings, 22 of them blocking errors, a large share
+  on AI-written fields: a wrong sense (祝福 glossed "grace"), a card whose
+  examples both use 手 in a sense the card does not teach, a part-of-speech
+  misclassification, a verbless fragment, a fabricated grammar rule for
+  四つ葉のクローバー, and 花火祭り where the ordinary word is 花火大会. The
+  owner also hand-corrected AI usage notes on language grounds in `f3f51de`.
+  The AI writer errs on language, the review layer catches it, and that layer
+  must not be made the sole guardian of anything.
+
+**What is not changed.** The oracle keeps deciding, sentence audio keeps its
+coupling to the flag, and the adjudicator stays — with the false-positive
+surface removed it should have almost nothing left to arbitrate, which is the
+honest way to retire a paid call. The zero-cost human escape hatch already
+exists for anything that survives: `enrich --recheck-furigana --accept` clears
+a flag on the owner's authority and records `kind="human"` in the ledger.
+
+Make these production changes:
+
+1. Request `position`/`length` for the verification parse and slice each
+   token's surface form out of the sentence in `qc.token_text`, instead of
+   falling back to the entry's dictionary spelling. Keep the `〈?〉` mark for a
+   token with neither an entry nor usable offsets.
+2. When a token's `/parse` reading is what a comparison would fail on, resolve
+   that token through `/lookup-vocabulary` by vid+sid before reporting a
+   disagreement. Batch these: the client already chunks 200 pairs per request,
+   so one lookup per sentence covers every disputed token in it.
+3. Leave `verify_example_furigana`'s verdict semantics, the audio coupling,
+   `impossible_character_furigana`, and the notation checks exactly as they
+   are.
+
+Tests must cover:
+
+- the null-furigana artifact (`あります` against a dictionary-form `ある`),
+  asserting the example verifies;
+- the endpoint inconsistency (日本語 にほんご where `/parse` says にっぽんご),
+  asserting the example verifies after the word-level resolution;
+- a genuinely wrong reading (`会議室[ぎんこう]`), still flagged;
+- the context case (`一日[いちにち]` where the sentence means ついたち), still
+  flagged — it is caught today and must remain caught;
+- the offline base-vs-sentence check (`本[ほん]が` for 本を), still flagged;
+- an impossible character reading, still flagged and still blocked from audio;
+  and
+- one parse per sentence and at most one lookup per sentence, asserted through
+  the canned-transport call list.
+
+Use these slices:
+
+1. Add the findings and failing offline cases built from the live `/parse` and
+   `/lookup-vocabulary` shapes captured during this investigation.
+2. Fix `token_text` via `position`/`length`; confirm nine of the eleven live
+   flags clear.
+3. Resolve disputed readings through the word endpoint; confirm the last two
+   clear and that `janki audio` then voices all eleven.
+4. Run the full replay and `make gates`, then one local review cycle.
+
+Do not run a paid semantic review as part of this task. jpdb calls are
+dictionary calls and are outside the owner's model-cost pause.
+
 ### [ ] M7.6B Pilot pair — scans and camera captures
 
 *Progress 2026-08-13: inventoried an owner-provided phone photo and added an
