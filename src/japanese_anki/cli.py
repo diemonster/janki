@@ -3616,9 +3616,9 @@ def _build_one(
         # shipping one janki has not read is the thing the gates exist to stop;
         # but gating the whole collection refused the build over nouns no drill
         # card could carry, and over records `exclude_ids` had held back.
+        shipping = pattern_cards.shipping_records(deck_path, records)
+        _refuse_invalid(shipping, deck_path)
         if output is None:
-            shipping = pattern_cards.shipping_records(deck_path, records)
-            _refuse_invalid(shipping, deck_path)
             _refuse_unreviewed(shipping, config, deck_path)
         target, count = pattern_cards.build_conjugation_deck(
             deck_path, config, records, output
@@ -3638,15 +3638,15 @@ def _build_one(
         # and a pattern deck ships none.
         return False
     _, records = resolve_deck_records(deck_path)
-    # The last gates, and only on a build that ships. A `--output` build is a
-    # throwaway that records nothing — `make gates` builds one on every run —
-    # so holding it to a review nobody asked for would make the gate something
-    # to work around rather than something to pass. `--only-new` validates even
-    # with `--output`: a deck whose already-shipped records are broken is a
-    # broken deck, and an incremental build that exits 0 on one a full build
-    # refuses would hide that until the next full build.
-    if output is None or only_new:
-        _refuse_invalid(records, deck_path)
+    # Local validation runs for every build shape — the exporters would refuse
+    # identically one call later, but running it here keeps the ordering (a
+    # local failure is named before the review store answers) and surfaces
+    # warning-level holds, and an unconditional call cannot be broken by the
+    # next early exit someone adds between here and the exporter. Only the
+    # review gate is scoped to shipping builds: a `--output` throwaway records
+    # nothing — `make gates` builds one on every run — so holding it to a
+    # review nobody asked for would make that gate something to work around.
+    _refuse_invalid(records, deck_path)
     if output is None:
         _refuse_unreviewed(records, config, deck_path)
     if only_new:

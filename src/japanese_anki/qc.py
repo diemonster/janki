@@ -159,7 +159,7 @@ _POLITE_STEM = "きしちにひみりぎじぢびぴい"
 #: (ませんでした needs no alternative of its own — it already ends in でした.)
 _POLITE_FINAL = re.compile(
     rf"(です|でした|でしょう|ません|ましょう"
-    rf"|(?<=[{_POLITE_STEM}])(ます|ました))[かねよ]?$"
+    rf"|(?<=[{_POLITE_STEM}])(ます|ました))[かねよ]{{0,2}}$"
 )
 
 #: Lexicalized politeness formulas used across registers — すみません said to
@@ -229,7 +229,11 @@ def example_content_holds(
     # the exact camera failure shape.
     if bare.endswith(_SENTENCE_FINAL):
         pass
-    elif core.endswith(("について", "については")):
+    elif core.endswith(("について", "については")) and "の" in core[:-4]:
+        # The genitive shape (〜の〜について) is the topic-label fragment the
+        # camera wrote; について without a preceding の is left alone, because
+        # it is also に+着いて — 席について, 位置について — a real imperative
+        # a punctuation-less example may legitimately end with.
         holds.append(
             (
                 "example-fragment",
@@ -258,9 +262,20 @@ def example_content_holds(
     # quoted polite speech ends, for this check, on the quote itself, so the
     # quotation's politeness never reaches the pattern.
     speech = japanese.rstrip("".join(_SENTENCE_FINAL) + "　 \t")
+    # いただきます is exempt only standing alone (or after an interjection):
+    # as a clause tail it is the productive humble auxiliary —
+    # させていただきます — the most formal keigo in the collection, exactly
+    # what the check exists to catch on a casual label.
+    formula_exempt = speech.endswith(_POLITE_FORMULAS) and not (
+        speech.endswith(("いただきます", "頂きます"))
+        and not (
+            speech in ("いただきます", "頂きます")
+            or speech.endswith(("、いただきます", "、頂きます"))
+        )
+    )
     if (
         example.register.strip().lower() == "casual"
-        and not speech.endswith(_POLITE_FORMULAS)
+        and not formula_exempt
         and _POLITE_FINAL.search(speech)
     ):
         holds.append(

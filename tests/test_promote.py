@@ -1564,3 +1564,36 @@ def test_a_hold_reason_janki_does_not_recognise_still_needs_a_reading(
     )
 
     assert enrich.needs_reading(typed_by_hand) is True
+
+
+def test_the_near_miss_warning_stays_off_non_extract_rows() -> None:
+    # _accept_examples deliberately ignores non-extract rows, so a sentinel
+    # typed there survives verbatim — warning about it would tell the user to
+    # retype the exact value they typed.
+    imported = record(
+        source=SourceReference(
+            type="shirabe",
+            imported_from="export.csv",
+            raw_fields={"example_authority": "staging-review"},
+        ),
+        examples=[ExampleSentence(japanese="友達と日本語を話します。")],
+    )
+
+    result = check_readings([imported], skip_reading_check=True)
+
+    assert result.warnings == []
+
+
+def test_a_typoed_sentinel_on_an_extract_row_is_named() -> None:
+    typoed = record(
+        examples=[ExampleSentence(japanese="友達と日本語を話します。")],
+        source=SourceReference(
+            type="extract",
+            imported_from="lesson.pdf",
+            raw_fields={"example_authority": "staging_review"},
+        ),
+    )
+
+    result = check_readings([typoed], skip_reading_check=True)
+
+    assert any("accepts nothing" in warning for warning in result.warnings)

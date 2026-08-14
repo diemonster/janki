@@ -664,12 +664,7 @@ def _carried_annotations(
     for key, field_name in CONTENT_ANNOTATIONS.items():
         if field_name not in filled:
             continue
-        items = [
-            item
-            for side in (old.source.raw_fields, new.source.raw_fields)
-            for item in side.get(key, "").split(",")
-            if item.strip()
-        ]
+        items = flag_entries(old, key) + flag_entries(new, key)
         if items:
             carried[key] = ",".join(dict.fromkeys(items))
     return carried
@@ -694,11 +689,12 @@ def _carried_provisional(
         for name, fingerprint in provisional_entries(new)
         if name in filled
     ]
-    touched = {name for name, _ in old_entries if name in filled}
-    touched |= {name for name, _ in incoming}
-    if not touched:
-        return None
     kept = [(name, fp) for name, fp in old_entries if name not in filled]
+    if kept == old_entries and not incoming:
+        # Nothing the merge wrote touches any marked field: leave the
+        # existing marker byte-for-byte alone (an unconditional rewrite would
+        # also drop unknown-name entries the parser filters).
+        return None
     return join_provisional_entries(kept + incoming)
 
 
@@ -728,13 +724,21 @@ def _merge_one(
     for name in _CONTENT_FIELDS:
         old_value = getattr(old, name)
         new_value = getattr(new, name)
-        if name == "examples" and new.source.type == "extract":
+        if (
+            name == "examples"
+            and new.source.type == "extract"
+            and old.source.type != "extract"
+        ):
             # The mirror of the minting rule below: a machine-era sentence on
             # an extract row that no reviewer accepted must not fill a
-            # curated-type record's hole, where the merged record's source
+            # *curated-type* record's hole, where the merged record's source
             # type would silently bless it as the user's own data — the exact
             # false-reviewed laundering M7.6T exists to prevent. Accepted
             # sentences pass; their stamp travels via the authority carry.
+            # An extract-typed store record needs no filter: the sentences
+            # land preserved-but-unaccepted there, exactly the documented
+            # posture, and dropping them would silently lose a reviewer's
+            # typed sentence between promote and the store.
             new_value = [
                 example
                 for example in new.examples
@@ -765,7 +769,7 @@ def _merge_one(
     if authority := _carried_authority(old, new):
         annotations[EXAMPLE_AUTHORITY_KEY] = authority
     removals = {key for key, value in annotations.items() if not value}
-    if annotations or removals:
+    if annotations:
         raw_fields = {
             key: value
             for key, value in {**merged.source.raw_fields, **annotations}.items()

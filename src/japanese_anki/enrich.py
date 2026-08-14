@@ -56,6 +56,7 @@ from japanese_anki.models import (
     add_example_flags,
     clear_provisional,
     example_accepted,
+    example_flags,
     prune_example_flags,
     split_provisional,
 )
@@ -1384,6 +1385,14 @@ def apply_ai_result(
         merged_examples, landed_unverified = _fill_existing_example_annotations(
             record.examples, kept, unverified
         )
+        # This branch IS the preserve decision: a generated sentence that
+        # matched no stored text had nowhere to land. Recorded here, where the
+        # discard happens — the earlier proxy lived in the else branch, where
+        # "examples" is always writable and the flag could never become True.
+        stored_texts = {example.japanese for example in record.examples}
+        outcome.preserved = any(
+            example.japanese not in stored_texts for example in kept
+        )
         updated = record
         changes: dict[str, tuple[Any, Any]] = {}
         if merged_examples != record.examples:
@@ -1422,7 +1431,6 @@ def apply_ai_result(
             for name in AI_FIELDS
             if name in force_fields or is_empty(getattr(record, name))
         ]
-        outcome.preserved = bool(kept) and "examples" not in writable
         updated, changes = _apply(record, proposals, writable)
     if "examples" in changes:
         landed_sentences = {
@@ -1619,12 +1627,7 @@ def recheck_furigana(
     for index, record in enumerate(result.records):
         if wanted is not None and record.id not in wanted:
             continue
-        raw_fields = dict(record.source.raw_fields)
-        flagged = {
-            item.strip()
-            for item in raw_fields.get(UNVERIFIED_KEY, "").split(",")
-            if item.strip()
-        }
+        flagged = example_flags(record, UNVERIFIED_KEY)
         if not flagged:
             continue
         cleared: list[str] = []
@@ -1687,13 +1690,10 @@ def recheck_furigana(
         if not cleared:
             continue
         result.cleared[record.id] = cleared
-        if flagged:
-            raw_fields[UNVERIFIED_KEY] = ",".join(sorted(flagged))
-        else:
-            raw_fields.pop(UNVERIFIED_KEY, None)
-        result.records[index] = replace(
-            record, source=replace(record.source, raw_fields=raw_fields)
-        )
+        # Through the shared writer: it keeps the stored order (a sorted()
+        # rewrite here used to churn vocabulary.json against every other
+        # writer) and removes the key when nothing survives.
+        result.records[index] = prune_example_flags(record, UNVERIFIED_KEY, flagged)
     return result
 
 

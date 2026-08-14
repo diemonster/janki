@@ -1454,3 +1454,45 @@ def test_a_spill_needing_a_guess_is_kept_as_written() -> None:
     )
 
     assert outcome.record.examples[0].furigana == written
+
+
+def test_the_preserve_warning_actually_fires() -> None:
+    # The decision and its report live in different functions; this pins the
+    # seam — a preserve that never sets the flag makes the user-decision nudge
+    # silently disappear, which is the failure it exists to prevent.
+    from japanese_anki.claude_client import CallResult as CR
+    from japanese_anki.enrich import AiResult, absorb_ai_call
+
+    excerpt = record(
+        source=SourceReference(
+            type="extract",
+            imported_from="page.jpg",
+            raw_fields={"example": "話すのとおりに"},
+        ),
+        examples=[ExampleSentence(japanese="話すのとおりに")],
+        usage_notes="a note",
+    )
+    result = AiResult(records=[excerpt], looked_up=1)
+
+    absorb_ai_call(
+        result,
+        excerpt,
+        CR(
+            answer(
+                generated(
+                    "毎日日本語を話します。",
+                    furigana="毎日[まいにち] 日本語[にほんご]を 話[はな]します。",
+                )
+            ),
+            "end_turn",
+            None,
+        ),
+        model="offline-model",
+        positions={excerpt.id: 0},
+        recent=[],
+    )
+
+    assert [ex.japanese for ex in result.records[0].examples] == ["話すのとおりに"]
+    assert any(
+        "carry no reviewer acceptance" in warning for warning in result.warnings
+    )

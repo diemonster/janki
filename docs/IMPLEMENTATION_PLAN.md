@@ -2922,15 +2922,23 @@ than replaceable, mark-clears persist, the learner-load bound covers the
 batch path and is visible to `validate`, reconciliation demands the exact
 entry spelling (kana homographs, suru stems), and the fragment/register
 checks gained the stem-morphology guards that keep 励ました, そば, and
-何について？ out of the gate. Two review-cycle efficiency notes are accepted
-rather than fixed for now, both bounded and both once-per-record shapes:
-gloss reconciliation issues one lookup-vocabulary call per marked record on
-its first enrich (batchable later; the mark clears on settlement), and a
-record whose provisional mark is provably unresolvable (kana homograph, suru
-stem) re-parses on each enrich run until a person settles it — the repeat is
-the "hold until evidence or review" contract, and a negative-cache marker can
-be added if real batches make it expensive. M7.6B and M7.6C can resume; their
-next paid semantic review is the milestone measurement of this boundary.*
+何について？ out of the gate. The cycle ran four full ten-angle rounds; every
+execution-verified finding was fixed and mutation-tested, through the final
+round's residuals (the preserve-warning seam, the extract-to-extract merge
+direction, the sentinel diagnostic scope, imperative について, the humble
+いただきます auxiliary, stacked final particles, and replay known-set
+normalization). Accepted, not fixed — all bounded, all recorded here so a
+later pass can pick them up: gloss reconciliation issues one
+lookup-vocabulary call per marked record on its first enrich (batchable; the
+mark clears on settlement); an unresolvable provisional mark (kana homograph,
+suru stem) re-parses per run until a person settles it, which is the "hold
+until evidence or review" contract; shipping builds validate twice (CLI
+ordering gate plus exporter backstop, ~2 ms measured); the learner-load known
+set is parameter-threaded rather than derived in the absorb layer; rare
+i-column noun endings (にじます) can false-positive the register gate; and
+parse-backed register verdicts could eventually replace the surface formula
+list. M7.6B and M7.6C can resume; their next paid semantic review is the
+milestone measurement of this boundary.*
 
 Depends on: M7.4, M7.5, M7.6A
 Files: `src/japanese_anki/extract.py`, `src/japanese_anki/enrich.py`,

@@ -335,7 +335,11 @@ def check_readings(
         # while it is one keystroke to fix, not weeks later as an AI-pass
         # warning about sentences they already reviewed.
         leftover = resolved.source.raw_fields.get(EXAMPLE_AUTHORITY_KEY, "")
-        if leftover and not _BOUND_AUTHORITY.fullmatch(leftover):
+        if (
+            resolved.source.type == "extract"
+            and leftover
+            and not _BOUND_AUTHORITY.fullmatch(leftover)
+        ):
             result.warnings.append(
                 f"{record.id}: example_authority is {leftover!r}, which is "
                 f"neither the {EXAMPLE_AUTHORITY_STAGING!r} sentinel nor a "
@@ -383,9 +387,10 @@ def _resolved(record: VocabularyRecord) -> VocabularyRecord:
 
 
 #: What a promote-time acceptance looks like once bound: comma-joined
-#: 12-hex content fingerprints. Anything else left in the key after
-#: ``_accept_examples`` ran is a value that accepts nothing.
-_BOUND_AUTHORITY = re.compile(r"[0-9a-f]{12}(,[0-9a-f]{12})*")
+#: 12-hex content fingerprints (whitespace around commas tolerated, because
+#: every reader strips it). Anything else left in the key on an *extract* row
+#: after ``_accept_examples`` ran is a value that accepts nothing.
+_BOUND_AUTHORITY = re.compile(r"\s*[0-9a-f]{12}(\s*,\s*[0-9a-f]{12})*\s*")
 
 
 def _accept_examples(record: VocabularyRecord) -> VocabularyRecord:

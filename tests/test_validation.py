@@ -681,3 +681,27 @@ def test_formula_exemptions_cover_every_spelling_they_ship_in() -> None:
     # conjugation honorific table follows.
     assert _codes(_teaching_record("じゃ、行ってきます", register="casual")) == []
     assert _codes(_teaching_record("お先にしつれいします", register="casual")) == []
+
+
+def test_an_imperative_ni_tsuite_is_not_a_fragment() -> None:
+    # について is also に+着いて: 席について is a real classroom imperative. The
+    # fragment shape the camera wrote is the genitive 〜の〜について.
+    assert _codes(_teaching_record("みんな、席について", register="casual")) == []
+    assert _codes(_teaching_record("古い地図の出発について", register="polite")) == [
+        "example-fragment"
+    ]
+
+
+def test_the_humble_auxiliary_is_not_a_meal_greeting() -> None:
+    # いただきます standing alone is the set phrase; as a clause tail it is
+    # the productive humble auxiliary — the most formal keigo there is.
+    assert _codes(
+        _teaching_record("本日は休業させていただきます", register="casual")
+    ) == ["example-register-mismatch"]
+    assert _codes(_teaching_record("じゃ、いただきます", register="casual")) == []
+
+
+def test_stacked_final_particles_do_not_hide_politeness() -> None:
+    assert _codes(_teaching_record("明日も行きますよね", register="casual")) == [
+        "example-register-mismatch"
+    ]

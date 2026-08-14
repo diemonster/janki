@@ -22,6 +22,7 @@ from japanese_anki import (
     enrich,
     extract,
     hardening,
+    identifiers,
     jpdb,
     kanji,
     promote,
@@ -874,6 +875,18 @@ def _ai_enrichment(data: dict[str, Any], root: Path) -> Any:
         if "kanji" in data
         else None
     )
+    # Normalized like the production set (`enrich._known_expressions`): a
+    # fixture written with decomposed dakuten must exercise the same bound the
+    # live paths apply, or the gating oracle measures a third behavior.
+    known = (
+        frozenset(
+            normalized
+            for item in _string_list(data["known_expressions"], "known_expressions")
+            if (normalized := identifiers.normalize_identity_part(item))
+        )
+        if "known_expressions" in data
+        else None
+    )
     result = enrich.AiResult(records=list(records), looked_up=1)
     enrich.absorb_ai_call(
         result,
@@ -885,11 +898,7 @@ def _ai_enrichment(data: dict[str, Any], root: Path) -> Any:
         force_fields=tuple(_string_list(data.get("force_fields", []), "force_fields")),
         jpdb_client=client,
         kanji_store=store,
-        known_expressions=(
-            frozenset(_string_list(data["known_expressions"], "known_expressions"))
-            if "known_expressions" in data
-            else None
-        ),
+        known_expressions=known,
     )
     if transport is not None:
         transport.finish()
@@ -904,9 +913,10 @@ def _ai_enrichment(data: dict[str, Any], root: Path) -> Any:
         "unverified_ids": sorted(result.unverified),
         "warning_count": len(result.warnings),
     }
-    if "known_expressions" in data:
+    if known is not None:
         # Only when the input opted into the learner-load bound, so the oracles
-        # of cases written before the key existed keep their exact shape.
+        # of cases written before the key existed keep their exact shape — and
+        # the same condition that enabled the bound gates its oracle key.
         output["load_held_ids"] = sorted(result.load_held)
     return output
 

@@ -307,10 +307,10 @@ class VocabularyRecord:
 #
 # The M7.6T trust keys and their machinery live beside the record type rather
 # than in `staging` because every layer that moves records needs them without
-# a cycle: `staging` and `enrich` write and resolve the marks, `audio` reads
-# the holds, and `io`'s merge must carry them per *field* when an import fills
-# a hole — and `io` is below `staging` in the import graph. `staging`
-# re-exports these names, so its callers keep their import site.
+# a cycle: `extract` and `enrich` write and resolve the marks, `audio` and
+# `qc` read the holds, and `io`'s merge must carry them per *field* when an
+# import fills a hole — and `io` is below `staging` in the import graph.
+# Every consumer imports these names from here.
 
 #: Field-level acceptance provenance for an extract-sourced record's examples.
 #: The reviewer types the sentinel value (``staging-review``) into a staging
@@ -324,11 +324,6 @@ EXAMPLE_AUTHORITY_KEY = "example_authority"
 EXAMPLE_AUTHORITY_STAGING = "staging-review"
 
 
-def accepted_example_fingerprints(record: VocabularyRecord) -> set[str]:
-    """The example content-fingerprints a reviewer's acceptance covers."""
-    return example_flags(record, EXAMPLE_AUTHORITY_KEY)
-
-
 def example_accepted(record: VocabularyRecord, example: ExampleSentence) -> bool:
     """Whether this example may be treated as accepted teaching content.
 
@@ -340,7 +335,9 @@ def example_accepted(record: VocabularyRecord, example: ExampleSentence) -> bool
     """
     if record.source.type != "extract":
         return True
-    return short_fingerprint(example.japanese) in accepted_example_fingerprints(record)
+    return short_fingerprint(example.japanese) in example_flags(
+        record, EXAMPLE_AUTHORITY_KEY
+    )
 
 #: Example content-fingerprints the AI pass held for learner load (M7.6T),
 #: comma-joined in ``source.raw_fields``. ``enrich`` writes it; the audio

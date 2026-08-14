@@ -867,3 +867,23 @@ def test_a_curated_fill_clears_the_mark_its_value_replaced() -> None:
     assert merged[0].meanings == ["a hand-written meaning"]
     assert provisional_entries(merged[0]) == []
     assert "provisional_fields" not in merged[0].source.raw_fields
+
+
+def test_an_extract_record_keeps_unaccepted_examples_from_its_own_kind() -> None:
+    # No laundering is possible in the extract→extract direction: the merged
+    # record stays extract-typed, where the sentences land
+    # preserved-but-unaccepted — the documented posture. Dropping them lost a
+    # reviewer's typed sentence between promote and the store.
+    hole = replace(
+        _curated(),
+        examples=[],
+        source=SourceReference(type="extract", imported_from="page.jpg"),
+    )
+    restaged = _imported(
+        examples=[ExampleSentence(japanese="毎日日本語を話します。")],
+        source=SourceReference(type="extract", imported_from="page.jpg"),
+    )
+
+    merged, _ = merge_records([hole], [restaged])
+
+    assert [ex.japanese for ex in merged[0].examples] == ["毎日日本語を話します。"]
