@@ -53,6 +53,13 @@ marked "supersedes design").
    own notes — the one kind of work in this repository that exists
    nowhere else. Everything janki writes *from scratch* still goes
    through PyYAML; do not widen this.
+8. **Paid model calls are milestone operations, not routine verification.** Run
+   local validation, hardening replay, and `make gates` before any live review.
+   Run the final semantic review once on a complete release candidate. If it
+   finds errors, rerun only the records whose content changed. Do not run a
+   paid advisory review after each small commit or on a media-only diff. Any
+   additional broad live review needs explicit repository-owner approval.
+   Tests and `make gates` never make a live request.
 
 ## Conventions (introduced in M1/M3.1, used by everything after)
 
@@ -2285,7 +2292,7 @@ weight updates, cross-run hidden memory, or allowing a model to rewrite curated
 Japanese unattended. The repository is the memory: cases, fixtures, rules,
 repair functions, prompt versions, decisions, and tests all travel with it.
 
-Four boundaries apply to every M7 task:
+Six boundaries apply to every M7 task:
 
 1. **Classify before generalizing.** A source-specific correction (this gloss is
    wrong, this handwritten kana is ambiguous) stays a curated edit. A systemic
@@ -2306,9 +2313,25 @@ Four boundaries apply to every M7 task:
    redacted, or synthetic fixture; committing source pixels requires an explicit
    redistribution declaration. A source fingerprint and locator preserve the
    link back to private evidence without duplicating it.
+5. **Source evidence is not teaching content.** A source excerpt proves where a
+   target occurred. It is not automatically a suitable example sentence. A
+   model-extracted meaning, part of speech, or example stays provisional until
+   the pipeline binds it to dictionary evidence or an explicit curation
+   decision. Schema validation, staging review, target-oracle approval, and
+   source-context review do not imply approval of every learner-facing field.
+6. **The final AI review is a residual check, not the source of truth.** Janki
+   must establish identity, provenance, dictionary agreement, field ownership,
+   furigana, romaji, register, audio eligibility, and other mechanically
+   decidable facts before this review. The final reviewer can find semantic or
+   naturalness errors that remain. Give it the canonical study record and a
+   compact authority summary, not the full PDF, image, or extraction history.
+   It does not reconstruct the source, repair records, establish field
+   authority, or replace deterministic validation. A repeated late finding is
+   evidence of an earlier pipeline defect and must move to that earlier
+   boundary.
 
-Lane map: {M7.1} → {M7.2} → {M7.3} → {M7.4, M7.5} →
-{M7.6A, M7.6B, M7.6C in parallel} → {M7.7} → {M7.W}.
+Lane map: {M7.1} → {M7.2} → {M7.3} → {M7.4, M7.5} → {M7.6A} →
+{M7.6T} → {M7.6B, M7.6C} → {M7.7} → {M7.W}.
 
 ### [x] M7.1 The hardening protocol and safety contract
 
@@ -2864,21 +2887,157 @@ approved the exact private fingerprint, the agent must use redistributable
 material or leave the task open. Regression cases for systemic findings are
 additional and may point at the same minimized evidence.
 
+### [ ] M7.6T Trust-boundary repair — source evidence versus study content
+
+*Added 2026-08-13 after the camera pilot. This task blocks more M7.6B and M7.6C
+source runs. The camera extraction found the approved identities and source
+context, but the first final semantic review still found five content errors
+and several quality notes across 12 records. The records were corrected, but
+that result showed a design defect: the late AI review had become the main
+teaching-content gate. Develop and verify this task with synthetic or offline
+fixtures. Do not send private source material or run a paid review while this
+task is in progress.*
+
+Depends on: M7.4, M7.5, M7.6A
+Files: `src/japanese_anki/extract.py`, `src/japanese_anki/enrich.py`,
+`src/japanese_anki/promote.py`, `src/japanese_anki/validation.py`,
+`src/japanese_anki/models.py`, `src/japanese_anki/cli.py`, the ledger and
+review-state modules, new offline quality cases and tests, and
+`docs/HARDENING.md` if the trust contract changes.
+
+The camera pilot exposed these trust-boundary failures:
+
+1. Extraction copied a source excerpt into `examples` and thereby promoted
+   evidence of occurrence into learner-facing study content.
+2. Enrichment then described the extracted example as reviewed and required
+   the model to preserve its exact Japanese, although no person or dictionary
+   had accepted it as a teaching example.
+3. Extracted meanings and parts of speech entered canonical records without a
+   provisional authority state. Dictionary enrichment filled only empty
+   fields, so a plausible model gloss could outrank stronger dictionary
+   evidence.
+4. Local validation checked structure but did not fully check teaching
+   suitability. Sentence fragments, false register labels, examples above the
+   intended learner level, unexplained collocations, and unsupported usage
+   notes could reach audio and remain there until the final AI review.
+
+Implement an explicit three-layer trust model:
+
+- **Source evidence** records what the source contains: locator, excerpt,
+  printed reading, image region, and extraction confidence. It can prove an
+  identity or give review context. It is not a study example by default.
+- **Provisional facts** are model or OCR claims that still need a named
+  authority path. A dictionary match, an exact reviewed source assertion, or a
+  human curation decision can resolve each claim.
+- **Study content** is learner-facing data that passed its field-specific
+  authority and validation rules. Only this layer can reach cards and audio.
+
+Provenance that defines field authority must be committed with the durable
+record or its committed review artifact. It must not exist only in the
+operational ledger. Reuse canonical `source.raw_fields` provenance when it can
+represent the contract without ambiguity. Otherwise, make the smallest
+reviewed schema change. Do not infer that oracle acceptance, promotion, or a
+valid record approves all semantic fields.
+
+Make these production changes:
+
+1. Stop automatic promotion of source excerpts into `examples`. Preserve the
+   excerpt as source evidence or review context. Keep support for explicitly
+   curated examples already present in staging. An explicit field-level
+   acceptance can promote a source excerpt when it is also suitable teaching
+   content.
+2. Remove the false reviewed state from enrichment. If a record has no
+   explicitly curated example, enrichment can generate a new pedagogic
+   example. It must preserve an existing curated example unless the user
+   requests a change.
+3. Mark semantic extraction fields as provisional. For an exact identity
+   match, dictionary reconciliation can replace only provisional meanings,
+   parts of speech, and related facts, and must show the authority change in a
+   reviewable diff. Preserve human-curated fields. Hold or propose a decision
+   for near matches, absent entries, conflicting evidence, or a different
+   reading.
+4. Add a local teaching-example gate. Keep the existing furigana, romaji, and
+   token checks. Also apply conservative checks for a complete generated
+   example or an intentional utterance, agreement between the target sense and
+   predicate or register, and bounded learner load based on parsed words,
+   known-vocabulary data, and available frequency data. Hold when the result is
+   undecidable. Do not build a broad Japanese grammar parser from the one
+   camera source.
+5. Keep usage notes optional unless they have an authority path. An empty note
+   is better than an unsupported distinction. Do not require one model to write
+   a note only so another model can grade it.
+6. Apply the same content gate before audio. Do not voice an example that is
+   held or fails local validation. Use the normal audio command so content
+   addressing, ledger state, and stale-media detection remain authoritative.
+7. Keep final AI review read-only and residual. Run it only after all local
+   gates pass for a complete release candidate. It can block residual semantic
+   or naturalness errors, but it cannot establish authority or mutate a
+   record. Its normal request contains the canonical study record and a compact
+   authority summary. It does not contain the original PDF or image. A narrow
+   source excerpt can be included only when the check concerns a declared
+   source-dependent assertion. After a correction, rerun only changed records.
+   A second broad review needs explicit repository-owner approval.
+
+Add findings and offline cases before the production fixes for at least the
+automatic source-example promotion and provisional-semantic precedence bugs.
+Tests must cover:
+
+- source evidence that survives promotion while canonical `examples` stays
+  empty, plus a positive case for an explicitly accepted source example;
+- oracle approval and ordinary promotion that do not imply approval of an
+  example, meaning, part of speech, note, or other learner-facing field;
+- exact dictionary reconciliation of provisional fields, with near-match,
+  human-curated, different-reading, absent-entry, and conflict cases;
+- complete polite and casual examples, a noun fragment, a trailing connective,
+  false register labels, an acceptable short utterance, and a learner-load hold
+  driven by canned parser data;
+- held examples that are not voiced, and an edited voiced example that cannot
+  reuse stale media; and
+- build readiness that reports local content failures separately from a
+  missing final AI result, and a saved AI result that cannot hide a later local
+  failure.
+
+Do not rewrite existing curated records only because this task adds provenance.
+Add a synthetic reproduction of the camera fragment pattern without private
+prose or pixels. Complete linked findings, the full offline replay, `make
+gates`, and a dry pipeline run without a live model. M7.6B and M7.6C can resume
+after these checks pass. The next paid semantic review is a milestone
+measurement of the repaired boundary, not part of the development loop.
+
+Use these small implementation and commit slices so another agent can resume
+without a live source run:
+
+1. Add the open findings, failing offline cases, and synthetic fixtures.
+2. Separate source evidence from curated examples and add its provenance.
+3. Add provisional semantic authority and dictionary reconciliation.
+4. Add the local teaching-content, build-readiness, and pre-audio gates.
+5. Update migration and operator documentation, run the full replay and `make
+   gates`, then do one local code-review cycle until it is clean.
+
+Each slice must pass its focused tests before commit. Do not run a paid
+advisory review after a slice. Keep the review hooks disabled while the owner
+cost pause is in effect. Do not remove or change the disable marker as part of
+this task.
+
 ### [ ] M7.6B Pilot pair — scans and camera captures
 
-*Preparation 2026-08-13: inventoried an owner-provided phone photo and added an
+*Progress 2026-08-13: inventoried an owner-provided phone photo and added an
 approved 14-target camera oracle. The owner also approved the exact private
 Anthropic evaluation scope. The first live extraction returned all 14 approved
 identities and readings; source-context review and validation passed. Promotion
 added all 14 records and archived the reviewed staging file at
-`data/staging/done/IMG_4563.jpg.yaml`. A later dictionary pass filled verified
-facts for 13 records. The approved
-source reading supplied `貴方[あなた]`; jpdb did not match that spelling and no
-pitch was guessed. AI enrichment, audio, final review, build, the coverage
-case, and the pilot report remain open. The distinct real scan and the
-ambiguous/unreadable-unit evidence are still open.*
+`data/staging/done/IMG_4563.jpg.yaml`. Dictionary enrichment filled verified
+facts for 13 records. The approved source reading supplied `貴方[あなた]`; jpdb
+did not match that spelling and no pitch was guessed. AI enrichment, safe audio,
+and semantic review are complete. The first semantic pass exposed M7.6T. After
+12 example corrections, all 14 records passed the final semantic review. The
+pilot has 13 word clips and 8 example clips; six examples remain safely
+unvoiced because their jpdb parses did not meet the audio guard. Build,
+coverage-case completion, and the pilot report are paused until M7.6T is done.
+The distinct real scan and the ambiguous or unreadable-unit evidence are still
+open.*
 
-Depends on: M7.4, M7.5
+Depends on: M7.4, M7.5, M7.6T
 Files: two new immutable source copies placed under `data/inbox/` by the input
 pipeline (never hand-edited), corresponding staging archives, curated
 records/deck definitions under `data/`, two `quality/pilots/*.yaml`, two unit
@@ -2905,7 +3064,7 @@ Anthropic evaluation scopes. The worksheet keeps `明日` unbound to a reading s
 the required owner identity decision can occur in staging. No model call has
 occurred.*
 
-Depends on: M7.4, M7.5
+Depends on: M7.4, M7.5, M7.6T
 Files: two new immutable source copies placed under `data/inbox/` by the input
 pipeline (never hand-edited), corresponding staging archives, curated
 records/deck definitions under `data/`, two `quality/pilots/*.yaml`, two unit
@@ -2926,7 +3085,7 @@ bound to the exact source, locator, expression, reading, and reviewed evidence.
 
 ### [ ] M7.7 Live extraction eval + release scorecard
 
-Depends on: M7.6A, M7.6B, M7.6C
+Depends on: M7.6A, M7.6T, M7.6B, M7.6C
 Files: `src/japanese_anki/hardening_eval.py` (new),
 `src/japanese_anki/cli.py`, `Makefile`, `quality/baseline.json` (new),
 `tests/test_hardening_eval.py`, `docs/HARDENING.md`.
