@@ -928,17 +928,19 @@ def _ai_enrichment_prompt(data: dict[str, Any], root: Path) -> Any:
         "expression_in_prompt": records[0].expression in combined,
     }
     if _optional_bool(data, "observe_example_pinning"):
-        # The pinning block quotes each pinned sentence as a JSON string; a
-        # sentence quoted that way is one the model was told to preserve
-        # exactly. Opt-in, so cases written before this key keep their shape.
-        pinned = [
-            example.japanese
-            for example in records[0].examples
-            if example.japanese
-            and json.dumps(example.japanese, ensure_ascii=False) in combined
+        # The selection comes from the same first-class function the prompt
+        # renders (`enrich.pinned_examples`) — probing the prompt's quoting
+        # would let a wording change silently disarm this gate. The block
+        # header is still checked in the text, so a selection the prompt
+        # failed to render (or a render with an empty selection) shows up as
+        # the two fields disagreeing. Opt-in, so cases written before this
+        # key keep their shape.
+        output["pins_existing_examples"] = (
+            "Existing curated examples need annotations" in combined
+        )
+        output["pinned_sentences"] = [
+            example.japanese for example in enrich.pinned_examples(records[0])
         ]
-        output["pins_existing_examples"] = bool(pinned)
-        output["pinned_sentences"] = pinned
     return output
 
 

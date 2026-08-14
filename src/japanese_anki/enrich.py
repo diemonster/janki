@@ -41,7 +41,11 @@ from typing import Any
 from japanese_anki import claude_client, jpdb, pitch, qc
 from japanese_anki.conjugation import conjugate
 from japanese_anki.errors import JankiError
-from japanese_anki.identifiers import contains_kanji, short_fingerprint
+from japanese_anki.identifiers import (
+    contains_kanji,
+    normalize_identity_part,
+    short_fingerprint,
+)
 from japanese_anki.io import is_empty
 from japanese_anki.ledger import Ledger
 from japanese_anki.models import (
@@ -49,6 +53,7 @@ from japanese_anki.models import (
     ExampleSentence,
     VocabularyRecord,
     add_example_flags,
+    prune_example_flags,
 )
 from japanese_anki.romaji import kana_to_romaji
 from japanese_anki.staging import (
@@ -543,8 +548,12 @@ def enrich_records(
                 "as this exact word"
             )
             reconcile = []
-        writable = [*_wanted(record, force_fields), *reconcile]
-        if not writable or not record.expression:
+        # Kept as two lists to their one consumer (`_apply` below): merging
+        # them here forced the wrong-spelling branch to un-merge, and the two
+        # retractions travelling together was exactly the state a future edit
+        # would break.
+        wanted = _wanted(record, force_fields)
+        if not (wanted or reconcile) or not record.expression:
             result.skipped += 1
             continue
         result.looked_up += 1
@@ -628,15 +637,19 @@ def enrich_records(
         # deliberately accepts the stem's entry for a 〜する record. Both are
         # fine sources for *empty* fields; neither is authority to overwrite a
         # provisional claim about a different spelling.
+        # Normalized on both sides: this project's inputs are documented to
+        # carry decomposed dakuten, and two spellings that render identically
+        # must not read as a homograph mismatch.
         entry_spelling = str(entry.get("spelling", "")).strip()
-        if reconcile and entry_spelling != record.expression:
+        if reconcile and normalize_identity_part(entry_spelling) != (
+            normalize_identity_part(record.expression)
+        ):
             result.warnings.append(
                 f"{record_id}: jpdb resolved {record.expression} to its entry "
                 f"for {entry_spelling or 'another word'}; provisional "
                 f"{', '.join(reconcile)} are settled only against the exact "
                 "spelling, so they stay provisional"
             )
-            writable = [name for name in writable if name not in reconcile]
             reconcile = []
         proposals = _proposals(record, token, entry, kanji_store)
         if "meanings" in reconcile:
@@ -649,23 +662,27 @@ def enrich_records(
                 f"{record_id}: jpdb pitch pattern(s) {', '.join(invalid_pitch)} "
                 f"do not fit reading {record.reading}; pitch accent was not written"
             )
-        updated, changes = _apply(record, proposals, writable)
+        updated, changes = _apply(record, proposals, [*wanted, *reconcile])
         if "pitch_accent" in changes:
             updated = pitch.bind_source(updated)
         # By this point the entry is the exact identity — the spelling matched
         # and the reading survived the checks above — so a non-empty proposal
         # settles a provisional claim either way: a different value replaced it
         # (visible in the diff), an equal one confirmed it. Only a field jpdb
-        # had no answer for stays provisional.
+        # had no answer for stays provisional. A *forced* write to a marked
+        # field settles it too: the value is janki's own dictionary write now,
+        # and a surviving mark would misreport the next run's stale-clear as a
+        # human edit that never happened.
         resolved = [name for name in reconcile if not is_empty(proposals.get(name))]
-        if resolved:
-            updated = clear_provisional(updated, resolved)
-            if confirmed := [name for name in resolved if name not in changes]:
-                result.cleared.setdefault(record_id, []).extend(confirmed)
-                result.warnings.append(
-                    f"{record_id}: dictionary evidence confirmed provisional "
-                    f"{', '.join(confirmed)}; the mark was cleared with no change"
-                )
+        forced = [name for name in active if name in changes and name not in resolved]
+        if resolved or forced:
+            updated = clear_provisional(updated, [*resolved, *forced])
+        if confirmed := [name for name in resolved if name not in changes]:
+            result.cleared.setdefault(record_id, []).extend(confirmed)
+            result.warnings.append(
+                f"{record_id}: dictionary evidence confirmed provisional "
+                f"{', '.join(confirmed)}; the mark was cleared with no change"
+            )
         if unresolved := [name for name in reconcile if name not in resolved]:
             result.warnings.append(
                 f"{record_id}: jpdb had no answer for provisional "
@@ -980,6 +997,25 @@ def ai_targets(
     return [record for record in records if record.id in needed]
 
 
+def pinned_examples(record: VocabularyRecord) -> list[ExampleSentence]:
+    """The examples the AI prompt pins for annotation, in stored order.
+
+    Pinning an existing sentence is a claim of authority — "someone accepted
+    this Japanese, annotate it" — so it is made per sentence, and only for
+    accepted ones (:func:`models.example_accepted`). An unaccepted example (a
+    machine-era sentence on an extract record that no reviewer's stamp
+    covers) gets no mention at all: describing it to the model as content to
+    preserve was the camera pilot's false-reviewed failure. First-class so
+    the replay runner observes the same selection the prompt renders, rather
+    than re-deriving it from the prompt's quoting.
+    """
+    return [
+        example
+        for example in record.examples
+        if example.needs_ai_annotations() and example_accepted(record, example)
+    ]
+
+
 def ai_prompt(
     record: VocabularyRecord,
     recent: Sequence[str] = (),
@@ -1010,17 +1046,7 @@ def ai_prompt(
     ):
         if value:
             lines.append(f"{label}: {value}")
-    # Pinning an existing sentence is a claim of authority — "someone accepted
-    # this Japanese, annotate it" — so it is made per sentence, and only for
-    # accepted ones. An unaccepted example (a machine-era sentence on an
-    # extract record that no reviewer's stamp covers) gets no mention at all:
-    # describing it to the model as content to preserve was the camera pilot's
-    # false-reviewed failure.
-    incomplete = [
-        example
-        for example in record.examples
-        if example.needs_ai_annotations() and example_accepted(record, example)
-    ]
+    incomplete = pinned_examples(record)
     if incomplete:
         lines.append(
             "\nExisting curated examples need annotations. Return each listed "
@@ -1116,7 +1142,9 @@ def _parsed_entries(parse: Any) -> list[Mapping[str, Any]]:
     and the learner-load bound must not disagree about which words a sentence
     contains. Empty for a parse that is missing or shaped unexpectedly: a
     caller with no boundaries to work from must leave its input alone, not
-    guess at it.
+    guess at it. ``bool`` is rejected the way ``ParseResult.vocabulary_for``
+    rejects it — ``True`` is an ``int`` in Python and would silently resolve
+    to entry #1.
     """
     tokens = getattr(parse, "tokens", None)
     vocabulary = getattr(parse, "vocabulary", None)
@@ -1127,12 +1155,30 @@ def _parsed_entries(parse: Any) -> list[Mapping[str, Any]]:
         if not isinstance(token, Mapping):
             continue
         index = token.get("vocabulary_index")
-        if not isinstance(index, int) or not 0 <= index < len(vocabulary):
+        if isinstance(index, bool) or not isinstance(index, int):
+            continue
+        if not 0 <= index < len(vocabulary):
             continue
         entry = vocabulary[index]
         if isinstance(entry, Mapping):
             entries.append(entry)
     return entries
+
+
+def _known_expressions(records: Sequence[VocabularyRecord]) -> frozenset[str]:
+    """The learner's collection, as the learner-load bound compares words.
+
+    One definition for the synchronous and batch passes — the bound must hold
+    (or clear) the same sentence whichever route the reply took. Normalized,
+    because this project's inputs are documented to carry decomposed dakuten
+    and jpdb answers composed spellings: the learner's own 食べる must never
+    count as an unknown word over a normalization form.
+    """
+    return frozenset(
+        normalized
+        for record in records
+        if (normalized := normalize_identity_part(record.expression))
+    )
 
 
 def _words_of(parse: Any) -> list[str]:
@@ -1171,7 +1217,7 @@ def _learner_load_excess(
     """
     hard: list[str] = []
     for entry in _parsed_entries(parse):
-        spelling = str(entry.get("spelling", ""))
+        spelling = normalize_identity_part(str(entry.get("spelling", "")))
         if (
             not spelling
             or spelling in known
@@ -1388,6 +1434,15 @@ def apply_ai_result(
             updated = add_example_flags(
                 updated, LEARNER_LOAD_HOLD_KEY, outcome.load_held
             )
+        # Then collect the garbage the write may have orphaned: a fingerprint
+        # matching no current example refers to nothing, and pruning here is
+        # what gives a hold a lifecycle — regenerating a held sentence with
+        # --force-fields drops its flag instead of accumulating it forever.
+        current = frozenset(
+            short_fingerprint(sentence) for sentence in landed_sentences
+        )
+        for key in (UNVERIFIED_KEY, LEARNER_LOAD_HOLD_KEY):
+            updated = prune_example_flags(updated, key, current)
     else:
         # The examples were not written — the field was not writable, or the
         # answer matched what is already there. Nothing was flagged, so nothing
@@ -1400,8 +1455,6 @@ def apply_ai_result(
     outcome.record = updated
     outcome.changes = changes
     return outcome
-
-
 
 
 @dataclass(slots=True)
@@ -1720,11 +1773,7 @@ def enrich_ai(
     caller = parse_call or claude_client.parse_call
     options = dict(call_options or {})
     recent: list[str] = []
-    # The learner's collection, for the learner-load bound: every expression
-    # janki holds a card for is a word an example may use for free.
-    known = frozenset(
-        record.expression for record in result.records if record.expression
-    )
+    known = _known_expressions(result.records)
 
     for record in targets:
         result.looked_up += 1
@@ -2349,12 +2398,7 @@ def apply_batch_results(
     candidates = {str(item) for item in only}
     recent: list[str] = []
     seen: set[str] = set()
-    # The same learner's collection the synchronous pass uses for the
-    # learner-load bound — the batch saves on how the request was sent, never
-    # on what is done with the reply.
-    known = frozenset(
-        record.expression for record in outcome.result.records if record.expression
-    )
+    known = _known_expressions(outcome.result.records)
 
     for entry in entries:
         record_id = keys.get(entry.custom_id)

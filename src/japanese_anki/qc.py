@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Collection, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
 from japanese_anki import jpdb
@@ -33,7 +33,12 @@ from japanese_anki.identifiers import (
     normalize_identity_part,
     short_fingerprint,
 )
-from japanese_anki.models import ExampleSentence
+from japanese_anki.models import (
+    LEARNER_LOAD_HOLD_KEY,
+    ExampleSentence,
+    VocabularyRecord,
+    example_flags,
+)
 from japanese_anki.romaji import kana_to_romaji
 
 __all__ = [
@@ -133,14 +138,15 @@ _TRAILING_ENCLOSURE = "」』）)】　 \t"
 #: end without any.
 _SENTENCE_FINAL = tuple("。．.！!？?…")
 
-#: Hiragana the polite ます-family can attach to: a verb's continuative stem
-#: ends in an i-column kana (話し→話します) and an ichidan stem in an e-column
-#: one (食べ→食べます). Without this guard the *plain* forms of ま-stem godan
-#: verbs — 励ます, 済ました — end in the literal characters ます/ました and a
-#: correctly-labelled casual sentence gets held; a kanji before ます is the
-#: same undecidable shape and is likewise left alone. The です family needs no
+#: Hiragana the polite ます-family can attach to with *certainty*: a godan
+#: continuative stem ends in an i-column kana (話し→話します), and no plain
+#: form ends [i-column]+ます. The e-column is deliberately absent even though
+#: ichidan polite forms end there (食べます): the kana plain form of a ま-stem
+#: godan verb has the identical surface — はげます (plain) vs 投げます (polite)
+#: — so an e-column ending is undecidable, and undecidable means unflagged.
+#: A kanji before ます is the same undecidable shape. The です family needs no
 #: stem: nothing casual ends in です.
-_POLITE_STEM = "きしちにひみりぎじぢびぴいけせてねへめれげぜでべぺえ"
+_POLITE_STEM = "きしちにひみりぎじぢびぴい"
 
 #: Polite sentence-final forms, matched at the very end of the sentence. Only
 #: the unambiguous cases: a sentence ending in one of these and labelled
@@ -151,6 +157,21 @@ _POLITE_FINAL = re.compile(
     rf"(です|でした|でしょう|(?<=[{_POLITE_STEM}])(ます|ました|ましょう|ません))$"
 )
 
+#: Lexicalized politeness formulas used across registers — すみません said to
+#: a friend is still すみません. A bounded list of set phrases, not a grammar
+#: model: each entry is a fixed form whose polite morphology carries no
+#: register information about the sentence around it. ございます covers the
+#: おはよう/ありがとう+ございます greetings.
+_POLITE_FORMULAS = (
+    "すみません",
+    "ごめんください",
+    "失礼します",
+    "お願いします",
+    "いただきます",
+    "いってきます",
+    "ございます",
+)
+
 #: Hiragana the conditional ば attaches to (-eba): an e-column kana. Without
 #: it, a punctuation-less sentence ending in a ば-final noun — そば, ことば —
 #: reads as a dangling conditional.
@@ -158,7 +179,7 @@ _CONDITIONAL_STEM = "けせてねへめれげぜでべぺえ"
 
 
 def example_content_holds(
-    example: ExampleSentence, *, load_held: Collection[str] = frozenset()
+    record: VocabularyRecord, example: ExampleSentence
 ) -> list[tuple[str, str, str]]:
     """Teaching-suitability holds for one example: ``(code, level, why)``.
 
@@ -169,15 +190,16 @@ def example_content_holds(
     check here fires only on evidence that cannot be read another way, and
     everything subtler is left for the residual AI review. Shared by
     ``validation`` (which reports holds at their level) and the audio command
-    (which refuses to voice any held example), so the two gates cannot drift.
+    (which refuses to voice any held example), so the two gates cannot drift
+    — and the record comes with the example so the learner-load flag lookup
+    cannot be dropped by omission at a new call site. A load hold is a
+    ``warning``: the sentence awaits a person's decision, which is not the
+    same certainty as a fragment — but audio refuses both alike.
 
-    ``load_held`` is the record's learner-load flag set
-    (``models.example_flags(record, LEARNER_LOAD_HOLD_KEY)``), passed in
-    because the caller holds the record and can parse the flags once. A load
-    hold is a ``warning``: the sentence needs a person's decision, which is
-    not the same certainty as a fragment — but audio refuses both alike.
+    The text is NFKC-normalized first: camera transcription writes half-width
+    ｡ and ｣, and a gate the source's own punctuation can blind is no gate.
     """
-    japanese = example.japanese.strip()
+    japanese = unicodedata.normalize("NFKC", example.japanese).strip()
     if not japanese:
         return []
     holds: list[tuple[str, str, str]] = []
@@ -200,6 +222,9 @@ def example_content_holds(
         )
     elif (
         core.endswith("ば")
+        # 〜ってば is the sentence-final particle (もういいってば), never the
+        # conditional: ば attaches to an e-stem, not a te-form.
+        and not core.endswith("ってば")
         and len(core) >= 2
         and core[-2] in _CONDITIONAL_STEM
     ):
@@ -210,7 +235,16 @@ def example_content_holds(
                 "ends with the conditional ば and no main clause",
             )
         )
-    if example.register.strip().lower() == "casual" and _POLITE_FINAL.search(core):
+    # Politeness is judged on the sentence's own final form: punctuation and
+    # spacing are stripped, closing quotes are NOT — a casual frame ending on
+    # quoted polite speech ends, for this check, on the quote itself, so the
+    # quotation's politeness never reaches the pattern.
+    speech = japanese.rstrip("".join(_SENTENCE_FINAL) + "　 \t")
+    if (
+        example.register.strip().lower() == "casual"
+        and not speech.endswith(_POLITE_FORMULAS)
+        and _POLITE_FINAL.search(speech)
+    ):
         holds.append(
             (
                 "example-register-mismatch",
@@ -219,7 +253,7 @@ def example_content_holds(
                 "the card would teach the opposite of what it says",
             )
         )
-    if short_fingerprint(japanese) in load_held:
+    if short_fingerprint(japanese) in example_flags(record, LEARNER_LOAD_HOLD_KEY):
         holds.append(
             (
                 "example-learner-load",

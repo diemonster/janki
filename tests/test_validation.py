@@ -578,3 +578,72 @@ def test_an_elliptical_topic_question_is_not_held() -> None:
     codes = _codes(_teaching_record("この本は何について？", register="casual"))
 
     assert codes == []
+
+
+def test_a_lexicalized_polite_formula_labelled_casual_is_not_held() -> None:
+    # すみません said to a friend is still すみません: a set phrase's polite
+    # morphology carries no register information about the sentence around it.
+    assert _codes(_teaching_record("あ、すみません", register="casual")) == []
+    assert _codes(_teaching_record("お先に失礼します", register="casual")) == []
+
+
+def test_the_sentence_final_tteba_is_not_a_conditional() -> None:
+    # ば attaches to an e-stem, never a te-form: 〜ってば is the particle.
+    assert _codes(_teaching_record("もういいってば", register="casual")) == []
+
+
+def test_half_width_punctuation_cannot_blind_the_gate() -> None:
+    # Camera transcription writes ｡ and ｣; the gate NFKC-normalizes first, so
+    # the fragment and register checks see the same sentence a reader does.
+    fragment = _codes(_teaching_record("古い地図の出発について｣", register="polite"))
+    register = _codes(_teaching_record("明日、九時に出発します｡", register="casual"))
+
+    assert fragment == ["example-fragment"]
+    assert register == ["example-register-mismatch"]
+
+
+def test_quoted_polite_speech_does_not_set_the_frames_register() -> None:
+    # The quotation's politeness belongs to the speaker inside it; the frame
+    # is judged by its own final form.
+    codes = _codes(
+        _teaching_record("彼が言ったのは「出発します」", register="casual")
+    )
+
+    assert codes == []
+
+
+def test_a_kana_ma_stem_plain_form_is_not_read_as_polite() -> None:
+    # はげます (plain) and 投げます (polite) share the [e-column]+ます surface,
+    # so an e-column ending is undecidable — and undecidable means unflagged.
+    codes = _codes(_teaching_record("ともだちをはげました", register="casual"))
+
+    assert codes == []
+
+
+def test_a_learner_load_hold_is_visible_to_validate() -> None:
+    # Audio refuses a held sentence; validate must *see* it too, or the deck
+    # ships the sentence silently as study content with nothing reporting why
+    # its audio is missing.
+    from japanese_anki.identifiers import short_fingerprint
+    from japanese_anki.models import ExampleSentence, SourceReference
+
+    sentence = "明日、九時に出発します。"
+    held = VocabularyRecord(
+        id="word:出発:しゅっぱつ",
+        expression="出発",
+        reading="しゅっぱつ",
+        meanings=["departure"],
+        examples=[
+            ExampleSentence(japanese=sentence, english="x", register="polite")
+        ],
+        source=SourceReference(
+            type="extract",
+            imported_from="page.jpg",
+            raw_fields={"learner_load_hold": short_fingerprint(sentence)},
+        ),
+    )
+    issues = validate_records([held])
+
+    assert [issue.code for issue in issues] == ["example-learner-load"]
+    assert [issue.level for issue in issues] == ["warning"]
+    assert not has_errors(issues)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from dataclasses import asdict, dataclass, field, replace
 from typing import Any
 
@@ -378,6 +378,31 @@ def add_example_flags(
     raw_fields = dict(record.source.raw_fields)
     existing = [item for item in raw_fields.get(key, "").split(",") if item.strip()]
     raw_fields[key] = ",".join(dict.fromkeys(existing + fingerprints))
+    return replace(record, source=replace(record.source, raw_fields=raw_fields))
+
+
+def prune_example_flags(
+    record: VocabularyRecord, key: str, valid: Collection[str]
+) -> VocabularyRecord:
+    """Drop ``key`` fingerprints outside ``valid``, removing the key when empty.
+
+    A flag fingerprint matching no current example refers to nothing: keeping
+    it accumulates dead entries forever and, for a hold, leaves a sentence
+    permanently refusable with no way to un-hold it. Order-preserving, like
+    every writer here.
+    """
+    raw_fields = dict(record.source.raw_fields)
+    kept = [
+        item.strip()
+        for item in raw_fields.get(key, "").split(",")
+        if item.strip() and item.strip() in valid
+    ]
+    if kept:
+        raw_fields[key] = ",".join(dict.fromkeys(kept))
+    else:
+        raw_fields.pop(key, None)
+    if raw_fields == record.source.raw_fields:
+        return record
     return replace(record, source=replace(record.source, raw_fields=raw_fields))
 
 

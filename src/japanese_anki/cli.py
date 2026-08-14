@@ -1367,18 +1367,20 @@ def command_enrich(args: argparse.Namespace) -> int:
 
     for line in enrich.format_field_diff(result.changes):
         print(line)
-    if result.changes and not _confirm_enrich(len(result.changes), args.yes):
+    # One confirmation for everything this run would write — the mark clears
+    # are bookkeeping, but they still rewrite the normalized file, and every
+    # write this command makes goes through the same y/N.
+    pending = len(result.changes) + sum(
+        1 for record_id in result.cleared if record_id not in result.changes
+    )
+    if not _confirm_enrich(pending, args.yes):
         print("Aborted: nothing was written.", file=sys.stderr)
         return 1
     if result.cleared:
-        # Bookkeeping, not content: the marks describe who vouches for a value,
-        # and both clear paths (a human edit broke the binding; the dictionary
-        # confirmed the claim) are already decided. Saving them is what stops
-        # the same warnings — and the same paid lookups — repeating forever.
         marks = sum(len(names) for names in result.cleared.values())
         print(
             f"Recorded {marks} provisional-mark update(s) on "
-            f"{len(result.cleared)} record(s)."
+            f"{len(result.cleared)} record(s) in {output_path}."
         )
 
     save_records_json(output_path, result.records, expected=output_revision)

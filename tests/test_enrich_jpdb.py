@@ -348,6 +348,28 @@ def test_a_confirming_dictionary_also_reports_its_clear() -> None:
     assert PROVISIONAL_FIELDS_KEY not in updated.source.raw_fields
 
 
+def test_a_forced_write_settles_the_mark_it_overwrote() -> None:
+    # --force-fields part_of_speech writes the dictionary's value over the
+    # provisional claim. The mark is settled by janki's own write — leaving it
+    # would misreport the next run's stale-clear as a human edit that never
+    # happened, and rewrite the collection again to say so.
+    api = FakeApi(
+        unforced={"話す": parse_response((HANASU_FURIGANA, HANASU))},
+        senses=hanasu_senses(),
+    )
+
+    result = enrich_records(
+        client_for(api), [provisional_record()], force_fields=("part_of_speech",)
+    )
+
+    from japanese_anki.models import provisional_entries
+
+    [updated] = result.records
+    assert updated.part_of_speech == "verb"
+    assert "part_of_speech" not in dict(provisional_entries(updated))
+    assert not any("edited since extraction" in warning for warning in result.warnings)
+
+
 def test_a_kana_homograph_cannot_settle_a_provisional_claim() -> None:
     # あめ the candy tokenizes to 雨 the rain — spelling different, readings
     # agreeing all the way. Fine for filling empty fields; not authority to
@@ -864,6 +886,40 @@ def test_a_marks_only_run_still_saves_the_records(
     assert "provisional-mark update(s)" in out
     raw_fields = stored(root)["word:話す:はなす"]["source"]["raw_fields"]
     assert "provisional_fields" not in raw_fields
+
+
+def test_a_marks_only_run_still_asks_before_writing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Bookkeeping or not, the run rewrites vocabulary.json — and every write
+    # this command makes goes through the same y/N.
+    marked = mark_provisional(
+        record(
+            source=SourceReference(type="extract", imported_from="page.jpg"),
+            meanings=["a model gloss"],
+            part_of_speech="verb",
+            furigana="話[はな]す",
+            romaji="hanasu",
+            verb_group="godan",
+            conjugations={"plain": "話す"},
+            pitch_accent=["LHLL"],
+            frequency_rank=200,
+        )
+    )
+    edited = replace(
+        marked,
+        meanings=["to speak (hand-checked)"],
+        part_of_speech="verb (hand-checked)",
+    )
+    root = project(tmp_path, [edited])
+    patch_api(monkeypatch, FakeApi({}))
+    before = (root / "vocabulary.json").read_text(encoding="utf-8")
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt: "n")
+
+    assert cli.main(["--root", str(root), "enrich", "--jpdb"]) == 1
+
+    assert (root / "vocabulary.json").read_text(encoding="utf-8") == before
 
 
 def test_a_declined_confirmation_writes_nothing(

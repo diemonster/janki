@@ -37,7 +37,6 @@ from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.models import (
     FURIGANA_UNVERIFIED_KEY,
-    LEARNER_LOAD_HOLD_KEY,
     ExampleSentence,
     VocabularyRecord,
     example_flags,
@@ -280,11 +279,6 @@ def _example_audio(
     reports "the clips written before this are saved".
     """
     flagged = example_flags(record, FURIGANA_UNVERIFIED_KEY)
-    # The same judgment `validate` reports — checked here as well because
-    # audio can run on a record the build has never seen: the camera pilot
-    # voiced its fragments precisely because the only content gate lived
-    # after synthesis. Audio refuses every hold whatever its level.
-    load_held = frozenset(example_flags(record, LEARNER_LOAD_HOLD_KEY))
     examples: list[ExampleSentence] = []
     changed = False
 
@@ -303,8 +297,18 @@ def _example_audio(
             result.unverified.append(f"{record.id}: {example.japanese}")
             examples.append(example)
             continue
-        if holds := qc.example_content_holds(example, load_held=load_held):
+        # The same judgment `validate` reports — checked here as well because
+        # audio can run on a record the build has never seen: the camera
+        # pilot voiced its fragments precisely because the only content gate
+        # lived after synthesis. Audio refuses every hold whatever its level,
+        # and a held example keeps no clip reference: presenting a recording
+        # of a sentence this run refuses to voice is the same failure with a
+        # cached voice.
+        if holds := qc.example_content_holds(record, example):
             result.held.append(f"{record.id}: {example.japanese} ({holds[0][0]})")
+            if example.audio:
+                example = replace(example, audio="")
+                changed = True
             examples.append(example)
             continue
 

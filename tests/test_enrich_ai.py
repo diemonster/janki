@@ -619,7 +619,32 @@ def test_a_stored_impossible_group_is_flagged_when_ai_fills_english() -> None:
     assert UNVERIFIED_KEY in outcome.record.source.raw_fields
 
 
-def test_the_flag_appends_rather_than_replacing() -> None:
+def test_flags_accumulate_for_sentences_still_on_the_record() -> None:
+    # A flag for a sentence the record still carries survives a later write;
+    # writes append, never replace.
+    first = apply_ai_result(
+        record(), answer(generated("話します。", furigana="話[か]します。")), parses={}
+    )
+
+    second = apply_ai_result(
+        first.record,
+        answer(
+            generated("話します。", furigana="話[か]します。"),
+            generated("昨日話した。", furigana="昨日[きのう] 話[はな]した。"),
+        ),
+        force_fields=("examples",),
+        parses={},
+    )
+
+    flags = second.record.source.raw_fields[UNVERIFIED_KEY]
+    assert short_fingerprint("話します。") in flags
+    assert short_fingerprint("昨日話した。") in flags
+
+
+def test_an_orphaned_flag_fingerprint_is_garbage_collected() -> None:
+    # A fingerprint matching no current example refers to nothing — and for a
+    # hold, keeping it would leave a sentence permanently refusable with no
+    # way to un-hold it. Pruned at the write, when the orphan is created.
     already = record(
         source=SourceReference(raw_fields={UNVERIFIED_KEY: "deadbeef"}),
         verb_group="godan",
@@ -629,7 +654,10 @@ def test_the_flag_appends_rather_than_replacing() -> None:
         already, answer(generated("話します。", furigana="話[か]します。")), parses={}
     )
 
-    assert outcome.record.source.raw_fields[UNVERIFIED_KEY].startswith("deadbeef,")
+    assert "deadbeef" not in outcome.record.source.raw_fields[UNVERIFIED_KEY]
+    assert short_fingerprint("話します。") in (
+        outcome.record.source.raw_fields[UNVERIFIED_KEY]
+    )
 
 
 def test_fields_that_already_have_content_are_left_alone() -> None:

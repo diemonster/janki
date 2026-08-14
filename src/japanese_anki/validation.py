@@ -6,11 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from japanese_anki.identifiers import contains_kanji
-from japanese_anki.models import (
-    LEARNER_LOAD_HOLD_KEY,
-    VocabularyRecord,
-    example_flags,
-)
+from japanese_anki.models import VocabularyRecord
 
 # An ID minted from an expression with no reading: ``word:話す:``. The reading is
 # part of the ID, so this one cannot be repaired in place once Anki has seen it.
@@ -63,12 +59,12 @@ def _stray_furigana_spaces(furigana: str) -> tuple[str, ...]:
 
 
 def _content_holds(
-    example: object, load_held: frozenset[str]
+    record: VocabularyRecord, example: object
 ) -> list[tuple[str, str, str]]:
     """Delegates to :func:`japanese_anki.qc.example_content_holds` (same rule)."""
     from japanese_anki import qc
 
-    return qc.example_content_holds(example, load_held=load_held)
+    return qc.example_content_holds(record, example)
 
 
 def _kana(reading: str) -> str:
@@ -220,7 +216,6 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
                 "plus the following particle) and audio generation will skip "
                 "this record rather than guess",
             )
-    load_held = frozenset(example_flags(record, LEARNER_LOAD_HOLD_KEY))
     for index, example in enumerate(record.examples, start=1):
         # The teaching-suitability judgment itself lives in
         # :func:`japanese_anki.qc.example_content_holds`, because the audio
@@ -230,7 +225,7 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
         # are errors that stop a build, the camera pilot's exact gap; a
         # learner-load hold is a warning, because it awaits a person's
         # decision — but it is *visible* here, not only at the audio gate.
-        for code, level, why in _content_holds(example, load_held):
+        for code, level, why in _content_holds(record, example):
             add(level, code, f"example {index} {why}")
         if example.japanese and not example.english:
             add(
