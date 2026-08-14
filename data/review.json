@@ -98,6 +98,14 @@
     "accepted_marks": [],
     "findings": []
   },
+  "09a432ecfc6d": {
+    "record_id": "word:差し支え:さしつかえ",
+    "at": "2026-08-14",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "09f2e491037b": {
     "record_id": "word:お父さん:おとうさん",
     "at": "2026-08-11",
@@ -109,6 +117,22 @@
   "0c224f1cd27c": {
     "record_id": "word:振る:ふる",
     "at": "2026-08-12",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "0c287f27aa9a": {
+    "record_id": "word:聖職者:せいしょくしゃ",
+    "at": "2026-08-14",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "0d1809194a10": {
+    "record_id": "word:祈祷:きとう",
+    "at": "2026-08-14",
     "accepted": false,
     "accepted_because": "",
     "accepted_marks": [],
@@ -174,6 +198,27 @@
     "accepted_marks": [],
     "findings": []
   },
+  "10832350c0d7": {
+    "record_id": "word:探求:たんきゅう",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0]",
+        "problem": "The sentence is far above a Genki-style beginner's level and its content is unhelpfully abstract: 聖職者 (clergy) and 黄金律 (Golden Rule) are both rare, low-frequency words, and 黄金律の探求をしています is stilted — 探求 normally takes an object one seeks or investigates (truth, knowledge, a cause), not a moral maxim one tries to live by, so the sentence does not clearly illustrate the listed senses.",
+        "severity": "note",
+        "suggestion": "Replace with a concrete, level-appropriate sentence using a typical collocation, e.g. 「私は真理の探求を続けています。」 (\"I am continuing my pursuit of truth.\") or a suru-form 「新しい音楽を探求しています。」, and prefer 探求しています over 探求をしています."
+      },
+      {
+        "where": "usage_notes",
+        "problem": "The note glosses 探求 as \"pursuit or investigation,\" but \"investigation/inquiry\" is the sense of the homophone 探究; 探求 is seeking/searching for something, and the examples given (真理の探求, 知識の探求) are more commonly written 真理の探究 / 知識の探究 in that inquiry sense.",
+        "severity": "note",
+        "suggestion": "Limit the note to the seeking/pursuit sense and add a contrast, e.g. \"Compare 探究 (たんきゅう), which is used for inquiry or research into a subject.\""
+      }
+    ]
+  },
   "112828a6be6a": {
     "record_id": "word:うす:うす",
     "at": "2026-08-12",
@@ -233,6 +278,27 @@
         "problem": "Four patterns are listed for a two-mora word but only two distinct shapes appear: LHH and HLL are each repeated. The card will draw the same diagram twice over, which reads as if もう had four accents rather than the two it has (atamadaka [1] and heiban [0]).",
         "severity": "note",
         "suggestion": "Deduplicate to the two distinct patterns, primary first: HLL, LHH."
+      }
+    ]
+  },
+  "1b50db36b37f": {
+    "record_id": "word:導き:みちびき",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0]",
+        "problem": "The sentence is not a well-formed Japanese sentence: it is a verbless fragment with 貴方 dangling with no particle or predicate (「ときに貴方 祝福の導きは？」), and 「ときに」 as \"by the way\" is archaic/literary, so it also contradicts the \"casual\" register label. It reads like a clipped line of game dialogue rather than usable Japanese.",
+        "severity": "error",
+        "suggestion": "Replace with a short natural sentence in one of the listed senses, e.g. 「先生[せんせい]の導[みちび]きで、日本語[にほんご]が上手[じょうず]になりました。」 (\"Thanks to my teacher's guidance, my Japanese improved.\")"
+      },
+      {
+        "where": "examples[0].english / usage_notes",
+        "problem": "祝福 means \"blessing,\" not \"grace,\" so glossing 祝福の導き as \"the guidance of grace\" misstates the sentence, and the usage note repeats the same wrong gloss.",
+        "severity": "error",
+        "suggestion": "If the phrase is kept, translate 祝福の導き as \"the guidance of (a) blessing\"; better, use the uncontroversial 神[かみ]の導[みちび]き (\"divine guidance\") as the illustrative phrase in the note."
       }
     ]
   },
@@ -298,6 +364,21 @@
         "problem": "「旅行にカメラをとる」 does not mean \"take a camera on a trip\": とる (取る) means to grasp/pick up/obtain, not to bring something along. The Japanese would be understood as picking up a camera (or misread as 撮る, \"photograph a camera\"), and it is exactly the false-friend use of English \"take\" that the card's own usage note warns against.",
         "severity": "error",
         "suggestion": "Replace with a sentence using a real とる sense, e.g. 「旅行の 写真[しゃしん]をたくさんとるつもりです。」 \"I plan to take lots of photos on the trip.\" or 「そのペンをとってください。」 \"Please pass/pick up that pen.\""
+      }
+    ]
+  },
+  "254d761380d6": {
+    "record_id": "word:円卓:えんたく",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0]",
+        "problem": "「円卓へようこそ！」 does not show 円卓 in the listed sense (a physical round table) — it reads as a metaphorical welcome to a council/fantasy setting, and it sits oddly beside the usage note saying the word is formal or literary and mostly appears in set compounds like 円卓会議. As a bare exclamatory greeting it teaches neither the furniture sense nor the register the note describes.",
+        "severity": "note",
+        "suggestion": "Use a concrete sentence with the furniture sense, e.g. 「レストランの大きな円卓で家族と食事をしました。」 (\"We ate with my family at the big round table in the restaurant.\"), or make the example one of the set phrases the note mentions, e.g. 「明日、円卓会議があります。」"
       }
     ]
   },
@@ -393,6 +474,14 @@
     "accepted_marks": [],
     "findings": []
   },
+  "3616a4e23d3e": {
+    "record_id": "word:見解:けんかい",
+    "at": "2026-08-14",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "37040b2a9d9b": {
     "record_id": "word:一杯:いっぱい",
     "at": "2026-08-11",
@@ -452,6 +541,27 @@
         "problem": "The sentence writes the target word in hiragana (かんじ) while spelling 勉強 in kanji, which is unnatural orthography; in real Japanese this would be 漢字を勉強するつもりです。Written in kana, かんじ also reads most naturally as 感じ ('feeling'), so the sentence is ambiguous for exactly the word it is meant to illustrate.",
         "severity": "note",
         "suggestion": "Use 漢字を勉強するつもりです。 for the example (and consider making the headword 漢字 with reading かんじ, as the usage note itself says the word is usually written in kanji)."
+      }
+    ]
+  },
+  "4af64d22ef97": {
+    "record_id": "word:初めて:はじめて",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0]",
+        "problem": "The sentence is stilted and above the stated beginner level: おかた is a dated, highly deferential word for \"person\" that a Genki-level learner will not meet, and the phrase reads like an old textbook set line rather than everyday speech. It also illustrates only the attributive 初めての pattern, not the core adverbial use the part of speech and gloss point at.",
+        "severity": "note",
+        "suggestion": "Use a plain adverbial example in a familiar context, e.g. 「今年、初めて日本に行きました。」\"I went to Japan for the first time this year.\" and keep an attributive example (初めての〜) as a secondary one if the 初めての pattern is worth showing."
+      },
+      {
+        "where": "examples[0].english",
+        "problem": "The translation \"It's your first time, isn't it?\" hides the structure the usage note explains — おかた is the head noun referring to the listener, so the sentence literally says \"You must be a first-time visitor.\" The gloss and the note pull in different directions.",
+        "severity": "note",
+        "suggestion": "Translate closer to the structure, e.g. \"You're here for the first time, aren't you?\""
       }
     ]
   },
@@ -568,6 +678,27 @@
       }
     ]
   },
+  "559d520550cb": {
+    "record_id": "word:修復:しゅうふく",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0]",
+        "problem": "The example is not a sentence but a title-like noun fragment (「〜について」), and 黄金律の修復 is an unnatural collocation: 修復 is used for physically restoring damaged things (buildings, artwork, data) or for repairing relationships (関係の修復), not for reinstating an abstract moral principle. It therefore fails to show the word in either of the listed senses and contradicts the usage note printed beside it.",
+        "severity": "error",
+        "suggestion": "Replace with a concrete full sentence in one of the noted senses, e.g. 「この お寺 は 去年 修復 されました。」 (\"This temple was restored last year.\") or 「バックアップ から データ を 修復 しました。」"
+      },
+      {
+        "where": "examples[0] (register label)",
+        "problem": "The example is labelled \"polite\", but the fragment contains no predicate at all, so it is neither polite nor plain; the label cannot be justified as written.",
+        "severity": "note",
+        "suggestion": "Give the example a 〜ます/です predicate if it is to be labelled polite, or drop the register label."
+      }
+    ]
+  },
   "563cb3155e90": {
     "record_id": "word:ここ:ここ",
     "at": "2026-08-11",
@@ -592,9 +723,48 @@
     "accepted_marks": [],
     "findings": []
   },
+  "56704ee4dc40": {
+    "record_id": "word:興味:きょうみ",
+    "at": "2026-08-14",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "5805315cb4d7": {
     "record_id": "word:話す:はなす",
     "at": "2026-08-10",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "59ac7b6ea70f": {
+    "record_id": "word:探求:たんきゅう",
+    "at": "2026-08-14",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "5be0f3fe5d6f": {
+    "record_id": "word:新来:しんらい",
+    "at": "2026-08-14",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0]",
+        "problem": "The sentence demonstrates 新来 with humble keigo (お伝えしたい, お〜する) plus explanatory のです, and reads as a context-dependent fragment; that is two grammar points above a Genki-style beginner's level competing with the target word.",
+        "severity": "note",
+        "suggestion": "Use a simpler, self-contained polite sentence, e.g. 新来のかたに会社を案内しました。(\"I showed the newcomer around the company.\")"
+      }
+    ]
+  },
+  "5c16f4f8e70b": {
+    "record_id": "word:円卓:えんたく",
+    "at": "2026-08-14",
     "accepted": false,
     "accepted_because": "",
     "accepted_marks": [],
@@ -728,6 +898,21 @@
       }
     ]
   },
+  "6c012a969bc2": {
+    "record_id": "word:興味:きょうみ",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0]",
+        "problem": "The sentence is lifted from a fantasy-game context (二本指様 \"the Two Fingers\") and uses 祈祷, a low-frequency compound well above a Genki-level learner; it is also an elliptical fragment rather than a full sentence, so it demonstrates 〜に興味がある only by implication.",
+        "severity": "note",
+        "suggestion": "Use a concrete everyday sentence in the same sense, e.g. 「日本の音楽に興味があります。」 (\"I'm interested in Japanese music.\"), and keep the fragment 「ご興味は？」 as a usage note if the polite ellipsis is worth teaching."
+      }
+    ]
+  },
   "6c09721df503": {
     "record_id": "word:うす:うす",
     "at": "2026-08-12",
@@ -781,6 +966,27 @@
     "accepted_because": "",
     "accepted_marks": [],
     "findings": []
+  },
+  "721bb4ee9036": {
+    "record_id": "word:貴方:あなた",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "meanings[0]",
+        "problem": "あなた is not a polite or formal way to address someone; dictionaries restrict it to addressees of equal or lower status, and using it toward a superior is rude. Glossing it \"you (polite/formal)\" invites exactly the mistake learners must avoid, and the usage note does not correct it (it only describes the kanji spelling's literary register).",
+        "severity": "error",
+        "suggestion": "Gloss as \"you\" (optionally \"you (to an equal or subordinate)\") and move the register facts to usage_notes, e.g. noting that あなた is not honorific and should not be used to superiors — a name plus さん or a title is used instead."
+      },
+      {
+        "where": "examples[0]",
+        "problem": "貴方の見解を伺いたく is a truncated business-email fragment: it uses the humble 伺う, the noun 見解, and the elliptical 〜たく continuative that trails off mid-sentence. For a Genki-level learner this teaches an advanced ellipsis pattern rather than the word あなた, and the card itself has to explain the fragment.",
+        "severity": "note",
+        "suggestion": "Use a complete, level-appropriate sentence such as 「貴方のお名前を教えてください。」 or, if the formal written flavour of the kanji spelling matters, at least a finished sentence like 「貴方のご意見を伺いたいです。」"
+      }
+    ]
   },
   "7286d7a47321": {
     "record_id": "word:うみ:うみ",
@@ -838,6 +1044,21 @@
         "problem": "The phrase \"It can be marked with は or を-less topic は for contrast\" is garbled — it repeats は and refers to a \"を-less topic は\" that means nothing to a beginner.",
         "severity": "note",
         "suggestion": "Simplify to something like: \"It can take は for contrast or topic: 明日は忙しいです ('Tomorrow I'm busy').\""
+      }
+    ]
+  },
+  "760e7c4c9082": {
+    "record_id": "word:見解:けんかい",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0]",
+        "problem": "The Japanese is not a sentence but a truncated business-letter clause (連用中止 〜たく, expecting 〜たく存じます/お願いします), while the English translation is a complete sentence; it is also well above a Genki-level learner's grammar, and 貴方 is normally written あなた or omitted.",
+        "severity": "note",
+        "suggestion": "Use a complete, level-appropriate polite sentence, e.g. 「先生のご見解を伺いたいです。」 or 「この問題について、部長の見解を伺いました。」"
       }
     ]
   },
@@ -900,6 +1121,14 @@
   "7dd62cde4774": {
     "record_id": "word:晩ご飯:ばんごはん",
     "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "7f850e641f54": {
+    "record_id": "word:導き:みちびき",
+    "at": "2026-08-14",
     "accepted": false,
     "accepted_because": "",
     "accepted_marks": [],
@@ -1104,6 +1333,14 @@
       }
     ]
   },
+  "9a92df082902": {
+    "record_id": "word:修復:しゅうふく",
+    "at": "2026-08-14",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "9b37483fd71b": {
     "record_id": "word:見る:みる",
     "at": "2026-08-10",
@@ -1166,6 +1403,14 @@
       }
     ]
   },
+  "a43ec2d3f1f6": {
+    "record_id": "word:貴方:あなた",
+    "at": "2026-08-14",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "a4a2b249aace": {
     "record_id": "word:お前:おまえ",
     "at": "2026-08-12",
@@ -1208,6 +1453,22 @@
   "a7c022ee9846": {
     "record_id": "word:勉強する:べんきょうする",
     "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "a7e98928d384": {
+    "record_id": "word:祝福:しゅくふく",
+    "at": "2026-08-14",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
+  "a7ed83f6264e": {
+    "record_id": "word:新来:しんらい",
+    "at": "2026-08-14",
     "accepted": false,
     "accepted_because": "",
     "accepted_marks": [],
@@ -1262,6 +1523,21 @@
     "accepted_because": "",
     "accepted_marks": [],
     "findings": []
+  },
+  "ae7e208833d4": {
+    "record_id": "word:祝福:しゅくふく",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0]",
+        "problem": "The sentence is a fragmentary, archaic/theatrical line (no predicate, no particle after 貴方, 貴方 written in kanji) that is neither natural modern Japanese nor 'casual' register, and it is well above a Genki-level learner's grammar; it also fails to show 祝福 in the listed sense clearly ('the blessing's guidance' is opaque). The usage note itself concedes the sentence is 古風で芝居がかった, which contradicts the 'casual' label.",
+        "severity": "error",
+        "suggestion": "Replace with a short, natural sentence in one of the forms the usage note recommends, e.g. 「友[とも]だちの結婚[けっこん]を祝福[しゅくふく]した。」(I blessed / congratulated my friend on his marriage.) or 「二人[ふたり]は祝福[しゅくふく]を受[う]けました。」and drop or rewrite the note about archaic phrasing."
+      }
+    ]
   },
   "b0984f305851": {
     "record_id": "word:すぐ:すぐ",
@@ -1565,6 +1841,14 @@
       }
     ]
   },
+  "d97832a5d644": {
+    "record_id": "word:初めて:はじめて",
+    "at": "2026-08-14",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "dcbac11cffa7": {
     "record_id": "word:ごろごろ:ごろごろ",
     "at": "2026-08-13",
@@ -1603,6 +1887,21 @@
     "accepted_because": "",
     "accepted_marks": [],
     "findings": []
+  },
+  "dfd59001d755": {
+    "record_id": "word:祈祷:きとう",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0]",
+        "problem": "The example is a mined mid-sentence fragment (ending in 〜ておりまして, with no main clause) that is far above a Genki-level learner: it pairs humble 〜ております with the rare, near-obsolete noun 示教, so the learner meets two harder unknowns than the target word, and 祈祷の示教をする is itself an odd collocation. The English translation is also a complete sentence, hiding that the Japanese is unfinished.",
+        "severity": "note",
+        "suggestion": "Replace with a short complete sentence using 祈祷 in its listed sense, e.g. 「お寺で祈祷をしてもらいました。」 (\"I had a prayer ritual performed for me at the temple.\")"
+      }
+    ]
   },
   "e277a3fd9cb7": {
     "record_id": "word:行く:いく",
@@ -1725,6 +2024,14 @@
       }
     ]
   },
+  "f8138a0528b1": {
+    "record_id": "word:黄金律:おうごんりつ",
+    "at": "2026-08-14",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "f9eb019f0d08": {
     "record_id": "word:それは:それは",
     "at": "2026-08-12",
@@ -1737,6 +2044,36 @@
         "problem": "The note ends with \"in this text\", a dangling reference to a source text the learner cannot see; on the card it reads as if そりゃ were somehow limited to a specific passage rather than being the general colloquial contraction of それは.",
         "severity": "note",
         "suggestion": "Rephrase without the source reference, e.g. \"Often contracted to 「そりゃ」 in casual speech.\""
+      }
+    ]
+  },
+  "fd2838026f94": {
+    "record_id": "word:聖職者:せいしょくしゃ",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0]",
+        "problem": "The sentence uses 聖職者 correctly but its content is abstract and off-level for the intended learner: 黄金律 and 探求 are both low-frequency, and 〜の探求をしています reads like translationese (探求しています, or plainer 〜について考えています, would be more natural). It teaches the 〜として construction and two hard nouns rather than illuminating 聖職者 itself.",
+        "severity": "note",
+        "suggestion": "Replace with something concrete and simpler, e.g. 「父は聖職者として教会で働いています。」(\"My father works at a church as a member of the clergy.\")"
+      }
+    ]
+  },
+  "fe9175f9f831": {
+    "record_id": "word:差し支え:さしつかえ",
+    "at": "2026-08-13",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "examples[0]",
+        "problem": "The example is a subordinate fragment with no main clause (「…差し支えなければ」 trailing off), so it never shows what the request or question actually is; the English gloss trails off too. A learner cannot see the noun 差し支え functioning in a complete sentence, and the fragment is labelled \"polite\" while containing no polite predicate at all (the politeness would live in the missing main clause).",
+        "severity": "note",
+        "suggestion": "Complete the sentence so the register is visible and the idiom's function is clear, e.g. 「差し支えなければ、お名前を教えていただけますか。」 (\"If you don't mind, could you tell me your name?\")"
       }
     ]
   },
