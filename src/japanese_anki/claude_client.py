@@ -71,6 +71,17 @@ API_KEY_ENV = "ANTHROPIC_API_KEY"
 #: callers look at.
 DEFAULT_MAX_TOKENS = 16000
 
+#: Reasoning depth for the passes that write or judge study content. Inside
+#: ``output_config`` beside the schema, not a top-level field.
+#:
+#: **Not a module-wide constant applied to every call.** ``_request_body`` is
+#: shared by five passes and one of them cannot accept this: the adjudicator
+#: runs on Haiku by default, which rejects ``effort`` with a 400 — and
+#: ``adjudicate_reading`` catches every exception and returns "unsure", so an
+#: unconditional value would disable that pass permanently with nothing
+#: printed. Callers pass it; the key is omitted when they do not.
+DEFAULT_EFFORT = "xhigh"
+
 #: The style guide, relative to the project root. Every AI pass sends it, which
 #: is why it is worth a cache breakpoint.
 STYLE_GUIDE_PATH = Path("docs") / "JAPANESE_STYLE_GUIDE.md"
@@ -120,6 +131,20 @@ class CallResult(NamedTuple):
     parsed: Any
     stop_reason: str | None
     refusal: Refusal | None
+
+
+def _http_errors() -> tuple[type[BaseException], ...]:
+    """Transport exceptions the SDK does not wrap, for the boundary below.
+
+    ``httpx`` ships with the SDK, so this cannot fail where a call is possible;
+    the empty tuple is for a checkout that has neither, where ``isinstance``
+    against it is simply never true.
+    """
+    try:
+        import httpx
+    except ImportError:  # pragma: no cover - only without the AI extra
+        return ()
+    return (httpx.HTTPError,)
 
 
 def load_anthropic() -> Any:
@@ -235,6 +260,7 @@ def _request_body(
     user_content: str | Iterable[dict[str, Any]],
     schema: Any,
     max_tokens: int,
+    effort: str | None = None,
 ) -> dict[str, Any]:
     """The Messages request both call shapes send.
 
@@ -244,17 +270,23 @@ def _request_body(
     return answers the synchronous path would never have produced.
     """
     anthropic = load_anthropic()
+    output_config: dict[str, Any] = {
+        "format": {
+            "type": "json_schema",
+            "schema": anthropic.transform_schema(schema),
+        }
+    }
+    # Omitted rather than sent as None: a model that does not support effort
+    # rejects the key itself, so the only safe way to not ask for it is to not
+    # send it.
+    if effort:
+        output_config["effort"] = effort
     return {
         "model": model,
         "max_tokens": max_tokens,
         "system": list(system_blocks),
         "messages": [{"role": "user", "content": user_content}],
-        "output_config": {
-            "format": {
-                "type": "json_schema",
-                "schema": anthropic.transform_schema(schema),
-            }
-        },
+        "output_config": output_config,
     }
 
 
@@ -299,6 +331,7 @@ def parse_call(
     client: Any | None = None,
     *,
     max_tokens: int = DEFAULT_MAX_TOKENS,
+    effort: str | None = None,
 ) -> CallResult:
     """One structured-output call, returning a :class:`CallResult`.
 
@@ -331,16 +364,40 @@ def parse_call(
     """
     api = client if client is not None else build_client()
     try:
-        response = api.messages.create(
-            **_request_body(model, system_blocks, user_content, schema, max_tokens)
-        )
+        # Streamed, and read whole with `get_final_message`: this module wants
+        # one complete answer, not events. The reason is the budget, not the
+        # events — thinking counts against `max_tokens`, so a review sized for
+        # extra-high effort approaches the ceiling above which the SDK refuses
+        # a non-streaming call outright, and refuses it with a bare ValueError
+        # the boundary below would not convert. A stream is also never idle,
+        # which is what a dropped connection at that length actually costs.
+        #
+        # `stream()` returns a manager, not the stream: `get_final_message`
+        # exists on what `__enter__` yields. Both statements are inside the
+        # try because the request is sent by the first and consumed by the
+        # second, and either can fail.
+        with api.messages.stream(
+            **_request_body(
+                model, system_blocks, user_content, schema, max_tokens, effort
+            )
+        ) as stream:
+            response = stream.get_final_message()
     except Exception as exc:
         # The SDK's transport/status exceptions do not subclass JankiError, so
         # without this boundary the CLI prints a traceback. Keep the import
         # lazy and re-raise programming errors from an injected client.
+        #
+        # httpx is named separately because the SDK wraps only the initial
+        # send: an error raised while iterating a stream's body arrives as a
+        # bare httpx exception, which is precisely the mid-stream failure this
+        # call shape makes possible.
         api_error = getattr(load_anthropic(), "APIError", ())
         if api_error and isinstance(exc, api_error):
             raise ClaudeRequestError(f"{model} request failed: {exc}") from exc
+        if isinstance(exc, _http_errors()):
+            raise ClaudeRequestError(
+                f"{model} request failed mid-response: {exc}"
+            ) from exc
         raise
     return _result_of(response, schema, model)
 
@@ -378,6 +435,7 @@ def batch_request(
     schema: Any,
     *,
     max_tokens: int = DEFAULT_MAX_TOKENS,
+    effort: str | None = None,
 ) -> dict[str, Any]:
     """One entry for :func:`submit_batch`, holding the same request as a live call.
 
@@ -387,7 +445,9 @@ def batch_request(
     """
     return {
         "custom_id": custom_id,
-        "params": _request_body(model, system_blocks, user_content, schema, max_tokens),
+        "params": _request_body(
+            model, system_blocks, user_content, schema, max_tokens, effort
+        ),
     }
 
 

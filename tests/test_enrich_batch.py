@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -250,6 +251,20 @@ def test_the_key_map_refuses_a_collision_rather_than_resolving_it(
 # --- the requests ------------------------------------------------------------
 
 
+class _Stream:
+    """The manager ``messages.stream`` returns: dunder lookup is on the type,
+    so this cannot be a SimpleNamespace."""
+
+    def __init__(self, answer: Any) -> None:
+        self._answer = answer
+
+    def __enter__(self) -> Any:
+        return SimpleNamespace(get_final_message=lambda: self._answer)
+
+    def __exit__(self, *_: Any) -> bool:
+        return False
+
+
 def test_a_batch_request_is_the_same_request_a_live_call_makes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -260,9 +275,11 @@ def test_a_batch_request_is_the_same_request_a_live_call_makes(
     class Client:
         class messages:  # noqa: N801
             @staticmethod
-            def create(**kw: Any) -> Any:
+            def stream(**kw: Any) -> Any:
                 sent.update(kw)
-                return type("R", (), {"stop_reason": "refusal", "stop_details": None})()
+                return _Stream(
+                    type("R", (), {"stop_reason": "refusal", "stop_details": None})()
+                )
 
     claude_client.parse_call("m", blocks, "hello", dict, Client(), max_tokens=99)
     batched = claude_client.batch_request("r1", "m", blocks, "hello", dict, max_tokens=99)

@@ -495,6 +495,7 @@ def review_records(
                 # answer itself is short: 2000 cut off a card mid-verdict, and a
                 # budget that truncates turns a clean read into a failed one.
                 max_tokens=8000,
+                effort=claude_client.DEFAULT_EFFORT,
             )
         except JankiError as exc:
             failures.append(f"{record.id}: {exc}")
@@ -538,6 +539,7 @@ def review_records(
                     review_schema(),
                     client,
                     max_tokens=8000,
+                    effort=claude_client.DEFAULT_EFFORT,
                 )
             except (JankiError, pitch.PitchError):
                 recheck = None

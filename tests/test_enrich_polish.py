@@ -429,9 +429,19 @@ def _patch_polish_batch_submit(
     monkeypatch: pytest.MonkeyPatch, submitted: list[list[dict[str, Any]]]
 ) -> None:
     def request(
-        custom_id: str, model: str, blocks: Any, content: str, schema: Any
+        custom_id: str,
+        model: str,
+        blocks: Any,
+        content: str,
+        schema: Any,
+        **options: Any,
     ) -> dict[str, Any]:
-        return {"custom_id": custom_id, "model": model, "content": content}
+        return {
+            "custom_id": custom_id,
+            "model": model,
+            "content": content,
+            **options,
+        }
 
     monkeypatch.setattr(enrich.claude_client, "batch_request", request)
     monkeypatch.setattr(

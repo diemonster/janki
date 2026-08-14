@@ -2170,7 +2170,12 @@ def polish_meanings(
     for record in polish_targets(records, ids):
         try:
             call = claude_client.parse_call(
-                model, blocks, polish_prompt(record), polish_schema(), client
+                model,
+                blocks,
+                polish_prompt(record),
+                polish_schema(),
+                client,
+                effort=claude_client.DEFAULT_EFFORT,
             )
         except claude_client.ClaudeRequestError as exc:
             yield PolishOutcome(
@@ -2258,6 +2263,7 @@ def batch_requests(
             blocks,
             ai_prompt(record, taught=taught),
             ai_schema(),
+            effort=claude_client.DEFAULT_EFFORT,
         )
         for record in targets
     ]
@@ -2288,6 +2294,7 @@ def polish_batch_requests(
             blocks,
             polish_prompt(record),
             polish_schema(),
+            effort=claude_client.DEFAULT_EFFORT,
         )
         for record in targets
     ]

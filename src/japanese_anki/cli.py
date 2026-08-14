@@ -1480,7 +1480,7 @@ def _enrich_ai(
         call_options=(
             {"reasoning_effort": config.enrich_reasoning_effort}
             if config.enrich_provider == "codex"
-            else {}
+            else {"effort": claude_client.DEFAULT_EFFORT}
         ),
     )
     if taught:

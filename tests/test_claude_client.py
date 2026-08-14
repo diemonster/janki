@@ -23,9 +23,11 @@ from pydantic import BaseModel
 
 from japanese_anki import claude_client
 from japanese_anki.claude_client import (
+    DEFAULT_EFFORT,
     DEFAULT_MAX_TOKENS,
     STYLE_GUIDE_PATH,
     ClaudeRequestError,
+    batch_request,
     build_client,
     load_anthropic,
     parse_call,
@@ -39,6 +41,20 @@ class Candidates(BaseModel):
     """A real schema — the module validates against it, so a stub will not do."""
 
     words: list[str]
+
+
+class _Stream:
+    """The manager ``messages.stream`` returns: dunder lookup is on the type,
+    so this cannot be a SimpleNamespace."""
+
+    def __init__(self, answer: Any) -> None:
+        self._answer = answer
+
+    def __enter__(self) -> Any:
+        return SimpleNamespace(get_final_message=lambda: self._answer)
+
+    def __exit__(self, *_: Any) -> bool:
+        return False
 
 
 class FakeMessages:
@@ -63,6 +79,11 @@ class FakeMessages:
         return SimpleNamespace(
             content=content, stop_reason=self.stop_reason, stop_details=self.details
         )
+
+    def stream(self, **kwargs: Any) -> Any:
+        """The shape the SDK returns: a manager whose ``__enter__`` yields the
+        stream. ``get_final_message`` is on the stream, not on the manager."""
+        return _Stream(self.create(**kwargs))
 
     def parse(self, **kwargs: Any) -> Any:  # pragma: no cover - must never run
         raise AssertionError(
@@ -325,6 +346,9 @@ def test_an_sdk_request_error_becomes_a_clean_janki_error(
         def create(self, **kwargs: Any) -> Any:
             raise FakeAPIError("output blocked by content filtering policy")
 
+        def stream(self, **kwargs: Any) -> Any:
+            raise FakeAPIError("output blocked by content filtering policy")
+
     monkeypatch.setattr(
         claude_client,
         "load_anthropic",
@@ -401,3 +425,34 @@ def test_a_normal_completion_carries_no_refusal() -> None:
     assert parse_call(
         "claude-opus-5", system_blocks("guide"), "go", SCHEMA, client
     ).refusal is None
+
+
+def test_effort_is_sent_when_a_caller_asks_for_it() -> None:
+    client = fake_client(VALID)
+
+    parse_call("m", system_blocks("g"), "hi", SCHEMA, client, effort=DEFAULT_EFFORT)
+
+    assert client.messages.calls[0]["output_config"]["effort"] == "xhigh"
+
+
+def test_effort_is_absent_when_a_caller_does_not_ask() -> None:
+    """The adjudicator runs on Haiku, which rejects the key with a 400 — and it
+    catches every exception and returns "unsure", so an unconditional value
+    would disable that pass permanently with nothing printed. The key is
+    omitted rather than sent as None: a model that does not support effort
+    rejects the key itself."""
+    client = fake_client(VALID)
+
+    parse_call("m", system_blocks("g"), "hi", SCHEMA, client)
+
+    assert "effort" not in client.messages.calls[0]["output_config"]
+
+
+def test_a_batch_entry_carries_the_same_effort_a_live_call_does() -> None:
+    client = fake_client(VALID)
+    blocks = system_blocks("g")
+
+    parse_call("m", blocks, "hi", SCHEMA, client, effort=DEFAULT_EFFORT)
+    batched = batch_request("r1", "m", blocks, "hi", SCHEMA, effort=DEFAULT_EFFORT)
+
+    assert batched["params"] == client.messages.calls[0]
