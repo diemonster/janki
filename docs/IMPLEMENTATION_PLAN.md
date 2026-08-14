@@ -3277,8 +3277,23 @@ Use these slices, each a finding plus a reproducing case plus a fix, ordered so
 5. Switch `enrich_provider`/`enrich_model`; update `DESIGN_V2.md` and
    `ENRICHMENT.md`.
 6. Add per-example dictionary forms to the AI schema — transient, defaulted, and
-   kept out of `card_fingerprint` — plus the learner-load case. Then move the
-   bound onto LLM words ranked by memoized jpdb word lookups.
+   kept out of `card_fingerprint` — then move the bound onto LLM words ranked by
+   memoized jpdb word lookups.
+
+   *Measured 2026-08-14, live.* The defect is not only that the parse is an
+   extra call: **the bound measures a segmentation that is not the sentence**,
+   in both directions. On `今、だれとすんでるの？` jpdb yields `とする`, which
+   the sentence does not contain, while 住む — the actual word inside すんでる —
+   is never counted at all. On `このゲーム、何回もしぬの？` it yields `する` for
+   しぬ. Both mis-parses happen to return common words here, so neither changes
+   a hold today; the input is wrong regardless, and a rarer mis-parse decides a
+   hold on a word that is not there or misses one that is.
+
+   This needs its own finding at the `ai-enrichment` boundary before the case
+   can exist: `example-teaching-suitability` carries the learner-load clause but
+   sits at `validation-qc`, and a case's boundary must match its finding's
+   stage. Open the finding on the measurement above, land its red case
+   non-gating, then fix and flip it.
 7. Retire the oracle, `recheck_furigana`, `adjudicate_reading` and the
    `parse is None` disjunct together, with their tests and docs, in one commit
    so the tree never references a deleted symbol. **`impossible` is not then
