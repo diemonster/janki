@@ -3122,19 +3122,32 @@ on by default and `max_tokens` bounds **thinking plus response together** —
 chosen to stay under the SDK's non-streaming timeout ceiling, and truncation
 arrives as `stop_reason == "max_tokens"`, which is deliberately absent from
 `COMPLETE_STOP_REASONS` and therefore a hard failure. Raising effort raises
-thinking spend, so this budget must be revisited in the same change or reviews
-will start failing outright rather than degrading. The two paths differ:
+thinking spend, so the budget must rise in the same change or reviews will
+start failing outright rather than degrading.
 
-- *Batch* has no HTTP timeout, so it can simply carry a larger `max_tokens`.
-- *Synchronous* cannot: above roughly 16K the SDK refuses the non-streaming
-  call rather than risking a dropped connection. Either keep the synchronous
-  budget where it is and confirm by measurement that a single card's review
-  fits, or move that path to `messages.stream(...)` with `.get_final_message()`
-  — a different call shape, and a deliberate decision rather than a side
-  effect.
+**Move the synchronous path to streaming, and do it for the invariant rather
+than for the timeout.** Batch has no HTTP timeout and can carry any budget;
+above roughly 16K the SDK refuses a *non-streaming* call outright rather than
+risk a dropped idle connection. So keeping `.create()` would force the
+synchronous budget to stay at 16000 while batch rose — and `_request_body`'s
+docstring is explicit that the two must not diverge, because the whole promise
+of `--batch-submit` is the same request at half price. Streaming is the only
+option where both paths carry one identical, larger `max_tokens`. Use
+`messages.stream(...)` with `.get_final_message()`: the request body is
+unchanged, so the shared-body guarantee holds, and `_result_of` still receives
+an ordinary message with `stop_reason`, `content` and `usage`.
 
-Measure before choosing: run one card at `xhigh` and read `usage`. Do not raise
-the synchronous budget past the streaming threshold without switching shape.
+What that costs, in full: `FakeMessages` and `BrokenMessages` in
+`tests/test_claude_client.py` need a `stream()` returning a context manager
+whose `get_final_message()` returns what `create()` returns today — the three
+`Client` fakes in `tests/test_enrich_batch.py` are batch-path and untouched.
+A mid-stream disconnect is not retried as transparently as a failed initial
+connection, which the existing `APIError` boundary already converts to
+`ClaudeRequestError`. Structured outputs are compatible with streaming, and
+pricing is unchanged.
+
+Size the budget with one measured card at `xhigh` — read `usage` rather than
+guessing — and give it real headroom above what that card used.
 
 **Retire the sentence oracle, keep the offline checks.** Delete
 `verify_example_furigana`'s comparison against jpdb's rendering, together with
@@ -3229,7 +3242,8 @@ Use these slices, each a finding plus a reproducing case plus a fix:
 1. Lift the offline base check.
 2. The review completeness gate — it removes no gate, needs no owner risk
    decision, and pays for itself immediately, so land it first among the rest.
-3. Effort and the `max_tokens` measurement.
+3. Effort, the move to streaming, and one identical raised `max_tokens` on
+   both paths — sized from a measured card, not guessed.
 4. The enrichment provider switch.
 5. Retire the oracle; update `docs/HARDENING.md`; full replay and `make gates`.
 6. Add per-example segmentation to the AI schema and prompt — dictionary forms,
