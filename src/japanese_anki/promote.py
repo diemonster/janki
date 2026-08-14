@@ -37,8 +37,8 @@ from typing import Any
 
 from japanese_anki import enrich, extract, hardening, jpdb
 from japanese_anki.errors import JankiError
-from japanese_anki.identifiers import contains_kanji, short_fingerprint, stable_record_id
-from japanese_anki.models import VocabularyRecord
+from japanese_anki.identifiers import contains_kanji, stable_record_id
+from japanese_anki.models import VocabularyRecord, set_example_flags
 from japanese_anki.staging import (
     EXAMPLE_AUTHORITY_KEY,
     EXAMPLE_AUTHORITY_STAGING,
@@ -388,19 +388,13 @@ def _accept_examples(record: VocabularyRecord) -> VocabularyRecord:
         # to bind. An unrecognised value covers no real fingerprint, so it can
         # bless nothing by accident.
         return record
-    raw_fields = dict(record.source.raw_fields)
-    fingerprints = [
-        short_fingerprint(example.japanese)
-        for example in record.examples
-        if example.japanese
-    ]
-    if fingerprints:
-        raw_fields[EXAMPLE_AUTHORITY_KEY] = ",".join(dict.fromkeys(fingerprints))
-    else:
-        # A sentinel with no sentences accepts nothing; leaving it behind
-        # would be a standing claim waiting for text nobody reviewed.
-        raw_fields.pop(EXAMPLE_AUTHORITY_KEY, None)
-    return replace(record, source=replace(record.source, raw_fields=raw_fields))
+    # Replace-semantics on purpose: the binding states the complete accepted
+    # set, and a sentinel with no sentences accepts nothing at all.
+    return set_example_flags(
+        record,
+        EXAMPLE_AUTHORITY_KEY,
+        [example.japanese for example in record.examples if example.japanese],
+    )
 
 
 def _structural_hold(record: VocabularyRecord) -> str | None:

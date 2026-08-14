@@ -758,3 +758,76 @@ def test_a_provisional_mark_travels_with_the_field_it_binds() -> None:
     # meanings filled, so its mark travelled; part_of_speech kept the curated
     # value, so the incoming claim about it did not.
     assert provisional_fields(merged[0]) == ["meanings"]
+
+
+def test_an_acceptance_of_identical_text_survives_an_unchanged_merge() -> None:
+    # The documented remediation path: re-reviewing a legacy record whose
+    # staged sentence matches the store fills nothing — and a carry gated on
+    # "the field was written" silently un-accepted the reviewer's stamp while
+    # the merge reported "unchanged".
+    from japanese_anki.identifiers import short_fingerprint
+    from japanese_anki.models import example_accepted
+
+    sentence = "毎日日本語を話します。"
+    legacy = replace(
+        _curated(),
+        examples=[ExampleSentence(japanese=sentence)],
+        source=SourceReference(type="extract", imported_from="page.jpg"),
+    )
+    restamped = _imported(
+        examples=[ExampleSentence(japanese=sentence)],
+        source=SourceReference(
+            type="extract",
+            imported_from="page.jpg",
+            raw_fields={"example_authority": short_fingerprint(sentence)},
+        ),
+    )
+
+    merged, _ = merge_records([legacy], [restamped])
+
+    assert example_accepted(merged[0], merged[0].examples[0])
+
+
+def test_a_curated_fill_on_an_extract_record_mints_acceptance() -> None:
+    # The merged record keeps its first-seen extract origin, which demands a
+    # stamp nobody could type for a Shirabe row — but the incoming sentence is
+    # the user's own data, curated by arrival. The fill event is the
+    # provenance.
+    from japanese_anki.models import example_accepted
+
+    hole = replace(
+        _curated(),
+        examples=[],
+        source=SourceReference(type="extract", imported_from="page.jpg"),
+    )
+    shirabe = _imported(
+        examples=[ExampleSentence(japanese="毎日日本語を話します。")]
+    )
+
+    merged, _ = merge_records([hole], [shirabe])
+
+    assert merged[0].source.type == "extract"
+    assert example_accepted(merged[0], merged[0].examples[0])
+
+
+def test_a_curated_fill_clears_the_mark_its_value_replaced() -> None:
+    # The old mark bound the old value; surviving the overwrite would make it
+    # a standing false claim about text the model never wrote — and the next
+    # enrich would report a human edit that never happened.
+    from japanese_anki.models import mark_provisional, provisional_entries
+
+    marked = mark_provisional(
+        replace(
+            _curated(),
+            meanings=["a model gloss"],
+            part_of_speech="",
+            source=SourceReference(type="extract", imported_from="page.jpg"),
+        )
+    )
+    curated_fill = _imported(meanings=["a hand-written meaning"], part_of_speech="")
+
+    merged, _ = merge_records([marked], [curated_fill], ("meanings",))
+
+    assert merged[0].meanings == ["a hand-written meaning"]
+    assert provisional_entries(merged[0]) == []
+    assert "provisional_fields" not in merged[0].source.raw_fields

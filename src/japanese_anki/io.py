@@ -18,10 +18,13 @@ from typing import Any
 import yaml
 
 from japanese_anki.errors import JankiError
+from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.models import (
+    EXAMPLE_AUTHORITY_KEY,
     PROVISIONAL_FIELDS_KEY,
     ModelError,
     VocabularyRecord,
+    join_provisional_entries,
     provisional_entries,
 )
 
@@ -540,9 +543,10 @@ MERGEABLE_FIELDS: tuple[str, ...] = tuple(
 # not kept is a lie in the other direction. Every key here holds a
 # comma-joined fingerprint list, which is what lets the merge union them.
 # (``provisional_fields`` travels too, but per field name rather than as a
-# blob — see the marker carry in ``_merge_one``.)
+# blob, and ``example_authority`` travels unconditionally — a bound acceptance
+# matching no sentence blesses nothing, while dropping it un-accepts a
+# reviewer's stamp. See ``_carried_provisional`` and ``_carried_authority``.)
 CONTENT_ANNOTATIONS: dict[str, str] = {
-    "example_authority": "examples",
     "furigana_unverified": "examples",
     "learner_load_hold": "examples",
 }
@@ -669,30 +673,48 @@ def _carried_annotations(
 
 def _carried_provisional(
     old: VocabularyRecord, new: VocabularyRecord, filled: Sequence[str]
-) -> str:
-    """The provisional marker the merged record should carry, or empty.
+) -> str | None:
+    """The provisional marker the merged record should carry.
 
-    Per field name, not as a blob: a mark travels with the *value* it is bound
-    to. An incoming model claim that filled a hole stays provisional in the
-    merged record — dropping the mark here is what turned unreviewed model
-    glosses into permanently "curated" values the dictionary would never
-    revisit. A field the merge did not write keeps the existing side's entry
-    (or none), whatever the incoming row believed about its own copy.
+    ``None`` leaves the existing marker untouched; a string — possibly empty,
+    meaning *remove the key* — rewrites it. Per field name, not as a blob: a
+    mark travels with the *value* it is bound to. A filled field takes the
+    incoming side's mark, or none at all when the incoming value is unmarked
+    (curated) — the old mark bound the old value, and surviving the overwrite
+    would make it a standing false claim about text the model never wrote.
+    A field the merge did not write keeps the existing side's entry.
     """
+    old_entries = provisional_entries(old)
     incoming = [
         (name, fingerprint)
         for name, fingerprint in provisional_entries(new)
         if name in filled
     ]
-    if not incoming:
-        return ""
-    replaced = {name for name, _ in incoming}
-    kept = [
-        (name, fingerprint)
-        for name, fingerprint in provisional_entries(old)
-        if name not in replaced
+    touched = {name for name, _ in old_entries if name in filled}
+    touched |= {name for name, _ in incoming}
+    if not touched:
+        return None
+    kept = [(name, fp) for name, fp in old_entries if name not in filled]
+    return join_provisional_entries(kept + incoming)
+
+
+def _carried_authority(old: VocabularyRecord, new: VocabularyRecord) -> str:
+    """The acceptance fingerprints the merged record should carry, or empty.
+
+    United *unconditionally*, unlike the hold flags: a bound acceptance
+    fingerprint that matches no sentence on the record blesses nothing, so
+    carrying it cannot lie — while conditioning on "the examples field was
+    written" silently un-accepted a reviewer's stamp whenever the accepted
+    text already matched the store (re-reviewing a legacy record fills
+    nothing, and that is the documented remediation path).
+    """
+    items = [
+        item
+        for side in (old.source.raw_fields, new.source.raw_fields)
+        for item in side.get(EXAMPLE_AUTHORITY_KEY, "").split(",")
+        if item.strip()
     ]
-    return ",".join(f"{name}:{fingerprint}" for name, fingerprint in kept + incoming)
+    return ",".join(dict.fromkeys(items))
 
 
 def _merge_one(
@@ -725,15 +747,39 @@ def _merge_one(
 
     merged = replace(old, **changes) if changes else old
     annotations = _carried_annotations(old, new, filled)
-    if marker := _carried_provisional(old, new, filled):
+    if (marker := _carried_provisional(old, new, filled)) is not None:
         annotations[PROVISIONAL_FIELDS_KEY] = marker
-    if annotations:
-        merged = replace(
-            merged,
-            source=replace(
-                merged.source, raw_fields={**merged.source.raw_fields, **annotations}
-            ),
-        )
+    if authority := _carried_authority(old, new):
+        annotations[EXAMPLE_AUTHORITY_KEY] = authority
+    if "examples" in filled and new.source.type != "extract":
+        # An incoming curated source's examples that filled the hole are the
+        # user's own data — curated by arrival, HARDENING.md's words — but the
+        # merged record keeps its first-seen extract origin, which demands a
+        # stamp nobody could type. The fill event itself is the provenance, so
+        # it mints acceptance for exactly those sentences.
+        minted = [
+            item.strip()
+            for example in new.examples
+            if example.japanese
+            for item in (short_fingerprint(example.japanese),)
+        ]
+        combined = [
+            item
+            for item in annotations.get(EXAMPLE_AUTHORITY_KEY, "").split(",")
+            if item.strip()
+        ] + minted
+        annotations[EXAMPLE_AUTHORITY_KEY] = ",".join(dict.fromkeys(combined))
+    removals = {key for key, value in annotations.items() if not value}
+    if annotations or removals:
+        raw_fields = {
+            key: value
+            for key, value in {**merged.source.raw_fields, **annotations}.items()
+            if key not in removals
+        }
+        if raw_fields != merged.source.raw_fields:
+            merged = replace(
+                merged, source=replace(merged.source, raw_fields=raw_fields)
+            )
     if conflicts:
         label = "conflicting"
     elif filled:

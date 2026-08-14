@@ -129,7 +129,7 @@ class ExampleSentence:
 
         Completeness only — whether this example's text may be *pinned* for
         annotation is an authority question the sentence cannot answer about
-        itself; ``enrich.examples_curated`` reads that off the record.
+        itself; ``models.example_accepted`` reads that off the record.
         """
         return bool(self.japanese) and (
             not self.english
@@ -326,8 +326,7 @@ EXAMPLE_AUTHORITY_STAGING = "staging-review"
 
 def accepted_example_fingerprints(record: VocabularyRecord) -> set[str]:
     """The example content-fingerprints a reviewer's acceptance covers."""
-    raw = record.source.raw_fields.get(EXAMPLE_AUTHORITY_KEY, "")
-    return {item.strip() for item in raw.split(",") if item.strip()}
+    return example_flags(record, EXAMPLE_AUTHORITY_KEY)
 
 
 def example_accepted(record: VocabularyRecord, example: ExampleSentence) -> bool:
@@ -381,6 +380,28 @@ def add_example_flags(
     raw_fields[key] = ",".join(dict.fromkeys(existing + fingerprints))
     return replace(record, source=replace(record.source, raw_fields=raw_fields))
 
+
+def set_example_flags(
+    record: VocabularyRecord, key: str, sentences: Iterable[str]
+) -> VocabularyRecord:
+    """Replace ``key`` with exactly ``sentences``' fingerprints, or remove it.
+
+    The replace-semantics sibling of :func:`add_example_flags`, for writers
+    whose statement is "this is the complete covered set" — promotion binding
+    a reviewer's acceptance to the sentences they read. An empty set removes
+    the key: a flag list naming nothing is a standing claim waiting to be
+    misread.
+    """
+    fingerprints = [short_fingerprint(sentence) for sentence in sentences]
+    raw_fields = dict(record.source.raw_fields)
+    if fingerprints:
+        raw_fields[key] = ",".join(dict.fromkeys(fingerprints))
+    else:
+        raw_fields.pop(key, None)
+    if raw_fields == record.source.raw_fields:
+        return record
+    return replace(record, source=replace(record.source, raw_fields=raw_fields))
+
 #: Authority state for semantic fields a model filled during extraction. The
 #: marker is ``name:fingerprint`` pairs, comma-joined. The fingerprint binds
 #: the mark to the *value* the model wrote: a human who edits the field
@@ -408,15 +429,26 @@ def mark_provisional(record: VocabularyRecord) -> VocabularyRecord:
     field the model left empty gets no mark — emptiness is not a claim.
     """
     entries = [
-        f"{name}:{_provisional_fingerprint(getattr(record, name))}"
+        (name, _provisional_fingerprint(getattr(record, name)))
         for name in PROVISIONAL_SEMANTIC_FIELDS
         if getattr(record, name)
     ]
     if not entries:
         return record
     raw_fields = dict(record.source.raw_fields)
-    raw_fields[PROVISIONAL_FIELDS_KEY] = ",".join(entries)
+    raw_fields[PROVISIONAL_FIELDS_KEY] = join_provisional_entries(entries)
     return replace(record, source=replace(record.source, raw_fields=raw_fields))
+
+
+def join_provisional_entries(entries: Iterable[tuple[str, str]]) -> str:
+    """``(name, fingerprint)`` pairs in the marker's wire form.
+
+    The serialization counterpart of :func:`provisional_entries`, and the only
+    place the wire form is spelled — three writers (extraction's mark, the
+    clear, and ``io``'s merge carry) drifting on it would silently widen or
+    lose dictionary-overwrite authority.
+    """
+    return ",".join(f"{name}:{fingerprint}" for name, fingerprint in entries)
 
 
 def split_provisional(record: VocabularyRecord) -> tuple[list[str], list[str]]:
@@ -448,13 +480,13 @@ def clear_provisional(
     """Drop resolved or stale names from the marker, removing it when empty."""
     dropped = set(names)
     kept = [
-        f"{name}:{fingerprint}"
+        (name, fingerprint)
         for name, fingerprint in provisional_entries(record)
         if name not in dropped
     ]
     raw_fields = dict(record.source.raw_fields)
     if kept:
-        raw_fields[PROVISIONAL_FIELDS_KEY] = ",".join(kept)
+        raw_fields[PROVISIONAL_FIELDS_KEY] = join_provisional_entries(kept)
     else:
         raw_fields.pop(PROVISIONAL_FIELDS_KEY, None)
     if raw_fields == record.source.raw_fields:
