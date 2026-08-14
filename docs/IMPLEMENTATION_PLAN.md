@@ -2887,7 +2887,7 @@ approved the exact private fingerprint, the agent must use redistributable
 material or leave the task open. Regression cases for systemic findings are
 additional and may point at the same minimized evidence.
 
-### [ ] M7.6T Trust-boundary repair — source evidence versus study content
+### [x] M7.6T Trust-boundary repair — source evidence versus study content
 
 *Added 2026-08-13 after the camera pilot. This task blocks more M7.6B and M7.6C
 source runs. The camera extraction found the approved identities and source
@@ -2897,6 +2897,24 @@ that result showed a design defect: the late AI review had become the main
 teaching-content gate. Develop and verify this task with synthetic or offline
 fixtures. Do not send private source material or run a paid review while this
 task is in progress.*
+
+*Completed 2026-08-13, entirely on synthetic and offline fixtures; no private
+source bytes were sent and no paid review ran. Four findings opened with red
+non-gating reproductions (`extraction-source-example-promotion`,
+`enrichment-provisional-precedence`, `enrichment-reviewed-example-claim`,
+`example-teaching-suitability`), then fixed and flipped gating slice by
+slice: extraction keeps the excerpt as `raw_fields["example"]` evidence with
+`examples` empty; promotion stamps `example_authority` for reviewer-placed
+examples and enrichment pins only curated Japanese; extraction marks model
+semantics in a value-bound `provisional_fields` and dictionary reconciliation
+replaces or holds them with the change in the diff; `qc.example_content_holds`
+gives validate and audio one shared teaching-content judgment, the AI pass
+bounds learner load from canned-able parser data, and a shipping build reports
+local failures before the review store answers. `docs/HARDENING.md` gained the
+"Study-content trust boundaries" contract, including the legacy-record and
+pre-boundary staging-file migration posture. Full gating replay (32 cases) and
+`make gates` pass. M7.6B and M7.6C can resume; their next paid semantic review
+is the milestone measurement of this boundary.*
 
 Depends on: M7.4, M7.5, M7.6A
 Files: `src/japanese_anki/extract.py`, `src/japanese_anki/enrich.py`,

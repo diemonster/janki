@@ -149,6 +149,55 @@ promotion.
 The allowlist can grow only through a reviewed contract change with a concrete
 invariant and adversarial fixtures.
 
+## Study-content trust boundaries
+
+The camera pilot (M7.6T) forced three layers apart. Every learner-facing field
+now belongs to exactly one of them:
+
+- **Source evidence** records what the source shows: locator, verbatim context,
+  the excerpt, extraction confidence. It lives in `source.raw_fields`
+  (`context`, `example`, `page`, `confidence`, `inclusion_reason`) and can
+  prove an identity or give review context. It is never study content by
+  itself: extraction keeps the excerpt under `raw_fields["example"]` and
+  leaves canonical `examples` empty.
+- **Provisional facts** are model claims awaiting a named authority.
+  Extraction marks the semantic fields it filled in
+  `raw_fields["provisional_fields"]` as `name:fingerprint` pairs, value-bound
+  so a later human edit breaks the binding and reads as curated. Dictionary
+  enrichment replaces a provisional `meanings` or `part_of_speech` on an exact
+  identity match, shows the change in its diff, and clears the resolved mark;
+  a near match, absent entry, different reading, or missing reading holds the
+  claim with a named warning. A stale mark is cleared, never obeyed.
+- **Study content** passed its field-specific authority. An example on an
+  extract-sourced record is curated only when promotion stamped
+  `raw_fields["example_authority"]` — the durable trace of a reviewer writing
+  the sentence into `examples` during staging review. Non-extract sources
+  (imports, hand-written records) are the user's own data, curated by arrival.
+  Enrichment pins an example's exact Japanese only when it is curated;
+  otherwise it generates fresh pedagogic sentences and the machine copy is
+  replaced.
+
+Promotion, oracle acceptance, and a structurally valid record approve nothing
+semantic. The local gates enforce teaching suitability before anything paid or
+audible: `validate` errors on certain fragments and false register labels
+(`qc.example_content_holds` — certainties only, no grammar model), the AI pass
+bounds learner load from its jpdb parses and the collection's own expressions
+(`raw_fields["learner_load_hold"]`), the audio command refuses to voice a held
+or failing example, and a shipping build reports local validation failures on
+their own before the review store is consulted.
+
+The final AI review stays read-only and residual. It runs only after every
+local gate passes for a complete release candidate, sees the canonical record
+and a compact authority summary rather than the original PDF or image, cannot
+establish authority or mutate a record, and a second broad pass needs explicit
+repository-owner approval.
+
+Records promoted before these boundaries carry no authority keys and are
+treated as curated everywhere — they are not rewritten just because provenance
+now exists. A staging file written before the boundary may still hold
+machine-copied examples; re-extract such a file rather than promoting it, or
+the copies would be stamped as reviewer acceptances.
+
 ## Extraction coverage gate
 
 Table extraction writes a `coverage` block to its staging file. The block
