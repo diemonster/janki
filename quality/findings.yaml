@@ -312,3 +312,15 @@ findings:
     recurrences: []
     case_ids: [example-teaching-suitability]
     fix_ref: src/japanese_anki/qc.py#example_content_holds
+  - id: ai-furigana-rewrites-sentence
+    state: fixed
+    pipeline_stage: ai-enrichment
+    source_archetypes: [camera]
+    symptom: The check that an example's furigana spells its own sentence needs no dictionary, but sat inside verify_example_furigana behind two short-circuits, so a run with no jpdb client and a card with an already-impossible reading both skipped it and were told only that the card was unverified. The rewritten particle also reaches the regenerated romaji, which a learner reads precisely because they cannot yet read the kana.
+    invariant: A furigana field that spells something other than its own sentence is detected with no parse and no kanji store, reported by name with both strings, marked unverified, and blocked from sentence audio.
+    evidence:
+      - fingerprint: 5d15943217690704a40cbab0808af1908c7fe23e2b02765fb533ed7e2e6364b2
+        locator: quality/cases/ai-furigana-rewrites-sentence/input.json
+    recurrences: []
+    case_ids: [ai-furigana-rewrites-sentence]
+    fix_ref: src/japanese_anki/qc.py#furigana_rewrites_sentence

@@ -48,6 +48,7 @@ __all__ = [
     "furigana_base",
     "furigana_pairs",
     "furigana_reading",
+    "furigana_rewrites_sentence",
     "impossible_character_furigana",
     "parse_pairs",
     "regenerate_example_romaji",
@@ -750,6 +751,40 @@ def _comparable(reading: str) -> str:
     )
 
 
+def furigana_rewrites_sentence(example: ExampleSentence) -> str:
+    """What the furigana field spells, when that is not the sentence.
+
+    This compares an example against *itself*, so it needs no dictionary — and
+    that is exactly why it lives here rather than inside
+    :func:`verify_example_furigana`, which cannot run without a parse. Behind
+    that call it was unreachable twice over: a collection enriched with no jpdb
+    client never reached it, and neither did a card that already had an
+    impossible character reading, because both conditions short-circuit ahead
+    of it. An offline check gated behind a network call is a check that is
+    absent whenever the network is.
+
+    The failure it catches is a model rewriting the sentence inside the field
+    that drives audio: ``本[ほん]が 読[よ]む`` for 本を読む passes every check on
+    the bracketed groups, and then sentence audio speaks a particle the card
+    never shows.
+
+    Normalized on both sides, like the containment check: janki composes the
+    furigana it renders while an example's text is only stripped, so a
+    decomposed dakuten would otherwise reject correct furigana with a message
+    showing two strings that render identically.
+
+    Empty when they agree, and empty when either side is — an all-kana sentence
+    carries no furigana field and has nothing to disagree with.
+    """
+    base = normalize_identity_part(furigana_base(example.furigana))
+    sentence = normalize_identity_part(
+        example.japanese.replace(" ", "").replace("　", "")
+    )
+    if not base or not sentence or base == sentence:
+        return ""
+    return f"the furigana spells {base}, but the sentence is {sentence}"
+
+
 def verify_example_furigana(
     example: ExampleSentence, parse: jpdb.ParseResult
 ) -> FuriganaVerdict:
@@ -823,18 +858,11 @@ def verify_example_furigana(
     # `本[ほん]が 読[よ]む` verifies against the sentence 本を読む — the model
     # rewrote a particle inside the furigana field, and the field that drives
     # sentence audio passes the check built to catch model invention.
-    # Normalized on both sides, like the containment check: the furigana janki
-    # renders is composed while an example's text is only stripped, so a
-    # decomposed dakuten would reject correct furigana — with a message showing
-    # two strings that render identically, which is undiagnosable.
-    base = normalize_identity_part(furigana_base(example.furigana))
-    sentence = normalize_identity_part(
-        example.japanese.replace(" ", "").replace("\u3000", "")
-    )
-    if base and sentence and base != sentence:
-        differences.append(
-            f"the furigana spells {base}, but the sentence is {sentence}"
-        )
+    # :func:`furigana_rewrites_sentence` needs no parse, so the AI pass runs it
+    # directly too; calling it here keeps the verdict reporting the same
+    # failure, so a re-check still sees it.
+    if rewritten := furigana_rewrites_sentence(example):
+        differences.append(rewritten)
 
     if expected_reading == found_reading and not differences:
         return FuriganaVerdict(True, expected, example.furigana)

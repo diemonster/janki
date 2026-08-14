@@ -1136,6 +1136,12 @@ class AiOutcome:
     impossible_furigana: list[
         tuple[str, str, tuple[tuple[str, str], ...]]
     ] = field(default_factory=list)
+    #: Sentences whose furigana field spells something other than the sentence
+    #: (M7.6V). Its own channel rather than a bare flag for the same reason
+    #: ``impossible_furigana`` has one: "unverified" does not tell a reviewer
+    #: which field to look at, and this one is decidable offline, so it is the
+    #: one failure that can always be named exactly.
+    rewritten_furigana: list[tuple[str, str, str]] = field(default_factory=list)
 
 
 def _parsed_entries(parse: Any) -> list[Mapping[str, Any]]:
@@ -1354,9 +1360,18 @@ def apply_ai_result(
             outcome.impossible_furigana.append(
                 (example.japanese, example.furigana, impossible)
             )
+        # Offline, so it runs whether or not a parse arrived and whether or not
+        # the reading was already impossible — both of those short-circuit the
+        # verdict below, and this failure is decidable without either.
+        rewritten = qc.furigana_rewrites_sentence(example)
+        if rewritten:
+            outcome.rewritten_furigana.append(
+                (example.japanese, example.furigana, rewritten)
+            )
         parse = (parses or {}).get(example.japanese)
         if (
             impossible
+            or rewritten
             or parse is None
             or not qc.verify_example_furigana(example, parse)
         ):
@@ -1406,11 +1421,17 @@ def apply_ai_result(
             for item in outcome.impossible_furigana
             if (item[0], item[1]) in landed
         ]
+        outcome.rewritten_furigana = [
+            item
+            for item in outcome.rewritten_furigana
+            if (item[0], item[1]) in landed
+        ]
         outcome.unverified = list(
             dict.fromkeys(
                 [
                     *landed_unverified,
                     *(item[0] for item in outcome.impossible_furigana),
+                    *(item[0] for item in outcome.rewritten_furigana),
                 ]
             )
         )
@@ -1463,6 +1484,7 @@ def apply_ai_result(
         outcome.unverified = []
         outcome.load_held = []
         outcome.impossible_furigana = []
+        outcome.rewritten_furigana = []
     outcome.record = updated
     outcome.changes = changes
     return outcome
@@ -1933,6 +1955,19 @@ def absorb_ai_call(
             f"{record.id}: generated furigana group(s) need review: "
             f"{', '.join(groups)}. The examples were kept and marked "
             "unverified; sentence audio remains blocked."
+        )
+    if outcome.rewritten_furigana:
+        # Named separately from the unverified count because this one is
+        # decidable offline and therefore always exactly diagnosable: the
+        # message says which two strings disagree, which is the difference
+        # between "check this card" and "check this field".
+        result.warnings.append(
+            f"{record.id}: the furigana field does not spell its own sentence — "
+            + "; ".join(
+                message for _sentence, _furigana, message in outcome.rewritten_furigana
+            )
+            + ". The example(s) were kept and marked unverified; sentence audio "
+            "remains blocked."
         )
     if outcome.changes:
         result.records[positions[record.id]] = outcome.record

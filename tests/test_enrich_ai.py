@@ -1496,3 +1496,58 @@ def test_the_preserve_warning_actually_fires() -> None:
     assert any(
         "carry no reviewer acceptance" in warning for warning in result.warnings
     )
+
+
+def test_a_furigana_field_that_rewrites_the_sentence_is_named_with_no_parse() -> None:
+    # The failure this catches is a model rewriting the sentence inside the
+    # field that drives audio: the groups all read correctly, and the particle
+    # is wrong. It is decidable without a dictionary, so it must be reported
+    # even when no parse arrived — the case that used to short-circuit ahead of
+    # it, leaving "unverified" as the only thing anyone was told.
+    outcome = apply_ai_result(
+        record(),
+        answer(generated("話を話します。", furigana="話[はなし]が 話[はな]します。")),
+        parses={},
+    )
+
+    assert outcome.rewritten_furigana == [
+        (
+            "話を話します。",
+            "話[はなし]が 話[はな]します。",
+            "the furigana spells 話が話します。, but the sentence is 話を話します。",
+        )
+    ]
+    assert outcome.unverified == ["話を話します。"]
+
+
+def test_a_rewritten_sentence_is_named_even_when_the_reading_is_impossible() -> None:
+    # `impossible` short-circuits the verdict too, so a card carrying both
+    # failures used to be told about only one of them.
+    store = KanjiStore(
+        entries={
+            "話": KanjiInfo(
+                character="話",
+                readings=(Reading(kind="kun", reading="はなし"),),
+            )
+        }
+    )
+
+    outcome = apply_ai_result(
+        record(),
+        answer(generated("話を話します。", furigana="話[はなし]が 話[ざぶとん]します。")),
+        kanji_store=store,
+        parses={},
+    )
+
+    assert [item[2] for item in outcome.impossible_furigana] == [(("話", "ざぶとん"),)]
+    assert [item[2] for item in outcome.rewritten_furigana] == [
+        "the furigana spells 話が話します。, but the sentence is 話を話します。"
+    ]
+
+
+def test_a_furigana_field_that_matches_its_sentence_is_not_named() -> None:
+    outcome = apply_ai_result(
+        record(), answer(generated("話します。", furigana="話[はな]します。")), parses={}
+    )
+
+    assert outcome.rewritten_furigana == []

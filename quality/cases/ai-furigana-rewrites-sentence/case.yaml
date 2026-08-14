@@ -1,0 +1,17 @@
+version: 1
+id: ai-furigana-rewrites-sentence
+purpose: regression
+gating: true
+runner: ai-enrichment
+pipeline_boundary: ai-enrichment
+source_archetype: camera
+redistributable: true
+fixture_basis: agent-created-synthetic
+fixtures:
+  - path: input.json
+    fingerprint: 5d15943217690704a40cbab0808af1908c7fe23e2b02765fb533ed7e2e6364b2
+  - path: oracle.json
+    fingerprint: 8cd6178aa1f9d2db35249995e89f3bedcc0e2df4c2116e76ea54cd15a128b06c
+runner_input: input.json
+oracle: oracle.json
+finding_id: ai-furigana-rewrites-sentence
