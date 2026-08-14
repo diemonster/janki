@@ -18,7 +18,12 @@ from typing import Any
 import yaml
 
 from japanese_anki.errors import JankiError
-from japanese_anki.models import ModelError, VocabularyRecord
+from japanese_anki.models import (
+    PROVISIONAL_FIELDS_KEY,
+    ModelError,
+    VocabularyRecord,
+    provisional_entries,
+)
 
 
 class DataError(JankiError):
@@ -527,12 +532,19 @@ MERGEABLE_FIELDS: tuple[str, ...] = tuple(
 # record's origin, mapped to the field they describe. ``source`` otherwise
 # belongs to whoever saw the record first, which is right for provenance and
 # wrong for these: ``furigana_unverified`` says "nobody checked the segmentation
-# of these examples", so if the examples travel and the key does not, the store
-# ends up holding unchecked sentences with nothing saying so — and M5.3 reads
-# exactly that key before it generates audio. Carried only when the merge
-# actually wrote the field, because a flag describing examples that were not
-# kept is a lie in the other direction.
-CONTENT_ANNOTATIONS: dict[str, str] = {"furigana_unverified": "examples"}
+# of these examples" and ``learner_load_hold`` says "audio must not voice
+# these", so if the examples travel and the key does not, the store ends up
+# holding unchecked — or held — sentences with nothing saying so, and M5.3
+# reads exactly these keys before it generates audio. Carried only when the
+# merge actually wrote the field, because a flag describing examples that were
+# not kept is a lie in the other direction. Every key here holds a
+# comma-joined fingerprint list, which is what lets the merge union them.
+# (``provisional_fields`` travels too, but per field name rather than as a
+# blob — see the marker carry in ``_merge_one``.)
+CONTENT_ANNOTATIONS: dict[str, str] = {
+    "furigana_unverified": "examples",
+    "learner_load_hold": "examples",
+}
 
 _EMPTY_CONTAINERS = (str, bytes, list, tuple, set, frozenset, dict)
 
@@ -654,6 +666,34 @@ def _carried_annotations(
     return carried
 
 
+def _carried_provisional(
+    old: VocabularyRecord, new: VocabularyRecord, filled: Sequence[str]
+) -> str:
+    """The provisional marker the merged record should carry, or empty.
+
+    Per field name, not as a blob: a mark travels with the *value* it is bound
+    to. An incoming model claim that filled a hole stays provisional in the
+    merged record — dropping the mark here is what turned unreviewed model
+    glosses into permanently "curated" values the dictionary would never
+    revisit. A field the merge did not write keeps the existing side's entry
+    (or none), whatever the incoming row believed about its own copy.
+    """
+    incoming = [
+        (name, fingerprint)
+        for name, fingerprint in provisional_entries(new)
+        if name in filled
+    ]
+    if not incoming:
+        return ""
+    replaced = {name for name, _ in incoming}
+    kept = [
+        (name, fingerprint)
+        for name, fingerprint in provisional_entries(old)
+        if name not in replaced
+    ]
+    return ",".join(f"{name}:{fingerprint}" for name, fingerprint in kept + incoming)
+
+
 def _merge_one(
     old: VocabularyRecord, new: VocabularyRecord, prefer_incoming: frozenset[str]
 ) -> tuple[VocabularyRecord, MergeOutcome]:
@@ -684,6 +724,8 @@ def _merge_one(
 
     merged = replace(old, **changes) if changes else old
     annotations = _carried_annotations(old, new, filled)
+    if marker := _carried_provisional(old, new, filled):
+        annotations[PROVISIONAL_FIELDS_KEY] = marker
     if annotations:
         merged = replace(
             merged,

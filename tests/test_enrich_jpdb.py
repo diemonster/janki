@@ -314,6 +314,40 @@ def test_a_silent_dictionary_leaves_the_mark_and_says_so() -> None:
     )
 
 
+def test_mark_clears_are_reported_for_persistence() -> None:
+    # A cleared mark that only lives in memory comes back to make the same
+    # network calls and print the same warning on every future run — the
+    # caller's save gate reads `changes`, so clears need their own channel.
+    edited = replace(provisional_record(), meanings=["to chat (hand-checked)"])
+    api = FakeApi(
+        unforced={"話す": parse_response((HANASU_FURIGANA, HANASU))},
+        senses=hanasu_senses(),
+    )
+
+    result = enrich_records(client_for(api), [edited])
+
+    assert result.cleared["word:話す:はなす"] == ["meanings"]
+
+
+def test_a_confirming_dictionary_also_reports_its_clear() -> None:
+    # The dictionary agreeing with the model claim settles the authority
+    # question with no visible field change; the clear still has to reach disk.
+    confirmed = provisional_record(
+        part_of_speech="verb",
+        meanings=["to talk, to speak", "to tell"],
+    )
+    api = FakeApi(
+        unforced={"話す": parse_response((HANASU_FURIGANA, HANASU))},
+        senses=hanasu_senses(),
+    )
+
+    result = enrich_records(client_for(api), [confirmed])
+
+    assert sorted(result.cleared["word:話す:はなす"]) == ["meanings", "part_of_speech"]
+    [updated] = result.records
+    assert PROVISIONAL_FIELDS_KEY not in updated.source.raw_fields
+
+
 def test_a_record_without_a_reading_holds_reconciliation() -> None:
     # Empty fields still fill from the lemma parse, as they always have, but a
     # provisional claim is never settled against an unconfirmed identity.
@@ -739,6 +773,42 @@ def test_enrich_jpdb_writes_nothing_when_there_is_nothing_to_fill(
 
     assert "Nothing to fill" in capsys.readouterr().out
     assert (root / "vocabulary.json").read_text(encoding="utf-8") == before
+
+
+def test_a_marks_only_run_still_saves_the_records(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Nothing to fill, but a stale mark to clear: the run must persist the
+    # clear or it repeats the same warning — and the same lookups — forever.
+    marked = mark_provisional(
+        record(
+            source=SourceReference(type="extract", imported_from="page.jpg"),
+            meanings=["a model gloss"],
+            part_of_speech="verb",
+            furigana="話[はな]す",
+            romaji="hanasu",
+            verb_group="godan",
+            conjugations={"plain": "話す"},
+            pitch_accent=["LHLL"],
+            frequency_rank=200,
+        )
+    )
+    # Both bound fields edited, so both marks are stale, nothing is left to
+    # reconcile, and the run never reaches the network.
+    edited = replace(
+        marked,
+        meanings=["to speak (hand-checked)"],
+        part_of_speech="verb (hand-checked)",
+    )
+    root = project(tmp_path, [edited])
+    patch_api(monkeypatch, FakeApi({}))
+
+    assert cli.main(["--root", str(root), "enrich", "--jpdb", "--yes"]) == 0
+
+    out = capsys.readouterr().out
+    assert "provisional-mark update(s)" in out
+    raw_fields = stored(root)["word:話す:はなす"]["source"]["raw_fields"]
+    assert "provisional_fields" not in raw_fields
 
 
 def test_a_declined_confirmation_writes_nothing(

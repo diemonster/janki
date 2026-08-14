@@ -53,8 +53,7 @@ from japanese_anki.staging import (
     annotate,
     annotations,
     clear_provisional,
-    provisional_fields,
-    stale_provisional_fields,
+    split_provisional,
 )
 
 __all__ = [
@@ -181,6 +180,12 @@ class EnrichResult:
 
     records: list[VocabularyRecord] = field(default_factory=list)
     changes: dict[str, dict[str, tuple[Any, Any]]] = field(default_factory=dict)
+    #: ``record id -> [field]`` whose provisional mark was cleared without a
+    #: value change (a stale binding, or dictionary confirmation). A separate
+    #: channel from ``changes`` because the caller's save gate reads ``changes``
+    #: — and a cleared mark that is never persisted comes back to make the same
+    #: network calls and print the same warning on every future run.
+    cleared: dict[str, list[str]] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     skipped: int = 0
     looked_up: int = 0
@@ -503,12 +508,16 @@ def enrich_records(
 
     for record_id in targets:
         record = result.records[by_id[record_id]]
-        # A marker whose value binding broke is a human edit made after
-        # extraction. The mark is now a lie that would authorize overwriting
-        # that edit, so it is cleared before anything reads it.
-        if stale := stale_provisional_fields(record):
+        # One marker parse for both halves. A marker whose value binding broke
+        # is a human edit made after extraction: the mark is now a lie that
+        # would authorize overwriting that edit, so it is cleared before
+        # anything reads it — and recorded in ``cleared`` so the caller
+        # persists the clear rather than repeating it forever.
+        active, stale = split_provisional(record)
+        if stale:
             record = clear_provisional(record, stale)
             result.records[by_id[record_id]] = record
+            result.cleared.setdefault(record_id, []).extend(stale)
             result.warnings.append(
                 f"{record_id}: {', '.join(stale)} edited since extraction; the "
                 "provisional mark was cleared and the field is kept as curated"
@@ -519,7 +528,7 @@ def enrich_records(
         # so the claim is held rather than reconciled against a guess.
         reconcile = [
             name
-            for name in provisional_fields(record)
+            for name in active
             if name not in force_fields and not is_empty(getattr(record, name))
         ]
         if reconcile and not record.reading:
@@ -630,6 +639,7 @@ def enrich_records(
         if resolved:
             updated = clear_provisional(updated, resolved)
             if confirmed := [name for name in resolved if name not in changes]:
+                result.cleared.setdefault(record_id, []).extend(confirmed)
                 result.warnings.append(
                     f"{record_id}: dictionary evidence confirmed provisional "
                     f"{', '.join(confirmed)}; the mark was cleared with no change"
@@ -641,7 +651,9 @@ def enrich_records(
             )
         if changes:
             result.changes[record_id] = changes
-        if updated != result.records[by_id[record_id]]:
+        # Identity, not equality: every no-op path above returns the very
+        # object `record` names, and every mutating path built a fresh one.
+        if updated is not record:
             result.records[by_id[record_id]] = updated
     return result
 
@@ -2348,6 +2360,12 @@ def apply_batch_results(
     candidates = {str(item) for item in only}
     recent: list[str] = []
     seen: set[str] = set()
+    # The same learner's collection the synchronous pass uses for the
+    # learner-load bound — the batch saves on how the request was sent, never
+    # on what is done with the reply.
+    known = frozenset(
+        record.expression for record in outcome.result.records if record.expression
+    )
 
     for entry in entries:
         record_id = keys.get(entry.custom_id)
@@ -2402,6 +2420,7 @@ def apply_batch_results(
             force_fields=force_fields,
             jpdb_client=jpdb_client,
             kanji_store=kanji_store,
+            known_expressions=known,
         )
 
     for record_id in pending_ids:

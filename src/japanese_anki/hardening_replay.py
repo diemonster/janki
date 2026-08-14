@@ -834,6 +834,7 @@ def _ai_enrichment(data: dict[str, Any], root: Path) -> Any:
             "sentence_responses",
             "kanji",
             "force_fields",
+            "known_expressions",
             "observe",
         },
         "ai-enrichment",
@@ -884,10 +885,15 @@ def _ai_enrichment(data: dict[str, Any], root: Path) -> Any:
         force_fields=tuple(_string_list(data.get("force_fields", []), "force_fields")),
         jpdb_client=client,
         kanji_store=store,
+        known_expressions=(
+            frozenset(_string_list(data["known_expressions"], "known_expressions"))
+            if "known_expressions" in data
+            else None
+        ),
     )
     if transport is not None:
         transport.finish()
-    return {
+    output = {
         "records": _observed_records(result.records, data.get("observe", [])),
         "changes": {
             record_id: sorted(fields) for record_id, fields in sorted(result.changes.items())
@@ -898,6 +904,11 @@ def _ai_enrichment(data: dict[str, Any], root: Path) -> Any:
         "unverified_ids": sorted(result.unverified),
         "warning_count": len(result.warnings),
     }
+    if "known_expressions" in data:
+        # Only when the input opted into the learner-load bound, so the oracles
+        # of cases written before the key existed keep their exact shape.
+        output["load_held_ids"] = sorted(result.load_held)
+    return output
 
 
 def _ai_enrichment_prompt(data: dict[str, Any], root: Path) -> Any:

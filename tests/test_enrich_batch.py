@@ -1500,6 +1500,39 @@ def test_a_terminal_row_keeps_its_reason_even_when_its_record_is_gone() -> None:
     assert not outcome.invalid
 
 
+def test_the_batch_path_applies_the_learner_load_bound_too(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The bound is one judgment, not a synchronous-path feature: the batch
+    saves on how the request was sent, never on what is done with the reply,
+    so absorb must receive the same known-vocabulary set enrich_ai builds."""
+    seen: list[Any] = []
+    real = enrich.absorb_ai_call
+
+    def recording(*args: Any, **kwargs: Any) -> None:
+        seen.append(kwargs.get("known_expressions"))
+        real(*args, **kwargs)
+
+    monkeypatch.setattr(enrich, "absorb_ai_call", recording)
+    here = record(id="word:見る:みる", expression="見る")
+    other = record(id="word:聞く:きく", expression="聞く")
+    empty_answer = enrich.ai_schema()(examples=[], usage_notes="")
+    entries = [
+        claude_client.BatchEntry(
+            key(here.id),
+            "succeeded",
+            "",
+            claude_client.CallResult(empty_answer, "end_turn", None),
+        )
+    ]
+
+    enrich.apply_batch_results(
+        [here, other], entries, [here.id], model="m"
+    )
+
+    assert seen == [frozenset({"見る", "聞く"})]
+
+
 def test_an_unreadable_answer_for_a_record_still_here_is_held_not_dropped() -> None:
     """The other side of the presence branch. Green before the change too — it
     is here so that collapsing the two cases back together turns one of the

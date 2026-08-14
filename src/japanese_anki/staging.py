@@ -35,11 +35,9 @@ import yaml
 from ruamel.yaml import YAML, YAMLError
 
 from japanese_anki.errors import JankiError
-from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.io import (
     atomic_write_text,
     exclusive_path_lock,
-    is_empty,
     load_structured,
 )
 from japanese_anki.models import VocabularyRecord
@@ -80,126 +78,42 @@ HOLD_UNKNOWN_READING = "reading not in the dictionary"
 #: is committed, until a run can prove the id is free.
 HOLD_UNVERIFIABLE_ID = "cannot check this id against the whole collection"
 
-#: Field-level acceptance provenance for an extract-sourced record's examples,
-#: written into ``source.raw_fields`` by ``promote`` when a reviewer's staging
-#: edit put a sentence into ``examples``. It lives here for the same reason the
-#: holds do: ``promote`` writes it and ``enrich`` reads it, and without the
-#: shared constant the trust boundary would be a string convention two modules
-#: could drift apart on. Extraction itself never writes ``examples`` (the
-#: excerpt stays evidence in ``raw_fields``), so on an extract-type record this
-#: key is what separates "a person accepted this sentence as teaching content"
-#: from "a model copied it off the page".
-EXAMPLE_AUTHORITY_KEY = "example_authority"
-EXAMPLE_AUTHORITY_STAGING = "staging-review"
-
-#: Example content-fingerprints the AI pass held for learner load (M7.6T),
-#: comma-joined in ``source.raw_fields``. ``enrich`` writes it from parsed
-#: words, known-vocabulary and frequency data; the audio command refuses to
-#: voice a held sentence. Shared here for the usual no-drift reason.
-LEARNER_LOAD_HOLD_KEY = "learner_load_hold"
-
-#: Authority state for semantic fields a model filled during extraction. The
-#: marker is ``name:fingerprint`` pairs, comma-joined — ``extract`` writes it,
-#: ``enrich`` resolves it against dictionary evidence, and the shared constant
-#: and helpers live here for the same no-drift reason as the example authority
-#: key above. The fingerprint binds the mark to the *value* the model wrote:
-#: a human who edits the field afterwards breaks the binding, and a broken
-#: binding reads as "curated" — the mark must never authorize overwriting an
-#: edit a person made after extraction.
-PROVISIONAL_FIELDS_KEY = "provisional_fields"
-
-#: The only fields extraction may mark provisional. The reading is pointedly
-#: absent: it is half of the record ID, reviewed by a human at staging, and no
-#: dictionary evidence is allowed to rewrite it.
-PROVISIONAL_SEMANTIC_FIELDS: tuple[str, ...] = ("meanings", "part_of_speech")
-
-
-def _provisional_fingerprint(value: Any) -> str:
-    return short_fingerprint(json.dumps(value, ensure_ascii=False))
-
-
-def mark_provisional(record: VocabularyRecord) -> VocabularyRecord:
-    """Stamp the semantic fields a model filled as provisional claims.
-
-    Written at extraction time, because that is the moment the values are
-    known to be model output and nothing else: one step later they sit in a
-    staging file beside human edits and the distinction is unrecoverable. A
-    field the model left empty gets no mark — emptiness is not a claim.
-    """
-    entries = [
-        f"{name}:{_provisional_fingerprint(getattr(record, name))}"
-        for name in PROVISIONAL_SEMANTIC_FIELDS
-        if not is_empty(getattr(record, name))
-    ]
-    if not entries:
-        return record
-    raw_fields = dict(record.source.raw_fields)
-    raw_fields[PROVISIONAL_FIELDS_KEY] = ",".join(entries)
-    return replace(record, source=replace(record.source, raw_fields=raw_fields))
-
-
-def split_provisional(record: VocabularyRecord) -> tuple[list[str], list[str]]:
-    """The marker split into ``(active, stale)`` by its value binding.
-
-    One comparison site on purpose: active and stale are the two halves of a
-    single question — does the field still hold the value the mark was bound
-    to? — and answering it in two places would let the answers drift. A field
-    is *active* (still the model's claim) while the fingerprint matches;
-    an edit after extraction breaks the binding and makes the entry *stale* —
-    curated content wearing a mark that must now be cleared, never obeyed.
-    """
-    active: list[str] = []
-    stale: list[str] = []
-    for name, fingerprint in _provisional_entries(record):
-        matches = _provisional_fingerprint(getattr(record, name)) == fingerprint
-        (active if matches else stale).append(name)
-    return active, stale
-
-
-def provisional_fields(record: VocabularyRecord) -> list[str]:
-    """The fields whose current value is still the model's provisional claim."""
-    return split_provisional(record)[0]
-
-
-def stale_provisional_fields(record: VocabularyRecord) -> list[str]:
-    """Marker entries whose field was edited after extraction."""
-    return split_provisional(record)[1]
-
-
-def clear_provisional(
-    record: VocabularyRecord, names: Iterable[str]
-) -> VocabularyRecord:
-    """Drop resolved or stale names from the marker, removing it when empty."""
-    dropped = set(names)
-    kept = [
-        f"{name}:{fingerprint}"
-        for name, fingerprint in _provisional_entries(record)
-        if name not in dropped
-    ]
-    raw_fields = dict(record.source.raw_fields)
-    if kept:
-        raw_fields[PROVISIONAL_FIELDS_KEY] = ",".join(kept)
-    else:
-        raw_fields.pop(PROVISIONAL_FIELDS_KEY, None)
-    if raw_fields == record.source.raw_fields:
-        return record
-    return replace(record, source=replace(record.source, raw_fields=raw_fields))
-
-
-def _provisional_entries(record: VocabularyRecord) -> list[tuple[str, str]]:
-    """The marker parsed to ``(name, fingerprint)``, unknown names dropped.
-
-    Unknown or malformed entries are ignored rather than errors: the marker
-    rides in hand-editable YAML, and the failure mode to prevent is a stray
-    edit *widening* what a dictionary may overwrite.
-    """
-    raw = record.source.raw_fields.get(PROVISIONAL_FIELDS_KEY, "")
-    entries: list[tuple[str, str]] = []
-    for item in raw.split(","):
-        name, _, fingerprint = item.strip().partition(":")
-        if name in PROVISIONAL_SEMANTIC_FIELDS and fingerprint:
-            entries.append((name, fingerprint))
-    return entries
+# The M7.6T authority keys and marker machinery live in ``models`` (see the
+# "authority provenance" section there for why: ``io``'s merge sits below
+# this module and must carry the marks per field, and ``io`` cannot import
+# this module). Re-exported here — the redundant aliases are how a re-export
+# is spelled so the linter keeps it — because staging review is where humans
+# meet them, and every earlier importer of these names uses this module.
+from japanese_anki.models import (  # noqa: E402
+    EXAMPLE_AUTHORITY_KEY as EXAMPLE_AUTHORITY_KEY,
+)
+from japanese_anki.models import (  # noqa: E402
+    EXAMPLE_AUTHORITY_STAGING as EXAMPLE_AUTHORITY_STAGING,
+)
+from japanese_anki.models import (  # noqa: E402
+    LEARNER_LOAD_HOLD_KEY as LEARNER_LOAD_HOLD_KEY,
+)
+from japanese_anki.models import (  # noqa: E402
+    PROVISIONAL_FIELDS_KEY as PROVISIONAL_FIELDS_KEY,
+)
+from japanese_anki.models import (  # noqa: E402
+    PROVISIONAL_SEMANTIC_FIELDS as PROVISIONAL_SEMANTIC_FIELDS,
+)
+from japanese_anki.models import (  # noqa: E402
+    clear_provisional as clear_provisional,
+)
+from japanese_anki.models import (  # noqa: E402
+    mark_provisional as mark_provisional,
+)
+from japanese_anki.models import (  # noqa: E402
+    provisional_entries as provisional_entries,
+)
+from japanese_anki.models import (  # noqa: E402
+    provisional_fields as provisional_fields,
+)
+from japanese_anki.models import (  # noqa: E402
+    split_provisional as split_provisional,
+)
 
 #: The holds that are *not* about the reading — a deny-list, not an allow-list,
 #: and the direction matters. A staging file is hand-edited: a reviewer may type

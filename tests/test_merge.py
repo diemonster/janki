@@ -669,3 +669,69 @@ def test_a_merge_import_over_a_malformed_file_is_a_clean_error(
     assert err.startswith("error:")
     assert "vocabulary.json" in err
     assert "conjugations" in err
+
+
+# --- M7.6T authority keys travel with their fields ----------------------------
+
+
+def test_hold_flags_travel_with_the_examples_they_describe() -> None:
+    # furigana_unverified says "nobody checked these", learner_load_hold says
+    # "audio must not voice these". If the examples land and either key does
+    # not, the store holds sentences with nothing saying so.
+    bare = replace(_curated(), examples=[])
+    flagged = _imported(
+        examples=[ExampleSentence(japanese="毎日日本語を話します。")],
+        source=SourceReference(
+            type="extract",
+            imported_from="page.jpg",
+            raw_fields={
+                "furigana_unverified": "aaaa1111",
+                "learner_load_hold": "bbbb2222",
+            },
+        ),
+    )
+
+    merged, _ = merge_records([bare], [flagged])
+
+    assert merged[0].source.raw_fields["furigana_unverified"] == "aaaa1111"
+    assert merged[0].source.raw_fields["learner_load_hold"] == "bbbb2222"
+
+
+def test_hold_flags_do_not_travel_when_the_examples_do_not() -> None:
+    # A flag describing examples that were not kept is a lie in the other
+    # direction.
+    unfilled = _imported(
+        examples=[ExampleSentence(japanese="毎日日本語を話します。")],
+        source=SourceReference(
+            type="extract",
+            imported_from="page.jpg",
+            raw_fields={"learner_load_hold": "bbbb2222"},
+        ),
+    )
+
+    merged, _ = merge_records([_curated()], [unfilled])
+
+    assert "learner_load_hold" not in merged[0].source.raw_fields
+
+
+def test_a_provisional_mark_travels_with_the_field_it_binds() -> None:
+    # An incoming model claim that filled a hole must stay provisional in the
+    # merged record: dropping the mark here is what turned unreviewed model
+    # glosses into permanently "curated" values the dictionary never revisits.
+    from japanese_anki.models import mark_provisional, provisional_fields
+
+    hole = replace(_curated(), meanings=[], part_of_speech="noun (curated)")
+    claimed = mark_provisional(
+        _imported(
+            meanings=["a model gloss"],
+            part_of_speech="noun",
+            source=SourceReference(type="extract", imported_from="page.jpg"),
+        )
+    )
+
+    merged, _ = merge_records([hole], [claimed])
+
+    assert merged[0].meanings == ["a model gloss"]
+    # meanings filled, so its mark travelled; part_of_speech kept the curated
+    # value, so the incoming claim about it did not.
+    assert provisional_fields(merged[0]) == ["meanings"]

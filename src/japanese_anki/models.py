@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+import json
+from collections.abc import Iterable
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any
 
 from japanese_anki.errors import JankiError
-from japanese_anki.identifiers import contains_kanji, stable_record_id
+from japanese_anki.identifiers import contains_kanji, short_fingerprint, stable_record_id
 
 
 class ModelError(JankiError):
@@ -299,3 +301,121 @@ class VocabularyRecord:
             if example.register.strip().lower() == wanted:
                 return example
         return ExampleSentence()
+
+
+# --- authority provenance ----------------------------------------------------
+#
+# The M7.6T trust keys and their machinery live beside the record type rather
+# than in `staging` because every layer that moves records needs them without
+# a cycle: `staging` and `enrich` write and resolve the marks, `audio` reads
+# the holds, and `io`'s merge must carry them per *field* when an import fills
+# a hole — and `io` is below `staging` in the import graph. `staging`
+# re-exports these names, so its callers keep their import site.
+
+#: Field-level acceptance provenance for an extract-sourced record's examples.
+#: See ``promote._accept_examples`` for who writes it and what the value means.
+EXAMPLE_AUTHORITY_KEY = "example_authority"
+EXAMPLE_AUTHORITY_STAGING = "staging-review"
+
+#: Example content-fingerprints the AI pass held for learner load (M7.6T),
+#: comma-joined in ``source.raw_fields``. ``enrich`` writes it; the audio
+#: command refuses to voice a held sentence; ``io``'s merge carries it with
+#: the examples it describes.
+LEARNER_LOAD_HOLD_KEY = "learner_load_hold"
+
+#: Authority state for semantic fields a model filled during extraction. The
+#: marker is ``name:fingerprint`` pairs, comma-joined. The fingerprint binds
+#: the mark to the *value* the model wrote: a human who edits the field
+#: afterwards breaks the binding, and a broken binding reads as "curated" —
+#: the mark must never authorize overwriting an edit a person made after
+#: extraction.
+PROVISIONAL_FIELDS_KEY = "provisional_fields"
+
+#: The only fields extraction may mark provisional. The reading is pointedly
+#: absent: it is half of the record ID, reviewed by a human at staging, and no
+#: dictionary evidence is allowed to rewrite it.
+PROVISIONAL_SEMANTIC_FIELDS: tuple[str, ...] = ("meanings", "part_of_speech")
+
+
+def _provisional_fingerprint(value: Any) -> str:
+    return short_fingerprint(json.dumps(value, ensure_ascii=False))
+
+
+def mark_provisional(record: VocabularyRecord) -> VocabularyRecord:
+    """Stamp the semantic fields a model filled as provisional claims.
+
+    Written at extraction time, because that is the moment the values are
+    known to be model output and nothing else: one step later they sit in a
+    staging file beside human edits and the distinction is unrecoverable. A
+    field the model left empty gets no mark — emptiness is not a claim.
+    """
+    entries = [
+        f"{name}:{_provisional_fingerprint(getattr(record, name))}"
+        for name in PROVISIONAL_SEMANTIC_FIELDS
+        if getattr(record, name)
+    ]
+    if not entries:
+        return record
+    raw_fields = dict(record.source.raw_fields)
+    raw_fields[PROVISIONAL_FIELDS_KEY] = ",".join(entries)
+    return replace(record, source=replace(record.source, raw_fields=raw_fields))
+
+
+def split_provisional(record: VocabularyRecord) -> tuple[list[str], list[str]]:
+    """The marker split into ``(active, stale)`` by its value binding.
+
+    One comparison site on purpose: active and stale are the two halves of a
+    single question — does the field still hold the value the mark was bound
+    to? — and answering it in two places would let the answers drift. A field
+    is *active* (still the model's claim) while the fingerprint matches;
+    an edit after extraction breaks the binding and makes the entry *stale* —
+    curated content wearing a mark that must now be cleared, never obeyed.
+    """
+    active: list[str] = []
+    stale: list[str] = []
+    for name, fingerprint in provisional_entries(record):
+        matches = _provisional_fingerprint(getattr(record, name)) == fingerprint
+        (active if matches else stale).append(name)
+    return active, stale
+
+
+def provisional_fields(record: VocabularyRecord) -> list[str]:
+    """The fields whose current value is still the model's provisional claim."""
+    return split_provisional(record)[0]
+
+
+def clear_provisional(
+    record: VocabularyRecord, names: Iterable[str]
+) -> VocabularyRecord:
+    """Drop resolved or stale names from the marker, removing it when empty."""
+    dropped = set(names)
+    kept = [
+        f"{name}:{fingerprint}"
+        for name, fingerprint in provisional_entries(record)
+        if name not in dropped
+    ]
+    raw_fields = dict(record.source.raw_fields)
+    if kept:
+        raw_fields[PROVISIONAL_FIELDS_KEY] = ",".join(kept)
+    else:
+        raw_fields.pop(PROVISIONAL_FIELDS_KEY, None)
+    if raw_fields == record.source.raw_fields:
+        return record
+    return replace(record, source=replace(record.source, raw_fields=raw_fields))
+
+
+def provisional_entries(record: VocabularyRecord) -> list[tuple[str, str]]:
+    """The marker parsed to ``(name, fingerprint)``, unknown names dropped.
+
+    Unknown or malformed entries are ignored rather than errors: the marker
+    rides in hand-editable YAML, and the failure mode to prevent is a stray
+    edit *widening* what a dictionary may overwrite. Public because ``io``'s
+    merge must carry a filled field's mark by name, not as an opaque blob.
+    """
+    raw = record.source.raw_fields.get(PROVISIONAL_FIELDS_KEY, "")
+    entries: list[tuple[str, str]] = []
+    for item in raw.split(","):
+        name, _, fingerprint = item.strip().partition(":")
+        if name in PROVISIONAL_SEMANTIC_FIELDS and fingerprint:
+            entries.append((name, fingerprint))
+    return entries

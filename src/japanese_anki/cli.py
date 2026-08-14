@@ -1358,7 +1358,7 @@ def command_enrich(args: argparse.Namespace) -> int:
 
     for warning in result.warnings:
         print(f"warning: {warning}", file=sys.stderr)
-    if not result.changes:
+    if not result.changes and not result.cleared:
         print(
             f"Nothing to fill: looked up {result.looked_up} record(s), skipped "
             f"{result.skipped} with no empty fields."
@@ -1367,13 +1367,27 @@ def command_enrich(args: argparse.Namespace) -> int:
 
     for line in enrich.format_field_diff(result.changes):
         print(line)
-    if not _confirm_enrich(len(result.changes), args.yes):
+    if result.changes and not _confirm_enrich(len(result.changes), args.yes):
         print("Aborted: nothing was written.", file=sys.stderr)
         return 1
+    if result.cleared:
+        # Bookkeeping, not content: the marks describe who vouches for a value,
+        # and both clear paths (a human edit broke the binding; the dictionary
+        # confirmed the claim) are already decided. Saving them is what stops
+        # the same warnings — and the same paid lookups — repeating forever.
+        marks = sum(len(names) for names in result.cleared.values())
+        print(
+            f"Recorded {marks} provisional-mark update(s) on "
+            f"{len(result.cleared)} record(s)."
+        )
 
     save_records_json(output_path, result.records, expected=output_revision)
     for record_id, changed in result.changes.items():
         book.record_enriched(record_id, kind="jpdb", model="jpdb", fields=changed)
+    if not result.changes:
+        # A marks-only save: the records were written, and there is no field
+        # change for the ledger to attribute to jpdb.
+        return 0
     ledger_error = _save_ledger(book)
 
     print(
