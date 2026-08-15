@@ -51,6 +51,12 @@ or second-guesses what came back.
 - Use deterministic note IDs and GUIDs so rebuilt decks update notes instead of duplicating them.
 - Surface source filename and row number in import errors.
 - Never silently discard an input row or unknown source column.
+- **Models for working on janki**: Claude Opus 5 across the board —
+  implementation at extra-high effort (`.claude/settings.json`), review and
+  planning at max (`.claude/agents/code-reviewer.md`, `.claude/agents/planner.md`).
+  No model aliases in settings: the id is written out, so a harness alias
+  change cannot silently swap the model. janki's own runtime calls follow the
+  same rule (`config.py` defaults, `claude_client.DEFAULT_EFFORT`).
 - Run `make gates` before considering work complete: it runs ruff, pytest,
   and a sample deck build. Run it rather than its parts. Bare `pytest` and
   bare `janki` resolve through the venv's editable install to the *primary*
