@@ -721,7 +721,8 @@ def _model_request(data: dict[str, Any], root: Path) -> Any:
     """Whether a model is sent ``output_config.effort``, and at what level.
 
     The body rather than the helper alone, so a change to either the allow-list
-    or the omission rule is caught. It does **not** exercise a call site: it
+    or the omission rule is caught — the latter only because presence is
+    recorded as a distinct value from a null one. It does **not** exercise a call site: it
     resolves effort here and hands the same model to ``_request_body``, so a
     call site that resolved effort from the configured model while ``--model``
     sent another would replay green. That half is pinned by tests, and this
@@ -735,15 +736,21 @@ def _model_request(data: dict[str, Any], root: Path) -> Any:
             model,
             [],
             "x",
-            enrich.ai_schema(),
+            _structured_schema(enrich.ai_schema, "model-request"),
             claude_client.DEFAULT_MAX_TOKENS,
             claude_client.effort_for(model),
         )
+        # `<absent>` rather than null: the rule is that the key is *omitted*
+        # for a model that rejects it, and a body carrying `effort: null`
+        # violates that while reading identically through `.get()`.
+        config = body["output_config"]
         observed.append(
             {
                 "model": model,
-                "effort": body["output_config"].get("effort"),
-                "thinking": body.get("thinking", {}).get("type"),
+                "effort": config.get("effort", "<absent>"),
+                "thinking": (
+                    body["thinking"]["type"] if "thinking" in body else "<absent>"
+                ),
             }
         )
     return {"requests": observed}
@@ -764,20 +771,27 @@ def _review_readiness(data: dict[str, Any], root: Path) -> Any:
     # Per card, not per id, on both sides: one record can ship as two cards, so
     # collapsing the output by id would report the clean copy as withheld and
     # hide exactly the behaviour this case exists to pin.
+    # Carrying the fingerprint, not the id alone: the input ships one id as two
+    # cards on purpose, so an output keyed only by id is identical whichever of
+    # the two is held — which is the assignment this case exists to pin.
     return {
         "held": sorted(
             (
-                {"id": record.id, "reason": held[review.card_fingerprint(record)]}
+                {
+                    "id": record.id,
+                    "card": review.card_fingerprint(record),
+                    "reason": held[review.card_fingerprint(record)],
+                }
                 for record in records
                 if review.card_fingerprint(record) in held
             ),
-            key=lambda item: (item["id"], item["reason"]),
+            key=lambda item: (item["id"], item["card"]),
         ),
-        "readable_ids": [
-            record.id
+        "readable": sorted(
+            {"id": record.id, "card": review.card_fingerprint(record)}
             for record in records
             if review.card_fingerprint(record) not in held
-        ],
+        ),
     }
 
 

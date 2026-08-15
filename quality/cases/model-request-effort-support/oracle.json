@@ -32,33 +32,33 @@
     },
     {
       "model": "claude-opus-4-6",
-      "effort": null,
+      "effort": "<absent>",
       "thinking": "adaptive"
     },
     {
       "model": "claude-opus-4-5",
-      "effort": null,
-      "thinking": null
+      "effort": "<absent>",
+      "thinking": "<absent>"
     },
     {
       "model": "claude-sonnet-4-6",
-      "effort": null,
+      "effort": "<absent>",
       "thinking": "adaptive"
     },
     {
       "model": "claude-sonnet-4-5",
-      "effort": null,
-      "thinking": null
+      "effort": "<absent>",
+      "thinking": "<absent>"
     },
     {
       "model": "claude-haiku-4-5-20251001",
-      "effort": null,
-      "thinking": null
+      "effort": "<absent>",
+      "thinking": "<absent>"
     },
     {
       "model": "a-model-this-list-has-never-heard-of",
-      "effort": null,
-      "thinking": null
+      "effort": "<absent>",
+      "thinking": "<absent>"
     }
   ]
 }

@@ -186,7 +186,9 @@ own collection is the newer side. Details and the measurements behind them:
 | `janki build [DECK]` | Build one deck, or `--all` |
 | `janki preview DECK` | A browser preview, no Anki needed |
 | `janki status` | Records, ledger, what is missing |
-| `janki refresh` | enrich → recheck → audio → review → build, in order |
+| `janki refresh` | enrich → recheck → audio → review → build, in order. The jpdb-backed
+stages need `JPDB_API_KEY`; without it they are skipped and the run exits
+non-zero rather than reporting a refresh that enriched nothing |
 
 Every command takes `--help`. `janki build` (and so `refresh --deck`) accepts a
 bare deck name as well as a path — `janki build verbs` finds

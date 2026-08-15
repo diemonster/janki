@@ -330,14 +330,17 @@ def test_refresh_skips_the_jpdb_stages_when_there_is_no_key(
     (root / "data" / "normalized").mkdir(parents=True, exist_ok=True)
     (root / "data" / "normalized" / "vocabulary.json").write_text("[]", encoding="utf-8")
 
-    cli.main(
+    code = cli.main(
         ["--root", str(root), "refresh", "--no-audio", "--no-review", "--no-build"]
     )
-    out = capsys.readouterr().out
+    err = capsys.readouterr().err
 
-    assert "— jpdb: skipped (no JPDB_API_KEY" in out
-    assert "— ai: skipped (no JPDB_API_KEY" in out
-    assert "— recheck: skipped (no JPDB_API_KEY" in out
+    # stderr, not stdout: this skip is not something the caller asked for.
+    assert "— jpdb: skipped (no JPDB_API_KEY" in err
+    assert "— ai: skipped (no JPDB_API_KEY" in err
+    assert "— recheck: skipped (no JPDB_API_KEY" in err
+    # And non-zero, so cron cannot read "nothing was enriched" as success.
+    assert code == 1
 
 
 def test_refresh_runs_the_recheck_when_a_key_exists(

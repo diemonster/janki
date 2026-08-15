@@ -343,7 +343,7 @@ findings:
     pipeline_stage: final-review
     source_archetypes: [camera, mixed-layout-pdf, native-pdf-table]
     symptom: The paid review read whatever _shipping_records returned, so a card with no example sentence or an unresolved local error was billed for at content that could not be judged or was about to change; measured over data/review.json, 181 reads covered 97 records and 71 of the 84 superseded reads carried no blocking finding.
-    invariant: A card carrying a local validation error, and a card with no example sentence, are each held back from the paid review; every other card stays readable in the same run. Readiness is decided per record, so a record shipping in two decks is not failed by the other's copy.
+    invariant: A card carrying a local validation error, and a card with no example sentence, are each held back from the paid review; every other card stays readable in the same run. Readiness is decided per card, so a record shipping in two decks is not failed by the other's copy. That the held cards are then withheld from the paid run is covered by tests rather than by this case, which reports readiness and does not select.
     evidence:
       - fingerprint: 2aa233a3943300eef9eb09650c7e7dc122f1e5628cac03f79051df7c23930924
         locator: quality/cases/review-holds-back-an-unreadable-card/input.json

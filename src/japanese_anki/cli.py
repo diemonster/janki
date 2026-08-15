@@ -3798,15 +3798,15 @@ def command_build(args: argparse.Namespace) -> int:
     return _finish_build(book, built)
 
 
-#: The refresh pipeline, in order. Each entry is the stage's own command line,
-#: parsed by the real parser rather than assembled as a Namespace — a stage
-#: that grows a flag then keeps its default here instead of raising
-#: AttributeError halfway through a run.
 #: Refresh stages that cannot run without a jpdb key, whatever the flags say.
 #: ``--ai`` builds a client to verify each sentence it writes, and
 #: ``--recheck-furigana`` re-parses the disputed ones.
 _JPDB_STAGES = frozenset({"jpdb", "ai", "recheck"})
 
+#: The refresh pipeline, in order. Each entry is the stage's own command line,
+#: parsed by the real parser rather than assembled as a Namespace — a stage
+#: that grows a flag then keeps its default here instead of raising
+#: AttributeError halfway through a run.
 _REFRESH_STAGES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("jpdb", "--no-jpdb", ("enrich", "--jpdb")),
     ("ai", "--no-ai", ("enrich", "--ai")),
@@ -3855,6 +3855,7 @@ def command_refresh(args: argparse.Namespace) -> int:
     requires_review = _load_config(args).require_review
 
     ran: list[str] = []
+    unasked: list[str] = []
     for name, flag, command in _REFRESH_STAGES:
         if getattr(args, f"no_{name}"):
             print(f"— {name}: skipped ({flag})")
@@ -3867,7 +3868,15 @@ def command_refresh(args: argparse.Namespace) -> int:
             # close, because `--ai` still flags examples through its own client
             # and `audio` refuses to voice a flagged one. With a key, both
             # stages run and `--no-jpdb` means only what it says.
-            print(f"— {name}: skipped (no JPDB_API_KEY; this stage needs one)")
+            # stderr, and remembered: this skip is not something the caller
+            # asked for. A run that silently omits the stages that fill
+            # readings and write sentences, and then reports success, tells
+            # cron the deck is current when nothing was enriched.
+            print(
+                f"— {name}: skipped (no JPDB_API_KEY; this stage needs one)",
+                file=sys.stderr,
+            )
+            unasked.append(name)
             continue
         if name == "review" and not requires_review:
             print(f"— {name}: skipped ([review] require = false)")
@@ -3893,6 +3902,16 @@ def command_refresh(args: argparse.Namespace) -> int:
         ran.append(name)
 
     print(f"refresh: {len(ran)} stage(s) completed: {', '.join(ran) or 'none'}")
+    if unasked:
+        # Non-zero for the same reason a failing stage is: the run did not do
+        # what it was asked, and the caller — often cron — has no other way to
+        # tell. A voluntary `--no-jpdb` skip still exits 0.
+        print(
+            f"refresh: {', '.join(unasked)} could not run without JPDB_API_KEY. "
+            "Export it, or pass the matching --no-* flag to skip on purpose.",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 

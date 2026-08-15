@@ -11,7 +11,7 @@ fixtures:
   - path: input.json
     fingerprint: 2aa233a3943300eef9eb09650c7e7dc122f1e5628cac03f79051df7c23930924
   - path: oracle.json
-    fingerprint: fd414ecf91dc91b0f7b31cadeb18c79d9e9d07cae88c3756a77b5734fa7a9e0b
+    fingerprint: 9962e16fd9834a0a38e1f062118b26ce2955d7973e58ccb82f23a0f2eeb42f60
 runner_input: input.json
 oracle: oracle.json
 finding_id: review-reads-an-unreadable-card

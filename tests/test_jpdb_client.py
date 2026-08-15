@@ -828,3 +828,12 @@ def test_a_word_tagged_both_transitive_and_intransitive_claims_neither(
     Taking the first match called it intransitive on a card whose own example is
     仕事をします — a guess about the word, dressed as a fact from the dictionary."""
     assert pos_to_transitivity(codes) == expected
+
+
+def test_api_key_in_env_reports_whitespace_as_absent() -> None:
+    """A key of spaces is not a key. Reporting it present runs the jpdb stages
+    and then raises "JPDB_API_KEY is not set" from inside them — which is the
+    crash the caller consulted this function to avoid."""
+    assert jpdb.api_key_in_env({"JPDB_API_KEY": "k"}) is True
+    assert jpdb.api_key_in_env({"JPDB_API_KEY": "   "}) is False
+    assert jpdb.api_key_in_env({}) is False

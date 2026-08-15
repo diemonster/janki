@@ -699,6 +699,7 @@ def test_refresh_reads_the_cards_between_voicing_and_building(
     """Last before the build, because it reads the *finished* card: the
     sentences `--ai` wrote and the readings `--jpdb` filled. Reviewing earlier
     would read a card that does not exist yet and pass it."""
+    monkeypatch.setenv("JPDB_API_KEY", "k")
     monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
     root = project(tmp_path, [record()])
     called: list[str] = []
