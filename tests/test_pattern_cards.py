@@ -1105,7 +1105,7 @@ def test_refresh_builds_one_named_drill_deck(tmp_path: Path, capsys) -> None:
 
     code = cli.main([
         "--root", str(tmp_path), "refresh", "--deck", "drill",
-        "--no-jpdb", "--no-ai", "--no-recheck", "--no-audio", "--no-review",
+        "--no-jpdb", "--no-ai", "--no-audio", "--no-review",
     ])
 
     assert code == 0, "the stage refresh always injects the flag for"

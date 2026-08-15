@@ -68,32 +68,41 @@ Sources are **KANJIDIC2** (CC BY-SA 4.0, EDRDG) via kanjiapi.dev and
 **KanjiVG** (CC BY-SA 3.0, Ulrich Apel). A personal deck is fine; a deck you
 share must credit both — the same footing as the VOICEVOX voice terms.
 
-## When jpdb and the sentence disagree
+## What flags a sentence, and what does not
 
-`enrich --ai` writes a sentence and jpdb checks its furigana — two independent
-sources, which is the point. But jpdb is not always right: its parse reads
-日本語 as **にっぽんご**, and the language is にほんご. A disagreement it wins
-leaves a correct sentence unvoiced forever, since `janki audio` will not speak
-a flagged example.
+`enrich --ai` writes a sentence and checks it *offline*, against the sentence
+itself and against KANJIDIC. Two things flag an example, and both are decidable
+without asking anything:
 
-So a disagreement is *adjudicated*. A model is shown both readings and
-asked which one a native speaker uses for that sentence — a much narrower
-question than "what is the reading", and one it never answers by proposing a
-third. `unsure` is an answer it is told to give, and it leaves the flag alone.
+- **an impossible character reading** — the furigana assigns a reading KANJIDIC
+  does not list for that character; and
+- **furigana that spells a different sentence** — `本[ほん]が 読[よ]む` for
+  本を読む, a particle rewritten inside the field that drives audio.
+
+A flagged example is kept, never discarded, and `janki audio` will not speak it
+until a person clears the flag:
 
 ```bash
-janki enrich --recheck-furigana                  # re-ask, adjudicating disputes
-janki enrich --recheck-furigana --no-adjudicate  # leave every dispute flagged
-janki enrich --recheck-furigana --accept IDS     # your call, not jpdb's
+janki enrich --accept word:話す:はなす   # your judgment, named record by record
 ```
 
-`janki refresh` runs this between writing and voicing, so a dispute is settled
-before it can silence a card. The ledger records **who vouched** — `jpdb`, `ai`
-with the adjudicating model, or `human` — because a reading a model judged is
-not the same evidence as one a dictionary confirmed, and months later that is
-the only thing explaining why a sentence was trusted.
+That is the only route from flagged to voiced. Correcting the furigana by hand
+does not clear the flag, because the flag describes the sentence as it was
+written — and `--accept` needs the ids you are vouching for, since accepting
+everything unread is not a judgment.
 
-Set `[ai] adjudicate_model = ""` to turn it off entirely.
+janki no longer asks jpdb to check a *sentence*. It used to, and the check was
+wrong more often than the sentences were: jpdb parses by segmenting, and on
+colloquial text it segments badly — it read とする in 今、だれとすんでるの？, a
+word not in the sentence, while 住む, the word actually there, went unread.
+Measured against a real import it flagged 12 of 17 correct examples. What
+replaces it is the semantic review, which reads the Japanese as language rather
+than as tokens.
+
+The dictionaries still enrich **words**: `enrich --jpdb` fills readings, pitch
+and frequency, and KANJIDIC supplies the kanji blocks. That is the division
+M7.6V draws — the model parses and writes, the dictionaries confirm facts about
+words.
 
 ## Writing what a dictionary cannot
 
@@ -109,11 +118,10 @@ python -m pip install -e '.[ai]'
 export ANTHROPIC_API_KEY='...'
 ```
 
-`--ai` needs `JPDB_API_KEY` as well, because it checks every sentence it writes
-against jpdb's parse of it — so the live pass and an AI `--batch-fetch` will not
-start without one. `--batch-submit` does not need it: no sentence exists to
-check yet. Neither does `--polish-meanings`, including its batch actions, which
-writes English and asks jpdb nothing.
+`--ai` needs no `JPDB_API_KEY`: since M7.6V it checks its sentences offline, so
+the live pass, `--batch-submit` and `--batch-fetch` all run without one. Only
+`--jpdb` and `--staging` ask the dictionary anything. `--polish-meanings` writes
+English and asks jpdb nothing either.
 
 One pass per run. `--jpdb`, `--ai` and `--polish-meanings` each show you their
 own diff, and merging two unrelated sets of proposals into one y/n is not
@@ -146,10 +154,10 @@ call per record and overwrites every curated value it names. Name ids there too.
 Everything it writes is checked before you see it. A sentence that does not
 contain the word is **rejected** — it may be a perfectly good sentence, but it
 is not an example of this word, and the check knows the word's conjugations and
-its 〜ます forms, so 話しました counts as 話す. A sentence whose furigana jpdb
-does not confirm is **kept and flagged** instead of dropped: the Japanese may be
-right where the segmentation is wrong, and that is a judgment for you rather
-than for janki. The flag is a fingerprint of the sentence in the record's
+its 〜ます forms, so 話しました counts as 話す. A sentence whose furigana assigns a reading KANJIDIC does not
+list, or spells a different sentence than the example does, is **kept and
+flagged** instead of dropped: the Japanese may be right where the furigana is
+not, and that is a judgment for you rather than for janki. The flag is a fingerprint of the sentence in the record's
 `raw_fields`, under `furigana_unverified`, and audio generation will read it before it speaks a
 sentence (Milestone 5).
 Romaji is always regenerated from the furigana, whatever the model sent.

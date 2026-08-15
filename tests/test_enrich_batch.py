@@ -502,8 +502,17 @@ def test_a_flagged_example_is_flagged_the_same_way_too(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     records = [record()]
+    # Its own result rather than `ok()`: the furigana spells 毎日話した。 where
+    # the sentence is 毎日話す。, which is what flags an example now that no
+    # dictionary is asked about a sentence. `ok()` writes matching furigana, so
+    # sharing it would assert the flag on an example with nothing wrong with it.
     batches = FakeBatches(
-        results=[ok(record())]
+        results=[
+            Entry(
+                key(records[0].id),
+                Succeeded(message("毎日話す。", "毎日[まいにち] 話[はな]した。")),
+            )
+        ]
     )
     root = submitted(tmp_path, records, monkeypatch, batches)
     capsys.readouterr()

@@ -72,6 +72,7 @@ __all__ = [
     "POLISH_FIELDS",
     "STAGING_THRESHOLD",
     "UNVERIFIED_KEY",
+    "accept_furigana",
     "ai_prompt",
     "ai_retry_prompt",
     "ai_schema",
@@ -1186,7 +1187,6 @@ def apply_ai_result(
     parsed: Any,
     *,
     force_fields: Sequence[str] = (),
-    parses: Mapping[str, Any] | None = None,
     kanji_store: Any | None = None,
 ) -> AiOutcome:
     """Put a model's answer through the mechanical checks, then the fill rules.
@@ -1195,17 +1195,19 @@ def apply_ai_result(
 
     * an example that does not contain the word is **rejected** — it may be a
       fine sentence, but it is not an example of this word;
-    * an example whose furigana disagrees with jpdb's parse is **kept and
-      flagged**, because the sentence may be right where the segmentation is
-      not, and a human deciding that is better than janki throwing away good
-      Japanese. A flag lands only with the example it describes. A stored
-      example is also re-flagged when its surviving furigana assigns a reading
-      KANJIDIC does not list for that character;
+    * an example is **kept and flagged** when its furigana assigns a reading
+      KANJIDIC does not list for a character, or when the furigana field spells
+      a different sentence than the example does. Both are decidable offline
+      and about the example alone. A flag lands only with the example it
+      describes, and a stored example is re-flagged the same way;
     * romaji is regenerated from the furigana, always, whatever arrived.
 
-    ``parses`` maps a sentence to its jpdb ``ParseResult``. An absent one is
-    not a pass: it means nobody checked, and the example is flagged the same
-    way a mismatch is, because "unverified" is exactly what it is.
+    No dictionary is asked about the sentence. M7.6V retired that check: jpdb
+    parses a *sentence* by segmenting it, and on colloquial text it segments
+    wrongly often enough that its disagreements were mostly its own — it read
+    とする in 今、だれとすんでるの？, a word not in the sentence. What replaces it
+    is the paid review, which reads the Japanese as language rather than as
+    tokens.
     """
     outcome = AiOutcome(record=record)
     kept: list[ExampleSentence] = []
@@ -1245,26 +1247,21 @@ def apply_ai_result(
             outcome.impossible_furigana.append(
                 (example.japanese, example.furigana, impossible)
             )
-        # Offline, so it runs whether or not a parse arrived and whether or not
-        # the reading was already impossible — both of those short-circuit the
-        # verdict below, and this failure is decidable without either.
+        # Offline, and now the only route to the flag for a sentence whose
+        # furigana field does not spell it. While the dictionary oracle stood
+        # this was redundant three ways over: a run with no jpdb client flagged
+        # on the absent parse, and a run with one flagged inside the oracle,
+        # which ran the same comparison itself.
         rewritten = qc.furigana_rewrites_sentence(example)
         if rewritten:
             outcome.rewritten_furigana.append(
                 (example.japanese, example.furigana, rewritten)
             )
-        parse = (parses or {}).get(example.japanese)
-        # `rewritten` is redundant here today and deliberately kept: with no
-        # parse the disjunct below already flags, and with one
-        # `verify_example_furigana` runs the same check itself. It becomes the
-        # only route to the flag when M7.6V slice 7 removes `parse is None`,
-        # which is where it gets the test it cannot have while unreachable.
-        if (
-            impossible
-            or rewritten
-            or parse is None
-            or not qc.verify_example_furigana(example, parse)
-        ):
+        # Two decidable failures, both offline. What is gone is the third
+        # branch: jpdb's parse of the *sentence*, which flagged a sentence
+        # nobody had checked as firmly as one it disagreed with, and whose
+        # disagreements were mostly its own segmentation.
+        if impossible or rewritten:
             outcome.unverified.append(example.japanese)
         kept.append(qc.regenerate_example_romaji(example))
 
@@ -1367,240 +1364,74 @@ def apply_ai_result(
 
 
 @dataclass(slots=True)
-class RecheckResult:
-    """What a furigana re-check found."""
+class AcceptResult:
+    """What accepting a furigana flag on a person's authority changed."""
 
     records: list[VocabularyRecord] = field(default_factory=list)
-    #: ``record id -> [sentence]`` cleared, because jpdb now agrees.
+    #: ``record id -> [sentence]`` whose flag was cleared.
     cleared: dict[str, list[str]] = field(default_factory=dict)
-    #: ``record id -> [(sentence, why)]`` still not vouched for.
-    differing: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
-    #: ``record id -> [(sentence, why)]`` blocked before a jpdb request because
-    #: KANJIDIC rejects a generated one-character reading.
-    blocked: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
-    #: Sentences jpdb could not parse at all — unverified, not fine.
-    unparsed: list[str] = field(default_factory=list)
-    #: ``record id -> [(sentence, why)]`` cleared because an adjudicator judged
-    #: the writer's reading the ordinary one where jpdb disagreed.
-    adjudicated: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
 
     @property
     def changed(self) -> bool:
         return bool(self.cleared)
 
 
-ADJUDICATE_INSTRUCTIONS = """\
-You settle disagreements about how a Japanese sentence is read.
+def accept_furigana(
+    records: Sequence[VocabularyRecord], ids: Sequence[str]
+) -> AcceptResult:
+    """Clear the named records' unverified flags on a human's authority.
 
-You are given a sentence, the reading a dictionary parse produced, and the
-reading its writer produced. Say which one a native speaker would use for this
-sentence in ordinary modern Japanese.
+    The flag is written once, when an example is created, and read much later
+    by ``janki audio`` deciding whether to speak a sentence. Nothing else
+    clears it: a person can correct the furigana by hand and the flag stays,
+    because the flag describes the sentence as it was when it was written.
+    Without this, correcting a card would leave it permanently unvoiced — the
+    exact state `prune_example_flags` calls "permanently refusable with no way
+    to un-hold it".
 
-Both are usually defensible; you are judging *ordinary usage*, not possibility.
-日本語 is にほんご, not にっぽんご, even though both are attested.
+    M7.6V retired the dictionary route, which used to clear a flag by re-asking
+    jpdb about the sentence. This is what the milestone kept: a person's
+    judgement, named record by record, which is the only authority left that
+    can say a sentence is right.
 
-Answer "writer" or "dictionary" — or "unsure", which is a real answer and the
-right one whenever the two readings are both ordinary, the word is rare, or the
-difference is a proper noun you cannot place. An unsure verdict leaves the
-sentence flagged for a human, which costs a re-check; a confident wrong one puts
-a reading nobody uses onto a card."""
-
-
-@functools.cache
-def adjudication_schema() -> Any:
-    """The shape an adjudication must take."""
-    from pydantic import BaseModel, Field
-
-    class Adjudication(BaseModel):
-        verdict: str = Field(
-            description="'writer', 'dictionary', or 'unsure'."
-        )
-        why: str = Field(default="", description="One short clause.")
-
-    return Adjudication
-
-
-def adjudicate_reading(
-    sentence: str,
-    dictionary_reading: str,
-    writer_reading: str,
-    *,
-    model: str,
-    client: Any | None = None,
-) -> tuple[str, str]:
-    """``(verdict, why)`` for one disagreement. Never raises.
-
-    A model is a poor *source* of readings — non-deterministic, and confidently
-    wrong on exactly the rare words where a check matters — but a good judge of
-    which of two given readings is the ordinary one, which is a much narrower
-    question. So it never proposes a reading, only picks between two that
-    already exist, and "unsure" is an answer it is told to give.
-
-    Anything that goes wrong is ``("unsure", …)``: an adjudicator that cannot
-    answer must leave the flag alone, not clear it.
+    ``ids`` is required. Accepting everything unread is not a judgment.
     """
-    blocks = claude_client.system_blocks(ADJUDICATE_INSTRUCTIONS)
-    prompt = (
-        f"Sentence: {sentence}\n"
-        f"Dictionary reading: {dictionary_reading}\n"
-        f"Writer reading: {writer_reading}\n"
-        "Which is how this sentence is normally read?"
-    )
-    try:
-        # `adjudication_schema()` is *inside* the guard: it imports pydantic,
-        # which ships in the `[ai]` extra, so on a plain `pip install -e .` it
-        # raised `ModuleNotFoundError` from the argument list — outside any
-        # except, and not a `JankiError`, so it left the interpreter with a
-        # traceback. `parse_call` can do the same: with no `ANTHROPIC_API_KEY`
-        # the SDK raises a bare `TypeError`. Either way `recheck_furigana` never
-        # returned, so `save_records_json` was never reached and every flag jpdb
-        # had already cleared in that run — and the calls paid for — was thrown
-        # away on the way out.
-        call = claude_client.parse_call(
-            model,
-            blocks,
-            prompt,
-            adjudication_schema(),
-            client,
-            # Room to think: this is a language judgement, and the pass runs on
-            # the same model at the same depth as every other. 200 was sized
-            # for a one-word verdict from a model that did not reason first.
-            max_tokens=claude_client.DEFAULT_MAX_TOKENS,
-            effort=claude_client.effort_for(model),
-        )
-    except Exception as exc:  # noqa: BLE001 — the docstring's contract
-        return "unsure", f"the adjudicator could not be reached: {exc}"
-    if call.parsed is None:
-        return "unsure", f"the adjudicator did not answer ({call.stop_reason})"
-    verdict = str(getattr(call.parsed, "verdict", "") or "").strip().lower()
-    why = str(getattr(call.parsed, "why", "") or "").strip()
-    return (verdict if verdict in {"writer", "dictionary", "unsure"} else "unsure"), why
-
-
-def recheck_furigana(
-    records: Sequence[VocabularyRecord],
-    *,
-    jpdb_client: jpdb.JpdbClient | None = None,
-    ids: Sequence[str] | None = None,
-    accept: bool = False,
-    adjudicate_model: str = "",
-    ai_client: Any | None = None,
-    kanji_store: Any | None = None,
-) -> RecheckResult:
-    """Re-ask jpdb whether each flagged example's furigana is right.
-
-    The flag is written once, when an example is created, and read much later by
-    ``janki audio`` deciding whether to speak a sentence. That makes it stale
-    twice over: a human can fix the furigana by hand, and the *check itself* can
-    improve — as it did when it stopped mistaking jpdb's per-character
-    segmentation for disagreement, which had flagged 12 of 17 correct examples.
-    Neither an AI pass nor an edit re-asks, so without this the only way to clear
-    a flag was to rewrite the sentence and pay for it again.
-
-    Only flagged examples are re-checked, and only ever cleared: an example
-    nobody doubted is not put in doubt by a parse that happens to fail today.
-
-    ``accept`` clears the flags of the named records on a *human's* authority
-    instead of asking jpdb. It exists because jpdb can be wrong: its parse reads
-    日本語 as にっぽんご, and the language is にほんご. Without it the choice was
-    to write a reading nobody uses into a card or to leave a correct sentence
-    unvoiced forever. It requires ``ids`` — accepting everything unread is not a
-    judgment — and the ledger records ``kind="human"`` so the entry says who
-    vouched.
-    """
-    if accept and not ids:
+    if not ids:
         raise EnrichError(
-            "--accept clears a flag on your authority rather than jpdb's, so it "
-            "needs the record ids you are vouching for. Accepting everything "
-            "unread is not a judgment."
+            "--accept clears a flag on your authority, so it needs the record "
+            "ids you are vouching for. Accepting everything unread is not a "
+            "judgment."
         )
-    if not accept and jpdb_client is None:
-        raise EnrichError("A furigana re-check needs a jpdb client or --accept.")
-    result = RecheckResult(records=list(records))
+    result = AcceptResult(records=list(records))
     known = {record.id for record in result.records}
-    wanted = set(ids) if ids else None
-    if wanted is not None:
-        # Named and not found is a typo, not an empty result. Every other
-        # ids-taking pass here refuses the same way; without it
-        # `--recheck-furigana word:わかる:わかる` (the id is word:分かる:わかる)
-        # reported a clean negative and exited 0.
-        missing = sorted(wanted - known)
-        if missing:
-            raise EnrichError(
-                "No record has "
-                + ("this id: " if len(missing) == 1 else "these ids: ")
-                + ", ".join(missing)
-            )
+    wanted = set(ids)
+    # Named and not found is a typo, not an empty result — the same refusal
+    # every other ids-taking pass here makes.
+    missing = sorted(wanted - known)
+    if missing:
+        raise EnrichError(
+            "No record has "
+            + ("this id: " if len(missing) == 1 else "these ids: ")
+            + ", ".join(missing)
+        )
     for index, record in enumerate(result.records):
-        if wanted is not None and record.id not in wanted:
+        if record.id not in wanted:
             continue
         flagged = example_flags(record, UNVERIFIED_KEY)
         if not flagged:
             continue
-        cleared: list[str] = []
-        for example in record.examples:
-            sentence = example.japanese.strip()
-            fingerprint = short_fingerprint(sentence)
-            if not sentence or fingerprint not in flagged:
-                continue
-            if accept:
-                cleared.append(sentence)
-                flagged.discard(fingerprint)
-                continue
-            impossible = qc.impossible_character_furigana(
-                example.furigana, kanji_store
-            )
-            if impossible:
-                groups = ", ".join(
-                    f"{text}[{reading}]" for text, reading in impossible
-                )
-                result.blocked.setdefault(record.id, []).append(
-                    (
-                        sentence,
-                        "generated furigana still assigns an unknown "
-                        f"character reading: {groups}",
-                    )
-                )
-                continue
-            try:
-                parse = jpdb_client.parse(sentence)
-            except JankiError:
-                # Nothing means unverified rather than fine, the same way the
-                # AI pass treats an absent client.
-                result.unparsed.append(sentence)
-                continue
-            verdict = qc.verify_example_furigana(example, parse)
-            if verdict:
-                cleared.append(sentence)
-                flagged.discard(fingerprint)
-                continue
-            why = "; ".join(verdict.differences[:2])
-            if adjudicate_model:
-                # jpdb and the writer disagree, and jpdb is not always right —
-                # its parse reads 日本語 as にっぽんご. A model is a poor source
-                # of readings but a good judge of which of two is ordinary, so
-                # it breaks the tie and nothing else.
-                call, reason = adjudicate_reading(
-                    sentence,
-                    verdict.expected,
-                    example.furigana or example.japanese,
-                    model=adjudicate_model,
-                    client=ai_client,
-                )
-                if call == "writer":
-                    cleared.append(sentence)
-                    flagged.discard(fingerprint)
-                    result.adjudicated.setdefault(record.id, []).append((sentence, reason))
-                    continue
-                why = f"{why} — adjudicator: {call}" + (f", {reason}" if reason else "")
-            result.differing.setdefault(record.id, []).append((sentence, why))
+        cleared = [
+            example.japanese
+            for example in record.examples
+            if example.japanese.strip()
+            and short_fingerprint(example.japanese.strip()) in flagged
+        ]
         if not cleared:
             continue
         result.cleared[record.id] = cleared
-        # Through the shared writer: it keeps the stored order (a sorted()
-        # rewrite here used to churn vocabulary.json against every other
-        # writer) and removes the key when nothing survives.
-        result.records[index] = prune_example_flags(record, UNVERIFIED_KEY, flagged)
+        # Through the shared writer, which keeps the stored order and removes
+        # the key once nothing survives.
+        result.records[index] = prune_example_flags(record, UNVERIFIED_KEY, set())
     return result
 
 
@@ -1632,27 +1463,6 @@ def format_ai_no_changes(result: AiResult) -> list[str]:
     ]
 
 
-def _verify_parses(
-    jpdb_client: jpdb.JpdbClient | None, sentences: Sequence[str]
-) -> dict[str, Any]:
-    """jpdb's parse of each sentence, for the furigana check.
-
-    A client that is not there yields nothing, and nothing means unverified
-    rather than fine — see :func:`apply_ai_result`. A parse that fails for one
-    sentence does the same rather than taking the whole record down: the
-    example is still usable, it is just not vouched for.
-    """
-    parses: dict[str, Any] = {}
-    if jpdb_client is None:
-        return parses
-    for sentence in sentences:
-        try:
-            parses[sentence] = jpdb_client.parse(sentence)
-        except JankiError:
-            continue
-    return parses
-
-
 def enrich_ai(
     records: Sequence[VocabularyRecord],
     *,
@@ -1663,7 +1473,6 @@ def enrich_ai(
     client: Any | None = None,
     parse_call: Any | None = None,
     call_options: Mapping[str, Any] | None = None,
-    jpdb_client: jpdb.JpdbClient | None = None,
     kanji_store: Any | None = None,
     taught: str = "",
 ) -> AiResult:
@@ -1701,7 +1510,6 @@ def enrich_ai(
             positions=positions,
             recent=recent,
             force_fields=force_fields,
-            jpdb_client=jpdb_client,
             kanji_store=kanji_store,
         )
         position = positions[record.id]
@@ -1727,7 +1535,6 @@ def enrich_ai(
             positions=positions,
             recent=recent,
             force_fields=force_fields,
-            jpdb_client=jpdb_client,
             kanji_store=kanji_store,
         )
         retry_wrote_examples = bool(result.records[position].examples)
@@ -1752,7 +1559,6 @@ def absorb_ai_call(
     positions: Mapping[str, int],
     recent: list[str],
     force_fields: Sequence[str] = (),
-    jpdb_client: jpdb.JpdbClient | None = None,
     kanji_store: Any | None = None,
 ) -> None:
     """Put one model answer through the checks and fold it into ``result``.
@@ -1777,16 +1583,10 @@ def absorb_ai_call(
         )
         return
 
-    sentences = [
-        text
-        for item in getattr(parsed, "examples", []) or []
-        if (text := str(getattr(item, "japanese", "") or "").strip())
-    ]
     outcome = apply_ai_result(
         record,
         parsed,
         force_fields=force_fields,
-        parses=_verify_parses(jpdb_client, sentences),
         kanji_store=kanji_store,
     )
     if outcome.rejected:
@@ -1799,7 +1599,7 @@ def absorb_ai_call(
         result.unverified[record.id] = outcome.unverified
         result.warnings.append(
             f"{record.id}: {len(outcome.unverified)} example(s) have furigana "
-            "jpdb did not confirm; kept and flagged for review."
+            "no local check could confirm; kept and flagged for review."
         )
     if outcome.preserved and any(
         example.japanese and not example_accepted(record, example)
@@ -2271,7 +2071,6 @@ def apply_batch_results(
     model: str,
     force_fields: Sequence[str] = (),
     only: Sequence[str] = (),
-    jpdb_client: jpdb.JpdbClient | None = None,
     kanji_store: Any | None = None,
 ) -> BatchApplyResult:
     """Fold a finished batch into the records, through the live path's checks.
@@ -2362,7 +2161,6 @@ def apply_batch_results(
             positions=positions,
             recent=recent,
             force_fields=force_fields,
-            jpdb_client=jpdb_client,
             kanji_store=kanji_store,
         )
 

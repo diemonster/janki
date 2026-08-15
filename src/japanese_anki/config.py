@@ -51,7 +51,6 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "enrich_reasoning_effort",
         "polish_model",
         "review_model",
-        "adjudicate_model",
     ),
     "tts": (
         "provider",
@@ -318,10 +317,6 @@ class ProjectConfig:
     enrich_reasoning_effort: str
     polish_model: str
     review_model: str
-    #: Settles a furigana disagreement between jpdb and the writer. Cheap on
-    #: purpose: it picks between two given readings and never proposes one.
-    #: Empty turns adjudication off and every disagreement stays flagged.
-    adjudicate_model: str
     tts_provider: str
     voicevox_url: str
     voicevox_speaker: int
@@ -446,13 +441,6 @@ class ProjectConfig:
             ),
             polish_model=_str(data, "ai", "polish_model", legacy_shared_model),
             review_model=_str(data, "ai", "review_model", legacy_shared_model),
-            # One model across every pass, at one reasoning depth. A cheaper
-            # model here was a false economy twice over: it decides whether a
-            # reading disagreement stands, which is a language judgement, and
-            # it is the one pass that cannot accept the effort setting the
-            # others run at — so it silently answered "unsure" the moment
-            # effort was applied module-wide.
-            adjudicate_model=_str(data, "ai", "adjudicate_model", "claude-opus-5"),
             tts_provider=_str(data, "tts", "provider", "voicevox"),
             voicevox_url=_str(data, "tts", "voicevox_url", "http://localhost:50021"),
             voicevox_speaker=_int(data, "tts", "voicevox_speaker", 46),

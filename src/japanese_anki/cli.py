@@ -1054,145 +1054,50 @@ def _enrich_staging(
     return 0
 
 
-def _recheck_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
-    """Re-ask jpdb about examples that were flagged, and clear the ones it now
-    vouches for.
+def _accept_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
+    """Clear the named records' unverified furigana flags on your authority.
 
-    Cheap and mostly jpdb-only: it writes no sentence, and calls a model only to
-    adjudicate a disagreement — so a flag left by a check that has since
-    improved costs a parse rather than a rewrite.
+    Asks nothing and writes no field: it removes a flag that `janki audio`
+    reads. Since M7.6V retired the dictionary re-check, this is the only way a
+    flag ever comes off — a corrected furigana does not clear its own flag,
+    because the flag describes the sentence as it was written.
     """
     output_path = config.normalized_file.resolve()
     output_revision = records_revision(output_path)
     records = load_records(output_path) if output_path.exists() else []
     if not records:
-        print(f"No records to check in {output_path}.")
+        print(f"No records to accept in {output_path}.")
         return 0
 
-    book = ledger.load(config.ledger_file)
-    result = enrich.recheck_furigana(
-        records,
-        # No key is asked for when a human is doing the vouching.
-        jpdb_client=None if args.accept else jpdb.JpdbClient(jpdb.api_key_from_env()),
-        ids=args.ids or None,
-        accept=args.accept,
-        # Off when a human is already doing the vouching, and off when the
-        # config names no model.
-        adjudicate_model="" if (args.accept or args.no_adjudicate) else config.adjudicate_model,
-        kanji_store=None if args.accept else kanji.load_store(config.kanji_file),
-    )
+    result = enrich.accept_furigana(records, args.ids or ())
+    if not result.changed:
+        print("Nothing to accept: none of those records carries a furigana flag.")
+        return 0
 
+    # Printed before anything is written, so the last thing on screen before a
+    # durable change is the list of sentences it covers.
+    for record_id, sentences in sorted(result.cleared.items()):
+        for sentence in sentences:
+            print(f"{record_id}: accepting {sentence}")
     cleared = sum(len(items) for items in result.cleared.values())
-    if result.changed:
-        save_records_json(output_path, result.records, expected=output_revision)
-        adjudicated = {rid for rid in result.adjudicated}
-        who_for = lambda rid: (  # noqa: E731 - a lookup, not a policy
-            "human" if args.accept else ("ai" if rid in adjudicated else "jpdb")
-        )
-        for record_id in result.cleared:
-            # `fields=["furigana"]` was a false statement: this pass writes no
-            # record field at all — it clears an *example's* unverified flag.
-            # Worse, `record_enriched` dedups on (kind, model, fields), so a
-            # later genuine --jpdb pass that really did fill `furigana` would
-            # collapse into this entry and inherit its date.
-            # Who vouched is part of the record: a reading a model adjudicated
-            # is not the same evidence as one a dictionary confirmed, and six
-            # months later that difference is the only thing that explains why
-            # a sentence was trusted.
-            who = who_for(record_id)
-            book.record_enriched(
-                record_id,
-                kind=who,
-                model=config.adjudicate_model if who == "ai" else who,
-                fields=["furigana_unverified"],
-            )
-    ledger_error = _save_ledger(book) if result.changed else None
 
-    settled = sum(len(items) for items in result.adjudicated.values())
-    if cleared:
-        if args.accept:
-            vouched = "your authority"
-        elif settled == cleared:
-            vouched = "the adjudicator's reading"
-        elif settled:
-            vouched = f"jpdb's parse, {settled} of them after adjudication"
-        else:
-            vouched = "jpdb's parse"
-        print(
-            f"Confirmed {cleared} example(s) across {len(result.cleared)} record(s) "
-            f"on {vouched}; their audio is no longer held back."
+    book = ledger.load(config.ledger_file)
+    for record_id in sorted(result.cleared):
+        # The flag key is the field this pass wrote — it cleared that key, and
+        # `record_enriched` refuses an empty field list. `model="human"` because
+        # `kind="human"` requires the thing that ran to be named, and here it is
+        # a person: a flag a reader vouched for is not the same evidence as one
+        # a dictionary confirmed, which is the whole reason this is recorded.
+        book.record_enriched(
+            record_id, kind="human", fields=[enrich.UNVERIFIED_KEY], model="human"
         )
-    elif result.unparsed and not result.differing and not result.blocked:
-        # jpdb answered nothing at all — an expired key, or the API down. Saying
-        # "not vouched for yet" asserts a judgment that was never obtained.
-        print(
-            f"jpdb could not parse any of the {len(result.unparsed)} flagged "
-            "example(s), so nothing was confirmed or ruled out.",
-            file=sys.stderr,
-        )
-    elif result.differing and result.blocked:
-        print(
-            "Nothing to confirm: checked examples differ from jpdb's parse or "
-            "are blocked by stored KANJIDIC readings."
-        )
-    elif result.differing:
-        print("Nothing to confirm: each parsed example differs from jpdb's reading.")
-    elif result.blocked:
-        print(
-            "Nothing to confirm: stored KANJIDIC evidence requires human "
-            "review for the blocked example(s)."
-        )
-    else:
-        print("Nothing to confirm: no example carries an unverified-furigana flag.")
-    if settled:
-        print(
-            f"{settled} of those were settled by the adjudicator, which judged the "
-            "sentence's own reading the ordinary one where jpdb disagreed:"
-        )
-        for record_id, items in result.adjudicated.items():
-            for sentence, why in items:
-                print(f"  {record_id}: {sentence}")
-                if why:
-                    print(f"    {why}")
-    if result.differing:
-        total = sum(len(items) for items in result.differing.values())
-        print(f"Still unconfirmed ({total}) — jpdb reads these differently:")
-        for record_id, items in result.differing.items():
-            for sentence, why in items:
-                print(f"  {record_id}: {sentence}")
-                print(f"    {why}")
-    if result.blocked:
-        total = sum(len(items) for items in result.blocked.values())
-        print(
-            f"Still blocked ({total}) — stored KANJIDIC readings reject these "
-            "generated character splits:"
-        )
-        for record_id, items in result.blocked.items():
-            for sentence, why in items:
-                print(f"  {record_id}: {sentence}")
-                print(f"    {why}")
-    for sentence in result.unparsed:
-        print(f"warning: jpdb could not parse: {sentence}", file=sys.stderr)
-    if (
-        result.unparsed
-        and not cleared
-        and not result.differing
-        and not result.blocked
-    ):
-        return 1
-    if ledger_error is not None:
-        _report_enrichment_ledger_failure(
-            ledger_error,
-            rerun=(
-                "Re-running --recheck-furigana records nothing: the flags it "
-                "cleared are already gone from the records, so it finds nothing "
-                "left to confirm."
-            ),
-            aftermath=(
-                "The records themselves are correct and their audio will "
-                "generate; only the note that jpdb vouched for them is missing."
-            ),
-        )
+    save_records_json(output_path, result.records, expected=output_revision)
+    print(f"Accepted {cleared} sentence(s) across {len(result.cleared)} record(s).")
+    try:
+        book.save()
+    except ledger.LedgerError as exc:
+        print(f"error: the flags were cleared but the ledger was not saved: {exc}",
+              file=sys.stderr)
         return 1
     return 0
 
@@ -1200,10 +1105,11 @@ def _recheck_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
 def command_enrich(args: argparse.Namespace) -> int:
     """Fill empty fields on existing records from a dictionary.
 
-    Three passes, one per run: ``--jpdb`` fills what a dictionary knows,
-    ``--ai`` writes what it does not, and ``--polish-meanings`` rewrites English
-    that is already there. One is required, because "enrich" without saying how
-    is a command whose meaning depends on which pass is newest.
+    Four passes, one per run: ``--jpdb`` fills what a dictionary knows,
+    ``--ai`` writes what it does not, ``--polish-meanings`` rewrites English that
+    is already there, and ``--accept`` clears a furigana flag a person has read
+    and vouched for. One is required, because "enrich" without saying how is a
+    command whose meaning depends on which pass is newest.
     """
     passes = [
         name
@@ -1211,22 +1117,24 @@ def command_enrich(args: argparse.Namespace) -> int:
             ("--jpdb", args.jpdb),
             ("--ai", args.ai),
             ("--polish-meanings", args.polish_meanings),
-            ("--recheck-furigana", args.recheck_furigana),
+            ("--accept", args.accept),
         )
         if chosen
     ]
     if len(passes) > 1:
         raise JankiError(
             "enrich takes one pass at a time: --jpdb fills what a dictionary "
-            "knows, --ai writes what it does not, and --polish-meanings rewrites "
-            f"English that is already there. Got {', '.join(passes)}. Run them "
+            "knows, --ai writes what it does not, --polish-meanings rewrites "
+            "English that is already there, and --accept clears a furigana flag "
+            f"you have vouched for. Got {', '.join(passes)}. Run them "
             "separately so each shows you its own diff."
         )
     if not passes:
         raise JankiError(
             "enrich needs a pass: --jpdb fills fields from the jpdb dictionary, "
             "--ai writes examples and usage notes, --polish-meanings proposes "
-            "better English glosses."
+            "better English glosses, --accept clears a furigana flag you have "
+            "read and vouched for."
         )
     batch_flags = [
         name
@@ -1263,8 +1171,8 @@ def command_enrich(args: argparse.Namespace) -> int:
     if batch_flags and not (args.ai or args.polish_meanings):
         raise JankiError(
             f"enrich {batch_flags[0]} needs --ai or --polish-meanings: those are "
-            "the model-backed passes. The dictionary and furigana re-check "
-            "passes have nothing to batch."
+            "the model-backed passes. The dictionary pass and --accept have "
+            "nothing to batch."
         )
     if args.polish_meanings and args.force_fields:
         raise JankiError(
@@ -1272,15 +1180,12 @@ def command_enrich(args: argparse.Namespace) -> int:
             "there is no field list to widen. It always overwrites — that is "
             "what it is for, and why it confirms one record at a time."
         )
-    force_fields = enrich.parse_force_fields(args.force_fields, ai=args.ai)
-    if args.accept and not args.recheck_furigana:
-        raise JankiError("--accept is part of --recheck-furigana; it has no meaning alone.")
-    if args.recheck_furigana and (args.staging is not None or force_fields):
+    if args.accept and (args.force_fields or args.staging is not None):
         raise JankiError(
-            "--recheck-furigana re-asks jpdb about examples that already exist; "
-            "it reads no staging file and writes no field, so --staging and "
-            "--force-fields have nothing to act on."
+            "--accept clears an example's furigana flag and writes no field, "
+            "so --force-fields and --staging have nothing to act on."
         )
+    force_fields = enrich.parse_force_fields(args.force_fields, ai=args.ai)
     if args.staging is not None and (force_fields or args.ids):
         raise JankiError(
             "enrich --staging proposes readings for held rows and writes nothing "
@@ -1308,13 +1213,10 @@ def command_enrich(args: argparse.Namespace) -> int:
     config = _load_config(args)
 
     # --polish-meanings rewrites English and asks jpdb nothing, so it must not
-    # require a key to run. The other paths do: --jpdb enriches *from* jpdb and
-    # --ai verifies example furigana *with* it.
+    # require a key to run. Only `--jpdb` and `--staging` do now: they enrich
+    # *from* the dictionary.
     if args.polish_meanings and not batch_flags:
         return _polish_meanings(config, args)
-
-    if args.recheck_furigana:
-        return _recheck_furigana(config, args)
 
     # Neither of these asks jpdb anything — one writes a ledger entry, the
     # other builds requests — so neither may demand a key to run.
@@ -1331,16 +1233,22 @@ def command_enrich(args: argparse.Namespace) -> int:
     if args.polish_meanings and args.batch_fetch:
         return _polish_batch_fetch(config, args)
 
-    client = jpdb.JpdbClient(jpdb.api_key_from_env())
-
-    if args.staging is not None:
-        return _enrich_staging(client, args.staging.resolve(), args.yes)
+    # Before the client is built, because neither asks jpdb anything. M7.6V
+    # retired the sentence oracle, so `--ai` writes and checks its examples
+    # offline — demanding a key for it would refuse a pass that never calls.
+    if args.accept:
+        return _accept_furigana(config, args)
 
     if args.batch_fetch:
         return _batch_fetch(config, args, force_fields)
 
     if args.ai:
         return _enrich_ai(config, args, force_fields)
+
+    client = jpdb.JpdbClient(jpdb.api_key_from_env())
+
+    if args.staging is not None:
+        return _enrich_staging(client, args.staging.resolve(), args.yes)
 
     output_path = config.normalized_file.resolve()
     output_revision = records_revision(output_path)
@@ -1468,7 +1376,6 @@ def _enrich_ai(
         style_guide=style_guide,
         force_fields=force_fields,
         ids=args.ids or None,
-        jpdb_client=jpdb.JpdbClient(jpdb.api_key_from_env()),
         kanji_store=kanji.load_store(config.kanji_file),
         taught=taught,
         parse_call=(
@@ -1558,7 +1465,7 @@ def _write_ai_result(
                 "review_notes": (
                     f"{len(result.changes)} record(s) enriched by {model}. These "
                     "records already exist; promoting merges the new fields into "
-                    "them. Sentences whose furigana jpdb did not confirm are "
+                    "them. Sentences whose furigana no local check could confirm are "
                     f"flagged with '{enrich.UNVERIFIED_KEY}' — check those before "
                     "audio is generated for them."
                 ),
@@ -1587,7 +1494,8 @@ def _write_ai_result(
     if result.unverified:
         print(
             f"  {len(result.unverified)} record(s) carry an example whose furigana "
-            "jpdb did not confirm; they are flagged in the record."
+            "no local check could confirm; they are flagged in the record. "
+            "Clear one with 'enrich --accept RECORD_ID' once you have read it."
         )
     if ledger_error is None:
         print(f"Ledger: recorded an AI pass over {len(result.changes)} record(s).")
@@ -2208,7 +2116,6 @@ def _batch_fetch(
         model=model,
         force_fields=force_fields,
         only=retry,
-        jpdb_client=jpdb.JpdbClient(jpdb.api_key_from_env()),
         kanji_store=kanji.load_store(config.kanji_file),
     )
     result = outcome.result
@@ -3799,9 +3706,9 @@ def command_build(args: argparse.Namespace) -> int:
 
 
 #: Refresh stages that cannot run without a jpdb key, whatever the flags say.
-#: ``--ai`` builds a client to verify each sentence it writes, and
-#: ``--recheck-furigana`` re-parses the disputed ones.
-_JPDB_STAGES = frozenset({"jpdb", "ai", "recheck"})
+#: Only the dictionary pass now: M7.6V retired the sentence oracle, so ``--ai``
+#: writes and checks its examples without asking jpdb anything.
+_JPDB_STAGES = frozenset({"jpdb"})
 
 #: The refresh pipeline, in order. Each entry is the stage's own command line,
 #: parsed by the real parser rather than assembled as a Namespace — a stage
@@ -3810,11 +3717,6 @@ _JPDB_STAGES = frozenset({"jpdb", "ai", "recheck"})
 _REFRESH_STAGES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("jpdb", "--no-jpdb", ("enrich", "--jpdb")),
     ("ai", "--no-ai", ("enrich", "--ai")),
-    # Between writing and voicing on purpose: `--ai` flags every example jpdb
-    # reads differently, and `audio` refuses to speak a flagged one. Without a
-    # re-check in between, a disagreement the adjudicator would have settled in
-    # seconds leaves the sentence silent until someone notices.
-    ("recheck", "--no-recheck", ("enrich", "--recheck-furigana")),
     ("audio", "--no-audio", ("audio", "--words", "--examples")),
     # Last before the build, because it reads the finished card: the sentences
     # `--ai` wrote, the readings `--jpdb` filled, the register each example
@@ -3861,17 +3763,15 @@ def command_refresh(args: argparse.Namespace) -> int:
             print(f"— {name}: skipped ({flag})")
             continue
         if name in _JPDB_STAGES and not jpdb.api_key_in_env():
-            # Keyed on the key, not on `--no-jpdb`. Two earlier shapes were
-            # wrong: demanding the key from a run that asked for no jpdb at
-            # all, and then skipping `recheck` whenever `--no-jpdb` was passed
-            # — which re-opened the hole the stage ordering above exists to
-            # close, because `--ai` still flags examples through its own client
-            # and `audio` refuses to voice a flagged one. With a key, both
-            # stages run and `--no-jpdb` means only what it says.
+            # Keyed on the key, not on `--no-jpdb`: demanding it from a run
+            # that asked for no jpdb at all was the earlier shape, and it made
+            # a key mandatory for a pipeline that never planned to call the
+            # dictionary.
+            #
             # stderr, and remembered: this skip is not something the caller
-            # asked for. A run that silently omits the stages that fill
-            # readings and write sentences, and then reports success, tells
-            # cron the deck is current when nothing was enriched.
+            # asked for. A run that silently omits the stage that fills
+            # readings, and then reports success, tells cron the deck is
+            # current when nothing was enriched.
             print(
                 f"— {name}: skipped (no JPDB_API_KEY; this stage needs one)",
                 file=sys.stderr,
@@ -5123,30 +5023,12 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     enrich_parser.add_argument(
-        "--no-adjudicate",
-        action="store_true",
-        help=(
-            "With --recheck-furigana: leave every jpdb disagreement flagged "
-            "instead of asking a model which reading is the ordinary one."
-        ),
-    )
-    enrich_parser.add_argument(
         "--accept",
         action="store_true",
         help=(
-            "With --recheck-furigana: clear the named records' flags on your "
-            "authority rather than jpdb's, for an example jpdb reads wrongly."
-        ),
-    )
-    enrich_parser.add_argument(
-        "--recheck-furigana",
-        action="store_true",
-        help=(
-            "Re-ask jpdb about examples flagged as unverified, and clear the "
-            "ones it vouches for so their audio can be generated. Writes no "
-            "sentences. Where jpdb and the sentence disagree it asks the "
-            "adjudicator model, which --no-adjudicate or an empty "
-            "[ai] adjudicate_model turns off."
+            "Clear the named records' unverified furigana flags on your "
+            "authority, so their sentence audio can be generated. Needs record "
+            "ids. Writes no field and asks no dictionary."
         ),
     )
     enrich_parser.add_argument(

@@ -32,10 +32,7 @@ re-enable them.
 
 Installing without bootstrap, add the extra you need:
 `pip install -e '.[ai]'` for `extract`, `patterns`, `review`, `enrich --ai` and
-`enrich --polish-meanings`. `--recheck-furigana` runs without it, and without an
-Anthropic key: jpdb re-reads the sentence either way, and the adjudicator that
-would settle a disagreement between them is what those buy — without it the
-disagreement stays flagged.
+`enrich --polish-meanings`.
 
 Every AI pass uses your Anthropic key. Codex remains a supported provider for
 `enrich --ai`, and needs `codex login` once — only if you set
@@ -48,8 +45,8 @@ export ANTHROPIC_API_KEY='...'   # every AI pass: extract, patterns,
                                  # enrich --ai, --polish-meanings,
                                  # review, and batches
 export JPDB_API_KEY='...'        # every jpdb lookup — import-jpdb, promote's
-                                 # reading check, patterns, jpdb ping, and
-                                 # enrich --jpdb/--ai/--staging/--recheck-furigana
+                                 # reading check, patterns, jpdb ping,
+                                 # and enrich --jpdb/--staging
 ```
 
 They are read from the environment only — never from `janki.toml`, never from a
@@ -131,13 +128,11 @@ every record in the collection, because a word's reading and its clip belong to
 the word rather than to whichever deck carries it — worth knowing before running
 it against a few thousand records.
 
-It runs `enrich --jpdb` → `enrich --ai` → `enrich --recheck-furigana` →
-`audio --words --examples` → `review` → `build --only-new`, in that order,
-because each stage needs what the one before it produced: jpdb fills the accents
-audio needs, `--ai` writes the sentences audio speaks, and the re-check settles
-any furigana dispute before it can leave a good sentence unvoiced. Skip any
-stage with `--no-jpdb`, `--no-ai`, `--no-recheck`, `--no-audio`, `--no-review`,
-`--no-build`. A stage that fails stops the run rather than shipping a package
+It runs `enrich --jpdb` → `enrich --ai` → `audio --words --examples` →
+`review` → `build --only-new`, in that order, because each stage needs what the
+one before it produced: jpdb fills the accents audio needs, and `--ai` writes
+the sentences audio speaks. Skip any stage with `--no-jpdb`, `--no-ai`,
+`--no-audio`, `--no-review`, `--no-build`. A stage that fails stops the run rather than shipping a package
 built from half-enriched records.
 
 `build --only-new` ships only the records a deck has never been built with, so a
@@ -178,6 +173,7 @@ own collection is the newer side. Details and the measurements behind them:
 | `janki promote FILE.yaml --accept-proposals` | Review repair proposals by field |
 | `janki enrich --jpdb` | Fill fields from the dictionary |
 | `janki enrich --ai` | Write example sentences and usage notes |
+| `janki enrich --accept ID...` | Clear the named records' furigana flags on your authority, so their audio can be generated |
 | `janki enrich --polish-meanings --batch-submit` | Queue a large gloss-improvement pass for later review |
 | `janki kanji` | Look up stroke order and on/kun readings |
 | `janki audio --words --examples` | Voice the words and the sentences |
@@ -186,15 +182,15 @@ own collection is the newer side. Details and the measurements behind them:
 | `janki build [DECK]` | Build one deck, or `--all` |
 | `janki preview DECK` | A browser preview, no Anki needed |
 | `janki status` | Records, ledger, what is missing |
-| `janki refresh` | enrich → recheck → audio → review → build, in order. The jpdb-backed
-stages need `JPDB_API_KEY`; without it they are skipped and the run exits
+| `janki refresh` | enrich → audio → review → build, in order. The jpdb-backed
+stage needs `JPDB_API_KEY`; without it that stage is skipped and the run exits
 non-zero rather than reporting a refresh that enriched nothing |
 
 Every command takes `--help`. `janki build` (and so `refresh --deck`) accepts a
 bare deck name as well as a path — `janki build verbs` finds
 `data/decks/verbs.yaml`. `validate`, `preview` and `migrate-inline` want the path.
 
-`refresh` runs five of these, plus `enrich --recheck-furigana`. Everything else
+`refresh` runs five of these. Everything else
 — the importers, `extract`, `patterns`, `promote`, `kanji`,
 `enrich --polish-meanings`, `validate`, `preview` and `status` — is yours to run
 when it applies. Run `janki kanji` after words with new characters arrive: a

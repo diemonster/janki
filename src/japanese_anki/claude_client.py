@@ -79,19 +79,19 @@ DEFAULT_MAX_TOKENS = 16000
 #:
 #: Every janki pass writes or judges study content, so every one of them runs
 #: here: extraction reads a photo and mints identities, enrichment writes the
-#: sentences, the adjudicator settles a reading dispute, and the review is the
-#: last reader before a learner sees the card. There is no pass whose answer is
-#: worth less than the others'.
+#: sentences, and the review is the last reader before a learner sees the card.
+#: There is no pass whose answer is worth less than the others'.
 DEFAULT_EFFORT = "xhigh"
 
 #: Models that accept ``output_config.effort`` at :data:`DEFAULT_EFFORT`.
 #:
 #: **An allow-list, because the failure is asymmetric.** Sending the key to a
 #: model that refuses it fails the call; withholding it from one that would
-#: accept it costs some reasoning depth. The first is unrecoverable exactly
-#: where it matters most — ``adjudicate_reading`` catches every exception and
-#: returns "unsure", so a 400 there retires that pass permanently with nothing
-#: printed — and the second is merely a weaker answer.
+#: accept it costs some reasoning depth. The first aborts a run — enrichment's
+#: call is not inside a try, so it dies on the first record — and the second is
+#: merely a weaker answer. (The pass this was written for, the retired reading
+#: adjudicator, swallowed the 400 into a permanent "unsure" with nothing
+#: printed; M7.6V removed it, and the asymmetry still holds without it.)
 #:
 #: An earlier form listed the families that *reject* effort, which had the
 #: direction wrong: ``xhigh`` arrived with Opus 4.7, so Opus 4.6 and Sonnet 4.6

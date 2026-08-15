@@ -912,7 +912,6 @@ def _ai_enrichment(data: dict[str, Any], root: Path) -> Any:
             "records",
             "model",
             "response",
-            "sentence_responses",
             "kanji",
             "force_fields",
             "observe",
@@ -945,10 +944,6 @@ def _ai_enrichment(data: dict[str, Any], root: Path) -> Any:
             raise hardening.HardeningError(
                 f"Invalid structured data in response.refusal: {exc}"
             ) from exc
-    client: jpdb.JpdbClient | None = None
-    transport: _CannedTransport | None = None
-    if "sentence_responses" in data:
-        client, transport = _client(data["sentence_responses"])
     store = (
         _fixture_kanji_store(data["kanji"], "kanji")
         if "kanji" in data
@@ -963,11 +958,8 @@ def _ai_enrichment(data: dict[str, Any], root: Path) -> Any:
         positions={records[0].id: 0},
         recent=[],
         force_fields=tuple(_string_list(data.get("force_fields", []), "force_fields")),
-        jpdb_client=client,
         kanji_store=store,
     )
-    if transport is not None:
-        transport.finish()
     output = {
         "records": _observed_records(result.records, data.get("observe", [])),
         "changes": {

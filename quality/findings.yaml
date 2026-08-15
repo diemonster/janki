@@ -350,6 +350,17 @@ findings:
     recurrences: []
     case_ids: [review-holds-back-an-unreadable-card]
     fix_ref: src/japanese_anki/review.py#unready
+  - id: furigana-full-width-separator
+    state: open
+    pipeline_stage: validation-qc
+    source_archetypes: [camera]
+    symptom: A ruby group whose separator Anki cannot read puts the reading over the preceding characters as well, and nothing reports it. Two shapes, one cause — 毎日　話[はな]します。 (a full-width space, which Anki's filter does not treat as a separator) and 毎日話[はな]します。 (no separator at all, which spilled_furigana_groups documents as its own known gap for a run beginning with a Han character). Both read はなします。, so 毎日 is dropped from the reconstructed reading, from the regenerated romaji, and from the sentence audio. M7.6V retired the jpdb sentence oracle, which caught both by comparing what the furigana sounds like against the dictionary's own rendering; spilled_furigana_groups catches only the subset that also spills a reading, so お　茶[ちゃ] is still refused and neither of these is.
+    invariant: Pending. A separator rule that reads the notation itself — every ruby group needs an ASCII space before it unless it opens the field — decidable offline like the other two example checks, since the fault is in the notation rather than in the Japanese and needs no dictionary to see.
+    evidence:
+      - fingerprint: 2cf757e9bdcffbcc97eefb7a938fa710c243b7083c3a6e0032a5e8d1f9877143
+        locator: quality/evidence/furigana-full-width-separator.json
+    recurrences: []
+    case_ids: []
   - id: model-request-unsupported-effort
     state: fixed
     pipeline_stage: model-request

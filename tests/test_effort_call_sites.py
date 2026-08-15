@@ -211,32 +211,6 @@ def test_asking_for_effort_also_asks_for_thinking() -> None:
 
 
 @pytest.mark.parametrize("model,expected", [(NEW, "xhigh"), (OLD, None)])
-def test_the_adjudicator_resolves_effort_from_its_own_model(
-    model: str, expected: str | None
-) -> None:
-    """The pass the finding names by name. `adjudicate_reading` catches every
-    exception and returns "unsure", so a bad effort value here retires it
-    permanently with nothing printed — and it was the one site unpinned."""
-    client = _BodyCapture('{"verdict": "writer", "why": "x"}')
-
-    enrich.adjudicate_reading(
-        "毎日話します。",
-        "毎日 話[はな]します。",
-        "毎日 話[わ]します。",
-        model=model,
-        client=client,
-    )
-
-    assert client.bodies, "the adjudicator never called the model"
-    assert client.bodies[0]["output_config"].get("effort") == expected
-    assert ("thinking" in client.bodies[0]) is (expected is not None)
-    # 200 was sized for a one-word verdict from a model that did not reason
-    # first. With thinking on it truncates every time — and this pass swallows
-    # a truncation into a permanent, silent "unsure".
-    assert client.bodies[0]["max_tokens"] == claude_client.DEFAULT_MAX_TOKENS
-
-
-@pytest.mark.parametrize("model,expected", [(NEW, "xhigh"), (OLD, None)])
 def test_meaning_polish_resolves_effort_from_its_own_model(
     model: str, expected: str | None
 ) -> None:
@@ -333,39 +307,19 @@ def test_refresh_skips_the_jpdb_stages_when_there_is_no_key(
     code = cli.main(
         ["--root", str(root), "refresh", "--no-audio", "--no-review", "--no-build"]
     )
-    err = capsys.readouterr().err
+    captured = capsys.readouterr()
 
     # stderr, not stdout: this skip is not something the caller asked for.
-    assert "— jpdb: skipped (no JPDB_API_KEY" in err
-    assert "— ai: skipped (no JPDB_API_KEY" in err
-    assert "— recheck: skipped (no JPDB_API_KEY" in err
+    assert "— jpdb: skipped (no JPDB_API_KEY" in captured.err
+    # `--ai` is no longer one of them: M7.6V retired the sentence oracle, so the
+    # AI pass writes and checks its examples without asking jpdb anything.
+    #
+    # Asserted as "it ran", not as "it was not skipped". The absence form is
+    # satisfied by an *abort* — a run that dies at `ai` with "JPDB_API_KEY is
+    # not set" also prints no "— ai: skipped" and also returns 1 — which is the
+    # regression this test exists to catch and did not.
+    assert "refresh: 1 stage(s) completed: ai" in captured.out
     # And non-zero, so cron cannot read "nothing was enriched" as success.
     assert code == 1
 
 
-def test_refresh_runs_the_recheck_when_a_key_exists(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """`--no-jpdb` skips the jpdb fill and nothing else. Skipping the re-check
-    with it re-opened the hole its position in the order exists to close: `--ai`
-    flags examples through its own client, and `audio` will not voice a flagged
-    one."""
-    from japanese_anki import cli
-
-    monkeypatch.setenv("JPDB_API_KEY", "k")
-    root = tmp_path / "p"
-    (root / "data" / "decks").mkdir(parents=True)
-    (root / "janki.toml").write_text("[paths]\n", encoding="utf-8")
-    (root / "data" / "normalized").mkdir(parents=True, exist_ok=True)
-    (root / "data" / "normalized" / "vocabulary.json").write_text("[]", encoding="utf-8")
-
-    cli.main(
-        [
-            "--root", str(root), "refresh", "--no-jpdb", "--no-ai",
-            "--no-audio", "--no-review", "--no-build",
-        ]
-    )
-    out = capsys.readouterr().out
-
-    assert "— jpdb: skipped (--no-jpdb)" in out
-    assert "recheck: skipped" not in out

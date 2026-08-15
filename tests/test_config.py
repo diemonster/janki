@@ -44,7 +44,6 @@ def test_defaults_apply_when_the_new_sections_are_absent(
     assert config.enrich_reasoning_effort == "ultra"  # codex-only, inert here
     assert config.polish_model == "claude-opus-5"
     assert config.review_model == "claude-opus-5"
-    assert config.adjudicate_model == "claude-opus-5"
     assert config.tts_provider == "voicevox"
     assert config.voicevox_url == "http://localhost:50021"
     assert config.voicevox_speaker == 46

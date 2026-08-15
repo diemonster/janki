@@ -3310,14 +3310,51 @@ Use these slices, each a finding plus a reproducing case plus a fix, ordered so
    the bound is the paid review, which judges whether a sentence is too hard as
    a language question rather than by rank — the line this whole task draws.
 
-7. Retire the oracle, `recheck_furigana`, `adjudicate_reading` and the
-   `parse is None` disjunct together, with their tests and docs, in one commit
-   so the tree never references a deleted symbol. **`impossible` is not then
-   the sole source of the unverified flag** — `rewritten` is the other, and it
-   is redundant while `parse is None` stands, so deleting that disjunct is what
-   makes it load-bearing. Pin it with a test in the same commit, or a furigana
-   that rewrites its sentence stops being flagged the moment its only other
-   route to the flag disappears.
+7. *Done 2026-08-14.* Retired together: the oracle and its now-orphaned
+   `FuriganaVerdict`/`_render`/`_comparable`, `recheck_furigana`,
+   `adjudicate_reading`, the `parse is None` disjunct, the `jpdb_client`
+   plumbing through the whole AI path (live and batch), the CLI flag's jpdb route and `--no-adjudicate`
+   (`--accept` was kept, and is now a standalone `enrich` pass), the `recheck` refresh stage,
+   `config.adjudicate_model`, and the replay runner's `sentence_responses`
+   support, which no case used. `--ai` now needs no jpdb key: `_JPDB_STAGES` is
+   `{"jpdb"}` alone.
+
+   Both terms of the flag are pinned, and each needed its own fixture. Dropping
+   `rewritten` is caught by nine tests. Dropping `impossible` **survived** at
+   first: a record that already has examples takes the merge branch, which
+   re-derives the flag from `outcome.impossible_furigana`, so the two routes
+   mask each other exactly as slice 6's measurement warned. A record with no
+   stored example has no merge to re-derive from, and pins the verdict itself.
+
+   **Two checks were lost**, the second in two shapes. A wrong-but-attested reading that KANJIDIC lists
+   is the deliberate one — no local rule can decide it, and it is left to a
+   reader. The second was not intended and is worth recording: the oracle was
+   the only rule that read a **full-width space** as a separator fault, and
+   Anki's filter separates on the ASCII space alone, so `毎日　話[はな]します。`
+   drops 毎日 from the reading, the romaji and the sentence audio. Measured:
+   `spilled_furigana_groups` catches `お　茶[ちゃ]` — but for the reading, not
+   the space (`お茶[ちゃ]` without any space gets the same verdict, and
+   `お　茶[おちゃ]` with the same space gets none). Only the subset that also
+   spills a reading survives. The same loss covers a group with *no* separator
+   before a Han-initial run — `毎日話[はな]します。` — which `spilled_furigana_groups`
+   documents as its own known gap. Both are recorded as the open finding
+   `furigana-full-width-separator`, and both are pinned as tests asserting the
+   wrong behaviour until the separator rule lands.
+
+   The merge branch's aggregation carries both routes and both are now pinned
+   too — dropping either the impossible or the rewritten term fails exactly one
+   test. `*landed_unverified` beside them is **dead**: it was the sole carrier
+   of the `parse is None` flag, and post-slice-7 `unverified` is a subset of
+   `impossible ∪ rewritten`, so removing it passes the whole suite. Left in
+   place rather than removed at the end of a long change, because taking it out
+   also changes `_fill_existing_example_annotations`' return shape; it is the
+   one known-dead line in this diff.
+
+   `ai-existing-example-annotations`'s oracle changed and was re-pinned. Its
+   example is all-kana with furigana identical to its sentence, so it had been
+   flagged solely by `parse is None`; `unverified_ids` and `warning_count` are
+   now empty and zero. The input fingerprint is untouched, so the finding's
+   evidence still resolves.
 8. *Done 2026-08-14, taken ahead of 6 and 7 because it removes a parse
    consumer.* Measured over all 158 examples carrying furigana, including the
    five regenerated with Opus: `repair_from_word_boundaries` changed
@@ -3328,7 +3365,7 @@ Use these slices, each a finding plus a reproducing case plus a fix, ordered so
    jpdb's sentence boundaries — measured wrong on three of five colloquial
    sentences. A repair that has never fired, driven by boundaries that are
    sometimes wrong, could only ever introduce the error it was written to
-   prevent. `_learner_load_excess` was then one of two consumers of the parse and has since been deleted; `verify_example_furigana` remains, and retiring it is slice 7.
+   prevent. `_learner_load_excess` was then one of two consumers of the parse and has since been deleted; `verify_example_furigana` was then the parse's last consumer, and slice 7 retired it.
 9. Update `docs/HARDENING.md`, full replay, `make gates`, one local review
    cycle.
 
