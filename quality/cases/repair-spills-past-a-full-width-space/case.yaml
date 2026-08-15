@@ -11,7 +11,7 @@ fixtures:
   - path: input.json
     fingerprint: 30b06aae554255c16db90db936ef6e51ef2786886c70a06fa6b565adcb6de29e
   - path: oracle.json
-    fingerprint: d1587d5303541555ab9c7b1ab5c2d6dae044f0a98d20dda8af689dcb6b3eed66
+    fingerprint: 6f52b5af1764b199fb0499b73a9055cf7451d080690b5414b8312e3d3777dc88
 runner_input: input.json
 oracle: oracle.json
 finding_id: repair-spills-past-a-full-width-space

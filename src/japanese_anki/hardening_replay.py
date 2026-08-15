@@ -977,7 +977,11 @@ def _ai_enrichment(data: dict[str, Any], root: Path) -> Any:
 def _ai_enrichment_prompt(data: dict[str, Any], root: Path) -> Any:
     """Observe the contracts sent to the AI enrichment model."""
     del root
-    _only(data, {"records", "observe_example_pinning"}, "ai-enrichment-prompt")
+    _only(
+        data,
+        {"records", "observe_example_pinning", "observe_furigana_notation"},
+        "ai-enrichment-prompt",
+    )
     records = _records(data.get("records"))
     if len(records) != 1:
         raise hardening.HardeningError(
@@ -990,6 +994,19 @@ def _ai_enrichment_prompt(data: dict[str, Any], root: Path) -> Any:
         ),
         "expression_in_prompt": records[0].expression in combined,
     }
+    if _optional_bool(data, "observe_furigana_notation"):
+        # The notation contract, which is where correct furigana is asked for
+        # rather than checked for afterwards. Two substrings, because the halves
+        # fail independently — a separator rule with no statement of what a base
+        # is lets the base widen, and the reverse lets the separator go missing.
+        # Opt-in, like the pinning keys above, so cases written before it keep
+        # their shape.
+        output["furigana_base_contract"] = (
+            "The base is exactly the characters that reading" in combined
+        )
+        output["furigana_separator_contract"] = (
+            "an ASCII space separates each group" in combined
+        )
     if _optional_bool(data, "observe_example_pinning"):
         # The selection comes from the same first-class function the prompt
         # renders (`enrich.pinned_examples`) — probing the prompt's quoting

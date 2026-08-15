@@ -355,7 +355,7 @@ findings:
     pipeline_stage: validation-qc
     source_archetypes: [camera]
     symptom: repair_spilled_punctuation inserts the ASCII space Anki needs before a run of leading punctuation, and its guard refuses the repair when the swallowed run still contains kana — but the guard reads kana only, so a full-width space inside that run passes. 週末[しゅうまつ]、東京　大阪[おおさか] is repaired to 週末[しゅうまつ]、 東京　大阪[おおさか], which spilled_furigana_groups reported before the repair and does not report after it, while おおさか still annotates 東京　大阪 and 東京 is gone from the reading, the romaji and the sentence audio. This is the evidence-erasing shape the function's own comment says it was rewritten to stop causing.
-    invariant: The punctuation repair refuses any run it cannot prove is the annotated word alone — kana in the remainder, and now whitespace of any kind, since a full-width space means the base still covers more than the reading spells. Refusing leaves spilled_furigana_groups reporting the defect, which is what the repair is not allowed to hide. That the repair still fires where the remainder is the word alone is covered by the same test.
+    invariant: The punctuation repair refuses any run it cannot prove is the annotated word alone — kana in the remainder, and whitespace of any kind, since a full-width space means the base still covers more than the reading spells. Refusing leaves spilled_furigana_groups reporting the defect, which is what a repair is not allowed to hide. That the repair still fires where the remainder is the word alone is covered by the same test.
     evidence:
       - fingerprint: af835e904ea2aad10da990c46e89c84b106c0272c766ad6ac9f5109542c24794
         locator: quality/evidence/repair-spills-past-a-full-width-space.json
@@ -364,16 +364,16 @@ findings:
     fix_ref: src/japanese_anki/qc.py#repair_spilled_punctuation
   - id: furigana-full-width-separator
     state: fixed
-    pipeline_stage: validation-qc
+    pipeline_stage: ai-enrichment
     source_archetypes: [camera]
     symptom: A ruby group whose separator Anki cannot read puts the reading over the preceding characters as well, and nothing reported it. Two notations, one fault — 毎日　話[はな]します。 with a full-width space, which Anki's filter does not treat as a separator, and 毎日話[はな]します。 with none at all. Both read はなします。, so 毎日 was dropped from the reconstructed reading, from the regenerated romaji and from the sentence audio. M7.6V retired the jpdb sentence oracle, which had caught both by comparing what the furigana sounds like against the dictionary's own rendering.
-    invariant: A ruby group's base is refused when its notation cannot be what its reading spells, by two rules that need no dictionary and make no word-boundary guess. Whitespace inside a base is refused outright, because Anki separates runs on the ASCII space alone and janki writes no other. A base holding more kanji than the reading holds kana is refused by counting, because every kanji spells at least one kana — which catches the missing separator that the notation rule cannot see and that asking where the word ends would require guessing. Neither fires on the other's shape, and neither fires on any of the collection's 214 furigana fields. The counting rule is deliberately weaker than knowing the boundary — a base widened by a kanji the reading still has kana for is not caught — and that limit is covered by tests rather than by this case.
+    invariant: The enrichment prompt states the furigana notation contract where the sentences are written — that the field is read back as the whole sentence, that a base is exactly the characters its reading spells, that an ASCII space separates each group and a full-width one does not, and that which reading a kanji takes is the model's contextual judgement. Asked for rather than checked for afterwards — janki does not parse the sentence to second-guess the notation, because a rule that reads Japanese structurally is the thing M7.6V retired, and a growing list of notation exceptions is the same instinct in a smaller coat. What still catches a malformed field is the spill warning, its repair, and the paid review that reads the card as language.
     evidence:
       - fingerprint: 2cf757e9bdcffbcc97eefb7a938fa710c243b7083c3a6e0032a5e8d1f9877143
         locator: quality/evidence/furigana-full-width-separator.json
     recurrences: []
     case_ids: [furigana-full-width-separator]
-    fix_ref: src/japanese_anki/qc.py#overwide_furigana_bases
+    fix_ref: src/japanese_anki/enrich.py#AI_INSTRUCTIONS
   - id: model-request-unsupported-effort
     state: fixed
     pipeline_stage: model-request

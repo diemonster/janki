@@ -6,6 +6,28 @@ This repository converts Japanese vocabulary and study material into custom
 Anki decks. Shirabe Jisho CSV exports are a primary input source. The repository
 is the durable source of truth; generated `.apkg` files are build artifacts.
 
+## The prompt does the work
+
+**This is the first rule, and it overrides convenience.** janki asks a model to
+read and parse Japanese. When the model's output is wrong or incomplete, the
+first move is to *expand the prompt* — not to add code that inspects, corrects
+or second-guesses what came back.
+
+- **Do not write logic that reads Japanese.** No rule that decides a reading, a
+  word boundary, a register, or whether notation describes a sentence. Japanese
+  is contextual; a rule derived from one sentence is wrong for the next, and a
+  growing list of exceptions is how M7.6V's retired jpdb sentence oracle got
+  built. It flagged 38 of 155 examples with no true positive among them.
+- **The logic this project owns is enrichment and filtering**: fetching facts
+  from dictionaries, and shaping reviewed content into an Anki deck. Structural
+  contracts — identifiers, fingerprints, field counts, file provenance — are
+  the project's, because they are about the artifact rather than the language.
+- **Prompts are templates and belong in files**, stated plainly enough that
+  someone can read what the model was asked for without reading Python.
+- Before adding any check: could the prompt have asked for this? If yes, change
+  the prompt. Add a check only for something the model cannot be asked — and
+  say in the commit why not.
+
 ## Development rules
 
 - Use Python 3.11 or newer.

@@ -3372,6 +3372,39 @@ Use these slices, each a finding plus a reproducing case plus a fix, ordered so
 Do not run a paid semantic review as part of this task. The first review after
 it lands is the milestone measurement.
 
+### [ ] M7.6P Prompts are templates, and the prompt does the work
+
+*The standing rule, recorded here because this project keeps drifting from it.*
+janki asks a model to read Japanese. When the answer is wrong or thin, the fix
+is to **expand the prompt**, never to add code that inspects or corrects what
+came back. Japanese is contextual: a rule derived from one sentence is wrong for
+the next, and a list of exceptions is exactly how the retired jpdb sentence
+oracle was built — 38 of 155 examples flagged, no true positive among them.
+M7.6V retired it and then, within one session, three replacement rules were
+proposed for furigana notation and reverted. The rule this project owns is
+enrichment and filtering; the logic it owns is about the *artifact* —
+identifiers, fingerprints, field counts, provenance — never about the language.
+
+1. Lift every model instruction out of Python into a template file readable
+   without opening the code: `enrich.AI_INSTRUCTIONS` and
+   `enrich.POLISH_INSTRUCTIONS`, `patterns.INSTRUCTIONS`, `review.INSTRUCTIONS`,
+   and the extraction prompt. One directory, one loader, the same
+   fingerprinting the style guide already gets so a prompt change is visible in
+   review rather than buried in a diff of string literals.
+2. The loader is the only new logic, and it is a file read — not a renderer with
+   conditionals. A prompt that needs a branch is two prompts.
+3. Prompt content is a reviewable artifact: a case observes the contracts a
+   prompt states (`ai-enrichment-prompt` already does this for the exact-spelling
+   and furigana-notation clauses), so retiring a clause is a visible change with
+   a failing case rather than a silent weakening.
+4. Audit what already exists against the rule. Anything in `qc.py` or
+   `validation.py` that decides a *reading*, a word boundary, or a register is
+   a candidate for deletion in favour of a prompt clause plus the paid review;
+   anything that checks notation, counts, identifiers or file shape stays.
+
+Depends on: M7.6V. Files: a prompt template directory, its loader, the five
+call sites, `docs/ENRICHMENT.md`, and the cases that observe prompt contracts.
+
 ### [ ] M7.6B Pilot pair — scans and camera captures
 
 *Progress 2026-08-13: inventoried an owner-provided phone photo and added an

@@ -2,16 +2,16 @@ version: 1
 id: furigana-full-width-separator
 purpose: regression
 gating: true
-runner: validation-qc
-pipeline_boundary: validation-qc
+runner: ai-enrichment-prompt
+pipeline_boundary: ai-enrichment
 source_archetype: camera
 redistributable: true
 fixture_basis: agent-created-synthetic
 fixtures:
   - path: input.json
-    fingerprint: 10bd96948e671a3faa7af6367b6a8b504fe859a308385c63d56fd6043f8ba589
+    fingerprint: d197eac065d85e32bddce7e2f034346df8bff64722d361a5eda38fe4b37c633a
   - path: oracle.json
-    fingerprint: 0af202cc9e9a43979d8715f42c64ba58593512098d377578be975b876c36cb46
+    fingerprint: 584a772919b5c69202608e1ef1535a11b822f9e9fcea878b6317d9ee8fe2cd9f
 runner_input: input.json
 oracle: oracle.json
 finding_id: furigana-full-width-separator

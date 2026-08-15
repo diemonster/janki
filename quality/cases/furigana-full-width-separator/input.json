@@ -7,21 +7,8 @@
       "meanings": [
         "to speak"
       ],
-      "part_of_speech": "v5s",
-      "examples": [
-        {
-          "japanese": "毎日話します。",
-          "furigana": "毎日　話[はな]します。",
-          "english": "I speak every day.",
-          "register": "polite"
-        },
-        {
-          "japanese": "毎日話します。",
-          "furigana": "毎日話[はな]します。",
-          "english": "I speak every day.",
-          "register": "polite"
-        }
-      ]
+      "verb_group": "godan"
     }
-  ]
+  ],
+  "observe_furigana_notation": true
 }

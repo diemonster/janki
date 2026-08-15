@@ -210,28 +210,6 @@ def test_okurigana_changed_inside_the_furigana_is_flagged() -> None:
     assert furigana_rewrites_sentence(altered)
 
 
-def test_a_full_width_space_outside_the_spill_subset_is_caught_by_nothing() -> None:
-    """A known gap, pinned so it is visible rather than discovered on a card.
-
-    Anki's furigana filter separates on the ASCII space alone, so the ruby in
-    `毎日　話[はな]します。` covers 毎日 too — the reading, the romaji and the
-    sentence audio all silently lose 毎日. M7.6V's retired dictionary oracle was
-    the only rule that read a full-width space as a separator fault; the spill
-    rule catches only the subset that also spills a *reading*, which this is
-    not. Recorded as `furigana-full-width-separator` in quality/findings.yaml.
-
-    Asserting the wrong behaviour on purpose. When the separator rule lands
-    this test fails, which is the point: it is the reminder, not the contract.
-    """
-    lost = ExampleSentence(japanese="毎日話します。", furigana="毎日　話[はな]します。")
-
-    assert furigana_rewrites_sentence(lost) == ""
-    assert spilled_furigana_groups(lost.furigana) == ()
-    assert stray_furigana_spaces(lost.furigana) == ()
-    # 毎日 is gone from what the card would speak.
-    assert furigana_reading(lost.furigana) == "はなします。"
-
-
 def test_a_full_width_space_does_not_pass_as_a_separator() -> None:
     # Anki's furigana filter separates on the ASCII space alone, so お　茶[ちゃ]
     # renders ちゃ over both characters — the same wrong-ruby failure a missing

@@ -1,15 +1,10 @@
 {
-  "errors": 1,
+  "errors": 0,
   "warnings": 1,
   "diagnostics": [
     {
       "code": "example-spilled-furigana",
       "level": "warning",
-      "record_id": "word:大阪:おおさか"
-    },
-    {
-      "code": "example-spaced-furigana-base",
-      "level": "error",
       "record_id": "word:大阪:おおさか"
     }
   ],
