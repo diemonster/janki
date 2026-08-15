@@ -1,3 +1,5 @@
+> **Historical.** `docs/DESIGN.md` is the leading design document. Parts of this file describe retired subsystems (the jpdb sentence oracle, VOICEVOX steering, review gating) and are kept only as a record of how the project got here.
+
 # Design v2: Multi-Source, AI-First Pipeline
 
 Status: accepted (2026-08-06), revised after adversarial review.

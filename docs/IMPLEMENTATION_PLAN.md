@@ -3401,9 +3401,57 @@ identifiers, fingerprints, field counts, provenance — never about the language
    `validation.py` that decides a *reading*, a word boundary, or a register is
    a candidate for deletion in favour of a prompt clause plus the paid review;
    anything that checks notation, counts, identifiers or file shape stays.
+5. Consolidate the AI passes into the templates (DESIGN.md stage 2): one rich
+   template for a source that carries sentences — Japanese, English, furigana
+   with each kanji's contextual reading, usage patterns, register — and one for
+   a bare word list, absorbing `extract`'s prompt and `enrich --ai`;
+   `--polish-meanings` becomes a template too. If the cards need more, the
+   template asks for more.
 
 Depends on: M7.6V. Files: a prompt template directory, its loader, the five
 call sites, `docs/ENRICHMENT.md`, and the cases that observe prompt contracts.
+
+## M8 The design leads
+
+*2026-08-15. `docs/DESIGN.md` is now the leading document; these milestones
+remove what it does not justify. The through-line of every one: janki's logic
+enriches the card, it never audits the model, and a rules engine for Japanese
+is this project's defining anti-pattern.*
+
+### [ ] M8.1 OpenAI TTS replaces VOICEVOX
+
+Decided 2026-08-15: OpenAI TTS renders natural Japanese — pitch accent
+included — so every mechanism that existed to *steer* VOICEVOX is unnecessary
+with it. Remove the VOICEVOX provider and all synthesis steering:
+`pitch.to_aquestalk`, `audio_accent` and `--allow-default-accent`, the
+accent-fitness audio guard, the `accent_unverified` ledger tag, and the
+`tts.voicevox_*` config keys. The card's pitch *display* keeps jpdb's pattern —
+that is a word fact (stage 3), not synthesis steering. Audio needs
+`OPENAI_API_KEY` and a voice name in config; calls are billed, and a missing
+key skips the stage the way a missing jpdb key skips enrichment. Clips stay
+content-addressed so identical text dedups and regeneration is cheap. Word and
+example clips both route through the one provider.
+
+### [ ] M8.2 The build stops asking a review for permission
+
+The review gate was janki's logic auditing the model, which is backwards — the
+model reads Japanese better than anything we write. `build` and `refresh` stop
+consulting the review store; readiness/unready, clean-review permission
+records, and the review stage in refresh all go. `janki review` survives only
+as an on-demand, non-blocking spot check (it is itself the LLM) or goes
+entirely if it earns nothing — either way it grants no permissions. A bad card
+means a template asked for too little.
+
+### [ ] M8.3 The hardening corpus becomes tests
+
+Most of the corpus's value was ordinary regression testing wearing ceremony —
+prose invariants, fingerprint pinning, findings opened for synthetic probes.
+Migrate the replay cases that guard real artifact behaviour (importers,
+packaging, provenance, repairs) into plain pytest; delete the findings/cases/
+replay apparatus and `janki harden` once nothing depends on them. A new defect
+in janki's machinery gets a failing test first and a fix second — the ordinary
+loop, no YAML. The immutable inbox and provenance rules are unaffected; they
+are design, not corpus.
 
 ### [ ] M7.6B Pilot pair — scans and camera captures
 

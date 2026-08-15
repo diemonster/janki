@@ -5,6 +5,8 @@
 This repository converts Japanese vocabulary and study material into custom
 Anki decks. Shirabe Jisho CSV exports are a primary input source. The repository
 is the durable source of truth; generated `.apkg` files are build artifacts.
+The one-page `docs/DESIGN.md` leads: when code, plan, or any other document
+disagrees with it, DESIGN.md wins and the other changes.
 
 ## The prompt does the work
 
@@ -24,6 +26,10 @@ or second-guesses what came back.
   the project's, because they are about the artifact rather than the language.
 - **Prompts are templates and belong in files**, stated plainly enough that
   someone can read what the model was asked for without reading Python.
+- **janki's logic enriches the card; it never audits the model.** Review
+  gates and hardening rules aimed at proving the model wrong are the same
+  anti-pattern as reading Japanese in code: writing a rules engine for
+  Japanese from scratch. If the output is thin, the template asks for more.
 - Before adding any check: could the prompt have asked for this? If yes, change
   the prompt. Add a check only for something the model cannot be asked — and
   say in the commit why not.
@@ -59,6 +65,10 @@ or second-guesses what came back.
 - Flag uncertain readings, pitch accent, meanings, or usage rather than guessing.
 
 ## Hardening rules
+
+*Scope (2026-08-15): a finding records a defect in janki's own machinery —
+importers, packaging, provenance, repairs. A wrong or thin model answer is a
+template problem, never a finding. M8.3 slims this corpus to plain tests.*
 
 - Follow `docs/HARDENING.md` when real deck work exposes a defect.
 - Classify a correction as `content-specific` or `systemic` before you
