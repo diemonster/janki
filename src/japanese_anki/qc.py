@@ -51,7 +51,6 @@ __all__ = [
     "parse_pairs",
     "regenerate_example_romaji",
     "target_forms",
-    "token_text",
 ]
 
 # One bracketed group in Anki furigana notation: the run of characters before
@@ -609,27 +608,6 @@ def furigana_base(furigana: str) -> str:
         position = match.end()
     out.append(furigana[position:])
     return "".join(out).replace(" ", "").replace("\u3000", "")
-
-
-def token_text(parse: jpdb.ParseResult, token: dict) -> str:
-    """The written text of one token, furigana or not.
-
-    jpdb sends ``furigana: null`` for an all-kana token — を, と, たべる in the
-    committed capture are all null — so a rendering built from furigana alone
-    silently drops whole words. The text comes off the dictionary entry the
-    token resolves to instead, which is the entry's *dictionary* form: a
-    conjugated kana token shows as たべる where the sentence said たべた. That
-    is accurate about what jpdb matched, and this text is only ever shown to a
-    human beside the sentence itself.
-    """
-    segments = _segments(token.get("furigana"))
-    if segments:
-        return "".join(
-            segment if isinstance(segment, str) else str(segment[0])
-            for segment in segments
-        )
-    entry = parse.vocabulary_for(token)
-    return str(entry.get("spelling") or "") if entry else ""
 
 
 def furigana_reading(furigana: str) -> str:

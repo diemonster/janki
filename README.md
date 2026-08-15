@@ -173,7 +173,7 @@ own collection is the newer side. Details and the measurements behind them:
 | `janki promote FILE.yaml --accept-proposals` | Review repair proposals by field |
 | `janki enrich --jpdb` | Fill fields from the dictionary |
 | `janki enrich --ai` | Write example sentences and usage notes |
-| `janki enrich --accept ID...` | Clear the named records' furigana flags on your authority, so their audio can be generated |
+| `janki enrich --accept ID...` | Clear the named records' furigana flags on your authority, so their sentence audio can be generated |
 | `janki enrich --polish-meanings --batch-submit` | Queue a large gloss-improvement pass for later review |
 | `janki kanji` | Look up stroke order and on/kun readings |
 | `janki audio --words --examples` | Voice the words and the sentences |

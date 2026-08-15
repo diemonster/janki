@@ -1,8 +1,11 @@
 """Writing examples and usage notes — ``janki enrich --ai``.
 
-No network (IMPLEMENTATION_PLAN rule 6): the model call is faked and jpdb is
-driven through a fake transport, so the QC routing is exercised for real rather
-than stubbed at the decision.
+No network (IMPLEMENTATION_PLAN rule 6): the model call is faked, so the QC
+routing is exercised for real rather than stubbed at the decision. The AI pass asks jpdb
+nothing since M7.6V, so `patch_all`'s client swap and its JPDB_API_KEY are
+vestigial — kept only because removing the key would be a second change, and
+noted here because that key is what hid the pass's own key dependency until
+`test_the_ai_pass_enriches_a_record_with_no_jpdb_key` was written without it.
 """
 
 from __future__ import annotations
@@ -1101,7 +1104,7 @@ def test_a_flagged_example_is_reported_and_recorded(
     cli.main(["--root", str(root), "enrich", "--ai", "--yes"])
 
     captured = capsys.readouterr()
-    assert "no local check could confirm" in captured.err
+    assert "a local check disagreed with" in captured.err
     fields = stored(root)["word:話す:はなす"]["source"]["raw_fields"]
     assert fields[UNVERIFIED_KEY] == short_fingerprint("話します。")
 
@@ -1253,7 +1256,7 @@ def test_the_unverified_flag_survives_the_staging_route_into_the_records(
     landed = stored(root)["word:話す0:はなす"]
     assert landed["examples"], "the examples merged in"
     assert UNVERIFIED_KEY in landed["source"]["raw_fields"], (
-        "M5.3 reads this key to decide whether to speak a sentence nobody checked"
+        "M5.3 reads this key to decide whether to speak a doubted sentence"
     )
 
 
@@ -1644,7 +1647,7 @@ def test_both_furigana_warnings_say_what_was_kept_and_that_audio_is_blocked() ->
     assert "sentence audio remains blocked" in named
 
 
-def test_a_furigana_field_that_rewrites_the_sentence_is_named_with_no_parse() -> None:
+def test_a_furigana_field_that_rewrites_the_sentence_is_named() -> None:
     # The failure this catches is a model rewriting the sentence inside the
     # field that drives audio: the groups all read correctly, and the particle
     # is wrong. It is decidable without a dictionary, so it must be reported
@@ -1936,3 +1939,39 @@ def test_a_full_width_separator_reaches_the_card_unflagged(furigana: str) -> Non
     assert outcome.unverified == []
     assert UNVERIFIED_KEY not in outcome.record.source.raw_fields
     assert outcome.record.examples[0].romaji == "hanashimasu."
+
+
+def test_the_ai_pass_enriches_a_record_with_no_jpdb_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """M7.6V's headline: `--ai` asks jpdb nothing, so it must not demand a key.
+
+    Driven over a record that really is enriched, and with `cli.jpdb.JpdbClient`
+    left unpatched so any attempt to build one raises rather than being handed a
+    fake. The first shape of the retirement narrowed `_JPDB_STAGES` but left the
+    client built above the `--ai` dispatch, so the pass still died without a
+    key; the only test covering it ran against an empty collection, where the
+    stage no-ops before reaching the construction."""
+    monkeypatch.delenv("JPDB_API_KEY", raising=False)
+    root = project(tmp_path, [record()])
+    call = FakeCall(
+        CallResult(
+            answer(
+                generated(
+                    "毎日話します。",
+                    furigana="毎日[まいにち] 話[はな]します。",
+                    english="I speak every day.",
+                ),
+                usage_notes="A common verb.",
+            ),
+            "end_turn",
+            None,
+        )
+    )
+    monkeypatch.setattr(cli.codex_client, "parse_call", call)
+    monkeypatch.setattr(cli.claude_client, "parse_call", call)
+
+    code = cli.main(["--root", str(root), "enrich", "--ai", "--yes"])
+
+    assert code == 0, capsys.readouterr().err
+    assert stored(root)["word:話す:はなす"]["examples"], "the pass wrote nothing"

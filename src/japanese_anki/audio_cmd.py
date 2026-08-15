@@ -13,10 +13,13 @@ synthesized with whatever the engine guesses — DESIGN_V2 is explicit that the
 homographs a guess gets wrong are exactly the ones a pitch card is for.
 ``--allow-default-accent`` opts into the guess deliberately and tags the ledger
 entry ``accent_unverified`` so the choice is visible afterwards rather than
-indistinguishable from a verified one. An example whose furigana jpdb never
-confirmed is skipped for the same reason: M4.2 flagged it precisely because
-nobody has checked its segmentation, and speaking it would launder that doubt
-into a recording.
+indistinguishable from a verified one. An example carrying a furigana flag is skipped
+for the same reason: something doubted that field and speaking it would launder
+the doubt into a recording. The flag records *that* it was doubted, not why —
+the collection still carries flags the retired jpdb sentence oracle wrote —
+so nothing here claims a reason. `enrich --accept` clears one on a person's
+authority, and a flag also lapses when its sentence is rewritten, since the
+fingerprint it is keyed to no longer exists.
 
 Files are content-addressed (``janki-<fingerprint>.wav``), which is what makes
 staleness fall out rather than needing tracking: change a sentence and its audio
@@ -108,7 +111,7 @@ class AudioResult:
     #: Records with no reading at all, which cannot be voiced and are not the
     #: same problem as a missing accent.
     no_reading: list[str] = field(default_factory=list)
-    #: Examples skipped because their furigana was never confirmed (M4.2's flag).
+    #: Examples skipped because their furigana carries a flag (M4.2's key).
     unverified: list[str] = field(default_factory=list)
     #: Examples refused by the teaching-content gate (M7.6T): a fragment or
     #: a false register label. The same judgment
@@ -312,8 +315,13 @@ def _example_audio(
             examples.append(example)
             continue
         if short_fingerprint(example.japanese) in flagged:
-            # M4.2 flagged this because nobody confirmed its segmentation.
-            # Speaking it would turn an open question into a recording.
+            # Something once doubted this furigana. What, exactly, the flag
+            # does not say — it is a fingerprint, and the collection still
+            # carries flags the retired jpdb sentence oracle wrote — so this
+            # does not claim a reason it cannot know. Speaking a doubted
+            # sentence would launder the doubt into a recording. A person clears
+            # it with `enrich --accept`; it also lapses if the sentence itself is
+            # rewritten, since the fingerprint goes with it.
             result.unverified.append(f"{record.id}: {example.japanese}")
             examples.append(example)
             continue

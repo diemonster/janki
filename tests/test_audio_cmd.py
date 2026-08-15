@@ -157,8 +157,9 @@ def test_an_example_is_read_naturally(tmp_path: Path) -> None:
 
 
 def test_an_example_with_unconfirmed_furigana_is_not_voiced(tmp_path: Path) -> None:
-    """M4.2 flagged it because nobody checked its segmentation. Speaking it
-    would turn an open question into a recording."""
+    """Something doubted this furigana — the flag records that, not why, since
+    the collection still carries flags the retired jpdb oracle wrote. Speaking
+    it would launder the doubt into a recording."""
     from japanese_anki.identifiers import short_fingerprint
 
     sentence = "橋を渡ります。"
@@ -1144,3 +1145,40 @@ def test_the_word_rate_does_not_reach_the_openai_sentence_provider(tmp_path: Pat
 
     assert sentences.name == "openai"
     assert sentences.speed == 1.0, "the word engine's rate stayed out of it"
+
+
+def test_the_flagged_warning_names_the_records_and_the_way_to_clear_them(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The one message a user meets at the moment of the hold. It has been wrong
+    twice: it blamed jpdb after the oracle was retired, and then claimed a local
+    check disagreed — false for every flag in the collection, all of which the
+    retired oracle wrote. So it says only that the furigana was doubted.
+
+    And it has to be actionable. `result.unverified` has always carried the
+    record ids; printing a bare count sent the reader to open vocabulary.json
+    and match fingerprints by hand."""
+    from japanese_anki.identifiers import short_fingerprint
+
+    sentence = "橋を渡ります。"
+    flagged = record(
+        examples=[ExampleSentence(japanese=sentence, english="x", register="polite")],
+        source=SourceReference(
+            type="jpdb",
+            imported_from="deck",
+            raw_fields={"furigana_unverified": short_fingerprint(sentence)},
+        ),
+    )
+    root = project(tmp_path, [flagged])
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: FakeVoice())
+
+    assert cli.main(["--root", str(root), "audio", "--examples"]) == 0
+
+    err = capsys.readouterr().err
+    assert "carry a furigana flag" in err
+    assert "enrich --accept" in err
+    # Named, so the reader can act without opening the store.
+    assert "word:橋:はし" in err
+    # And no claim about *why*, which this command cannot know.
+    assert "jpdb" not in err
+    assert "disagreed" not in err

@@ -433,8 +433,6 @@ def test_a_failing_stage_stops_the_run(
 def test_refresh_builds_only_the_named_deck(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # The recheck stage needs a key, and an involuntary skip now fails the run.
-    monkeypatch.setenv("JPDB_API_KEY", "k")
     root = _project(tmp_path, [_record("橋", "はし")])
     (root / "decks" / "nouns.yaml").write_text(
         "deck:\n  name: Nouns\n  source: ../vocabulary.json\nnotes: []\n",

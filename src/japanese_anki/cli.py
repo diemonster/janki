@@ -1059,8 +1059,10 @@ def _accept_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
 
     Asks nothing and writes no field: it removes a flag that `janki audio`
     reads. Since M7.6V retired the dictionary re-check, this is the only way a
-    flag ever comes off — a corrected furigana does not clear its own flag,
-    because the flag describes the sentence as it was written.
+    flag comes off a sentence that stays — a corrected furigana does not clear
+    its own flag, because the flag is keyed to the sentence rather than to the
+    field. Rewriting the *sentence* does drop it, at the prune in
+    `apply_ai_result`, because the fingerprint then matches no example.
     """
     output_path = config.normalized_file.resolve()
     output_revision = records_revision(output_path)
@@ -1465,7 +1467,7 @@ def _write_ai_result(
                 "review_notes": (
                     f"{len(result.changes)} record(s) enriched by {model}. These "
                     "records already exist; promoting merges the new fields into "
-                    "them. Sentences whose furigana no local check could confirm are "
+                    "them. Sentences whose furigana a local check disagreed with are "
                     f"flagged with '{enrich.UNVERIFIED_KEY}' — check those before "
                     "audio is generated for them."
                 ),
@@ -1494,7 +1496,7 @@ def _write_ai_result(
     if result.unverified:
         print(
             f"  {len(result.unverified)} record(s) carry an example whose furigana "
-            "no local check could confirm; they are flagged in the record. "
+            "a local check disagreed with; they are flagged in the record. "
             "Clear one with 'enrich --accept RECORD_ID' once you have read it."
         )
     if ledger_error is None:
@@ -2811,8 +2813,11 @@ def command_audio(args: argparse.Namespace) -> int:
         )
     if result.unverified:
         print(
-            f"warning: {len(result.unverified)} example(s) carry furigana jpdb "
-            "never confirmed and were left unvoiced; check them first.",
+            f"warning: {len(result.unverified)} example(s) carry a furigana "
+            "flag and were left unvoiced. Read the sentence, then clear it "
+            "with 'janki enrich --accept RECORD_ID': "
+            f"{', '.join(result.unverified[:5])}"
+            + (" ..." if len(result.unverified) > 5 else ""),
             file=sys.stderr,
         )
     if result.held:

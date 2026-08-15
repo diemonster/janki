@@ -95,7 +95,7 @@ janki no longer asks jpdb to check a *sentence*. It used to, and the check was
 wrong more often than the sentences were: jpdb parses by segmenting, and on
 colloquial text it segments badly — it read とする in 今、だれとすんでるの？, a
 word not in the sentence, while 住む, the word actually there, went unread.
-Measured against a real import it flagged 12 of 17 correct examples. What
+Measured over the whole collection it flagged 38 of 155 examples, with no true positive among them. What
 replaces it is the semantic review, which reads the Japanese as language rather
 than as tokens.
 

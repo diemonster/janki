@@ -675,7 +675,7 @@ def test_a_merge_import_over_a_malformed_file_is_a_clean_error(
 
 
 def test_hold_flags_travel_with_the_examples_they_describe() -> None:
-    # furigana_unverified says "nobody checked these". If the examples land
+    # furigana_unverified says "these examples' furigana was doubted". If they land
     # and the key does not, the store holds sentences with nothing saying so.
     # The incoming row
     # is the AI staging route's shape: the record's own non-extract source,

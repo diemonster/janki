@@ -537,9 +537,9 @@ MERGEABLE_FIELDS: tuple[str, ...] = tuple(
 # ``source.raw_fields`` keys that annotate a *content* field rather than the
 # record's origin, mapped to the field they describe. ``source`` otherwise
 # belongs to whoever saw the record first, which is right for provenance and
-# wrong for these: ``furigana_unverified`` says "nobody checked the segmentation
-# of these examples", so if the examples travel and the key does not, the store
-# ends up holding unchecked sentences with nothing saying so, and M5.3
+# wrong for these: ``furigana_unverified`` says "these examples' furigana was
+# doubted", so if the examples travel and the key does not, the store ends up
+# holding doubted sentences with nothing saying so, and M5.3
 # reads exactly these keys before it generates audio. Carried only when the
 # merge actually wrote the field, because a flag describing examples that were
 # not kept is a lie in the other direction. Every key here holds a

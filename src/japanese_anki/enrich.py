@@ -1383,8 +1383,10 @@ def accept_furigana(
 
     The flag is written once, when an example is created, and read much later
     by ``janki audio`` deciding whether to speak a sentence. Nothing else
-    clears it: a person can correct the furigana by hand and the flag stays,
-    because the flag describes the sentence as it was when it was written.
+    clears it from a sentence that stays: correcting the furigana by hand leaves
+    the flag, because it is keyed to the sentence rather than to the field.
+    (Rewriting the sentence drops it — the fingerprint then matches no example —
+    which is a different thing from vouching for the one that was there.)
     Without this, correcting a card would leave it permanently unvoiced — the
     exact state `prune_example_flags` calls "permanently refusable with no way
     to un-hold it".
@@ -1599,7 +1601,7 @@ def absorb_ai_call(
         result.unverified[record.id] = outcome.unverified
         result.warnings.append(
             f"{record.id}: {len(outcome.unverified)} example(s) have furigana "
-            "no local check could confirm; kept and flagged for review."
+            "a local check disagreed with; kept and flagged for review."
         )
     if outcome.preserved and any(
         example.japanese and not example_accepted(record, example)

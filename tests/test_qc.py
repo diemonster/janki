@@ -1,8 +1,9 @@
 """Mechanical checks on an example sentence.
 
 No network (IMPLEMENTATION_PLAN rule 6): every check here is offline. The
-committed `/parse` capture went with M7.6V's retired sentence oracle; what
-remains reads an example against itself and against KANJIDIC.
+example checks read a sentence against itself and against KANJIDIC since M7.6V
+retired the dictionary oracle; the parse helpers that remain are notation
+readers, driven from canned token lists rather than fetched.
 """
 
 from __future__ import annotations
