@@ -31,7 +31,9 @@ dist/*-preview.html
 # pins per-developer model choices and agents/ is personal tooling, so neither
 # is something a clone should inherit; AGENTS.md is the instructions that are
 # meant to be shared, and it is tracked.
-.claude/
+.claude/*
+!.claude/settings.json
+!.claude/agents/
 
 # macOS
 .DS_Store
