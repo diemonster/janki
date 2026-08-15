@@ -17,7 +17,7 @@ findings:
     pipeline_stage: deck-membership
     source_archetypes: [camera, mixed-layout-pdf, native-pdf-table]
     symptom: The unfiltered general verbs deck also claimed records assigned to dedicated hardening-pilot decks, so packages exported the same stable Anki GUIDs under different deck IDs.
-    invariant: Every deck under the configured repository deck tree has a unique stem and resolves to a unique in-repository file; every vocabulary deck is discovered recursively, named in the gate result, is nonempty, and enters an automatic all-pairs stable-ID check; no record belongs to more than one word deck. Unique stems are covered by tests rather than by this case, whose input is empty and which therefore only observes the repository as it stands.
+    invariant: Every deck under the configured repository deck tree has a unique stem and resolves to a unique in-repository file; every vocabulary deck is discovered recursively, named in the gate result, is nonempty, and enters an automatic all-pairs stable-ID check; no record belongs to more than one word deck. Unique stems, recursive discovery, and the refusal of two paths to one deck file are covered by tests rather than by this case, whose input is empty and which therefore only observes the repository as it stands.
     evidence:
       - fingerprint: ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356
         locator: quality/cases/deck-membership-partition/input.json
@@ -29,7 +29,7 @@ findings:
     pipeline_stage: ai-enrichment
     source_archetypes: [mixed-layout-pdf]
     symptom: AI enrichment kept reviewed source sentences but could not fill their empty English, furigana, or register fields.
-    invariant: AI fills empty annotations when its Japanese sentence matches the reviewed stored sentence exactly, preserving Japanese text, audio, and existing annotations. That a non-matching sentence fills nothing is covered by tests rather than by this case, whose runner accepts a single record.
+    invariant: AI fills empty annotations when its Japanese sentence matches the reviewed stored sentence exactly, preserving Japanese text, audio, and existing annotations. That a non-matching sentence fills nothing is covered by tests rather than by this case, whose runner refuses more than one record. So is which side wins for each annotation, though for a different reason — this case's stored example carries no english, furigana, or register at all, so every fill it observes is of an empty field and no precedence arises.
     evidence:
       - fingerprint: 26bf29f64985ac036953289040f6ed56b29bac1609d12eaf70c7a628296ef92e
         locator: quality/cases/ai-existing-example-annotations/input.json
@@ -41,7 +41,7 @@ findings:
     pipeline_stage: ai-enrichment
     source_archetypes: [native-pdf-table]
     symptom: AI enrichment replaced kana headwords with kanji spellings, so the exact-target check rejected every example.
-    invariant: Each generated example uses the record expression exactly as written, including a kana-only spelling; that the prompt still permits a natural inflected form is a second sentence this case's substring check does not observe. one limited retry supplies the permitted forms when every first-pass example fails this check.
+    invariant: Each generated example uses the record expression exactly as written, including a kana-only spelling, while still accepting a natural inflected form of it; one limited retry supplies the permitted forms when every first-pass example fails this check. The recurrence case observes both halves — its two retried sentences are 明日、友達をまちます。 and ここでまつの？, the first carrying the kana headword inflected and the second carrying it exactly as written — so neither is handed to tests.
     evidence:
       - fingerprint: 46f44e594c406bfe0ef54598caddf3f8d932829cb4ef93c09eb4d9d29e958e8e
         locator: quality/cases/ai-exact-headword-spelling/input.json
@@ -79,7 +79,7 @@ findings:
     pipeline_stage: dictionary-enrichment
     source_archetypes: [mixed-layout-pdf]
     symptom: Dictionary enrichment rejected valid する compounds after jpdb resolved the exact suru-verb stem.
-    invariant: Enrichment uses an exact X stem when spelling, reading, する suffix, and jpdb's suru-verb marker agree. The negative direction — that any one disagreeing is enough to refuse — is covered by tests rather than by this case, whose runner accepts a single record and so cannot hold two configurations side by side.
+    invariant: Enrichment uses an exact X stem when spelling, reading, する suffix, and jpdb's suru-verb marker agree. The negative direction — that any one of those conditions disagreeing is enough to refuse, the empty stem included — is covered by tests rather than by this case, whose input carries a single record and one agreeing dictionary answer. The stem and marker conditions are driven through the promote-time reading check, which asks enrichment's own question of the same shared predicate; the two する-suffix conditions are asserted on that predicate directly, because either one alone still refuses and neither is separable through a deck.
     evidence:
       - fingerprint: 1269a5308b0f263eb806215cd2e1c4ebd91391dd9a410de5c86c72d6bb2ba6da
         locator: quality/cases/enrichment-suru-compound/input.json
@@ -115,7 +115,7 @@ findings:
     pipeline_stage: final-review
     source_archetypes: [mixed-layout-pdf]
     symptom: Final review raised blocking pitch findings after it misread the stored raw pattern, counted a small kana as a separate mora, or replaced valid dictionary accent from model memory.
-    invariant: A pitch finding gets one independent recheck carrying mechanical pitch facts; that those facts are the exact raw pattern and a deterministic per-mora rendering is covered by tests rather than by this case, which observes the header alone. model memory yields only when a source marker fingerprints the current jpdb value.
+    invariant: A pitch finding gets one independent recheck carrying mechanical pitch facts; that those facts are the exact raw pattern and a deterministic per-mora rendering is covered by tests rather than by this case, which observes the header alone. Model memory yields only when a source marker fingerprints the current jpdb value, which the recurrence cases observe in both directions; that a marker left bound to a superseded value no longer counts is covered by tests rather than by any of them.
     evidence:
       - fingerprint: 0b2af7e5a8f9cff39462ba2dfbaa393188b892b3836989b2867f5ccd5ffbe17a
         locator: quality/cases/review-pitch-fact-recheck/input.json
@@ -159,7 +159,7 @@ findings:
     pipeline_stage: repair-plan
     source_archetypes: [bilingual-layout]
     symptom: A repeated derived-field correction had no named and reviewable production path.
-    invariant: A repair uses a versioned declaration and records exact diffs with provenance. Declared inputs and field limits are covered by tests rather than by this case, whose oracle observes only the fields its observe list names.
+    invariant: A repair uses a versioned declaration and records exact diffs with provenance; this case's oracle pins the recorded change's version, evidence, and provenance alongside the repaired field. Declared inputs and field limits are covered by tests rather than by this case, whose oracle observes the recorded change rather than the declaration that produced it.
     evidence:
       - fingerprint: d516f0c2d854fe123c46e70e7037373ed46c1b33f568b3015c42ea53a0ecb253
         locator: quality/cases/derived-romaji-repair/input.json
@@ -171,7 +171,7 @@ findings:
     pipeline_stage: repair-plan
     source_archetypes: [camera]
     symptom: The automatic example-romaji repair derived a lossy value from furigana that the validator had already marked as structurally invalid.
-    invariant: The automatic example-romaji repair preserves the existing value when furigana has a reported spilled group or stray notation space; Deriving romaji once those defects are corrected is covered by tests rather than by this case, whose input carries only the defective record.
+    invariant: The automatic example-romaji repair preserves the existing value when furigana has a reported spilled group. The stray-notation-space half of the same guard, and deriving romaji once those defects are corrected, are covered by tests rather than by this case, whose input carries only the defective record.
     evidence:
       - fingerprint: 643375818ce75a5e16bba8d2e7493a38426d5d8af46bc9841df5ee0d0d975371
         locator: quality/cases/example-romaji-invalid-furigana/input.json
@@ -219,7 +219,7 @@ findings:
     pipeline_stage: input-provenance
     source_archetypes: [camera, printed-ruby, bilingual-layout]
     symptom: A source already stored in the durable inbox root was copied again into the configured scan subdirectory before extraction.
-    invariant: A source anywhere under the durable inbox root is used where it lies unless another durable source has the same case-insensitive basename and different bytes. Neither qualifier is observed by these cases — every fixture writes an ordinary file, and every collision they carry differs in content, so the regular-file guard and the identical-bytes allowance are covered by tests instead; that collision is refused before model or staging work and an external copy cannot bypass it.
+    invariant: A regular source anywhere under the durable inbox root is used where it lies unless another durable source has the same case-insensitive basename and different bytes; that collision is refused before model or staging work, and an external copy cannot bypass it. Classifying a namesake by content is observed here — collapsing that split either way makes input-external-existing-name-collision stop refusing, writing a fingerprint-stamped copy if every namesake is read as a conflict and reusing the existing one if every namesake is read as a match — but reusing an existing identical copy is not, and neither is the regular-source qualifier, since every fixture writes an ordinary file. Both are covered by tests instead.
     evidence:
       - fingerprint: cb0c156163da379db2b4f02da5f66771e973a44c9e716827a3de1d703936b7ef
         locator: data/inbox/IMG_4563.jpg
@@ -319,7 +319,7 @@ findings:
     pipeline_stage: validation-qc
     source_archetypes: [camera]
     symptom: Local validation checked structure only, so sentence fragments, trailing connectives, and false register labels passed every local gate and reached audio; the late paid AI review was the first check to catch them.
-    invariant: Local validation holds an example that is certainly not a complete sentence or an intentional utterance, and one whose register label contradicts its sentence-final form, while accepting complete polite and casual sentences and intentional short utterances; and holds carry their level. That the audio command applies the same judgment before voicing, and that a shipping build reports local content failures before the review gate is consulted, are covered by tests rather than by this case, whose runner calls validation alone.
+    invariant: Local validation holds an example that is certainly not a complete sentence or an intentional utterance, and one whose register label contradicts its sentence-final form, while accepting a complete polite sentence and an intentional short utterance. That a complete casual sentence is accepted, that the audio command applies the same judgment before voicing, and that a shipping build reports local content failures before the review gate is consulted, are covered by tests rather than by this case, whose runner calls validation alone. Every hold this rule emits today is an error, so validation reporting a hold at its own level is not yet a distinction anything can observe.
     evidence:
       - fingerprint: 0bf7117a9577b5a1c3a921cee46174162c436d70157c750085adaf16a9fbe66c
         locator: quality/cases/example-teaching-suitability/input.json

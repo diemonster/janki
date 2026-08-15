@@ -22,7 +22,12 @@ from japanese_anki.kanji import load_store as load_kanji_store
 from japanese_anki.kanji import render_kanji_html
 from japanese_anki.models import ModelError, VocabularyRecord
 from japanese_anki.pitch import PitchError, render_pitch_html
-from japanese_anki.validation import has_errors, refusal_text, validate_records
+from japanese_anki.validation import (
+    field_separator_fault,
+    has_errors,
+    refusal_text,
+    validate_records,
+)
 
 
 class AnkiBuildError(JankiError):
@@ -797,14 +802,26 @@ def build_deck(
     if deck_max_meanings is None:
         deck_max_meanings = project_config.max_meanings
     for record in records:
+        values = _field_values(
+            record, media_dir, deck_path.parent, media_files, media_warnings,
+            claimed,
+            deck_max_meanings,
+            render_kanji_html(kanji_store.for_text(record.expression)),
+        )
+        # `validate_records` refuses this on the record, which is the earlier
+        # and better error. This covers what that check cannot see, because not
+        # every value here comes from the record — the kanji block is rendered
+        # from `data/kanji.json`.
+        fault = field_separator_fault(FIELD_NAMES, values)
+        if fault is not None:
+            raise AnkiBuildError(
+                f"{record.id}: the {fault} field contains U+001F, the "
+                "separator Anki joins a note's fields with. Writing it would "
+                "shift every later field out of place."
+            )
         note = genanki.Note(
             model=model,
-            fields=_field_values(
-                record, media_dir, deck_path.parent, media_files, media_warnings,
-                claimed,
-                deck_max_meanings,
-                render_kanji_html(kanji_store.for_text(record.expression)),
-            ),
+            fields=values,
             tags=[_clean_tag(tag) for tag in record.tags if _clean_tag(tag)],
             guid=genanki.guid_for(record.id),
         )

@@ -185,6 +185,75 @@ def test_a_suru_suffix_does_not_pass_without_the_vs_dictionary_marker() -> None:
     assert held_reason(result.held[0]) == HOLD_UNKNOWN_READING
 
 
+def test_a_suru_compound_does_not_pass_on_a_different_stem_spelling() -> None:
+    """The stem jpdb resolved has to be *this* word's stem. jpdb answers a
+    single lexeme per spelling and picks it itself, so a near neighbour with the
+    same reading and the same `vs` marker is exactly what it returns when its
+    split is wrong — and accepting one promotes an identity no dictionary
+    confirmed."""
+    studying = record(
+        id="word:勉強する:べんきょうする",
+        expression="勉強する",
+        reading="べんきょうする",
+    )
+    neighbour = [1512670, 1424808594, "勉学", "べんきょう", ["LHHHHH"], 1000, ["n", "vs"]]
+    api = FakeJpdb(
+        {"勉強する": neighbour},
+        {(1512670, 1424808594): {"reading": "べんきょう", "alt_sids": []}},
+    )
+
+    result = check_readings([studying], client=client_for(api))
+
+    assert result.promoted == []
+    assert held_reason(result.held[0]) == HOLD_UNKNOWN_READING
+
+
+def test_a_suru_compound_does_not_pass_on_a_different_stem_reading() -> None:
+    """The other half of the same identity. 勉強 read べんがく is a different
+    word from 勉強 read べんきょう, and only the spelling agrees."""
+    studying = record(
+        id="word:勉強する:べんきょうする",
+        expression="勉強する",
+        reading="べんきょうする",
+    )
+    misread = [1512670, 1424808594, "勉強", "べんがく", ["LHHHHH"], 1000, ["n", "vs"]]
+    api = FakeJpdb(
+        {"勉強する": misread},
+        {(1512670, 1424808594): {"reading": "べんがく", "alt_sids": []}},
+    )
+
+    result = check_readings([studying], client=client_for(api))
+
+    assert result.promoted == []
+    assert held_reason(result.held[0]) == HOLD_UNKNOWN_READING
+
+
+def test_a_word_with_no_suru_suffix_is_not_answered_for_by_its_first_character() -> None:
+    """The reading check reaches the same allowance, so a word that is not a
+    する compound must not be promoted on a stem entry that happens to match its
+    opening characters.
+
+    Constructed rather than drawn from a real word: the comparison is against
+    the last two characters, so reaching it without the suffix check needs an
+    expression of at least three characters whose first character is a word in
+    its own right. 図書館 is held because としょかん is not a reading jpdb lists
+    for it — without the suffix gate, 図/としょ would answer for it instead.
+
+    Each suffix conjunct is pinned separately on the predicate itself, in
+    `tests/test_enrich_jpdb.py`; through this path only the pair is
+    observable, because either one alone still refuses."""
+    library = record(
+        id="word:図書館:としょかん", expression="図書館", reading="としょかん"
+    )
+    fragment = [1, 2, "図", "としょ", ["LH"], 500, ["n", "vs"]]
+    api = FakeJpdb({"図書館": fragment}, {(1, 2): {"reading": "としょ", "alt_sids": []}})
+
+    result = check_readings([library], client=client_for(api))
+
+    assert result.promoted == []
+    assert held_reason(result.held[0]) == HOLD_UNKNOWN_READING
+
+
 def test_a_spelling_jpdb_cannot_resolve_is_promoted_unchecked() -> None:
     # Silence is not disagreement. Holding these back would punish exactly the
     # uncommon words a textbook is most worth extracting.

@@ -1300,3 +1300,45 @@ def test_a_failed_ledger_write_says_a_re_run_would_skip_these_records(
     assert "either skips these records or looks them up and proposes nothing" in err
     assert "not a free repair" not in err
     assert stored(root)["word:話す:はなす"]["furigana"] == "話[はな]す"
+
+
+def test_the_suru_allowance_needs_the_suffix_on_each_side_separately() -> None:
+    """The allowance exists for `Xする` and nothing else, and it is gated on the
+    suffix on *both* sides before it compares stems.
+
+    Checked on the predicate rather than through a deck, because the two
+    conjuncts are only separable on inputs a real record never has: drop the
+    expression's suffix and the comparison is against `[:-2]` of a word that
+    does not end in する, which needs a three-character expression whose first
+    character is a word in its own right. Driven through a deck, only the pair
+    is observable — either one alone still refuses, so the test would pass
+    against a build that had lost one of them.
+    """
+    from japanese_anki.enrich import _supports_suru_suffix
+
+    def entry(spelling: str, reading: str, *codes: str) -> dict[str, Any]:
+        return {
+            "spelling": spelling,
+            "reading": reading,
+            "part_of_speech": list(codes) or ["n", "vs"],
+        }
+
+    assert _supports_suru_suffix(
+        "勉強する", "べんきょうする", entry("勉強", "べんきょう")
+    )
+
+    # The reading does not end in する, so this identity is 勉強する read
+    # べんきょう — a spelling and a reading that disagree about the verb. The
+    # entry answers for `reading[:-2]`, so that without the suffix conjunct
+    # every remaining one holds and the identity would pass.
+    assert not _supports_suru_suffix("勉強する", "べんきょう", entry("勉強", "べんき"))
+
+    # The expression does not end in する. 図書館 read としょかんする is not a
+    # する compound however its stem is spelled.
+    assert not _supports_suru_suffix(
+        "図書館", "としょかんする", entry("図", "としょかん")
+    )
+
+    # する itself is not `Xする`: there is no X, and an entry answering for the
+    # empty stem would otherwise satisfy every remaining conjunct.
+    assert not _supports_suru_suffix("する", "する", entry("", ""))

@@ -788,9 +788,12 @@ def _review_readiness(data: dict[str, Any], root: Path) -> Any:
             key=lambda item: (item["id"], item["card"]),
         ),
         "readable": sorted(
-            {"id": record.id, "card": review.card_fingerprint(record)}
-            for record in records
-            if review.card_fingerprint(record) not in held
+            (
+                {"id": record.id, "card": review.card_fingerprint(record)}
+                for record in records
+                if review.card_fingerprint(record) not in held
+            ),
+            key=lambda item: (item["id"], item["card"]),
         ),
     }
 

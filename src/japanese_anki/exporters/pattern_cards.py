@@ -56,7 +56,12 @@ from japanese_anki.patterns import (
     check_pattern_rules,
     verb_pairs_in,
 )
-from japanese_anki.validation import has_errors, refusal_text, validate_records
+from japanese_anki.validation import (
+    field_separator_fault,
+    has_errors,
+    refusal_text,
+    validate_records,
+)
 
 __all__ = [
     "PatternCard",
@@ -764,17 +769,27 @@ def build_pattern_deck(
     )
     deck = genanki.Deck(deck_id, str(deck_config.get("name") or deck_path.stem))
     for card in cards:
+        values = [
+            html.escape(card.trigger),
+            html.escape(card.result),
+            html.escape(card.gloss),
+            "<br>".join(html.escape(item) for item in card.examples),
+            html.escape(document),
+            "Rule",
+        ]
+        # A rule card's values come from `data/patterns.json` and the deck file
+        # — never from a record — so no record-level validation sees them.
+        fault = field_separator_fault(FIELDS, values)
+        if fault is not None:
+            raise PatternDeckError(
+                f"{document}: {card.identity}'s {fault} field contains "
+                "U+001F, the separator Anki joins a note's fields with. "
+                "Writing it would shift every later field out of place."
+            )
         deck.add_note(
             genanki.Note(
                 model=model,
-                fields=[
-                    html.escape(card.trigger),
-                    html.escape(card.result),
-                    html.escape(card.gloss),
-                    "<br>".join(html.escape(item) for item in card.examples),
-                    html.escape(document),
-                    "Rule",
-                ],
+                fields=values,
                 guid=genanki.guid_for(f"pattern:{document}:{card.identity}"),
             )
         )
@@ -889,17 +904,24 @@ def build_conjugation_deck(
     deck = genanki.Deck(deck_id, str(deck_config.get("name") or deck_path.stem))
     label = form.replace("_", " ")
     for card, record_id in cards:
+        values = [
+            html.escape(card.trigger),
+            html.escape(card.result),
+            html.escape(card.gloss),
+            html.escape(", ".join(card.examples)),
+            html.escape("computed by janki"),
+            html.escape(label),
+        ]
+        # No separator check here, unlike the rule deck above: every one of
+        # these six values derives from a record this function already put
+        # through `validate_records`, or from `form`, which is checked against
+        # `CONJUGATION_FORMS`. A guard would be unreachable, and an unreachable
+        # guard is one no test can hold. Add one here if a field ever takes its
+        # value from somewhere else.
         deck.add_note(
             genanki.Note(
                 model=model,
-                fields=[
-                    html.escape(card.trigger),
-                    html.escape(card.result),
-                    html.escape(card.gloss),
-                    html.escape(", ".join(card.examples)),
-                    html.escape("computed by janki"),
-                    html.escape(label),
-                ],
+                fields=values,
                 # Keyed on the record and the form, never the text: correcting a
                 # reading rewrites the front, and a GUID that moved with it would
                 # orphan the card's review history.

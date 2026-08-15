@@ -682,3 +682,126 @@ def test_stacked_final_particles_do_not_hide_politeness() -> None:
     assert _codes(_teaching_record("明日も行きますよね", register="casual")) == [
         "example-register-mismatch"
     ]
+
+
+def _record_with(**overrides: object) -> VocabularyRecord:
+    return replace(
+        VocabularyRecord(
+            id="word:出発:しゅっぱつ",
+            expression="出発",
+            reading="しゅっぱつ",
+            meanings=["departure"],
+        ),
+        **overrides,
+    )
+
+
+def test_the_anki_field_separator_in_a_value_is_an_error() -> None:
+    """Anki stores a note's fields as one U+001F-joined string, so a separator
+    inside a value adds a field: every value after it shifts one position, the
+    usage note's tail lands in `Audio`, the audio tag lands in `Image`, and so
+    on to the end of the notetype. The build succeeds and says nothing, and
+    `janki status --rebuild` reads the collection back through the same split.
+
+    Refused here rather than at the exporter because this is where a build
+    already asks, and because an importer is what puts one there: `.strip()`
+    takes a separator off either end of a CSV cell — U+001F is whitespace to
+    Python — and leaves an interior one untouched."""
+    issues = validate_records([_record_with(usage_notes="before\x1fafter")])
+
+    assert has_errors(issues)
+    [issue] = [issue for issue in issues if issue.code == "control-character"]
+    assert "usage_notes" in issue.message
+    assert "U+001F" in issue.message
+    # Named as the separator, not as generic non-text: the remedy differs. Any
+    # other control character is junk to strip, while this one has shifted
+    # every field after it and the note has to be rebuilt.
+    assert "separator" in issue.message
+
+
+def test_a_preserved_source_column_is_not_refused() -> None:
+    """`raw_fields` is the verbatim source row, kept so an unknown column is
+    never silently discarded. It reaches no note field — the `Source` field is
+    built from `type`, `imported_from`, and `row` — so a stray byte in a column
+    janki does not map cannot corrupt a note.
+
+    Refusing it would be worse than useless: `has_errors` gates `janki build`
+    on the whole deck, so one unreadable byte in one preserved column would
+    refuse every card, and the only remedies would be deleting the provenance
+    or editing `data/inbox/`."""
+    from japanese_anki.models import SourceReference
+
+    record = _record_with(
+        source=SourceReference(
+            type="csv",
+            imported_from="shirabe.csv",
+            raw_fields={"DateAdded": "2024-01-01\x7f"},
+        )
+    )
+
+    assert [
+        issue
+        for issue in validate_records([record])
+        if issue.code == "control-character"
+    ] == []
+
+
+def test_a_control_character_inside_an_example_is_named_by_its_path() -> None:
+    """Walked over the record's whole serialized shape, not a list of top-level
+    fields: an example's Japanese reaches a note field just as directly, and a
+    hand-written field list goes stale the next time one is added."""
+    from japanese_anki.models import ExampleSentence
+
+    record = _record_with(
+        examples=[ExampleSentence(japanese="本を\x07読む。", english="x")]
+    )
+
+    [issue] = [
+        issue
+        for issue in validate_records([record])
+        if issue.code == "control-character"
+    ]
+
+    assert "examples[0].japanese" in issue.message
+    assert "U+0007" in issue.message
+
+
+def test_ordinary_whitespace_is_not_a_control_character() -> None:
+    """A usage note is prose and may be written across lines; refusing a
+    newline would refuse the field's normal content."""
+    record = _record_with(usage_notes="first line\nsecond\tline\r\nthird")
+
+    assert [
+        issue
+        for issue in validate_records([record])
+        if issue.code == "control-character"
+    ] == []
+
+
+def test_a_control_character_in_a_field_name_is_caught_too() -> None:
+    """`conjugations` keys are rendered into the Conjugations field, so a form
+    name carries into a note exactly as a value does. `from_dict` strips the
+    key, and U+001F is whitespace to `str.strip` — a leading one is removed and
+    an interior one survives.
+
+    Without this the record validates clean and the *build* refuses it, which
+    inverts the two checks: `janki validate` says the record is fine and then
+    `janki build` will not ship it."""
+    record = VocabularyRecord.from_dict(
+        {
+            "id": "word:出発:しゅっぱつ",
+            "expression": "出発",
+            "reading": "しゅっぱつ",
+            "meanings": ["departure"],
+            "conjugations": {"te\x1fform": "出発して"},
+        }
+    )
+
+    [issue] = [
+        issue
+        for issue in validate_records([record])
+        if issue.code == "control-character"
+    ]
+
+    assert "conjugations key" in issue.message
+    assert "U+001F" in issue.message

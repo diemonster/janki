@@ -224,3 +224,32 @@ def test_a_null_raw_field_is_dropped_rather_than_stringified() -> None:
     )
 
     assert record.source.raw_fields == {"freq": "12"}
+
+
+def test_a_register_label_is_normalized_on_the_way_in() -> None:
+    """`needs_ai_annotations` and the AI merge in `enrich.py` both compare
+    `register` against bare literals. That is only safe because a label is
+    normalized *here*, once, on the way in — every loader funnels through this
+    constructor, and nothing downstream normalizes again.
+
+    Normalizing at those comparisons instead would be worse than redundant: the
+    mixed-case label would then be *preserved*, `needs_ai_annotations` would
+    keep answering yes, and the record would be re-sent to a paid model on
+    every run without ever settling.
+
+    Only the normalization is asserted. What goes wrong downstream without it
+    is `apply_ai_result`'s behaviour, and asserting `example_in`/`main_example`
+    here would prove nothing — both lowercase the stored value themselves, so
+    both answer correctly whether or not this constructor did its job."""
+    record = VocabularyRecord.from_dict(
+        {
+            "id": "word:出発:しゅっぱつ",
+            "expression": "出発",
+            "examples": [
+                {"japanese": "行くよ。", "register": "  Casual "},
+                {"japanese": "行きます。", "register": "POLITE"},
+            ],
+        }
+    )
+
+    assert [example.register for example in record.examples] == ["casual", "polite"]

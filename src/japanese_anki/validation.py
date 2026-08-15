@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,6 +20,17 @@ _READINGLESS_ID = re.compile(r"^word:(?P<expression>.*):$")
 # `has_errors` is true and `janki build` refuses the whole deck — over a pattern
 # `to_aquestalk` converts correctly and speaks correctly.
 _PITCH_PATTERN = re.compile(r"^[HL]+$", re.IGNORECASE)
+
+# C0 control characters, minus the three that are ordinary text. U+001F is the
+# one that corrupts rather than merely looks wrong: Anki stores a note's fields
+# as a single `\x1f`-joined string, so one inside a value adds a field and every
+# value after it shifts by one position — `UsageNotes` keeps the head, `Audio`
+# receives the tail, `Image` receives the audio tag, and so on to the end of the
+# notetype. The build succeeds and reports nothing, and `janki status --rebuild`
+# reads the collection back through the same split. The rest are refused with
+# it because none of them belongs in a Japanese sentence either, and a value
+# carrying one is evidence its importer mis-parsed a row.
+_CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 # Self-contained on purpose: the remedy has to be readable from the error, not
 # from a document. Pointing a reviewer at the review they just did is how this
@@ -120,6 +132,77 @@ def _accent_patterns(record: VocabularyRecord) -> list[tuple[str, str]]:
     return patterns
 
 
+def field_separator_fault(names: Sequence[str], values: Sequence[str]) -> str | None:
+    """The name of the first field carrying U+001F, or ``None``.
+
+    The name alone. A caller reporting the value would put the separator into
+    its own error message, and the field is what a person needs to look at.
+
+    Anki stores a note's fields as a single U+001F-joined string, so one inside
+    a value adds a field and shifts every later value into the next slot — on a
+    build that succeeds and reports nothing.
+
+    For the values that never pass through a record and so are never seen by
+    :func:`validate_record` — a word deck's kanji block, rendered from
+    `data/kanji.json`, and a rule card's fields, which come from
+    `data/patterns.json` and the deck file. ``html.escape`` leaves control
+    characters alone. A drill deck asks nothing here: every one of its values
+    derives from a record its builder has already validated.
+
+    Only U+001F, where :func:`validate_record` refuses a wider class. This one
+    corrupts the note; the rest merely look wrong, and refusing a build over a
+    stray byte in a chart nobody can edit through janki would trade a cosmetic
+    fault for an unshippable deck.
+
+    Returns rather than raises, so each exporter reports it as its own error.
+    """
+    for name, value in zip(names, values, strict=True):
+        if "\x1f" in value:
+            return name
+    return None
+
+
+def _control_characters(record: VocabularyRecord) -> list[tuple[str, str]]:
+    """Every ``(field path, character)`` in the record that is not text.
+
+    Over the record's own serialized shape rather than a hand-written list of
+    fields, which would go stale the next time a field is added — but *not*
+    over ``source.raw_fields``, which is the opposite kind of value. That is the
+    verbatim source row, kept precisely so an unknown column is never silently
+    discarded; it reaches no note field (`_source_text` reads `type`,
+    `imported_from`, and `row`), so a stray byte in a column janki does not map
+    cannot corrupt a note. Refusing it would make an unreadable export refuse
+    the *whole deck*, with the only remedies being to delete the provenance the
+    repository exists to keep or to edit `data/inbox/`.
+    """
+    found: dict[tuple[str, str], None] = {}
+
+    def walk(value: object, path: str) -> None:
+        if isinstance(value, str):
+            for match in _CONTROL_CHARACTERS.finditer(value):
+                found[(path or "record", match.group())] = None
+        elif isinstance(value, dict):
+            for key, item in value.items():
+                child = f"{path}.{key}" if path else str(key)
+                if child == "source.raw_fields":
+                    continue
+                # The key as well as the value. A `conjugations` form name is
+                # rendered into the Conjugations field, and `from_dict` only
+                # strips it — U+001F is whitespace to `str.strip`, so a leading
+                # one is removed and an interior one survives. Without this the
+                # record validates clean and the *build* is what refuses it,
+                # which is the later and worse error.
+                for match in _CONTROL_CHARACTERS.finditer(str(key)):
+                    found[(f"{path or 'record'} key {key!r}", match.group())] = None
+                walk(item, child)
+        elif isinstance(value, list | tuple):
+            for index, item in enumerate(value):
+                walk(item, f"{path}[{index}]")
+
+    walk(record.to_dict(), "")
+    return list(found)
+
+
 def validate_record(record: VocabularyRecord, source: str = "") -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
 
@@ -134,6 +217,18 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
             )
         )
 
+    for path, character in _control_characters(record):
+        add(
+            "error",
+            "control-character",
+            f"{path} contains U+{ord(character):04X}"
+            + (
+                ", the separator Anki joins a note's fields with — the value "
+                "would add a field and shift every later one out of place"
+                if character == "\x1f"
+                else ", which is not text a card can carry"
+            ),
+        )
     if not record.id:
         add("error", "missing-id", "missing stable ID")
     if not record.expression:

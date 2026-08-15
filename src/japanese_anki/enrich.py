@@ -1163,6 +1163,12 @@ def _fill_existing_example_annotations(
             english=old.english or incoming.english,
             register=(
                 old.register
+                # Exact, and safe because `ExampleSentence.from_dict` lowercases
+                # and strips on every read, so a record reaching here cannot
+                # carry "Casual". Normalizing here as well would be worse than
+                # redundant: it would *preserve* a mixed-case label, and
+                # `needs_ai_annotations` still compares exactly, so the record
+                # would be re-sent to the model on every run and never converge.
                 if old.register in {"polite", "casual"}
                 else incoming.register
             ),

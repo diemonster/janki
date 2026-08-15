@@ -33,10 +33,28 @@ from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRec
 from japanese_anki.staging import read_staging
 
 
-def generated(japanese: str, furigana: str = "", english: str = "", romaji: str = "") -> Any:
+def generated(
+    japanese: str,
+    furigana: str = "",
+    english: str = "",
+    romaji: str = "",
+    **extra: Any,
+) -> Any:
+    """One generated example. ``extra`` reaches the schema item verbatim, which
+    is how a test states a `speech_level` other than the default.
+
+    Names checked against the schema first: the model config does not forbid
+    extras, so pydantic *ignores* an unknown key. A misspelled `speech_level`
+    would silently leave the default in place and turn a test asserting the
+    register precedence into one comparing the default with itself."""
     schema = ai_schema()
     item = schema.model_fields["examples"].annotation.__args__[0]
-    return item(japanese=japanese, furigana=furigana, english=english, romaji=romaji)
+    unknown = sorted(set(extra) - set(item.model_fields))
+    if unknown:
+        raise TypeError(f"not a field of the generated-example schema: {unknown}")
+    return item(
+        japanese=japanese, furigana=furigana, english=english, romaji=romaji, **extra
+    )
 
 
 def answer(*examples: Any, usage_notes: str = "") -> Any:
@@ -476,6 +494,117 @@ def test_an_impossible_character_group_is_kept_flagged_and_reported() -> None:
             (("指", "にほんゆび"),),
         )
     ]
+
+
+def test_each_stored_annotation_wins_over_the_models_own() -> None:
+    """The merge fills *holes*. A stored annotation is a reviewed one, and a
+    model that disagrees with it is proposing a rewrite of curated content
+    under the name of an empty-field fill.
+
+    Per annotation, not once for the record: furigana and english are separate
+    `or` expressions, so a precedence pinned only for furigana leaves english
+    free to invert. Register is a conditional rather than an `or`, and has its
+    own rule besides — a stored value outside {polite, casual} is not a reviewed
+    label, so the model's answer fills that hole rather than being refused."""
+    stored = VocabularyRecord(
+        id="word:画面:がめん",
+        expression="画面",
+        reading="がめん",
+        meanings=["screen"],
+        examples=[
+            ExampleSentence(
+                japanese="画面を見ます。",
+                furigana="画面[がめん]を 見[み]ます。",
+                english="I look at the screen.",
+                register="polite",
+            )
+        ],
+    )
+
+    outcome = apply_ai_result(
+        stored,
+        answer(
+            generated(
+                "画面を見ます。",
+                furigana="画面[がめん]を 見[けん]ます。",
+                english="A different gloss entirely.",
+                speech_level="casual",
+            )
+        ),
+    )
+
+    kept = outcome.record.examples[0]
+    assert kept.furigana == "画面[がめん]を 見[み]ます。"
+    assert kept.english == "I look at the screen."
+    assert kept.register == "polite"
+
+
+@pytest.mark.parametrize("answered", ["formal", "neutral", ""])
+def test_a_speech_level_janki_does_not_use_is_read_as_polite(answered: str) -> None:
+    """`speech_level` is a plain string with a default, not a `Literal`, and the
+    schema declares no validator — so the model can answer anything and pydantic
+    passes it through. Only two labels select a slot on the card, and an
+    unrecognised one would select neither, leaving the sentence in no half of
+    the card at all.
+
+    Polite rather than casual, because that is what the instructions ask for
+    first and what every example written before the field existed actually is;
+    guessing casual would put a ます sentence under a label saying it is not."""
+    outcome = apply_ai_result(
+        record(),
+        answer(
+            generated(
+                "毎日話します。",
+                furigana="毎日[まいにち] 話[はな]します。",
+                english="I speak every day.",
+                speech_level=answered,
+            )
+        ),
+    )
+
+    assert outcome.record.examples[0].register == "polite"
+
+
+@pytest.mark.parametrize("stored_register", ["", "formal"])
+def test_an_unreviewed_register_label_is_a_hole_the_model_may_fill(
+    stored_register: str,
+) -> None:
+    """The other direction of the same rule, so the precedence above cannot be
+    satisfied by never writing register at all.
+
+    Both an empty label and a non-empty one janki does not use: only the two
+    labels the card renders are reviewed answers, and a value outside them
+    selects no slot, so keeping it would leave the sentence in neither the
+    polite nor the casual half. Testing the empty case alone would be satisfied
+    by a truthiness check, which is a different rule that happens to agree
+    there."""
+    stored = VocabularyRecord(
+        id="word:画面:がめん",
+        expression="画面",
+        reading="がめん",
+        meanings=["screen"],
+        examples=[
+            ExampleSentence(
+                japanese="画面を見ます。",
+                furigana="画面[がめん]を 見[み]ます。",
+                english="I look at the screen.",
+                register=stored_register,
+            )
+        ],
+    )
+
+    outcome = apply_ai_result(
+        stored,
+        answer(
+            generated(
+                "画面を見ます。",
+                furigana="画面[がめん]を 見[み]ます。",
+                english="I look at the screen.",
+            )
+        ),
+    )
+
+    assert outcome.record.examples[0].register == "polite"
 
 
 def test_an_impossible_group_is_not_reported_when_curated_furigana_wins() -> None:
@@ -1483,6 +1612,79 @@ def test_the_preserve_warning_actually_fires() -> None:
     assert any(
         "carry no reviewer acceptance" in warning for warning in result.warnings
     )
+
+
+def test_both_furigana_warnings_say_what_was_kept_and_that_audio_is_blocked() -> None:
+    """The flag is structured data; this is the sentence a person actually
+    reads. Both messages have to say the same three things — which groups or
+    strings disagree, that the example was kept rather than dropped, and that
+    audio stays blocked — because a warning that reports only "unverified"
+    sends someone looking for a card fault that is really a field fault.
+
+    Driven through `absorb_ai_call`, where the text is built: the outcome
+    assertions elsewhere in this file pin the tuples and never the string."""
+    from japanese_anki.enrich import AiResult, absorb_ai_call
+
+    store = KanjiStore(
+        entries={
+            "指": KanjiInfo(
+                character="指", readings=(Reading(kind="kun", reading="ゆび"),)
+            )
+        }
+    )
+    impossible = record(id="word:画面:がめん", expression="画面", reading="がめん")
+    result = AiResult(records=[impossible], looked_up=1)
+
+    absorb_ai_call(
+        result,
+        impossible,
+        CallResult(
+            answer(
+                generated(
+                    "二本指で画面を広げます。",
+                    furigana="二本 指[にほんゆび]で 画面[がめん]を 広[ひろ]げます。",
+                    english="Use two fingers to enlarge the screen.",
+                )
+            ),
+            "end_turn",
+            None,
+        ),
+        model="offline-model",
+        positions={impossible.id: 0},
+        recent=[],
+        kanji_store=store,
+    )
+
+    [warning] = [text for text in result.warnings if "need review" in text]
+    assert "指" in warning and "にほんゆび" in warning
+    assert "kept and marked unverified" in warning
+    assert "sentence audio remains blocked" in warning
+
+    rewriting = record(id="word:話:はなし", expression="話", reading="はなし")
+    second = AiResult(records=[rewriting], looked_up=1)
+
+    absorb_ai_call(
+        second,
+        rewriting,
+        CallResult(
+            answer(generated("話を話します。", furigana="話[はなし]が 話[はな]します。")),
+            "end_turn",
+            None,
+        ),
+        model="offline-model",
+        positions={rewriting.id: 0},
+        recent=[],
+    )
+
+    [named] = [
+        text for text in second.warnings if "does not spell its own sentence" in text
+    ]
+    # The diagnosis, not just the verdict: this warning exists to say which two
+    # strings disagree, which is the difference between "check this card" and
+    # "check this field". Without it the message is the unverified count again.
+    assert "話が話します。" in named and "話を話します。" in named
+    assert "kept and marked unverified" in named
+    assert "sentence audio remains blocked" in named
 
 
 def test_a_furigana_field_that_rewrites_the_sentence_is_named_with_no_parse() -> None:

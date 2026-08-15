@@ -120,6 +120,27 @@ def test_a_missing_file_is_named(tmp_path: Path) -> None:
     assert "nope.pdf" in str(excinfo.value)
 
 
+def test_a_source_that_exists_but_is_not_a_regular_file_is_refused(
+    tmp_path: Path,
+) -> None:
+    """"Readable file" is not "exists". A directory named like a scan reaches
+    every later stage as a path that opens and never yields bytes, and one
+    sitting *inside* the durable inbox would otherwise be used where it lies —
+    the provenance rule reads "a regular source", and this is the qualifier."""
+    inbox = tmp_path / "data" / "inbox"
+    scan_inbox = inbox / "scans"
+    directory = inbox / "lesson.pdf"
+    directory.mkdir(parents=True)
+
+    with pytest.raises(InputError) as excinfo:
+        prepare_inputs([directory], scan_inbox, inbox_root=inbox)
+
+    # The guard's own message, not just the name: an `exists()` check lets a
+    # directory through here and it fails further along, still naming the path.
+    assert "Not a readable file" in str(excinfo.value)
+    assert "lesson.pdf" in str(excinfo.value)
+
+
 # --- the inbox copy ----------------------------------------------------------
 
 

@@ -1637,10 +1637,11 @@ def test_a_pattern_build_stops_on_an_unreadable_collection(tmp_path: Path, capsy
     class, and the deck shipped with every `Examples` field empty — while the
     command printed an unchanged rule-card count and exited 0.
 
-    Worse than an empty deck: the note GUID is `trigger\x1fgloss` and
-    deliberately excludes the examples, so importing that package *updates* the
-    rule cards already in Anki and blanks their examples. A transient bad
-    `vocabulary.json` erases verified content on a run that reported success."""
+    Worse than an empty deck: the note GUID is derived from the trigger alone
+    (`PatternCard.identity`, scoped by document) and so is unaffected by the
+    examples, so importing that package *updates* the rule cards already in
+    Anki and blanks their examples. A transient bad `vocabulary.json` erases
+    verified content on a run that reported success."""
     from japanese_anki import cli
     from japanese_anki import patterns as patterns_module
 
@@ -1663,3 +1664,21 @@ def test_a_pattern_build_stops_on_an_unreadable_collection(tmp_path: Path, capsy
     assert code == 1, "the build stopped"
     assert not (tmp_path / "out.apkg").exists(), "and shipped nothing"
     assert "rule card(s)" not in capsys.readouterr().out
+
+
+def test_a_rule_carrying_the_field_separator_is_refused(tmp_path: Path) -> None:
+    """A rule card's values come from `data/patterns.json` and never pass
+    through a record, so `validate_records` never sees them. Anki joins a
+    note's fields with U+001F, so one inside a value adds a field and shifts
+    every later one into the next slot — on a build that otherwise succeeds and
+    reports nothing."""
+    project(tmp_path)
+    store = {"teform.pdf": chart(Pattern("う・つ・る → って\x1fsecond", "godan"))}
+
+    with pytest.raises(PatternDeckError) as excinfo:
+        build_pattern_deck(
+            deck_file(tmp_path), ProjectConfig.load(tmp_path), store,
+            tmp_path / "out.apkg", CLASSES,
+        )
+
+    assert "U+001F" in str(excinfo.value)
