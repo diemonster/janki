@@ -351,27 +351,29 @@ findings:
     case_ids: [review-holds-back-an-unreadable-card]
     fix_ref: src/japanese_anki/review.py#unready
   - id: repair-spills-past-a-full-width-space
-    state: open
+    state: fixed
     pipeline_stage: validation-qc
     source_archetypes: [camera]
     symptom: repair_spilled_punctuation inserts the ASCII space Anki needs before a run of leading punctuation, and its guard refuses the repair when the swallowed run still contains kana — but the guard reads kana only, so a full-width space inside that run passes. 週末[しゅうまつ]、東京　大阪[おおさか] is repaired to 週末[しゅうまつ]、 東京　大阪[おおさか], which spilled_furigana_groups reported before the repair and does not report after it, while おおさか still annotates 東京　大阪 and 東京 is gone from the reading, the romaji and the sentence audio. This is the evidence-erasing shape the function's own comment says it was rewritten to stop causing.
-    invariant: Pending. The repair must refuse a run it cannot fully separate, not only one containing kana — a full-width space inside the run means the base still covers more than the reading spells, which is exactly the condition the repair is not allowed to hide.
+    invariant: The punctuation repair refuses any run it cannot prove is the annotated word alone — kana in the remainder, and now whitespace of any kind, since a full-width space means the base still covers more than the reading spells. Refusing leaves spilled_furigana_groups reporting the defect, which is what the repair is not allowed to hide. That the repair still fires where the remainder is the word alone is covered by the same test.
     evidence:
       - fingerprint: af835e904ea2aad10da990c46e89c84b106c0272c766ad6ac9f5109542c24794
         locator: quality/evidence/repair-spills-past-a-full-width-space.json
     recurrences: []
-    case_ids: []
+    case_ids: [repair-spills-past-a-full-width-space]
+    fix_ref: src/japanese_anki/qc.py#repair_spilled_punctuation
   - id: furigana-full-width-separator
-    state: open
+    state: fixed
     pipeline_stage: validation-qc
     source_archetypes: [camera]
-    symptom: A ruby group whose separator Anki cannot read puts the reading over the preceding characters as well, and nothing reports it. Two shapes, one cause — 毎日　話[はな]します。 (a full-width space, which Anki's filter does not treat as a separator) and 毎日話[はな]します。 (no separator at all, which spilled_furigana_groups documents as its own known gap for a run beginning with a Han character). Both read はなします。, so 毎日 is dropped from the reconstructed reading, from the regenerated romaji, and from the sentence audio. M7.6V retired the jpdb sentence oracle, which caught both by comparing what the furigana sounds like against the dictionary's own rendering; spilled_furigana_groups catches only the subset that also spills a reading, so お　茶[ちゃ] is still refused and neither of these is.
-    invariant: Pending, and the two shapes do not have one answer. Neither is caught by a rule phrased as needing an ASCII space before each group — both groups open the field — and neither is caught by delimiting the base at the previous space, which condemns correct per-character notation such as 第[だい]１[いち]話[わ] and 日[にっ]本[ぽん]. A full-width space is the tractable half, since Anki reads exactly one separator and a base is not supposed to contain another — but janki does write one, through repair_spilled_punctuation, whose leading-punctuation scan stops at the first space and carries a full-width one into the base (see repair-spills-past-a-full-width-space). A check written to this rule must fix that repair in the same change, or it will refuse fields enrich --ai has just produced. The missing-separator half is not tractable offline — deciding that 毎日 is outside 話[はな] is the word-boundary guess spilled_furigana_groups already refuses to make for a Han-initial run, and it is why that rule documents this as its own gap. Splitting the finding, or accepting the second half as a known limit, is the decision this needs.
+    symptom: A ruby group whose separator Anki cannot read puts the reading over the preceding characters as well, and nothing reported it. Two notations, one fault — 毎日　話[はな]します。 with a full-width space, which Anki's filter does not treat as a separator, and 毎日話[はな]します。 with none at all. Both read はなします。, so 毎日 was dropped from the reconstructed reading, from the regenerated romaji and from the sentence audio. M7.6V retired the jpdb sentence oracle, which had caught both by comparing what the furigana sounds like against the dictionary's own rendering.
+    invariant: A ruby group's base is refused when its notation cannot be what its reading spells, by two rules that need no dictionary and make no word-boundary guess. Whitespace inside a base is refused outright, because Anki separates runs on the ASCII space alone and janki writes no other. A base holding more kanji than the reading holds kana is refused by counting, because every kanji spells at least one kana — which catches the missing separator that the notation rule cannot see and that asking where the word ends would require guessing. Neither fires on the other's shape, and neither fires on any of the collection's 214 furigana fields. The counting rule is deliberately weaker than knowing the boundary — a base widened by a kanji the reading still has kana for is not caught — and that limit is covered by tests rather than by this case.
     evidence:
       - fingerprint: 2cf757e9bdcffbcc97eefb7a938fa710c243b7083c3a6e0032a5e8d1f9877143
         locator: quality/evidence/furigana-full-width-separator.json
     recurrences: []
-    case_ids: []
+    case_ids: [furigana-full-width-separator]
+    fix_ref: src/japanese_anki/qc.py#overwide_furigana_bases
   - id: model-request-unsupported-effort
     state: fixed
     pipeline_stage: model-request

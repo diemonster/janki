@@ -1368,8 +1368,11 @@ class AcceptResult:
     """What accepting a furigana flag on a person's authority changed."""
 
     records: list[VocabularyRecord] = field(default_factory=list)
-    #: ``record id -> [sentence]`` whose flag was cleared.
+    #: ``record id -> [sentence]`` whose flag was cleared. A record whose
+    #: fingerprints are all orphans maps to an empty list.
     cleared: dict[str, list[str]] = field(default_factory=dict)
+    #: Records whose only flags named no current sentence.
+    orphaned: list[str] = field(default_factory=list)
 
     @property
     def changed(self) -> bool:
@@ -1428,9 +1431,14 @@ def accept_furigana(
             if example.japanese.strip()
             and short_fingerprint(example.japanese.strip()) in flagged
         ]
-        if not cleared:
-            continue
         result.cleared[record.id] = cleared
+        if not cleared:
+            # Every fingerprint on this record is an orphan — it names no
+            # sentence the record still carries, so there is nothing for a
+            # person to have read. Cleared all the same, and reported as its own
+            # case: saying "this record carries no flag" was false, and left the
+            # only command that can remove one refusing to.
+            result.orphaned.append(record.id)
         # Through the shared writer, which keeps the stored order and removes
         # the key once nothing survives.
         result.records[index] = prune_example_flags(record, UNVERIFIED_KEY, set())

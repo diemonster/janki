@@ -58,6 +58,20 @@ def _misplaced_furigana(furigana: str) -> list[str]:
     return [text for text, _reading in qc.spilled_furigana_groups(furigana)]
 
 
+def _overwide_furigana_bases(furigana: str) -> tuple[tuple[str, str], ...]:
+    """Delegates to :func:`japanese_anki.qc.overwide_furigana_bases` (same rule)."""
+    from japanese_anki import qc
+
+    return qc.overwide_furigana_bases(furigana)
+
+
+def _spaced_furigana_bases(furigana: str) -> tuple[str, ...]:
+    """Delegates to :func:`japanese_anki.qc.spaced_furigana_bases` (same rule)."""
+    from japanese_anki import qc
+
+    return qc.spaced_furigana_bases(furigana)
+
+
 def _stray_furigana_spaces(furigana: str) -> tuple[str, ...]:
     """Spaces in a furigana field that no ruby group follows.
 
@@ -356,6 +370,27 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
                 "means 'the next group starts here', so this one survives into "
                 "the reading and the romaji, and shows on the card as a gap "
                 "the sentence itself does not have",
+            )
+        if example.furigana and (spaced := _spaced_furigana_bases(example.furigana)):
+            add(
+                "error",
+                "example-spaced-furigana-base",
+                f"example {index} furigana annotates "
+                + ", ".join(repr(text) for text in spaced)
+                + " as one run — Anki separates runs on the ASCII space alone, "
+                "so every character back through that whitespace is drawn under "
+                "the same reading and the rest vanishes from the reading, the "
+                "romaji and the sentence audio",
+            )
+        if example.furigana and (over := _overwide_furigana_bases(example.furigana)):
+            add(
+                "error",
+                "example-overwide-furigana-base",
+                f"example {index} furigana annotates "
+                + ", ".join(f"{base!r} with {reading!r}" for base, reading in over)
+                + " — every kanji spells at least one kana, so that reading "
+                "cannot cover that many characters, and the ones it does not "
+                "cover are lost from the reading, the romaji and the audio",
             )
     return issues
 

@@ -1917,10 +1917,10 @@ def test_accepting_refuses_the_flags_that_write_fields(
     ["毎日　話[はな]します。", "毎日話[はな]します。"],
     ids=["full-width-space", "no-separator"],
 )
-def test_a_full_width_separator_reaches_the_card_unflagged(furigana: str) -> None:
-    """A known gap, pinned where it regressed. Before M7.6V every generated
-    example was flagged when no parse arrived, so this shipped held back; now
-    the two surviving checks are both silent on it and it reaches a card.
+def test_a_separator_fault_is_refused_by_the_build_not_by_the_flag(furigana: str) -> None:
+    """Which gate owns this fault. Before M7.6V every generated example was
+    flagged when no parse arrived; the two enrichment checks are silent on it,
+    and validation refuses it instead.
 
     Anki's furigana filter separates on the ASCII space alone, so the ruby in
     `毎日　話[はな]します。` covers 毎日 as well — the reading, the romaji and the
@@ -1929,9 +1929,12 @@ def test_a_full_width_separator_reaches_the_card_unflagged(furigana: str) -> Non
     Han-initial run, which `spilled_furigana_groups` documents as its own gap.
     A fix for one that leaves the other silent has to fail something.
 
-    Recorded as `furigana-full-width-separator` in quality/findings.yaml. This
-    asserts the wrong behaviour on purpose and is expected to fail when the
-    separator rule lands."""
+    Both are refused by `janki validate` and so by `janki build` —
+    `example-spaced-furigana-base` reads the notation, `example-overwide-furigana-base`
+    counts kanji against kana. What this pins is that *enrichment* does not flag
+    them: the unverified flag holds sentence audio, and these two faults stop
+    the build outright, which is the stronger answer. A card carrying one never
+    ships, so it never reaches the point of being voiced."""
     outcome = apply_ai_result(
         record(), answer(generated("毎日話します。", furigana=furigana))
     )
@@ -1975,3 +1978,32 @@ def test_the_ai_pass_enriches_a_record_with_no_jpdb_key(
 
     assert code == 0, capsys.readouterr().err
     assert stored(root)["word:話す:はなす"]["examples"], "the pass wrote nothing"
+
+
+def test_accepting_clears_a_flag_that_names_no_current_sentence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An orphan fingerprint names no example the record still carries — the
+    sentence was rewritten and the flag was left behind. `--accept` used to skip
+    the record entirely and report that it carried no flag, which was false and
+    left the only command that can remove one refusing to.
+
+    Cleared, and reported as its own case rather than as a vouched sentence:
+    there was no sentence for a person to have read."""
+    monkeypatch.delenv("JPDB_API_KEY", raising=False)
+    stale = record(
+        examples=[ExampleSentence(japanese="話します。", furigana="話[はな]します。")],
+        source=SourceReference(
+            type="shirabe",
+            imported_from="export.csv",
+            raw_fields={UNVERIFIED_KEY: "deadbeef1234"},
+        ),
+    )
+    root = project(tmp_path, [stale])
+
+    code = cli.main(["--root", str(root), "enrich", "--accept", stale.id])
+
+    assert code == 0
+    assert UNVERIFIED_KEY not in stored(root)[stale.id]["source"]["raw_fields"]
+    out = capsys.readouterr().out
+    assert "named no sentence" in out

@@ -580,3 +580,24 @@ def test_a_space_at_the_field_edge_is_reported_whatever_is_beside_it(
     it too" reason cannot apply — and the comment above the code said as much
     while the ASCII neighbour silenced it anyway."""
     assert stray_furigana_spaces(written) == expected
+
+
+def test_the_punctuation_repair_refuses_a_run_it_cannot_separate() -> None:
+    """The repair adds the ASCII space Anki needs before a run of leading
+    punctuation, and only when the remainder is provably the annotated word
+    alone. Kana in the remainder was the stated test; whitespace was not, so
+    `週末[しゅうまつ]、東京　大阪[おおさか]` was repaired into a field that
+    `spilled_furigana_groups` reported before and not after — おおさか still
+    annotating 東京　大阪, and 東京 gone from the reading, the romaji and the
+    audio.
+
+    That is the evidence erasure this function's own comment says it was
+    rewritten to stop causing, reached through a character class the guard did
+    not name. Refusing leaves the defect reported, which is the whole point."""
+    spilled = "週末[しゅうまつ]、東京　大阪[おおさか]"
+
+    assert repair_spilled_punctuation(spilled) == spilled
+    assert spilled_furigana_groups(spilled) == (("、東京　大阪", "おおさか"),)
+
+    # The repair still fires where the remainder really is the word alone.
+    assert repair_spilled_punctuation("本[ほん]、読[よ]む") == "本[ほん]、 読[よ]む"

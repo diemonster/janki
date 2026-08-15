@@ -1,0 +1,17 @@
+version: 1
+id: furigana-full-width-separator
+purpose: regression
+gating: true
+runner: validation-qc
+pipeline_boundary: validation-qc
+source_archetype: camera
+redistributable: true
+fixture_basis: agent-created-synthetic
+fixtures:
+  - path: input.json
+    fingerprint: 10bd96948e671a3faa7af6367b6a8b504fe859a308385c63d56fd6043f8ba589
+  - path: oracle.json
+    fingerprint: 0af202cc9e9a43979d8715f42c64ba58593512098d377578be975b876c36cb46
+runner_input: input.json
+oracle: oracle.json
+finding_id: furigana-full-width-separator

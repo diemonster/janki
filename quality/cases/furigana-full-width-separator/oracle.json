@@ -1,0 +1,37 @@
+{
+  "errors": 3,
+  "warnings": 0,
+  "diagnostics": [
+    {
+      "code": "example-spaced-furigana-base",
+      "level": "error",
+      "record_id": "word:話す:はなす"
+    },
+    {
+      "code": "example-overwide-furigana-base",
+      "level": "error",
+      "record_id": "word:話す:はなす"
+    },
+    {
+      "code": "example-overwide-furigana-base",
+      "level": "error",
+      "record_id": "word:話す:はなす"
+    }
+  ],
+  "furigana": [
+    {
+      "id": "word:話す:はなす",
+      "record": "",
+      "examples": [
+        "毎日　話[はな]します。",
+        "毎日話[はな]します。"
+      ]
+    }
+  ],
+  "spilled_furigana": [
+    {
+      "id": "word:話す:はなす",
+      "groups": []
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "errors": 1,
+  "warnings": 1,
+  "diagnostics": [
+    {
+      "code": "example-spilled-furigana",
+      "level": "warning",
+      "record_id": "word:大阪:おおさか"
+    },
+    {
+      "code": "example-spaced-furigana-base",
+      "level": "error",
+      "record_id": "word:大阪:おおさか"
+    }
+  ],
+  "furigana": [
+    {
+      "id": "word:大阪:おおさか",
+      "record": "",
+      "examples": [
+        "週末[しゅうまつ]、東京　大阪[おおさか]"
+      ]
+    }
+  ],
+  "spilled_furigana": [
+    {
+      "id": "word:大阪:おおさか",
+      "groups": []
+    }
+  ]
+}

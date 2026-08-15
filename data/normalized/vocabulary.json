@@ -1158,8 +1158,7 @@
         "confidence": "high",
         "page": "1",
         "context": "しぬ → んで",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "furigana_unverified": "ef0a4c83abc8,5213b1026206"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -1380,8 +1379,7 @@
         "confidence": "high",
         "page": "1",
         "context": "すむ → んで",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "furigana_unverified": "aa0ec8da88dc"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -1705,8 +1703,7 @@
         "confidence": "high",
         "page": "1",
         "context": "とる → って",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "furigana_unverified": "b97883c00df0"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -2907,8 +2904,7 @@
         "context": "円卓へようこそ！",
         "inclusion_reason": "Concrete intermediate noun and a place name element in the scene.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]",
-        "janki_pitch_accent_source": "jpdb:12d27608bfde6e51a8b3828f74675078b1a8573546741bb775375b16497352e1",
-        "furigana_unverified": "dbb0f7fdb35a"
+        "janki_pitch_accent_source": "jpdb:12d27608bfde6e51a8b3828f74675078b1a8573546741bb775375b16497352e1"
       }
     }
   },
@@ -2971,8 +2967,7 @@
         "anki_tags": "Yotsubato1",
         "anki_Front": "<div>凄い</div>",
         "anki_Back": "<div>すごい　「すげえ」</div><div>Amazing, wow</div>",
-        "anki_Add Reverse": "y",
-        "furigana_unverified": "34997ffa4edc"
+        "anki_Add Reverse": "y"
       }
     }
   },
@@ -3487,8 +3482,7 @@
         "context": "ときに貴方 祝福の導きは？",
         "inclusion_reason": "Nominalized form of 導く; shows verb-to-noun derivation.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]",
-        "janki_pitch_accent_source": "jpdb:c0d9d65c23715985ccaea35f0811bb05c8d0d5412cc3ac13425e55cae2433d12",
-        "furigana_unverified": "278cd97fe171"
+        "janki_pitch_accent_source": "jpdb:c0d9d65c23715985ccaea35f0811bb05c8d0d5412cc3ac13425e55cae2433d12"
       }
     }
   },
@@ -3539,8 +3533,7 @@
         "context": "その前に差し支えなければ黄金律の修復について貴方の見解を伺いたく",
         "inclusion_reason": "Appears in the set polite phrase 差し支えなければ (\"if you don't mind\").",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]",
-        "janki_pitch_accent_source": "jpdb:5c893ea13a801f27b066756cd6323ce2f36bd1fee2802a9ffbee3c2c5d380edb",
-        "furigana_unverified": "906079cd8de0"
+        "janki_pitch_accent_source": "jpdb:5c893ea13a801f27b066756cd6323ce2f36bd1fee2802a9ffbee3c2c5d380edb"
       }
     }
   },
@@ -4804,8 +4797,7 @@
         "context": "二本指様の祈祷にご興味は？",
         "inclusion_reason": "High-frequency noun with the ～に興味がある pattern.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]",
-        "janki_pitch_accent_source": "jpdb:3ef2ccb06d2be21b40ce805bbb34c92444288f773d0de5f4c85ccd18b23c4ccf",
-        "furigana_unverified": "ea985ff0b3df"
+        "janki_pitch_accent_source": "jpdb:3ef2ccb06d2be21b40ce805bbb34c92444288f773d0de5f4c85ccd18b23c4ccf"
       }
     }
   },
@@ -5228,8 +5220,7 @@
         "page": "1",
         "context": "その前に差し支えなければ黄金律の修復について貴方の見解を伺いたく",
         "inclusion_reason": "Kanji spelling of あなた, glossed with ruby here; worth recognizing in print.",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]",
-        "furigana_unverified": "a06a2ad5ea83"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]"
       }
     }
   },
@@ -5591,8 +5582,7 @@
         "context": "私は聖職者として黄金律の探求をしています",
         "inclusion_reason": "Key setting term repeated on the page; teaches 黄金 plus 律.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:a9fd729e984f1e24776a64435e219806505f4bf0204e54ee9c15709ad21cbb8a",
-        "furigana_unverified": "029b8cf639c8"
+        "janki_pitch_accent_source": "jpdb:a9fd729e984f1e24776a64435e219806505f4bf0204e54ee9c15709ad21cbb8a"
       }
     }
   }

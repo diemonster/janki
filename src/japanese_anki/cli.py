@@ -1082,6 +1082,11 @@ def _accept_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
         for sentence in sentences:
             print(f"{record_id}: accepting {sentence}")
     cleared = sum(len(items) for items in result.cleared.values())
+    for record_id in result.orphaned:
+        print(
+            f"{record_id}: cleared a flag that named no sentence this record "
+            "still carries"
+        )
 
     book = ledger.load(config.ledger_file)
     for record_id in sorted(result.cleared):
@@ -1098,8 +1103,18 @@ def _accept_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
     try:
         book.save()
     except ledger.LedgerError as exc:
-        print(f"error: the flags were cleared but the ledger was not saved: {exc}",
-              file=sys.stderr)
+        _report_enrichment_ledger_failure(
+            exc,
+            rerun=(
+                "Re-running --accept records nothing: the flags it cleared are "
+                "already gone from the records, so it finds none to clear."
+            ),
+            aftermath=(
+                "The records are correct and their sentence audio will "
+                "generate; only the note that a person vouched for them is "
+                "missing."
+            ),
+        )
         return 1
     return 0
 

@@ -805,3 +805,84 @@ def test_a_control_character_in_a_field_name_is_caught_too() -> None:
 
     assert "conjugations key" in issue.message
     assert "U+001F" in issue.message
+
+
+def test_a_full_width_space_inside_a_base_is_an_error() -> None:
+    """Anki separates furigana runs on the ASCII space and nothing else, so a
+    base holding any other whitespace is drawn as one run: 毎日　話[はな] renders
+    はな over 毎日　話, and 毎日 vanishes from the reading, the regenerated romaji
+    and the sentence audio.
+
+    Decidable without a dictionary, which is what separates it from the
+    *missing* separator — 毎日話[はな]します。 needs someone to know 毎日 is not
+    part of the annotated word, and that guess is the one `spilled_furigana_groups`
+    refuses to make. This asks nothing about Japanese: a base is what one
+    reading covers, and whitespace inside it means the notation says otherwise."""
+    from japanese_anki.models import ExampleSentence
+
+    record = _record_with(
+        examples=[
+            ExampleSentence(
+                japanese="毎日話します。", furigana="毎日　話[はな]します。", english="x"
+            )
+        ]
+    )
+
+    issues = validate_records([record])
+
+    assert has_errors(issues)
+    [issue] = [i for i in issues if i.code == "example-spaced-furigana-base"]
+    # Escaped, deliberately: the offending character is invisible, so a message
+    # printing it raw would name a base that looks identical to a correct one.
+    assert repr("毎日　話") in issue.message
+    assert "\\u3000" in issue.message
+
+
+def test_a_missing_separator_is_caught_by_counting_rather_than_by_notation() -> None:
+    """The other half of the same defect, caught by arithmetic instead. The
+    notation rule cannot see 毎日話[はな]します。 — there is no whitespace to
+    object to — and asking *where the word ends* is the segmentation guess this
+    project refuses to make.
+
+    Counting asks neither. 毎日話 is three kanji and はな is two kana; every
+    kanji spells at least one, so that reading cannot cover that base whatever
+    the boundary is. Both rules fire on their own shape and neither fires on
+    the other's, which is why both exist."""
+    from japanese_anki.models import ExampleSentence
+
+    record = _record_with(
+        examples=[
+            ExampleSentence(
+                japanese="毎日話します。", furigana="毎日話[はな]します。", english="x"
+            )
+        ]
+    )
+
+    issues = validate_records([record])
+
+    assert has_errors(issues)
+    assert [i.code for i in issues if i.code.startswith("example-")] == [
+        "example-overwide-furigana-base"
+    ]
+    [issue] = [i for i in issues if i.code == "example-overwide-furigana-base"]
+    assert "毎日話" in issue.message and "はな" in issue.message
+
+
+def test_a_correct_reading_shorter_than_its_base_is_not_flagged() -> None:
+    """The counting rule must never accuse correct Japanese. 一日[ついたち] and
+    大人[おとな] both read longer than their kanji count; 日本語[にほんご] is the
+    ordinary case. None has more kanji than kana, so none is flagged — and the
+    collection's own 214 furigana fields produce no hit at all."""
+    from japanese_anki.models import ExampleSentence
+
+    for furigana in ("一日[ついたち]", "大人[おとな]", "日本語[にほんご]を 話[はな]す"):
+        record = _record_with(
+            examples=[
+                ExampleSentence(japanese="x", furigana=furigana, english="x")
+            ]
+        )
+        assert [
+            i
+            for i in validate_records([record])
+            if i.code == "example-overwide-furigana-base"
+        ] == [], furigana
