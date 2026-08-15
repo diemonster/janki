@@ -376,6 +376,11 @@ def test_refresh_runs_the_stages_in_order(
 
     monkeypatch.setattr(cli, "command_enrich", fake_enrich)
     monkeypatch.setattr(cli, "command_audio", fake_audio)
+    # The jpdb-dependent stages skip without a key, so the order this test is
+    # about only exists when one is present. Set rather than inherited: the
+    # developer's shell has one and a clean checkout does not, and a test whose
+    # subject appears only on one of those is not pinning the subject.
+    monkeypatch.setenv("JPDB_API_KEY", "k")
 
     assert _run(root, "refresh") == 0
 
@@ -422,6 +427,7 @@ def test_a_failing_stage_stops_the_run(
     # the only one that prompts — is never reached.
     root = _project(tmp_path, [_record("橋", "はし")])
     monkeypatch.setattr(cli, "command_enrich", lambda args: 3)
+    monkeypatch.setenv("JPDB_API_KEY", "k")
 
     assert _run(root, "refresh") == 3
 
