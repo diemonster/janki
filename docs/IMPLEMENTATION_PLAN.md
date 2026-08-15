@@ -3425,6 +3425,32 @@ identifiers, fingerprints, field counts, provenance — never about the language
    archive; any prompt change invalidates that recorded provenance — accepted,
    pre-release: the archive is history, not a contract.
 
+Decided 2026-08-15, answering "where do humans edit these": a top-level
+`prompts/` directory — not `docs/` (operational inputs, not reading material)
+and not `templates/` (that is card HTML) — one **Markdown** file per prompt,
+named by pass and input shape:
+
+    prompts/
+      README.md           the map: which pass sends which file, and the rules
+      style-guide.md      moved from docs/JAPANESE_STYLE_GUIDE.md — it is a prompt
+      extract-<mode>.md   one per extraction mode (three today, three files)
+      enrich-examples.md  the bare-word-list shape (absorbs AI_INSTRUCTIONS)
+      polish-meanings.md
+      patterns.md
+
+Markdown because the model reads it natively and the file is sent
+byte-for-byte: no placeholders, no comments, no template syntax — if it is in
+the file, the model sees it, which is what keeps the loader a file read rather
+than a renderer. Record data is composed into the user turn by Python; that is
+data, not instruction. Editing a file changes the next run with no rebuild and
+deliberately no caching, so an edit can never be silently stale. The loader
+exposes a sha-256 for staging archives and batch records and raises a clean
+error naming the full path when a file is missing. `git log prompts/` is the
+prompt history a human reads. The pydantic `Field(description=…)` strings stay
+in code — they are welded to the schema — and the audit keeps them terse,
+with any real instruction moved up into the files. `review.INSTRUCTIONS` gets
+no file; it dies with M8.2.
+
 Depends on: M7.6V. Files: a prompt template directory, its loader, the five
 call sites, `docs/ENRICHMENT.md`, and the cases that observe prompt contracts.
 
