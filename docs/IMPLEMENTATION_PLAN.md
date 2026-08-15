@@ -3072,6 +3072,12 @@ this task.
 
 ### [ ] M7.6V Authority realignment — the LLM parses, the dictionaries enrich
 
+> *Correction 2026-08-15: sentences below promise that the paid review is "the
+> one this task keeps" and that deleted checks are replaced by "a prompt clause
+> plus the paid review." M8.2 deletes the review subsystem; the duty those
+> sentences assign to it belongs to the prompt templates (`docs/DESIGN.md`).
+> The sentences stand as history rather than being rewritten.*
+
 *Opened 2026-08-14, replacing three discarded drafts of a jpdb-side furigana
 repair. Those drafts assumed jpdb should adjudicate the AI's readings; the
 owner's decision is that it should not adjudicate anything. jpdb and KANJIDIC
@@ -3390,23 +3396,34 @@ identifiers, fingerprints, field counts, provenance — never about the language
    `enrich.POLISH_INSTRUCTIONS`, `patterns.INSTRUCTIONS`, `review.INSTRUCTIONS`,
    and the extraction prompt. One directory, one loader, the same
    fingerprinting the style guide already gets so a prompt change is visible in
-   review rather than buried in a diff of string literals.
+   review rather than buried in a diff of string literals. The inventory is
+   wider than the five constants: every string that reaches a model is a
+   template concern — the user-turn builders, `patterns.format_patterns`'s
+   injected directive, `codex_client._prompt`, and the pydantic
+   `Field(description=…)` strings that ship inside the JSON schema and carry
+   real instructions. Fingerprint them all, and record them on `--ai` batch
+   submissions the way the polish batch already does.
 2. The loader is the only new logic, and it is a file read — not a renderer with
-   conditionals. A prompt that needs a branch is two prompts.
+   conditionals. A prompt that needs a branch in its *instruction prose* is two
+   prompts — extract's three modes are three files. Interpolating a record's
+   own data into the user turn stays in Python and is not a branch.
 3. Prompt content is a reviewable artifact: a case observes the contracts a
    prompt states (`ai-enrichment-prompt` already does this for the exact-spelling
    and furigana-notation clauses), so retiring a clause is a visible change with
    a failing case rather than a silent weakening.
-4. Audit what already exists against the rule. Anything in `qc.py` or
-   `validation.py` that decides a *reading*, a word boundary, or a register is
-   a candidate for deletion in favour of a prompt clause plus the paid review;
-   anything that checks notation, counts, identifiers or file shape stays.
+4. Audit what remains after M8.3 against the rule: anything anywhere in
+   `src/` that judges the model's Japanese is a deletion, full stop — M8.3
+   names the known ones, this audit catches stragglers. Artifact structure
+   (identifiers, counts, file shape, packaging) stays.
 5. Consolidate the AI passes into the templates (DESIGN.md stage 2): one rich
    template for a source that carries sentences — Japanese, English, furigana
    with each kanji's contextual reading, usage patterns, register — and one for
    a bare word list, absorbing `extract`'s prompt and `enrich --ai`;
    `--polish-meanings` becomes a template too. If the cards need more, the
    template asks for more.
+   The archived camera pilot pins a `system_prompt_fingerprint` in its staging
+   archive; any prompt change invalidates that recorded provenance — accepted,
+   pre-release: the archive is history, not a contract.
 
 Depends on: M7.6V. Files: a prompt template directory, its loader, the five
 call sites, `docs/ENRICHMENT.md`, and the cases that observe prompt contracts.
@@ -3426,42 +3443,155 @@ approach is superseded, the old one is deleted in the same change — code,
 config keys, data shims, tests, docs. A milestone that replaces a mechanism is
 not done until the mechanism it replaced is gone.*
 
-### [ ] M8.1 OpenAI TTS replaces VOICEVOX
+### [ ] M8.1 OpenAI TTS replaces VOICEVOX — words included
 
-Decided 2026-08-15: OpenAI TTS renders natural Japanese — pitch accent
-included — so every mechanism that existed to *steer* VOICEVOX is unnecessary
-with it. Remove the VOICEVOX provider and all synthesis steering:
-`pitch.to_aquestalk`, `audio_accent` and `--allow-default-accent`, the
-accent-fitness audio guard, the `accent_unverified` ledger tag, and the
-`tts.voicevox_*` config keys. The card's pitch *display* keeps jpdb's pattern —
-that is a word fact (stage 3), not synthesis steering. Audio needs
-`OPENAI_API_KEY` and a voice name in config; calls are billed, and a missing
-key skips the stage the way a missing jpdb key skips enrichment. Clips stay
-content-addressed so identical text dedups and regeneration is cheap. Word and
-example clips both route through the one provider.
+Decided 2026-08-15, and sharpened after review: the owner has listened to the
+output and OpenAI TTS speaks natural Japanese, so it takes **both** word and
+example clips. This overturns the earlier recorded measurement ("橋 and 箸
+would come out identical" — `tts/openai_tts.py`, `docs/AUDIO.md` "measured,
+not assumed") on the owner's judgment. If an isolated word clip ever sounds
+wrong, the fix is per-clip — the reading or accent rides along in that clip's
+TTS `instructions` — never machinery.
 
-### [ ] M8.2 The build stops asking a review for permission
+Remove: the VOICEVOX provider and the word refusal in `openai_tts.py`;
+`pitch.to_aquestalk` (its second caller, `enrich._compatible_pitch_patterns`,
+keeps only the mora-count fit `validation.py` already performs);
+`audio_accent` end to end — synthesis steering *and* the card-display
+override, since 0 of 97 records carry one and pre-release means delete now,
+re-add only if a wrong jpdb accent ever ships; `--allow-default-accent`, the
+accent-fitness guard, the `accent_unverified` ledger tag; `tts.voicevox_*`,
+`tts.azure_*`, and `tts.provider`/`sentence_provider` (one provider needs no
+selector); `voicevox_speed` — pace lives in the `openai_instructions` prose,
+which is also the only voice steering left, and DESIGN.md says so.
 
-The review gate was janki's logic auditing the model, which is backwards — the
-model reads Japanese better than anything we write. `build` and `refresh` stop
-consulting the review store; readiness/unready, clean-review permission
-records, and the review stage in refresh all go. `janki review` survives only
-as an on-demand, non-blocking spot check (it is itself the LLM) or goes
-entirely if it earns nothing — either way it grants no permissions. A bad card
-means a template asked for too little.
+Corrected from the first draft of this milestone: clips are content-addressed
+by **record identity** (`fp(record.id)`, `fp(record.id + example.japanese)`),
+not by text — two records sharing a sentence keep two clips, and an edit
+orphans the old clip visibly. That stays. Migration: regenerate every clip
+through the new provider (billed; ~92 word `.wav` plus the example clips) via
+`janki audio --words --examples --prune` — `docs/AUDIO.md`'s re-voicing
+procedure is written for exactly this, so run it before rewriting that
+section. The `.wav`/`.mp3` twin during transition is already handled by
+`status._EXTENSION_PREFERENCE`.
 
-### [ ] M8.3 The hardening corpus becomes tests
+Depends on: nothing.
+Files: `src/japanese_anki/tts/`, `audio_cmd.py`, `pitch.py`, `enrich.py`,
+`cli.py`, `config.py`, `exporters/anki.py` (`_accent_patterns`),
+`janki.toml`, `scripts/voice-samples.py` (delete), `docs/AUDIO.md`,
+`docs/DATA_MODEL.md`, `data/media/`, `data/ledger.json`, and the tests that
+pin `audio_accent`/aquestalk (`test_anki_build.py`, `test_pitch.py`,
+`test_validation.py`, `test_merge.py`, `test_models.py`, `test_ledger.py`,
+`test_audio_cmd.py`, `test_docs.py`).
+
+### [ ] M8.2 Delete the review subsystem
+
+Decided 2026-08-15: not just the gate — the subsystem. Quality lives in the
+templates; a paid pass that audits finished cards is the audit instinct at
+its most expensive. Delete `review.py`, the review store and card
+fingerprints, readiness, `janki review`, the refresh `review` stage and
+`--no-review`, `require_review`, and every consultation of any of it.
+
+`data/review.json` freezes as committed history — 183 paid entries are data,
+not a code path — and nothing reads it again. Before the code that displays
+them dies, its two human-written accent notes (both on `word:なる:なる`) are
+copied into that record's provenance. The four `review-*` replay cases die
+here. M7.6V and M7.6P justified their deletions by pointing at "the paid
+review this task keeps"; a dated correction under M7.6V's header records
+that the templates now carry that duty.
+
+Depends on: nothing.
+Files: `src/japanese_anki/review.py`, `cli.py`, `config.py`,
+`hardening_replay.py`, `data/normalized/vocabulary.json` (the two notes),
+`quality/cases/review-*`, `quality/findings.yaml`, `tests/test_review.py`,
+`docs/QUALITY.md`, `README.md`.
+
+### [ ] M8.3 Delete the model-audit logic
+
+The deletions the owner ordered on 2026-08-15, each named here per the
+pre-release rule. janki stops checking the model's Japanese anywhere:
+
+- **The furigana flag subsystem**: `qc.impossible_character_furigana` and
+  `kanji.assigns_a_known_reading`'s rendaku/sokuon tables — live false
+  positive today: 父[とう] in `word:お父さん:おとうさん`, correct furigana
+  flagged because KANJIDIC lists only ちち/フ — plus
+  `qc.furigana_rewrites_sentence`, `FURIGANA_UNVERIFIED_KEY` with
+  `add/prune_example_flags`, `enrich --accept` and `AcceptResult`, the audio
+  hold in `audio_cmd.py`, and the flag warnings.
+- **The headword rejection**: `qc.example_contains_target`, `qc.target_forms`,
+  the one-limited-retry loop and `ai_retry_prompt`, the `rejected` channel.
+  Measured: it rejects 食べよう, 食べれば, 食べさせる and 行かなきゃ — the
+  casual forms `AI_INSTRUCTIONS` explicitly asks for — because the table
+  knows seven forms.
+- **The teaching-suitability grammar**: `qc.example_content_holds` with its
+  politeness, fragment and conditional tables. Measured: 0 holds on the 155
+  real examples, while holding もっと早く行けば and 君のことについて (natural
+  casual ellipsis) and missing the identical register fault on ichidan verbs.
+  Its validation error and audio refusal go with it.
+- **The notation checks**: `qc.spilled_furigana_groups`,
+  `qc.stray_furigana_spaces`, and `qc.repair_spilled_punctuation` — which
+  silently rewrites the model's furigana. The prompt states the notation
+  contract; nothing re-checks it.
+- **The pattern-chart checker**: `patterns.check_pattern_rules` and
+  `--check-rules` — the dictionary-checks-writer shape M7.6V retired,
+  rebuilt for charts. The human `reviewed:` gate is the approval.
+
+Stays, reclassified: `conjugation.py` — the drill decks and the Conjugations
+field are stage-3 derivation, now named in DESIGN.md; its audit callers die
+above. The promote-time reading check and する predicate stay — a word fact
+from a dictionary. `furigana_reading`, `furigana_base`, and
+`regenerate_example_romaji` stay — notation arithmetic that renders and never
+judges. Every gating case and finding owned by a deleted check retires in the
+same commit.
+
+Depends on: nothing.
+Files: `qc.py`, `kanji.py`, `enrich.py`, `models.py`, `validation.py`,
+`audio_cmd.py`, `cli.py`, `patterns.py`, `quality/cases/`,
+`quality/findings.yaml`, tests throughout.
+
+### [ ] M8.4 The corpus becomes tests, and the ceremony goes with it
 
 Most of the corpus's value was ordinary regression testing wearing ceremony —
 prose invariants, fingerprint pinning, findings opened for synthetic probes.
-Migrate the replay cases that guard real artifact behaviour (importers,
-packaging, provenance, repairs) into plain pytest; delete the findings/cases/
-replay apparatus and `janki harden` once nothing depends on them. A new defect
-in janki's machinery gets a failing test first and a fix second — the ordinary
-loop, no YAML. The immutable inbox and provenance rules are unaffected; they
-are design, not corpus.
+Migrate the replay cases that guard artifact behaviour (importers, packaging,
+provenance, repairs — 26 of 37 measured portable) into plain pytest; the
+other 11 die with their owners in M8.2/M8.3. Then delete `hardening.py`,
+`hardening_replay.py` (including the dead `render-build` runner no case ever
+used), `janki harden`, `quality/`, and `docs/HARDENING.md`.
+
+Governance that outlives the apparatus moves to simple homes: **live-model
+consent** — the gate on sending a private source to a billed API — becomes a
+plain y/N confirmation on `janki extract` naming the file and the model;
+redistribution notes live in the deck docs; staging coverage acceptance and
+repair proposals already live outside the corpus and are untouched. A new
+defect in janki's machinery gets a failing test first and a fix second — the
+ordinary loop, no YAML. The immutable inbox and provenance rules are design,
+not corpus, and are unaffected.
+
+Depends on: M8.2, M8.3.
+Files: `hardening.py`, `hardening_replay.py`, `cli.py`, `Makefile`,
+`quality/`, `AGENTS.md` (Hardening rules), `docs/HARDENING.md`,
+`tests/test_hardening_replay.py`.
+
+### [ ] M8.5 Real sources through the real pipeline
+
+Replaces the cancelled pilot program (M7.6B, M7.6C, M7.7, M7.W — stamped
+below). The goal survives without the harness: run each collected real source
+through the templates, human-review the staging file, promote, build, and
+study the deck. What a pilot proved with oracles and coverage cells, use
+proves directly; a defect found this way gets a failing test (M8.4's loop),
+and a weak card gets a stronger template clause. Also here: the three
+hand-seeded records with empty `imported_from` get it filled, so DESIGN.md's
+provenance sentence is true without a caveat.
+
+Depends on: M7.6P, M8.1–M8.4.
+Files: `data/inbox/` sources already collected, staging archives, deck
+definitions under `data/decks/`.
 
 ### [ ] M7.6B Pilot pair — scans and camera captures
+
+> *Cancelled 2026-08-15 — superseded by M8.5. The oracle, coverage-cell
+> and eval apparatus this milestone requires is deleted by M8.4; the goal
+> (prove extraction on real sources) survives as ordinary use.*
 
 *Progress 2026-08-13: inventoried an owner-provided phone photo and added an
 approved 14-target camera oracle. The owner also approved the exact private
@@ -3499,6 +3629,10 @@ content and declare whether the pixels may be committed.
 
 ### [ ] M7.6C Pilot pair — adversarial visual language
 
+> *Cancelled 2026-08-15 — superseded by M8.5. The oracle, coverage-cell
+> and eval apparatus this milestone requires is deleted by M8.4; the goal
+> (prove extraction on real sources) survives as ordinary use.*
+
 *Preparation 2026-08-13: inventoried distinct printed-ruby and bilingual-layout
 sources. Added approved oracles for 34 exhaustive ruby rows and 19 selected
 bilingual worksheet targets. The owner also approved both exact private
@@ -3526,6 +3660,10 @@ reading minted into an ID. Its staging archive keeps the M7.1 approval record
 bound to the exact source, locator, expression, reading, and reviewed evidence.
 
 ### [ ] M7.7 Live extraction eval + release scorecard
+
+> *Cancelled 2026-08-15 — superseded by M8.5. The oracle, coverage-cell
+> and eval apparatus this milestone requires is deleted by M8.4; the goal
+> (prove extraction on real sources) survives as ordinary use.*
 
 Depends on: M7.6A, M7.6T, M7.6B, M7.6C
 Files: `src/japanese_anki/hardening_eval.py` (new),
@@ -3617,6 +3755,10 @@ stable JSON suitable for review in git. An evaluation run writes only under
 write: the atomic update of `quality/baseline.json`.
 
 ### [ ] M7.W Milestone 7 wrap and operating cadence
+
+> *Cancelled 2026-08-15 — superseded by M8.5. The oracle, coverage-cell
+> and eval apparatus this milestone requires is deleted by M8.4; the goal
+> (prove extraction on real sources) survives as ordinary use.*
 
 Depends on: all M7 tasks
 Files: `README.md`, `docs/QUALITY.md`, `docs/IMPORTING.md`,

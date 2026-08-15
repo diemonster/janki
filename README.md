@@ -242,6 +242,7 @@ recoverable and a build reproducible.
 
 | Doc | Covers |
 | --- | --- |
+| [docs/DESIGN.md](docs/DESIGN.md) | The one-page design that leads — read this first |
 | [docs/IMPORTING.md](docs/IMPORTING.md) | Merge rules, held-back rows, jpdb decks, PDFs and photos, deck membership |
 | [docs/ENRICHMENT.md](docs/ENRICHMENT.md) | jpdb lookups, AI sentences and glosses, batch mode, what it costs |
 | [docs/PATTERNS.md](docs/PATTERNS.md) | Grammar handouts, rule decks, drill decks, how a chart is checked |

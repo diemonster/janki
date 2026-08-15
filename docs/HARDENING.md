@@ -85,7 +85,7 @@ behavior. A test-only copy of production logic is not a regression case.
 
 ### 5. Choose validation, repair, proposal, or hold
 
-Add a deterministic validator when the rule no longer needs judgement. Add an
+Add a deterministic validator only for artifact structure — identifiers, counts, file shape — never for a judgment about the Japanese; that belongs in the prompt template (AGENTS.md: the prompt does the work). Add an
 automatic repair only when it meets the repair boundary below. Use a staged
 proposal when a protected non-identity content field needs a human decision.
 Hold the record when evidence is uncertain.
