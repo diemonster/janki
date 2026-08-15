@@ -355,9 +355,9 @@ findings:
     pipeline_stage: model-request
     source_archetypes: [native-pdf-table]
     symptom: Reasoning depth was resolved from the provider rather than the model, so `janki review --model claude-haiku-4-5` sent output_config.effort to a family that answers it with a 400; enrichment's call is not inside a try, so the run aborted on the first record. The first fix listed the families that reject effort, which had the direction wrong — xhigh arrived with Opus 4.7, so it then sent an invalid level to Opus 4.6, Opus 4.5, Sonnet 4.6 and Sonnet 4.5 as well, and adjudicate_reading turns any of those 400s into a permanent "unsure" with nothing printed.
-    invariant: A request body carries the effort key only for models known to accept it at that level, and adaptive thinking only for models where it must be asked for by name; neither is sent for an unrecognized id. The two sets are not the same, and the body reflects that. That every call site resolves both from the model it actually sends is covered by tests rather than by this case, which builds the body directly.
+    invariant: A request body carries the effort key only for models known to accept it at that level, and adaptive thinking for every model that accepts it — a wider set, since Opus 4.6 and Sonnet 4.6 take thinking without taking the xhigh level, and asking a model that already thinks by default costs nothing while omitting it from one that does not costs the reasoning the effort was bought for. Neither key is sent for an unrecognized id. That every call site resolves both from the model it actually sends is covered by tests rather than by this case, which builds the body directly and so cannot see a call site at all.
     evidence:
-      - fingerprint: 16000b089458ee8dc915d0cc3e3703252bcb373b3d409f9b381141909b284334
+      - fingerprint: 0b193ff37dcc391cf1fd01804201e06e4066bea25208dfc74ae5cabb452c637b
         locator: quality/cases/model-request-effort-support/input.json
     recurrences: []
     case_ids: [model-request-effort-support]

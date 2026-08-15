@@ -162,6 +162,9 @@ def test_extraction_resolves_effort_from_the_model_it_reads_with(
 
     assert client.bodies, "extraction never called the model"
     assert client.bodies[0]["output_config"].get("effort") == expected
+    # Thinking travels with the model too, and per site — the gating case
+    # builds the body directly, so only this reaches the call.
+    assert ("thinking" in client.bodies[0]) is (expected is not None)
 
 
 @pytest.mark.parametrize("model,expected", [(NEW, "xhigh"), (OLD, None)])
@@ -176,6 +179,9 @@ def test_pattern_reading_resolves_effort_from_its_own_model(
 
     assert client.bodies, "pattern reading never called the model"
     assert client.bodies[0]["output_config"].get("effort") == expected
+    assert ("thinking" in client.bodies[0]) is (expected is not None)
+    # 4000 was sized for an answer alone; thinking now shares the budget.
+    assert client.bodies[0]["max_tokens"] == claude_client.DEFAULT_MAX_TOKENS
 
 
 def test_asking_for_effort_also_asks_for_thinking() -> None:
@@ -192,9 +198,16 @@ def test_asking_for_effort_also_asks_for_thinking() -> None:
     )
 
     assert with_effort["thinking"] == {"type": "adaptive"}
-    # And not sent otherwise: a model that takes no effort is not being asked
-    # to reason harder, and older families reject the pairing differently.
+    # Not sent to models that reject it — but *is* sent to Opus 4.6 and Sonnet
+    # 4.6, which take thinking and not the xhigh level. Keying the pairing on
+    # effort left exactly those two silently thinking-off.
     assert "thinking" not in without
+    pair = claude_client._request_body(
+        "claude-opus-4-6", [], "x", enrich.ai_schema(), 16000,
+        claude_client.effort_for("claude-opus-4-6"),
+    )
+    assert pair["output_config"].get("effort") is None
+    assert pair["thinking"] == {"type": "adaptive"}
 
 
 @pytest.mark.parametrize("model,expected", [(NEW, "xhigh"), (OLD, None)])
@@ -216,6 +229,11 @@ def test_the_adjudicator_resolves_effort_from_its_own_model(
 
     assert client.bodies, "the adjudicator never called the model"
     assert client.bodies[0]["output_config"].get("effort") == expected
+    assert ("thinking" in client.bodies[0]) is (expected is not None)
+    # 200 was sized for a one-word verdict from a model that did not reason
+    # first. With thinking on it truncates every time — and this pass swallows
+    # a truncation into a permanent, silent "unsure".
+    assert client.bodies[0]["max_tokens"] == claude_client.DEFAULT_MAX_TOKENS
 
 
 @pytest.mark.parametrize("model,expected", [(NEW, "xhigh"), (OLD, None)])
@@ -233,6 +251,7 @@ def test_meaning_polish_resolves_effort_from_its_own_model(
 
     assert client.bodies, "polish never called the model"
     assert client.bodies[0]["output_config"].get("effort") == expected
+    assert ("thinking" in client.bodies[0]) is (expected is not None)
 
 
 @pytest.mark.parametrize("model,expected", [(NEW, "xhigh"), (OLD, None)])
@@ -290,3 +309,60 @@ def test_the_pitch_recheck_resolves_effort_from_its_own_model(
 
     assert len(caller.calls) == 2, "the pitch recheck was never reached"
     assert caller.calls[1].get("effort") == expected
+
+
+def test_refresh_skips_the_jpdb_stages_when_there_is_no_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Keyed on the key rather than on `--no-jpdb`, and asserted with the
+    environment controlled rather than inherited.
+
+    The previous shape was pinned only when the key happened to be unset, so on
+    a machine that exports it — the author's — deleting the branch entirely
+    left the suite green.
+    """
+    from japanese_anki import cli
+
+    monkeypatch.delenv("JPDB_API_KEY", raising=False)
+    root = tmp_path / "p"
+    (root / "data" / "decks").mkdir(parents=True)
+    (root / "janki.toml").write_text("[paths]\n", encoding="utf-8")
+    (root / "data" / "normalized").mkdir(parents=True, exist_ok=True)
+    (root / "data" / "normalized" / "vocabulary.json").write_text("[]", encoding="utf-8")
+
+    cli.main(
+        ["--root", str(root), "refresh", "--no-audio", "--no-review", "--no-build"]
+    )
+    out = capsys.readouterr().out
+
+    assert "— jpdb: skipped (no JPDB_API_KEY" in out
+    assert "— ai: skipped (no JPDB_API_KEY" in out
+    assert "— recheck: skipped (no JPDB_API_KEY" in out
+
+
+def test_refresh_runs_the_recheck_when_a_key_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--no-jpdb` skips the jpdb fill and nothing else. Skipping the re-check
+    with it re-opened the hole its position in the order exists to close: `--ai`
+    flags examples through its own client, and `audio` will not voice a flagged
+    one."""
+    from japanese_anki import cli
+
+    monkeypatch.setenv("JPDB_API_KEY", "k")
+    root = tmp_path / "p"
+    (root / "data" / "decks").mkdir(parents=True)
+    (root / "janki.toml").write_text("[paths]\n", encoding="utf-8")
+    (root / "data" / "normalized").mkdir(parents=True, exist_ok=True)
+    (root / "data" / "normalized" / "vocabulary.json").write_text("[]", encoding="utf-8")
+
+    cli.main(
+        [
+            "--root", str(root), "refresh", "--no-jpdb", "--no-ai",
+            "--no-audio", "--no-review", "--no-build",
+        ]
+    )
+    out = capsys.readouterr().out
+
+    assert "— jpdb: skipped (--no-jpdb)" in out
+    assert "recheck: skipped" not in out

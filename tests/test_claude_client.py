@@ -436,7 +436,7 @@ def test_effort_is_sent_when_a_caller_asks_for_it() -> None:
 
 
 def test_effort_is_absent_when_a_caller_does_not_ask() -> None:
-    """The adjudicator runs on Haiku, which rejects the key with a 400 — and it
+    """The adjudicator once ran on Haiku, which rejects the key with a 400 — and it
     catches every exception and returns "unsure", so an unconditional value
     would disable that pass permanently with nothing printed. The key is
     omitted rather than sent as None: a model that does not support effort

@@ -21,6 +21,16 @@
       "thinking": "adaptive"
     },
     {
+      "model": "claude-fable-5",
+      "effort": "xhigh",
+      "thinking": "adaptive"
+    },
+    {
+      "model": "claude-mythos-5",
+      "effort": "xhigh",
+      "thinking": "adaptive"
+    },
+    {
       "model": "claude-opus-4-6",
       "effort": null,
       "thinking": "adaptive"

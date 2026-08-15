@@ -3557,7 +3557,9 @@
           "model": "jpdb"
         }
       ],
-      "exports": {},
+      "exports": {
+        "m7-camera-vertical-dialogue": "2026-08-14"
+      },
       "sources": [
         {
           "ref": "IMG_4563.jpg",
@@ -3760,7 +3762,9 @@
           "model": "gpt-5.6-sol"
         }
       ],
-      "exports": {},
+      "exports": {
+        "m7-camera-vertical-dialogue": "2026-08-14"
+      },
       "sources": [
         {
           "ref": "IMG_4563.jpg",
@@ -4057,7 +4061,9 @@
           "model": "jpdb"
         }
       ],
-      "exports": {},
+      "exports": {
+        "m7-camera-vertical-dialogue": "2026-08-14"
+      },
       "sources": [
         {
           "ref": "IMG_4563.jpg",
@@ -4468,7 +4474,9 @@
           "model": "gpt-5.6-sol"
         }
       ],
-      "exports": {},
+      "exports": {
+        "m7-camera-vertical-dialogue": "2026-08-14"
+      },
       "sources": [
         {
           "ref": "IMG_4563.jpg",
@@ -4511,7 +4519,9 @@
           "model": "gpt-5.6-sol"
         }
       ],
-      "exports": {},
+      "exports": {
+        "m7-camera-vertical-dialogue": "2026-08-14"
+      },
       "sources": [
         {
           "ref": "IMG_4563.jpg",
@@ -4962,7 +4972,9 @@
           "model": "jpdb"
         }
       ],
-      "exports": {},
+      "exports": {
+        "m7-camera-vertical-dialogue": "2026-08-14"
+      },
       "sources": [
         {
           "ref": "IMG_4563.jpg",
@@ -5026,7 +5038,9 @@
           "model": "jpdb"
         }
       ],
-      "exports": {},
+      "exports": {
+        "m7-camera-vertical-dialogue": "2026-08-14"
+      },
       "sources": [
         {
           "ref": "IMG_4563.jpg",
@@ -5690,7 +5704,9 @@
           "model": "jpdb"
         }
       ],
-      "exports": {},
+      "exports": {
+        "m7-camera-vertical-dialogue": "2026-08-14"
+      },
       "sources": [
         {
           "ref": "IMG_4563.jpg",
@@ -5755,7 +5771,9 @@
           "model": "jpdb"
         }
       ],
-      "exports": {},
+      "exports": {
+        "m7-camera-vertical-dialogue": "2026-08-14"
+      },
       "sources": [
         {
           "ref": "IMG_4563.jpg",
@@ -5965,7 +5983,9 @@
           "model": "jpdb"
         }
       ],
-      "exports": {},
+      "exports": {
+        "m7-camera-vertical-dialogue": "2026-08-14"
+      },
       "sources": [
         {
           "ref": "IMG_4563.jpg",
@@ -6102,7 +6122,9 @@
           "model": "jpdb"
         }
       ],
-      "exports": {},
+      "exports": {
+        "m7-camera-vertical-dialogue": "2026-08-14"
+      },
       "sources": [
         {
           "ref": "IMG_4563.jpg",
@@ -6334,7 +6356,9 @@
           "model": "jpdb"
         }
       ],
-      "exports": {},
+      "exports": {
+        "m7-camera-vertical-dialogue": "2026-08-14"
+      },
       "sources": [
         {
           "ref": "IMG_4563.jpg",
@@ -6603,7 +6627,15 @@
           "model": "gpt-5.6-sol"
         }
       ],
-      "exports": {},
+      "exports": {
+        "m7-camera-vertical-dialogue": {
+          "at": "2026-08-14",
+          "missing": [
+            "accent",
+            "audio"
+          ]
+        }
+      },
       "sources": [
         {
           "ref": "IMG_4563.jpg",
@@ -7031,7 +7063,9 @@
           "model": "gpt-5.6-sol"
         }
       ],
-      "exports": {},
+      "exports": {
+        "m7-camera-vertical-dialogue": "2026-08-14"
+      },
       "sources": [
         {
           "ref": "IMG_4563.jpg",

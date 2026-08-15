@@ -3142,7 +3142,7 @@ no single budget to raise:
 |---|---|---|
 | adjudication | `DEFAULT_MAX_TOKENS` (was 200) | `enrich.py` |
 | patterns | `DEFAULT_MAX_TOKENS` (was 4000) | `patterns.py` |
-| **review, and its pitch recheck** | **8000** | `review.py:497`, `review.py:540` |
+| review, and its pitch recheck | `DEFAULT_MAX_TOKENS` (was 8000) | `review.py` |
 | extract / enrich / polish / batch | 16000 | `DEFAULT_MAX_TOKENS` |
 
 The pass this task exists to improve is the *tightest*, and its own comment

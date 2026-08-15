@@ -667,6 +667,27 @@ def unreviewed(
     ]
 
 
+def readiness(records: Sequence[VocabularyRecord]) -> dict[str, str]:
+    """:func:`unready` over ``records``, deciding local failure per record.
+
+    The composition, in one place. It lived in the CLI while the replay runner
+    kept its own copy, so swapping ``validate_record`` for ``validate_records``
+    — the regression the CLI comment warns about, since the sequence form adds
+    a duplicate-id error and one record can ship as two cards — changed
+    production and replayed green.
+    """
+    from japanese_anki.validation import has_errors, validate_record
+
+    return unready(
+        records,
+        failing=(
+            card_fingerprint(record)
+            for record in records
+            if has_errors(validate_record(record))
+        ),
+    )
+
+
 def unready(
     records: Iterable[VocabularyRecord], *, failing: Iterable[str]
 ) -> dict[str, str]:

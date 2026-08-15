@@ -9,9 +9,9 @@ redistributable: true
 fixture_basis: agent-created-synthetic
 fixtures:
   - path: input.json
-    fingerprint: 16000b089458ee8dc915d0cc3e3703252bcb373b3d409f9b381141909b284334
+    fingerprint: 0b193ff37dcc391cf1fd01804201e06e4066bea25208dfc74ae5cabb452c637b
   - path: oracle.json
-    fingerprint: 556a1a2547a9e0cdbcac400bbf748ef48d73a1ae60ce4903a9094771e8c3bdc6
+    fingerprint: c3faa0fd871cbe59e20a9cd93100b0d52fcc9995c42ae139b20c6be62adac8d1
 runner_input: input.json
 oracle: oracle.json
 finding_id: model-request-unsupported-effort

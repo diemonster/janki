@@ -162,6 +162,16 @@ def api_key_from_env(env: Mapping[str, str] | None = None) -> str:
     return value
 
 
+def api_key_in_env(env: Mapping[str, str] | None = None) -> bool:
+    """Whether a jpdb key is available, without raising.
+
+    For callers deciding *whether* to run a jpdb-dependent stage rather than
+    running one: `api_key_from_env` is the right error for a command that needs
+    the key, and the wrong control flow for a command choosing not to need it.
+    """
+    return bool((env if env is not None else os.environ).get(API_KEY_ENV, "").strip())
+
+
 def _decode_body(raw: bytes, status: int, url: str) -> Any:
     """Decode a response body, or explain why it could not be."""
     text = raw.decode("utf-8", errors="replace").strip()

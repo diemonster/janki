@@ -382,6 +382,14 @@
       }
     ]
   },
+  "26a38ce0011f": {
+    "record_id": "word:すぐ:すぐ",
+    "at": "2026-08-14",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": []
+  },
   "27439ff14e0f": {
     "record_id": "word:映画:えいが",
     "at": "2026-08-13",
@@ -1292,6 +1300,21 @@
         "problem": "The sentence is labeled polite and uses ですね, but pairs it with an interjection the card describes as very casual and potentially rough/masculine; the register label sits awkwardly against the usage note's \"best used with close friends\".",
         "severity": "note",
         "suggestion": "Either relabel this example as semi-casual/familiar (e.g. speaking to a close coworker) or recast it in plain form, e.g. よう、今日は早いね。"
+      }
+    ]
+  },
+  "89bbc4d67552": {
+    "record_id": "word:祭り:まつり",
+    "at": "2026-08-14",
+    "accepted": false,
+    "accepted_because": "",
+    "accepted_marks": [],
+    "findings": [
+      {
+        "where": "usage_notes",
+        "problem": "花火祭り is offered as a common compound, but the standard everyday word for a fireworks event is 花火大会; 花火祭り occurs mainly inside specific event names, so it is a misleading model for a beginner.",
+        "severity": "note",
+        "suggestion": "Replace it with a genuinely common compound such as 夏祭り and 秋祭り (or 村祭り), and if fireworks are worth mentioning, point out 花火大会 instead."
       }
     ]
   },

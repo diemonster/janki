@@ -75,7 +75,6 @@ from japanese_anki.validation import (
     ValidationIssue,
     has_errors,
     refusal_text,
-    validate_record,
     validate_records,
 )
 
@@ -3803,6 +3802,11 @@ def command_build(args: argparse.Namespace) -> int:
 #: parsed by the real parser rather than assembled as a Namespace — a stage
 #: that grows a flag then keeps its default here instead of raising
 #: AttributeError halfway through a run.
+#: Refresh stages that cannot run without a jpdb key, whatever the flags say.
+#: ``--ai`` builds a client to verify each sentence it writes, and
+#: ``--recheck-furigana`` re-parses the disputed ones.
+_JPDB_STAGES = frozenset({"jpdb", "ai", "recheck"})
+
 _REFRESH_STAGES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("jpdb", "--no-jpdb", ("enrich", "--jpdb")),
     ("ai", "--no-ai", ("enrich", "--ai")),
@@ -3855,13 +3859,15 @@ def command_refresh(args: argparse.Namespace) -> int:
         if getattr(args, f"no_{name}"):
             print(f"— {name}: skipped ({flag})")
             continue
-        if name == "recheck" and args.no_jpdb:
-            # `--recheck-furigana` is a jpdb pass: it re-parses each disputed
-            # sentence and refuses without a key. Running it under --no-jpdb
-            # made that flag mean "no jpdb, except the stage that needs it
-            # most", and made `refresh` demand a network secret from a run
-            # that had just been told not to use one.
-            print("— recheck: skipped (--no-jpdb; it re-parses through jpdb)")
+        if name in _JPDB_STAGES and not jpdb.api_key_in_env():
+            # Keyed on the key, not on `--no-jpdb`. Two earlier shapes were
+            # wrong: demanding the key from a run that asked for no jpdb at
+            # all, and then skipping `recheck` whenever `--no-jpdb` was passed
+            # — which re-opened the hole the stage ordering above exists to
+            # close, because `--ai` still flags examples through its own client
+            # and `audio` refuses to voice a flagged one. With a key, both
+            # stages run and `--no-jpdb` means only what it says.
+            print(f"— {name}: skipped (no JPDB_API_KEY; this stage needs one)")
             continue
         if name == "review" and not requires_review:
             print(f"— {name}: skipped ([review] require = false)")
@@ -4526,14 +4532,7 @@ def command_review(args: argparse.Namespace) -> int:
         # Per record, not `validate_records`: that adds a duplicate-id error
         # across the sequence, and a record shipping in two decks appears twice
         # here legitimately. Readiness is a property of one card.
-        held = review.unready(
-            todo,
-            failing=(
-                review.card_fingerprint(record)
-                for record in todo
-                if has_errors(validate_record(record))
-            ),
-        )
+        held = review.readiness(todo)
         if held:
             withheld = [
                 record

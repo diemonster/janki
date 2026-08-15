@@ -1538,3 +1538,25 @@ def test_a_furigana_field_that_matches_its_sentence_is_not_named() -> None:
     )
 
     assert outcome.rewritten_furigana == []
+
+
+def test_the_codex_path_still_sends_its_own_reasoning_effort(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Codex takes `reasoning_effort`, not `output_config.effort`, and remains a
+    supported provider. Its only end-to-end pin went out with the test that was
+    repointed at the Anthropic default."""
+    call = FakeCall(ok("話します。", "話[はな]します。"))
+    root = project(tmp_path, [record()])
+    (root / "janki.toml").write_text(
+        (root / "janki.toml").read_text(encoding="utf-8")
+        + '\n[ai]\nenrich_provider = "codex"\nenrich_model = "gpt-5.6-sol"\n'
+        'enrich_reasoning_effort = "ultra"\n',
+        encoding="utf-8",
+    )
+    patch_all(monkeypatch, call, FakeJpdb({"話します。": HANASHIMASU}))
+
+    cli.main(["--root", str(root), "enrich", "--ai", "--yes"])
+
+    assert call.calls[0]["reasoning_effort"] == "ultra"
+    assert "effort" not in call.calls[0]

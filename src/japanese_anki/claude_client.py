@@ -65,9 +65,11 @@ API_KEY_ENV = "ANTHROPIC_API_KEY"
 #: Below the SDK's non-streaming timeout ceiling. Going higher means streaming,
 #: which is a caller's decision and a different call shape.
 #:
-#: Note this is a budget for **thinking plus response**, not response alone:
-#: every request that asks for effort also asks for adaptive thinking, so a
-#: limit sized snugly around the expected output can truncate mid-answer. That truncation arrives as
+#: Note this is a budget for **thinking plus response**, not response alone.
+#: Every model janki sends adaptive thinking to spends part of it reasoning —
+#: and that set is wider than the effort set, since Opus 4.6 and Sonnet 4.6
+#: think without taking the ``xhigh`` level. A limit sized against the answer
+#: alone truncates mid-thought. That truncation arrives as
 #: ``stop_reason == "max_tokens"``, which is exactly what this module makes
 #: callers look at.
 DEFAULT_MAX_TOKENS = 16000
