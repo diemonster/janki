@@ -36,6 +36,12 @@ or second-guesses what came back.
 
 ## Development rules
 
+- **Pre-release: there are no legacy paths.** Nothing is released and nothing
+  outside this repository depends on this code. When an approach is
+  superseded, delete it in the same change — old code paths, compatibility
+  shims, deprecated flags, config keys, tests for removed behaviour. Do not
+  preserve, deprecate, or warn; remove. Breaking changes are expected and
+  free, and a migration is a plain data edit, not a supported pathway.
 - Use Python 3.11 or newer.
 - Keep parsing, normalization, validation, and Anki generation separate.
 - Prefer the standard library unless an external package materially simplifies the task.

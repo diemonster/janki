@@ -3418,6 +3418,14 @@ remove what it does not justify. The through-line of every one: janki's logic
 enriches the card, it never audits the model, and a rules engine for Japanese
 is this project's defining anti-pattern.*
 
+*Standing rule, recorded here because it keeps getting forgotten: **this
+software is not released.** No user, deck, or file outside this repository
+depends on any behaviour here. There are no legacy paths to support, no
+deprecation periods, and no backward-compatibility obligations. When an
+approach is superseded, the old one is deleted in the same change — code,
+config keys, data shims, tests, docs. A milestone that replaces a mechanism is
+not done until the mechanism it replaced is gone.*
+
 ### [ ] M8.1 OpenAI TTS replaces VOICEVOX
 
 Decided 2026-08-15: OpenAI TTS renders natural Japanese — pitch accent
