@@ -214,7 +214,7 @@ def test_each_group_in_a_sentence_gets_its_own_ruby(
 
 
 def test_a_missing_separator_really_does_spill_the_reading() -> None:
-    """The failure `spilled_furigana_groups` exists to catch, demonstrated
+    """The failure the prompt template's separator rule exists for, demonstrated
     against Anki itself rather than described. Without the space before 妻, the
     ruby base becomes `、妻` — つま is drawn over the comma as well as the word.
 

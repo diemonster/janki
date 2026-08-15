@@ -18,11 +18,11 @@
     }
   ],
   "changes": {
-    "word:ほん:ほん": ["examples"]
+    "word:ほん:ほん": [
+      "examples"
+    ]
   },
   "no_changes": [],
   "report": [],
-  "rejected_ids": [],
-  "unverified_ids": [],
   "warning_count": 0
 }

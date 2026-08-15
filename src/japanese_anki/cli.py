@@ -40,7 +40,7 @@ from japanese_anki.exporters.anki import (
     deck_notetype,
     resolve_deck_records,
 )
-from japanese_anki.identifiers import normalize_identity_part, short_fingerprint
+from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.importers import anki_deck, jpdb_import, jpdb_reviews
 from japanese_anki.importers.shirabe import import_file, inspect_file
 from japanese_anki.inputs import prepare_inputs
@@ -1054,79 +1054,13 @@ def _enrich_staging(
     return 0
 
 
-def _accept_furigana(config: ProjectConfig, args: argparse.Namespace) -> int:
-    """Clear the named records' unverified furigana flags on your authority.
-
-    Asks nothing and writes no field: it removes a flag that `janki audio`
-    reads. Since M7.6V retired the dictionary re-check, this is the only way a
-    flag comes off a sentence that stays — a corrected furigana does not clear
-    its own flag, because the flag is keyed to the sentence rather than to the
-    field. Rewriting the *sentence* does drop it, at the prune in
-    `apply_ai_result`, because the fingerprint then matches no example.
-    """
-    output_path = config.normalized_file.resolve()
-    output_revision = records_revision(output_path)
-    records = load_records(output_path) if output_path.exists() else []
-    if not records:
-        print(f"No records to accept in {output_path}.")
-        return 0
-
-    result = enrich.accept_furigana(records, args.ids or ())
-    if not result.changed:
-        print("Nothing to accept: none of those records carries a furigana flag.")
-        return 0
-
-    # Printed before anything is written, so the last thing on screen before a
-    # durable change is the list of sentences it covers.
-    for record_id, sentences in sorted(result.cleared.items()):
-        for sentence in sentences:
-            print(f"{record_id}: accepting {sentence}")
-    cleared = sum(len(items) for items in result.cleared.values())
-    for record_id in result.orphaned:
-        print(
-            f"{record_id}: cleared a flag that named no sentence this record "
-            "still carries"
-        )
-
-    book = ledger.load(config.ledger_file)
-    for record_id in sorted(result.cleared):
-        # The flag key is the field this pass wrote — it cleared that key, and
-        # `record_enriched` refuses an empty field list. `model="human"` because
-        # `kind="human"` requires the thing that ran to be named, and here it is
-        # a person: a flag a reader vouched for is not the same evidence as one
-        # a dictionary confirmed, which is the whole reason this is recorded.
-        book.record_enriched(
-            record_id, kind="human", fields=[enrich.UNVERIFIED_KEY], model="human"
-        )
-    save_records_json(output_path, result.records, expected=output_revision)
-    print(f"Accepted {cleared} sentence(s) across {len(result.cleared)} record(s).")
-    try:
-        book.save()
-    except ledger.LedgerError as exc:
-        _report_enrichment_ledger_failure(
-            exc,
-            rerun=(
-                "Re-running --accept records nothing: the flags it cleared are "
-                "already gone from the records, so it finds none to clear."
-            ),
-            aftermath=(
-                "The records are correct and their sentence audio will "
-                "generate; only the note that a person vouched for them is "
-                "missing."
-            ),
-        )
-        return 1
-    return 0
-
-
 def command_enrich(args: argparse.Namespace) -> int:
     """Fill empty fields on existing records from a dictionary.
 
-    Four passes, one per run: ``--jpdb`` fills what a dictionary knows,
+    Three passes, one per run: ``--jpdb`` fills what a dictionary knows,
     ``--ai`` writes what it does not, ``--polish-meanings`` rewrites English that
-    is already there, and ``--accept`` clears a furigana flag a person has read
-    and vouched for. One is required, because "enrich" without saying how is a
-    command whose meaning depends on which pass is newest.
+    is already there. One is required, because "enrich" without saying how is
+    a command whose meaning depends on which pass is newest.
     """
     passes = [
         name
@@ -1134,7 +1068,6 @@ def command_enrich(args: argparse.Namespace) -> int:
             ("--jpdb", args.jpdb),
             ("--ai", args.ai),
             ("--polish-meanings", args.polish_meanings),
-            ("--accept", args.accept),
         )
         if chosen
     ]
@@ -1142,16 +1075,14 @@ def command_enrich(args: argparse.Namespace) -> int:
         raise JankiError(
             "enrich takes one pass at a time: --jpdb fills what a dictionary "
             "knows, --ai writes what it does not, --polish-meanings rewrites "
-            "English that is already there, and --accept clears a furigana flag "
-            f"you have vouched for. Got {', '.join(passes)}. Run them "
+            f"English that is already there. Got {', '.join(passes)}. Run them "
             "separately so each shows you its own diff."
         )
     if not passes:
         raise JankiError(
             "enrich needs a pass: --jpdb fills fields from the jpdb dictionary, "
             "--ai writes examples and usage notes, --polish-meanings proposes "
-            "better English glosses, --accept clears a furigana flag you have "
-            "read and vouched for."
+            "better English glosses."
         )
     batch_flags = [
         name
@@ -1188,19 +1119,13 @@ def command_enrich(args: argparse.Namespace) -> int:
     if batch_flags and not (args.ai or args.polish_meanings):
         raise JankiError(
             f"enrich {batch_flags[0]} needs --ai or --polish-meanings: those are "
-            "the model-backed passes. The dictionary pass and --accept have "
-            "nothing to batch."
+            "the model-backed passes. The dictionary pass has nothing to batch."
         )
     if args.polish_meanings and args.force_fields:
         raise JankiError(
             "enrich --polish-meanings writes 'meanings' and nothing else, so "
             "there is no field list to widen. It always overwrites — that is "
             "what it is for, and why it confirms one record at a time."
-        )
-    if args.accept and (args.force_fields or args.staging is not None):
-        raise JankiError(
-            "--accept clears an example's furigana flag and writes no field, "
-            "so --force-fields and --staging have nothing to act on."
         )
     force_fields = enrich.parse_force_fields(args.force_fields, ai=args.ai)
     if args.staging is not None and (force_fields or args.ids):
@@ -1250,12 +1175,9 @@ def command_enrich(args: argparse.Namespace) -> int:
     if args.polish_meanings and args.batch_fetch:
         return _polish_batch_fetch(config, args)
 
-    # Before the client is built, because neither asks jpdb anything. M7.6V
-    # retired the sentence oracle, so `--ai` writes and checks its examples
-    # offline — demanding a key for it would refuse a pass that never calls.
-    if args.accept:
-        return _accept_furigana(config, args)
-
+    # Before the client is built, because these ask jpdb nothing: since M7.6V
+    # retired the sentence oracle, `--ai` writes its examples and no check runs
+    # — demanding a key here would refuse a pass that never calls.
     if args.batch_fetch:
         return _batch_fetch(config, args, force_fields)
 
@@ -1393,7 +1315,6 @@ def _enrich_ai(
         style_guide=style_guide,
         force_fields=force_fields,
         ids=args.ids or None,
-        kanji_store=kanji.load_store(config.kanji_file),
         taught=taught,
         parse_call=(
             codex_client.parse_call
@@ -1482,9 +1403,7 @@ def _write_ai_result(
                 "review_notes": (
                     f"{len(result.changes)} record(s) enriched by {model}. These "
                     "records already exist; promoting merges the new fields into "
-                    "them. Sentences whose furigana a local check disagreed with are "
-                    f"flagged with '{enrich.UNVERIFIED_KEY}' — check those before "
-                    "audio is generated for them."
+                    "them."
                 ),
             },
             force=force,
@@ -1508,12 +1427,6 @@ def _write_ai_result(
     ledger_error = _save_ledger(book)
 
     print(f"Enriched {len(result.changes)} record(s) in {output_path}.")
-    if result.unverified:
-        print(
-            f"  {len(result.unverified)} record(s) carry an example whose furigana "
-            "a local check disagreed with; they are flagged in the record. "
-            "Clear one with 'enrich --accept RECORD_ID' once you have read it."
-        )
     if ledger_error is None:
         print(f"Ledger: recorded an AI pass over {len(result.changes)} record(s).")
     else:
@@ -2133,7 +2046,6 @@ def _batch_fetch(
         model=model,
         force_fields=force_fields,
         only=retry,
-        kanji_store=kanji.load_store(config.kanji_file),
     )
     result = outcome.result
 
@@ -2826,23 +2738,6 @@ def command_audio(args: argparse.Namespace) -> int:
             + (" ..." if len(result.no_pattern) > 5 else ""),
             file=sys.stderr,
         )
-    if result.unverified:
-        print(
-            f"warning: {len(result.unverified)} example(s) carry a furigana "
-            "flag and were left unvoiced. Read the sentence, then clear it "
-            "with 'janki enrich --accept RECORD_ID': "
-            f"{', '.join(result.unverified[:5])}"
-            + (" ..." if len(result.unverified) > 5 else ""),
-            file=sys.stderr,
-        )
-    if result.held:
-        print(
-            f"warning: {len(result.held)} example(s) failed the teaching-content "
-            "gate and were left unvoiced; fix the sentence or its register "
-            "first: " + "; ".join(result.held[:3])
-            + (" ..." if len(result.held) > 3 else ""),
-            file=sys.stderr,
-        )
     if result.no_reading:
         print(
             f"warning: {len(result.no_reading)} record(s) have no reading to "
@@ -2850,12 +2745,7 @@ def command_audio(args: argparse.Namespace) -> int:
             + (" ..." if len(result.no_reading) > 5 else ""),
             file=sys.stderr,
         )
-
-    # `cleared_refs` counts too: the hold gate strips a stale clip reference
-    # without writing any file, and a clear that never reaches disk resurrects
-    # the recording — while --prune below deletes the file the saved
-    # collection would still name.
-    if result.file_count or result.cleared_refs:
+    if result.file_count:
         save_records_json(output_path, result.records, expected=output_revision)
     ledger_error = _save_ledger(book)
 
@@ -3564,7 +3454,6 @@ def _build_one(
             config,
             patterns.load_store(config.patterns_file),
             output,
-            _verb_groups(config),
         )
         print(f"Built {target} — {count} rule card(s)")
         # Nothing to record: exports track which *records* a deck has shipped,
@@ -3874,147 +3763,6 @@ def _collection_lines(config: ProjectConfig) -> list[str]:
     return lines
 
 
-def _classes_for(
-    entries: Sequence[patterns.PatternSet],
-    config: ProjectConfig,
-    ask_jpdb: bool,
-    known: dict[str, str] | None = None,
-) -> dict[str, str]:
-    """Every verb class available for checking these documents.
-
-    The collection first, because it is free and offline and `enrich --jpdb`
-    already put jpdb's own answer there. Then jpdb itself for what is left, on
-    request — one `/parse` call for every remaining verb, which is how a word
-    the collection has never held (おきる, まつ) gets checked at all rather than
-    held back.
-    """
-    # Taken from the caller when it has one: `_verb_groups` parses the whole
-    # collection and *warns* when it cannot, so recomputing it on the recovery
-    # path printed the same warning twice and read the file twice.
-    known = _verb_groups(config) if known is None else known
-    if not ask_jpdb:
-        return known
-    missing = [
-        verb
-        for entry in entries
-        for verb in patterns.chart_verbs(entry)
-        if verb not in known
-    ]
-    if not missing:
-        return known
-    client = jpdb.JpdbClient(jpdb.api_key_from_env())
-    return {**patterns.verb_groups_from_jpdb(missing, client), **known}
-
-
-def _verb_groups(config: ProjectConfig) -> dict[str, str]:
-    """Every verb class the collection already knows, by spelling and reading.
-
-    `enrich --jpdb` records a `verb_group` per record from jpdb's own codes, so
-    the class a conjugation chart states in English prose is already on disk in
-    a form janki can use. Keyed both ways because a chart writes its examples in
-    kana (かう ⇨ かって) while the record is 買う with reading かう.
-    """
-    # No `exists()` shortcut. A collection that is *missing* — a renamed file, a
-    # typo in `[paths]` — is as unreadable as one that will not parse, and
-    # returning an empty map for it reached the same loss by the neighbouring
-    # branch: a pattern deck built with every `Examples` field blank, reported
-    # as built, whose GUIDs then blank the examples of the rule cards already in
-    # the user's Anki. `collection_for` refuses a missing collection for a drill
-    # deck already. `load_records` names the file it could not find.
-    normalized = config.normalized_file.resolve()
-    # Raised, not swallowed. "No class on record" and "janki could not read the
-    # collection" are different verdicts, and turning the second into the first
-    # made `janki build` of a pattern deck strip every worked example while
-    # printing an unchanged card count and exiting 0 — and, because the note
-    # GUID deliberately excludes the examples, importing that package *blanks*
-    # the Examples field of rule cards already in the user's Anki. It also made
-    # `janki patterns --check` report an all-clear over a run in which nothing
-    # was checked. A caller that means to continue anyway says so.
-    records = load_records(normalized)
-
-    # Accumulated per key, then narrowed to the keys exactly one class claims.
-    # A kana key is where the class is *ambiguous* — かえる is 変える (ichidan)
-    # and 帰る (godan), きる is 切る and 着る — and taking whichever record loaded
-    # first turned a correct chart row into a confident failure. A key two
-    # records disagree about is not knowledge.
-    seen: dict[str, dict[str, str]] = {}
-    for record in records:
-        if not record.verb_group:
-            continue
-        # Folded to the name `conjugate` would accept, so two spellings of one
-        # class do not read as a disagreement. A CSV import writes the column
-        # through verbatim, so `五段` sits beside another record's jpdb-written
-        # `godan` — `enrich --jpdb` only fills a field that is empty, so it
-        # never repairs one. Unfolded, that pair dropped かう and held the row
-        # back saying no class was on record, when two were and both agreed.
-        # Two genuinely unrecognized names stay distinct and still reach the
-        # "does not recognise the verb class" branch.
-        group = patterns.group_identity(record.verb_group) or record.verb_group
-        for key in (record.expression, record.reading):
-            # Normalized like `conjugate`'s own arguments and like the verb the
-            # chart is scanned for: records are stored as imported, so a
-            # decomposed dakuten (く + U+3099) would never match a composed ぐ.
-            folded = normalize_identity_part(key or "")
-            if folded:
-                # Keyed by the folded class, valued by a raw spelling: the fold
-                # decides whether two records agree, and the raw spelling is
-                # what `check_pattern_rules` quotes back when `conjugate` does
-                # not recognise the name.
-                seen.setdefault(folded, {}).setdefault(group, record.verb_group)
-    return {
-        key: next(iter(spellings.values()))
-        for key, spellings in seen.items()
-        if len(spellings) == 1
-    }
-
-
-def _rule_check_lines(
-    entry: patterns.PatternSet, groups: Mapping[str, str] | None = None
-) -> list[str]:
-    """What janki's own conjugation rules say about a chart's worked examples.
-
-    Empty for a document with nothing checkable — a lesson deck states no
-    conjugations, and a chart that gives only rule shapes (``く → いて``) offers
-    nothing to compute against. Silence there is correct: reporting "0 checked"
-    on every slide deck would train the eye to skip the line that matters.
-    """
-    checks = patterns.check_pattern_rules(entry, groups)
-    if not checks:
-        return []
-    examined = [check for check in checks if check.examined]
-    held = [check for check in checks if not check.examined]
-    disagreed = [check for check in examined if not check.agrees]
-    lines = [
-        f"    checked {len(examined) - len(disagreed)}/{len(examined)} worked "
-        f"example(s) against janki's conjugation rules"
-    ]
-    # Which column each row matched. This code deliberately declines to parse
-    # which form the chart teaches, so it has to say what it found instead:
-    # `のむ ⇨ のんだ` on a て-form chart agrees — as a *past* — and without
-    # naming the form, the most likely garble on such a chart reads as a pass.
-    for check in examined:
-        if check.agrees:
-            lines.append(
-                f"        {check.verb} ⇨ {check.claimed} matched "
-                f"{check.form.replace('_', ' ')}"
-            )
-    # Named, not dropped. A row found and not examined used to disappear
-    # entirely, so a chart with one readable row and one janki has no opinion
-    # about reported "all 1 agree" and said nothing about the other.
-    for check in held:
-        lines.append(
-            f"    note: {check.verb} ⇨ {check.claimed} not checked — "
-            f"{check.held_back}"
-        )
-    for check in disagreed:
-        lines.append(
-            f"    warning: {check.verb} ⇨ {check.claimed} is not what janki "
-            f"computes ({', '.join(check.computed) or 'no group applies'}) "
-            f"— for {check.template!r}"
-        )
-    return lines
-
-
 def command_patterns(args: argparse.Namespace) -> int:
     """Read documents for what they teach.
 
@@ -4029,16 +3777,6 @@ def command_patterns(args: argparse.Namespace) -> int:
     """
     config = _load_config(args)
     store = patterns.load_store(config.patterns_file)
-
-    # Same trap the --review guard below exists for, reintroduced for a new
-    # flag: `--check` returns before the read loop, so files passed alongside it
-    # were never read, never stored, and never mentioned — on a zero exit.
-    if args.check and (args.files or args.review):
-        given = [str(path) for path in args.files] + list(args.review)
-        raise JankiError(
-            "--check reads nothing and only re-checks the store, so it cannot "
-            f"be combined with {', '.join(given)}. Run them separately."
-        )
 
     if args.review and args.files:
         # `files` is nargs="*" and `--review` appends, so
@@ -4079,125 +3817,6 @@ def command_patterns(args: argparse.Namespace) -> int:
                 )
         return 0
 
-    if args.check:
-        if not store:
-            print("No documents read yet. Pass a PDF or image to read one.")
-            return 0
-        entries = list(store.values())
-        collection_error = ""
-        try:
-            known = _verb_groups(config)
-        except JankiError as exc:
-            # Not fatal on its own. `--ask-jpdb` is documented as the way to
-            # check verbs the collection does not hold, and a collection janki
-            # cannot read is the limit case — aborting here never asked, and a
-            # store of lesson decks or bare-ending charts needed no class at
-            # all. Refused below only for a verb nothing could answer for.
-            known = {}
-            collection_error = f"could not read the collection for verb classes: {exc}"
-        lookup_error = ""
-        try:
-            groups = _classes_for(entries, config, args.ask_jpdb, known)
-        except JankiError as exc:
-            # Two independent failures, and both have to be said. Unguarded,
-            # an unset `JPDB_API_KEY` or a 429 unwound past the line reporting
-            # the collection, so the user fixed the key, re-ran, and only then
-            # learned the collection was the real problem. The offline classes
-            # are kept for the same reason the read path keeps them: a transient
-            # 429 must not discard the checks they would have produced.
-            groups = known
-            lookup_error = f"could not look up verb classes: {exc}"
-        # The verbs the store names that no read could answer for. Only those
-        # make a failed read this command's failure — `--check`'s exit code is
-        # its entire product, and reporting "nothing could be checked" on exit 0
-        # is a pass over a run that verified nothing. Counted for the jpdb
-        # failure as well as the collection one: on the read path the exit code
-        # means "a document was lost" and a failed lookup is deliberately kept
-        # out of it, but `--check` loses nothing and has no other signal, so
-        # leaving it out passed a run whose garbled row was never checked while
-        # blaming the very lookup that failed.
-        failed_reads = [note for note in (collection_error, lookup_error) if note]
-        unresolved = sorted({
-            verb
-            for entry in entries
-            for verb in patterns.chart_verbs(entry)
-            if verb not in groups
-        }) if failed_reads else []
-        stranded = bool(unresolved)
-        # What to blame, from what actually failed. Hard-coding the collection
-        # was safe only while it was the sole cause: a 429 then reported a
-        # healthy `vocabulary.json` as unreadable and sent the user to
-        # `[paths]` over a transient network error they need only re-run.
-        cause = " and ".join(
-            phrase
-            for phrase, failed in (
-                ("the collection could not be read", bool(collection_error)),
-                ("the verb-class lookup failed", bool(lookup_error)),
-            )
-            if failed
-        )
-        for note in failed_reads:
-            # Once each, at the severity the outcome earned. Printing eagerly
-            # *and* again after the lookup said the same sentence twice, as a
-            # warning and as an error, and the second carried less than the
-            # first.
-            print(f"{'error' if stranded else 'warning'}: {note}", file=sys.stderr)
-        if stranded:
-            print(f"error: no class for {', '.join(unresolved)}", file=sys.stderr)
-        disagreed = checked = 0
-        skipped_names: list[str] = []
-        for name, entry in sorted(store.items()):
-            found = patterns.check_pattern_rules(entry, groups)
-            examined = [check for check in found if check.examined]
-            if not found:
-                skipped_names.append(f"{name} ({entry.kind})")
-                continue
-            print(f"{name} — {entry.kind}")
-            for line in _rule_check_lines(entry, groups):
-                print(line)
-            # Held-back rows are named by `_rule_check_lines` and count toward
-            # neither the total nor the exit code: janki having no opinion is
-            # not the chart being wrong.
-            checked += len(examined)
-            disagreed += sum(1 for check in examined if not check.agrees)
-        # The all-clear is only said when something was actually checked. Saying
-        # it over a store of lesson decks — or a chart whose rows this cannot
-        # read — is false reassurance from the one command whose entire job is
-        # reassurance.
-        # Named whenever there are any, not only when *nothing* was checkable:
-        # one readable chart beside nine documents this cannot read printed an
-        # unqualified all-clear and never mentioned the nine.
-        if skipped_names:
-            print(
-                "Not checked against janki's conjugation rules: "
-                + ", ".join(skipped_names)
-            )
-        if not checked:
-            if stranded:
-                # Not the ordinary "janki has no opinion about these rows": the
-                # command could not read the file it needed. Saying the first
-                # over the second is the false reassurance this whole block
-                # exists to avoid.
-                print(f"{cause[0].upper()}{cause[1:]}, so these rules were "
-                      "checked against nothing.")
-            else:
-                print("Nothing in the store could be checked against those rules.")
-            return 1 if stranded else 0
-        if not disagreed:
-            # Qualified when something was stranded, and blamed on whatever
-            # actually failed. An unqualified all-clear over a run that could
-            # not read what it needed is the false reassurance this block is
-            # written against — and the held-back rows above blame "no verb
-            # class on record", sending the user to `janki enrich --jpdb`, which
-            # is the very read that just failed.
-            print(
-                f"All {checked} worked example(s) agree with janki's "
-                f"conjugation rules."
-                if not stranded
-                else f"{checked} worked example(s) agree with janki's conjugation "
-                f"rules; {cause}, so {', '.join(unresolved)} went unchecked."
-            )
-        return 1 if disagreed or stranded else 0
 
     if not args.files:
         for name, entry in sorted(store.items()):
@@ -4311,78 +3930,12 @@ def command_patterns(args: argparse.Namespace) -> int:
         for pattern in found.patterns:
             gloss = f" — {pattern.gloss}" if pattern.gloss else ""
             print(f"    {pattern.template}{gloss}")
-    # Saved before anything else can fail. The class lookup below can raise —
-    # an unset key, a timeout, a 429 — and it used to sit inside this loop,
-    # outside the try, so one bad request discarded every document already read
-    # and paid for in the same run.
+    # Saved before the reporting below, so a failure there cannot discard
+    # documents already read and paid for in this run.
     patterns.save_store(config.patterns_file, store)
 
-    # A conjugation chart shows its work, and janki computes te-forms — so the
-    # rules are checked rather than believed, which is the same shape the
-    # furigana path uses against jpdb. Automatic rather than a flag: a check
-    # nobody runs catches nothing.
-    #
-    # One lookup for the whole run, after the reads: the collection is parsed
-    # once instead of once per document, and `--ask-jpdb` makes the single
-    # request its help text promises rather than one per file.
-    offline_error = ""
-    try:
-        offline = _verb_groups(config)
-    except JankiError as exc:
-        # Continued, because every document was read and saved above and losing
-        # those to an unrelated file would be the worse outcome — but recorded
-        # in `failures`, so the exit code still says the rule check did not
-        # happen. Silently exiting 0 here let `janki patterns *.pdf && …` run on
-        # from a run that verified nothing.
-        offline = {}
-        offline_error = f"could not read the collection for verb classes: {exc}"
-    try:
-        classes = _classes_for(fresh, config, args.ask_jpdb, offline)
-    except JankiError as exc:
-        # The offline map, not nothing. `_classes_for` reads the collection's
-        # own `verb_group` values first and only then asks jpdb for what is
-        # missing, so discarding both on a 429 held back every row — reporting
-        # "no verb class on record" for verbs that are on record, and losing the
-        # garbled row the offline check would have caught.
-        classes = offline
-        # Kept out of `failures`, which means "a document was lost" and decides
-        # the exit code. Nothing was lost: every document was read and saved,
-        # and failing the run here breaks the very
-        # `janki patterns *.pdf && janki patterns --review …` chain the non-zero
-        # exit exists to protect.
-        print(f"warning: could not look up verb classes: {exc}", file=sys.stderr)
-    if offline_error:
-        # Decided *after* jpdb, and on what is still missing rather than on what
-        # the documents named. `--ask-jpdb` exists precisely to answer for verbs
-        # the collection does not hold, and a missing collection is the limit
-        # case of that — so a run whose every verb jpdb resolved was reported as
-        # unchecked while stdout said `checked 1/1`, and exited 1 into the
-        # `janki patterns *.pdf && janki patterns --review …` chain. A chart of
-        # bare endings (`く → いて`) names no verb and resolves the same way.
-        unresolved = sorted({
-            verb
-            for entry in fresh
-            for verb in patterns.chart_verbs(entry)
-            if verb not in classes
-        })
-        if unresolved:
-            failures.append(
-                f"{offline_error} — no class for {', '.join(unresolved)}, so "
-                "those worked examples were not checked"
-            )
-        else:
-            # Said, but not counted: nothing in this run needed the map, and
-            # failing here would break the `janki patterns *.pdf && janki
-            # patterns --review …` chain over a file the run never consulted.
-            print(f"warning: {offline_error}", file=sys.stderr)
     for entry in fresh:
-        # Named, because these lines carry no filename of their own and two
-        # charts can share a template string. Checking inside the read loop used
-        # to put them under the document's own header; the whole run's output
-        # was one undifferentiated block without this.
         print(f"{entry.source} — {entry.kind}")
-        for line in _rule_check_lines(entry, classes):
-            print(line)
     # Deliberately skipping a document janki already has is not a problem, so it
     # is a notice on stdout rather than a warning — and it must not reach the
     # exit code, or the very idiom the non-zero exit protects
@@ -5043,15 +4596,6 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     enrich_parser.add_argument(
-        "--accept",
-        action="store_true",
-        help=(
-            "Clear the named records' unverified furigana flags on your "
-            "authority, so their sentence audio can be generated. Needs record "
-            "ids. Writes no field and asks no dictionary."
-        ),
-    )
-    enrich_parser.add_argument(
         "--polish-meanings",
         action="store_true",
         help=(
@@ -5298,27 +4842,6 @@ def build_parser() -> argparse.ArgumentParser:
             "use them, if it is a lesson document — a conjugation chart is "
             "reviewed for its own sake and steers no sentences. Repeat for "
             "several."
-        ),
-    )
-    patterns_parser.add_argument(
-        "--ask-jpdb",
-        dest="ask_jpdb",
-        action="store_true",
-        help=(
-            "Look up the verb class of any word the collection does not hold, "
-            "so its rows can be checked instead of held back. One jpdb request; "
-            "without it this command touches no network."
-        ),
-    )
-    patterns_parser.add_argument(
-        "--check",
-        action="store_true",
-        help=(
-            "Check every stored document's worked examples against janki's own "
-            "conjugation rules, without re-reading anything. Exits non-zero on "
-            "a disagreement, and on a verb it needed a class for that no read "
-            "could answer for — an unreadable collection, or a failed "
-            "--ask-jpdb lookup."
         ),
     )
     patterns_parser.add_argument(

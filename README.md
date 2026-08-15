@@ -96,9 +96,9 @@ janki patterns --review 'teform_song.pdf'
 
 A reviewed **lesson** document steers the sentences `enrich --ai` writes, so this
 week's examples use this week's grammar. A **chart** can become its own deck —
-rule cards, plus a drill deck that asks you to produce the form — and janki
-checks the chart's worked examples against its own conjugation rules rather than
-trusting them. See [docs/PATTERNS.md](docs/PATTERNS.md).
+rule cards, plus a drill deck that asks you to produce the form. The gate is
+your review of the chart; a reviewed chart's rules and worked examples ship as
+it states them. See [docs/PATTERNS.md](docs/PATTERNS.md).
 
 ### jpdb and Shirabe Jisho
 
@@ -173,7 +173,6 @@ own collection is the newer side. Details and the measurements behind them:
 | `janki promote FILE.yaml --accept-proposals` | Review repair proposals by field |
 | `janki enrich --jpdb` | Fill fields from the dictionary |
 | `janki enrich --ai` | Write example sentences and usage notes |
-| `janki enrich --accept ID...` | Clear the named records' furigana flags on your authority, so their sentence audio can be generated |
 | `janki enrich --polish-meanings --batch-submit` | Queue a large gloss-improvement pass for later review |
 | `janki kanji` | Look up stroke order and on/kun readings |
 | `janki audio --words --examples` | Voice the words and the sentences |
@@ -245,7 +244,7 @@ recoverable and a build reproducible.
 | [docs/DESIGN.md](docs/DESIGN.md) | The one-page design that leads — read this first |
 | [docs/IMPORTING.md](docs/IMPORTING.md) | Merge rules, held-back rows, jpdb decks, PDFs and photos, deck membership |
 | [docs/ENRICHMENT.md](docs/ENRICHMENT.md) | jpdb lookups, AI sentences and glosses, batch mode, what it costs |
-| [docs/PATTERNS.md](docs/PATTERNS.md) | Grammar handouts, rule decks, drill decks, how a chart is checked |
+| [docs/PATTERNS.md](docs/PATTERNS.md) | Grammar handouts, rule decks, drill decks, the review gate for charts |
 | [docs/AUDIO.md](docs/AUDIO.md) | VOICEVOX and OpenAI, choosing a voice, re-voicing |
 | [docs/QUALITY.md](docs/QUALITY.md) | The review gate, the ledger and `janki status`, known limits |
 | [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | Every field a record can carry |

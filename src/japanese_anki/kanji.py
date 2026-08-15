@@ -45,6 +45,7 @@ __all__ = [
     "KanjiError",
     "KanjiInfo",
     "Reading",
+    "assigns_a_known_reading",
     "fetch_kanji",
     "kanji_in",
     "urllib_transport",

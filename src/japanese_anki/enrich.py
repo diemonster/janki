@@ -49,14 +49,10 @@ from japanese_anki.identifiers import (
 from japanese_anki.io import is_empty
 from japanese_anki.ledger import Ledger
 from japanese_anki.models import (
-    FURIGANA_UNVERIFIED_KEY,
     ExampleSentence,
     VocabularyRecord,
-    add_example_flags,
     clear_provisional,
     example_accepted,
-    example_flags,
-    prune_example_flags,
     split_provisional,
 )
 from japanese_anki.romaji import kana_to_romaji
@@ -71,10 +67,7 @@ __all__ = [
     "AI_FIELDS",
     "POLISH_FIELDS",
     "STAGING_THRESHOLD",
-    "UNVERIFIED_KEY",
-    "accept_furigana",
     "ai_prompt",
-    "ai_retry_prompt",
     "ai_schema",
     "ai_targets",
     "absorb_ai_call",
@@ -900,16 +893,8 @@ def format_field_diff(
 #
 # jpdb fills what a dictionary knows. This fills what it does not: an example
 # sentence a beginner can read, and a note about how the word is actually used.
-# Both are written rather than looked up, so everything here is arranged around
-# not believing the result until a machine check or a human says so.
-
-
-#: Where a flagged example is recorded (IMPLEMENTATION_PLAN, Conventions):
-#: a comma-joined list of content fingerprints of the flagged examples'
-#: ``japanese`` text, on the record rather than per example. The constant
-#: itself lives with the other example flags in ``models``; this name is the
-#: one this module's callers have always imported.
-UNVERIFIED_KEY = FURIGANA_UNVERIFIED_KEY
+# The prompt template states the whole contract and nothing audits the answer
+# (M8.3) — what follows is fill discipline and derivation.
 
 #: How many other records' examples ride along as variety pressure. Enough to
 #: show the model what it has already written this run, few enough that the
@@ -1065,28 +1050,6 @@ def ai_prompt(
     return "\n".join(lines)
 
 
-def ai_retry_prompt(
-    record: VocabularyRecord,
-    recent: Sequence[str] = (),
-    taught: str = "",
-) -> str:
-    """A second request after every proposed example missed the headword.
-
-    The accepted forms come from the same deterministic conjugation rules as
-    the quality check. The retry therefore narrows the model's choice without
-    weakening the check or guessing a new spelling.
-    """
-    forms = ", ".join(qc.target_forms(record.expression, record.verb_group))
-    return (
-        ai_prompt(record, recent, taught)
-        + "\n\nYour first examples failed the exact headword spelling check.\n"
-        + "Use one permitted written target form in each japanese field. "
-        + "Keep the kana or kanji spelling shown here; do not substitute a "
-        + "different spelling.\n"
-        + f"Permitted written target forms: {forms}"
-    )
-
-
 AI_INSTRUCTIONS = """\
 Write **two** example sentences for the word, and a usage note if there is
 something worth saying.
@@ -1138,43 +1101,27 @@ class AiOutcome:
 
     record: VocabularyRecord
     changes: dict[str, tuple[Any, Any]] = field(default_factory=dict)
-    rejected: list[str] = field(default_factory=list)
-    unverified: list[str] = field(default_factory=list)
     #: True when generated examples were discarded to preserve stored ones —
     #: the preserve decision itself, carried first-class so the caller's
     #: warning reports what this function did rather than re-deriving it from
-    #: proxies (which misfired on --force-fields runs whose sentences were
-    #: all rejected).
+    #: proxies.
     preserved: bool = False
-    impossible_furigana: list[
-        tuple[str, str, tuple[tuple[str, str], ...]]
-    ] = field(default_factory=list)
-    #: Sentences whose furigana field spells something other than the sentence
-    #: (M7.6V). Its own channel rather than a bare flag for the same reason
-    #: ``impossible_furigana`` has one: "unverified" does not tell a reviewer
-    #: which field to look at, and this one is decidable offline, so it is the
-    #: one failure that can always be named exactly.
-    rewritten_furigana: list[tuple[str, str, str]] = field(default_factory=list)
 
 
 def _fill_existing_example_annotations(
     stored: Sequence[ExampleSentence],
     generated: Sequence[ExampleSentence],
-    unverified: Sequence[str],
-) -> tuple[list[ExampleSentence], list[str]]:
+) -> list[ExampleSentence]:
     """Fill holes only when generated Japanese exactly matches stored text."""
     by_japanese: dict[str, ExampleSentence] = {}
     for example in generated:
         by_japanese.setdefault(example.japanese, example)
-    flagged = set(unverified)
-    landed_unverified: list[str] = []
     merged: list[ExampleSentence] = []
     for old in stored:
         incoming = by_japanese.get(old.japanese)
         if incoming is None:
             merged.append(old)
             continue
-        wrote_furigana = not old.furigana and bool(incoming.furigana)
         updated = replace(
             old,
             furigana=old.furigana or incoming.furigana,
@@ -1193,10 +1140,8 @@ def _fill_existing_example_annotations(
         )
         if updated.furigana or not contains_kanji(updated.japanese):
             updated = qc.regenerate_example_romaji(updated)
-        if wrote_furigana and incoming.japanese in flagged:
-            landed_unverified.append(incoming.japanese)
         merged.append(updated)
-    return merged, landed_unverified
+    return merged
 
 
 def apply_ai_result(
@@ -1204,27 +1149,20 @@ def apply_ai_result(
     parsed: Any,
     *,
     force_fields: Sequence[str] = (),
-    kanji_store: Any | None = None,
 ) -> AiOutcome:
-    """Put a model's answer through the mechanical checks, then the fill rules.
+    """Fold a model's answer into the record.
 
-    Three checks, in the order that matters (M4.1):
+    No checks on the Japanese. M8.3 deleted the audit layer that used to sit
+    here — headword containment, KANJIDIC reading adjudication, the
+    furigana-vs-sentence comparison, the punctuation repair — because janki's
+    logic enriches the card and never audits the model (DESIGN.md). The prompt
+    template states the contract; the model's answer is the answer.
 
-    * an example that does not contain the word is **rejected** — it may be a
-      fine sentence, but it is not an example of this word;
-    * an example is **kept and flagged** when its furigana assigns a reading
-      KANJIDIC does not list for a character, or when the furigana field spells
-      a different sentence than the example does. Both are decidable offline
-      and about the example alone. A flag lands only with the example it
-      describes, and a stored example is re-flagged the same way;
-    * romaji is regenerated from the furigana, always, whatever arrived.
-
-    No dictionary is asked about the sentence. M7.6V retired that check: jpdb
-    parses a *sentence* by segmenting it, and on colloquial text it segments
-    wrongly often enough that its disagreements were mostly its own — it read
-    とする in 今、だれとすんでるの？, a word not in the sentence. What replaces it
-    is the paid review, which reads the Japanese as language rather than as
-    tokens.
+    What remains is fill discipline and derivation: stored examples are
+    preserved unless ``--force-fields examples`` asks otherwise, existing
+    annotations win over the model's, an unrecognized speech level reads as
+    polite, and romaji is regenerated from the furigana, always, whatever
+    arrived.
     """
     outcome = AiOutcome(record=record)
     kept: list[ExampleSentence] = []
@@ -1244,45 +1182,8 @@ def apply_ai_result(
         )
         if not example.japanese:
             continue
-        # Before anything reads the furigana. A model writes 週末[しゅうまつ]、何[なに]
-        # without the separator space perhaps half the time, and Anki then draws
-        # なに over 、何 while the comma vanishes from the reading the romaji and
-        # the sentence audio are built from. The repair adds only the separator,
-        # never a reading or a segmentation, so it is safe to run unattended;
-        # spills that would need a guess are left for `spilled_furigana_groups`.
-        if example.furigana:
-            example = replace(
-                example, furigana=qc.repair_spilled_punctuation(example.furigana)
-            )
-        if not qc.example_contains_target(example, record.expression, record.verb_group):
-            outcome.rejected.append(example.japanese)
-            continue
-        impossible = qc.impossible_character_furigana(
-            example.furigana, kanji_store
-        )
-        if impossible:
-            outcome.impossible_furigana.append(
-                (example.japanese, example.furigana, impossible)
-            )
-        # Offline, and now the only route to the flag for a sentence whose
-        # furigana field does not spell it. While the dictionary oracle stood
-        # this was redundant three ways over: a run with no jpdb client flagged
-        # on the absent parse, and a run with one flagged inside the oracle,
-        # which ran the same comparison itself.
-        rewritten = qc.furigana_rewrites_sentence(example)
-        if rewritten:
-            outcome.rewritten_furigana.append(
-                (example.japanese, example.furigana, rewritten)
-            )
-        # Two decidable failures, both offline. What is gone is the third
-        # branch: jpdb's parse of the *sentence*, which flagged a sentence
-        # nobody had checked as firmly as one it disagreed with, and whose
-        # disagreements were mostly its own segmentation.
-        if impossible or rewritten:
-            outcome.unverified.append(example.japanese)
         kept.append(qc.regenerate_example_romaji(example))
 
-    unverified = list(outcome.unverified)
     proposals: dict[str, Any] = {
         "examples": kept,
         "usage_notes": str(getattr(parsed, "usage_notes", "") or "").strip(),
@@ -1295,13 +1196,12 @@ def apply_ai_result(
     # pin an unaccepted sentence, so nothing here launders it into curated
     # content either.
     if record.examples and "examples" not in force_fields:
-        merged_examples, landed_unverified = _fill_existing_example_annotations(
-            record.examples, kept, unverified
+        merged_examples = _fill_existing_example_annotations(
+            record.examples, kept
         )
         # This branch IS the preserve decision: a generated sentence that
         # matched no stored text had nowhere to land. Recorded here, where the
-        # discard happens — the earlier proxy lived in the else branch, where
-        # "examples" is always writable and the flag could never become True.
+        # discard happens.
         stored_texts = {example.japanese for example in record.examples}
         outcome.preserved = any(
             example.japanese not in stored_texts for example in kept
@@ -1311,28 +1211,6 @@ def apply_ai_result(
         if merged_examples != record.examples:
             changes["examples"] = (record.examples, merged_examples)
             updated = replace(record, examples=merged_examples)
-        landed = {
-            (example.japanese, example.furigana) for example in merged_examples
-        }
-        outcome.impossible_furigana = [
-            item
-            for item in outcome.impossible_furigana
-            if (item[0], item[1]) in landed
-        ]
-        outcome.rewritten_furigana = [
-            item
-            for item in outcome.rewritten_furigana
-            if (item[0], item[1]) in landed
-        ]
-        outcome.unverified = list(
-            dict.fromkeys(
-                [
-                    *landed_unverified,
-                    *(item[0] for item in outcome.impossible_furigana),
-                    *(item[0] for item in outcome.rewritten_furigana),
-                ]
-            )
-        )
         updated, other_changes = _apply(
             updated,
             proposals,
@@ -1351,115 +1229,9 @@ def apply_ai_result(
             if name in force_fields or is_empty(getattr(record, name))
         ]
         updated, changes = _apply(record, proposals, writable)
-    if "examples" in changes:
-        landed_sentences = {
-            example.japanese for example in updated.examples if example.japanese
-        }
-        if outcome.unverified:
-            updated = add_example_flags(updated, UNVERIFIED_KEY, outcome.unverified)
-        # Then collect the garbage the write may have orphaned: a fingerprint
-        # matching no current example refers to nothing, and pruning here is
-        # what gives a hold a lifecycle — regenerating a held sentence with
-        # --force-fields drops its flag instead of accumulating it forever.
-        current = frozenset(
-            short_fingerprint(sentence) for sentence in landed_sentences
-        )
-        for key in (UNVERIFIED_KEY,):
-            updated = prune_example_flags(updated, key, current)
-    else:
-        # The examples were not written — the field was not writable, or the
-        # answer matched what is already there. Nothing was flagged, so nothing
-        # may be reported as flagged: a reviewer told to check a key would find
-        # no key. The rejections still stand; those were the model's sentences
-        # either way.
-        outcome.unverified = []
-        outcome.impossible_furigana = []
-        outcome.rewritten_furigana = []
     outcome.record = updated
     outcome.changes = changes
     return outcome
-
-
-@dataclass(slots=True)
-class AcceptResult:
-    """What accepting a furigana flag on a person's authority changed."""
-
-    records: list[VocabularyRecord] = field(default_factory=list)
-    #: ``record id -> [sentence]`` whose flag was cleared. A record whose
-    #: fingerprints are all orphans maps to an empty list.
-    cleared: dict[str, list[str]] = field(default_factory=dict)
-    #: Records whose only flags named no current sentence.
-    orphaned: list[str] = field(default_factory=list)
-
-    @property
-    def changed(self) -> bool:
-        return bool(self.cleared)
-
-
-def accept_furigana(
-    records: Sequence[VocabularyRecord], ids: Sequence[str]
-) -> AcceptResult:
-    """Clear the named records' unverified flags on a human's authority.
-
-    The flag is written once, when an example is created, and read much later
-    by ``janki audio`` deciding whether to speak a sentence. Nothing else
-    clears it from a sentence that stays: correcting the furigana by hand leaves
-    the flag, because it is keyed to the sentence rather than to the field.
-    (Rewriting the sentence drops it — the fingerprint then matches no example —
-    which is a different thing from vouching for the one that was there.)
-    Without this, correcting a card would leave it permanently unvoiced — the
-    exact state `prune_example_flags` calls "permanently refusable with no way
-    to un-hold it".
-
-    M7.6V retired the dictionary route, which used to clear a flag by re-asking
-    jpdb about the sentence. This is what the milestone kept: a person's
-    judgement, named record by record, which is the only authority left that
-    can say a sentence is right.
-
-    ``ids`` is required. Accepting everything unread is not a judgment.
-    """
-    if not ids:
-        raise EnrichError(
-            "--accept clears a flag on your authority, so it needs the record "
-            "ids you are vouching for. Accepting everything unread is not a "
-            "judgment."
-        )
-    result = AcceptResult(records=list(records))
-    known = {record.id for record in result.records}
-    wanted = set(ids)
-    # Named and not found is a typo, not an empty result — the same refusal
-    # every other ids-taking pass here makes.
-    missing = sorted(wanted - known)
-    if missing:
-        raise EnrichError(
-            "No record has "
-            + ("this id: " if len(missing) == 1 else "these ids: ")
-            + ", ".join(missing)
-        )
-    for index, record in enumerate(result.records):
-        if record.id not in wanted:
-            continue
-        flagged = example_flags(record, UNVERIFIED_KEY)
-        if not flagged:
-            continue
-        cleared = [
-            example.japanese
-            for example in record.examples
-            if example.japanese.strip()
-            and short_fingerprint(example.japanese.strip()) in flagged
-        ]
-        result.cleared[record.id] = cleared
-        if not cleared:
-            # Every fingerprint on this record is an orphan — it names no
-            # sentence the record still carries, so there is nothing for a
-            # person to have read. Cleared all the same, and reported as its own
-            # case: saying "this record carries no flag" was false, and left the
-            # only command that can remove one refusing to.
-            result.orphaned.append(record.id)
-        # Through the shared writer, which keeps the stored order and removes
-        # the key once nothing survives.
-        result.records[index] = prune_example_flags(record, UNVERIFIED_KEY, set())
-    return result
 
 
 @dataclass(slots=True)
@@ -1468,8 +1240,6 @@ class AiResult:
 
     records: list[VocabularyRecord] = field(default_factory=list)
     changes: dict[str, dict[str, tuple[Any, Any]]] = field(default_factory=dict)
-    rejected: dict[str, list[str]] = field(default_factory=dict)
-    unverified: dict[str, list[str]] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     no_changes: list[str] = field(default_factory=list)
     looked_up: int = 0
@@ -1500,15 +1270,13 @@ def enrich_ai(
     client: Any | None = None,
     parse_call: Any | None = None,
     call_options: Mapping[str, Any] | None = None,
-    kanji_store: Any | None = None,
     taught: str = "",
 ) -> AiResult:
     """Write examples and usage notes for the records that lack them.
 
-    One initial call per record keeps failures local to that record. If every
-    proposed example fails only the exact-headword check and the record still
-    has no examples, one limited retry supplies the deterministic forms that
-    the check accepts. Refusals and truncated answers are never salvaged.
+    One call per record keeps failures local to that record. Refusals and
+    truncated answers are never salvaged, and nothing audits the answer —
+    the template asked precisely, and the answer is the answer (M8.3).
     """
     result = AiResult(records=list(records))
     positions = {record.id: index for index, record in enumerate(result.records)}
@@ -1520,7 +1288,6 @@ def enrich_ai(
 
     for record in targets:
         result.looked_up += 1
-        warning_start = len(result.warnings)
         call = caller(
             model,
             blocks,
@@ -1537,43 +1304,7 @@ def enrich_ai(
             positions=positions,
             recent=recent,
             force_fields=force_fields,
-            kanji_store=kanji_store,
         )
-        position = positions[record.id]
-        current = result.records[position]
-        if record.examples or record.id not in result.rejected or current.examples:
-            continue
-
-        first_warning_end = len(result.warnings)
-        first_rejected = result.rejected.pop(record.id)
-        retry = caller(
-            model,
-            blocks,
-            ai_retry_prompt(current, recent[-VARIETY_EXAMPLES:], taught),
-            ai_schema(),
-            client,
-            **options,
-        )
-        absorb_ai_call(
-            result,
-            current,
-            retry,
-            model=model,
-            positions=positions,
-            recent=recent,
-            force_fields=force_fields,
-            kanji_store=kanji_store,
-        )
-        retry_wrote_examples = bool(result.records[position].examples)
-        retry_reported_rejection = record.id in result.rejected
-        if retry_wrote_examples or retry_reported_rejection:
-            del result.warnings[warning_start:first_warning_end]
-        else:
-            result.rejected[record.id] = first_rejected
-        if retry_wrote_examples:
-            result.no_changes = [
-                item for item in result.no_changes if item != record.id
-            ]
     return result
 
 
@@ -1586,7 +1317,6 @@ def absorb_ai_call(
     positions: Mapping[str, int],
     recent: list[str],
     force_fields: Sequence[str] = (),
-    kanji_store: Any | None = None,
 ) -> None:
     """Put one model answer through the checks and fold it into ``result``.
 
@@ -1614,58 +1344,16 @@ def absorb_ai_call(
         record,
         parsed,
         force_fields=force_fields,
-        kanji_store=kanji_store,
     )
-    if outcome.rejected:
-        result.rejected[record.id] = outcome.rejected
+    if outcome.preserved:
+        # Not an audit — a report of janki's own fill discipline: stored
+        # examples were preserved, so the freshly generated sentences had
+        # nowhere to land and were discarded. Without this line a user who
+        # asked for new sentences is silently told nothing happened.
         result.warnings.append(
-            f"{record.id}: {len(outcome.rejected)} example(s) did not contain "
-            f"{record.expression} and were rejected."
-        )
-    if outcome.unverified:
-        result.unverified[record.id] = outcome.unverified
-        result.warnings.append(
-            f"{record.id}: {len(outcome.unverified)} example(s) have furigana "
-            "a local check disagreed with; kept and flagged for review."
-        )
-    if outcome.preserved and any(
-        example.japanese and not example_accepted(record, example)
-        for example in record.examples
-    ):
-        # Silence here would read as completeness: the run generated sentences,
-        # discarded them to preserve stored ones, and the only path forward is
-        # a user decision.
-        result.warnings.append(
-            f"{record.id}: generated examples were not written — the existing "
-            "example(s) carry no reviewer acceptance and janki does not replace "
-            "them unasked. Accept them in staging review, or replace them with "
-            "--force-fields examples."
-        )
-    if outcome.impossible_furigana:
-        groups = sorted(
-            {
-                f"{text}[{reading}]"
-                for _sentence, _furigana, pairs in outcome.impossible_furigana
-                for text, reading in pairs
-            }
-        )
-        result.warnings.append(
-            f"{record.id}: generated furigana group(s) need review: "
-            f"{', '.join(groups)}. The examples were kept and marked "
-            "unverified; sentence audio remains blocked."
-        )
-    if outcome.rewritten_furigana:
-        # Named separately from the unverified count because this one is
-        # decidable offline and therefore always exactly diagnosable: the
-        # message says which two strings disagree, which is the difference
-        # between "check this card" and "check this field".
-        result.warnings.append(
-            f"{record.id}: the furigana field does not spell its own sentence — "
-            + "; ".join(
-                message for _sentence, _furigana, message in outcome.rewritten_furigana
-            )
-            + ". The example(s) were kept and marked unverified; sentence audio "
-            "remains blocked."
+            f"{record.id}: stored examples were preserved, so the generated "
+            "sentences were discarded — pass --force-fields examples to "
+            "replace them."
         )
     if outcome.changes:
         result.records[positions[record.id]] = outcome.record
@@ -2098,7 +1786,6 @@ def apply_batch_results(
     model: str,
     force_fields: Sequence[str] = (),
     only: Sequence[str] = (),
-    kanji_store: Any | None = None,
 ) -> BatchApplyResult:
     """Fold a finished batch into the records, through the live path's checks.
 
@@ -2188,7 +1875,6 @@ def apply_batch_results(
             positions=positions,
             recent=recent,
             force_fields=force_fields,
-            kanji_store=kanji_store,
         )
 
     for record_id in pending_ids:

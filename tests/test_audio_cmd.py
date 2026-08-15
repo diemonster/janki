@@ -10,7 +10,6 @@ anything.
 from __future__ import annotations
 
 import json
-from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -154,99 +153,6 @@ def test_an_example_is_read_naturally(tmp_path: Path) -> None:
 
     assert provider.said == [("橋を渡ります。", False)]
     assert result.records[0].examples[0].audio.startswith("audio/janki-")
-
-
-def test_an_example_with_unconfirmed_furigana_is_not_voiced(tmp_path: Path) -> None:
-    """Something doubted this furigana — the flag records that, not why, since
-    the collection still carries flags the retired jpdb oracle wrote. Speaking
-    it would launder the doubt into a recording."""
-    from japanese_anki.identifiers import short_fingerprint
-
-    sentence = "橋を渡ります。"
-    flagged = record(
-        examples=[ExampleSentence(japanese=sentence)],
-        source=SourceReference(
-            type="jpdb",
-            imported_from="deck",
-            raw_fields={"furigana_unverified": short_fingerprint(sentence)},
-        ),
-    )
-
-    result, provider, _ = run([flagged], tmp_path, words=False, examples=True)
-
-    assert provider.said == []
-    assert result.unverified == [f"word:橋:はし: {sentence}"]
-
-
-def test_a_fragment_example_is_held_and_not_voiced(tmp_path: Path) -> None:
-    # The camera pilot voiced source fragments because the only content gate
-    # lived after synthesis. The audio command now applies the same judgment
-    # `validate` does, so a held sentence never becomes a recording.
-    fragment, fine = "古い橋の工事について", "橋が長いです。"
-    held = record(
-        examples=[
-            ExampleSentence(japanese=fragment, english="x", register="polite"),
-            ExampleSentence(japanese=fine, english="y", register="polite"),
-        ]
-    )
-
-    result, provider, _ = run([held], tmp_path, words=False, examples=True)
-
-    assert provider.said == [(fine, False)]
-    assert result.held == [f"word:橋:はし: {fragment} (example-fragment)"]
-    assert result.records[0].examples[0].audio == ""
-    assert result.records[0].examples[1].audio.startswith("audio/")
-
-
-def test_a_held_example_keeps_no_stale_clip_reference(tmp_path: Path) -> None:
-    # A recording made before the gate existed is the held question already
-    # turned into a recording: the reference is cleared so the card stops
-    # playing it and --prune can sweep the file.
-    fragment = "古い橋の工事について"
-    held = record(
-        examples=[
-            ExampleSentence(
-                japanese=fragment,
-                english="x",
-                register="polite",
-                audio="audio/janki-stale.mp3",
-            )
-        ]
-    )
-
-    result, provider, _ = run([held], tmp_path, words=False, examples=True)
-
-    assert provider.said == []
-    assert result.held == [f"word:橋:はし: {fragment} (example-fragment)"]
-    assert result.records[0].examples[0].audio == ""
-
-
-def test_a_confirmed_example_beside_a_flagged_one_is_still_voiced(tmp_path: Path) -> None:
-    from japanese_anki.identifiers import short_fingerprint
-
-    flagged_text, fine_text = "橋を渡ります。", "橋が長いです。"
-    both = record(
-        examples=[
-            ExampleSentence(japanese=flagged_text),
-            ExampleSentence(japanese=fine_text),
-        ],
-        source=SourceReference(
-            type="jpdb",
-            imported_from="deck",
-            raw_fields={"furigana_unverified": short_fingerprint(flagged_text)},
-        ),
-    )
-
-    result, provider, _ = run([both], tmp_path, words=False, examples=True)
-
-    assert provider.said == [(fine_text, False)]
-    assert result.records[0].examples[0].audio == ""
-    assert result.records[0].examples[1].audio.startswith("audio/")
-
-
-# ---------------------------------------------------------------------------
-# The config reaches the engine
-# ---------------------------------------------------------------------------
 
 
 def test_the_configured_voice_and_rate_reach_the_provider(tmp_path: Path) -> None:
@@ -518,34 +424,6 @@ def test_the_command_writes_records_media_and_ledger(
     assert "Wrote 1 clip(s)" in capsys.readouterr().out
 
 
-def test_a_cleared_stale_reference_is_persisted_without_new_clips(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The hold gate strips a stale clip reference without writing any file;
-    gating the save on file_count alone dropped the clear — resurrecting the
-    recording, and letting --prune delete the file the saved collection still
-    named."""
-    fragment = "古い橋の工事について"
-    held = record(
-        pitch_accent=[],
-        examples=[
-            ExampleSentence(
-                japanese=fragment,
-                english="x",
-                register="polite",
-                audio="audio/janki-stale.mp3",
-            )
-        ],
-    )
-    root = project(tmp_path, [held])
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: FakeVoice())
-
-    assert cli.main(["--root", str(root), "audio", "--examples"]) == 0
-
-    stored = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
-    assert stored[0]["examples"][0]["audio"] == ""
-
-
 def test_azure_is_refused_by_name_rather_than_falling_back(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -668,41 +546,6 @@ def test_bare_janki_audio_refuses_rather_than_voicing_everything(
 
     assert "--words" in capsys.readouterr().err
     assert voice.said == []
-
-
-def test_a_superseded_entry_survives_while_its_clip_is_still_referenced(
-    tmp_path: Path,
-) -> None:
-    """The mismatch has to stay visible until it is actually fixed. Editing a
-    sentence whose replacement is flagged unverified writes nothing — dropping
-    the old entry first would leave the record naming clip A with sentence B and
-    no evidence anywhere that the card shows one and plays the other."""
-    from japanese_anki.identifiers import short_fingerprint
-
-    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
-    first, _, _ = run(
-        [record(examples=[ExampleSentence(japanese="橋を渡ります。")])],
-        tmp_path, words=False, examples=True, book=book,
-    )
-    edited_text = "橋を渡りました。"
-    edited = [
-        record(
-            examples=[
-                replace(first.records[0].examples[0], japanese=edited_text)
-            ],
-            source=SourceReference(
-                type="jpdb",
-                imported_from="deck",
-                raw_fields={"furigana_unverified": short_fingerprint(edited_text)},
-            ),
-        )
-    ]
-
-    result, provider, _ = run(edited, tmp_path, words=False, examples=True, book=book)
-
-    assert provider.said == [], "flagged, so nothing was written"
-    assert book.records["word:橋:はし"]["audio"], "and the entry stayed"
-    assert book.stale_audio(result.records) == ["word:橋:はし"], "still reported"
 
 
 def test_clips_written_before_a_failure_stay_referenced(tmp_path: Path) -> None:
@@ -1147,38 +990,3 @@ def test_the_word_rate_does_not_reach_the_openai_sentence_provider(tmp_path: Pat
     assert sentences.speed == 1.0, "the word engine's rate stayed out of it"
 
 
-def test_the_flagged_warning_names_the_records_and_the_way_to_clear_them(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """The one message a user meets at the moment of the hold. It has been wrong
-    twice: it blamed jpdb after the oracle was retired, and then claimed a local
-    check disagreed — false for every flag in the collection, all of which the
-    retired oracle wrote. So it says only that the furigana was doubted.
-
-    And it has to be actionable. `result.unverified` has always carried the
-    record ids; printing a bare count sent the reader to open vocabulary.json
-    and match fingerprints by hand."""
-    from japanese_anki.identifiers import short_fingerprint
-
-    sentence = "橋を渡ります。"
-    flagged = record(
-        examples=[ExampleSentence(japanese=sentence, english="x", register="polite")],
-        source=SourceReference(
-            type="jpdb",
-            imported_from="deck",
-            raw_fields={"furigana_unverified": short_fingerprint(sentence)},
-        ),
-    )
-    root = project(tmp_path, [flagged])
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: FakeVoice())
-
-    assert cli.main(["--root", str(root), "audio", "--examples"]) == 0
-
-    err = capsys.readouterr().err
-    assert "carry a furigana flag" in err
-    assert "enrich --accept" in err
-    # Named, so the reader can act without opening the store.
-    assert "word:橋:はし" in err
-    # And no claim about *why*, which this command cannot know.
-    assert "jpdb" not in err
-    assert "disagreed" not in err

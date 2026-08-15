@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Collection, Iterable
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field, replace
 from typing import Any
 
@@ -339,11 +339,6 @@ def example_accepted(record: VocabularyRecord, example: ExampleSentence) -> bool
         record, EXAMPLE_AUTHORITY_KEY
     )
 
-#: Example content-fingerprints whose furigana no dictionary confirmed
-#: (M4.2). Defined beside the other example flags so every reader and writer
-#: names one constant — the audio command used to spell it as a literal.
-FURIGANA_UNVERIFIED_KEY = "furigana_unverified"
-
 
 def flag_entries(record: VocabularyRecord, key: str) -> list[str]:
     """``key``'s fingerprints in stored order — the one parse of the wire form.
@@ -399,20 +394,6 @@ def add_example_flags(
         key,
         flag_entries(record, key)
         + [short_fingerprint(sentence) for sentence in sentences],
-    )
-
-
-def prune_example_flags(
-    record: VocabularyRecord, key: str, valid: Collection[str]
-) -> VocabularyRecord:
-    """Drop ``key`` fingerprints outside ``valid``, removing the key when empty.
-
-    A flag fingerprint matching no current example refers to nothing: keeping
-    it accumulates dead entries forever and, for a hold, leaves a sentence
-    permanently refusable with no way to un-hold it.
-    """
-    return _write_flags(
-        record, key, [item for item in flag_entries(record, key) if item in valid]
     )
 
 

@@ -39,11 +39,10 @@ container is OOM-killed. That only bites when auditioning many voices at once �
 janki audio --words --examples
 ```
 
-Both kinds are off unless asked for. It skips — and reports — anything it is not
-sure of: a record with no accent pattern is not voiced with a guess, and an
-example carrying a furigana flag is not spoken at all —
-`janki enrich --accept RECORD_ID` clears one once you have read the sentence. `--prune` removes
-clips no record references any more, taking their ledger entries with them.
+Both kinds are off unless asked for. It skips — and reports — anything it is
+not sure of: a record with no accent pattern is not voiced with a guess.
+`--prune` removes clips no record references any more, taking their ledger
+entries with them.
 
 ## Choosing a voice
 

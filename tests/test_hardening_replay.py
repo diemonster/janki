@@ -7,16 +7,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from japanese_anki import enrich, hardening, hardening_replay, jpdb, kanji, qc, repairs
+from japanese_anki import enrich, hardening, hardening_replay, jpdb, repairs
 
 ROOT = Path(__file__).resolve().parents[1]
 SEEDED_CASES = (
     "ai-exact-headword-spelling",
     "ai-existing-example-annotations",
-    "ai-furigana-rewrites-sentence",
-    "ai-impossible-character-furigana",
     "ai-no-writable-change",
-    "ai-rejected-example-retry",
     "ai-uncurated-example-pinning",
     "deck-membership-partition",
     "derived-romaji-repair",
@@ -24,26 +21,21 @@ SEEDED_CASES = (
     "enrichment-invalid-pitch-length",
     "enrichment-provisional-precedence",
     "enrichment-suru-compound",
-    "example-romaji-invalid-furigana",
-    "example-teaching-suitability",
     "extraction-oracle-key-binding",
     "extraction-selection-target-binding",
     "extraction-source-example-promotion",
     "extraction-unit-accounting",
     "furigana-full-width-separator",
-    "impossible-character-furigana",
     "input-external-existing-name-collision",
     "input-parent-inbox-casefold-collision",
     "input-parent-inbox-name-collision",
     "input-parent-inbox-provenance",
     "m7-mixed-tsumori-coverage",
     "m7-native-teform-table-coverage",
-    "missing-furigana-separator",
     "model-request-effort-support",
     "pos-precedence",
     "reading-check-forced-furigana",
     "reading-check-suru-compound",
-    "repair-spills-past-a-full-width-space",
     "review-holds-back-an-unreadable-card",
     "review-pitch-fact-recheck",
     "review-pitch-source-authority",
@@ -500,8 +492,6 @@ def test_replay_reads_only_declared_case_fixtures_not_a_private_source(
     ("case_id", "target", "replacement"),
     [
         ("pos-precedence", jpdb, lambda _codes: "adverb"),
-        ("impossible-character-furigana", kanji, lambda _info, _reading: True),
-        ("missing-furigana-separator", qc, lambda furigana: furigana),
         ("ai-no-writable-change", enrich, lambda _result: []),
         (
             "derived-romaji-repair",
@@ -518,8 +508,6 @@ def test_each_seeded_case_kills_a_production_mutant(
 ) -> None:
     names = {
         "pos-precedence": "pos_to_part_of_speech",
-        "impossible-character-furigana": "assigns_a_known_reading",
-        "missing-furigana-separator": "repair_spilled_punctuation",
         "ai-no-writable-change": "format_ai_no_changes",
         "derived-romaji-repair": "apply_declarations",
     }

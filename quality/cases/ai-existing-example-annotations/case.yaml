@@ -11,7 +11,7 @@ fixtures:
   - path: input.json
     fingerprint: 26bf29f64985ac036953289040f6ed56b29bac1609d12eaf70c7a628296ef92e
   - path: oracle.json
-    fingerprint: 4bcacb5306d41f95b4e403f906ba6ad7870227805baa3f7efe2370bfc7050e89
+    fingerprint: bc438ba5637587a8a039144517c2502be51b49cfa7407f7e4ed533af714c1a8d
 runner_input: input.json
 oracle: oracle.json
 finding_id: ai-existing-example-annotations

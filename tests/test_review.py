@@ -285,19 +285,21 @@ def test_local_validation_failures_are_reported_before_the_review_gate(
     happen after every local gate passes."""
     from japanese_anki.models import ExampleSentence
 
-    fragment = record(
+    broken = record(
         examples=[
             ExampleSentence(
-                japanese="古い地図の話について", english="x", register="polite"
+                japanese="毎日話します。",
+                furigana="毎日[まいにち 話[はな]します。",
+                english="x",
             )
         ]
     )
-    root = project(tmp_path, [fragment])
+    root = project(tmp_path, [broken])
 
     assert cli.main(["--root", str(root), "build", "verbs"]) == 1
 
     err = capsys.readouterr().err
-    assert "example-fragment" in err
+    assert "example-unbalanced-furigana" in err
     assert "fails local validation" in err
     assert "have not been read" not in err
 
@@ -318,7 +320,9 @@ def test_a_saved_clean_review_cannot_answer_for_a_later_local_failure(
     broken = record(
         examples=[
             ExampleSentence(
-                japanese="明日、九時に話します。", english="x", register="casual"
+                japanese="明日、九時に話します。",
+                furigana="明日[あした]、九時[くじに 話[はな]します。",
+                english="x",
             )
         ]
     )
@@ -330,7 +334,7 @@ def test_a_saved_clean_review_cannot_answer_for_a_later_local_failure(
     assert cli.main(["--root", str(root), "build", "verbs"]) == 1
 
     err = capsys.readouterr().err
-    assert "example-register-mismatch" in err
+    assert "example-unbalanced-furigana" in err
 
 
 def test_accepting_lets_the_build_through(

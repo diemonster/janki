@@ -475,54 +475,6 @@ def test_a_finished_batch_writes_the_records_and_clears_the_entry(
     assert [item["kind"] for item in entries] == ["ai"]
 
 
-def test_the_fetched_answers_go_through_the_same_qc_as_a_live_call(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """A sentence that does not contain the word is not an example of it,
-    whether it arrived in two seconds or two hours."""
-    records = [record()]
-    batches = FakeBatches(
-        results=[
-            Entry(
-                key("word:話す:はなす"),
-                Succeeded(message("犬が走る。", "犬[いぬ]が走[はし]る。")),
-            )
-        ]
-    )
-    root = submitted(tmp_path, records, monkeypatch, batches)
-    capsys.readouterr()
-
-    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]) == 0
-
-    assert stored(root)["word:話す:はなす"]["examples"] == []
-    assert "did not contain" in capsys.readouterr().err
-
-
-def test_a_flagged_example_is_flagged_the_same_way_too(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    records = [record()]
-    # Its own result rather than `ok()`: the furigana spells 毎日話した。 where
-    # the sentence is 毎日話す。, which is what flags an example now that no
-    # dictionary is asked about a sentence. `ok()` writes matching furigana, so
-    # sharing it would assert the flag on an example with nothing wrong with it.
-    batches = FakeBatches(
-        results=[
-            Entry(
-                key(records[0].id),
-                Succeeded(message("毎日話す。", "毎日[まいにち] 話[はな]した。")),
-            )
-        ]
-    )
-    root = submitted(tmp_path, records, monkeypatch, batches)
-    capsys.readouterr()
-
-    cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"])
-
-    raw = stored(root)["word:話す:はなす"]["source"]["raw_fields"]
-    assert enrich.UNVERIFIED_KEY in raw
-
-
 def test_an_errored_result_leaves_that_record_untouched_and_says_so(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

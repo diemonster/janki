@@ -1,17 +1,5 @@
 version: 1
 findings:
-  - id: ai-impossible-character-furigana
-    state: fixed
-    pipeline_stage: ai-enrichment
-    source_archetypes: [camera]
-    symptom: AI enrichment assigned a compound's full reading to one kanji in a per-character furigana group, so the reconstructed sentence reading contained the compound twice.
-    invariant: A generated per-character split accounts for common rendaku and sokuon before it is compared with stored KANJIDIC readings; a remaining disagreement is preserved and marked unverified. The rendaku and sokuon tolerance, the warning text, and the refusal to voice a flagged example are covered by tests rather than by this case — its runner reports a warning count, not warning text, and never reaches the audio command.
-    evidence:
-      - fingerprint: 8853be75fe83cd9e59dca532a8e216ac43759755e64d913b16bb1f0247cec9ac
-        locator: quality/cases/ai-impossible-character-furigana/input.json
-    recurrences: []
-    case_ids: [ai-impossible-character-furigana]
-    fix_ref: src/japanese_anki/enrich.py#apply_ai_result
   - id: anki-deck-membership-overlap
     state: fixed
     pipeline_stage: deck-membership
@@ -41,15 +29,13 @@ findings:
     pipeline_stage: ai-enrichment
     source_archetypes: [native-pdf-table]
     symptom: AI enrichment replaced kana headwords with kanji spellings, so the exact-target check rejected every example.
-    invariant: Each generated example uses the record expression exactly as written, including a kana-only spelling, while still accepting a natural inflected form of it; one limited retry supplies the permitted forms when every first-pass example fails this check. The recurrence case observes both halves — its two retried sentences are 明日、友達をまちます。 and ここでまつの？, the first carrying the kana headword inflected and the second carrying it exactly as written — so neither is handed to tests.
+    invariant: The enrichment prompt instructs the model to use the record expression exactly as written, including a kana-only spelling, and the prompt carries the expression. That the model obeys is not checked — M8.3 deleted the containment check and its retry; the template asks, and the answer is the answer.
     evidence:
       - fingerprint: 46f44e594c406bfe0ef54598caddf3f8d932829cb4ef93c09eb4d9d29e958e8e
         locator: quality/cases/ai-exact-headword-spelling/input.json
-    recurrences:
-      - fingerprint: 1c4b2a599b99466d19012701032f949008ca22c2b93d1b572451b5662a70c811
-        locator: quality/cases/ai-rejected-example-retry/input.json
-    case_ids: [ai-exact-headword-spelling, ai-rejected-example-retry]
-    fix_ref: src/japanese_anki/enrich.py#ai_retry_prompt
+    recurrences: []
+    case_ids: [ai-exact-headword-spelling]
+    fix_ref: src/japanese_anki/enrich.py#AI_INSTRUCTIONS
   - id: enrichment-forced-kana-reading
     state: fixed
     pipeline_stage: dictionary-enrichment
@@ -166,18 +152,6 @@ findings:
     recurrences: []
     case_ids: [derived-romaji-repair]
     fix_ref: docs/IMPLEMENTATION_PLAN.md#m7.5
-  - id: example-romaji-invalid-furigana
-    state: fixed
-    pipeline_stage: repair-plan
-    source_archetypes: [camera]
-    symptom: The automatic example-romaji repair derived a lossy value from furigana that the validator had already marked as structurally invalid.
-    invariant: The automatic example-romaji repair preserves the existing value when furigana has a reported spilled group. The stray-notation-space half of the same guard, and deriving romaji once those defects are corrected, are covered by tests rather than by this case, whose input carries only the defective record.
-    evidence:
-      - fingerprint: 643375818ce75a5e16bba8d2e7493a38426d5d8af46bc9841df5ee0d0d975371
-        locator: quality/cases/example-romaji-invalid-furigana/input.json
-    recurrences: []
-    case_ids: [example-romaji-invalid-furigana]
-    fix_ref: src/japanese_anki/repairs.py#_example_romaji_values
   - id: extraction-unit-accounting
     state: fixed
     pipeline_stage: extraction
@@ -202,18 +176,6 @@ findings:
     recurrences: []
     case_ids: [ai-no-writable-change]
     fix_ref: commit:44826b2
-  - id: impossible-character-furigana
-    state: fixed
-    pipeline_stage: dictionary-enrichment
-    source_archetypes: [bilingual-layout]
-    symptom: A compound used per-character furigana that assigned an unknown reading to one kanji.
-    invariant: A per-character split must agree with stored KANJIDIC readings.
-    evidence:
-      - fingerprint: fdec6fc9b4f17a6bd8a08cffcdb9498b3114de0cc3e14b93a2792fa1a43514f1
-        locator: quality/cases/impossible-character-furigana/input.json
-    recurrences: []
-    case_ids: [impossible-character-furigana]
-    fix_ref: commit:fa575e9
   - id: input-parent-inbox-provenance
     state: fixed
     pipeline_stage: input-provenance
@@ -238,18 +200,6 @@ findings:
       - input-parent-inbox-name-collision
       - input-parent-inbox-provenance
     fix_ref: src/japanese_anki/inputs.py#_copy_into_inbox
-  - id: missing-furigana-separator
-    state: fixed
-    pipeline_stage: validation-qc
-    source_archetypes: [bilingual-layout]
-    symptom: Punctuation and a following word entered one furigana group.
-    invariant: A furigana group must not consume leading punctuation from an earlier token.
-    evidence:
-      - fingerprint: 0ab89b453179775c61a3b67059c29579d8c3355fd3ef692692bef32ceabf296d
-        locator: quality/cases/missing-furigana-separator/input.json
-    recurrences: []
-    case_ids: [missing-furigana-separator]
-    fix_ref: commit:fa575e9
   - id: pos-precedence
     state: fixed
     pipeline_stage: dictionary-enrichment
@@ -300,44 +250,6 @@ findings:
     recurrences: []
     case_ids: [ai-uncurated-example-pinning]
     fix_ref: src/japanese_anki/enrich.py#ai_prompt
-  # 2026-08-14 (M7.6V): the invariant below was narrowed on the repository
-  # owner's decision. The removed clause read "learner load is bounded from
-  # parsed and known-vocabulary data when that data is offered"; the bound it
-  # named is deleted. Measured first: it held 0 of 155 examples across 97
-  # records, and did not fire on 逡巡 (jpdb rank 9100), 邂逅 (16600) or 憂鬱
-  # (6900) either, because its limit was rank 20000 — a level a model writing
-  # from the style guide never reaches. It worked; it was calibrated to a
-  # threshold nothing meets. Its input was also wrong: reading jpdb's sentence
-  # segmentation it counted とする on 今、だれとすんでるの？, absent from that
-  # sentence, while 住む — the word actually inside すんでる — went uncounted.
-  # The clause was never observable by this finding's case, which supplies no
-  # parse and no known-vocabulary data, so the narrowing moved the invariant
-  # closer to what is proved. What replaces the bound is the paid review,
-  # judging difficulty as language rather than by rank.
-  - id: example-teaching-suitability
-    state: fixed
-    pipeline_stage: validation-qc
-    source_archetypes: [camera]
-    symptom: Local validation checked structure only, so sentence fragments, trailing connectives, and false register labels passed every local gate and reached audio; the late paid AI review was the first check to catch them.
-    invariant: Local validation holds an example that is certainly not a complete sentence or an intentional utterance, and one whose register label contradicts its sentence-final form, while accepting a complete polite sentence and an intentional short utterance. That a complete casual sentence is accepted, that the audio command applies the same judgment before voicing, and that a shipping build reports local content failures before the review gate is consulted, are covered by tests rather than by this case, whose runner calls validation alone. Every hold this rule emits today is an error, so validation reporting a hold at its own level is not yet a distinction anything can observe.
-    evidence:
-      - fingerprint: 0bf7117a9577b5a1c3a921cee46174162c436d70157c750085adaf16a9fbe66c
-        locator: quality/cases/example-teaching-suitability/input.json
-    recurrences: []
-    case_ids: [example-teaching-suitability]
-    fix_ref: src/japanese_anki/qc.py#example_content_holds
-  - id: ai-furigana-rewrites-sentence
-    state: fixed
-    pipeline_stage: ai-enrichment
-    source_archetypes: [camera]
-    symptom: The check that an example's furigana spells its own sentence needs no dictionary, but sat inside verify_example_furigana behind two short-circuits, so a run with no jpdb client and a card with an already-impossible reading both skipped it and were told only that the card was unverified. The rewritten particle also reaches the regenerated romaji, which a learner reads precisely because they cannot yet read the kana.
-    invariant: A furigana field that spells something other than its own sentence is detected with no parse and no kanji store, and marked unverified. That it is reported by name with both strings, and that a flagged example is not voiced, are covered by tests rather than by this case, whose runner reports a warning count and never reaches the audio command.
-    evidence:
-      - fingerprint: 5d15943217690704a40cbab0808af1908c7fe23e2b02765fb533ed7e2e6364b2
-        locator: quality/cases/ai-furigana-rewrites-sentence/input.json
-    recurrences: []
-    case_ids: [ai-furigana-rewrites-sentence]
-    fix_ref: src/japanese_anki/qc.py#furigana_rewrites_sentence
   - id: review-reads-an-unreadable-card
     state: fixed
     pipeline_stage: final-review
@@ -350,18 +262,6 @@ findings:
     recurrences: []
     case_ids: [review-holds-back-an-unreadable-card]
     fix_ref: src/japanese_anki/review.py#unready
-  - id: repair-spills-past-a-full-width-space
-    state: fixed
-    pipeline_stage: validation-qc
-    source_archetypes: [camera]
-    symptom: repair_spilled_punctuation inserts the ASCII space Anki needs before a run of leading punctuation, and its guard refuses the repair when the swallowed run still contains kana — but the guard reads kana only, so a full-width space inside that run passes. 週末[しゅうまつ]、東京　大阪[おおさか] is repaired to 週末[しゅうまつ]、 東京　大阪[おおさか], which spilled_furigana_groups reported before the repair and does not report after it, while おおさか still annotates 東京　大阪 and 東京 is gone from the reading, the romaji and the sentence audio. This is the evidence-erasing shape the function's own comment says it was rewritten to stop causing.
-    invariant: The punctuation repair refuses any run it cannot prove is the annotated word alone — kana in the remainder, and whitespace of any kind, since a full-width space means the base still covers more than the reading spells. Refusing leaves spilled_furigana_groups reporting the defect, which is what a repair is not allowed to hide. That the repair still fires where the remainder is the word alone is covered by the same test.
-    evidence:
-      - fingerprint: af835e904ea2aad10da990c46e89c84b106c0272c766ad6ac9f5109542c24794
-        locator: quality/evidence/repair-spills-past-a-full-width-space.json
-    recurrences: []
-    case_ids: [repair-spills-past-a-full-width-space]
-    fix_ref: src/japanese_anki/qc.py#repair_spilled_punctuation
   - id: furigana-full-width-separator
     state: fixed
     pipeline_stage: ai-enrichment

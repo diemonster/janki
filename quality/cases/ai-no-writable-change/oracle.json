@@ -2,16 +2,19 @@
   "records": [
     {
       "id": "word:話す:はなす",
-      "fields": {"examples": [], "usage_notes": ""}
+      "fields": {
+        "examples": [],
+        "usage_notes": ""
+      }
     }
   ],
   "changes": {},
-  "no_changes": ["word:話す:はなす"],
+  "no_changes": [
+    "word:話す:はなす"
+  ],
   "report": [
     "No changes for 1 of 1 record(s) the AI pass visited:",
     "  word:話す:はなす"
   ],
-  "rejected_ids": [],
-  "unverified_ids": [],
   "warning_count": 0
 }

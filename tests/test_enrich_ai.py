@@ -11,17 +11,15 @@ noted here because that key is what hid the pass's own key dependency until
 from __future__ import annotations
 
 import json
-from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
 
-from japanese_anki import cli, enrich, qc
+from japanese_anki import cli, enrich
 from japanese_anki.claude_client import CallResult, Refusal
 from japanese_anki.enrich import (
-    UNVERIFIED_KEY,
     ai_prompt,
     ai_schema,
     ai_targets,
@@ -29,9 +27,7 @@ from japanese_anki.enrich import (
     parse_force_fields,
 )
 from japanese_anki.identifiers import short_fingerprint
-from japanese_anki.io import merge_records
 from japanese_anki.jpdb import JpdbClient
-from japanese_anki.kanji import KanjiInfo, KanjiStore, Reading
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
 from japanese_anki.staging import read_staging
 
@@ -292,23 +288,6 @@ def test_acceptance_covers_sentences_not_the_record() -> None:
 # --- the QC gate --------------------------------------------------------------
 
 
-def test_an_example_without_the_word_is_rejected() -> None:
-    outcome = apply_ai_result(record(), answer(generated("毎日言います。")))
-
-    assert outcome.rejected == ["毎日言います。"]
-    assert outcome.changes == {}
-
-
-def test_a_conjugated_example_is_kept() -> None:
-    outcome = apply_ai_result(
-        record(),
-        answer(generated("昨日話した。", furigana="昨日[きのう] 話[はな]した。")),
-    )
-
-    assert outcome.rejected == []
-    assert [ex.japanese for ex in outcome.record.examples] == ["昨日話した。"]
-
-
 def test_romaji_is_always_regenerated_never_taken() -> None:
     outcome = apply_ai_result(
         record(),
@@ -401,78 +380,6 @@ def test_an_accepted_extracted_example_is_annotated_in_place_not_replaced() -> N
 
     assert [ex.japanese for ex in outcome.record.examples] == ["日本語を話します。"]
     assert outcome.record.examples[0].english == "I speak Japanese."
-
-
-def test_furigana_that_spells_its_own_sentence_is_not_flagged() -> None:
-    """The negative direction, and it is what the retired dictionary check kept
-    getting wrong: with no parse it flagged this sentence, and with one it
-    flagged whichever sentences jpdb segmented differently than the writer."""
-    outcome = apply_ai_result(
-        record(),
-        answer(generated("話します。", furigana="話[はな]します。")),
-    )
-
-    assert outcome.unverified == []
-    assert UNVERIFIED_KEY not in outcome.record.source.raw_fields
-
-
-def test_a_flagged_example_is_kept_and_its_sentence_fingerprinted() -> None:
-    # Kept, not dropped: the sentence may be right where the furigana is not,
-    # and a human deciding that beats janki throwing away good Japanese. The
-    # flag is keyed to the sentence, so it follows that example and no other.
-    outcome = apply_ai_result(
-        record(),
-        answer(generated("話します。", furigana="話[はな]しました。")),
-    )
-
-    assert [ex.japanese for ex in outcome.record.examples] == ["話します。"]
-    assert outcome.unverified == ["話します。"]
-    fingerprints = outcome.record.source.raw_fields[UNVERIFIED_KEY].split(",")
-    assert fingerprints == [short_fingerprint("話します。")]
-
-
-def test_an_impossible_character_group_is_kept_flagged_and_reported() -> None:
-    source = VocabularyRecord(
-        id="word:画面:がめん",
-        expression="画面",
-        reading="がめん",
-        meanings=["screen"],
-        examples=[ExampleSentence(japanese="二本指で画面を広げます。")],
-        usage_notes="A common noun.",
-    )
-    store = KanjiStore(
-        entries={
-            "指": KanjiInfo(
-                character="指",
-                readings=(Reading(kind="kun", reading="ゆび"),),
-            )
-        }
-    )
-
-    outcome = apply_ai_result(
-        source,
-        answer(
-            generated(
-                "二本指で画面を広げます。",
-                furigana="二本 指[にほんゆび]で 画面[がめん]を 広[ひろ]げます。",
-                english="Use two fingers to enlarge the screen.",
-            )
-        ),
-        kanji_store=store,
-    )
-
-    kept = outcome.record.examples[0]
-    assert kept.furigana == "二本 指[にほんゆび]で 画面[がめん]を 広[ひろ]げます。"
-    assert kept.romaji == ""
-    assert kept.english == "Use two fingers to enlarge the screen."
-    assert outcome.unverified == ["二本指で画面を広げます。"]
-    assert outcome.impossible_furigana == [
-        (
-            "二本指で画面を広げます。",
-            "二本 指[にほんゆび]で 画面[がめん]を 広[ひろ]げます。",
-            (("指", "にほんゆび"),),
-        )
-    ]
 
 
 def test_each_stored_annotation_wins_over_the_models_own() -> None:
@@ -586,131 +493,6 @@ def test_an_unreviewed_register_label_is_a_hole_the_model_may_fill(
     assert outcome.record.examples[0].register == "polite"
 
 
-def test_an_impossible_group_is_not_reported_when_curated_furigana_wins() -> None:
-    source = VocabularyRecord(
-        id="word:画面:がめん",
-        expression="画面",
-        reading="がめん",
-        meanings=["screen"],
-        examples=[
-            ExampleSentence(
-                japanese="二本指で画面を広げます。",
-                furigana="二本指[にほんゆび]で 画面[がめん]を 広[ひろ]げます。",
-                romaji="nihon'yubidegamen'ohirogemasu.",
-                english="Use two fingers to enlarge the screen.",
-                register="polite",
-            )
-        ],
-    )
-    store = KanjiStore(
-        entries={
-            "指": KanjiInfo(
-                character="指",
-                readings=(Reading(kind="kun", reading="ゆび"),),
-            )
-        }
-    )
-
-    outcome = apply_ai_result(
-        source,
-        answer(
-            generated(
-                "二本指で画面を広げます。",
-                furigana="二本 指[にほんゆび]で 画面[がめん]を 広[ひろ]げます。",
-                english="Use two fingers to enlarge the screen.",
-            ),
-            usage_notes="Pinch gestures use two fingers.",
-        ),
-        kanji_store=store,
-    )
-
-    assert outcome.record.examples == source.examples
-    assert outcome.impossible_furigana == []
-    assert outcome.unverified == []
-    assert outcome.record.usage_notes == "Pinch gestures use two fingers."
-
-
-def test_a_stored_impossible_group_is_flagged_when_ai_fills_english() -> None:
-    invalid = "二本 指[にほんゆび]で 画面[がめん]を 広[ひろ]げます。"
-    source = VocabularyRecord(
-        id="word:画面:がめん",
-        expression="画面",
-        reading="がめん",
-        meanings=["screen"],
-        examples=[
-            ExampleSentence(
-                japanese="二本指で画面を広げます。",
-                furigana=invalid,
-            )
-        ],
-        usage_notes="A common noun.",
-    )
-    store = KanjiStore(
-        entries={
-            "指": KanjiInfo(
-                character="指",
-                readings=(Reading(kind="kun", reading="ゆび"),),
-            )
-        }
-    )
-
-    outcome = apply_ai_result(
-        source,
-        answer(
-            generated(
-                "二本指で画面を広げます。",
-                furigana=invalid,
-                english="Use two fingers to enlarge the screen.",
-            )
-        ),
-        kanji_store=store,
-    )
-
-    assert outcome.unverified == ["二本指で画面を広げます。"]
-    assert outcome.impossible_furigana
-    assert UNVERIFIED_KEY in outcome.record.source.raw_fields
-
-
-def test_flags_accumulate_for_sentences_still_on_the_record() -> None:
-    # A flag for a sentence the record still carries survives a later write;
-    # writes append, never replace.
-    first = apply_ai_result(
-        record(), answer(generated("話します。", furigana="話[はな]しました。"))
-    )
-
-    second = apply_ai_result(
-        first.record,
-        answer(
-            generated("話します。", furigana="話[はな]しました。"),
-            generated("昨日話した。", furigana="昨日[きのう] 話[はな]しました。"),
-        ),
-        force_fields=("examples",),
-    )
-
-    flags = second.record.source.raw_fields[UNVERIFIED_KEY]
-    assert short_fingerprint("話します。") in flags
-    assert short_fingerprint("昨日話した。") in flags
-
-
-def test_an_orphaned_flag_fingerprint_is_garbage_collected() -> None:
-    # A fingerprint matching no current example refers to nothing — and for a
-    # hold, keeping it would leave a sentence permanently refusable with no
-    # way to un-hold it. Pruned at the write, when the orphan is created.
-    already = record(
-        source=SourceReference(raw_fields={UNVERIFIED_KEY: "deadbeef"}),
-        verb_group="godan",
-    )
-
-    outcome = apply_ai_result(
-        already, answer(generated("話します。", furigana="話[はな]しました。"))
-    )
-
-    assert "deadbeef" not in outcome.record.source.raw_fields[UNVERIFIED_KEY]
-    assert short_fingerprint("話します。") in (
-        outcome.record.source.raw_fields[UNVERIFIED_KEY]
-    )
-
-
 def test_fields_that_already_have_content_are_left_alone() -> None:
     curated = record(
         examples=[ExampleSentence(japanese="curated")], usage_notes="curated note"
@@ -792,76 +574,6 @@ def test_variety_pressure_grows_as_the_run_goes(
 
     assert "毎日話します。" not in call.calls[0]["content"]
     assert "毎日話します。" in call.calls[1]["content"]
-
-
-def test_all_rejected_examples_get_one_constrained_retry(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    waiting = record(
-        id="word:まつ:まつ",
-        expression="まつ",
-        reading="まつ",
-        meanings=["to wait"],
-    )
-    call = FakeCall(
-        CallResult(
-            answer(
-                generated("友達を待ちます。"),
-                usage_notes="The particle を can mark the person awaited.",
-            ),
-            "end_turn",
-            None,
-        ),
-        CallResult(
-            answer(
-                generated("友達をまちます。"),
-                generated("ここでまつの？"),
-            ),
-            "end_turn",
-            None,
-        ),
-    )
-    monkeypatch.setattr(enrich.claude_client, "parse_call", call)
-
-    result = enrich.enrich_ai([waiting], model="m", style_guide="S")
-
-    assert len(call.calls) == 2
-    assert "Permitted written target forms:" in call.calls[1]["content"]
-    assert "まちます" in call.calls[1]["content"]
-    assert [example.japanese for example in result.records[0].examples] == [
-        "友達をまちます。",
-        "ここでまつの？",
-    ]
-    assert result.records[0].usage_notes == (
-        "The particle を can mark the person awaited."
-    )
-    assert result.rejected == {}
-    assert result.no_changes == []
-    assert set(result.changes[waiting.id]) == {"examples", "usage_notes"}
-
-
-def test_one_accepted_example_does_not_trigger_the_retry(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    call = FakeCall(
-        CallResult(
-            answer(generated("話します。"), generated("友達に言います。")),
-            "end_turn",
-            None,
-        )
-    )
-    monkeypatch.setattr(enrich.claude_client, "parse_call", call)
-
-    result = enrich.enrich_ai([record()], model="m", style_guide="S")
-
-    assert len(call.calls) == 1
-    assert [example.japanese for example in result.records[0].examples] == [
-        "話します。"
-    ]
-    assert result.rejected == {"word:話す:はなす": ["友達に言います。"]}
-
-
-# --- the CLI ------------------------------------------------------------------
 
 
 def project(tmp_path: Path, records: list[VocabularyRecord]) -> Path:
@@ -973,7 +685,6 @@ def test_a_large_run_goes_to_a_staging_file_instead_of_a_diff(
     # Nothing reached the records; promote is what lands them.
     assert stored(root)["word:話す0:はなす"]["examples"] == []
     assert "janki promote" in capsys.readouterr().out
-    assert UNVERIFIED_KEY in meta["review_notes"]
 
 
 def test_the_staging_route_records_already_exist_so_promote_updates_them(
@@ -1089,41 +800,6 @@ def test_a_model_that_rejects_effort_is_not_sent_it(
     assert "effort" not in call.calls[0]
 
 
-def test_a_flagged_example_is_reported_and_recorded(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    root = project(tmp_path, [record()])
-    patch_all(
-        monkeypatch,
-        FakeCall(
-            ok("話します。", "話[はな]しました。")
-        ),
-        FakeJpdb({"話します。": HANASHIMASU}),
-    )
-
-    cli.main(["--root", str(root), "enrich", "--ai", "--yes"])
-
-    captured = capsys.readouterr()
-    assert "a local check disagreed with" in captured.err
-    fields = stored(root)["word:話す:はなす"]["source"]["raw_fields"]
-    assert fields[UNVERIFIED_KEY] == short_fingerprint("話します。")
-
-
-def test_a_rejected_example_is_reported(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    root = project(tmp_path, [record()])
-    patch_all(
-        monkeypatch,
-        FakeCall(CallResult(answer(generated("毎日言います。")), "end_turn", None)),
-        FakeJpdb(),
-    )
-
-    cli.main(["--root", str(root), "enrich", "--ai", "--yes"])
-
-    assert "did not contain 話す" in capsys.readouterr().err
-
-
 def test_the_staging_file_is_not_overwritten_without_force(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1190,89 +866,6 @@ def test_the_staging_file_reads_back_through_the_loader(
 
     assert raw["model"] == "claude-opus-5"
     assert raw["records"][0]["usage_notes"] == "note"
-
-
-def test_a_polite_example_is_accepted(tmp_path: Path) -> None:
-    # The style guide asks for beginner examples and a beginner textbook
-    # teaches 〜ます first, so without the polite forms this check would reject
-    # almost every good sentence a model writes.
-    for sentence in ("話します。", "話しました。", "話しません。", "話しましょう。"):
-        outcome = apply_ai_result(record(), answer(generated(sentence)))
-        assert outcome.rejected == [], sentence
-
-
-def test_the_polite_stem_alone_is_not_enough_to_count() -> None:
-    # Matching the bare stem would let 食べ物 count as an example of 食べる.
-    taberu = record(
-        id="word:食べる:たべる", expression="食べる", reading="たべる", verb_group="ichidan"
-    )
-
-    outcome = apply_ai_result(taberu, answer(generated("食べ物が好きです。")))
-
-    assert outcome.rejected == ["食べ物が好きです。"]
-
-
-# --- what the review found ---------------------------------------------------
-
-
-def test_the_unverified_flag_survives_the_staging_route_into_the_records(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The large-run route is the *only* one big runs may take, so the flag has
-    to reach vocabulary.json through it. It rides in ``source.raw_fields``, and
-    a merge keeps the existing record's source — which is right for provenance
-    and wrong for a flag describing the examples arriving with it."""
-    many = [
-        record(id=f"word:話す{index}:はなす", expression=f"話す{index}")
-        for index in range(enrich.STAGING_THRESHOLD)
-    ]
-    root = project(tmp_path, many)
-    # Each furigana field spells a different sentence than its example, which
-    # is what flags them now that no dictionary is asked about a sentence.
-    patch_all(
-        monkeypatch,
-        FakeCall(
-            *[
-                CallResult(
-                    answer(generated(f"話す{index}。", furigana=f"話[はな]した{index}。")),
-                    "end_turn",
-                    None,
-                )
-                for index in range(enrich.STAGING_THRESHOLD)
-            ]
-        ),
-        FakeJpdb(),
-    )
-    target = root / "staging" / "ai-enrichment.yaml"
-    assert cli.main(["--root", str(root), "enrich", "--ai", "--yes"]) == 0
-    staged, _ = read_staging(target)
-    assert all(UNVERIFIED_KEY in item.source.raw_fields for item in staged)
-
-    assert (
-        cli.main(["--root", str(root), "promote", str(target), "--skip-reading-check"])
-        == 0
-    )
-
-    landed = stored(root)["word:話す0:はなす"]
-    assert landed["examples"], "the examples merged in"
-    assert UNVERIFIED_KEY in landed["source"]["raw_fields"], (
-        "M5.3 reads this key to decide whether to speak a doubted sentence"
-    )
-
-
-def test_the_flag_does_not_ride_along_when_the_examples_did_not_land() -> None:
-    """A flag describes the examples it arrived with. If the merge kept the
-    existing curated examples, saying they are unverified would be a lie."""
-    curated = record(examples=[ExampleSentence(japanese="人と話す。")])
-    incoming = replace(
-        record(examples=[ExampleSentence(japanese="話しました。")]),
-        source=replace(curated.source, raw_fields={UNVERIFIED_KEY: "abc123"}),
-    )
-
-    merged, _ = merge_records([curated], [incoming], ())
-
-    assert merged[0].examples == curated.examples
-    assert UNVERIFIED_KEY not in merged[0].source.raw_fields
 
 
 def test_the_diff_shows_the_sentence_the_user_is_saying_yes_to() -> None:
@@ -1423,44 +1016,6 @@ def test_an_existing_staging_file_is_refused_before_the_pass_is_paid_for(
     assert call.calls == [], "the file exists; nothing should have been generated"
 
 
-def test_an_example_that_was_not_kept_is_not_reported_as_flagged(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """A record with curated examples and no usage note is a target for the
-    note. The example that comes back with it is discarded, so claiming it was
-    flagged points a reviewer at a key that is not there."""
-    curated = record(examples=[ExampleSentence(japanese="人と話す。")])
-    root = project(tmp_path, [curated])
-    patch_all(
-        monkeypatch,
-        FakeCall(
-            CallResult(
-                answer(
-                    generated("話します。", furigana="話[はな]します。"),
-                    usage_notes="Polite.",
-                ),
-                "end_turn",
-                None,
-            )
-        ),
-        FakeJpdb(),
-    )
-
-    assert cli.main(["--root", str(root), "enrich", "--ai", "--yes"]) == 0
-
-    landed = stored(root)["word:話す:はなす"]
-    assert landed["usage_notes"] == "Polite."
-    assert UNVERIFIED_KEY not in landed["source"]["raw_fields"]
-    output = capsys.readouterr()
-    assert "flagged" not in (output.out + output.err)
-
-
-def test_an_honorific_polite_example_is_accepted() -> None:
-    example = ExampleSentence(japanese="先生は教室にいらっしゃいます。")
-
-    assert qc.example_contains_target(example, "いらっしゃる", "godan")
-
-
 def test_a_pass_flag_is_not_silently_ignored_by_the_other_pass(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -1499,24 +1054,6 @@ def test_a_failed_ledger_write_does_not_call_a_re_run_pointless(
 
 
 # --- the separator space, on the way in ---------------------------------------
-
-
-def test_a_swallowed_comma_is_repaired_before_anything_reads_the_furigana() -> None:
-    """A model writes `週末[しゅうまつ]、何[なに]` without the separator perhaps
-    half the time. Anki then draws なに over `、何`, and the comma disappears
-    from the reading the romaji and the sentence audio are built from — so the
-    repair has to happen before the example is kept, not in a later pass over
-    the file."""
-    outcome = apply_ai_result(
-        record(),
-        answer(generated(
-            "週末、何を話すの？", furigana="週末[しゅうまつ]、何[なに]を 話[はな]すの？"
-        )),
-    )
-
-    kept = outcome.record.examples[0]
-    assert kept.furigana == "週末[しゅうまつ]、 何[なに]を 話[はな]すの？"
-    assert kept.romaji == "shuumatsu, naniohanasuno?", "the comma survives into the romaji"
 
 
 def test_a_spill_needing_a_guess_is_kept_as_written() -> None:
@@ -1570,134 +1107,8 @@ def test_the_preserve_warning_actually_fires() -> None:
 
     assert [ex.japanese for ex in result.records[0].examples] == ["話すのとおりに"]
     assert any(
-        "carry no reviewer acceptance" in warning for warning in result.warnings
+        "stored examples were preserved" in warning for warning in result.warnings
     )
-
-
-def test_both_furigana_warnings_say_what_was_kept_and_that_audio_is_blocked() -> None:
-    """The flag is structured data; this is the sentence a person actually
-    reads. Both messages have to say the same three things — which groups or
-    strings disagree, that the example was kept rather than dropped, and that
-    audio stays blocked — because a warning that reports only "unverified"
-    sends someone looking for a card fault that is really a field fault.
-
-    Driven through `absorb_ai_call`, where the text is built: the outcome
-    assertions elsewhere in this file pin the tuples and never the string."""
-    from japanese_anki.enrich import AiResult, absorb_ai_call
-
-    store = KanjiStore(
-        entries={
-            "指": KanjiInfo(
-                character="指", readings=(Reading(kind="kun", reading="ゆび"),)
-            )
-        }
-    )
-    impossible = record(id="word:画面:がめん", expression="画面", reading="がめん")
-    result = AiResult(records=[impossible], looked_up=1)
-
-    absorb_ai_call(
-        result,
-        impossible,
-        CallResult(
-            answer(
-                generated(
-                    "二本指で画面を広げます。",
-                    furigana="二本 指[にほんゆび]で 画面[がめん]を 広[ひろ]げます。",
-                    english="Use two fingers to enlarge the screen.",
-                )
-            ),
-            "end_turn",
-            None,
-        ),
-        model="offline-model",
-        positions={impossible.id: 0},
-        recent=[],
-        kanji_store=store,
-    )
-
-    [warning] = [text for text in result.warnings if "need review" in text]
-    assert "指" in warning and "にほんゆび" in warning
-    assert "kept and marked unverified" in warning
-    assert "sentence audio remains blocked" in warning
-
-    rewriting = record(id="word:話:はなし", expression="話", reading="はなし")
-    second = AiResult(records=[rewriting], looked_up=1)
-
-    absorb_ai_call(
-        second,
-        rewriting,
-        CallResult(
-            answer(generated("話を話します。", furigana="話[はなし]が 話[はな]します。")),
-            "end_turn",
-            None,
-        ),
-        model="offline-model",
-        positions={rewriting.id: 0},
-        recent=[],
-    )
-
-    [named] = [
-        text for text in second.warnings if "does not spell its own sentence" in text
-    ]
-    # The diagnosis, not just the verdict: this warning exists to say which two
-    # strings disagree, which is the difference between "check this card" and
-    # "check this field". Without it the message is the unverified count again.
-    assert "話が話します。" in named and "話を話します。" in named
-    assert "kept and marked unverified" in named
-    assert "sentence audio remains blocked" in named
-
-
-def test_a_furigana_field_that_rewrites_the_sentence_is_named() -> None:
-    # The failure this catches is a model rewriting the sentence inside the
-    # field that drives audio: the groups all read correctly, and the particle
-    # is wrong. It is decidable without a dictionary, so it must be reported
-    # even when no parse arrived — the case that used to short-circuit ahead of
-    # it, leaving "unverified" as the only thing anyone was told.
-    outcome = apply_ai_result(
-        record(),
-        answer(generated("話を話します。", furigana="話[はなし]が 話[はな]します。")),
-    )
-
-    assert outcome.rewritten_furigana == [
-        (
-            "話を話します。",
-            "話[はなし]が 話[はな]します。",
-            "the furigana spells 話が話します。, but the sentence is 話を話します。",
-        )
-    ]
-    assert outcome.unverified == ["話を話します。"]
-
-
-def test_a_rewritten_sentence_is_named_even_when_the_reading_is_impossible() -> None:
-    # `impossible` short-circuits the verdict too, so a card carrying both
-    # failures used to be told about only one of them.
-    store = KanjiStore(
-        entries={
-            "話": KanjiInfo(
-                character="話",
-                readings=(Reading(kind="kun", reading="はなし"),),
-            )
-        }
-    )
-
-    outcome = apply_ai_result(
-        record(),
-        answer(generated("話を話します。", furigana="話[はなし]が 話[ざぶとん]します。")),
-        kanji_store=store,
-    )
-
-    assert [item[2] for item in outcome.impossible_furigana] == [(("話", "ざぶとん"),)]
-    assert [item[2] for item in outcome.rewritten_furigana] == [
-        "the furigana spells 話が話します。, but the sentence is 話を話します。"
-    ]
-
-
-def test_a_furigana_field_that_matches_its_sentence_is_not_named() -> None:
-    outcome = apply_ai_result(
-        record(), answer(generated("話します。", furigana="話[はな]します。"))
-    )
-
-    assert outcome.rewritten_furigana == []
 
 
 def test_the_codex_path_still_sends_its_own_reasoning_effort(
@@ -1720,228 +1131,6 @@ def test_the_codex_path_still_sends_its_own_reasoning_effort(
 
     assert call.calls[0]["reasoning_effort"] == "ultra"
     assert "effort" not in call.calls[0]
-
-
-def test_an_impossible_reading_flags_a_record_that_had_no_examples() -> None:
-    """The impossible-character route to the flag, on the branch where it is
-    the only thing writing it.
-
-    A record that already has examples takes the merge branch, which re-derives
-    the flag list from `outcome.impossible_furigana` — so removing the check
-    from the verdict there changes nothing and the two routes mask each other.
-    A record with no stored example has no merge to re-derive from, and the
-    verdict is the whole of it."""
-    store = KanjiStore(
-        entries={
-            "指": KanjiInfo(
-                character="指", readings=(Reading(kind="kun", reading="ゆび"),)
-            )
-        }
-    )
-    empty = record(id="word:画面:がめん", expression="画面", reading="がめん")
-
-    outcome = apply_ai_result(
-        empty,
-        answer(
-            generated(
-                "二本指で画面を広げます。",
-                furigana="二本 指[にほんゆび]で 画面[がめん]を 広[ひろ]げます。",
-                english="Use two fingers to enlarge the screen.",
-            )
-        ),
-        kanji_store=store,
-    )
-
-    assert outcome.record.examples, "the example is kept, not dropped"
-    assert outcome.unverified == ["二本指で画面を広げます。"]
-
-
-def test_accepting_clears_a_flag_a_person_has_vouched_for() -> None:
-    """The only route left from a flagged example to a voiced one. M7.6V
-    retired the dictionary re-check, and nothing else takes a flag off: a
-    person can correct the furigana by hand and the flag stays, because it
-    describes the sentence as it was when it was written.
-
-    Without this, retiring the oracle would leave every already-flagged
-    sentence permanently unvoiced with no way to un-hold it."""
-    flagged = apply_ai_result(
-        record(), answer(generated("話します。", furigana="話[はな]しました。"))
-    ).record
-    assert UNVERIFIED_KEY in flagged.source.raw_fields
-
-    result = enrich.accept_furigana([flagged], [flagged.id])
-
-    assert result.cleared == {flagged.id: ["話します。"]}
-    assert UNVERIFIED_KEY not in result.records[0].source.raw_fields
-
-
-def test_accepting_needs_the_ids_a_person_is_vouching_for() -> None:
-    """Accepting everything unread is not a judgment — it is the one shape of
-    this command that would clear a flag nobody looked at."""
-    with pytest.raises(enrich.EnrichError) as excinfo:
-        enrich.accept_furigana([record()], [])
-
-    assert "not a judgment" in str(excinfo.value)
-
-
-def test_accepting_an_id_no_record_has_is_a_typo_not_an_empty_result() -> None:
-    with pytest.raises(enrich.EnrichError) as excinfo:
-        enrich.accept_furigana([record()], ["word:無い:ない"])
-
-    assert "word:無い:ない" in str(excinfo.value)
-
-
-def test_a_stored_rewriting_furigana_is_flagged_when_ai_fills_english() -> None:
-    """The merge branch re-derives the flag list, and it has to carry *both*
-    routes. A stored example whose own furigana spells a different sentence is
-    the mirror of the stored-impossible case: the model returns the sentence
-    unchanged and fills an empty annotation, and the example that lands is
-    still the one whose furigana is wrong.
-
-    Pinned separately because the verdict above cannot stand in for it — the
-    verdict runs on the *generated* example, and what reaches the record here
-    is the stored one that the fill merged into."""
-    stored = VocabularyRecord(
-        id="word:本:ほん",
-        expression="本",
-        reading="ほん",
-        meanings=["book"],
-        examples=[ExampleSentence(japanese="本を読む。", furigana="本[ほん]が 読[よ]む。")],
-    )
-
-    outcome = apply_ai_result(
-        stored,
-        answer(
-            generated(
-                "本を読む。",
-                furigana="本[ほん]が 読[よ]む。",
-                english="I read a book.",
-            )
-        ),
-    )
-
-    assert outcome.record.examples[0].english == "I read a book."
-    assert short_fingerprint("本を読む。") in (
-        outcome.record.source.raw_fields[UNVERIFIED_KEY]
-    )
-
-
-def _ledger_entries(book: dict[str, Any]) -> list[dict[str, Any]]:
-    """Every enrichment entry, whatever shape the ledger stores them in."""
-    found: list[dict[str, Any]] = []
-    stack: list[Any] = [book]
-    while stack:
-        node = stack.pop()
-        if isinstance(node, dict):
-            if {"kind", "fields"} <= set(node):
-                found.append(node)
-            stack.extend(node.values())
-        elif isinstance(node, list):
-            stack.extend(node)
-    return found
-
-
-def test_accepting_through_the_cli_writes_the_records_and_the_human_ledger_entry(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """Driven through `cli.main`, because the unit tests above cannot see the
-    command. The first shape of this handler cleared the flags on disk and then
-    raised from `record_enriched` — `fields=[]` and no model are both refused —
-    so it exited 1 having destroyed its own audit trail, and re-running found
-    nothing left to accept. Every assertion here failed on that shape.
-
-    Needs no jpdb key: accepting asks no dictionary anything."""
-    monkeypatch.delenv("JPDB_API_KEY", raising=False)
-    flagged = apply_ai_result(
-        record(), answer(generated("話します。", furigana="話[はな]しました。"))
-    ).record
-    root = project(tmp_path, [flagged])
-
-    code = cli.main(["--root", str(root), "enrich", "--accept", flagged.id])
-
-    assert code == 0
-    assert UNVERIFIED_KEY not in stored(root)[flagged.id]["source"]["raw_fields"]
-
-    # The entry's exact shape, not just that the word "human" appears somewhere:
-    # `record_enriched` dedups on (kind, model, fields), so naming the wrong
-    # field here would let a later real --jpdb pass that fills `furigana`
-    # collapse into this entry and inherit its date. That assertion existed in
-    # the deleted test_recheck_furigana.py and has to survive the move.
-    book = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
-    entries = [
-        entry
-        for record in book.get("records", {}).values()
-        for entry in record.get("enriched", [])
-    ] or _ledger_entries(book)
-    assert entries, f"no enrichment entry was written: {book}"
-    [entry] = entries
-    assert entry["kind"] == "human", "who vouched is the whole of what this records"
-    assert entry["model"] == "human"
-    assert entry["fields"] == [UNVERIFIED_KEY]
-
-    # Each accepted sentence is named, ahead of the count that summarises them.
-    # That the naming also precedes `save_records_json` is real and deliberate
-    # — a durable change should not be the first thing a reader learns about —
-    # but stdout ordering cannot observe it, so this does not claim to.
-    out = capsys.readouterr().out
-    assert out.index("話します。") < out.index("Accepted 1 sentence")
-
-
-@pytest.mark.parametrize(
-    "extra",
-    [["--force-fields", "examples"], ["--staging", "somewhere.yaml"]],
-    ids=["force-fields", "staging"],
-)
-def test_accepting_refuses_the_flags_that_write_fields(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], extra: list[str]
-) -> None:
-    """`--accept` writes no field and reads no staging file, so neither flag
-    has anything to act on. Without this the pass ran and ignored them, and
-    `--force-fields examples` answered with the *jpdb* field list.
-
-    Both rows, because they are separate conjuncts: the deleted
-    test_recheck_furigana.py parametrized them and the staging row did not
-    survive the move, so dropping it from the guard passed the whole suite."""
-    root = project(tmp_path, [record()])
-
-    code = cli.main(
-        ["--root", str(root), "enrich", "--accept", *extra, "word:話す:はなす"]
-    )
-
-    assert code == 1
-    assert "nothing to act on" in capsys.readouterr().err
-
-
-@pytest.mark.parametrize(
-    "furigana",
-    ["毎日　話[はな]します。", "毎日話[はな]します。"],
-    ids=["full-width-space", "no-separator"],
-)
-def test_a_separator_fault_is_refused_by_the_build_not_by_the_flag(furigana: str) -> None:
-    """Which gate owns this fault. Before M7.6V every generated example was
-    flagged when no parse arrived; the two enrichment checks are silent on it,
-    and validation refuses it instead.
-
-    Anki's furigana filter separates on the ASCII space alone, so the ruby in
-    `毎日　話[はな]します。` covers 毎日 as well — the reading, the romaji and the
-    sentence audio all lose it. Both rows, because they are one fault with two
-    notations: a separator Anki cannot read, and no separator at all before a
-    Han-initial run, which `spilled_furigana_groups` documents as its own gap.
-    A fix for one that leaves the other silent has to fail something.
-
-    Both are refused by `janki validate` and so by `janki build` —
-    `example-spaced-furigana-base` reads the notation, `example-overwide-furigana-base`
-    counts kanji against kana. What this pins is that *enrichment* does not flag
-    them: the unverified flag holds sentence audio, and these two faults stop
-    the build outright, which is the stronger answer. A card carrying one never
-    ships, so it never reaches the point of being voiced."""
-    outcome = apply_ai_result(
-        record(), answer(generated("毎日話します。", furigana=furigana))
-    )
-
-    assert outcome.unverified == []
-    assert UNVERIFIED_KEY not in outcome.record.source.raw_fields
-    assert outcome.record.examples[0].romaji == "hanashimasu."
 
 
 def test_the_ai_pass_enriches_a_record_with_no_jpdb_key(
@@ -1980,30 +1169,69 @@ def test_the_ai_pass_enriches_a_record_with_no_jpdb_key(
     assert stored(root)["word:話す:はなす"]["examples"], "the pass wrote nothing"
 
 
-def test_accepting_clears_a_flag_that_names_no_current_sentence(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """An orphan fingerprint names no example the record still carries — the
-    sentence was rewritten and the flag was left behind. `--accept` used to skip
-    the record entirely and report that it carried no flag, which was false and
-    left the only command that can remove one refusing to.
+def test_the_preserve_branch_still_fills_the_records_other_empty_fields() -> None:
+    """A record that already has examples takes the merge branch, and that
+    branch must still write the *other* empty AI fields — usage_notes above
+    all, since `ai_targets` selects on "no example or no note" and
+    有-examples/無-note is the largest real target class. M8.3's rewrite of
+    `apply_ai_result` kept this behaviour but lost every test that pinned it:
+    narrowing the writable list to force-fields-only left the whole suite
+    green while silently never writing a note again."""
+    stored = record(
+        examples=[ExampleSentence(japanese="人と話す。", english="x", register="casual")]
+    )
 
-    Cleared, and reported as its own case rather than as a vouched sentence:
-    there was no sentence for a person to have read."""
-    monkeypatch.delenv("JPDB_API_KEY", raising=False)
-    stale = record(
-        examples=[ExampleSentence(japanese="話します。", furigana="話[はな]します。")],
-        source=SourceReference(
-            type="shirabe",
-            imported_from="export.csv",
-            raw_fields={UNVERIFIED_KEY: "deadbeef1234"},
+    outcome = apply_ai_result(
+        stored,
+        answer(
+            generated("毎日話します。", furigana="毎日[まいにち] 話[はな]します。"),
+            usage_notes="Casual speech often drops the particle.",
         ),
     )
-    root = project(tmp_path, [stale])
 
-    code = cli.main(["--root", str(root), "enrich", "--accept", stale.id])
+    assert "usage_notes" in outcome.changes
+    assert outcome.record.usage_notes == "Casual speech often drops the particle."
+    # And the stored example was preserved, which is what routed us here.
+    assert [ex.japanese for ex in outcome.record.examples] == ["人と話す。"]
 
-    assert code == 0
-    assert UNVERIFIED_KEY not in stored(root)[stale.id]["source"]["raw_fields"]
-    out = capsys.readouterr().out
-    assert "named no sentence" in out
+
+def test_the_preserve_warning_fires_even_for_accepted_stored_examples() -> None:
+    """M8.3 widened the preserve warning: it used to stay silent when every
+    stored example carried reviewer acceptance, and now it reports the discard
+    whenever generated sentences had nowhere to land. Deliberate — the warning
+    is fill-discipline reporting ("your new sentences went nowhere; use
+    --force-fields to replace"), which is true and useful regardless of how
+    blessed the stored examples are."""
+    from japanese_anki.identifiers import short_fingerprint
+    from japanese_anki.models import EXAMPLE_AUTHORITY_KEY
+
+    sentence = "人と話す。"
+    accepted = record(
+        source=SourceReference(
+            type="extract",
+            imported_from="page.jpg",
+            raw_fields={EXAMPLE_AUTHORITY_KEY: short_fingerprint(sentence)},
+        ),
+        examples=[ExampleSentence(japanese=sentence, english="x", register="casual")],
+    )
+    from japanese_anki.models import example_accepted
+
+    # The premise, asserted rather than assumed: this stored example really is
+    # reviewer-accepted, so the warning firing below proves the widening.
+    assert example_accepted(accepted, accepted.examples[0])
+    result = enrich.AiResult(records=[accepted], looked_up=1)
+
+    enrich.absorb_ai_call(
+        result,
+        accepted,
+        CallResult(
+            answer(generated("毎日話します。", furigana="毎日[まいにち] 話[はな]します。")),
+            "end_turn",
+            None,
+        ),
+        model="offline-model",
+        positions={accepted.id: 0},
+        recent=[],
+    )
+
+    assert any("stored examples were preserved" in w for w in result.warnings)

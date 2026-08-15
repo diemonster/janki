@@ -182,14 +182,12 @@ now belongs to exactly one of them:
   examples` request.
 
 Promotion, oracle acceptance, and a structurally valid record approve nothing
-semantic. The local gates enforce teaching suitability before anything paid or
-audible: `validate` errors on certain fragments and false register labels
-(`qc.example_content_holds` — one judgment, certainties only, no grammar
-model), the audio command refuses to voice any held or failing example, every
-one of these keys and the provisional
-marker travels through the merge with the field it describes, and a shipping
-build — word or drill deck — reports local validation failures on their own
-before the review store is consulted.
+semantic — and since M8.3, nothing mechanical judges it either: janki's logic
+enriches the card and never audits the model (DESIGN.md). `validate` checks
+structure — identifiers, brackets, control characters, pitch shape — and a
+shipping build reports those local failures on their own before the review
+store is consulted. What a sentence *says* is the template's contract and the
+reviewer's judgment, not a rule's.
 
 The final AI review stays read-only and residual. It runs only after every
 local gate passes for a complete release candidate, sees the canonical record

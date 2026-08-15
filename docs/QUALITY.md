@@ -70,8 +70,8 @@ shut when there is no casual sentence, that no `{{Field}}` survives unresolved,
 that `[sound:...]` is consumed rather than shown, and that both lookup links
 carry a percent-encoded query.
 
-It also demonstrates, against Anki rather than in a comment, the failure
-`qc.spilled_furigana_groups` exists for: with the separator missing, Anki really
+It also demonstrates, against Anki rather than in a comment, why the prompt
+template states the separator rule: with the separator missing, Anki really
 does draw つま across `、妻`.
 
 **It is not a device test.** AnkiMobile and AnkiDroid rendering, CSS and layout,

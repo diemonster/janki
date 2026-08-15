@@ -674,27 +674,6 @@ def test_a_merge_import_over_a_malformed_file_is_a_clean_error(
 # --- M7.6T authority keys travel with their fields ----------------------------
 
 
-def test_hold_flags_travel_with_the_examples_they_describe() -> None:
-    # furigana_unverified says "these examples' furigana was doubted". If they land
-    # and the key does not, the store holds sentences with nothing saying so.
-    # The incoming row
-    # is the AI staging route's shape: the record's own non-extract source,
-    # carrying the flags the pass wrote.
-    bare = replace(_curated(), examples=[])
-    flagged = _imported(
-        examples=[ExampleSentence(japanese="毎日日本語を話します。")],
-        source=SourceReference(
-            type="shirabe",
-            imported_from="export.csv",
-            raw_fields={"furigana_unverified": "aaaa1111"},
-        ),
-    )
-
-    merged, _ = merge_records([bare], [flagged])
-
-    assert merged[0].source.raw_fields["furigana_unverified"] == "aaaa1111"
-
-
 def test_an_unaccepted_extract_example_cannot_fill_a_curated_record() -> None:
     # The mirror of the minting rule: a machine-era sentence on an extract row
     # must not fill a curated-type record's hole, where the merged record's
@@ -727,23 +706,6 @@ def test_an_unaccepted_extract_example_cannot_fill_a_curated_record() -> None:
 
     assert [ex.japanese for ex in merged[0].examples] == ["毎日日本語を話します。"]
     assert example_accepted(merged[0], merged[0].examples[0])
-
-
-def test_hold_flags_do_not_travel_when_the_examples_do_not() -> None:
-    # A flag describing examples that were not kept is a lie in the other
-    # direction.
-    unfilled = _imported(
-        examples=[ExampleSentence(japanese="毎日日本語を話します。")],
-        source=SourceReference(
-            type="extract",
-            imported_from="page.jpg",
-            raw_fields={"furigana_unverified": "bbbb2222"},
-        ),
-    )
-
-    merged, _ = merge_records([_curated()], [unfilled])
-
-    assert "furigana_unverified" not in merged[0].source.raw_fields
 
 
 def test_a_reviewers_acceptance_travels_with_the_sentence_it_covers() -> None:

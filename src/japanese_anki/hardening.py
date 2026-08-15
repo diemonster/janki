@@ -62,7 +62,6 @@ RUNNER_BOUNDARIES = {
     "render-build": "render-build",
     "dictionary-enrichment": "dictionary-enrichment",
     "ai-enrichment": "ai-enrichment",
-    "ai-enrichment-retry": "ai-enrichment",
     "ai-enrichment-prompt": "ai-enrichment",
     "model-request": "model-request",
     "review-readiness": "final-review",

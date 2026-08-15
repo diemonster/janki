@@ -87,6 +87,30 @@ def test_known_reading_accepts_compound_sound_changes(
     assert assigns_a_known_reading(info, surface)
 
 
+@pytest.mark.parametrize(
+    ("listed", "surface"),
+    [("ニチ", "した"), ("あ", "した"), ("ヒ", "あす")],
+)
+def test_a_reading_the_dictionary_never_lists_is_refused(
+    listed: str, surface: str
+) -> None:
+    """The negative direction, and the reason the function survived M8.3: on
+    the --jpdb word path it stops a jukujikun's per-character split from
+    teaching readings that do not exist. jpdb hands 明日 back as
+    明[あ]日[した], and した is no reading of 日 under any rendaku or sokuon
+    tolerance — so `_furigana_for` falls back to whole-word 明日[あした],
+    which is always true. A version of this function that answers yes to
+    everything re-teaches the false decomposition."""
+    info = KanjiInfo(
+        character="日",
+        readings=(Reading(kind="on", reading=listed),)
+        if listed.isupper() or listed in ("ニチ", "ヒ")
+        else (Reading(kind="kun", reading=listed),),
+    )
+
+    assert not assigns_a_known_reading(info, surface)
+
+
 # --- ranking the examples ---------------------------------------------------
 
 

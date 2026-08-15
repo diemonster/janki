@@ -43,40 +43,6 @@ _STAGING_HINT = (
 )
 
 
-def _misplaced_furigana(furigana: str) -> list[str]:
-    """Ruby groups whose reading will land on the text before them.
-
-    Delegates to :func:`japanese_anki.qc.spilled_furigana_groups` — janki
-    should not hold two ideas about what Anki will draw, and the rule is subtler
-    than it looks. See that function for the two plausible tests that are wrong:
-    position alone (``日[にっ]本[ぽん]`` abuts legitimately) and "the run starts
-    with kana" (which flags correct whole-word ruby, and whose advice would
-    break it).
-    """
-    from japanese_anki import qc
-
-    return [text for text, _reading in qc.spilled_furigana_groups(furigana)]
-
-
-def _stray_furigana_spaces(furigana: str) -> tuple[str, ...]:
-    """Spaces in a furigana field that no ruby group follows.
-
-    Delegates to :func:`japanese_anki.qc.stray_furigana_spaces` for the same
-    reason as above: `furigana_reading` decides which spaces are notation, so
-    only it can say which are content.
-    """
-    from japanese_anki import qc
-
-    return qc.stray_furigana_spaces(furigana)
-
-
-def _content_holds(example: object) -> list[tuple[str, str, str]]:
-    """Delegates to :func:`japanese_anki.qc.example_content_holds` (same rule)."""
-    from japanese_anki import qc
-
-    return qc.example_content_holds(example)
-
-
 def _kana(reading: str) -> str:
     """``reading`` with combining marks composed, which is what a kana count is.
 
@@ -265,15 +231,6 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
         add("error", "missing-meaning", "at least one English meaning is required")
     if record.furigana and record.furigana.count("[") != record.furigana.count("]"):
         add("error", "unbalanced-furigana", "furigana brackets are unbalanced")
-    elif record.furigana and (spilled := _misplaced_furigana(record.furigana)):
-        add(
-            "warning",
-            "spilled-furigana",
-            "furigana is missing a space before "
-            + ", ".join(repr(text) for text in spilled)
-            + " — Anki draws a reading over everything back to the previous "
-            "space, so it will spill onto the kana before it",
-        )
     if record.furigana and not record.reading:
         add(
             "warning",
@@ -310,15 +267,6 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
                 "this record rather than guess",
             )
     for index, example in enumerate(record.examples, start=1):
-        # The teaching-suitability judgment itself lives in
-        # :func:`japanese_anki.qc.example_content_holds`, because the audio
-        # command applies the same gate before voicing — janki must not hold
-        # two ideas about what a teachable example is. Each hold carries its
-        # own level: the certain shapes (fragments, false register labels)
-        # are errors that stop a build, the camera pilot's exact gap — and
-        # they are *visible* here, not only at the audio gate.
-        for code, level, why in _content_holds(example):
-            add(level, code, f"example {index} {why}")
         if example.japanese and not example.english:
             add(
                 "warning",
@@ -336,26 +284,6 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
                 "error",
                 "example-unbalanced-furigana",
                 f"example {index} has unbalanced furigana brackets",
-            )
-        elif example.furigana and (spilled := _misplaced_furigana(example.furigana)):
-            add(
-                "warning",
-                "example-spilled-furigana",
-                f"example {index} furigana is missing a space before "
-                + ", ".join(repr(text) for text in spilled)
-                + " — Anki draws a reading over everything back to the previous "
-                "space, so it will spill onto the kana before it",
-            )
-        if example.furigana and (stray := _stray_furigana_spaces(example.furigana)):
-            add(
-                "warning",
-                "example-stray-furigana-space",
-                f"example {index} furigana has a space before "
-                + ", ".join(repr(text) for text in stray)
-                + ", which no reading annotates — in a furigana field a space "
-                "means 'the next group starts here', so this one survives into "
-                "the reading and the romaji, and shows on the card as a gap "
-                "the sentence itself does not have",
             )
     return issues
 

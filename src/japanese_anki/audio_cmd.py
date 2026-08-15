@@ -13,13 +13,10 @@ synthesized with whatever the engine guesses — DESIGN_V2 is explicit that the
 homographs a guess gets wrong are exactly the ones a pitch card is for.
 ``--allow-default-accent`` opts into the guess deliberately and tags the ledger
 entry ``accent_unverified`` so the choice is visible afterwards rather than
-indistinguishable from a verified one. An example carrying a furigana flag is skipped
-for the same reason: something doubted that field and speaking it would launder
-the doubt into a recording. The flag records *that* it was doubted, not why —
-the collection still carries flags the retired jpdb sentence oracle wrote —
-so nothing here claims a reason. `enrich --accept` clears one on a person's
-authority, and a flag also lapses when its sentence is rewritten, since the
-fingerprint it is keyed to no longer exists.
+indistinguishable from a verified one. M8.3 deleted the furigana flag and the
+teaching-suitability hold: janki's logic enriches the card, it never audits
+the model, and what the sentence says is the model's answer to a template
+that asked precisely.
 
 Files are content-addressed (``janki-<fingerprint>.wav``), which is what makes
 staleness fall out rather than needing tracking: change a sentence and its audio
@@ -35,14 +32,11 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from japanese_anki import ledger as ledger_mod
-from japanese_anki import pitch, qc
+from japanese_anki import pitch
 from japanese_anki.errors import JankiError
-from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.models import (
-    FURIGANA_UNVERIFIED_KEY,
     ExampleSentence,
     VocabularyRecord,
-    example_flags,
 )
 from japanese_anki.tts import SpeechProvider
 
@@ -111,18 +105,6 @@ class AudioResult:
     #: Records with no reading at all, which cannot be voiced and are not the
     #: same problem as a missing accent.
     no_reading: list[str] = field(default_factory=list)
-    #: Examples skipped because their furigana carries a flag (M4.2's key).
-    unverified: list[str] = field(default_factory=list)
-    #: Examples refused by the teaching-content gate (M7.6T): a fragment or
-    #: a false register label. The same judgment
-    #: ``validate`` applies — voicing what the build would refuse turns a held
-    #: question into a recording.
-    held: list[str] = field(default_factory=list)
-    #: Stale clip references the hold gate cleared. Counted so the caller
-    #: knows the records changed even when no file was written — a cleared
-    #: reference that never reaches disk resurrects the recording, and
-    #: ``--prune`` would delete the file the saved collection still names.
-    cleared_refs: int = 0
     warnings: list[str] = field(default_factory=list)
     #: Clips that already existed and were left alone.
     up_to_date: int = 0
@@ -274,9 +256,9 @@ def _example_audio(
     Superseded ledger entries are dropped **after** the loop, not before it, and
     only when nothing still points at their file. Dropping first deletes the one
     durable record of a mismatch in exactly the cases where no replacement
-    follows — an edited sentence whose new text is flagged unverified, or a
-    provider that fails on the first example — leaving the record naming clip A
-    while its sentence is B, with nothing left to report it.
+    follows — a provider that fails on the first example, say — leaving the
+    record naming clip A while its sentence is B, with nothing left to report
+    it.
 
     And a provider failure is caught **here**, so the partially-updated example
     list is returned rather than discarded. Unwinding past this point loses the
@@ -284,7 +266,6 @@ def _example_audio(
     disk, unreferenced, and the next ``--prune`` deletes them — while the run
     reports "the clips written before this are saved".
     """
-    flagged = example_flags(record, FURIGANA_UNVERIFIED_KEY)
     examples: list[ExampleSentence] = []
     changed = False
 
@@ -297,35 +278,6 @@ def _example_audio(
         if not example.japanese:
             examples.append(example)
             continue
-        # The same judgment `validate` reports — checked here as well because
-        # audio can run on a record the build has never seen: the camera
-        # pilot voiced its fragments precisely because the only content gate
-        # lived after synthesis. Audio refuses every hold whatever its level,
-        # and a held example keeps no clip reference: presenting a recording
-        # of a sentence this run refuses to voice is the same failure with a
-        # cached voice. Checked *before* the unverified flag, because the
-        # hold is the stronger refusal — an example carrying both must still
-        # lose its stale clip.
-        if holds := qc.example_content_holds(example):
-            result.held.append(f"{record.id}: {example.japanese} ({holds[0][0]})")
-            if example.audio:
-                example = replace(example, audio="")
-                changed = True
-                result.cleared_refs += 1
-            examples.append(example)
-            continue
-        if short_fingerprint(example.japanese) in flagged:
-            # Something once doubted this furigana. What, exactly, the flag
-            # does not say — it is a fingerprint, and the collection still
-            # carries flags the retired jpdb sentence oracle wrote — so this
-            # does not claim a reason it cannot know. Speaking a doubted
-            # sentence would launder the doubt into a recording. A person clears
-            # it with `enrich --accept`; it also lapses if the sentence itself is
-            # rewritten, since the fingerprint goes with it.
-            result.unverified.append(f"{record.id}: {example.japanese}")
-            examples.append(example)
-            continue
-
         content_fp = ledger_mod.example_audio_content_fingerprint(example)
         if not force and _is_current(
             book,

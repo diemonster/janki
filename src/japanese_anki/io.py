@@ -20,7 +20,6 @@ import yaml
 from japanese_anki.errors import JankiError
 from japanese_anki.models import (
     EXAMPLE_AUTHORITY_KEY,
-    FURIGANA_UNVERIFIED_KEY,
     PROVISIONAL_FIELDS_KEY,
     ModelError,
     VocabularyRecord,
@@ -534,23 +533,6 @@ MERGEABLE_FIELDS: tuple[str, ...] = tuple(
     name for name in _RECORD_FIELDS if name not in PREFER_INCOMING_PROTECTED
 )
 
-# ``source.raw_fields`` keys that annotate a *content* field rather than the
-# record's origin, mapped to the field they describe. ``source`` otherwise
-# belongs to whoever saw the record first, which is right for provenance and
-# wrong for these: ``furigana_unverified`` says "these examples' furigana was
-# doubted", so if the examples travel and the key does not, the store ends up
-# holding doubted sentences with nothing saying so, and M5.3
-# reads exactly these keys before it generates audio. Carried only when the
-# merge actually wrote the field, because a flag describing examples that were
-# not kept is a lie in the other direction. Every key here holds a
-# comma-joined fingerprint list, which is what lets the merge union them.
-# (``provisional_fields`` travels too, but per field name rather than as a
-# blob, and ``example_authority`` travels unconditionally — a bound acceptance
-# matching no sentence blesses nothing, while dropping it un-accepts a
-# reviewer's stamp. See ``_carried_provisional`` and ``_carried_authority``.)
-CONTENT_ANNOTATIONS: dict[str, str] = {
-    FURIGANA_UNVERIFIED_KEY: "examples",
-}
 
 _EMPTY_CONTAINERS = (str, bytes, list, tuple, set, frozenset, dict)
 
@@ -648,25 +630,6 @@ def parse_prefer_incoming(value: str | None) -> tuple[str, ...]:
         raise DataError(f"--prefer-incoming: {exc}") from exc
 
 
-def _carried_annotations(
-    old: VocabularyRecord, new: VocabularyRecord, filled: Sequence[str]
-) -> dict[str, str]:
-    """The ``CONTENT_ANNOTATIONS`` the incoming record's fields brought with them.
-
-    Values are unioned rather than replaced: every key in this table holds a
-    comma-joined list of example fingerprints, and a record can collect flagged
-    examples across several passes.
-    """
-    carried: dict[str, str] = {}
-    for key, field_name in CONTENT_ANNOTATIONS.items():
-        if field_name not in filled:
-            continue
-        items = flag_entries(old, key) + flag_entries(new, key)
-        if items:
-            carried[key] = ",".join(dict.fromkeys(items))
-    return carried
-
-
 def _carried_provisional(
     old: VocabularyRecord, new: VocabularyRecord, filled: Sequence[str]
 ) -> str | None:
@@ -760,7 +723,7 @@ def _merge_one(
         filled.append("tags")
 
     merged = replace(old, **changes) if changes else old
-    annotations = _carried_annotations(old, new, filled)
+    annotations: dict[str, str] = {}
     if (marker := _carried_provisional(old, new, filled)) is not None:
         annotations[PROVISIONAL_FIELDS_KEY] = marker
     if authority := _carried_authority(old, new):

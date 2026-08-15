@@ -27,8 +27,6 @@ from japanese_anki.patterns import Pattern, PatternSet
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-CLASSES = {"かう": "godan", "くる": "kuru", "する": "suru", "たべる": "ichidan"}
-
 
 def chart(*patterns: Pattern, reviewed: bool = True, kind: str = "pattern") -> PatternSet:
     return PatternSet("teform.pdf", kind, "Te-form", tuple(patterns), reviewed)
@@ -38,7 +36,7 @@ def chart(*patterns: Pattern, reviewed: bool = True, kind: str = "pattern") -> P
 
 
 def test_a_rule_becomes_a_question_and_an_answer() -> None:
-    cards = cards_for(chart(Pattern("う・つ・る → って", "godan て-form")), CLASSES)
+    cards = cards_for(chart(Pattern("う・つ・る → って", "godan て-form")))
 
     assert len(cards) == 1
     assert (cards[0].trigger, cards[0].result) == ("う・つ・る", "って")
@@ -48,7 +46,7 @@ def test_a_rule_becomes_a_question_and_an_answer() -> None:
 def test_a_row_stating_two_rules_becomes_two_cards() -> None:
     """`くる → きて / する → して` is one row of the chart and two things to
     know, which is how they are drilled."""
-    cards = cards_for(chart(Pattern("くる → きて / する → して", "the irregulars")), CLASSES)
+    cards = cards_for(chart(Pattern("くる → きて / する → して", "the irregulars")))
 
     assert [(c.trigger, c.result) for c in cards] == [("くる", "きて"), ("する", "して")]
 
@@ -65,22 +63,22 @@ def test_a_rule_with_no_arrow_keeps_its_gloss_as_the_answer() -> None:
 # --- only what janki agreed with ----------------------------------------------
 
 
-def test_only_a_verified_example_reaches_a_card() -> None:
-    """The chart is a model's reading of a page. An example janki disagrees with
-    is one it has reason to think was mis-transcribed, and drilling it would
-    teach the error."""
+def test_a_reviewed_charts_examples_ship_as_it_states_them() -> None:
+    """M8.3 deleted the checker that adjudicated worked examples against
+    janki's own conjugation tables before letting them onto a card. The gate is
+    the human `reviewed:` mark — `cards_for` refuses an unreviewed chart — and
+    a reviewed chart's examples ship verbatim, every one of them."""
     cards = cards_for(
-        chart(Pattern("う・つ・る → って", examples=("かう ⇨ かって", "かう ⇨ かいて"))),
-        CLASSES,
+        chart(Pattern("う・つ・る → って", examples=("かう ⇨ かって", "まつ ⇨ まって"))),
     )
 
-    assert cards[0].examples == ("かう ⇨ かって",)
+    assert cards[0].examples == ("かう ⇨ かって", "まつ ⇨ まって")
 
 
 def test_a_rule_with_nothing_checkable_still_ships() -> None:
     """`く → いて` names an ending, not a verb, so there is nothing to disagree
     with — and the rule is the thing being taught."""
-    cards = cards_for(chart(Pattern("く → いて", "godan く")), CLASSES)
+    cards = cards_for(chart(Pattern("く → いて", "godan く")))
 
     assert len(cards) == 1 and cards[0].examples == ()
 
@@ -89,7 +87,6 @@ def test_each_rule_on_a_row_keeps_only_its_own_example() -> None:
     """Asking about くる while showing する ⇨ して is noise on the card."""
     cards = cards_for(
         chart(Pattern("くる → きて / する → して", examples=("くる ⇨ きて", "する ⇨ して"))),
-        CLASSES,
     )
 
     assert cards[0].examples == ("くる ⇨ きて",)
@@ -97,14 +94,13 @@ def test_each_rule_on_a_row_keeps_only_its_own_example() -> None:
 
 
 def test_an_annotated_trigger_still_claims_its_own_example() -> None:
-    """`check_pattern_rules` reads the row with parentheticals removed, so
+    """`worked_examples_in` reads the row with parentheticals removed, so
     `check.verb` is the bare かう. Matched against the displayed trigger the
     example belonged to no card — and the fallback, which keeps whatever belongs
     to no *other* rule, then put it on the `く → いて` card as well, showing a
     worked example from a different rule."""
     cards = cards_for(
         chart(Pattern("かう (exception) → かって / く → いて", examples=("かう ⇨ かって",))),
-        CLASSES,
     )
 
     assert [(c.trigger, c.examples) for c in cards] == [
@@ -120,7 +116,7 @@ def test_an_annotation_taken_out_of_the_answer_lands_on_the_gloss() -> None:
     trigger, a rebuild would overwrite `いで (voiced → で)` with `いで` in a
     collection that already carries it."""
     cards = cards_for(
-        chart(Pattern("く → いて / ぐ → いで (voiced → で)", "godan て-form")), CLASSES
+        chart(Pattern("く → いて / ぐ → いで (voiced → で)", "godan て-form"))
     )
 
     assert [(c.result, c.gloss) for c in cards] == [
@@ -158,7 +154,7 @@ def test_a_full_width_bracket_survives_into_the_identity() -> None:
 
 
 def test_a_decomposed_trigger_still_claims_its_own_example() -> None:
-    """`check_pattern_rules` composes what it reads, so `check.verb` is NFC
+    """The example scan composes what it reads, so the scanned verb is NFC
     while a chart extracted on macOS arrives decomposed — およぐ as およく plus
     U+3099. Compared unnormalized the example matched no card, and the fallback
     then put it on every card on the row."""
@@ -170,7 +166,6 @@ def test_a_decomposed_trigger_still_claims_its_own_example() -> None:
             f"{decomposed} (exception) → およいで / く → いて",
             examples=(f"{decomposed} ⇨ およいで",),
         )),
-        {"およぐ": "godan"},
     )
 
     assert [c.examples for c in cards] == [("およぐ ⇨ およいで",), ()]
@@ -184,7 +179,6 @@ def test_a_chain_beside_a_rule_keeps_its_own_worked_example() -> None:
     that names the verb is the one that claims it."""
     cards = cards_for(
         chart(Pattern("くる → きて → きた / く → いて", examples=("くる ⇨ きて",))),
-        CLASSES,
     )
 
     assert [(c.trigger, c.examples) for c in cards] == [
@@ -196,7 +190,7 @@ def test_a_chain_beside_a_rule_keeps_its_own_worked_example() -> None:
 def test_a_rule_stated_by_ending_takes_the_rows_examples() -> None:
     """No example names `う・つ・る`, so the row's whole verified set is its."""
     cards = cards_for(
-        chart(Pattern("う・つ・る → って", examples=("かう ⇨ かって",))), CLASSES
+        chart(Pattern("う・つ・る → って", examples=("かう ⇨ かって",)))
     )
 
     assert cards[0].examples == ("かう ⇨ かって",)
@@ -260,8 +254,7 @@ def test_the_package_carries_one_note_per_rule(tmp_path: Path) -> None:
 
     target, count = build_pattern_deck(
         deck_file(tmp_path), ProjectConfig.load(tmp_path), store,
-        tmp_path / "out.apkg", CLASSES,
-    )
+        tmp_path / "out.apkg",    )
 
     assert count == 3, "two rules, one of which states two"
     assert target.exists()
@@ -307,8 +300,8 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
     """A rule whose answer was mis-transcribed and later fixed is the same card
     with a corrected back. A GUID derived from the answer would orphan its
     review history on the day the deck got better."""
-    first = cards_for(chart(Pattern("う・つ・る → いて", "godan")), CLASSES)
-    fixed = cards_for(chart(Pattern("う・つ・る → って", "godan")), CLASSES)
+    first = cards_for(chart(Pattern("う・つ・る → いて", "godan")))
+    fixed = cards_for(chart(Pattern("う・つ・る → って", "godan")))
 
     assert first[0].identity == fixed[0].identity
     assert first[0].result != fixed[0].result
@@ -447,7 +440,7 @@ def test_a_separator_divides_rules_only_when_every_piece_has_an_arrow(
     three cards — one of them drilling `る → って`, which is the *ichidan*
     ending and takes て. A card teaching an error is what this module exists
     not to ship."""
-    cards = cards_for(chart(Pattern(template)), CLASSES)
+    cards = cards_for(chart(Pattern(template)))
 
     assert [(c.trigger, c.result) for c in cards] == expected
 
@@ -474,7 +467,7 @@ def test_a_line_janki_cannot_cut_apart_is_refused_by_name(template: str) -> None
     only signal was the card count dropping. The row is hand-fixable in
     `patterns.json`, and saying so beats printing a card that teaches nothing."""
     with pytest.raises(PatternDeckError, match="cannot tell where") as raised:
-        cards_for(chart(Pattern(template)), CLASSES)
+        cards_for(chart(Pattern(template)))
 
     # Which ambiguity it is, not a hard-coded story. The first row holds exactly
     # one separator, so telling its author to look for a second one — the
@@ -493,7 +486,7 @@ def test_a_chain_with_no_separator_is_prose_rather_than_a_refusal() -> None:
     it holds no separator at all — so there is no cut to be ambiguous about.
     Treating every uncut line as an ambiguity refused the whole document over
     it, taking the chart's other rows with it."""
-    cards = cards_for(chart(Pattern("〜て → 〜ている → 〜てる")), CLASSES)
+    cards = cards_for(chart(Pattern("〜て → 〜ている → 〜てる")))
 
     assert [(c.trigger, c.result) for c in cards] == [("〜て → 〜ている → 〜てる", "")]
 
@@ -505,8 +498,7 @@ def test_a_chain_beside_a_rule_keeps_the_rule() -> None:
     never became a card, and the single note that shipped carried the entire
     line as its trigger, which is also its GUID."""
     cards = cards_for(
-        chart(Pattern("〜て → 〜ている → 〜てる / 〜ておく → 〜とく")), CLASSES
-    )
+        chart(Pattern("〜て → 〜ている → 〜てる / 〜ておく → 〜とく")),    )
 
     assert [(c.trigger, c.result) for c in cards] == [
         ("〜て → 〜ている → 〜てる", ""),
@@ -648,6 +640,25 @@ def build_drill(tmp_path: Path, records: list, name: str) -> Path:
     return target
 
 
+def test_a_pattern_build_does_not_read_the_collection(tmp_path: Path) -> None:
+    """A rule deck is built from the reviewed chart alone. The collection used
+    to supply verb classes for the deleted example checker, so a missing or
+    unreadable vocabulary.json failed the build of a deck that names no record
+    — now it is simply not consulted."""
+    from japanese_anki import cli
+    from japanese_anki import patterns as patterns_module
+
+    project(tmp_path)
+    patterns_module.save_store(
+        ProjectConfig.load(tmp_path).patterns_file,
+        {"teform.pdf": chart(Pattern("う・つ・る → って", "godan て-form", ("かう ⇨ かって",)))},
+    )
+    deck = deck_file(tmp_path)
+    (tmp_path / "vocabulary.json").unlink()
+
+    assert cli.main(["--root", str(tmp_path), "build", str(deck)]) == 0
+
+
 def test_the_drill_guid_survives_a_corrected_reading(tmp_path: Path) -> None:
     """Correcting a reading rewrites the front of the card. A GUID that moved
     with it would orphan the review history on the day the deck got better.
@@ -762,9 +773,8 @@ def test_the_guid_ignores_the_gloss() -> None:
     is the failure the deterministic-GUID rule exists to prevent."""
     long_gloss = cards_for(
         chart(Pattern("う・つ・る → って", "godan verbs ending in う, つ, or る take って")),
-        CLASSES,
     )
-    shortened = cards_for(chart(Pattern("う・つ・る → って", "godan う/つ/る → って")), CLASSES)
+    shortened = cards_for(chart(Pattern("う・つ・る → って", "godan う/つ/る → って")))
 
     assert long_gloss[0].identity == shortened[0].identity
 
@@ -780,8 +790,7 @@ def test_two_rules_sharing_a_trigger_are_refused(tmp_path: Path) -> None:
     with pytest.raises(PatternDeckError, match="more than one rule for く"):
         build_pattern_deck(
             deck_file(tmp_path), ProjectConfig.load(tmp_path), store,
-            tmp_path / "o.apkg", CLASSES,
-        )
+            tmp_path / "o.apkg",        )
 
 
 def test_every_card_in_a_drill_deck_gets_its_own_guid(tmp_path: Path) -> None:
@@ -977,7 +986,9 @@ def test_a_drill_deck_reports_local_failures_before_the_review_gate(
         verb("買う", "かう", "godan"),
         examples=[
             ExampleSentence(
-                japanese="明日、九時に買います。", english="x", register="casual"
+                japanese="明日、九時に買います。",
+                furigana="明日[あした]、九時[くじに 買[か]います。",
+                english="x",
             )
         ],
     )
@@ -987,7 +998,7 @@ def test_a_drill_deck_reports_local_failures_before_the_review_gate(
 
     err = capsys.readouterr().err
     assert "fails local validation" in err
-    assert "example-register-mismatch" in err
+    assert "example-unbalanced-furigana" in err
     assert "not ready to ship" not in err
 
 
@@ -1005,7 +1016,9 @@ def test_a_drill_output_build_still_validates_its_records(tmp_path: Path) -> Non
         verb("買う", "かう", "godan"),
         examples=[
             ExampleSentence(
-                japanese="明日、九時に買います。", english="x", register="casual"
+                japanese="明日、九時に買います。",
+                furigana="明日[あした]、九時[くじに 買[か]います。",
+                english="x",
             )
         ],
     )
@@ -1602,70 +1615,6 @@ def test_a_sweep_builds_the_decks_after_a_broken_one(tmp_path: Path, capsys) -> 
     assert (tmp_path / "dist" / "words.apkg").exists(), "the other deck built"
 
 
-def test_a_pattern_build_stops_on_a_missing_collection(tmp_path: Path, capsys) -> None:
-    """The same loss by the neighbouring branch — a renamed file or a typo'd
-    `[paths]`, rather than a file that will not parse. The class lookup returned
-    an empty map, every chart row was held back for want of a class, and the
-    deck shipped with every `Examples` field blank on exit 0. The GUID excludes
-    the examples on purpose, so importing that package blanks the examples of
-    the rule cards already in Anki."""
-    from japanese_anki import cli
-    from japanese_anki import patterns as patterns_module
-
-    project(tmp_path)
-    patterns_module.save_store(
-        ProjectConfig.load(tmp_path).patterns_file,
-        {"teform.pdf": chart(Pattern("う・つ・る → って", "godan て-form", ("かう ⇨ かって",)))},
-    )
-    deck = deck_file(tmp_path)
-    (tmp_path / "vocabulary.json").unlink()
-
-    code = cli.main([
-        "--root", str(tmp_path), "build", str(deck),
-        "--output", str(tmp_path / "out.apkg"),
-    ])
-
-    assert code == 1
-    assert not (tmp_path / "out.apkg").exists(), "and shipped nothing"
-    assert "rule card(s)" not in capsys.readouterr().out
-
-
-def test_a_pattern_build_stops_on_an_unreadable_collection(tmp_path: Path, capsys) -> None:
-    """The worked examples on a rule card come from checking the chart against
-    the collection's own `verb_group` values. When the collection could not be
-    read that lookup returned nothing, every row was held back for want of a
-    class, and the deck shipped with every `Examples` field empty — while the
-    command printed an unchanged rule-card count and exited 0.
-
-    Worse than an empty deck: the note GUID is derived from the trigger alone
-    (`PatternCard.identity`, scoped by document) and so is unaffected by the
-    examples, so importing that package *updates* the rule cards already in
-    Anki and blanks their examples. A transient bad `vocabulary.json` erases
-    verified content on a run that reported success."""
-    from japanese_anki import cli
-    from japanese_anki import patterns as patterns_module
-
-    project(tmp_path)
-    patterns_module.save_store(
-        ProjectConfig.load(tmp_path).patterns_file,
-        {"teform.pdf": chart(Pattern("う・つ・る → って", "godan て-form", ("かう ⇨ かって",)))},
-    )
-    deck = deck_file(tmp_path)
-    (tmp_path / "vocabulary.json").write_text(
-        '[{"id": "word:x:x", "expression": "x", "reading": "x", "examples": 3}]',
-        encoding="utf-8",
-    )
-
-    code = cli.main([
-        "--root", str(tmp_path), "build", str(deck),
-        "--output", str(tmp_path / "out.apkg"),
-    ])
-
-    assert code == 1, "the build stopped"
-    assert not (tmp_path / "out.apkg").exists(), "and shipped nothing"
-    assert "rule card(s)" not in capsys.readouterr().out
-
-
 def test_a_rule_carrying_the_field_separator_is_refused(tmp_path: Path) -> None:
     """A rule card's values come from `data/patterns.json` and never pass
     through a record, so `validate_records` never sees them. Anki joins a
@@ -1678,7 +1627,6 @@ def test_a_rule_carrying_the_field_separator_is_refused(tmp_path: Path) -> None:
     with pytest.raises(PatternDeckError) as excinfo:
         build_pattern_deck(
             deck_file(tmp_path), ProjectConfig.load(tmp_path), store,
-            tmp_path / "out.apkg", CLASSES,
-        )
+            tmp_path / "out.apkg",        )
 
     assert "U+001F" in str(excinfo.value)

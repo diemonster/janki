@@ -3531,7 +3531,7 @@ Files: `src/japanese_anki/review.py`, `cli.py`, `config.py`,
 `quality/cases/review-*`, `quality/findings.yaml`, `tests/test_review.py`,
 `docs/QUALITY.md`, `README.md`.
 
-### [ ] M8.3 Delete the model-audit logic
+### [x] M8.3 Delete the model-audit logic
 
 The deletions the owner ordered on 2026-08-15, each named here per the
 pre-release rule. janki stops checking the model's Japanese anywhere:
@@ -3558,7 +3558,7 @@ pre-release rule. janki stops checking the model's Japanese anywhere:
   silently rewrites the model's furigana. The prompt states the notation
   contract; nothing re-checks it.
 - **The pattern-chart checker**: `patterns.check_pattern_rules` and
-  `--check-rules` — the dictionary-checks-writer shape M7.6V retired,
+  `--check` — the dictionary-checks-writer shape M7.6V retired,
   rebuilt for charts. The human `reviewed:` gate is the approval.
 
 Stays, reclassified: `conjugation.py` — the drill decks and the Conjugations
@@ -3568,6 +3568,25 @@ from a dictionary. `furigana_reading`, `furigana_base`, and
 `regenerate_example_romaji` stay — notation arithmetic that renders and never
 judges. Every gating case and finding owned by a deleted check retires in the
 same commit.
+
+*Done 2026-08-15, with two scope corrections found in execution. First:
+`kanji.assigns_a_known_reading` has a second caller the milestone missed —
+`enrich._furigana_for`, on the **--jpdb word path**, where it decides between
+two dictionary renderings of a word's furigana (jpdb's per-character split vs
+whole-word) so a jukujikun like 明日 is not taught as 明[あ]日[した]. That is
+dictionary-vs-dictionary display formatting about a word — stage-3 enrichment —
+so it was restored for that caller; only the model-example caller died.
+Second: `check_pattern_rules`'s notation *scan* survives as
+`patterns.worked_examples_in` — reading which verb ⇨ form pairs a row states
+is artifact reading; judging them was the deletion. A reviewed chart's
+examples now ship verbatim, and a pattern build no longer reads the collection
+at all. Also recorded: the repair **proposal machinery** lost its only
+instance (the punctuation repair was the sole proposal-only declaration), so
+`repair --accept-proposals` currently has no producer — delete or re-instance
+it in M8.4's audit. Roughly 240 tests retired with their subjects; the
+replaced local-failure fixtures in `test_review.py`/`test_pattern_cards.py`
+now use structural faults (unbalanced brackets), which is what local
+validation still owns.*
 
 Depends on: nothing.
 Files: `qc.py`, `kanji.py`, `enrich.py`, `models.py`, `validation.py`,

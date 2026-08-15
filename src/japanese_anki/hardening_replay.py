@@ -25,7 +25,6 @@ from japanese_anki import (
     jpdb,
     kanji,
     promote,
-    qc,
     repairs,
     review,
     staging,
@@ -800,22 +799,8 @@ def _review_readiness(data: dict[str, Any], root: Path) -> Any:
 
 def _validation_qc(data: dict[str, Any], root: Path) -> Any:
     del root
-    _only(data, {"records", "repair_spilled_punctuation"}, "validation-qc")
+    _only(data, {"records"}, "validation-qc")
     records = _records(data.get("records"))
-    if _optional_bool(data, "repair_spilled_punctuation"):
-        records = [
-            dataclass_replace(
-                record,
-                examples=[
-                    dataclass_replace(
-                        example,
-                        furigana=qc.repair_spilled_punctuation(example.furigana),
-                    )
-                    for example in record.examples
-                ],
-            )
-            for record in records
-        ]
     issues = validation.validate_records(records, "offline-case")
     return {
         "errors": sum(issue.level == "error" for issue in issues),
@@ -829,13 +814,6 @@ def _validation_qc(data: dict[str, Any], root: Path) -> Any:
                 "id": record.id,
                 "record": record.furigana,
                 "examples": [example.furigana for example in record.examples],
-            }
-            for record in records
-        ],
-        "spilled_furigana": [
-            {
-                "id": record.id,
-                "groups": [list(group) for group in qc.spilled_furigana_groups(record.furigana)],
             }
             for record in records
         ],
@@ -912,7 +890,6 @@ def _ai_enrichment(data: dict[str, Any], root: Path) -> Any:
             "records",
             "model",
             "response",
-            "kanji",
             "force_fields",
             "observe",
         },
@@ -944,11 +921,6 @@ def _ai_enrichment(data: dict[str, Any], root: Path) -> Any:
             raise hardening.HardeningError(
                 f"Invalid structured data in response.refusal: {exc}"
             ) from exc
-    store = (
-        _fixture_kanji_store(data["kanji"], "kanji")
-        if "kanji" in data
-        else None
-    )
     result = enrich.AiResult(records=list(records), looked_up=1)
     enrich.absorb_ai_call(
         result,
@@ -958,7 +930,6 @@ def _ai_enrichment(data: dict[str, Any], root: Path) -> Any:
         positions={records[0].id: 0},
         recent=[],
         force_fields=tuple(_string_list(data.get("force_fields", []), "force_fields")),
-        kanji_store=store,
     )
     output = {
         "records": _observed_records(result.records, data.get("observe", [])),
@@ -967,8 +938,6 @@ def _ai_enrichment(data: dict[str, Any], root: Path) -> Any:
         },
         "no_changes": result.no_changes,
         "report": enrich.format_ai_no_changes(result),
-        "rejected_ids": sorted(result.rejected),
-        "unverified_ids": sorted(result.unverified),
         "warning_count": len(result.warnings),
     }
     return output
@@ -1088,84 +1057,6 @@ def _semantic_review_recheck(data: dict[str, Any], root: Path) -> Any:
         ),
         "findings": [finding.to_dict() for finding in entry.findings] if entry else [],
         "failures": failures,
-    }
-
-
-def _ai_enrichment_retry(data: dict[str, Any], root: Path) -> Any:
-    """Replay a sequence of structured AI answers through the full pass."""
-    del root
-    _only(data, {"records", "model", "responses"}, "ai-enrichment-retry")
-    records = _records(data.get("records"))
-    if len(records) != 1:
-        raise hardening.HardeningError(
-            "ai-enrichment-retry requires exactly one record"
-        )
-    raw_responses = data.get("responses")
-    if not isinstance(raw_responses, list):
-        raise hardening.HardeningError("responses must be a JSON list")
-    responses = list(raw_responses)
-    prompts: list[str] = []
-
-    def canned_call(
-        model: str,
-        blocks: Any,
-        content: str,
-        schema: Any,
-        client: Any = None,
-        **options: Any,
-    ) -> claude_client.CallResult:
-        del model, blocks, schema, client, options
-        if not responses:
-            raise hardening.HardeningError(
-                "Canned AI responses ended before the enrichment pass finished"
-            )
-        prompts.append(content)
-        raw = _mapping(responses.pop(0), "responses entry")
-        _only(raw, {"parsed", "stop_reason", "refusal"}, "responses entry")
-        parsed_raw = raw.get("parsed")
-        parsed = (
-            _model_validate(
-                _structured_schema(enrich.ai_schema, "ai-enrichment retry replay"),
-                parsed_raw,
-                "responses entry.parsed",
-            )
-            if parsed_raw is not None
-            else None
-        )
-        refusal_raw = raw.get("refusal")
-        refusal = None
-        if refusal_raw is not None:
-            refusal_data = _mapping(refusal_raw, "responses entry.refusal")
-            _only(
-                refusal_data,
-                {"category", "explanation"},
-                "responses entry.refusal",
-            )
-            try:
-                refusal = claude_client.Refusal(**refusal_data)
-            except TypeError as exc:
-                raise hardening.HardeningError(
-                    f"Invalid structured data in responses entry.refusal: {exc}"
-                ) from exc
-        return claude_client.CallResult(parsed, raw.get("stop_reason"), refusal)
-
-    result = enrich.enrich_ai(
-        records,
-        model=str(data.get("model", "offline-model")),
-        style_guide="Offline hardening replay.",
-        parse_call=canned_call,
-    )
-    record = result.records[0]
-    return {
-        "call_count": len(prompts),
-        "responses_remaining": len(responses),
-        "example_texts": [example.japanese for example in record.examples],
-        "usage_notes": record.usage_notes,
-        "rejected_ids": sorted(result.rejected),
-        "no_changes": result.no_changes,
-        "retry_prompt_has_allowed_forms": (
-            len(prompts) > 1 and "Permitted written target forms:" in prompts[1]
-        ),
     }
 
 
@@ -1324,7 +1215,6 @@ RUNNERS: dict[str, Callable[[dict[str, Any], Path], Any]] = {
     "render-build": _render_build,
     "dictionary-enrichment": _dictionary_enrichment,
     "ai-enrichment": _ai_enrichment,
-    "ai-enrichment-retry": _ai_enrichment_retry,
     "ai-enrichment-prompt": _ai_enrichment_prompt,
     "semantic-review-recheck": _semantic_review_recheck,
     "repair-plan": _repair_plan,

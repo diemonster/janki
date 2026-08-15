@@ -7,17 +7,12 @@ the collection supplies verbs to run them on (`build_conjugation_deck`).
 The rule deck:
 
 
-A conjugation chart is a deck in itself. `janki patterns` already reads one and
-checks its worked examples against `conjugation.conjugate`; this turns the rules
-it holds into cards, and it ships **only what that check passed**.
-
-That last part is the whole design. Everything on these cards is either
-transcribed from the document by a model — which this project never trusts on
-its own — or computed by janki. A rule whose worked example janki disagrees
-with is a rule janki has reason to think was mis-transcribed, and putting it on
-a card would drill the error. A rule with nothing checkable at all (``く → いて``
-names an ending, not a verb) still ships: there is nothing to disagree with, and
-the rule is the thing being taught.
+A conjugation chart is a deck in itself: this turns the rules it holds into
+cards, worked examples included, exactly as the chart states them. The gate is
+the human ``reviewed:`` mark — M8.3 deleted the checker that used to adjudicate
+each worked example against janki's own conjugation tables before letting it
+ship, because janki's logic enriches the card and never audits the model
+(DESIGN.md). A chart a person has reviewed is trusted.
 
 **Its own notetype, not new fields on the vocabulary one.** A pattern card has
 no reading, no pitch, no audio; it shares nothing with a word card but the deck
@@ -53,8 +48,8 @@ from japanese_anki.patterns import (
     CHECKABLE_KINDS,
     LIST_SEPARATORS,
     PatternSet,
-    check_pattern_rules,
     verb_pairs_in,
+    worked_examples_in,
 )
 from japanese_anki.validation import (
     field_separator_fault,
@@ -106,8 +101,7 @@ class PatternCard:
     #: case the gloss carries it and the card is a plain statement.
     result: str
     gloss: str = ""
-    #: ``verb ⇨ form`` pairs janki checked and agreed with. Never the document's
-    #: unverified ones.
+    #: ``verb ⇨ form`` pairs the reviewed chart states.
     examples: tuple[str, ...] = ()
 
     @property
@@ -140,18 +134,11 @@ class PatternCard:
         return unicodedata.normalize("NFC", self.trigger).strip() or self.trigger
 
 
-def cards_for(
-    entry: PatternSet, groups: Mapping[str, str] | None = None
-) -> list[PatternCard]:
-    """The cards a document's rules make, with only verified examples.
+def cards_for(entry: PatternSet) -> list[PatternCard]:
+    """The cards a reviewed document's rules make.
 
     One card per rule, and a rule stating several — ``くる → きて / する → して``
     — becomes one card each, which is how they are drilled anyway.
-
-    ``groups`` is the verb classes to check the worked examples against, from
-    the collection. Without it every example is held back — `check_pattern_rules`
-    will not guess a class — and the cards ship with none, which is correct but
-    thin: the rule is still the thing being taught.
     """
     if entry.kind not in CHECKABLE_KINDS:
         raise PatternDeckError(
@@ -166,20 +153,19 @@ def cards_for(
             f"janki patterns --review {entry.source!r}"
         )
 
-    agreed: dict[str, list[tuple[str, str]]] = {}
-    for check in check_pattern_rules(entry, groups):
-        if check.agrees:
-            agreed.setdefault(check.template, []).append(
-                (check.verb, f"{check.verb} ⇨ {check.claimed}")
-            )
+    # The chart's own worked examples, as it states them. M8.3 deleted the
+    # checker that used to adjudicate each pair against janki's conjugation
+    # tables before letting it onto a card — a reviewed chart is trusted, and
+    # the human `reviewed:` gate above is the approval.
+    agreed = worked_examples_in(entry)
 
     cards: list[PatternCard] = []
     for pattern in entry.patterns:
         checked = agreed.get(pattern.template, [])
         rules = _split_rules(pattern.template)
         # Matched on the trigger without its parenthetical, because
-        # `check_pattern_rules` reads the same row with parentheticals removed:
-        # `check.verb` for `かう (exception) → かって` is the bare かう. Compared
+        # `worked_examples_in` reads the row with parentheticals removed:
+        # the scanned verb for `かう (exception) → かって` is the bare かう. Compared
         # against the displayed trigger, the example matched no card, and the
         # fallback below — which keeps what belongs to no *other* rule — then
         # put it on every card on the row.
@@ -657,9 +643,8 @@ def deck_problems(
     elif not entry.reviewed:
         problems.append(f"{document} has not been reviewed")
     else:
-        # The two refusals a *well-formed* deck can still hit. `groups` only
-        # filters examples, never triggers, so the card set here is the one the
-        # build produces and validate can answer for it.
+        # The refusals a *well-formed* deck can still hit, so the card set
+        # here is the one the build produces and validate can answer for it.
         try:
             cards_for(entry)
         except PatternDeckError as exc:
@@ -719,7 +704,6 @@ def build_pattern_deck(
     project_config: ProjectConfig,
     store: dict[str, PatternSet],
     output_path: Path | None = None,
-    groups: Mapping[str, str] | None = None,
 ) -> tuple[Path, int]:
     """Build one pattern deck. Returns ``(package path, card count)``."""
     if genanki is None:
@@ -742,7 +726,7 @@ def build_pattern_deck(
             f"Known: {known}"
         )
 
-    cards = cards_for(entry, groups)
+    cards = cards_for(entry)
     if not cards:
         raise PatternDeckError(f"{document} states no rules to make cards from.")
     # Raised rather than absorbed into the identity. Two rules sharing a trigger

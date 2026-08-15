@@ -68,36 +68,20 @@ Sources are **KANJIDIC2** (CC BY-SA 4.0, EDRDG) via kanjiapi.dev and
 **KanjiVG** (CC BY-SA 3.0, Ulrich Apel). A personal deck is fine; a deck you
 share must credit both — the same footing as the VOICEVOX voice terms.
 
-## What flags a sentence, and what does not
+## Nothing checks the sentences
 
-`enrich --ai` writes a sentence and checks it *offline*, against the sentence
-itself and against KANJIDIC. Two things flag an example, and both are decidable
-without asking anything:
+`enrich --ai` writes a sentence and nothing audits it (M8.3). The prompt states
+the whole contract — the notation, the register, the exact headword spelling,
+which reading each kanji takes in *this* sentence — and the model's answer is
+the answer. janki's logic enriches the card; it never judges the Japanese.
 
-- **an impossible character reading** — the furigana assigns a reading KANJIDIC
-  does not list for that character; and
-- **furigana that spells a different sentence** — `本[ほん]が 読[よ]む` for
-  本を読む, a particle rewritten inside the field that drives audio.
-
-A flagged example is kept, never discarded, and `janki audio` will not speak it
-until a person clears the flag:
-
-```bash
-janki enrich --accept word:話す:はなす   # your judgment, named record by record
-```
-
-That is the only route from flagged to voiced. Correcting the furigana by hand
-does not clear the flag, because the flag describes the sentence as it was
-written — and `--accept` needs the ids you are vouching for, since accepting
-everything unread is not a judgment.
-
-janki no longer asks jpdb to check a *sentence*. It used to, and the check was
-wrong more often than the sentences were: jpdb parses by segmenting, and on
-colloquial text it segments badly — it read とする in 今、だれとすんでるの？, a
-word not in the sentence, while 住む, the word actually there, went unread.
-Measured over the whole collection it flagged 38 of 155 examples, with no true positive among them. What
-replaces it is the semantic review, which reads the Japanese as language rather
-than as tokens.
+That is a decision with history, not an oversight. Every checker this project
+built for sentences was wrong more often than the sentences were: the jpdb
+sentence oracle flagged 38 of 155 examples with zero true positives (it read
+とする in 今、だれとすんでるの？, a word not in the sentence), and the local
+rules that replaced it held natural casual ellipsis while missing the faults
+they were written for. A wrong or thin sentence is fixed by editing the record
+or strengthening the prompt template — never by another rule.
 
 The dictionaries still enrich **words**: `enrich --jpdb` fills readings, pitch
 and frequency, and KANJIDIC supplies the kanji blocks. That is the division
@@ -151,16 +135,11 @@ including ones that were being skipped for having nothing left to fill. So
 `janki enrich --jpdb --force-fields pitch_accent` with no ids is one dictionary
 call per record and overwrites every curated value it names. Name ids there too.
 
-Everything it writes is checked before you see it. A sentence that does not
-contain the word is **rejected** — it may be a perfectly good sentence, but it
-is not an example of this word, and the check knows the word's conjugations and
-its 〜ます forms, so 話しました counts as 話す. A sentence whose furigana assigns a reading KANJIDIC does not
-list, or spells a different sentence than the example does, is **kept and
-flagged** instead of dropped: the Japanese may be right where the furigana is
-not, and that is a judgment for you rather than for janki. The flag is a fingerprint of the sentence in the record's
-`raw_fields`, under `furigana_unverified`, and audio generation will read it before it speaks a
-sentence (Milestone 5).
-Romaji is always regenerated from the furigana, whatever the model sent.
+Nothing it writes is audited (see above). What janki still does with the
+answer is fill discipline and derivation: stored examples are preserved unless
+`--force-fields examples` asks otherwise, existing annotations win over the
+model's, and romaji is always regenerated from the furigana, whatever the
+model sent.
 
 At fifty records or more the proposals go to `data/staging/ai-enrichment.yaml`
 and through `janki promote` instead of a terminal diff, because nobody reads

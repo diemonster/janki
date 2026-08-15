@@ -623,14 +623,6 @@ def _example_romaji_values(before: Mapping[str, Any]) -> list[str]:
         before["examples[*].romaji"],
         strict=True,
     ):
-        if furigana and (
-            qc.spilled_furigana_groups(furigana)
-            or qc.stray_furigana_spaces(furigana)
-        ):
-            # Romaji is safe to derive only from structurally valid furigana.
-            # Keep the reviewed value until a human corrects the notation.
-            values.append(romaji)
-            continue
         repaired = qc.regenerate_example_romaji(
             ExampleSentence(japanese=japanese, furigana=furigana, romaji=romaji)
         )
@@ -665,36 +657,6 @@ def _example_romaji_post(
     )
 
 
-def _punctuation_pre(before: Mapping[str, Any], evidence: Mapping[str, Any]) -> bool:
-    del evidence
-    return any(
-        qc.repair_spilled_punctuation(value) != value
-        for value in before["examples[*].furigana"]
-    )
-
-
-def _punctuation_transform(
-    before: Mapping[str, Any], evidence: Mapping[str, Any]
-) -> Mapping[str, Any]:
-    del evidence
-    return {
-        f"examples[{index}].furigana": repaired
-        for index, value in enumerate(before["examples[*].furigana"])
-        if (repaired := qc.repair_spilled_punctuation(value)) != value
-    }
-
-
-def _punctuation_post(
-    before: Mapping[str, Any], planned: Mapping[str, Any], evidence: Mapping[str, Any]
-) -> bool:
-    del evidence
-    for index, old in enumerate(before["examples[*].furigana"]):
-        value = planned.get(f"examples[{index}].furigana", old)
-        if qc.repair_spilled_punctuation(value) != value:
-            return False
-    return True
-
-
 REGISTRY = RepairRegistry(
     (
         RepairDeclaration(
@@ -726,25 +688,6 @@ REGISTRY = RepairRegistry(
             transformation=_example_romaji_transform,
             postcondition=_example_romaji_post,
             provenance="Derived example romaji from stored Japanese and furigana.",
-        ),
-        RepairDeclaration(
-            code="example-furigana-punctuation-separator",
-            version="1.0.0",
-            phase="curated",
-            mode="proposal-only",
-            allowed_fields=("examples[*].furigana",),
-            input_fields=("examples[*].furigana",),
-            evidence={
-                "algorithm": "japanese_anki.qc.repair_spilled_punctuation",
-                "basis": "leading punctuation is not part of a ruby word",
-            },
-            precondition=_punctuation_pre,
-            transformation=_punctuation_transform,
-            postcondition=_punctuation_post,
-            provenance=(
-                "Proposed an Anki furigana separator before a ruby group that "
-                "starts with punctuation."
-            ),
         ),
     )
 )

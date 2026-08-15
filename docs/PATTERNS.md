@@ -88,30 +88,12 @@ cannot be conjugated without it, and hiding it would test the reading instead of
 the form. GUIDs key on the record and the form, so correcting a reading rewrites
 the card rather than orphaning its history.
 
-## A chart is checked, not believed
+## A chart is reviewed, then believed
 
-Where the chart shows its work — `かう ⇨ かって`, `くる ⇨ きて` — janki checks it
-against `conjugation.conjugate`, the same rules it uses to build every card:
-
-```text
-teform_song.pdf — pattern
-    checked 6/6 worked example(s) against janki's conjugation rules
-        いく ⇨ いって matched te form
-```
-
-**A verb with no class on record is held back, not guessed at.** This matters
-more than it sounds: a conjugation chart exists *because* Japanese verbs have
-outliers, and する, くる and 行く are why anyone prints one. Running an unknown
-verb through every class to see if something fits gets both directions wrong —
-it contradicts a correct chart wherever janki has no override for the exception
-being taught, and it agrees with a garble whenever the garble is some other
-class's regular form (`食べる ⇨ 食べれる` is ら抜き, and godan-regular).
-
-The class comes from your collection, where `enrich --jpdb` has already recorded
-one per verb. For a word the collection has never held, ask the dictionary:
-
-```bash
-janki patterns --check --ask-jpdb    # one request for every unknown verb
-```
-
-Without that flag the command touches no network.
+A chart's rules and worked examples reach cards through one gate: a human
+marks the document reviewed (`janki patterns --review`). M8.3 deleted the
+checker that used to adjudicate each worked example against janki's own
+conjugation tables before letting it ship — the dictionary-checks-writer shape
+this project retired everywhere else. A reviewed chart's examples ship exactly
+as it states them; a garbled row is fixed by editing the document's entry in
+`data/patterns.json`, the same way any other reviewed content is fixed.
