@@ -955,8 +955,8 @@ def test_the_casual_example_coming_first_does_not_empty_the_main_slot(
     Taking `examples[0]` and blanking it when it was the casual one meant a
     record whose casual sentence happened to lead showed *no* main example — the
     polite sentence was on the record, paid for, and read by no field, with
-    nothing to report it: the record has examples, so `status` sees no gap and
-    `janki review` reads the record rather than the built note."""
+    nothing to report it: the record has examples, so `status` sees no gap, and
+    nothing else reads the built note."""
     _project(tmp_path)
     _write_records(tmp_path, [VocabularyRecord(
         id="word:使う:つかう", expression="使う", reading="つかう", meanings=["to use"],

@@ -952,31 +952,64 @@ def test_a_drill_deck_honours_its_own_source(tmp_path: Path) -> None:
     assert collection_for(deck, ProjectConfig.load(tmp_path)).name == "other.json"
 
 
-def test_a_drill_deck_passes_the_same_review_gate_a_word_deck_does(
-    tmp_path: Path, capsys
-) -> None:
-    """A drill card carries the expression, the reading and a meaning straight
-    off the record, so shipping one janki has not read is the thing the gate
-    exists to stop. The `pattern` branch skips it because it ships no record
-    content; this branch had no such excuse and returned before reaching it."""
+def test_a_drill_build_surfaces_a_warning_level_hold(tmp_path: Path, capsys) -> None:
+    """The half only the CLI's pre-gate can do, and so the only assertion that
+    can tell the two gates apart.
+
+    `build_conjugation_deck` refuses on errors with the *identical* refusal
+    text, so a test that breaks a record and reads the message cannot tell
+    which gate spoke: before this test existed, deleting the pre-gate call
+    left the whole suite green. A warning does not refuse, so the exporter
+    never mentions it; printing it is exactly what the pre-gate is for, and a
+    drill deck that stopped surfacing warnings would ship the silent holds a
+    word deck reports.
+    """
     from japanese_anki import cli
 
+    # verb_group set, part_of_speech empty: a warning, not an error, so the
+    # build succeeds and the only question is whether anything said so.
     deck = cli_project(tmp_path, [verb("買う", "かう", "godan")])
 
-    assert cli.main(["--root", str(tmp_path), "build", str(deck)]) == 1
+    assert cli.main(["--root", str(tmp_path), "build", str(deck)]) == 0
 
     err = capsys.readouterr().err
-    assert "not ready to ship" in err
-    assert "janki review" in err
+    assert "verb-group-without-part-of-speech" in err
+    assert "fails local validation" not in err, "a warning does not refuse"
 
 
-def test_a_drill_deck_reports_local_failures_before_the_review_gate(
+def test_a_broken_noun_does_not_refuse_the_drill_build(tmp_path: Path) -> None:
+    """The gate judges what the deck ships, not what the collection holds.
+
+    A noun has no verb class, so no drill card could ever carry it — validating
+    the whole collection refuses the build over a record this deck structurally
+    cannot ship, and the collection a real learner has is mostly nouns. The
+    review-gate half of this rule had a test until M8.2 deleted it with its
+    subject; the validation half never did, and passing `records` instead of
+    `shipping` left the suite green.
+    """
+    from dataclasses import replace as dc_replace
+
+    from japanese_anki import cli
+
+    # Not conjugable, and invalid: no verb group keeps it out of the deck,
+    # unbalanced furigana would refuse the build if the gate saw it. Not an
+    # empty `meanings` — the helper coerces that back to a default, which is
+    # how the first draft of this test passed against the mutation it names.
+    broken_noun = dc_replace(verb("猫", "ねこ", ""), furigana="猫[ねこ")
+    deck = cli_project(
+        tmp_path, [verb("買う", "かう", "godan", part_of_speech="verb"), broken_noun]
+    )
+
+    assert cli.main(["--root", str(tmp_path), "build", str(deck)]) == 0
+
+
+def test_a_drill_deck_refuses_a_record_that_fails_validation(
     tmp_path: Path, capsys
 ) -> None:
-    """M7.6T build readiness applies to every shipping branch: a local
-    validation failure is named on its own, before the review store answers —
-    a drill deck used to consult the review gate with no local validation at
-    all."""
+    """M7.6T build readiness applies to every shipping branch: a drill deck
+    used to reach its exporter with no local validation at all. That something
+    refuses is all this pins — the exporter's refusal text is identical, so
+    *which* gate spoke is the warning test's job above."""
     from dataclasses import replace as dc_replace
 
     from japanese_anki import cli
@@ -999,7 +1032,6 @@ def test_a_drill_deck_reports_local_failures_before_the_review_gate(
     err = capsys.readouterr().err
     assert "fails local validation" in err
     assert "example-unbalanced-furigana" in err
-    assert "not ready to ship" not in err
 
 
 def test_a_drill_output_build_still_validates_its_records(tmp_path: Path) -> None:
@@ -1076,12 +1108,6 @@ def test_a_sweep_builds_a_drill_deck_that_cannot_narrow(tmp_path: Path, capsys) 
         "deck:\n  kind: conjugation\n  name: D\n  deck_id: 1\n  model_id: 2\n",
         encoding="utf-8",
     )
-    (tmp_path / "janki.toml").write_text(
-        (tmp_path / "janki.toml").read_text(encoding="utf-8")
-        + "\n[review]\nrequire = false\n",
-        encoding="utf-8",
-    )
-
     code = cli.main(["--root", str(tmp_path), "build", "--all", "--only-new"])
 
     assert code == 0
@@ -1110,15 +1136,9 @@ def test_refresh_builds_one_named_drill_deck(tmp_path: Path, capsys) -> None:
         "deck:\n  kind: conjugation\n  name: D\n  deck_id: 1\n  model_id: 2\n",
         encoding="utf-8",
     )
-    (tmp_path / "janki.toml").write_text(
-        (tmp_path / "janki.toml").read_text(encoding="utf-8")
-        + "\n[review]\nrequire = false\n",
-        encoding="utf-8",
-    )
-
     code = cli.main([
         "--root", str(tmp_path), "refresh", "--deck", "drill",
-        "--no-jpdb", "--no-ai", "--no-audio", "--no-review",
+        "--no-jpdb", "--no-ai", "--no-audio",
     ])
 
     assert code == 0, "the stage refresh always injects the flag for"
@@ -1151,40 +1171,6 @@ def test_validate_catches_what_the_build_would_refuse(
     problems = deck_problems(deck, {}, ProjectConfig.load(tmp_path))
 
     assert any(expected in problem for problem in problems), problems
-
-
-def test_an_unreviewed_noun_does_not_block_the_drill_build(tmp_path: Path) -> None:
-    """Through the CLI, with the gate on. A noun has no verb class so no drill
-    card could carry it — refusing the build over one is a false refusal, and
-    the collection a real learner has is mostly nouns."""
-    import json
-
-    from japanese_anki import cli
-    from japanese_anki.review import CardReview, card_fingerprint, save_store
-
-    project(tmp_path)
-    drilled = verb("買う", "かう", "godan")
-    noun = verb("猫", "ねこ", "")
-    (tmp_path / "vocabulary.json").write_text(
-        json.dumps([drilled.to_dict(), noun.to_dict()], ensure_ascii=False),
-        encoding="utf-8",
-    )
-    (tmp_path / "decks" / "drill.yaml").write_text(
-        "deck:\n  kind: conjugation\n  name: D\n  deck_id: 1\n  model_id: 2\n",
-        encoding="utf-8",
-    )
-    # Only the verb has been read. The noun has not, and must not matter.
-    save_store(
-        tmp_path / "review.json",
-        {card_fingerprint(drilled): CardReview(drilled.id, card_fingerprint(drilled))},
-    )
-    (tmp_path / "janki.toml").write_text(
-        (tmp_path / "janki.toml").read_text(encoding="utf-8")
-        + '\nreview_file = "review.json"\n',
-        encoding="utf-8",
-    )
-
-    assert cli.main(["--root", str(tmp_path), "build", str(tmp_path / "decks" / "drill.yaml")]) == 0
 
 
 def test_validate_reports_a_pattern_deck_without_swallowing_the_records(
@@ -1602,12 +1588,6 @@ def test_a_sweep_builds_the_decks_after_a_broken_one(tmp_path: Path, capsys) -> 
         'name: W\ndeck:\n  source: "../vocabulary.json"\n  output: "words.apkg"\n',
         encoding="utf-8",
     )
-    (tmp_path / "janki.toml").write_text(
-        (tmp_path / "janki.toml").read_text(encoding="utf-8")
-        + "\n[review]\nrequire = false\n",
-        encoding="utf-8",
-    )
-
     code = cli.main(["--root", str(tmp_path), "build", "--all", "--yes"])
 
     assert code == 1, "the broken deck still failed the run"

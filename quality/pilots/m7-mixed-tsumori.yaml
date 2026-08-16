@@ -43,7 +43,6 @@ finding_ids:
   - enrichment-suru-compound
   - extraction-selection-target-binding
   - reading-check-suru-compound
-  - review-pitch-fact-recheck
 pipeline:
   extract: true
   coverage_review: true
@@ -64,3 +63,5 @@ notes: >-
   after review. Audio produced 17 word clips and 20 example clips.
   Three word clips remain absent because jpdb supplied pitch patterns for a
   different reading length; the safe audio gate did not guess.
+  This run also produced the finding review-pitch-fact-recheck, which retired
+  with the review subsystem in M8.2 and so is no longer linked above.

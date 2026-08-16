@@ -31,7 +31,7 @@ clone, create `.claude/hooks/DISABLED` with a short reason; delete it to
 re-enable them.
 
 Installing without bootstrap, add the extra you need:
-`pip install -e '.[ai]'` for `extract`, `patterns`, `review`, `enrich --ai` and
+`pip install -e '.[ai]'` for `extract`, `patterns`, `enrich --ai` and
 `enrich --polish-meanings`.
 
 Every AI pass uses your Anthropic key. Codex remains a supported provider for
@@ -43,7 +43,7 @@ Provider credentials are environment variables:
 ```bash
 export ANTHROPIC_API_KEY='...'   # every AI pass: extract, patterns,
                                  # enrich --ai, --polish-meanings,
-                                 # review, and batches
+                                 # and batches
 export JPDB_API_KEY='...'        # every jpdb lookup — import-jpdb, promote's
                                  # reading check, patterns, jpdb ping,
                                  # and enrich --jpdb/--staging
@@ -129,10 +129,10 @@ the word rather than to whichever deck carries it — worth knowing before runni
 it against a few thousand records.
 
 It runs `enrich --jpdb` → `enrich --ai` → `audio --words --examples` →
-`review` → `build --only-new`, in that order, because each stage needs what the
-one before it produced: jpdb fills the accents audio needs, and `--ai` writes
-the sentences audio speaks. Skip any stage with `--no-jpdb`, `--no-ai`,
-`--no-audio`, `--no-review`, `--no-build`. A stage that fails stops the run rather than shipping a package
+`build --only-new`, in that order, because each stage needs what the one before
+it produced: jpdb fills the accents audio needs, and `--ai` writes the sentences
+audio speaks. Skip any stage with `--no-jpdb`, `--no-ai`, `--no-audio`,
+`--no-build`. A stage that fails stops the run rather than shipping a package
 built from half-enriched records.
 
 `build --only-new` ships only the records a deck has never been built with, so a
@@ -176,12 +176,11 @@ own collection is the newer side. Details and the measurements behind them:
 | `janki enrich --polish-meanings --batch-submit` | Queue a large gloss-improvement pass for later review |
 | `janki kanji` | Look up stroke order and on/kun readings |
 | `janki audio --words --examples` | Voice the words and the sentences |
-| `janki review` | Read the finished cards for correctness |
 | `janki validate [PATH]` | Check records, decks, or a staging file |
 | `janki build [DECK]` | Build one deck, or `--all` |
 | `janki preview DECK` | A browser preview, no Anki needed |
 | `janki status` | Records, ledger, what is missing |
-| `janki refresh` | enrich → audio → review → build, in order. The jpdb-backed
+| `janki refresh` | enrich → audio → build, in order. The jpdb-backed
 stage needs `JPDB_API_KEY`; without it that stage is skipped and the run exits
 non-zero rather than reporting a refresh that enriched nothing |
 
@@ -189,7 +188,7 @@ Every command takes `--help`. `janki build` (and so `refresh --deck`) accepts a
 bare deck name as well as a path — `janki build verbs` finds
 `data/decks/verbs.yaml`. `validate`, `preview` and `migrate-inline` want the path.
 
-`refresh` runs five of these. Everything else
+`refresh` runs four of these. Everything else
 — the importers, `extract`, `patterns`, `promote`, `kanji`,
 `enrich --polish-meanings`, `validate`, `preview` and `status` — is yours to run
 when it applies. Run `janki kanji` after words with new characters arrive: a
@@ -209,14 +208,11 @@ enrich_provider = "anthropic"   # or "codex"
 enrich_model = "claude-opus-5"
 enrich_reasoning_effort = "ultra"   # codex only; Anthropic depth follows
                                     # the model (claude_client.effort_for)
-polish_model = "claude-opus-5"  # review_model is independently configurable
+polish_model = "claude-opus-5"
 
 [tts]
 voicevox_speaker = 13         # words, with the pitch accent forced
 sentence_provider = "openai"  # or leave unset for VOICEVOX throughout
-
-[review]
-require = true                # a build refuses a card the gate has not passed
 
 [anki]
 profile = "User 1"            # only needed with several Anki profiles
@@ -231,6 +227,7 @@ profile = "User 1"            # only needed with several Anki profiles
 | `data/staging/` | Waiting for you to review — extractions, held-back rows |
 | `data/inbox/` | The originals every record cites |
 | `data/ledger.json` | Machine-written: what arrived when, what shipped where |
+| `data/review.json` | Frozen history: what a model said about these cards in August 2026. Nothing reads it |
 | `dist/` | Built `.apkg` files |
 | `templates/japanese-study/` | The card HTML and CSS |
 
@@ -246,7 +243,7 @@ recoverable and a build reproducible.
 | [docs/ENRICHMENT.md](docs/ENRICHMENT.md) | jpdb lookups, AI sentences and glosses, batch mode, what it costs |
 | [docs/PATTERNS.md](docs/PATTERNS.md) | Grammar handouts, rule decks, drill decks, the review gate for charts |
 | [docs/AUDIO.md](docs/AUDIO.md) | VOICEVOX and OpenAI, choosing a voice, re-voicing |
-| [docs/QUALITY.md](docs/QUALITY.md) | The review gate, the ledger and `janki status`, known limits |
+| [docs/QUALITY.md](docs/QUALITY.md) | What checks what, the ledger and `janki status`, known limits |
 | [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | Every field a record can carry |
 | [docs/CARD_DESIGN.md](docs/CARD_DESIGN.md) | What a card shows and why |
 | [docs/NOTETYPE_UPGRADE.md](docs/NOTETYPE_UPGRADE.md) | Adding a field to a notetype already in Anki |

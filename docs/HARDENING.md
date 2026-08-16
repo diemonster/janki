@@ -185,15 +185,13 @@ Promotion, oracle acceptance, and a structurally valid record approve nothing
 semantic — and since M8.3, nothing mechanical judges it either: janki's logic
 enriches the card and never audits the model (DESIGN.md). `validate` checks
 structure — identifiers, brackets, control characters, pitch shape — and a
-shipping build reports those local failures on their own before the review
-store is consulted. What a sentence *says* is the template's contract and the
-reviewer's judgment, not a rule's.
+shipping build refuses on those local failures. What a sentence *says* is the
+template's contract and the reviewer's judgment, not a rule's.
 
-The final AI review stays read-only and residual. It runs only after every
-local gate passes for a complete release candidate, sees the canonical record
-and a compact authority summary rather than the original PDF or image, cannot
-establish authority or mutate a record, and a second broad pass needs explicit
-repository-owner approval.
+There is no AI pass that reads finished cards. One ran until M8.2, gating
+builds on its findings; deleting it is the same rule applied to janki's last
+auditor, and the duty moved to the templates that ask for the content in the
+first place.
 
 Records promoted before these boundaries carry no authority keys, and their
 examples take the same posture as any unaccepted sentence: preserved, never

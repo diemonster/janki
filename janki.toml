@@ -37,7 +37,6 @@ enrich_model = "claude-opus-5"
 # from claude_client.effort_for(model) rather than from a config key.
 enrich_reasoning_effort = "ultra"
 polish_model = "claude-opus-5"
-review_model = "claude-opus-5"
 
 [tts]
 provider = "voicevox"              # words only; the one engine that forces accent

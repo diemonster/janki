@@ -36,10 +36,6 @@ SEEDED_CASES = (
     "pos-precedence",
     "reading-check-forced-furigana",
     "reading-check-suru-compound",
-    "review-holds-back-an-unreadable-card",
-    "review-pitch-fact-recheck",
-    "review-pitch-source-authority",
-    "review-pitch-unbound-remains-reviewable",
 )
 DISCOVERED_CASES = hardening_replay.discover_cases(ROOT)
 
@@ -255,52 +251,6 @@ def test_deck_membership_rejects_two_paths_to_one_deck(
         match=r"two paths for the same deck file:.*alias\.yaml.*only\.yaml",
     ):
         hardening_replay.RUNNERS["deck-membership"]({}, root)
-
-
-def test_review_readiness_reports_more_than_one_readable_card() -> None:
-    """A `sorted()` over dicts with no key is a `TypeError` the moment there are
-    two of them. The gating case ships one readable card (and three held, whose
-    list was already keyed), so an unkeyed sort of the readable list replays
-    green and takes the whole `harden replay` run down with a traceback the
-    first time a fixture grows — an error, not a FAIL, so no case reports which
-    invariant broke."""
-    readable = [
-        {
-            "id": "word:読む:よむ",
-            "expression": "読む",
-            "reading": "よむ",
-            "part_of_speech": "v5m",
-            "meanings": ["to read"],
-            "examples": [
-                {
-                    "japanese": "本を読みます。",
-                    "furigana": "本[ほん]を 読[よ]みます。",
-                    "english": "I read a book.",
-                }
-            ],
-        },
-        {
-            "id": "word:書く:かく",
-            "expression": "書く",
-            "reading": "かく",
-            "part_of_speech": "v5k",
-            "meanings": ["to write"],
-            "examples": [
-                {
-                    "japanese": "手紙を書きます。",
-                    "furigana": "手紙[てがみ]を 書[か]きます。",
-                    "english": "I write a letter.",
-                }
-            ],
-        },
-    ]
-
-    observed = hardening_replay.RUNNERS["review-readiness"]({"records": readable}, ROOT)
-
-    assert [item["id"] for item in observed["readable"]] == [
-        "word:書く:かく",
-        "word:読む:よむ",
-    ]
 
 
 def test_every_registered_runner_calls_its_production_boundary() -> None:

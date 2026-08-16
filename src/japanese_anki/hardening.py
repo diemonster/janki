@@ -39,6 +39,10 @@ M7_SOURCE_ARCHETYPES = (
     "printed-ruby",
     "bilingual-layout",
 )
+#: The stages a pilot report declares. Frozen with the pilot program (cancelled
+#: 2026-08-15): `final_review` names the review subsystem M8.2 deleted, and it
+#: stays required because the two committed pilots ran it and say so. Both this
+#: tuple and its readers go with `quality/` in M8.4.
 PILOT_STEPS = (
     "extract",
     "coverage_review",
@@ -64,8 +68,6 @@ RUNNER_BOUNDARIES = {
     "ai-enrichment": "ai-enrichment",
     "ai-enrichment-prompt": "ai-enrichment",
     "model-request": "model-request",
-    "review-readiness": "final-review",
-    "semantic-review-recheck": "final-review",
     "repair-plan": "repair-plan",
 }
 

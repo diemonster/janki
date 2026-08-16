@@ -3,53 +3,31 @@
 The gates between a record and your collection, the ledger they read and write,
 and the things janki still cannot check for you.
 
-## The last gate: `janki review`
+## What checks what
 
-Every other check in janki is a rule. `validate` knows the shape a record must
-have, `qc` knows what Anki will draw from a furigana field, `conjugation` knows
-which forms exist. Between them they catch everything that can be *stated* — but
-not a card that is well-formed and wrong: an example using the word in a sense
-the meanings do not list, a "casual" sentence written in 〜ます, a usage note that
-contradicts the sentence beside it.
+Every check janki runs is a rule about *artifacts*, not a judgement about
+Japanese. `validate` knows the shape a record must have — identifiers,
+balanced brackets, control characters, the shape of a pitch pattern;
+`conjugation` knows which forms exist; the importers know what a source file
+may claim. What none of them do is read the card as language, and that
+includes the notation: brackets are counted, not parsed, so a ruby group whose
+separator Anki cannot read passes `validate` and is caught by the person
+reading the diff — the y/n an enrichment pass prints, or the staging file it
+writes instead once a run is large enough. The enrichment template states what
+a good sentence is, and stating it is the whole of the protection.
 
-`janki review` reads the finished cards and reports those. **A recorded build
-refuses to ship a card it has not passed:**
+That is a deliberate reversal. A paid pass that re-read finished cards and
+blocked builds on its findings ran until M8.2, with `data/review.json` as its
+store; it was the audit instinct at its most expensive, and the templates now
+carry the duty. `data/review.json` stays committed as history — 183 entries of
+what a model said about these cards in August 2026 — and nothing reads it.
 
-```text
-$ janki build verbs
-error: verbs.yaml is not ready to ship.
-  3 card(s) have not been read since they last changed: word:行く:いく, ...
-  Run: janki review
-```
-
-It never has the last word. Only an `error` blocks — a model asked to find fault
-will always find some, and a gate that stops on "could be more natural" is one
-you learn to wave through. An error is cleared by fixing the card, or by
-overruling it *by name*:
-
-```bash
-janki review --accept word:なる:なる --because "jpdb's accent is this deck's authority"
-```
-
-The reason is recorded beside the acceptance, and the acceptance covers **that
-version of the card only**: edit the text afterwards and the question comes back
-rather than an old judgement carrying forward onto new words.
-
-It is fingerprinted, so it is affordable. `data/review.json` records what the
-card said when it was read, so a re-run costs one request per *changed* card and
-nothing at all for a deck you have not touched — the same shape the audio ledger
-uses. The file is committed, so a fresh clone builds offline.
-
-`janki refresh` runs it as the stage before `build`. A project that does not want
-a model reading its cards sets `[review] require = false`, and says so in its own
-`janki.toml` rather than by omission.
-
-**What it found on this repository's own deck.** Six of twenty cards carried a
-part of speech that contradicted their own verb group — jpdb returns
-`["aux-v", "vi", "v1"]` for 見る and `["int", "vi", "v5", "v5r"]` for 分かる, and
+**What that pass found while it ran.** Six of twenty cards carried a part of
+speech that contradicted their own verb group — jpdb returns
+`["aux-v", "vt", "v1"]` for 見る and `["int", "vi", "v5", "v5r"]` for 分かる, and
 janki was taking the first recognized code, so 分かる shipped as an
-"interjection". That is now a deterministic rule in `pos_to_part_of_speech`
-rather than something the gate has to catch twice.
+"interjection". That is a deterministic rule in `pos_to_part_of_speech` now,
+which is where a fact about a dictionary's codes belongs.
 
 ## What Anki actually draws
 

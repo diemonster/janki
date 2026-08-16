@@ -1833,7 +1833,8 @@
         "vid": "1375610",
         "sid": "4283029021",
         "deck": "Anki Test - Top 20 Verbs",
-        "card_state": "new"
+        "card_state": "new",
+        "pitch_accent_note": "2026-08-10, two acceptances copied verbatim from the retired review store: “jpdb's API returns HLL for なる and the deck owner confirmed it against jpdb; jpdb is this deck's authority for accents. The heiban reading is the dictionary's, not the one this deck follows.” “Verified against jpdb's API earlier and confirmed by the deck owner: jpdb returns HLL for なる (な high, る low), and jpdb is the accepted authority for this deck's accents. The reviewer's heiban reading is the dictionary's, not the one this deck follows.”"
       }
     }
   },

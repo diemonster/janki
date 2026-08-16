@@ -1,5 +1,14 @@
 # Hardening pilot reports
 
+> **The pilot program is cancelled** (2026-08-15; M7.6B, M7.6C, M7.7 and M7.W
+> are stamped superseded, and M8.5 runs real sources through the real pipeline
+> instead). Everything here is a frozen record: two pilot reports of runs that
+> happened, and two source inventories for milestones that never ran. Do not
+> author a new one against the instructions below — and note that the schema
+> still requires a `final_review:` step naming a subsystem deleted in M8.2,
+> which is one of the reasons this shape is going. `hardening.py` and this
+> directory are deleted by M8.4.
+
 This directory contains reviewed measurements from real or synthetic deck
 pilots. One file describes one pilot. Name the file `<id>.yaml`. Use a stable,
 lowercase slug for the ID.
@@ -155,5 +164,5 @@ The M7 source-archetype cells are:
 - `printed-ruby`
 - `bilingual-layout`
 
-`janki harden status` reports which cells have no pilot. M7.6 can add reviewed
-cells if field use shows a distinct source type.
+`janki harden status` reports which cells have no pilot. Nothing adds cells
+now — M7.6B and M7.6C, which would have, are cancelled.

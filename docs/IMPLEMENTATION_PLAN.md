@@ -2947,7 +2947,9 @@ set is parameter-threaded rather than derived in the absorb layer; rare
 i-column noun endings (にじます) can false-positive the register gate; and
 parse-backed register verdicts could eventually replace the surface formula
 list. M7.6B and M7.6C can resume; their next paid semantic review is the
-milestone measurement of this boundary.*
+milestone measurement of this boundary.* *(Correction 2026-08-15: M7.6B and
+M7.6C are cancelled and the paid semantic review was deleted in M8.2. The
+sentence stands as history.)*
 
 Depends on: M7.4, M7.5, M7.6A
 Files: `src/japanese_anki/extract.py`, `src/japanese_anki/enrich.py`,
@@ -3054,6 +3056,8 @@ prose or pixels. Complete linked findings, the full offline replay, `make
 gates`, and a dry pipeline run without a live model. M7.6B and M7.6C can resume
 after these checks pass. The next paid semantic review is a milestone
 measurement of the repaired boundary, not part of the development loop.
+*(Correction 2026-08-15: both milestones are cancelled and that review was
+deleted in M8.2 — history, not a plan.)*
 
 Use these small implementation and commit slices so another agent can resume
 without a live source run:
@@ -3448,8 +3452,8 @@ exposes a sha-256 for staging archives and batch records and raises a clean
 error naming the full path when a file is missing. `git log prompts/` is the
 prompt history a human reads. The pydantic `Field(description=…)` strings stay
 in code — they are welded to the schema — and the audit keeps them terse,
-with any real instruction moved up into the files. `review.INSTRUCTIONS` gets
-no file; it dies with M8.2.
+with any real instruction moved up into the files. `review.INSTRUCTIONS`
+needs no file — it died with the review subsystem in M8.2.
 
 Depends on: M7.6V. Files: a prompt template directory, its loader, the five
 call sites, `docs/ENRICHMENT.md`, and the cases that observe prompt contracts.
@@ -3509,7 +3513,7 @@ pin `audio_accent`/aquestalk (`test_anki_build.py`, `test_pitch.py`,
 `test_validation.py`, `test_merge.py`, `test_models.py`, `test_ledger.py`,
 `test_audio_cmd.py`, `test_docs.py`).
 
-### [ ] M8.2 Delete the review subsystem
+### [x] M8.2 Delete the review subsystem
 
 Decided 2026-08-15: not just the gate — the subsystem. Quality lives in the
 templates; a paid pass that audits finished cards is the audit instinct at
@@ -3525,11 +3529,34 @@ here. M7.6V and M7.6P justified their deletions by pointing at "the paid
 review this task keeps"; a dated correction under M7.6V's header records
 that the templates now carry that duty.
 
+*Done 2026-08-15. `review.py` (890 lines) and `tests/test_review.py` are
+gone, with `command_review` and its subparser, `_refuse_unreviewed`,
+`_shipping_records`, `_card_design_text`, the `review` refresh stage and the
+`--no-review` flag it generated, `require_review`, `review_file`,
+`review_model`, and the two replay runners (`review-readiness`,
+`semantic-review-recheck`) with their `final-review` boundary entries.*
+
+*Three corrections found in execution. First, the two なる acceptances were
+copied into `raw_fields.pitch_accent_note` rather than into a new provenance
+field: the record's own `source.raw_fields` is where a fact about where its
+pitch came from already lives, and adding a schema field for two sentences of
+history would outlive the history. Second, `quality/pilots/m7-mixed-tsumori.yaml`
+linked `review-pitch-fact-recheck` in its `finding_ids` — the corpus loader
+refused the whole repository until the link was dropped, which is the pilot's
+own structural check working; the run's notes now record that the finding
+retired here. Third, the repository's `janki.toml` carried `review_model`,
+which `test_the_repository_config_loads_without_warnings` caught the moment
+the key stopped being known — the unknown-key warning doing its job.*
+
 Depends on: nothing.
-Files: `src/japanese_anki/review.py`, `cli.py`, `config.py`,
-`hardening_replay.py`, `data/normalized/vocabulary.json` (the two notes),
-`quality/cases/review-*`, `quality/findings.yaml`, `tests/test_review.py`,
-`docs/QUALITY.md`, `README.md`.
+Files: `src/japanese_anki/review.py`, `cli.py`, `config.py`, `validation.py`,
+`claude_client.py`, `jpdb.py`, `hardening.py`, `hardening_replay.py`,
+`exporters/pattern_cards.py`, `importers/anki_deck.py`, `janki.toml`,
+`data/normalized/vocabulary.json` (the two notes), `quality/cases/review-*`,
+`quality/findings.yaml`, `quality/pilots/m7-mixed-tsumori.yaml`,
+`quality/pilots/README.md`, `tests/test_review.py` and six other test files,
+`README.md`, `AGENTS.md`, `docs/QUALITY.md`, `docs/HARDENING.md`,
+`docs/ENRICHMENT.md`, `docs/DESIGN_V2.md`.
 
 ### [x] M8.3 Delete the model-audit logic
 
@@ -3626,7 +3653,11 @@ study the deck. What a pilot proved with oracles and coverage cells, use
 proves directly; a defect found this way gets a failing test (M8.4's loop),
 and a weak card gets a stronger template clause. Also here: the three
 hand-seeded records with empty `imported_from` get it filled, so DESIGN.md's
-provenance sentence is true without a caveat.
+provenance sentence is true without a caveat; and `transitivity` gets a filler
+at last — set at import and backfilled by nothing since the hand-paste era
+(the gap is recorded in `prompts/ENRICH_VOCABULARY.md`), while jpdb's
+`vt`/`vi` POS codes have carried the dictionary answer all along. Wire it
+into `enrich --jpdb`.
 
 Depends on: M7.6P, M8.1–M8.4.
 Files: `data/inbox/` sources already collected, staging archives, deck

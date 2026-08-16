@@ -1,4 +1,4 @@
-> **Historical.** `docs/DESIGN.md` is the leading design document. Parts of this file describe subsystems that are retired (the jpdb sentence oracle) or scheduled for deletion by the M8 milestones (VOICEVOX steering, review gating, the hardening corpus); it is kept only as a record of how the project got here.
+> **Historical.** `docs/DESIGN.md` is the leading design document. Parts of this file describe subsystems that are already deleted (the jpdb sentence oracle, the model-audit checks, review gating and its `review_model` config) or scheduled for deletion by the remaining M8 milestones (VOICEVOX steering, the hardening corpus); it is kept only as a record of how the project got here. Nothing in it is a working example.
 
 # Design v2: Multi-Source, AI-First Pipeline
 

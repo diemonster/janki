@@ -285,7 +285,6 @@ enrich_provider = "anthropic"
 enrich_model = "claude-opus-5"
 enrich_reasoning_effort = "ultra"
 polish_model = "claude-opus-5"
-review_model = "claude-opus-5"
 ```
 
 The immediate `--ai` pass uses `enrich_provider`, `enrich_model`, and (for
@@ -293,9 +292,8 @@ Codex) `enrich_reasoning_effort` — that key has no Anthropic equivalent, whose
 reasoning depth comes from `claude_client.effort_for`, which sends it only for
 models that accept it. `--model` overrides
 the model for one run.
-Meaning polish and the card review gate remain Anthropic-backed and have their
-own model settings so changing the enrichment provider cannot change them by
-accident.
+Meaning polish stays Anthropic-backed with its own model setting, so changing
+the enrichment provider cannot change it by accident.
 
 Codex receives imported deck text as untrusted prompt content. Janki runs the
 CLI from an empty temporary workspace with user configuration ignored, keeps
@@ -306,7 +304,7 @@ which a prompt embedded in a source gloss could retrieve host data.
 
 For upgrade compatibility, an older `[ai]` table that has `enrich_model` but no
 `enrich_provider` keeps its original meaning: Anthropic is selected and that
-model remains the default for enrichment, meaning polish, and review. Add
+model remains the default for enrichment and meaning polish. Add
 `enrich_provider = "codex"` explicitly when migrating that configuration to
 Codex-backed enrichment.
 

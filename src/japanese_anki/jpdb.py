@@ -869,7 +869,8 @@ def pos_to_verb_group(codes: Any) -> str:
 #: category is something else: 凄い is ``["adv", "adj-i"]`` and 明日 is
 #: ``["adv", "n"]``, both measured against the live API. Labelled adverb, an
 #: い-adjective loses its conjugation and a temporal noun stops being a noun —
-#: `janki review` caught both on a twenty-card pilot. A word that really is only
+#: the since-retired paid review caught both on a twenty-card pilot. A word that
+#: really is only
 #: an adverb (すぐ, とても) carries no other code and keeps the label.
 _SECONDARY_TO_A_CONTENT_WORD = frozenset({"adverb"})
 

@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from japanese_anki import claude_client, enrich, extract, patterns, review
+from japanese_anki import claude_client, enrich, extract, patterns
 from japanese_anki.inputs import PreparedInput
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
 
@@ -53,23 +53,6 @@ class _Recorder:
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         self.calls.append(kwargs)
         return self._result
-
-
-@pytest.mark.parametrize("model,expected", [(NEW, "xhigh"), (OLD, None)])
-def test_review_resolves_effort_from_the_model_it_reads_with(
-    model: str, expected: str | None
-) -> None:
-    caller = _Recorder(claude_client.CallResult(None, "refusal", None))
-
-    review.review_records(
-        [_record()], model=model, style_guide="g", parse_call=caller
-    )
-
-    assert caller.calls, "review never called the model"
-    # Both halves matter. The supported model catches the argument going
-    # missing; the unsupported one catches it being sent regardless. Asserting
-    # only the second passes when the site sends nothing at all.
-    assert caller.calls[0].get("effort") == expected
 
 
 @pytest.mark.parametrize("model,expected", [(NEW, "xhigh"), (OLD, None)])
@@ -242,49 +225,6 @@ def test_a_polish_batch_entry_resolves_effort_from_its_own_model(
     assert requests[0]["params"]["output_config"].get("effort") == expected
 
 
-@pytest.mark.parametrize("model,expected", [(NEW, "xhigh"), (OLD, None)])
-def test_the_pitch_recheck_resolves_effort_from_its_own_model(
-    model: str, expected: str | None
-) -> None:
-    """A second call, reached only when the first returns a pitch finding on a
-    record that has an accent — so a recorder that refuses never gets here, and
-    this site sat unpinned behind that."""
-
-    class _PitchThenRecord:
-        def __init__(self) -> None:
-            self.calls: list[dict[str, Any]] = []
-
-        def __call__(self, *args: Any, **kwargs: Any) -> Any:
-            self.calls.append(kwargs)
-            if len(self.calls) == 1:
-                return claude_client.CallResult(
-                    SimpleNamespace(
-                        findings=[
-                            SimpleNamespace(
-                                where="Pitch accent",
-                                problem="HLL draws it as 頭高",
-                                severity="note",
-                                suggestion="",
-                            )
-                        ]
-                    ),
-                    "end_turn",
-                    None,
-                )
-            return claude_client.CallResult(None, "refusal", None)
-
-    caller = _PitchThenRecord()
-    # One mark per kana plus the following particle: はなす is four.
-    accented = replace(_record(), pitch_accent=["LHHH"])
-
-    review.review_records(
-        [accented], model=model, style_guide="g", parse_call=caller
-    )
-
-    assert len(caller.calls) == 2, "the pitch recheck was never reached"
-    assert caller.calls[1].get("effort") == expected
-
-
 def test_refresh_skips_the_jpdb_stages_when_there_is_no_key(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -305,7 +245,7 @@ def test_refresh_skips_the_jpdb_stages_when_there_is_no_key(
     (root / "data" / "normalized" / "vocabulary.json").write_text("[]", encoding="utf-8")
 
     code = cli.main(
-        ["--root", str(root), "refresh", "--no-audio", "--no-review", "--no-build"]
+        ["--root", str(root), "refresh", "--no-audio", "--no-build"]
     )
     captured = capsys.readouterr()
 

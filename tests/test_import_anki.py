@@ -96,7 +96,8 @@ def test_a_variant_beside_the_reading_becomes_a_usage_note() -> None:
 
     Worded to stand alone: the card does not name the book it came from, so an
     earlier "…in this text" referred to nothing a learner could see — which is
-    what `janki review` caught on three cards of a twenty-card pilot."""
+    what the since-retired paid review caught on three cards of a twenty-card
+    pilot."""
     record = only("<div>凄い</div>", "<div>すごい　「すげえ」</div><div>Amazing, wow</div>")
 
     assert (record.expression, record.reading) == ("凄い", "すごい")

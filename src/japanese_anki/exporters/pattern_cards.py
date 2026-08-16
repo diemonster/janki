@@ -530,10 +530,10 @@ def shipping_records(
 ) -> list[VocabularyRecord]:
     """The records this deck will put on a card: filtered, and conjugable.
 
-    What the review gate has to ask about. Gating the whole collection instead
-    refused a build over records the deck structurally cannot ship — a noun has
-    no verb class, so no drill card could ever carry it — and over records the
-    deck's own `exclude_ids` had deliberately held back.
+    What the build's gates get to judge. Validating the whole collection
+    instead refused a build over records the deck structurally cannot ship — a
+    noun has no verb class, so no drill card could ever carry it — and over
+    records the deck's own `exclude_ids` had deliberately held back.
     """
     section = _deck_section(deck_path)
     wanted = str(form or section.get("form") or "te_form").strip()

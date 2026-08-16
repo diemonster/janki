@@ -143,11 +143,14 @@ template problem, never a finding. M8.3 slims this corpus to plain tests.*
 7. `data/ledger.json`: machine-written operational state — **committed**, never
    hand-edited. `janki status --rebuild` reconstructs what records and media
    still prove.
-8. `dist/`: generated `.apkg` and preview files — **not** committed.
+8. `data/review.json`: the retired review subsystem's store — **committed**
+   as history and read by nothing since M8.2. Do not extend it or wire a
+   reader to it; it is a record of what a model once said, not state.
+9. `dist/`: generated `.apkg` and preview files — **not** committed.
 
-Only `dist/` is disposable. Everything under `data/` is tracked, including the
-two directories that start empty (`.gitkeep`), because the repository — not
-Anki's database and not an uncommitted working tree — is the source of truth.
+Only `dist/` is disposable. Everything under `data/` is tracked, down to the
+`.gitkeep` that holds an empty inbox open, because the repository — not Anki's
+database and not an uncommitted working tree — is the source of truth.
 
 A new import must not erase manually curated examples, notes, conjugations, or furigana.
 

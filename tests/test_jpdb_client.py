@@ -633,7 +633,8 @@ def test_pos_to_verb_group(codes: Any, group: str) -> None:
         # jpdb names a *use* before it names the word: 明日 is ["adv", "n"] and
         # 凄い is ["adv", "adj-i"], both measured live. Labelled adverb, a
         # temporal noun stops being a noun and an い-adjective loses its
-        # conjugation — `janki review` caught both on a twenty-card pilot.
+        # conjugation — the since-retired paid review caught both on a
+        # twenty-card pilot.
         (["adv", "n"], "noun"),
         (["adv", "adj-i"], "i-adjective"),
         (["adv"], "adverb"),  # a word that really is only an adverb keeps it

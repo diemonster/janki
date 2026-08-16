@@ -26,7 +26,6 @@ from japanese_anki import (
     kanji,
     promote,
     repairs,
-    review,
     staging,
     status,
     validation,
@@ -755,48 +754,6 @@ def _model_request(data: dict[str, Any], root: Path) -> Any:
     return {"requests": observed}
 
 
-def _review_readiness(data: dict[str, Any], root: Path) -> Any:
-    """Which cards the paid review holds back, and why.
-
-    The composition the CLI performs, not just the predicate: readiness is
-    decided per record — `validate_records` would add a duplicate-id error
-    across the sequence, and a record shipping in two decks appears twice
-    legitimately.
-    """
-    del root
-    _only(data, {"records"}, "review-readiness")
-    records = _records(data.get("records"))
-    held = review.readiness(records)
-    # Per card, not per id, on both sides: one record can ship as two cards, so
-    # collapsing the output by id would report the clean copy as withheld and
-    # hide exactly the behaviour this case exists to pin.
-    # Carrying the fingerprint, not the id alone: the input ships one id as two
-    # cards on purpose, so an output keyed only by id is identical whichever of
-    # the two is held — which is the assignment this case exists to pin.
-    return {
-        "held": sorted(
-            (
-                {
-                    "id": record.id,
-                    "card": review.card_fingerprint(record),
-                    "reason": held[review.card_fingerprint(record)],
-                }
-                for record in records
-                if review.card_fingerprint(record) in held
-            ),
-            key=lambda item: (item["id"], item["card"]),
-        ),
-        "readable": sorted(
-            (
-                {"id": record.id, "card": review.card_fingerprint(record)}
-                for record in records
-                if review.card_fingerprint(record) not in held
-            ),
-            key=lambda item: (item["id"], item["card"]),
-        ),
-    }
-
-
 def _validation_qc(data: dict[str, Any], root: Path) -> Any:
     del root
     _only(data, {"records"}, "validation-qc")
@@ -993,73 +950,6 @@ def _ai_enrichment_prompt(data: dict[str, Any], root: Path) -> Any:
     return output
 
 
-def _semantic_review_recheck(data: dict[str, Any], root: Path) -> Any:
-    """Replay an initial review and any production-managed recheck."""
-    del root
-    _only(data, {"records", "model", "responses"}, "semantic-review-recheck")
-    records = _records(data.get("records"))
-    if len(records) != 1:
-        raise hardening.HardeningError(
-            "semantic-review-recheck requires exactly one record"
-        )
-    raw_responses = data.get("responses")
-    if not isinstance(raw_responses, list):
-        raise hardening.HardeningError("responses must be a JSON list")
-    responses = list(raw_responses)
-    prompts: list[str] = []
-
-    def canned_call(
-        model: str,
-        blocks: Any,
-        content: Any,
-        schema: Any,
-        client: Any = None,
-        **options: Any,
-    ) -> claude_client.CallResult:
-        del model, blocks, schema, client, options
-        if not responses:
-            raise hardening.HardeningError(
-                "Canned review responses ended before the review finished"
-            )
-        prompts.append(json.dumps(content, ensure_ascii=False, sort_keys=True))
-        raw = _mapping(responses.pop(0), "responses entry")
-        _only(raw, {"parsed", "stop_reason"}, "responses entry")
-        parsed_raw = raw.get("parsed")
-        parsed = (
-            _model_validate(
-                _structured_schema(review.review_schema, "semantic review replay"),
-                parsed_raw,
-                "responses entry.parsed",
-            )
-            if parsed_raw is not None
-            else None
-        )
-        return claude_client.CallResult(parsed, raw.get("stop_reason"), None)
-
-    reviewed, failures = review.review_records(
-        records,
-        model=str(data.get("model", "offline-model")),
-        style_guide="Offline hardening replay.",
-        parse_call=canned_call,
-    )
-    entry = next(iter(reviewed.values()), None)
-    return {
-        "call_count": len(prompts),
-        "responses_remaining": len(responses),
-        "recheck_prompt_has_pitch_facts": (
-            len(prompts) > 1 and "Mechanical pitch facts:" in prompts[1]
-        ),
-        "recheck_prompt_binds_source_authority": (
-            len(prompts) > 1
-            and "content-bound jpdb source marker" in prompts[1]
-            and "do not replace this valid lexical pattern from model memory"
-            in prompts[1]
-        ),
-        "findings": [finding.to_dict() for finding in entry.findings] if entry else [],
-        "failures": failures,
-    }
-
-
 def _render_build(data: dict[str, Any], root: Path) -> Any:
     _only(data, {"records", "cards", "observe_fields"}, "render-build")
     records = _records(data.get("records"))
@@ -1079,7 +969,7 @@ def _render_build(data: dict[str, Any], root: Path) -> Any:
     with tempfile.TemporaryDirectory(prefix="janki-replay-") as temporary:
         temporary_root = Path(temporary)
         (temporary_root / "janki.toml").write_text(
-            "[project]\nname = 'Offline hardening replay'\n[review]\nrequire = false\n",
+            "[project]\nname = 'Offline hardening replay'\n",
             encoding="utf-8",
         )
         records_path = temporary_root / "records.json"
@@ -1210,13 +1100,11 @@ RUNNERS: dict[str, Callable[[dict[str, Any], Path], Any]] = {
     "extraction-prompt": _extraction_prompt,
     "staging-promote": _staging_promote,
     "model-request": _model_request,
-    "review-readiness": _review_readiness,
     "validation-qc": _validation_qc,
     "render-build": _render_build,
     "dictionary-enrichment": _dictionary_enrichment,
     "ai-enrichment": _ai_enrichment,
     "ai-enrichment-prompt": _ai_enrichment_prompt,
-    "semantic-review-recheck": _semantic_review_recheck,
     "repair-plan": _repair_plan,
 }
 

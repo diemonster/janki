@@ -38,12 +38,11 @@ def test_defaults_apply_when_the_new_sections_are_absent(
     # One model at one depth across every pass. Codex stays selectable, but a
     # project that does not name a provider gets the one every other pass uses
     # — a default that silently routes example writing to a different vendor
-    # than the review judging it is a difference nobody chose.
+    # than meaning polish is a difference nobody chose.
     assert config.enrich_provider == "anthropic"
     assert config.enrich_model == "claude-opus-5"
     assert config.enrich_reasoning_effort == "ultra"  # codex-only, inert here
     assert config.polish_model == "claude-opus-5"
-    assert config.review_model == "claude-opus-5"
     assert config.tts_provider == "voicevox"
     assert config.voicevox_url == "http://localhost:50021"
     assert config.voicevox_speaker == 46
@@ -70,7 +69,6 @@ def test_new_sections_override_defaults_and_paths_resolve_against_the_root(
         enrich_model = "claude-sonnet-5"
         enrich_reasoning_effort = "high"
         polish_model = "claude-sonnet-5"
-        review_model = "claude-opus-5-1"
 
         [tts]
         provider = "azure"
@@ -92,7 +90,6 @@ def test_new_sections_override_defaults_and_paths_resolve_against_the_root(
     assert config.enrich_model == "claude-sonnet-5"
     assert config.enrich_reasoning_effort == "high"
     assert config.polish_model == "claude-sonnet-5"
-    assert config.review_model == "claude-opus-5-1"
     assert config.tts_provider == "azure"
     assert config.voicevox_url == "http://voice.local:1234"
     assert config.voicevox_speaker == 8
@@ -198,7 +195,6 @@ def test_a_legacy_enrich_model_keeps_its_anthropic_and_shared_model_meaning(
     assert config.enrich_provider == "anthropic"
     assert config.enrich_model == "claude-sonnet-legacy"
     assert config.polish_model == "claude-sonnet-legacy"
-    assert config.review_model == "claude-sonnet-legacy"
 
 
 def test_an_explicit_anthropic_provider_gets_an_anthropic_model_default(

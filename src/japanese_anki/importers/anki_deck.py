@@ -138,8 +138,9 @@ def _record(
     spoken = ""
     if variants:
         # Self-contained: the card does not name the book it came from, so a
-        # note saying "in this text" refers to nothing a learner can see. The
-        # review gate caught this on three cards of a twenty-card pilot.
+        # note saying "in this text" refers to nothing a learner can see.
+        # The since-retired paid review caught this on three cards of a
+        # twenty-card pilot.
         spoken = f"Colloquial form: 「{'」, 「'.join(dict.fromkeys(variants))}」."
     return VocabularyRecord(
         usage_notes=spoken,

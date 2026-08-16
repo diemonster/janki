@@ -96,22 +96,6 @@ findings:
     recurrences: []
     case_ids: [reading-check-suru-compound]
     fix_ref: src/japanese_anki/enrich.py#dictionary_readings
-  - id: review-pitch-fact-recheck
-    state: fixed
-    pipeline_stage: final-review
-    source_archetypes: [mixed-layout-pdf]
-    symptom: Final review raised blocking pitch findings after it misread the stored raw pattern, counted a small kana as a separate mora, or replaced valid dictionary accent from model memory.
-    invariant: A pitch finding gets one independent recheck carrying mechanical pitch facts; that those facts are the exact raw pattern and a deterministic per-mora rendering is covered by tests rather than by this case, which observes the header alone. Model memory yields only when a source marker fingerprints the current jpdb value, which the recurrence cases observe in both directions; that a marker left bound to a superseded value no longer counts is covered by tests rather than by any of them.
-    evidence:
-      - fingerprint: 0b2af7e5a8f9cff39462ba2dfbaa393188b892b3836989b2867f5ccd5ffbe17a
-        locator: quality/cases/review-pitch-fact-recheck/input.json
-    recurrences:
-      - fingerprint: 897419d33e89c133d85a1474d5bf76d3aeb354859413755ca83c30ec33943dac
-        locator: quality/cases/review-pitch-source-authority/input.json
-      - fingerprint: 69e4328d23552b60517d16a760b04ca28f3c7bd2397b083851748d52a1d7281c
-        locator: quality/cases/review-pitch-unbound-remains-reviewable/input.json
-    case_ids: [review-pitch-fact-recheck, review-pitch-source-authority, review-pitch-unbound-remains-reviewable]
-    fix_ref: src/japanese_anki/review.py#pitch_recheck_prompt
   - id: extraction-oracle-key-binding
     state: fixed
     pipeline_stage: extraction-prompt
@@ -250,24 +234,12 @@ findings:
     recurrences: []
     case_ids: [ai-uncurated-example-pinning]
     fix_ref: src/japanese_anki/enrich.py#ai_prompt
-  - id: review-reads-an-unreadable-card
-    state: fixed
-    pipeline_stage: final-review
-    source_archetypes: [camera, mixed-layout-pdf, native-pdf-table]
-    symptom: The paid review read whatever _shipping_records returned, so a card with no example sentence or an unresolved local error was billed for at content that could not be judged or was about to change; measured over data/review.json, 181 reads covered 97 records and 71 of the 84 superseded reads carried no blocking finding.
-    invariant: A card carrying a local validation error, and a card with no example sentence, are each held back from the paid review; every other card stays readable in the same run. Readiness is decided per card, so a record shipping in two decks is not failed by the other's copy. That the held cards are then withheld from the paid run is covered by tests rather than by this case, which reports readiness and does not select.
-    evidence:
-      - fingerprint: 2aa233a3943300eef9eb09650c7e7dc122f1e5628cac03f79051df7c23930924
-        locator: quality/cases/review-holds-back-an-unreadable-card/input.json
-    recurrences: []
-    case_ids: [review-holds-back-an-unreadable-card]
-    fix_ref: src/japanese_anki/review.py#unready
   - id: furigana-full-width-separator
     state: fixed
     pipeline_stage: ai-enrichment
     source_archetypes: [camera]
     symptom: A ruby group whose separator Anki cannot read puts the reading over the preceding characters as well, and nothing reported it. Two notations, one fault — 毎日　話[はな]します。 with a full-width space, which Anki's filter does not treat as a separator, and 毎日話[はな]します。 with none at all. Both read はなします。, so 毎日 was dropped from the reconstructed reading, from the regenerated romaji and from the sentence audio. M7.6V retired the jpdb sentence oracle, which had caught both by comparing what the furigana sounds like against the dictionary's own rendering.
-    invariant: The enrichment prompt states the furigana notation contract where the sentences are written — that the field is read back as the whole sentence, that a base is exactly the characters its reading spells, that an ASCII space separates each group and a full-width one does not, and that which reading a kanji takes is the model's contextual judgement. Asked for rather than checked for afterwards — janki does not parse the sentence to second-guess the notation, because a rule that reads Japanese structurally is the thing M7.6V retired, and a growing list of notation exceptions is the same instinct in a smaller coat. What still catches a malformed field is the spill warning, its repair, and the paid review that reads the card as language.
+    invariant: The enrichment prompt states the furigana notation contract where the sentences are written — that the field is read back as the whole sentence, that a base is exactly the characters its reading spells, that an ASCII space separates each group and a full-width one does not, and that which reading a kanji takes is the model's contextual judgement. Asked for rather than checked for afterwards — janki does not parse the sentence to second-guess the notation, because a rule that reads Japanese structurally is the thing M7.6V retired, and a growing list of notation exceptions is the same instinct in a smaller coat. Nothing audits it afterwards — the M8 deletions retired the spill warning, its repair, and the paid review — so the stated contract, and the human reading the pass's diff, are the protection. The field is still read — regenerate_example_romaji reconstructs the romaji from it, which is how the original symptom propagated — so not auditing it is not the same as not depending on it.
     evidence:
       - fingerprint: 2cf757e9bdcffbcc97eefb7a938fa710c243b7083c3a6e0032a5e8d1f9877143
         locator: quality/evidence/furigana-full-width-separator.json

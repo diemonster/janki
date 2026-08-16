@@ -32,10 +32,8 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "media_dir",
         "kanji_file",
         "patterns_file",
-        "review_file",
         "scan_inbox",
     ),
-    "review": ("require",),
     "anki": (
         "default_deck_name",
         "default_deck_id",
@@ -50,7 +48,6 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "enrich_model",
         "enrich_reasoning_effort",
         "polish_model",
-        "review_model",
     ),
     "tts": (
         "provider",
@@ -293,9 +290,6 @@ class ProjectConfig:
     kanji_file: Path
     #: What documents teach, inferred and reviewed before anything uses it.
     patterns_file: Path
-    review_file: Path
-    #: Whether a recorded build refuses cards `janki review` has not passed.
-    require_review: bool
     scan_inbox: Path
     default_deck_name: str
     default_deck_id: int
@@ -316,7 +310,6 @@ class ProjectConfig:
     enrich_model: str
     enrich_reasoning_effort: str
     polish_model: str
-    review_model: str
     tts_provider: str
     voicevox_url: str
     voicevox_speaker: int
@@ -370,7 +363,7 @@ class ProjectConfig:
             and "enrich_provider" not in ai_table
         )
         # Before providers and per-pass models existed, ``enrich_model`` meant
-        # Anthropic for --ai, meaning polish, and review. Preserve that exact
+        # Anthropic for --ai and meaning polish. Preserve that exact
         # configuration shape on upgrade; a newly configured Codex project
         # names ``enrich_provider`` explicitly, as the generated config does.
         enrich_provider = _choice(
@@ -392,8 +385,8 @@ class ProjectConfig:
             root=project_root,
             name=_str(data, "project", "name", "Japanese Anki"),
             # Every [paths] key goes through _str for the same reason the rest
-            # do, and more urgently: these decide where records, the ledger and
-            # the review queue are written. An unquoted path coerced to
+            # do, and more urgently: these decide where records and the ledger
+            # are written. An unquoted path coerced to
             # `<root>/123`, `<root>/True` or `<root>/['a', 'b']` has janki
             # reading and writing under a Python repr while the real file sits
             # untouched and `janki status` reports 0 records.
@@ -410,14 +403,6 @@ class ProjectConfig:
             staging_dir=project_path(_str(data, "paths", "staging_dir", "data/staging")),
             media_dir=project_path(_str(data, "paths", "media_dir", "data/media")),
             kanji_file=project_path(_str(data, "paths", "kanji_file", "data/kanji.json")),
-            review_file=project_path(
-                _str(data, "paths", "review_file", "data/review.json")
-            ),
-            # On by default: a gate you have to remember to switch on is a
-            # gate that is off on the day it would have mattered. A project
-            # that does not want a model reading its cards sets this false,
-            # and says so in its own janki.toml rather than by omission.
-            require_review=_bool(data, "review", "require", True),
             patterns_file=project_path(
                 _str(data, "paths", "patterns_file", "data/patterns.json")
             ),
@@ -440,7 +425,6 @@ class ProjectConfig:
                 data, "ai", "enrich_reasoning_effort", "ultra"
             ),
             polish_model=_str(data, "ai", "polish_model", legacy_shared_model),
-            review_model=_str(data, "ai", "review_model", legacy_shared_model),
             tts_provider=_str(data, "tts", "provider", "voicevox"),
             voicevox_url=_str(data, "tts", "voicevox_url", "http://localhost:50021"),
             voicevox_speaker=_int(data, "tts", "voicevox_speaker", 46),

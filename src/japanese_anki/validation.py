@@ -336,6 +336,6 @@ def refusal_text(deck_name: str, issues: list[ValidationIssue]) -> str:
     """
     formatted = "\n".join(issue.format() for issue in issues)
     return (
-        f"{deck_name} fails local validation — fix these before any review "
-        f"run:\n{formatted}"
+        f"{deck_name} fails local validation — fix these before it can "
+        f"ship:\n{formatted}"
     )

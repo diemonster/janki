@@ -77,10 +77,11 @@ DEFAULT_MAX_TOKENS = 16000
 #: Reasoning depth for every pass. Inside ``output_config`` beside the schema,
 #: not a top-level field.
 #:
-#: Every janki pass writes or judges study content, so every one of them runs
-#: here: extraction reads a photo and mints identities, enrichment writes the
-#: sentences, and the review is the last reader before a learner sees the card.
-#: There is no pass whose answer is worth less than the others'.
+#: Every janki pass writes study content, so every one of them runs here:
+#: extraction reads a photo and mints identities, pattern reading decides what
+#: a handout teaches, enrichment writes the sentences a learner will study, and
+#: meaning polish rewrites the glosses on the front of a card. There is no pass
+#: whose answer is worth less than the others'.
 DEFAULT_EFFORT = "xhigh"
 
 #: Models that accept ``output_config.effort`` at :data:`DEFAULT_EFFORT`.
