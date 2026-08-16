@@ -305,7 +305,7 @@
       "yo",
       "hi (very casual)"
     ],
-    "part_of_speech": "",
+    "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
     "examples": [
@@ -325,9 +325,11 @@
     "usage_notes": "A very casual greeting, also commonly written うっす. It is especially associated with men, teammates, and close friends and can sound rough, so avoid it in polite or formal situations.",
     "audio": "audio/janki-1a0bd2e56b99.wav",
     "image": "",
-    "pitch_accent": [],
+    "pitch_accent": [
+      "HLL"
+    ],
     "audio_accent": "",
-    "frequency_rank": null,
+    "frequency_rank": 28100,
     "source": {
       "type": "anki",
       "imported_from": "Yotsubato Volume 1 Reading Pack Vocab",
@@ -339,7 +341,8 @@
         "anki_tags": "Yotsubato1",
         "anki_Front": "<div>うす</div>",
         "anki_Back": "<div>うす</div><div>Very casual greeting</div>",
-        "anki_Add Reverse": ""
+        "anki_Add Reverse": "",
+        "janki_pitch_accent_source": "jpdb:c2e2536dbceb2e0bf9c5cf70f2bd6cddfebb3340e574a22ac44a37d9c0187730"
       }
     }
   },
@@ -2305,7 +2308,9 @@
     "usage_notes": "When ジャンボ is a name, it is a proper noun rather than a な-adjective. In ジャンボなの？, な appears because the name is a noun before the explanatory/question ending の.",
     "audio": "audio/janki-8838d8eee68b.wav",
     "image": "",
-    "pitch_accent": [],
+    "pitch_accent": [
+      "HHLLL"
+    ],
     "audio_accent": "",
     "frequency_rank": 49800,
     "source": {
@@ -2319,7 +2324,8 @@
         "anki_tags": "Yotsubato1",
         "anki_Front": "<div>ジャンボ</div>",
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\">Jumbo (name)</span>",
-        "anki_Add Reverse": ""
+        "anki_Add Reverse": "",
+        "janki_pitch_accent_source": "jpdb:b899a3cb574e8547112a02b4540d8eae50adc481e5164095d910afc863f5d323"
       }
     }
   },

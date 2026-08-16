@@ -395,9 +395,8 @@
       "added_at": "2026-08-12",
       "audio": [
         {
-          "accent_unverified": true,
-          "at": "2026-08-12",
-          "content_fp": "3706050487dd",
+          "at": "2026-08-15",
+          "content_fp": "14cf8cedd9b2",
           "file": "janki-1a0bd2e56b99.wav",
           "of": "word",
           "provider": "voicevox",
@@ -443,6 +442,16 @@
           ],
           "kind": "human",
           "model": "human"
+        },
+        {
+          "at": "2026-08-15",
+          "fields": [
+            "frequency_rank",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
         }
       ],
       "exports": {
@@ -2933,9 +2942,8 @@
       "added_at": "2026-08-12",
       "audio": [
         {
-          "accent_unverified": true,
-          "at": "2026-08-12",
-          "content_fp": "3573d635c1c1",
+          "at": "2026-08-15",
+          "content_fp": "a4d33cf26f14",
           "file": "janki-8838d8eee68b.wav",
           "of": "word",
           "provider": "voicevox",
@@ -2988,6 +2996,14 @@
           ],
           "kind": "ai",
           "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-15",
+          "fields": [
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
         }
       ],
       "exports": {
