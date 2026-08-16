@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -267,14 +266,16 @@ def test_the_enrichment_pass_sends_the_file_it_was_given() -> None:
     )
 
     enrich.enrich_ai(
-        [record], model="m", style_guide="G",
+        [record], model="m", style_guide="STYLE-GUIDE-MARKER",
         instructions=prompts.load(REPO_ROOT, "enrich-examples"),
         ids=["word:話す:はなす"], parse_call=call,
     )
 
     [sent] = call.sent
     assert prompts.load(REPO_ROOT, "enrich-examples") in sent, "verbatim, not a paraphrase"
-    assert "G" in sent, "and the style guide leads it"
+    # A distinctive marker: the prompt itself contains "Genki" and "Give", so a
+    # single capital G was satisfied by the instructions alone.
+    assert "STYLE-GUIDE-MARKER" in sent, "and the style guide rides along"
 
 
 def test_each_pass_would_notice_being_handed_another_passes_prompt() -> None:
@@ -320,11 +321,16 @@ def _sent_system(monkeypatch: pytest.MonkeyPatch) -> list[str]:
         )
         return claude_client.CallResult(None, "refusal", None)
 
-    # Patched on every module that reads the name, not just the defining one.
-    # `cli._enrich_ai` passes `parse_call=claude_client.parse_call` explicitly,
-    # so the reference it resolves is `cli`'s — patching only the source module
-    # left the real client reachable and the run tripped conftest's
-    # build_client guard.
+    # Patched on every module that holds a reference, not just the defining
+    # one. The reason is not that the production code captures it early — it
+    # does not — but that `tests/test_claude_client.py` deletes
+    # `japanese_anki.claude_client` from `sys.modules` and re-imports it.
+    # `MonkeyPatch` restores the `sys.modules` entry and not the package
+    # attribute, so a later `from japanese_anki import claude_client` yields a
+    # second module object while the production modules keep the first.
+    # Patching only one of the two left the real client reachable and tripped
+    # conftest's billed-client guard — in the full suite, not in isolation.
+    # `tests/test_patterns.py` documents the same hazard.
     from japanese_anki import cli, coverage, enrich, extract, patterns
 
     for module in (claude_client, cli, enrich, extract, patterns, coverage):
@@ -395,6 +401,13 @@ def test_each_enrichment_command_sends_its_own_template(
         assert not any(prompts.load(REPO_ROOT, other) in t for t in seen), (
             f"{other}.md was sent instead"
         )
+    # The style guide leads every pass and its own send was unpinned at three
+    # of four sites: dropping it left the suite green while every card in the
+    # run stopped being written to this project's conventions.
+    assert any(prompts.load(REPO_ROOT, "style-guide") in text for text in seen), (
+        "the style guide was not sent"
+    )
+
 
 
 def test_extraction_sends_the_template_for_the_mode_it_was_asked_for(
@@ -422,45 +435,104 @@ def test_extraction_sends_the_template_for_the_mode_it_was_asked_for(
         assert not any(prompts.load(REPO_ROOT, other) in t for t in seen), other
 
 
-def test_the_coverage_checker_sends_the_prompt_it_fingerprints(
+
+
+@pytest.mark.parametrize(
+    "argv,expected",
+    [
+        (["enrich", "--ai", "--batch-submit", "--yes"], "enrich-examples"),
+        (["enrich", "--polish-meanings", "--batch-submit", "--yes"], "polish-meanings"),
+    ],
+    ids=["ai-batch", "polish-batch"],
+)
+def test_each_batch_builder_sends_its_own_template(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, argv: list[str], expected: str
+) -> None:
+    """The batch path builds the same request bodies without calling the model,
+    so `parse_call` never fires and the interactive tests above miss it
+    entirely. A batch wired to the wrong template bills a whole submission for
+    the wrong work, hours before anyone reads a result."""
+    from japanese_anki import claude_client, cli
+
+    root = _wiring_project(tmp_path)
+    submitted: list[list[dict[str, object]]] = []
+    monkeypatch.setattr(
+        claude_client, "submit_batch",
+        lambda requests: submitted.append(requests) or "batch_test",
+    )
+    monkeypatch.setattr(cli.claude_client, "submit_batch",
+                        lambda requests: submitted.append(requests) or "batch_test",
+                        raising=False)
+
+    cli.main(["--root", str(root), *argv])
+
+    assert submitted, "a batch was built"
+    # Read the system blocks, not a JSON dump of them: `json.dumps` escapes the
+    # newlines, so the file's own text is never a substring of the encoded form.
+    system = "\n".join(
+        block.get("text", "")
+        for batch in submitted
+        for request in batch
+        for block in request["params"]["system"]
+    )
+    assert prompts.load(REPO_ROOT, expected) in system, f"{expected}.md was not sent"
+    other = ({"enrich-examples", "polish-meanings"} - {expected}).pop()
+    assert prompts.load(REPO_ROOT, other) not in system, f"{other}.md was sent instead"
+    assert prompts.load(REPO_ROOT, "style-guide") in system, "the style guide too"
+
+
+@pytest.mark.parametrize("mode", ["table", "prose", None], ids=["table", "prose", "auto"])
+def test_every_extraction_mode_sends_its_own_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str | None
+) -> None:
+    """All three, not just `--mode table`.
+
+    Pinning one mode left the other two rewirable: `janki extract` with no
+    mode, which is the ordinary invocation, could be sent the table rules and
+    nothing would notice."""
+    from japanese_anki import cli, extract
+
+    root = _wiring_project(tmp_path)
+    source = root / "inbox" / "lesson.pdf"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_bytes(b"%PDF-1.4\n%x\n")
+    seen = _sent_system(monkeypatch)
+
+    argv = ["--root", str(root), "extract", "--yes"]
+    if mode is not None:
+        argv += ["--mode", mode]
+    cli.main([*argv, str(source)])
+
+    assert seen
+    wanted = extract.prompt_name(mode)
+    assert any(prompts.load(REPO_ROOT, wanted) in t for t in seen), wanted
+    for other in {"extract-table", "extract-prose", "extract-auto"} - {wanted}:
+        assert not any(prompts.load(REPO_ROOT, other) in t for t in seen), other
+
+
+def test_the_patterns_command_sends_the_patterns_template(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The worst of the unpinned wirings.
+    """`command_patterns` was rewirable at `approve-coverage.md` undetected —
+    a document read for the grammar it teaches, asked instead whether a page
+    was accounted for."""
+    from japanese_anki import cli
 
-    `review_coverage` records `prompt_fingerprint` from the text it was handed,
-    so sending a different file writes a permanent `authority: model` approval
-    naming a prompt that never ran — provenance that points at the wrong
-    question.
-    """
-    from japanese_anki import coverage
+    root = _wiring_project(tmp_path)
+    handout = root / "inbox" / "teform.pdf"
+    handout.parent.mkdir(parents=True, exist_ok=True)
+    handout.write_bytes(b"%PDF-1.4\n%x\n")
+    seen = _sent_system(monkeypatch)
 
-    sent: list[str] = []
+    cli.main(["--root", str(root), "patterns", str(handout)])
 
-    def call(_model, blocks, _content, _schema, _client=None, **_options):
-        from japanese_anki.claude_client import CallResult
-
-        sent.append(
-            "\n".join(
-                b.get("text", "") if isinstance(b, dict) else str(b) for b in blocks
-            )
-        )
-        return CallResult(
-            SimpleNamespace(approved=True, reason="Accounted for."), "end_turn", None
-        )
-
-    text = prompts.load(REPO_ROOT, "approve-coverage")
-
-    class _Page:
-        origin_path = Path("lesson.pdf")
-
-        def content_block(self) -> dict[str, object]:
-            return {"type": "document"}
-
-    verdict = coverage.review_coverage(
-        _Page(), {"source_units": []}, model="m", instructions=text, parse_call=call
+    assert seen, "the command reached the model"
+    assert any(prompts.load(REPO_ROOT, "patterns") in t for t in seen)
+    assert not any(prompts.load(REPO_ROOT, "approve-coverage") in t for t in seen)
+    # The style guide leads every pass and its own send was unpinned at three
+    # of four sites: dropping it left the suite green while every card in the
+    # run stopped being written to this project's conventions.
+    assert any(prompts.load(REPO_ROOT, "style-guide") in text for text in seen), (
+        "the style guide was not sent"
     )
 
-    assert text in sent[0], "the file it fingerprints is the file it sent"
-    assert verdict.prompt_fingerprint == prompts.fingerprint(text), (
-        "and the fingerprint it records is that file's"
-    )

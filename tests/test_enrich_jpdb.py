@@ -1443,3 +1443,25 @@ def test_the_suru_allowance_needs_the_suffix_on_each_side_separately() -> None:
     # する itself is not `Xする`: there is no X, and an entry answering for the
     # empty stem would otherwise satisfy every remaining conjunct.
     assert not _supports_suru_suffix("する", "する", entry("", ""))
+
+
+def test_a_stored_part_of_speech_cannot_unlock_a_transitivity() -> None:
+    """The gate reads jpdb's derived label, never the record's own.
+
+    A stored part of speech is uncontrolled text — a source column copied
+    verbatim by an importer, extraction's contextual phrasing, a hand edit —
+    and an exact test for "noun" lets "pronoun", "proper noun" and
+    "noun, suru-verb" past it. Twenty-two live records carry a near-miss label
+    like those with an empty transitivity, so the next `enrich --jpdb` would
+    have written the contradiction the rule exists to prevent.
+    """
+    shigoto = vocab(1330910, 4, "仕事", "しごと", ["LHH"], 300, ["n", "vs", "vi"])
+    api = FakeApi({"仕事": parse_response(([["仕事", "しごと"]], shigoto))})
+
+    result = enrich_records(
+        client_for(api),
+        [record(id="word:仕事:しごと", expression="仕事", reading="しごと",
+                meanings=["work"], part_of_speech="noun, suru-verb")],
+    )
+
+    assert result.records[0].transitivity == ""

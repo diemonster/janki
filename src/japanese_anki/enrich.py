@@ -427,9 +427,13 @@ def _proposals(
         # verb, and writing it on a record whose own part of speech says "noun"
         # puts a contradiction on a card that shows the field unconditionally
         # and has no validation rule for it.
-        "transitivity": jpdb.transitivity_for(
-            codes, record.part_of_speech or part_of_speech
-        ),
+        # The *derived* label, never the record's own. A stored part of speech
+        # is uncontrolled text — copied verbatim from a source column, written
+        # by extraction, or typed by hand — so gating on it let "pronoun",
+        # "proper noun" and "noun, suru-verb" past a test for exactly "noun"
+        # and wrote the contradiction this rule exists to prevent. jpdb's
+        # answer is the only input here that cannot be influenced by the file.
+        "transitivity": jpdb.transitivity_for(codes, part_of_speech),
         # Same rule the importer applies: jpdb has no verb class for an
         # い-adjective, so the part of speech is what carries its inflection.
         "conjugations": conjugate(

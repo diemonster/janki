@@ -49,6 +49,15 @@ __all__ = [
 #: `templates/` (that is the card HTML).
 DIRECTORY = Path("prompts")
 
+#: Characters that occupy a file without instructing anything. Stripped in one
+#: pass together with whitespace: two passes let `"\u200b \u200b"` through,
+#: because the space survives the first and the marks survive the second.
+_INVISIBLE = (
+    "\t\n\r\v\f \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005"
+    "\u2006\u2007\u2008\u2009\u200a\u202f\u205f\u3000"
+    "\ufeff\u200b\u200c\u200d\u200e\u200f\u2060\u2062\u00ad\u180e"
+)
+
 
 class PromptError(JankiError):
     """A prompt file could not be read."""
@@ -95,7 +104,7 @@ def load(root: Path, name: str) -> str:
     # prompt truncated to its byte-order mark alone would slip past an
     # `if not text.strip()` guard and buy a full paid pass with no
     # instructions — the exact failure this refuses.
-    if not text.strip().strip("\ufeff\u200b\u2060"):
+    if not text.strip(_INVISIBLE):
         # An empty file is the failure this module exists to prevent, arriving
         # by a different door: a truncated or emptied prompt would buy a full
         # paid pass with no instructions and report success.

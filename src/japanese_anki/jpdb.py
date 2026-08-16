@@ -949,11 +949,16 @@ def transitivity_for(codes: Any, part_of_speech: str) -> str:
     label already says verb. Only "noun" and "transitive" is the pair that
     cannot both be true.
 
-    ``part_of_speech`` is the *effective* one — what the record will show,
-    which is its own value when it has one and this pass's proposal when it
-    does not. Passing the proposal alone would drop transitivity from every
-    ``Xする`` record, because those resolve through their stem entry and the
-    stem is a noun.
+    ``part_of_speech`` must be **this pass's own derived label**, never the
+    record's stored one. A stored value is uncontrolled text — a source column
+    copied verbatim, an extraction's contextual phrasing, a hand edit — and an
+    exact test for ``"noun"`` lets ``"pronoun"``, ``"proper noun"`` and
+    ``"noun, suru-verb"`` straight through. Both callers pass the derived
+    value, so they cannot disagree for any input.
+
+    The cost is that an ``Xする`` record states no transitivity: those resolve
+    through their stem entry, and the stem is a noun. Saying nothing there is
+    the honest outcome — the dictionary is describing 勉強, not 勉強する.
     """
     return "" if part_of_speech.strip() == "noun" else pos_to_transitivity(codes)
 

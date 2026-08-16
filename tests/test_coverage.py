@@ -467,8 +467,12 @@ def test_a_block_the_gate_would_reject_is_never_paid_for(
 
 @pytest.mark.parametrize(
     "reason",
-    ["no", "on", "off", "yes", "12:30", "1.0"],
-    ids=["no", "on", "off", "yes", "sexagesimal", "float"],
+    # Every one of these is a YAML 1.1 bareword that PyYAML resolves to a
+    # non-string. `y` and `1.0` were tried and dropped: 1.1 does not resolve a
+    # lone `y`, and ruamel's own 1.2 resolver already quotes `1.0`, so neither
+    # could fail without the fix.
+    ["no", "on", "off", "yes", "true", "12:30"],
+    ids=["no", "on", "off", "yes", "true", "sexagesimal"],
 )
 def test_an_approval_survives_both_yaml_dialects(tmp_path: Path, reason: str) -> None:
     """The hazard `rewrite_staging` documents, arriving from the other side.
@@ -520,3 +524,51 @@ def test_a_block_that_needs_no_approval_is_not_paid_for(
     assert calls == [], "nothing was sent"
     assert "approval" not in staged.read_text(encoding="utf-8")
     assert "does not need a coverage approval" in capsys.readouterr().err
+
+
+def test_the_promote_command_sends_the_coverage_template(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Through `_model_accepts_coverage`, not through `review_coverage`.
+
+    The first attempt at this test called `review_coverage` directly and handed
+    it the file — pinning only that the function forwards its own argument,
+    which is exactly the mistake it was written to correct, applied to the site
+    its own docstring called the worst one. Repointing `cli.py`'s loader at any
+    other template stayed invisible.
+
+    It matters here more than anywhere: `review_coverage` fingerprints the text
+    it is handed, so a wrong wiring writes a permanent `authority: model`
+    approval into a committed file naming a question that was never asked.
+    """
+    from japanese_anki import cli, prompts
+
+    root, staged = project_with_source(tmp_path)
+    sent: list[str] = []
+
+    def call(_model, blocks, _content, _schema, _client=None, **_options):
+        from japanese_anki.claude_client import CallResult
+
+        sent.append(
+            "\n".join(
+                b.get("text", "") if isinstance(b, dict) else str(b) for b in blocks
+            )
+        )
+        return CallResult(
+            SimpleNamespace(approved=True, reason="Accounted for."), "end_turn", None
+        )
+
+    for module in (cli, coverage):
+        monkeypatch.setattr(module.claude_client, "parse_call", call, raising=False)
+    from japanese_anki.staging import read_staging
+
+    _records, meta = read_staging(staged)
+
+    cli._model_accepts_coverage(  # noqa: SLF001
+        cli._load_config(SimpleNamespace(root=root)), staged, meta
+    )
+
+    assert sent, "the command reached the model"
+    assert prompts.load(REPO_ROOT, "approve-coverage") in sent[0]
+    for other in ("patterns", "enrich-examples", "extract-table"):
+        assert prompts.load(REPO_ROOT, other) not in sent[0], other
