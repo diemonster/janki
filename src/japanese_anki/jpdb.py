@@ -931,6 +931,33 @@ def pos_to_part_of_speech(codes: Any) -> str:
     return first or adverbial
 
 
+def transitivity_for(codes: Any, part_of_speech: str) -> str:
+    """The transitivity a card may state beside ``part_of_speech``.
+
+    :func:`pos_to_transitivity` answers what the dictionary says; this answers
+    whether the card should say it. The two differ for one shape, and it is
+    common: JMdict tags a noun that takes する with ``vt``/``vi`` as well —
+    仕事 is ``["n", "vs", "vi"]`` — so a bare dictionary answer puts
+    "intransitive" on a card whose own part of speech says "noun". The card
+    prints both fields unconditionally and nothing validates the pair.
+
+    A verb class is not the test. ``pos_to_verb_group`` calls that same 仕事
+    ``suru``, so gating on it lets the contradiction straight through. What
+    decides it is the label the card is going to show: anything but ``noun``
+    can carry a transitivity — a verb, an ``expression`` like 家を売る whose
+    codes are ``["exp", "v5r", "vt"]``, or a する-compound record whose stored
+    label already says verb. Only "noun" and "transitive" is the pair that
+    cannot both be true.
+
+    ``part_of_speech`` is the *effective* one — what the record will show,
+    which is its own value when it has one and this pass's proposal when it
+    does not. Passing the proposal alone would drop transitivity from every
+    ``Xする`` record, because those resolve through their stem entry and the
+    stem is a noun.
+    """
+    return "" if part_of_speech.strip() == "noun" else pos_to_transitivity(codes)
+
+
 def pos_to_transitivity(codes: Any) -> str:
     """``"transitive"``/``"intransitive"`` from ``vt``/``vi``, or ``""``.
 

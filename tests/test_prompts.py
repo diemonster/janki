@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -96,6 +97,23 @@ def test_an_empty_prompt_is_refused_like_a_missing_one(tmp_path: Path) -> None:
 
     with pytest.raises(prompts.PromptError, match="is empty"):
         prompts.load(tmp_path, "blank")
+
+
+@pytest.mark.parametrize(
+    "raw", [b"\xef\xbb\xbf", "\u200b".encode(), "\ufeff  \n".encode()],
+    ids=["bom", "zero-width-space", "bom-and-space"],
+)
+def test_a_prompt_of_only_invisible_characters_is_refused(
+    tmp_path: Path, raw: bytes
+) -> None:
+    """`'\ufeff'.strip()` is truthy, so a file truncated to its byte-order mark
+    slipped past the empty guard and bought a full paid pass with no
+    instructions — the exact failure that guard exists to refuse."""
+    (tmp_path / prompts.DIRECTORY).mkdir()
+    (tmp_path / prompts.DIRECTORY / "invisible.md").write_bytes(raw)
+
+    with pytest.raises(prompts.PromptError, match="is empty"):
+        prompts.load(tmp_path, "invisible")
 
 
 def test_a_prompt_that_is_not_utf8_says_so(tmp_path: Path) -> None:
@@ -255,7 +273,6 @@ def test_the_enrichment_pass_sends_the_file_it_was_given() -> None:
     )
 
     [sent] = call.sent
-    assert "Write one natural example sentence" in sent or "example" in sent.lower()
     assert prompts.load(REPO_ROOT, "enrich-examples") in sent, "verbatim, not a paraphrase"
     assert "G" in sent, "and the style guide leads it"
 
@@ -274,3 +291,176 @@ def test_each_pass_would_notice_being_handed_another_passes_prompt() -> None:
     assert examples != polish
     assert "gloss" in polish.lower(), "polish is about the English glosses"
     assert "example sentence" in examples.lower(), "examples is about sentences"
+
+
+# --- the wiring: which file each command actually sends -------------------------
+#
+# The hole a verification review found in the first attempt at this section. The
+# test above drives `enrich.enrich_ai` directly and passes the file itself, so it
+# pins only that the function forwards its own argument. It says nothing about
+# `cli.py` handing that function the *right* file — and repointing any of the
+# seven `prompts.load` sites at another template was undetectable, including the
+# coverage checker, which would then write a permanent approval naming a prompt
+# it never sent.
+#
+# These drive the real commands and read what reached the model.
+
+
+def _sent_system(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Capture the system text of every model call a command makes."""
+    from japanese_anki import claude_client
+
+    seen: list[str] = []
+
+    def call(_model, blocks, _content, _schema, _client=None, **_options):
+        seen.append(
+            "\n".join(
+                b.get("text", "") if isinstance(b, dict) else str(b) for b in blocks
+            )
+        )
+        return claude_client.CallResult(None, "refusal", None)
+
+    # Patched on every module that reads the name, not just the defining one.
+    # `cli._enrich_ai` passes `parse_call=claude_client.parse_call` explicitly,
+    # so the reference it resolves is `cli`'s — patching only the source module
+    # left the real client reachable and the run tripped conftest's
+    # build_client guard.
+    from japanese_anki import cli, coverage, enrich, extract, patterns
+
+    for module in (claude_client, cli, enrich, extract, patterns, coverage):
+        target = getattr(module, "claude_client", module)
+        monkeypatch.setattr(target, "parse_call", call, raising=False)
+    monkeypatch.setattr(claude_client, "parse_call", call)
+    return seen
+
+
+def _wiring_project(tmp_path: Path) -> Path:
+    import json
+
+    from conftest import seed_prompts
+
+    (tmp_path / "janki.toml").write_text(
+        '[paths]\nnormalized_file = "vocabulary.json"\nstaging_dir = "staging"\n'
+        'scan_inbox = "inbox"\npatterns_file = "patterns.json"\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps(
+            [
+                {
+                    "id": "word:話す:はなす",
+                    "expression": "話す",
+                    "reading": "はなす",
+                    "meanings": ["to speak"],
+                    "source": {"type": "shirabe", "imported_from": "x.csv"},
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    seed_prompts(tmp_path)
+    return tmp_path
+
+
+@pytest.mark.parametrize(
+    "argv,expected",
+    [
+        (["enrich", "--ai", "--yes"], "enrich-examples"),
+        (["enrich", "--polish-meanings", "--yes"], "polish-meanings"),
+    ],
+    ids=["ai", "polish"],
+)
+def test_each_enrichment_command_sends_its_own_template(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, argv: list[str], expected: str
+) -> None:
+    """Repointing `cli.py`'s loader call at the other template was invisible.
+
+    The two prompts ask for different work — one writes example sentences, the
+    other rewrites English glosses — so a swap produces confidently wrong cards
+    and reports success.
+    """
+    from japanese_anki import cli
+
+    root = _wiring_project(tmp_path)
+    seen = _sent_system(monkeypatch)
+
+    cli.main(["--root", str(root), *argv])
+
+    assert seen, "the command reached the model"
+    wanted = prompts.load(REPO_ROOT, expected)
+    assert any(wanted in text for text in seen), f"{expected}.md was not sent"
+    others = {"enrich-examples", "polish-meanings"} - {expected}
+    for other in others:
+        assert not any(prompts.load(REPO_ROOT, other) in t for t in seen), (
+            f"{other}.md was sent instead"
+        )
+
+
+def test_extraction_sends_the_template_for_the_mode_it_was_asked_for(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`--mode table` must send `extract-table.md` and not one of its siblings.
+
+    The three files ask for genuinely different work — exhaustive row
+    accounting versus selective prose reading — so a mode wired to the wrong
+    template produces a coverage record that means something else entirely.
+    """
+    from japanese_anki import cli
+
+    root = _wiring_project(tmp_path)
+    source = root / "inbox" / "lesson.pdf"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_bytes(b"%PDF-1.4\n%x\n")
+    seen = _sent_system(monkeypatch)
+
+    cli.main(["--root", str(root), "extract", "--yes", "--mode", "table", str(source)])
+
+    assert seen
+    assert any(prompts.load(REPO_ROOT, "extract-table") in t for t in seen)
+    for other in ("extract-prose", "extract-auto"):
+        assert not any(prompts.load(REPO_ROOT, other) in t for t in seen), other
+
+
+def test_the_coverage_checker_sends_the_prompt_it_fingerprints(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The worst of the unpinned wirings.
+
+    `review_coverage` records `prompt_fingerprint` from the text it was handed,
+    so sending a different file writes a permanent `authority: model` approval
+    naming a prompt that never ran — provenance that points at the wrong
+    question.
+    """
+    from japanese_anki import coverage
+
+    sent: list[str] = []
+
+    def call(_model, blocks, _content, _schema, _client=None, **_options):
+        from japanese_anki.claude_client import CallResult
+
+        sent.append(
+            "\n".join(
+                b.get("text", "") if isinstance(b, dict) else str(b) for b in blocks
+            )
+        )
+        return CallResult(
+            SimpleNamespace(approved=True, reason="Accounted for."), "end_turn", None
+        )
+
+    text = prompts.load(REPO_ROOT, "approve-coverage")
+
+    class _Page:
+        origin_path = Path("lesson.pdf")
+
+        def content_block(self) -> dict[str, object]:
+            return {"type": "document"}
+
+    verdict = coverage.review_coverage(
+        _Page(), {"source_units": []}, model="m", instructions=text, parse_call=call
+    )
+
+    assert text in sent[0], "the file it fingerprints is the file it sent"
+    assert verdict.prompt_fingerprint == prompts.fingerprint(text), (
+        "and the fingerprint it records is that file's"
+    )

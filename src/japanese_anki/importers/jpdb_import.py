@@ -151,7 +151,7 @@ def record_from_entry(
         meanings=_meanings(entry.get("meanings_chunks")),
         part_of_speech=part_of_speech,
         verb_group=verb_group,
-        transitivity=jpdb.pos_to_transitivity(codes),
+        transitivity=jpdb.transitivity_for(codes, part_of_speech),
         conjugations=conjugations,
         tags=sorted({"jpdb", deck_tag(deck_name)}),
         pitch_accent=jpdb.accent_patterns(entry.get("pitch_accent")),

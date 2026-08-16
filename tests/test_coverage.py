@@ -329,7 +329,7 @@ def test_an_invented_authority_is_refused() -> None:
 # --- the CLI path, which had no test at all -------------------------------------
 
 
-def project_with_source(tmp_path: Path) -> tuple[Path, Path]:
+def project_with_source(tmp_path: Path, *, mode: str = "table") -> tuple[Path, Path]:
     """A project holding one inbox PDF and a staging file extracted from it."""
     import json
 
@@ -351,7 +351,7 @@ def project_with_source(tmp_path: Path) -> tuple[Path, Path]:
     import hashlib
 
     sha = hashlib.sha256(source.read_bytes()).hexdigest()
-    units = tuple(
+    units = () if mode == "prose" else tuple(
         SourceUnit(
             page=1, section="vocabulary", ordinal=n,
             context=f"row {n}",
@@ -361,9 +361,11 @@ def project_with_source(tmp_path: Path) -> tuple[Path, Path]:
         for n in (1, 2, 3)
     )
     block = coverage_block(
-        ExtractionResult(candidates=(), source_units=units, model_reported_unit_count=3),
+        ExtractionResult(
+            candidates=(), source_units=units, model_reported_unit_count=len(units)
+        ),
         source_sha256=sha,
-        mode="table",
+        mode=mode,
     )
     staged = tmp_path / "staging" / "lesson.pdf.yaml"
     staged.parent.mkdir(parents=True)
@@ -463,7 +465,11 @@ def test_a_block_the_gate_would_reject_is_never_paid_for(
     assert "approval" not in staged.read_text(encoding="utf-8")
 
 
-@pytest.mark.parametrize("reason", ["no", "on", "12:30", "y"], ids=list("abcd"))
+@pytest.mark.parametrize(
+    "reason",
+    ["no", "on", "off", "yes", "12:30", "1.0"],
+    ids=["no", "on", "off", "yes", "sexagesimal", "float"],
+)
 def test_an_approval_survives_both_yaml_dialects(tmp_path: Path, reason: str) -> None:
     """The hazard `rewrite_staging` documents, arriving from the other side.
 
@@ -483,3 +489,34 @@ def test_an_approval_survives_both_yaml_dialects(tmp_path: Path, reason: str) ->
 
     _records, meta = read_staging(path)
     assert meta["coverage"]["approval"]["reason"] == reason
+
+
+def test_a_block_that_needs_no_approval_is_not_paid_for(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A prose-only extraction does not block, so there is nothing to accept.
+
+    `validate_coverage_facts` says so by returning None. Discarding that return
+    meant `--accept-coverage` bought a verdict and wrote an `authority: model`
+    approval into a committed file that no gate would ever read — the same
+    waste as spending before validation, one branch over.
+    """
+    from japanese_anki import cli
+    from japanese_anki.staging import read_staging
+
+    root, staged = project_with_source(tmp_path, mode="prose")
+    calls: list[object] = []
+    monkeypatch.setattr(
+        cli.coverage, "review_coverage",
+        lambda *a, **k: calls.append(1) or coverage.CoverageVerdict(True, "ok", "m", "f"),
+    )
+    _records, meta = read_staging(staged)
+
+    accepted = cli._model_accepts_coverage(  # noqa: SLF001
+        cli._load_config(SimpleNamespace(root=root)), staged, meta
+    )
+
+    assert accepted is False
+    assert calls == [], "nothing was sent"
+    assert "approval" not in staged.read_text(encoding="utf-8")
+    assert "does not need a coverage approval" in capsys.readouterr().err

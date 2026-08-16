@@ -91,7 +91,11 @@ def load(root: Path, name: str) -> str:
             f"The prompt at {path} is not UTF-8: {exc}. Prompts are Markdown "
             "and are sent as written, so janki will not guess an encoding."
         ) from exc
-    if not text.strip():
+    # `\ufeff` and other zero-width marks are truthy under `str.strip`, so a
+    # prompt truncated to its byte-order mark alone would slip past an
+    # `if not text.strip()` guard and buy a full paid pass with no
+    # instructions — the exact failure this refuses.
+    if not text.strip().strip("\ufeff\u200b\u2060"):
         # An empty file is the failure this module exists to prevent, arriving
         # by a different door: a truncated or emptied prompt would buy a full
         # paid pass with no instructions and report success.

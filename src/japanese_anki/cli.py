@@ -2876,7 +2876,17 @@ def _model_accepts_coverage(
     # either way; finding out afterwards meant paying for a verdict, writing
     # it down, then refusing — and leaving a file that could not be promoted
     # or re-approved without hand-deleting the approval just written.
-    validate_coverage_facts(meta)
+    if validate_coverage_facts(meta) is None:
+        # `None` means the block needs no acceptance at all — a prose-only
+        # extraction, which does not block. Paying for a verdict and writing an
+        # approval nothing will ever read is the same waste this ordering was
+        # introduced to stop, one branch over.
+        print(
+            f"{path.name} does not need a coverage approval; promote it "
+            "without --accept-coverage.",
+            file=sys.stderr,
+        )
+        return False
 
     source_name = str(meta.get("source_file") or "").strip()
     if not source_name:
@@ -3843,6 +3853,10 @@ def command_patterns(args: argparse.Namespace) -> int:
     # per-file read would let an edit mid-run split one command across two
     # prompts.
     pattern_instructions = prompts.load(config.root, "patterns")
+    # The style guide is a prompt too — `read_style_guide` *is* the loader —
+    # so it gets the same treatment. Read inside the loop it let an edit
+    # mid-run split one command across two versions of the same document.
+    pattern_style_guide = claude_client.read_style_guide(config.root)
     for prepared in prepared_inputs:
         # Before the read, not after it. `reviewed` is the one piece of
         # human-entered state in this file and `extract_patterns` always returns
@@ -3865,7 +3879,7 @@ def command_patterns(args: argparse.Namespace) -> int:
                 prepared,
                 model=config.extract_model,
                 instructions=pattern_instructions,
-                style_guide=claude_client.read_style_guide(config.root),
+                style_guide=pattern_style_guide,
             )
         except JankiError as exc:
             failures.append(f"{prepared.origin_path.name}: {exc}")

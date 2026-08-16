@@ -52,16 +52,22 @@ or wrong, the fix is here, in the asking.
 sha-256 of the file's own bytes goes into the staging archive
 (`prompt_provenance.system_prompt_fingerprint`) and into a coverage approval,
 so a card from those passes can be traced to the exact text that produced it
-via `git log prompts/`. The other passes do not yet: `--polish-meanings`
-fingerprints the *record's* user turn rather than the template, and `patterns`
-records nothing. Worth closing, and not closed.
+via `git log prompts/`. The other three do not: `--ai` records no prompt
+fingerprint at all, `--polish-meanings` fingerprints the *record's* user turn
+rather than the template, and `patterns` records nothing. Worth closing, and
+not closed.
 
 ## Changing one
 
 Edit the file, run the pass, look at the output. If a clause matters enough
 that removing it should break something, `tests/test_prompts.py` is where that
 assertion goes — it reads these files, so a retired clause is a failing test
-rather than a silent weakening. Assertions living in `tests/test_enrich_ai.py`
+rather than a silent weakening.
+
+Today that holds for `enrich-examples.md` (two clauses), the three
+`extract-*.md` files and `approve-coverage.md`. `patterns.md`,
+`polish-meanings.md` and `style-guide.md` have no clause pinned, so a change
+to any of them passes silently. Worth closing when you next edit one. Assertions living in `tests/test_enrich_ai.py`
 must read the file too: they once read a Python constant holding a byte-identical
 copy, which meant deleting a clause from the file here changed nothing anyone
 would notice.

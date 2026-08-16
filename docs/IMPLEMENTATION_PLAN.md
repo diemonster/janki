@@ -3685,7 +3685,10 @@ examples now ship verbatim, and a pattern build no longer reads the collection
 at all. Also recorded: the repair **proposal machinery** lost its only
 instance (the punctuation repair was the sole proposal-only declaration), so
 `repair --accept-proposals` currently has no producer — delete or re-instance
-it in M8.4's audit. Roughly 240 tests retired with their subjects; the
+it in M8.4's audit. *(Resolved 2026-08-15: deleted. d7ee435 cut the whole
+subsystem — proposal documents, the two-phase journal, the archive, the
+dependency and staleness checks, `repair --propose`, `promote
+--accept-proposals` and the `proposal-only` mode.)* Roughly 240 tests retired with their subjects; the
 replaced local-failure fixtures in `test_review.py`/`test_pattern_cards.py`
 now use structural faults (unbalanced brackets), which is what local
 validation still owns.*
