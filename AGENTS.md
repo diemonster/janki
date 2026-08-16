@@ -108,7 +108,7 @@ template problem, never a finding. M8.3 slims this corpus to plain tests.*
   or `reading`. These fields determine Anki identity and review history.
 - The user owns live-eval consent, redistribution approval for owner-provided
   material, human unit-oracle acceptance, manual coverage acceptance,
-  repair-proposal acceptance, ambiguous new-identity resolution,
+  ambiguous new-identity resolution,
   existing-identity migration, accepted-risk approval, and baseline acceptance.
   An agent must not infer, generate, grant, or widen one of these decisions. It
   must not answer an approval prompt as the user.

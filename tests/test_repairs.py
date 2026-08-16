@@ -1,4 +1,4 @@
-"""Constrained repairs, review proposals, and their recovery transaction."""
+"""Constrained repairs: what they may touch, and what they refuse."""
 
 from __future__ import annotations
 
@@ -261,8 +261,7 @@ def test_mixed_check_plan_runs_each_callback_once_and_fingerprints_shown_bytes(
 
     declaration = replace(
         base,
-        code="test-proposal-preview",
-        mode="proposal-only",
+        code="test-check-plan-preview",
         transformation=transform,
     )
 
@@ -448,107 +447,3 @@ def test_noninteractive_apply_writes_only_the_checked_exact_plan(
 
     assert result == 0
     assert load_records(normalized)[0].romaji == "neko"
-
-
-def test_dependency_check_rejects_two_accepted_dependent_fields() -> None:
-    first = {
-        "record_id": "word:ねこ:ねこ",
-        "target_field": "meanings",
-        "basis_fields": ["meanings"],
-        "proposal_entry_fingerprint": "a" * 64,
-    }
-    second = {
-        "record_id": "word:ねこ:ねこ",
-        "target_field": "part_of_speech",
-        "basis_fields": ["meanings"],
-        "proposal_entry_fingerprint": "b" * 64,
-    }
-
-    with pytest.raises(repairs.RepairError, match="depends on accepted target"):
-        repairs._dependency_reasons(
-            [first, second], frozenset({"a" * 64, "b" * 64})
-        )
-    stale = repairs._dependency_reasons([first, second], frozenset({"a" * 64}))
-    assert stale == {
-        "b" * 64: "An accepted proposal changed basis field(s): meanings"
-    }
-
-
-def test_journal_removal_refuses_an_identity_swap(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    root, _normalized, staging = project(tmp_path, [record()])
-    journal = repairs.proposal_journal_path(staging)
-    text = '{"marker": "test"}\n'
-    journal.write_text(text, encoding="utf-8")
-    original_unlink = repairs.unlink_path_bound
-
-    def swap_then_unlink(path: Path, **kwargs: Any) -> None:
-        path.rename(path.with_suffix(".original"))
-        path.write_text(text, encoding="utf-8")
-        original_unlink(path, **kwargs)
-
-    monkeypatch.setattr(repairs, "unlink_path_bound", swap_then_unlink)
-
-    with pytest.raises(DataError, match="changed identity"):
-        repairs._remove_journal(journal, root, text)
-    assert journal.read_text(encoding="utf-8") == text
-
-
-def _proposal_only(code: str = "test-proposal-only") -> repairs.RepairDeclaration:
-    """A synthetic proposal-only declaration, so the proposal machinery keeps
-    its tests now that the punctuation repair — its only real instance — is
-    deleted. M8.3 left the machinery standing for M8.4 to delete or
-    re-instance; until that decision, these guards stay pinned."""
-    base = repairs.REGISTRY.get("record-romaji-from-reading")
-    assert base is not None
-    return replace(base, code=code, mode="proposal-only")
-
-
-def test_direct_apply_refuses_a_proposal_only_repair(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """The mode guard is what keeps `repair --apply` from writing a protected
-    change straight into vocabulary.json. Its only registered instance died
-    with M8.3, so it is pinned through a synthetic declaration — relaxing the
-    guard must fail this, not pass silently for want of a producer."""
-    monkeypatch.setattr(
-        repairs, "REGISTRY", repairs.RepairRegistry([_proposal_only()])
-    )
-    root, normalized, _staging = project(tmp_path, [record(romaji="wrong")])
-    before = normalized.read_bytes()
-
-    result = cli.main(
-        ["--root", str(root), "repair", str(normalized), "--apply", "test-proposal-only"]
-    )
-
-    assert result == 1
-    assert "only ingest-safe" in capsys.readouterr().err
-    assert normalized.read_bytes() == before
-
-
-def test_a_changed_declaration_version_makes_a_proposal_stale(
-    tmp_path: Path,
-) -> None:
-    """The staleness check is the accept transaction's precondition: a proposal
-    written under version N must not be applied under version N+1, whose
-    transform may produce something else entirely."""
-    root, normalized, staging = project(tmp_path, [record(romaji="wrong")])
-    document = repairs.read_safe_document(root, normalized, staging, normalized)
-    declaration = _proposal_only()
-    proposal_path, _entries = repairs.create_proposals(
-        document, [declaration], staging
-    )
-    changed_registry = repairs.RepairRegistry(
-        [replace(declaration, version="2.0.0")]
-    )
-
-    _review_state, stale = repairs.inspect_proposals(
-        root,
-        normalized,
-        staging,
-        proposal_path,
-        changed_registry,
-    )
-
-    assert stale

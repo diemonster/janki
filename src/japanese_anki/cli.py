@@ -2812,19 +2812,6 @@ def command_repair(args: argparse.Namespace) -> int:
         config.staging_dir,
         args.path,
     )
-    if args.propose is not None:
-        declarations = repairs.REGISTRY.select(args.propose)
-        invalid = [item.code for item in declarations if item.mode != "proposal-only"]
-        if invalid:
-            raise repairs.RepairError(
-                "--propose accepts only proposal-only repairs: " + ", ".join(invalid)
-            )
-        target, entries = repairs.create_proposals(
-            document, declarations, config.staging_dir
-        )
-        print(f"Wrote {len(entries)} proposal(s) to {target}")
-        return 0
-
     if args.apply is not None:
         declarations = repairs.REGISTRY.select(args.apply)
         invalid = [item.code for item in declarations if item.mode != "ingest-safe"]
@@ -2863,68 +2850,6 @@ def command_repair(args: argparse.Namespace) -> int:
     return 0
 
 
-def _proposal_shape(path: Path) -> bool:
-    try:
-        raw = load_structured(path)
-    except JankiError:
-        return False
-    return isinstance(raw, Mapping) and raw.get("kind") == repairs.PROPOSAL_KIND
-
-
-def _accept_repair_proposals(args: argparse.Namespace, config: ProjectConfig) -> int:
-    if repairs.recover_proposal_transaction(
-        config.root, config.normalized_file, config.staging_dir
-    ):
-        print("Recovered the unfinished repair proposal transaction.")
-        return 0
-    if not sys.stdin.isatty():
-        raise repairs.RepairError(
-            "Proposal acceptance needs an interactive terminal for y/n/q review"
-        )
-    review_state, stale = repairs.inspect_proposals(
-        config.root,
-        config.normalized_file,
-        config.staging_dir,
-        args.file,
-    )
-    if stale:
-        repairs.mark_stale_proposals(review_state, stale)
-        summary = "; ".join(
-            f"{entry_fingerprint}: {reason}"
-            for entry_fingerprint, reason in sorted(stale.items())
-        )
-        raise repairs.RepairError(
-            f"Stale proposal entries were marked in {args.file}: {summary}"
-        )
-    decisions: dict[str, bool] = {}
-    for entry in review_state.entries:
-        print(
-            f"{entry['record_id']} {entry['target_field']}: "
-            f"{_format_repair_value(entry['old_value'])} -> "
-            f"{_format_repair_value(entry['new_value'])}"
-        )
-        while True:
-            try:
-                answer = input("Accept this field? [y/n/q] ").strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                print()
-                answer = "q"
-            if answer in {"y", "n", "q"}:
-                break
-            print("Enter y, n, or q.")
-        if answer == "q":
-            break
-        decisions[entry["proposal_entry_fingerprint"]] = answer == "y"
-    result = repairs.accept_proposals(review_state, decisions)
-    print(
-        f"Accepted {result.accepted} proposal(s); "
-        f"{result.remaining} remain in {args.file}."
-    )
-    if result.accepted:
-        print(f"Archived accepted proposals to {result.archive_path}")
-    return 0
-
-
 def command_promote(args: argparse.Namespace) -> int:
     """Move a reviewed staging file's records into the normalized collection.
 
@@ -2939,18 +2864,6 @@ def command_promote(args: argparse.Namespace) -> int:
     safe.
     """
     config = _load_config(args)
-    proposal_shaped = _proposal_shape(args.file)
-    if args.accept_proposals:
-        if not proposal_shaped:
-            raise PromoteError(
-                "--accept-proposals accepts only a repair proposal staging file"
-            )
-        return _accept_repair_proposals(args, config)
-    if proposal_shaped:
-        raise PromoteError(
-            f"{args.file} contains repair proposals. Use "
-            f"'janki promote {args.file} --accept-proposals'."
-        )
     path = args.file.resolve()
     done = (config.staging_dir / "done" / path.name).resolve()
     if _inside_archive(path, done.parent):
@@ -4457,12 +4370,6 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="CODE",
         help="Apply the ordered ingest-safe repair codes.",
     )
-    repair_actions.add_argument(
-        "--propose",
-        nargs="+",
-        metavar="CODE",
-        help="Write proposal-only repair entries to active staging.",
-    )
     repair_parser.add_argument(
         "--format",
         choices=("text", "json"),
@@ -4483,13 +4390,7 @@ def build_parser() -> argparse.ArgumentParser:
     promote_parser.add_argument(
         "file", type=_path, metavar="FILE", help="The staging file to promote."
     )
-    promote_modes = promote_parser.add_mutually_exclusive_group()
-    promote_modes.add_argument(
-        "--accept-proposals",
-        action="store_true",
-        help="Review and accept a repair proposal file one field at a time.",
-    )
-    promote_modes.add_argument(
+    promote_parser.add_argument(
         "--skip-reading-check",
         action="store_true",
         help=(

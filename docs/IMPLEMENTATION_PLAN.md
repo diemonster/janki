@@ -1512,7 +1512,9 @@ minimum, and the API is silent about missing it.
 `prompts/ENRICH_VOCABULARY.md` became a migration table plus the one
 honest gap — **`transitivity` has no successor pass.** It is set at
 import and nothing backfills it, so claiming the prompt's rules all
-survived would have been false.
+survived would have been false. *(That file was deleted 2026-08-15 with
+the rest of `prompts/`; the gap it recorded is carried into M8.5, which
+closes it.)*
 
 Three things the reviews turned up that were code, not prose. (1)
 `_print_merge_summary` advertised `--prefer-incoming` on `promote` and
@@ -3678,9 +3680,10 @@ and a weak card gets a stronger template clause. Also here: the three
 hand-seeded records with empty `imported_from` get it filled, so DESIGN.md's
 provenance sentence is true without a caveat; and `transitivity` gets a filler
 at last — set at import and backfilled by nothing since the hand-paste era
-(the gap is recorded in `prompts/ENRICH_VOCABULARY.md`), while jpdb's
-`vt`/`vi` POS codes have carried the dictionary answer all along. Wire it
-into `enrich --jpdb`.
+— the gap was recorded in the hand-paste prompt `prompts/ENRICH_VOCABULARY.md`,
+deleted 2026-08-15, which is why it is restated here rather than cited — while
+jpdb's `vt`/`vi` POS codes have carried the dictionary answer all along. Wire
+it into `enrich --jpdb`.
 
 Depends on: M7.6P, M8.1–M8.4.
 Files: `data/inbox/` sources already collected, staging archives, deck

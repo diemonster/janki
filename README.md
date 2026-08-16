@@ -170,7 +170,6 @@ own collection is the newer side. Details and the measurements behind them:
 | `janki import-jpdb-reviews FILE` | Tag records jpdb already drills |
 | `janki repair PATH` | Show exact changes from registered safe repairs |
 | `janki promote FILE.yaml` | Move a reviewed staging file into the collection |
-| `janki promote FILE.yaml --accept-proposals` | Review repair proposals by field |
 | `janki enrich --jpdb` | Fill fields from the dictionary |
 | `janki enrich --ai` | Write example sentences and usage notes |
 | `janki enrich --polish-meanings --batch-submit` | Queue a large gloss-improvement pass for later review |

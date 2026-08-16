@@ -301,10 +301,12 @@ Use `--apply CODE --expected-plan SHA256` for a non-interactive, derived-field
 repair. The fingerprint must match the new plan. Direct apply cannot change an
 ID or a protected content field.
 
-A protected content repair uses `--propose CODE`. This command writes a
-fingerprinted file to active staging. It does not change the source record. Run
-`janki promote FILE --accept-proposals` in a terminal. The command asks for a
-`y`, `n`, or `q` decision for each field.
+There is no repair for a protected content field. A staged proposal flow
+existed for that — `--propose CODE`, then `promote --accept-proposals` field by
+field — with exactly one producer, which M8.3 deleted as model-audit logic; the
+rest went with it in M8.4. Content a person wrote is changed by that person, in
+the staging file or the record, or by a template clause that asks for something
+better next time.
 
 Then build as usual:
 
