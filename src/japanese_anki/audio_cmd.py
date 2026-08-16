@@ -7,16 +7,22 @@ read naturally, because forcing an accent across one needs accent data janki
 does not have and a natural adult voice matters more there than a guaranteed
 contour.
 
-Everything here is arranged around one rule: **never speak what janki is not
-sure of.** A record with no pitch pattern is skipped and reported, not
-synthesized with whatever the engine guesses — DESIGN_V2 is explicit that the
-homographs a guess gets wrong are exactly the ones a pitch card is for.
-``--allow-default-accent`` opts into the guess deliberately and tags the ledger
-entry ``accent_unverified`` so the choice is visible afterwards rather than
-indistinguishable from a verified one. M8.3 deleted the furigana flag and the
-teaching-suitability hold: janki's logic enriches the card, it never audits
-the model, and what the sentence says is the model's answer to a template
-that asked precisely.
+**Every word gets a clip.** When janki has the pitch pattern it forces the
+accent; when it does not, the engine reads the kana and picks one, the ledger
+entry is tagged ``accent_unverified`` so the guess is visible afterwards rather
+than indistinguishable from a verified clip, and every run says which records
+are carrying one — not only the run that wrote them. Earlier this skipped the
+record instead — DESIGN_V2 argued that a guess is wrong on exactly the
+homographs a pitch card is for, which is true — but a silent card teaches
+nothing at all, and the owner's decision (2026-08-15) is that a clip with an
+unverified accent beats no clip. The trade is safe because it is temporary:
+word audio is fingerprinted over ``reading + pattern``, so the day
+``enrich --jpdb`` fills the accent the guessed clip reads as stale and the next
+``janki audio`` replaces it with a forced one.
+
+M8.3 deleted the furigana flag and the teaching-suitability hold: janki's logic
+enriches the card, it never audits the model, and what the sentence says is the
+model's answer to a template that asked precisely.
 
 Files are content-addressed (``janki-<fingerprint>.wav``), which is what makes
 staleness fall out rather than needing tracking: change a sentence and its audio
@@ -99,9 +105,12 @@ class AudioResult:
     records: list[VocabularyRecord] = field(default_factory=list)
     #: ``record id -> [file names written]``
     written: dict[str, list[str]] = field(default_factory=dict)
-    #: Records skipped for having no accent pattern, which is the interesting
-    #: skip: it means a card will have no word audio until somebody supplies one.
-    no_pattern: list[str] = field(default_factory=list)
+    #: Records whose accent janki could not force, so the engine chose one.
+    #: Their clips exist and are tagged ``accent_unverified``. Reported on
+    #: *every* run, not only the one that wrote the clip: a guessed accent is a
+    #: standing property of the record until the dictionary supplies a pattern,
+    #: and a report that fires once is one nobody sees again.
+    guessed_accent: list[str] = field(default_factory=list)
     #: Records with no reading at all, which cannot be voiced and are not the
     #: same problem as a missing accent.
     no_reading: list[str] = field(default_factory=list)
@@ -178,15 +187,31 @@ def _word_audio(
     media_dir: Path,
     result: AudioResult,
     force: bool,
-    allow_default_accent: bool,
 ) -> VocabularyRecord:
+    # Decided before the currency check, deliberately. Whether this record's
+    # accent can be forced is a property of the *record*, true on every run,
+    # not of the one run that happened to write the clip — appended after the
+    # early return below, the report fired once and then went quiet while the
+    # clips went on carrying a guess. The mismatch warning is the same: bad
+    # data stays bad, so it keeps saying so.
+    spoken: str | None = None
     pattern = pitch.select_pattern(record)
-    if not pattern and not allow_default_accent:
-        # The skip DESIGN_V2 asks for. Reported rather than silent, because a
-        # word with no audio is a card that behaves differently from its
-        # neighbours and the reason is not visible on the card.
-        result.no_pattern.append(record.id)
-        return record
+    if pattern:
+        try:
+            spoken = pitch.to_aquestalk(record.reading, pattern)
+        except pitch.PitchError as exc:
+            # A pattern that does not fit its reading cannot be forced —
+            # `to_aquestalk` refuses rather than inventing an alignment — so
+            # this is the no-pattern case wearing different clothes, and it
+            # takes the same fallback. The warning still names the bad data;
+            # falling back voices the card, it does not hide the fault.
+            result.warnings.append(f"{record.id}: {exc}")
+    if spoken is None:
+        # `None`, never an empty string: "no pattern", "the pattern did not
+        # fit" and "the notation came back empty" are three different facts,
+        # and a truthiness test would silently fold a bug in `to_aquestalk`
+        # into the ordinary no-pattern path with no warning at all.
+        result.guessed_accent.append(record.id)
 
     content_fp = ledger_mod.word_audio_content_fingerprint(record)
     if not force and _is_current(
@@ -201,22 +226,13 @@ def _word_audio(
         result.up_to_date += 1
         return record
 
-    if pattern:
-        try:
-            spoken = pitch.to_aquestalk(record.reading, pattern)
-        except pitch.PitchError as exc:
-            # A pattern that does not fit its reading is exactly the case
-            # `to_aquestalk` refuses rather than guesses at, and this command
-            # must not convert that refusal into a guess of its own.
-            result.warnings.append(f"{record.id}: {exc}")
-            result.no_pattern.append(record.id)
-            return record
+    if spoken is not None:
         data = provider.synthesize(spoken, forced_accent=True)
         details = {}
     else:
-        # `--allow-default-accent`: the engine reads the kana and picks the
-        # accent. Marked, because a listener cannot tell this clip from a
-        # verified one and later work needs to.
+        # The engine reads the kana and picks the accent. Marked, because a
+        # listener cannot tell this clip from a verified one and later work
+        # needs to.
         data = provider.synthesize(record.reading, forced_accent=False)
         details = {ACCENT_UNVERIFIED: True}
 
@@ -355,7 +371,6 @@ def generate_audio(
     examples: bool = False,
     ids: Sequence[str] | None = None,
     force: bool = False,
-    allow_default_accent: bool = False,
 ) -> AudioResult:
     """Synthesize what is missing, and report what was deliberately not.
 
@@ -402,7 +417,6 @@ def generate_audio(
                     media_dir=media_dir,
                     result=result,
                     force=force,
-                    allow_default_accent=allow_default_accent,
                 )
             if examples:
                 updated = _example_audio(

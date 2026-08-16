@@ -540,6 +540,16 @@
           },
           "speed": 1.0,
           "voice": "onyx"
+        },
+        {
+          "accent_unverified": true,
+          "at": "2026-08-15",
+          "content_fp": "1b53aa112b9c",
+          "file": "janki-9c7e60613821.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
         }
       ],
       "enriched": [
@@ -4087,6 +4097,16 @@
           },
           "speed": 1.0,
           "voice": "onyx"
+        },
+        {
+          "accent_unverified": true,
+          "at": "2026-08-15",
+          "content_fp": "eef37b3f5890",
+          "file": "janki-f47dd0aea75f.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
         }
       ],
       "enriched": [
@@ -5064,6 +5084,16 @@
           },
           "speed": 1.0,
           "voice": "onyx"
+        },
+        {
+          "accent_unverified": true,
+          "at": "2026-08-15",
+          "content_fp": "519f9962f040",
+          "file": "janki-a93e41552feb.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
         }
       ],
       "enriched": [
@@ -5890,6 +5920,16 @@
           },
           "speed": 1.0,
           "voice": "onyx"
+        },
+        {
+          "accent_unverified": true,
+          "at": "2026-08-15",
+          "content_fp": "d634afef59f8",
+          "file": "janki-1aabf466e422.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
         }
       ],
       "enriched": [
@@ -6615,7 +6655,18 @@
     },
     "word:貴方:あなた": {
       "added_at": "2026-08-13",
-      "audio": [],
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-08-15",
+          "content_fp": "e640f55e0224",
+          "file": "janki-193d3a009fdb.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-13",

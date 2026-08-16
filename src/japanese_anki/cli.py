@@ -2723,18 +2723,21 @@ def command_audio(args: argparse.Namespace) -> int:
         examples=args.examples,
         ids=args.ids or None,
         force=args.force,
-        allow_default_accent=args.allow_default_accent,
     )
 
     for warning in result.warnings:
         print(f"warning: {warning}", file=sys.stderr)
-    if result.no_pattern:
+    if result.guessed_accent:
+        # Phrased about the *records*, not the clips: this list is built before
+        # anything is written, so it is the honest subject either way — and it
+        # is reported on every run, including one that wrote nothing.
         print(
-            f"warning: {len(result.no_pattern)} record(s) have no accent pattern "
-            "and were skipped rather than voiced with a guessed one — "
-            "'janki enrich --jpdb' fills it, or --allow-default-accent opts into "
-            f"the guess: {', '.join(result.no_pattern[:5])}"
-            + (" ..." if len(result.no_pattern) > 5 else ""),
+            f"warning: {len(result.guessed_accent)} record(s) have no usable "
+            "accent pattern, so their word audio carries the engine's own "
+            "accent and is tagged 'accent_unverified'. 'janki enrich --jpdb' "
+            "fills the pattern, and the next 'janki audio' re-voices them: "
+            f"{', '.join(result.guessed_accent[:5])}"
+            + (" ..." if len(result.guessed_accent) > 5 else ""),
             file=sys.stderr,
         )
     if result.no_reading:
@@ -4413,7 +4416,12 @@ def build_parser() -> argparse.ArgumentParser:
         "ids", nargs="*", metavar="ID", help="Record ids. Omit for every record."
     )
     audio_parser.add_argument(
-        "--words", action="store_true", help="Word audio, with the accent forced."
+        "--words",
+        action="store_true",
+        help=(
+            "Word audio — accent forced when the pattern is known, otherwise "
+            "the engine's own and tagged 'accent_unverified'."
+        ),
     )
     audio_parser.add_argument(
         "--examples", action="store_true", help="Example-sentence audio, read naturally."
@@ -4428,14 +4436,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     audio_parser.add_argument(
         "--prune", action="store_true", help="Delete janki-* clips nothing references."
-    )
-    audio_parser.add_argument(
-        "--allow-default-accent",
-        action="store_true",
-        help=(
-            "Voice records with no accent pattern, letting the engine choose — "
-            "tagged 'accent_unverified' in the ledger."
-        ),
     )
     audio_parser.set_defaults(handler=command_audio)
 

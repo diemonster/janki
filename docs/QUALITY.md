@@ -208,10 +208,13 @@ you have accumulated real review history. See `CARD_DESIGN.md`.
   jpdb's dictionary data. Neither is ever guessed: an empty field means the
   dictionary did not say, and `janki status` counts it as missing rather than
   inventing a value. See [DESIGN_V2.md](DESIGN_V2.md).
-- Word audio needs a pitch accent, so a record without one is skipped and
-  reported rather than voiced with the engine's guess — the guess is wrong on
-  exactly the homographs a pitch card exists for. `--allow-default-accent` opts
-  into it deliberately and marks those clips in the ledger.
+- Word audio forces the pitch accent when janki has the pattern, because the
+  engine's own guess is wrong on exactly the homographs a pitch card exists
+  for. A record without a pattern is still voiced — a silent card teaches
+  nothing — but the run reports it and the clip is tagged `accent_unverified`
+  in the ledger. Fill the pattern with `janki enrich --jpdb` and the next
+  `janki audio` replaces the clip, because the audio fingerprint covers the
+  pattern.
 - `janki status` reads your Anki collection to report an import that silently
   failed to upgrade the notetype, but only after the fact — nothing can stop the
   bad import while it is happening. Tick **Merge Notetypes** — see

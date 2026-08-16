@@ -1781,7 +1781,9 @@ existing. Asking the ledger alone (which is what shipped first, as
 `janki-*`: a clip somebody dropped into `data/media` by hand is theirs.
 A pattern that does not fit its reading is reported and skipped, because
 `to_aquestalk` refuses rather than guesses and this command must not
-convert that refusal into a guess of its own.*
+convert that refusal into a guess of its own.* *(Reversed 2026-08-15 under
+M8.1: it takes the no-pattern fallback and is voiced with the engine's
+accent, warning on every run rather than being silently absent.)*
 
 Depends on: M5.1, M5.2, M2.2, M1.3
 Files: new `src/japanese_anki/audio_cmd.py`, `src/japanese_anki/cli.py`,
@@ -1791,6 +1793,8 @@ Design: DESIGN_V2 "Audio > Mechanics".
 - Flags: `--words`, `--examples`, `--provider {voicevox,azure}`
   (overrides `[tts] provider`; azure errors "not implemented" until
   M5.7), `--force`, `--prune`, `--allow-default-accent`, `IDS...`.
+  *(`--allow-default-accent` deleted 2026-08-15 under M8.1 — the fallback
+  it opted into is now unconditional.)*
   `AudioError` defined here.
 - `--words`: records with reading + `select_pattern` result and no
   current word audio (ledger content_fp-aware): M5.1 convert → M5.2
@@ -1798,7 +1802,9 @@ Design: DESIGN_V2 "Audio > Mechanics".
   `record.audio` (media-dir-relative) → ledger `record_audio` with the
   word content fp. Empty pattern → **skip + flag** in the summary;
   `--allow-default-accent` synthesizes without forcing (plain
-  audio_query path) and ledger-tags `accent_unverified`.
+  audio_query path) and ledger-tags `accent_unverified`. *(2026-08-15:
+  the unforced path is what every pattern-less record takes now; the
+  flag is gone and the summary reports the guess on every run.)*
 - `--examples`: per example with furigana **not** listed in the
   record's unverified-furigana key (see Conventions) and no current
   audio: synthesize sentence (no accent forcing), filename/content fps
@@ -3473,45 +3479,62 @@ approach is superseded, the old one is deleted in the same change — code,
 config keys, data shims, tests, docs. A milestone that replaces a mechanism is
 not done until the mechanism it replaced is gone.*
 
-### [ ] M8.1 OpenAI TTS replaces VOICEVOX — words included
+### [ ] M8.1 OpenAI TTS for sentences; VOICEVOX keeps the words
 
-Decided 2026-08-15, and sharpened after review: the owner has listened to the
-output and OpenAI TTS speaks natural Japanese, so it takes **both** word and
-example clips. This overturns the earlier recorded measurement ("橋 and 箸
-would come out identical" — `tts/openai_tts.py`, `docs/AUDIO.md` "measured,
-not assumed") on the owner's judgment. If an isolated word clip ever sounds
-wrong, the fix is per-clip — the reading or accent rides along in that clip's
-TTS `instructions` — never machinery.
+**Reversed 2026-08-15, after measuring.** This milestone previously moved word
+clips to OpenAI TTS too, on the owner's judgment that it speaks natural
+Japanese. Re-examined at the owner's request, the numbers argued the other way
+and the owner's decision is that **VOICEVOX stays for words**:
 
-Remove: the VOICEVOX provider and the word refusal in `openai_tts.py`;
-`pitch.to_aquestalk` (its second caller, `enrich._compatible_pitch_patterns`,
-keeps only the mora-count fit `validation.py` already performs);
-`audio_accent` end to end — synthesis steering *and* the card-display
-override, since 0 of 97 records carry one and pre-release means delete now,
-re-add only if a wrong jpdb accent ever ships; `--allow-default-accent`, the
-accent-fitness guard, the `accent_unverified` ledger tag; `tts.voicevox_*`,
-`tts.azure_*`, and `tts.provider`/`sentence_provider` (one provider needs no
-selector); `voicevox_speed` — pace lives in the `openai_instructions` prose,
-which is also the only voice steering left, and DESIGN.md says so.
+- 89 of 97 records carry a pitch pattern, so forcing applies to 92% of the
+  deck, and 0 patterns mismatch their reading — the pilot-era gap is closed.
+- The split already in production is exactly the hybrid: every word clip is a
+  VOICEVOX `.wav` (92 when this was measured, 97 after the accent fallback
+  below voiced the rest), all 144 example clips OpenAI `.mp3`.
+- The measured claim stands and is the whole point: unforced, 橋/箸/端 all come
+  out accent 1 (`tts/openai_tts.py`). An isolated word gives the listener
+  nothing *but* the accent, which is why the word clip is the one artifact
+  worth forcing — a sentence carries context that disambiguates.
+- Keeping costs nothing to execute: the 92 clips stay valid, against a billed
+  regeneration for switching.
 
-Corrected from the first draft of this milestone: clips are content-addressed
-by **record identity** (`fp(record.id)`, `fp(record.id + example.japanese)`),
-not by text — two records sharing a sentence keep two clips, and an edit
-orphans the old clip visibly. That stays. Migration: regenerate every clip
-through the new provider (billed; ~92 word `.wav` plus the example clips) via
-`janki audio --words --examples --prune` — `docs/AUDIO.md`'s re-voicing
-procedure is written for exactly this, so run it before rewriting that
-section. The `.wav`/`.mp3` twin during transition is already handled by
-`status._EXTENSION_PREFERENCE`.
+The honest costs of keeping, recorded so they are not rediscovered as
+surprises: word audio needs a local server on `localhost:50021`, and since
+`refresh` runs `audio --words --examples` a full refresh needs it up unless
+`--no-audio` is passed (the availability check is per-job, so an
+examples-only run never asks for it);
+and one card carries two voices, 青山龍星 for the word and `onyx` for the
+sentence.
+
+*Done in this reversal: the accent safe-refusal is gone.* A record with no
+usable pattern used to get no word clip at all unless `--allow-default-accent`
+was passed — 5 records silent today. Now every word is voiced, the engine
+picking the accent when janki cannot force one, tagged `accent_unverified` in
+the ledger and reported by the run. Safe because it is temporary: the word
+audio fingerprint covers `reading + pattern`, so filling the accent with
+`enrich --jpdb` makes the guessed clip stale and the next `janki audio`
+replaces it — pinned end-to-end, with a control half, because the first draft
+of that test passed with the pattern dropped from the fingerprint entirely.
+`--allow-default-accent` is deleted: it now opts into nothing. A pattern that
+does not fit its reading takes the same fallback rather than staying the last
+silent refusal, and still warns.
+
+What is left for this milestone, all sentence-side:
+
+- The per-clip `instructions` escape hatch, so a sentence that reads wrong is
+  fixed in that clip rather than in machinery.
+- Delete `tts.azure_*` and the `azure` provider choice: `_speech_provider`
+  refuses it by name with an explanation, which is worth keeping as a message
+  but not as a config surface or a `--provider` choice.
+- Clips stay content-addressed by **record identity** (`fp(record.id)`,
+  `fp(record.id + example.japanese)`), not by text — two records sharing a
+  sentence keep two clips, and an edit orphans the old clip visibly.
+
+No migration and no billed regeneration: nothing about existing clips changes.
 
 Depends on: nothing.
-Files: `src/japanese_anki/tts/`, `audio_cmd.py`, `pitch.py`, `enrich.py`,
-`cli.py`, `config.py`, `exporters/anki.py` (`_accent_patterns`),
-`janki.toml`, `scripts/voice-samples.py` (delete), `docs/AUDIO.md`,
-`docs/DATA_MODEL.md`, `data/media/`, `data/ledger.json`, and the tests that
-pin `audio_accent`/aquestalk (`test_anki_build.py`, `test_pitch.py`,
-`test_validation.py`, `test_merge.py`, `test_models.py`, `test_ledger.py`,
-`test_audio_cmd.py`, `test_docs.py`).
+Files: `src/japanese_anki/tts/openai_tts.py`, `audio_cmd.py`, `cli.py`,
+`config.py`, `janki.toml`, `docs/AUDIO.md`.
 
 ### [x] M8.2 Delete the review subsystem
 

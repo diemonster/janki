@@ -261,10 +261,12 @@ Design and history, for anyone changing janki rather than using it:
 - The Shirabe deep link (`shirabelookup://search?w=...`) and the jpdb search URL
   on each card back are unverified against the live app and site. Test them
   before relying on them.
-- Pitch accent and frequency rank are never guessed. An empty field means the
-  dictionary did not say, and word audio is skipped rather than voiced with an
-  engine's guess — the guess is wrong on exactly the homographs a pitch card
-  exists for.
+- Pitch accent and frequency rank are never guessed *in the record*: an empty
+  field means the dictionary did not say. Word audio is still generated — a
+  silent card teaches nothing — but with the engine's own accent rather than a
+  forced one, tagged `accent_unverified` in the ledger and named by every
+  `janki audio` run until `enrich --jpdb` fills the pattern, because the guess
+  is wrong on exactly the homographs a pitch card exists for.
 - Rendering is verified against Anki Desktop only. AnkiMobile and AnkiDroid
   layout, and whether the Shirabe app answers its URL scheme, are still manual
   checks.

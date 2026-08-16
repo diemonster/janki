@@ -489,6 +489,10 @@ hand-waved, because the naive rule is wrong for the largest accent class:
   (letting the engine guess would violate the never-guess rule for exactly
   the homograph minimal pairs that matter); `--allow-default-accent` opts
   in explicitly and tags the ledger entry `accent_unverified`.
+  *(Reversed 2026-08-15: every word is voiced, the engine choosing the accent
+  when janki cannot force one, and `--allow-default-accent` is deleted because
+  it opts into nothing. The clip is still tagged `accent_unverified`, and the
+  audio fingerprint covers the pattern, so it is replaced when one arrives.)*
 - Community testing says even forced accents are occasionally rendered
   wrong (やり直す is a known case) — spot-check; the ledger makes
   regeneration targeted.
@@ -594,7 +598,7 @@ janki promote data/staging/X.yaml [--skip-reading-check]
 janki enrich [--jpdb] [--ai] [--polish-meanings] [--batch-submit|--batch-fetch]
              [--force-fields F,..] [--yes] [IDS...]
 janki audio [--words] [--examples] [--provider P] [--force] [--prune]
-            [--allow-default-accent] [IDS...]
+            [IDS...]
 janki status [--unexported] [--missing-audio] [--duplicates] [--staged] [--rebuild] [--format ids]
 janki refresh [--deck DECK]   # the weekly loop, in order (below)
 janki migrate-inline DECK.yaml   # one-time, Milestone 1

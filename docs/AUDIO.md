@@ -39,10 +39,14 @@ container is OOM-killed. That only bites when auditioning many voices at once �
 janki audio --words --examples
 ```
 
-Both kinds are off unless asked for. It skips — and reports — anything it is
-not sure of: a record with no accent pattern is not voiced with a guess.
-`--prune` removes clips no record references any more, taking their ledger
-entries with them.
+Both kinds are off unless asked for. Every word gets a clip: when janki has
+the pitch pattern it forces the accent, and when it does not the engine picks
+one — those clips are reported and tagged `accent_unverified` in the ledger.
+That is not permanent. Word audio is fingerprinted over the reading *and* the
+pattern, so once `janki enrich --jpdb` fills the accent the guessed clip reads
+as stale and the next `janki audio` replaces it with a forced one, no `--force`
+needed. `--prune` removes clips no record references any more, taking their
+ledger entries with them.
 
 ## Choosing a voice
 
@@ -114,7 +118,17 @@ change.
 
 Within one engine, filenames are content-addressed and unchanged by a re-voice,
 so clips are rewritten in place and Anki's media sync picks up the new audio
-behind the same `[sound:]` references. **Switching engines changes the file
+behind the same `[sound:]` references.
+
+> **Unverified, and worth one manual check.** That last sentence is true of
+> AnkiWeb sync. janki delivers through `janki build` → `.apkg` → import, and
+> nothing here pins what your Anki version does when an incoming package
+> carries a media file whose *name* matches one already in `collection.media`
+> but whose *bytes* differ. If it keeps the existing file, a re-voice is
+> silently ignored on import — which matters most for a clip upgrading from a
+> guessed accent to a forced one, since the note text does not change either.
+> If a re-voiced clip sounds unchanged after an import, delete the file from
+> `collection.media` and import again. **Switching engines changes the file
 extension** — VOICEVOX writes `.wav`, OpenAI `.mp3` — so the note's `[sound:]`
 reference is repointed and the old clip is left behind unreferenced. Follow that
 one with `janki audio --examples --prune`.

@@ -74,7 +74,7 @@ def run(records: list[VocabularyRecord], tmp_path: Path, **kwargs: Any):
 
 
 # ---------------------------------------------------------------------------
-# Words: the accent is forced, or nothing is said
+# Words: the accent is forced when known, and marked when guessed
 # ---------------------------------------------------------------------------
 
 
@@ -97,38 +97,114 @@ def test_the_clip_lands_in_the_media_dir_and_on_the_record(tmp_path: Path) -> No
     assert "/" in stored and not stored.startswith("/"), "relative to media_dir"
 
 
-def test_a_record_with_no_pattern_is_skipped_and_reported(tmp_path: Path) -> None:
-    """The rule the whole command is arranged around. An engine's guess is
-    wrong exactly for the homographs a pitch card is for, so silence is the
-    honest answer — but it has to be a visible one."""
-    result, provider, _ = run([record(pitch_accent=[])], tmp_path, words=True)
-
-    assert provider.said == []
-    assert result.no_pattern == ["word:橋:はし"]
-    assert result.file_count == 0
-
-
-def test_allow_default_accent_opts_into_the_guess_and_marks_it(tmp_path: Path) -> None:
-    result, provider, book = run(
-        [record(pitch_accent=[])], tmp_path, words=True, allow_default_accent=True
-    )
+def test_a_record_with_no_pattern_is_voiced_with_the_engines_own_accent(
+    tmp_path: Path,
+) -> None:
+    """The owner's decision (2026-08-15): a clip carrying an unverified accent
+    beats no clip. It has to be a *marked* one — a listener cannot tell it from
+    a forced clip, and the ledger is where later work finds out."""
+    result, provider, book = run([record(pitch_accent=[])], tmp_path, words=True)
 
     # Read naturally, not forced — there is no accent to force.
     assert provider.said == [("はし", False)]
     entry = book.records["word:橋:はし"]["audio"][0]
     assert entry[audio_cmd.ACCENT_UNVERIFIED] is True
+    assert result.guessed_accent == ["word:橋:はし"]
     assert result.file_count == 1
 
 
-def test_a_pattern_that_does_not_fit_its_reading_is_not_guessed_around(
+def test_a_forced_clip_carries_no_unverified_mark(tmp_path: Path) -> None:
+    """The other direction, and the one that matters for the mark's meaning: a
+    tag written unconditionally would make every clip look guessed and the
+    upgrade below unfindable."""
+    result, provider, book = run([record(pitch_accent=["LHL"])], tmp_path, words=True)
+
+    assert provider.said == [("ハシ'", True)]
+    assert audio_cmd.ACCENT_UNVERIFIED not in book.records["word:橋:はし"]["audio"][0]
+    assert result.guessed_accent == []
+
+
+def test_a_guessed_accent_is_reported_on_every_run(tmp_path: Path) -> None:
+    """Not only on the run that wrote the clip.
+
+    A guessed accent is a standing property of the record until the dictionary
+    supplies a pattern, so the report has to survive the currency check that
+    skips re-synthesizing. Appended after that early return — where it first
+    was — this fired once and then went quiet while the clips went on carrying
+    a guess, which is silence about the one thing the fallback trades away.
+    """
+    first, _, book = run([record(pitch_accent=[])], tmp_path, words=True)
+    stored = f"audio/{first.written['word:橋:はし'][0]}"
+    assert first.guessed_accent == ["word:橋:はし"]
+
+    again, provider, _ = run(
+        [record(pitch_accent=[], audio=stored)], tmp_path, words=True, book=book
+    )
+
+    assert provider.said == [], "nothing was re-voiced"
+    assert again.up_to_date == 1
+    assert again.guessed_accent == ["word:橋:はし"], "still carrying a guess"
+
+
+def test_a_mismatched_pattern_warns_on_every_run(tmp_path: Path) -> None:
+    """Same rule for the bad-data half. The clip settles, the fault does not:
+    a warning that fires once leaves a record whose stored pattern contradicts
+    its reading looking resolved forever."""
+    first, _, book = run([record(pitch_accent=["LH"])], tmp_path, words=True)
+    stored = f"audio/{first.written['word:橋:はし'][0]}"
+
+    again, provider, _ = run(
+        [record(pitch_accent=["LH"], audio=stored)], tmp_path, words=True, book=book
+    )
+
+    assert provider.said == []
+    assert any("does not fit" in w for w in again.warnings)
+
+
+def test_a_guessed_clip_is_replaced_once_the_pattern_arrives(tmp_path: Path) -> None:
+    """What makes the fallback safe rather than a silent lock-in. Word audio is
+    fingerprinted over reading + pattern, so a clip voiced without an accent
+    reads as stale the day `enrich --jpdb` fills one — no --force needed. If
+    that ever stopped holding, the records voiced by guess today would keep
+    their guess forever.
+
+    The record has to carry its audio reference forward, and the control half
+    is why: `_is_current` short-circuits on an empty `audio` field, so a
+    re-run built from a bare record re-voices whatever the fingerprint says and
+    proves nothing. Measured — the first draft of this test passed with the
+    pattern dropped from the fingerprint entirely.
+    """
+    guessed, _, book = run([record(pitch_accent=[])], tmp_path, words=True)
+    stored = f"audio/{guessed.written['word:橋:はし'][0]}"
+
+    # Control: same content, reference carried, nothing to do.
+    same, provider, book = run(
+        [record(pitch_accent=[], audio=stored)], tmp_path, words=True, book=book
+    )
+    assert provider.said == [], "an unchanged guess is not re-voiced"
+    assert same.up_to_date == 1
+
+    # Now the dictionary answers, and the same clip is no longer current.
+    result, provider, book = run(
+        [record(pitch_accent=["LHL"], audio=stored)], tmp_path, words=True, book=book
+    )
+
+    assert provider.said == [("ハシ\'", True)], "re-voiced, and forced this time"
+    assert result.up_to_date == 0, "the guessed clip did not answer for it"
+    assert result.guessed_accent == []
+
+
+def test_a_pattern_that_does_not_fit_its_reading_falls_back_and_warns(
     tmp_path: Path,
 ) -> None:
     """`to_aquestalk` refuses a mismatched pattern rather than inventing an
-    alignment; this command must not turn that refusal into a guess."""
+    alignment, so this is the no-pattern case wearing different clothes and it
+    takes the same fallback — but the warning still names the bad data, because
+    voicing the card must not hide the fault."""
     result, provider, _ = run([record(pitch_accent=["LH"])], tmp_path, words=True)
 
-    assert provider.said == []
-    assert result.no_pattern == ["word:橋:はし"]
+    assert provider.said == [("はし", False)], "the engine's own, not forced"
+    assert result.guessed_accent == ["word:橋:はし"]
     assert any("does not fit" in w for w in result.warnings)
 
 
@@ -577,6 +653,23 @@ def test_clips_written_before_a_failure_stay_referenced(tmp_path: Path) -> None:
     assert result.file_count == 1
     assert result.records[0].examples[0].audio.startswith("audio/"), "named by the record"
     assert prune_unreferenced(result.records, tmp_path / "media", book) == []
+
+
+def test_the_command_tells_the_shell_which_records_carry_a_guess(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Through the CLI, because `AudioResult.guessed_accent` proves nothing
+    about anyone being told. Deleting the whole report block left every test
+    green — the list was asserted only in-process, and this message is the one
+    surface a person ever sees for a clip that sounds right and is not."""
+    root = project(tmp_path, [record(pitch_accent=[])])
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: FakeVoice())
+
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 0
+
+    err = capsys.readouterr().err
+    assert "accent_unverified" in err
+    assert "word:橋:はし" in err
 
 
 def test_the_command_prunes_the_saved_ledger_too(

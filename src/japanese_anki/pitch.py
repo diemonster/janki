@@ -194,9 +194,10 @@ def select_pattern(record: VocabularyRecord) -> str | None:
     ``audio_accent`` first, because it exists for the reader who listened and
     disagreed; then jpdb's primary, which is the first entry in its own
     ordering. ``None`` when the record carries no pattern at all — the caller
-    decides what to do about that, and DESIGN_V2 says skip and flag rather than
-    let an engine guess, since the homographs a guess gets wrong are exactly the
-    ones a pitch card exists for.
+    decides what to do about that. It voices the word with the engine's own
+    accent and marks the clip: the homographs a guess gets wrong are exactly
+    the ones a pitch card exists for, so the guess is recorded rather than
+    trusted, and it is replaced the moment a pattern arrives.
 
     **Upper-cased**, which is not cosmetic. The ledger's word-audio *content*
     fingerprint is ``fp(reading + this)``, and it is defined as covering what

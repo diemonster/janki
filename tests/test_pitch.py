@@ -277,8 +277,9 @@ def test_otherwise_jpdbs_primary() -> None:
 
 
 def test_no_pattern_is_no_answer_rather_than_a_default() -> None:
-    # The caller skips and flags. Letting an engine guess would get exactly the
-    # homographs wrong that a pitch card exists to teach.
+    # `None`, not a default: the caller distinguishes "force this" from "let
+    # the engine choose, and mark the clip", and a default here would erase
+    # that difference for exactly the homographs a pitch card exists to teach.
     assert select_pattern(record()) is None
     assert select_pattern(record(pitch_accent=["", "  "])) is None
 
