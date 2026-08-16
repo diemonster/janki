@@ -42,6 +42,36 @@ def safe_document(tmp_path: Path, item: VocabularyRecord) -> repairs.SafeDocumen
     return repairs.read_safe_document(root, normalized, staging, normalized)
 
 
+def test_a_recorded_repair_carries_its_version_evidence_and_provenance(
+    tmp_path: Path,
+) -> None:
+    """What the change says about itself, which is the whole audit trail.
+
+    Ported from the gating case `derived-romaji-repair` when M8.4 deleted the
+    corpus. The sibling below pins the repaired *value*; nothing pinned the
+    metadata stamped beside it. Three single edits each left the suite green:
+    rewriting the provenance sentence, rewriting the evidence algorithm, and
+    bumping the version to 1.0.1.
+
+    None of the three changes a card. They change what a person reads months
+    later when asking why a field says what it says — the version that would
+    tell them which transform ran, and the algorithm that would tell them
+    whether to trust it. `test_plan_fingerprint_covers_version_evidence_diff_and_output`
+    proves *changing* these changes the fingerprint; it never says what they are.
+    """
+    declaration = repairs.REGISTRY.select(["record-romaji-from-reading"])
+    document = safe_document(tmp_path, record(romaji="wrong"))
+
+    plan = repairs.build_plan(document, declaration)
+
+    [change] = [item.to_dict() for item in plan.changes]
+    assert change["version"] == "1.0.0"
+    assert change["evidence"] == {"algorithm": "japanese_anki.romaji.kana_to_romaji"}
+    assert change["provenance"] == (
+        "Derived Hepburn romaji from the stored kana reading."
+    )
+
+
 def test_seed_repair_has_two_near_misses_and_is_idempotent(tmp_path: Path) -> None:
     declaration = repairs.REGISTRY.select(["record-romaji-from-reading"])
     document = safe_document(tmp_path, record(romaji="wrong"))

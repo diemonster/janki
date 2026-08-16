@@ -54,7 +54,7 @@ marked "supersedes design").
    nowhere else. Everything janki writes *from scratch* still goes
    through PyYAML; do not widen this.
 8. **Paid model calls are milestone operations, not routine verification.** Run
-   local validation, hardening replay, and `make gates` before any live review.
+   local validation and `make gates` before any live review.
    Run the final semantic review once on a complete release candidate. If it
    finds errors, rerun only the records whose content changed. Do not run a
    paid advisory review after each small commit or on a media-only diff. Any
@@ -3061,7 +3061,8 @@ Tests must cover:
 Do not rewrite existing curated records only because this task adds provenance.
 Add a synthetic reproduction of the camera fragment pattern without private
 prose or pixels. Complete linked findings, the full offline replay, `make
-gates`, and a dry pipeline run without a live model. M7.6B and M7.6C can resume
+gates`, and a dry pipeline run without a live model. *(2026-08-15: M8.4
+deleted findings and the replay; `make gates` alone is the check now.)* M7.6B and M7.6C can resume
 after these checks pass. The next paid semantic review is a milestone
 measurement of the repaired boundary, not part of the development loop.
 *(Correction 2026-08-15: both milestones are cancelled and that review was
@@ -3074,8 +3075,9 @@ without a live source run:
 2. Separate source evidence from curated examples and add its provenance.
 3. Add provisional semantic authority and dictionary reconciliation.
 4. Add the local teaching-content, build-readiness, and pre-audio gates.
-5. Update migration and operator documentation, run the full replay and `make
-   gates`, then do one local code-review cycle until it is clean.
+5. Update migration and operator documentation, run `make gates` (the full
+   replay it names went with M8.4), then do one local code-review cycle until
+   it is clean.
 
 Each slice must pass its focused tests before commit. Do not run a paid
 advisory review after a slice. Keep the review hooks disabled while the owner
@@ -3419,10 +3421,13 @@ identifiers, fingerprints, field counts, provenance — never about the language
    conditionals. A prompt that needs a branch in its *instruction prose* is two
    prompts — extract's three modes are three files. Interpolating a record's
    own data into the user turn stays in Python and is not a branch.
-3. Prompt content is a reviewable artifact: a case observes the contracts a
-   prompt states (`ai-enrichment-prompt` already does this for the exact-spelling
-   and furigana-notation clauses), so retiring a clause is a visible change with
-   a failing case rather than a silent weakening.
+3. Prompt content is a reviewable artifact: a **test** observes the contracts
+   a prompt states — `tests/test_enrich_ai.py`'s prompt section already does
+   this for the exact-spelling and furigana-notation clauses, and M8.4 moved
+   the last of it out of the deleted corpus — so retiring a clause is a
+   visible change with a failing test rather than a silent weakening. Assert
+   against the assembled prompt, not a bare constant, so the assertions
+   survive the move into template files.
 4. Audit what remains after M8.3 against the rule: anything anywhere in
    `src/` that judges the model's Japanese is a deletion, full stop — M8.3
    names the known ones, this audit catches stragglers. Artifact structure
@@ -3464,7 +3469,8 @@ with any real instruction moved up into the files. `review.INSTRUCTIONS`
 needs no file — it died with the review subsystem in M8.2.
 
 Depends on: M7.6V. Files: a prompt template directory, its loader, the five
-call sites, `docs/ENRICHMENT.md`, and the cases that observe prompt contracts.
+call sites, `docs/ENRICHMENT.md`, and the prompt-contract tests in
+`tests/test_enrich_ai.py`.
 
 ## M8 The design leads
 
@@ -3645,7 +3651,7 @@ Files: `qc.py`, `kanji.py`, `enrich.py`, `models.py`, `validation.py`,
 `audio_cmd.py`, `cli.py`, `patterns.py`, `quality/cases/`,
 `quality/findings.yaml`, tests throughout.
 
-### [ ] M8.4 The corpus becomes tests, and the ceremony goes with it
+### [x] M8.4 The corpus becomes tests, and the ceremony goes with it
 
 Most of the corpus's value was ordinary regression testing wearing ceremony —
 prose invariants, fingerprint pinning, findings opened for synthetic probes.
@@ -3664,10 +3670,71 @@ defect in janki's machinery gets a failing test first and a fix second — the
 ordinary loop, no YAML. The immutable inbox and provenance rules are design,
 not corpus, and are unaffected.
 
+**Measured before deleting anything (2026-08-15).** Each surviving case was
+tested by mutating the production code it pins and running pytest *with the
+replay excluded* — `tests/test_hardening_replay.py` parametrizes over
+`discover_cases`, so the corpus runs inside pytest and every case trivially
+catches its own mutation. The honest baseline is 1909, not 2028: that file
+(47 tests) and `tests/test_hardening.py` (72) both die with the apparatus.
+
+Of 25 cases: **22 are redundant** with existing pytest tests, each confirmed
+by a named non-replay failure. **Two die outright** — `m7-mixed-tsumori-coverage`
+and `m7-native-teform-table-coverage` feed an empty candidate list and assert
+an empty result, with byte-identical fixtures; they observe no production
+behaviour at all, and their content is pilot bookkeeping for a cancelled
+programme. **Three carry real coverage** and get tests before the corpus goes:
+
+- `input-external-existing-name-collision` → `tests/test_inputs.py`. The
+  refusal is covered; *which files the error names* is not. Passing
+  `conflicts + matches` to `_durable_name_collision` leaves pytest green while
+  the message names a byte-identical file and claims it "has the same basename
+  but different content" — pointing the reader at the wrong file to move aside.
+- `model-request-effort-support` → `tests/test_effort_call_sites.py`. The
+  *absent* half is parametrized already; the *positive* half is pinned only for
+  `claude-opus-5`. Deleting `opus-4-8`, `opus-4-7`, `sonnet-5`, `fable-5` or
+  `mythos-5` from `_XHIGH_MODELS`, or trimming `_ADAPTIVE_THINKING_MODELS`,
+  leaves pytest green — so every AI pass would quietly stop asking for the
+  depth it was configured for. Assert the whole table, testing the key's
+  *absence* rather than a `None` value.
+- `ai-existing-example-annotations` → `tests/test_enrich_ai.py`. The English
+  fill was covered; three other halves were not. Dropping `or
+  incoming.furigana`, writing `audio=""` into the replacement, or skipping the
+  romaji regeneration each left pytest green — stranding a paid clip, or
+  leaving romaji that describes the sentence as it was before the furigana
+  arrived.
+- `furigana-full-width-separator` → `tests/test_enrich_ai.py`. Replacing the
+  whole notation paragraph with "write the furigana however you think best"
+  left pytest green. Written now rather than deferred to M7.6P: this prompt
+  clause is the *only* remaining protection for that field, the file already
+  has a prompt-assertion section, and asserting against
+  `AI_INSTRUCTIONS + ai_prompt(record)` survives the move to a template.
+- `derived-romaji-repair` → `tests/test_repairs.py`. The repaired value was
+  covered; the version, evidence algorithm and provenance sentence stamped
+  beside it were not — the audit trail a person reads months later.
+
+*Done 2026-08-15, with one scope correction found in execution. The
+**coverage-oracle apparatus had to go with the corpus**, which the milestone
+did not name: `promote.check_coverage` resolved oracles from
+`quality/oracles/`, so deleting `quality/` broke it structurally, and
+`--coverage-oracle`, `_bind_coverage_oracles`, the approved-inventory prompt
+blocks in `extract.prompt_for`, and every oracle comparison in
+`extract.coverage_block` had no reachable producer once it went. That is the
+pilot programme's question — "did the model return everything a human said was
+on this page" — cancelled with the programme. What survives is the part that
+needs nobody's approval: the coverage block still records the source units,
+their dispositions, both unit counts and any repeated key, and
+`promote._verify_coverage_facts` still re-derives it and refuses a staging file
+whose numbers no longer follow from its units. The staging schema shrank to
+match — `status` accepts only `unmeasured` or `selection`, because `matched`
+and `mismatch` were verdicts against an oracle and no producer can reach them,
+so continuing to accept them would let a hand-edited file claim a measurement
+nothing performs.*
+
 Depends on: M8.2, M8.3.
 Files: `hardening.py`, `hardening_replay.py`, `cli.py`, `Makefile`,
 `quality/`, `AGENTS.md` (Hardening rules), `docs/HARDENING.md`,
-`tests/test_hardening_replay.py`.
+`tests/test_hardening_replay.py`, `tests/test_hardening.py`,
+`tests/test_inputs.py`, `tests/test_effort_call_sites.py`.
 
 ### [ ] M8.5 Real sources through the real pipeline
 

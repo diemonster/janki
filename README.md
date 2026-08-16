@@ -9,7 +9,7 @@ records live in git, and rebuilding a deck updates the notes in Anki rather than
 duplicating them.
 
 ```bash
-janki extract ~/Downloads/lesson-3.pdf   # read a page
+janki extract ~/Downloads/lesson-3.pdf   # names the file and model, asks first
 janki promote data/staging/lesson-3.pdf.yaml
 janki refresh                            # enrich, voice, build what is new
 ```
@@ -63,6 +63,11 @@ an import fills empty fields and reports conflicts instead of resolving them.
 ```bash
 janki extract ~/Downloads/lesson-3.pdf ~/Desktop/IMG_0421.HEIC
 ```
+
+`extract` is the one command that sends **your own documents** to a paid model,
+so it names the files and the model and asks before the first call. Add `--yes`
+to consent in advance; without it an unattended run refuses rather than
+sending, because there is nobody there to ask.
 
 PDF, JPEG, PNG and HEIC. A file outside `data/inbox/` is copied into
 `data/inbox/scans/`; a file already in the durable inbox stays where it is. That

@@ -1,9 +1,0 @@
-{
-  "promoted_ids": ["word:勉強する:べんきょうする"],
-  "held": [],
-  "reminted": {},
-  "metadata_keys": ["source_file"],
-  "round_trip_metadata_equal": true,
-  "round_trip_record_ids": ["word:勉強する:べんきょうする"],
-  "warning_count": 0
-}

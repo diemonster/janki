@@ -9,13 +9,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
 import yaml
 
-from japanese_anki import cli, extract, hardening
+from japanese_anki import cli, extract
 from japanese_anki.claude_client import CallResult, Refusal
 from japanese_anki.extract import ExtractError, build_records, known_ids, system_prompt
 from japanese_anki.inputs import PreparedInput
@@ -179,55 +178,6 @@ def test_the_known_word_list_rides_in_the_user_turn_not_the_system_blocks(
     assert "食べる" in user_text
 
 
-def test_an_exhaustive_oracle_binds_exact_unit_keys_in_the_user_turn(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    call = FakeCall(ok())
-    monkeypatch.setattr(extract.claude_client, "parse_call", call)
-
-    extract.extract_candidates(
-        prepared(tmp_path),
-        model="claude-opus-5",
-        style_guide="STYLE",
-        mode="table",
-        source_unit_keys=((1, "lesson-table", 1), (1, "lesson-table", 2)),
-    )
-
-    user_text = " ".join(
-        block["text"]
-        for block in call.calls[0]["content"]
-        if block.get("type") == "text"
-    )
-    assert "page=1 section=lesson-table ordinal=1" in user_text
-    assert "page=1 section=lesson-table ordinal=2" in user_text
-    assert "Do not add keys for titles" in user_text
-
-
-def test_a_selection_oracle_binds_exact_targets_and_its_rubric(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    call = FakeCall(ok())
-    monkeypatch.setattr(extract.claude_client, "parse_call", call)
-
-    extract.extract_candidates(
-        prepared(tmp_path),
-        model="claude-opus-5",
-        style_guide="STYLE",
-        mode="prose",
-        selection_targets=(("word:ほん:ほん", "page-1/person-a-monday"),),
-        selection_rubric="Keep the source spelling.",
-    )
-
-    user_text = " ".join(
-        block["text"]
-        for block in call.calls[0]["content"]
-        if block.get("type") == "text"
-    )
-    assert "identity=word:ほん:ほん locator=page-1/person-a-monday" in user_text
-    assert "Selection rubric: Keep the source spelling." in user_text
-    assert "do not add other prose candidates" in user_text
-
-
 def test_the_file_is_sent_as_its_content_block(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -345,24 +295,14 @@ def normalized_unit(
     )
 
 
-def exhaustive_oracle(*units: extract.SourceUnit) -> Any:
-    return SimpleNamespace(
-        id="lesson-table",
-        type="exhaustive",
-        units=tuple(
-            hardening.OracleUnit(
-                page=unit.page,
-                section=unit.section,
-                ordinal=unit.ordinal,
-                context_fingerprint=unit.context_fingerprint,
-                disposition=unit.disposition,
-            )
-            for unit in units
-        ),
-    )
+def test_coverage_records_both_counts_rather_than_trusting_the_models_own() -> None:
+    """The model's self-count is stored as a claim, beside what was observed.
 
-
-def test_exact_coverage_ignores_the_models_wrong_self_count() -> None:
+    M8.4 deleted the approved oracle that used to adjudicate between them, so
+    nothing scores the difference now — but recording both is what lets a
+    person see one, and collapsing them into a single number would destroy the
+    evidence rather than the ceremony.
+    """
     one = normalized_unit(1)
     two = normalized_unit(2, disposition="unreadable", reason="ink is hidden")
 
@@ -370,68 +310,64 @@ def test_exact_coverage_ignores_the_models_wrong_self_count() -> None:
         table_result(one, two, reported=99),
         source_sha256="a" * 64,
         mode="table",
-        oracle=exhaustive_oracle(one, two),
-        oracle_fingerprint="b" * 64,
     )
 
-    assert block["status"] == "matched"
-    assert block["blocking"] is False
     assert block["observed_unit_count"] == 2
     assert block["model_reported_unit_count"] == 99
     assert block["unreadable_units"] == [two.fact()]
+    assert block["status"] == "unmeasured", "nobody asserted what the page held"
 
 
-def test_an_omitted_row_cannot_be_replaced_by_a_duplicate_or_invented_row() -> None:
+def test_every_observed_unit_appears_in_exactly_one_disposition_list() -> None:
+    """The disposition lists must partition `source_units`, not sample it.
+
+    Building them from a key-deduplicated mapping instead of the observed list
+    makes a repeated source row vanish from the record while
+    `observed_unit_count` still counts it — the block then contradicts itself,
+    and `promote._verify_coverage_facts` cannot notice because it re-derives
+    with the same function, so the inconsistency is self-consistent. Measured
+    after M8.4: green.
+    """
     one = normalized_unit(1)
-    two = normalized_unit(2)
     repeated_one = normalized_unit(1, disposition="duplicate", reason="repeated")
-    invented = normalized_unit(3)
+    other = normalized_unit(3)
 
     block = extract.coverage_block(
-        table_result(one, repeated_one, invented),
+        table_result(one, repeated_one, other),
         source_sha256="a" * 64,
         mode="table",
-        oracle=exhaustive_oracle(one, two),
-        oracle_fingerprint="b" * 64,
     )
 
-    assert block["status"] == "mismatch"
-    assert block["missing_units"][0]["ordinal"] == 2
-    assert block["unexpected_units"][0]["ordinal"] == 3
+    listed = sum(
+        len(block[f"{name.replace('-', '_')}_units"])
+        for name in extract.SOURCE_UNIT_DISPOSITIONS
+    )
+    assert listed == block["observed_unit_count"] == 3
+    assert len(block["duplicate_units"]) == 1, "the repeat is filed, not dropped"
+
+
+def test_a_repeated_source_unit_key_is_named_not_silently_collapsed() -> None:
+    """The one internal inconsistency still detectable without an oracle.
+
+    Two units under one key means the model returned the same row twice, which
+    a plain `dict` build would swallow by overwriting. Nothing outside the
+    response is needed to know it is wrong, which is why this half outlived the
+    oracle comparisons deleted with M8.4.
+    """
+    one = normalized_unit(1)
+    repeated_one = normalized_unit(1, disposition="duplicate", reason="repeated")
+    other = normalized_unit(3)
+
+    block = extract.coverage_block(
+        table_result(one, repeated_one, other),
+        source_sha256="a" * 64,
+        mode="table",
+    )
+
     assert block["duplicate_keys"] == [
         {"page": 1, "section": "vocabulary", "ordinal": 1}
     ]
-    assert block["omission_units"][0]["ordinal"] == 2
-
-
-def test_context_and_disposition_mismatches_are_exact_facts() -> None:
-    expected = normalized_unit(1, context="話す はなす")
-    observed = normalized_unit(
-        1,
-        context="話す はなし",
-        disposition="unreadable",
-        reason="last kana is hidden",
-    )
-
-    block = extract.coverage_block(
-        table_result(observed),
-        source_sha256="a" * 64,
-        mode="table",
-        oracle=exhaustive_oracle(expected),
-        oracle_fingerprint="b" * 64,
-    )
-
-    assert block["context_mismatched_units"] == [
-        {
-            "page": 1,
-            "section": "vocabulary",
-            "ordinal": 1,
-            "expected": expected.context_fingerprint,
-            "observed": observed.context_fingerprint,
-        }
-    ]
-    assert block["disposition_mismatched_units"][0]["observed"] == "unreadable"
-    assert block["unreadable_units"] == [observed.fact()]
+    assert block["observed_unit_count"] == 3, "the repeat is counted, not dropped"
 
 
 def test_table_candidates_must_link_to_source_units_one_to_one(
@@ -500,6 +436,26 @@ def test_provenance_is_stringified_into_raw_fields(tmp_path: Path) -> None:
     assert fields["context"] == "話す　はなす　to speak"
     assert fields["extracted_from"] == "lesson.pdf"
     assert all(isinstance(value, str) for value in fields.values())
+
+
+def test_the_models_reason_for_proposing_a_word_is_kept(tmp_path: Path) -> None:
+    """`inclusion_reason` is why a prose candidate was proposed at all, and the
+    prompt asks for it by name.
+
+    It is persisted in exactly one place, and dropping it from that tuple left
+    the suite green after M8.4 — the reviewer would lose the model's own
+    argument for every prose candidate while every other provenance field kept
+    working, which is the kind of gap nobody notices until they need it.
+    """
+    item = prepared(tmp_path)
+    reasoned = candidate(inclusion_reason="Introduced in the dialogue on page 12.")
+
+    [record] = build_records([reasoned], item)
+
+    assert (
+        record.source.raw_fields["inclusion_reason"]
+        == "Introduced in the dialogue on page 12."
+    )
 
 
 def test_a_candidate_with_no_reading_keeps_its_malformed_id(tmp_path: Path) -> None:
@@ -646,119 +602,78 @@ def source_pdf(tmp_path: Path, name: str = "lesson.pdf") -> Path:
     return path
 
 
-def write_approved_oracle(
-    root: Path,
-    *,
-    source_sha256: str,
-    units: tuple[extract.SourceUnit, ...],
-    oracle_id: str = "lesson-table",
-    approved: bool = True,
-) -> Path:
-    path = root / "quality" / "oracles" / f"{oracle_id}.yaml"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    oracle_units = tuple(
-        hardening.OracleUnit(
-            unit.page,
-            unit.section,
-            unit.ordinal,
-            unit.context_fingerprint,
-            unit.disposition,
-        )
-        for unit in units
-    )
-    oracle = hardening.UnitOracle(
-        path=path,
-        relative_path=f"quality/oracles/{path.name}",
-        id=oracle_id,
-        source_fingerprint=source_sha256,
-        type="exhaustive",
-        case_ids=(),
-        units=oracle_units,
-        targets=(),
-        selection_rubric=None,
-        approval=None,
-    )
-    content_fingerprint = hardening.oracle_content_fingerprint(oracle)
-    payload: dict[str, Any] = {
-        "version": 1,
-        "id": oracle_id,
-        "source_fingerprint": source_sha256,
-        "type": "exhaustive",
-        "case_ids": [],
-        "units": [
-            {
-                "page": unit.page,
-                "section": unit.section,
-                "ordinal": unit.ordinal,
-                "context_fingerprint": unit.context_fingerprint,
-                "disposition": unit.disposition,
-            }
-            for unit in oracle_units
-        ],
-    }
-    if approved:
-        payload["approval"] = {
-            "authority": "repository-owner",
-            "oracle_id": oracle_id,
-            "source_fingerprint": source_sha256,
-            "oracle_type": "exhaustive",
-            "oracle_content_fingerprint": content_fingerprint,
-            "approved_at": "2026-08-12",
-        }
-    path.write_text(
-        yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8"
-    )
-    return path
+def test_an_unattended_run_refuses_to_send_rather_than_assuming_consent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The opposite default from every other prompt in janki, on purpose.
+
+    Elsewhere "nobody is watching" means proceed, because the worst case is a
+    deck built with a gap. Here the worst case is a photograph of someone's own
+    notebook sent to a vendor, which cannot be recalled — and AGENTS.md forbids
+    an agent from answering an approval prompt as the user. So no person means
+    stop. Note pytest is itself non-interactive, which is why every scripted
+    test above passes `--yes`.
+    """
+    root = project(tmp_path)
+    call = FakeCall(ok(candidate()))
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
+
+    code = cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path))])
+
+    assert code == 1
+    assert call.calls == [], "nothing was sent"
+    assert not (root / "staging" / "lesson.pdf.yaml").exists()
+    assert "Refusing" in capsys.readouterr().err
 
 
-def write_approved_selection_oracle(
-    root: Path,
-    *,
-    source_sha256: str,
-    targets: tuple[hardening.SelectionTarget, ...],
-    selection_rubric: str,
-    oracle_id: str = "lesson-selection",
-) -> Path:
-    path = root / "quality" / "oracles" / f"{oracle_id}.yaml"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    oracle = hardening.UnitOracle(
-        path=path,
-        relative_path=f"quality/oracles/{path.name}",
-        id=oracle_id,
-        source_fingerprint=source_sha256,
-        type="selection",
-        case_ids=(),
-        units=(),
-        targets=targets,
-        selection_rubric=selection_rubric,
-        approval=None,
-    )
-    content_fingerprint = hardening.oracle_content_fingerprint(oracle)
-    payload = {
-        "version": 1,
-        "id": oracle_id,
-        "source_fingerprint": source_sha256,
-        "type": "selection",
-        "case_ids": [],
-        "targets": [
-            {"identity": target.identity, "locator": target.locator}
-            for target in targets
-        ],
-        "selection_rubric": selection_rubric,
-        "approval": {
-            "authority": "repository-owner",
-            "oracle_id": oracle_id,
-            "source_fingerprint": source_sha256,
-            "oracle_type": "selection",
-            "oracle_content_fingerprint": content_fingerprint,
-            "selection_rubric": selection_rubric,
-            "approved_at": "2026-08-13",
-        },
-    }
-    path.write_text(
-        yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8"
-    )
-    return path
+@pytest.mark.parametrize(
+    "typed,sent",
+    [("y", True), ("yes", True), ("Y", True), ("", False), ("n", False), ("q", False)],
+    ids=["y", "yes", "Y", "bare-enter", "n", "typo"],
+)
+def test_only_an_explicit_yes_sends_the_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, typed: str, sent: bool
+) -> None:
+    """The prompt reads `[y/N]`, so silence must mean no.
+
+    The interactive branch is the whole point of the gate and had no test at
+    all: rewriting the answer check to `not in {"n", "no"}` left the suite
+    green, which would make a bare Enter — and every stray keystroke — send
+    someone's private document to a paid API.
+    """
+    root = project(tmp_path)
+    call = FakeCall(ok(candidate()))
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt="": typed)
+
+    code = cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path))])
+
+    assert bool(call.calls) is sent
+    assert code == (0 if sent else 1)
+
+
+def test_the_consent_prompt_names_the_files_and_the_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Both halves, because neither alone is something a person can consent to.
+
+    "Send 3 files to the API?" does not say which files; naming the files
+    without the model does not say where they go. The refusal path is used here
+    only because it is the one that prints the notice without needing a TTY.
+    """
+    root = project(tmp_path)
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", FakeCall(ok(candidate())))
+
+    cli.main([
+        "--root", str(root), "extract", str(source_pdf(tmp_path)),
+        "--model", "claude-haiku-4-5",
+    ])
+
+    out = capsys.readouterr().out
+    assert "lesson.pdf" in out, "the file is named"
+    assert "claude-haiku-4-5" in out, "and the model it would go to"
+    assert "paid" in out
 
 
 def test_extract_writes_one_staging_file_per_input(
@@ -770,7 +685,7 @@ def test_extract_writes_one_staging_file_per_input(
         cli.extract.claude_client, "parse_call", FakeCall(ok(candidate()), ok(candidate()))
     )
 
-    code = cli.main(["--root", str(root), "extract", str(one), str(two)])
+    code = cli.main(["--root", str(root), "extract", "--yes", str(one), str(two)])
 
     assert code == 0
     assert (root / "staging" / "lesson.pdf.yaml").is_file()
@@ -788,7 +703,7 @@ def test_cli_reuses_a_source_in_the_default_parent_inbox(
     call = FakeCall(ok(candidate()))
     monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
 
-    code = cli.main(["--root", str(root), "extract", str(source)])
+    code = cli.main(["--root", str(root), "extract", "--yes", str(source)])
 
     assert code == 0
     assert len(call.calls) == 1
@@ -805,7 +720,7 @@ def test_cli_custom_scan_inbox_remains_its_own_durable_root(
         cli.extract.claude_client, "parse_call", FakeCall(ok(candidate()))
     )
 
-    assert cli.main(["--root", str(root), "extract", str(source)]) == 0
+    assert cli.main(["--root", str(root), "extract", "--yes", str(source)]) == 0
 
     assert (root / "inbox" / "lesson.pdf").read_bytes() == PDF
 
@@ -825,7 +740,7 @@ def test_cli_refuses_cross_run_durable_basename_collisions_before_the_model(
     call = FakeCall(ok(candidate()))
     monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
 
-    code = cli.main(["--root", str(root), "extract", "--force", str(source)])
+    code = cli.main(["--root", str(root), "extract", "--yes", "--force", str(source)])
 
     assert code == 1
     assert call.calls == []
@@ -848,7 +763,7 @@ def test_cli_refuses_case_only_durable_name_collisions_before_the_model(
     call = FakeCall(ok(candidate()))
     monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
 
-    code = cli.main(["--root", str(root), "extract", "--force", str(source)])
+    code = cli.main(["--root", str(root), "extract", "--yes", "--force", str(source)])
 
     assert code == 1
     assert call.calls == []
@@ -876,7 +791,7 @@ def test_cli_does_not_duplicate_an_external_source_in_a_colliding_inbox(
     call = FakeCall(ok(candidate()))
     monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
 
-    code = cli.main(["--root", str(root), "extract", str(source)])
+    code = cli.main(["--root", str(root), "extract", "--yes", str(source)])
 
     assert code == 1
     assert call.calls == []
@@ -890,7 +805,7 @@ def test_the_staging_file_is_the_pinned_shape(
     root = project(tmp_path)
     monkeypatch.setattr(cli.extract.claude_client, "parse_call", FakeCall(ok(candidate())))
 
-    cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path))])
+    cli.main(["--root", str(root), "extract", "--yes", str(source_pdf(tmp_path))])
 
     written = yaml.safe_load((root / "staging" / "lesson.pdf.yaml").read_text(encoding="utf-8"))
     assert written["model"] == "claude-opus-5"
@@ -904,232 +819,33 @@ def test_the_staging_file_is_the_pinned_shape(
     assert meta["source_file"] == "lesson.pdf"
 
 
-def test_an_approved_oracle_and_prompt_provenance_are_persisted(
+def test_the_staging_file_records_its_provenance_and_never_the_api_key(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    root = project(tmp_path)
-    source = source_pdf(tmp_path)
-    unit = normalized_unit(1, context="話す　はなす　to speak")
-    # The model page is 12 in this fixture.
-    unit = extract.SourceUnit(
-        12,
-        unit.section,
-        unit.ordinal,
-        unit.context,
-        unit.context_fingerprint,
-        unit.disposition,
-        unit.reason,
-    )
-    oracle = write_approved_oracle(
-        root,
-        source_sha256=extract.source_fingerprint(source),
-        units=(unit,),
-    )
+    """Three assertions that rode on a deleted oracle test and had nothing to do
+    with oracles.
+
+    Staging files are committed. The `provider` field sits one string
+    concatenation away from the environment variable holding the API key, so
+    the leak guard belongs beside the thing it guards — measured after M8.4
+    removed it: writing the key into `provider` left the whole suite green.
+
+    The block's *presence* matters just as much. Drop it and every later
+    `janki promote` dies with `[prompt-provenance-invalid]`, which turns paid
+    extraction output into files nothing can consume — and that too was green.
+    """
     monkeypatch.setenv("ANTHROPIC_API_KEY", "must-not-be-stored")
-    monkeypatch.setattr(
-        cli.extract.claude_client,
-        "parse_call",
-        FakeCall(
-            table_ok(
-                candidate(source_kind="table", section="vocabulary", ordinal=1),
-                units=[source_unit()],
-                count=17,
-            )
-        ),
-    )
+    root = project(tmp_path)
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", FakeCall(ok(candidate())))
 
-    code = cli.main(
-        [
-            "--root",
-            str(root),
-            "extract",
-            str(source),
-            "--mode",
-            "table",
-            "--coverage-oracle",
-            str(oracle),
-        ]
-    )
+    cli.main(["--root", str(root), "extract", "--yes", str(source_pdf(tmp_path))])
 
-    assert code == 0
     _records, meta = read_staging(root / "staging" / "lesson.pdf.yaml")
-    assert meta["coverage"]["status"] == "matched"
-    assert meta["coverage"]["oracle_id"] == "lesson-table"
-    assert meta["coverage"]["model_reported_unit_count"] == 17
     provenance = meta["prompt_provenance"]
     assert provenance["provider"] == "anthropic"
     assert provenance["response_schema_version"] == extract.EXTRACTION_SCHEMA_VERSION
-    serialized = json.dumps(meta, ensure_ascii=False)
-    assert "must-not-be-stored" not in serialized
-    assert str(root) not in serialized
-    # Promotion reloads the approved oracle and recomputes these facts. A
-    # hand-edited "matched" label cannot bypass that check.
-    (root / "quality" / "oracles" / "unrelated.yaml").write_text(
-        "not: a valid oracle\n", encoding="utf-8"
-    )
-    assert (
-        cli.main(
-            [
-                "--root",
-                str(root),
-                "promote",
-                str(root / "staging" / "lesson.pdf.yaml"),
-                "--skip-reading-check",
-            ]
-        )
-        == 0
-    )
-    _archived, archived_meta = read_staging(
-        root / "staging" / "done" / "lesson.pdf.yaml"
-    )
-    assert archived_meta["coverage"]["oracle_id"] == "lesson-table"
-
-
-def test_selection_targets_override_the_known_word_skip_list(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    existing = VocabularyRecord(
-        id="word:ほん:ほん", expression="ほん", reading="ほん"
-    )
-    root = project(tmp_path, [existing])
-    source = source_pdf(tmp_path)
-    rubric = "Select only the named word and keep the source spelling."
-    oracle = write_approved_selection_oracle(
-        root,
-        source_sha256=extract.source_fingerprint(source),
-        targets=(
-            hardening.SelectionTarget(
-                "word:ほん:ほん", "page-1/person-a-monday"
-            ),
-        ),
-        selection_rubric=rubric,
-    )
-    call = FakeCall(
-        ok(
-            candidate(
-                expression="ほん",
-                reading="ほん",
-                page=1,
-                context="ほんをよむつもりです。",
-                inclusion_reason="Approved target.",
-            )
-        )
-    )
-    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
-
-    code = cli.main(
-        [
-            "--root",
-            str(root),
-            "extract",
-            str(source),
-            "--mode",
-            "prose",
-            "--coverage-oracle",
-            str(oracle),
-        ]
-    )
-
-    assert code == 0
-    user_text = " ".join(
-        block["text"]
-        for block in call.calls[0]["content"]
-        if block.get("type") == "text"
-    )
-    assert "identity=word:ほん:ほん locator=page-1/person-a-monday" in user_text
-    assert rubric in user_text
-    assert "Words janki already has" not in user_text
-    _records, meta = read_staging(root / "staging" / "lesson.pdf.yaml")
-    assert meta["coverage"]["status"] == "selection"
-    assert meta["coverage"]["blocking"] is False
-
-
-def test_oracle_binding_errors_happen_before_the_first_paid_call(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    root = project(tmp_path)
-    one = source_pdf(tmp_path)
-    two = source_pdf(tmp_path, "lesson2.pdf")
-    # Both fixtures have the same bytes. One oracle would bind to two sources.
-    oracle = write_approved_oracle(
-        root,
-        source_sha256=extract.source_fingerprint(one),
-        units=(normalized_unit(1),),
-    )
-    call = FakeCall(ok(candidate()), ok(candidate()))
-    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
-
-    code = cli.main(
-        [
-            "--root",
-            str(root),
-            "extract",
-            str(one),
-            str(two),
-            "--coverage-oracle",
-            str(oracle),
-        ]
-    )
-
-    assert code == 1
-    assert call.calls == []
-
-
-def test_a_draft_oracle_is_refused_before_the_model_call(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    root = project(tmp_path)
-    source = source_pdf(tmp_path)
-    oracle = write_approved_oracle(
-        root,
-        source_sha256=extract.source_fingerprint(source),
-        units=(normalized_unit(1),),
-        approved=False,
-    )
-    call = FakeCall(ok(candidate()))
-    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
-
-    code = cli.main(
-        [
-            "--root",
-            str(root),
-            "extract",
-            str(source),
-            "--coverage-oracle",
-            str(oracle),
-        ]
-    )
-
-    assert code == 1
-    assert call.calls == []
-
-
-def test_a_source_oracle_hash_mismatch_is_refused_before_the_model_call(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    root = project(tmp_path)
-    source = source_pdf(tmp_path)
-    oracle = write_approved_oracle(
-        root,
-        source_sha256="f" * 64,
-        units=(normalized_unit(1),),
-    )
-    call = FakeCall(ok(candidate()))
-    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
-
-    code = cli.main(
-        [
-            "--root",
-            str(root),
-            "extract",
-            str(source),
-            "--coverage-oracle",
-            str(oracle),
-        ]
-    )
-
-    assert code == 1
-    assert call.calls == []
+    assert "must-not-be-stored" not in json.dumps(meta, ensure_ascii=False)
+    assert str(root) not in json.dumps(meta, ensure_ascii=False)
 
 
 def test_prompt_fingerprints_change_with_the_prompt_not_the_path(tmp_path: Path) -> None:
@@ -1140,26 +856,8 @@ def test_prompt_fingerprints_change_with_the_prompt_not_the_path(tmp_path: Path)
     changed = extract.prompt_provenance(
         item, model="m", style_guide="style", mode="prose", known=("話す",)
     )
-    keyed = extract.prompt_provenance(
-        item,
-        model="m",
-        style_guide="style",
-        mode="table",
-        source_unit_keys=((1, "lesson-table", 1),),
-    )
-    selected = extract.prompt_provenance(
-        item,
-        model="m",
-        style_guide="style",
-        mode="prose",
-        selection_targets=(("word:ほん:ほん", "page-1/person-a-monday"),),
-        selection_rubric="Keep the source spelling.",
-    )
-
     assert base["system_prompt_fingerprint"] == changed["system_prompt_fingerprint"]
     assert base["user_prompt_fingerprint"] != changed["user_prompt_fingerprint"]
-    assert base["user_prompt_fingerprint"] != keyed["user_prompt_fingerprint"]
-    assert base["user_prompt_fingerprint"] != selected["user_prompt_fingerprint"]
     assert str(tmp_path) not in json.dumps(base)
 
 
@@ -1170,7 +868,7 @@ def test_the_input_is_copied_into_the_inbox_and_cited(
     root = project(tmp_path)
     monkeypatch.setattr(cli.extract.claude_client, "parse_call", FakeCall(ok(candidate())))
 
-    cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path))])
+    cli.main(["--root", str(root), "extract", "--yes", str(source_pdf(tmp_path))])
 
     assert (root / "inbox" / "lesson.pdf").read_bytes() == PDF
     records, _ = read_staging(root / "staging" / "lesson.pdf.yaml")
@@ -1188,7 +886,7 @@ def test_an_existing_staging_file_is_not_overwritten_without_force(
     )
     monkeypatch.setattr(cli.extract.claude_client, "parse_call", FakeCall(ok(candidate())))
 
-    code = cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path))])
+    code = cli.main(["--root", str(root), "extract", "--yes", str(source_pdf(tmp_path))])
 
     assert code == 1
     assert "mid-review" in (root / "staging" / "lesson.pdf.yaml").read_text(encoding="utf-8")
@@ -1202,7 +900,7 @@ def test_force_overwrites_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(cli.extract.claude_client, "parse_call", FakeCall(ok(candidate())))
 
     code = cli.main(
-        ["--root", str(root), "extract", str(source_pdf(tmp_path)), "--force"]
+        ["--root", str(root), "extract", "--yes", str(source_pdf(tmp_path)), "--force"]
     )
 
     assert code == 0
@@ -1222,6 +920,7 @@ def test_the_model_can_be_overridden_per_run(
             "--root",
             str(root),
             "extract",
+            "--yes",
             str(source_pdf(tmp_path)),
             "--model",
             "claude-haiku-4-5",
@@ -1249,12 +948,16 @@ def test_known_words_are_only_listed_for_prose(
     )
     monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
 
-    cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path)), "--mode", "table"])
+    cli.main([
+        "--root", str(root), "extract", "--yes",
+        str(source_pdf(tmp_path)), "--mode", "table",
+    ])
     cli.main(
         [
             "--root",
             str(root),
             "extract",
+            "--yes",
             str(source_pdf(tmp_path)),
             "--mode",
             "prose",
@@ -1280,7 +983,7 @@ def test_an_already_known_candidate_is_annotated_end_to_end(
     )
     monkeypatch.setattr(cli.extract.claude_client, "parse_call", FakeCall(ok(candidate())))
 
-    cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path))])
+    cli.main(["--root", str(root), "extract", "--yes", str(source_pdf(tmp_path))])
 
     records, _ = read_staging(root / "staging" / "lesson.pdf.yaml")
     assert records[0].source.raw_fields["already_known"] == "true"
@@ -1297,7 +1000,7 @@ def test_a_refusal_writes_no_staging_file_at_all(
         FakeCall(CallResult(None, "refusal", Refusal("bio", "declined"))),
     )
 
-    code = cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path))])
+    code = cli.main(["--root", str(root), "extract", "--yes", str(source_pdf(tmp_path))])
 
     assert code == 1
     assert not (root / "staging" / "lesson.pdf.yaml").exists()
@@ -1316,7 +1019,7 @@ def test_a_later_failure_keeps_the_earlier_files(
         FakeCall(ok(candidate()), CallResult(None, "max_tokens", None)),
     )
 
-    code = cli.main(["--root", str(root), "extract", str(one), str(two)])
+    code = cli.main(["--root", str(root), "extract", "--yes", str(one), str(two)])
 
     assert code == 1
     assert (root / "staging" / "lesson.pdf.yaml").is_file()
@@ -1332,7 +1035,7 @@ def test_nothing_reaches_the_normalized_records(
     before = (root / "vocabulary.json").read_text(encoding="utf-8")
     monkeypatch.setattr(cli.extract.claude_client, "parse_call", FakeCall(ok(candidate())))
 
-    cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path))])
+    cli.main(["--root", str(root), "extract", "--yes", str(source_pdf(tmp_path))])
 
     assert (root / "vocabulary.json").read_text(encoding="utf-8") == before
 
@@ -1350,7 +1053,7 @@ def test_the_same_file_twice_is_refused_rather_than_written_twice(
     call = FakeCall(ok(candidate()), ok(candidate()))
     monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
 
-    code = cli.main(["--root", str(root), "extract", str(source), str(source)])
+    code = cli.main(["--root", str(root), "extract", "--yes", str(source), str(source)])
 
     assert code == 1
     assert call.calls == []
@@ -1370,7 +1073,7 @@ def test_a_scan_and_a_photo_of_the_same_page_keep_separate_files(
         cli.extract.claude_client, "parse_call", FakeCall(ok(candidate()), ok(candidate()))
     )
 
-    assert cli.main(["--root", str(root), "extract", str(scan), str(photo)]) == 0
+    assert cli.main(["--root", str(root), "extract", "--yes", str(scan), str(photo)]) == 0
 
     assert (root / "staging" / "worksheet.pdf.yaml").is_file()
     assert (root / "staging" / "worksheet.png.yaml").is_file()
@@ -1399,7 +1102,7 @@ def test_a_candidate_with_no_expression_is_counted_not_hidden(
         ),
     )
 
-    cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path))])
+    cli.main(["--root", str(root), "extract", "--yes", str(source_pdf(tmp_path))])
 
     assert "1 unusable" in capsys.readouterr().out
     # And durably, in the file a reviewer actually reads — a count that lives
@@ -1435,7 +1138,7 @@ def test_a_held_back_row_whose_values_are_zero_is_still_recorded(
         ),
     )
 
-    cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path))])
+    cli.main(["--root", str(root), "extract", "--yes", str(source_pdf(tmp_path))])
 
     _records, meta = read_staging(root / "staging" / "lesson.pdf.yaml")
     note = meta["review_notes"]

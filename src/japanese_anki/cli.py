@@ -16,8 +16,6 @@ from japanese_anki import (
     codex_client,
     enrich,
     extract,
-    hardening,
-    hardening_replay,
     jpdb,
     kanji,
     ledger,
@@ -2351,84 +2349,52 @@ def _polish_meanings(config: ProjectConfig, args: argparse.Namespace) -> int:
     return 0
 
 
-def _bind_coverage_oracles(
-    root: Path,
-    prepared: Sequence[Any],
-    oracle_paths: Sequence[Path],
-    mode: str | None,
-) -> tuple[list[str], dict[int, hardening.UnitOracle]]:
-    """Bind approved oracles to exactly one prepared source before any model call."""
-    fingerprints = [
-        item.source_sha256 or extract.source_fingerprint(item.origin_path)
-        for item in prepared
-    ]
-    bindings: dict[int, hardening.UnitOracle] = {}
-    seen_paths: set[Path] = set()
-    seen_ids: set[str] = set()
-    seen_sources: set[str] = set()
-    for path in oracle_paths:
-        candidate = path if path.is_absolute() else root / path
-        lexical = candidate.absolute()
-        if lexical in seen_paths:
-            raise extract.ExtractError(
-                f"Coverage oracle {path} was supplied more than once.",
-                code="extract-oracle-duplicate",
-            )
-        seen_paths.add(lexical)
-        try:
-            oracle = hardening.load_oracle_file(root, path)
-        except hardening.HardeningError as exc:
-            raise extract.ExtractError(
-                str(exc), code="extract-oracle-invalid"
-            ) from exc
-        if not oracle.approved:
-            raise extract.ExtractError(
-                f"Coverage oracle {oracle.relative_path} is a draft. It needs a "
-                "repository-owner approval for content fingerprint "
-                f"{hardening.oracle_content_fingerprint(oracle)}.",
-                code="extract-oracle-unapproved",
-            )
-        if oracle.id in seen_ids or oracle.source_fingerprint in seen_sources:
-            raise extract.ExtractError(
-                f"Coverage oracle {oracle.id} duplicates an oracle ID or source "
-                "binding in this run.",
-                code="extract-oracle-duplicate-binding",
-            )
-        seen_ids.add(oracle.id)
-        seen_sources.add(oracle.source_fingerprint)
-        matches = [
-            index
-            for index, fingerprint in enumerate(fingerprints)
-            if fingerprint == oracle.source_fingerprint
-        ]
-        if len(matches) != 1:
-            detail = "no prepared source" if not matches else f"{len(matches)} sources"
-            raise extract.ExtractError(
-                f"Coverage oracle {oracle.id} binds to {detail}; it must bind to "
-                "exactly one source by SHA-256.",
-                code="extract-oracle-source-binding",
-            )
-        if mode == "table" and oracle.type != "exhaustive":
-            raise extract.ExtractError(
-                f"Coverage oracle {oracle.id} is a prose selection oracle and "
-                "cannot measure table mode.",
-                code="extract-oracle-mode-mismatch",
-            )
-        if mode == "prose" and oracle.type != "selection":
-            raise extract.ExtractError(
-                f"Coverage oracle {oracle.id} is exhaustive and cannot make prose "
-                "selection exhaustive.",
-                code="extract-oracle-mode-mismatch",
-            )
-        index = matches[0]
-        if index in bindings:
-            raise extract.ExtractError(
-                f"More than one coverage oracle binds to "
-                f"{prepared[index].origin_path.name}.",
-                code="extract-oracle-duplicate-binding",
-            )
-        bindings[index] = oracle
-    return fingerprints, bindings
+def _confirm_live_model(
+    prepared: Sequence[Any], model: str, assume_yes: bool
+) -> bool:
+    """Ask before a private document leaves this machine for a billed API.
+
+    The one piece of governance worth keeping from the hardening corpus, moved
+    to where it applies. There it was a YAML block recording, after the fact,
+    that the owner had approved a live run — a declaration in a file, checked
+    by a schema, about something that had already happened. The decision it
+    described belongs in front of the request.
+
+    Named in full, both halves: *which* files and *which* model. "Send 3 files
+    to the API?" is not consent to send a photograph of a private notebook to
+    a vendor, because the person answering cannot see what they are agreeing
+    to. Extraction is also the one command whose inputs are pictures of
+    someone's own material rather than dictionary lookups.
+
+    A non-TTY without ``--yes`` refuses rather than proceeds. Every other
+    prompt in janki treats "nobody is watching" as permission to continue,
+    because the worst case is a deck built with a gap; here the worst case is
+    a document sent somewhere it cannot be recalled from, and AGENTS.md is
+    explicit that an agent must never answer an approval prompt as the user.
+    So the absence of a person means stop, and ``--yes`` is how a person says
+    so in advance.
+    """
+    if assume_yes:
+        return True
+    names = [item.origin_path.name for item in prepared]
+    listed = "\n".join(f"  {name}" for name in names)
+    print(
+        f"About to send {len(names)} file(s) to {model}, which is a paid API "
+        f"call and leaves this machine:\n{listed}"
+    )
+    if not sys.stdin.isatty():
+        print(
+            "Refusing: this needs a person. Re-run with --yes to consent in "
+            "advance.",
+            file=sys.stderr,
+        )
+        return False
+    try:
+        answer = input("Send them? [y/N] ")
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return False
+    return answer.strip().lower() in {"y", "yes"}
 
 
 def command_extract(args: argparse.Namespace) -> int:
@@ -2474,57 +2440,32 @@ def command_extract(args: argparse.Namespace) -> int:
     targets = extract.staging_targets(
         config.staging_dir, prepared, force=args.force
     )
-    source_fingerprints, oracle_bindings = _bind_coverage_oracles(
-        config.root,
-        prepared,
-        args.coverage_oracle or (),
-        args.mode,
-    )
+    source_fingerprints = [
+        item.source_sha256 or extract.source_fingerprint(item.origin_path)
+        for item in prepared
+    ]
+
+    if not _confirm_live_model(prepared, model, args.yes):
+        print("Nothing was sent.")
+        return 1
 
     written = 0
     for index, (item, target) in enumerate(
         zip(prepared, targets, strict=True)
     ):
-        oracle = oracle_bindings.get(index)
-        selection_targets = (
-            tuple((entry.identity, entry.locator) for entry in oracle.targets)
-            if oracle is not None and oracle.type == "selection"
-            else ()
-        )
-        selection_rubric = (
-            oracle.selection_rubric or "" if selection_targets else ""
-        )
-        # An approved selection target wins over the general known-word skip
-        # list. The oracle may deliberately include a known identity to measure
-        # this source, and telling the model both "return it" and "skip it"
-        # makes the prompt self-contradictory.
-        known_for_item = () if selection_targets else skip_list
         result = extract.extract_candidates(
             item,
             model=model,
             style_guide=style_guide,
             mode=args.mode,
-            known=known_for_item,
-            source_unit_keys=(
-                tuple(unit.key for unit in oracle_bindings[index].units)
-                if index in oracle_bindings
-                and oracle_bindings[index].type == "exhaustive"
-                else ()
-            ),
-            selection_targets=selection_targets,
-            selection_rubric=selection_rubric,
+            known=skip_list,
         )
         candidates = result.candidates
         records = extract.build_records(candidates, item, known)
-        oracle_fingerprint = (
-            hardening.oracle_content_fingerprint(oracle) if oracle is not None else None
-        )
         coverage = extract.coverage_block(
             result,
             source_sha256=source_fingerprints[index],
             mode=args.mode,
-            oracle=oracle,
-            oracle_fingerprint=oracle_fingerprint,
         )
         target.parent.mkdir(parents=True, exist_ok=True)
         meta = {
@@ -2538,14 +2479,7 @@ def command_extract(args: argparse.Namespace) -> int:
                 model=model,
                 style_guide=style_guide,
                 mode=args.mode,
-                known=known_for_item,
-                source_unit_keys=(
-                    tuple(unit.key for unit in oracle.units)
-                    if oracle is not None and oracle.type == "exhaustive"
-                    else ()
-                ),
-                selection_targets=selection_targets,
-                selection_rubric=selection_rubric,
+                known=skip_list,
                 source_sha256=source_fingerprints[index],
             ),
             "coverage": coverage,
@@ -2876,7 +2810,7 @@ def command_promote(args: argparse.Namespace) -> int:
     # Coverage is an owner-review gate. Check it before a reading client is
     # created and before records, ledger, archive, or staging content can move.
     # A file written before M7.4 has no block and remains valid.
-    promote.check_coverage(meta, config.root)
+    promote.check_coverage(meta)
     if not records:
         print(f"{path} holds no records; nothing to promote.")
         return 0
@@ -3958,42 +3892,6 @@ def command_status(args: argparse.Namespace) -> int:
     return 0
 
 
-def command_harden_status(args: argparse.Namespace) -> int:
-    config = _load_config(args)
-    report = hardening.build_status(config.root)
-    if args.format == "json":
-        print(
-            json.dumps(
-                hardening.status_payload(report),
-                ensure_ascii=False,
-                indent=2,
-                sort_keys=True,
-            )
-        )
-    else:
-        for line in hardening.format_status(report):
-            print(line)
-    return 0
-
-
-def command_harden_replay(args: argparse.Namespace) -> int:
-    config = _load_config(args)
-    results = hardening_replay.replay(config.root, args.cases)
-    if args.format == "json":
-        print(
-            json.dumps(
-                hardening_replay.replay_payload(results),
-                ensure_ascii=False,
-                indent=2,
-                sort_keys=True,
-            )
-        )
-    else:
-        for line in hardening_replay.format_replay(results):
-            print(line)
-    return 0 if all(result.passed for result in results) else 1
-
-
 def command_migrate_inline(args: argparse.Namespace) -> int:
     config = _load_config(args)
     # Load once, save once: the ledger is a whole-file rewrite.
@@ -4303,21 +4201,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Override the configured extract model for this run.",
     )
     extract_parser.add_argument(
-        "--coverage-oracle",
-        action="append",
-        type=_path,
-        metavar="FILE",
-        help=(
-            "Bind an approved human coverage oracle to one input by SHA-256. "
-            "Repeat for a multi-input run."
-        ),
-    )
-    extract_parser.add_argument(
         "--force",
         action="store_true",
         help=(
             "Overwrite an existing staging file. Without it, a file already "
             "under review is left alone."
+        ),
+    )
+    extract_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help=(
+            "Consent in advance to sending these files to the paid model. "
+            "Without it, an unattended run refuses rather than sending."
         ),
     )
     extract_parser.set_defaults(handler=command_extract)
@@ -4532,36 +4428,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="'ids' prints bare record ids, one per line, for piping into other commands.",
     )
     status_parser.set_defaults(handler=command_status)
-
-    harden_parser = subparsers.add_parser(
-        "harden", help="Inspect deck-driven hardening evidence"
-    )
-    harden_commands = harden_parser.add_subparsers(
-        dest="harden_command", required=True
-    )
-    harden_status_parser = harden_commands.add_parser(
-        "status", help="Validate and summarize findings and pilot reports"
-    )
-    harden_status_parser.add_argument(
-        "--format",
-        choices=("text", "json"),
-        default="text",
-        help="Select human-readable text or deterministic JSON.",
-    )
-    harden_status_parser.set_defaults(handler=command_harden_status)
-    harden_replay_parser = harden_commands.add_parser(
-        "replay", help="Run deterministic offline hardening cases"
-    )
-    harden_replay_parser.add_argument(
-        "cases", nargs="*", metavar="CASE", help="Case IDs. The default is all gating cases."
-    )
-    harden_replay_parser.add_argument(
-        "--format",
-        choices=("text", "json"),
-        default="text",
-        help="Select human-readable text or deterministic JSON.",
-    )
-    harden_replay_parser.set_defaults(handler=command_harden_replay)
 
     migrate_parser = subparsers.add_parser(
         "migrate-inline",

@@ -308,55 +308,20 @@ def system_prompt(mode: str | None) -> str:
 def prompt_for(
     source_name: str,
     known: Sequence[str] = (),
-    source_unit_keys: Sequence[tuple[int, str, int]] = (),
-    selection_targets: Sequence[tuple[str, str]] = (),
-    selection_rubric: str = "",
 ) -> str:
     """The user-turn text for one file.
 
     The known-word list rides here rather than in the system blocks on purpose:
     it changes every time the collection grows, and anything above the cache
     breakpoint that changes invalidates the cached style guide for every run.
+
+    Two other blocks used to ride here — approved source-unit keys, and
+    approved prose-selection targets with their rubric — binding a human's
+    inventory of a page into the prompt so coverage could be scored against it.
+    That was the pilot programme's question, and it was cancelled with it
+    (M8.4). What is left is the ordinary ask.
     """
-    if source_unit_keys and selection_targets:
-        raise ExtractError(
-            "An extraction prompt cannot bind exhaustive unit keys and prose "
-            "selection targets at the same time.",
-            code="extract-oracle-prompt-conflict",
-        )
-    if bool(selection_targets) != bool(selection_rubric.strip()):
-        raise ExtractError(
-            "Prose selection targets and their rubric must be supplied together.",
-            code="extract-selection-prompt-incomplete",
-        )
     lines = [f"Extract vocabulary from {source_name}."]
-    if source_unit_keys:
-        lines.append(
-            "\nA person inventoried these table or list source-unit keys. "
-            "Return exactly one source_units entry for every key, in this order. "
-            "Use each key exactly as written. Do not add keys for titles, headings, "
-            "labels, watermarks, or other page furniture. The keys do not supply "
-            "context or disposition; read those facts from the source:\n"
-            + "\n".join(
-                f"page={page} section={section} ordinal={ordinal}"
-                for page, section, ordinal in source_unit_keys
-            )
-        )
-    if selection_targets:
-        lines.append(
-            "\nA person approved these exact prose-selection targets and source "
-            "locators. Return exactly one prose candidate for every target and "
-            "do not add other prose candidates. Keep each identity exactly as "
-            "written: the text between the first and last colon is Expression, "
-            "and the text after the last colon is Reading. Do not replace kana "
-            "with kanji or kanji with kana. Use the locator to find the source "
-            "occurrence and quote its context.\n"
-            f"Selection rubric: {selection_rubric.strip()}\n"
-            + "\n".join(
-                f"identity={identity} locator={locator}"
-                for identity, locator in selection_targets
-            )
-        )
     if known:
         lines.append(
             "\nWords janki already has — skip these unless the page says "
@@ -399,20 +364,11 @@ def prompt_provenance(
     style_guide: str,
     mode: str | None,
     known: Sequence[str] = (),
-    source_unit_keys: Sequence[tuple[int, str, int]] = (),
-    selection_targets: Sequence[tuple[str, str]] = (),
-    selection_rubric: str = "",
     source_sha256: str | None = None,
 ) -> dict[str, Any]:
     """The stable inputs needed to explain a later model-output change."""
     system = system_prompt(mode)
-    user = prompt_for(
-        prepared.origin_path.name,
-        known,
-        source_unit_keys,
-        selection_targets,
-        selection_rubric,
-    )
+    user = prompt_for(prepared.origin_path.name, known)
     return {
         "source_sha256": source_sha256 or source_fingerprint(prepared.origin_path),
         "mode": mode or "auto",
@@ -432,9 +388,6 @@ def extract_candidates(
     style_guide: str,
     mode: str | None = None,
     known: Sequence[str] = (),
-    source_unit_keys: Sequence[tuple[int, str, int]] = (),
-    selection_targets: Sequence[tuple[str, str]] = (),
-    selection_rubric: str = "",
     client: Any | None = None,
 ) -> ExtractionResult:
     """The normalized response one file yields, or a stable diagnostic.
@@ -454,13 +407,7 @@ def extract_candidates(
                 prepared.content_block(),
                 {
                     "type": "text",
-                    "text": prompt_for(
-                        prepared.origin_path.name,
-                        known,
-                        source_unit_keys,
-                        selection_targets,
-                        selection_rubric,
-                    ),
+                    "text": prompt_for(prepared.origin_path.name, known),
                 },
             ],
             candidate_schema(),
@@ -635,10 +582,22 @@ def coverage_block(
     *,
     source_sha256: str,
     mode: str | None,
-    oracle: Any | None = None,
-    oracle_fingerprint: str | None = None,
 ) -> dict[str, Any]:
-    """Compare exact source-unit facts and return durable staging metadata."""
+    """Durable staging metadata: what the model said the source contained.
+
+    This used to compare that against a human's approved inventory of the same
+    page — an "oracle" — and score the difference. M8.4 deleted the oracle
+    apparatus with the pilot programme it served, so what is left is the record
+    itself: the source units the model reported, their dispositions, the counts,
+    and the keys it repeated.
+
+    Still worth writing, and still checked. `promote._verify_coverage_facts`
+    re-derives this block and refuses a staging file whose numbers no longer
+    follow from the units beside them — which catches a hand-edit that changed
+    one and not the other. What it no longer claims is that anything was
+    *measured*: `status` is "unmeasured" whenever there are table units at all,
+    because nobody is asserting what the page held.
+    """
     actual = list(result.source_units)
     by_key: dict[tuple[int, str, int], SourceUnit] = {}
     duplicate_keys: list[dict[str, Any]] = []
@@ -648,76 +607,10 @@ def coverage_block(
         else:
             by_key[unit.key] = unit
 
-    missing: list[dict[str, Any]] = []
-    unexpected: list[dict[str, Any]] = []
-    context_mismatches: list[dict[str, Any]] = []
-    disposition_mismatches: list[dict[str, Any]] = []
-    oracle_type = str(getattr(oracle, "type", "")) if oracle is not None else ""
-    if oracle_type == "exhaustive":
-        expected_by_key = {unit.key: unit for unit in oracle.units}
-        for key in sorted(expected_by_key.keys() - by_key.keys()):
-            unit = expected_by_key[key]
-            missing.append(
-                {
-                    **_key_value(key),
-                    "context_fingerprint": unit.context_fingerprint,
-                    "disposition": unit.disposition,
-                }
-            )
-        for key in sorted(by_key.keys() - expected_by_key.keys()):
-            unexpected.append(by_key[key].fact())
-        for key in sorted(by_key.keys() & expected_by_key.keys()):
-            expected = expected_by_key[key]
-            observed = by_key[key]
-            if expected.context_fingerprint != observed.context_fingerprint:
-                context_mismatches.append(
-                    {
-                        **_key_value(key),
-                        "expected": expected.context_fingerprint,
-                        "observed": observed.context_fingerprint,
-                    }
-                )
-            if expected.disposition != observed.disposition:
-                disposition_mismatches.append(
-                    {
-                        **_key_value(key),
-                        "expected": expected.disposition,
-                        "observed": observed.disposition,
-                    }
-                )
-
-        expected_candidates = {
-            unit.key for unit in oracle.units if unit.disposition == "candidate"
-        }
-        observed_candidates = {
-            unit.key for unit in actual if unit.disposition == "candidate"
-        }
-        omissions = [
-            _key_value(key) for key in sorted(expected_candidates - observed_candidates)
-        ]
-        mismatch = any(
-            (
-                missing,
-                unexpected,
-                duplicate_keys,
-                context_mismatches,
-                disposition_mismatches,
-            )
-        )
-        status = "mismatch" if mismatch else "matched"
-        blocking = mismatch
-    elif oracle_type == "selection":
-        omissions = []
-        # A selection oracle measures prose targets only. In an auto-mode file
-        # it must not make table units look exhaustive.
-        has_table = bool(actual) or mode == "table"
-        status = "unmeasured" if has_table else "selection"
-        blocking = has_table
-    else:
-        omissions = []
-        has_table = bool(actual) or mode == "table"
-        status = "unmeasured" if has_table else "selection"
-        blocking = has_table
+    # A prose-only file has no table units to be exhaustive about; anything
+    # else is unmeasured now that no oracle says what should have been there.
+    has_table = bool(actual) or mode == "table"
+    status = "unmeasured" if has_table else "selection"
 
     dispositions = {
         name.replace("-", "_") + "_units": sorted(
@@ -726,32 +619,21 @@ def coverage_block(
         )
         for name in SOURCE_UNIT_DISPOSITIONS
     }
-    prose_is_present = (
-        mode == "prose"
-        or oracle_type == "selection"
-        or bool(result.prose_candidates)
-    )
     block: dict[str, Any] = {
         "version": 1,
         "status": status,
-        "blocking": blocking,
+        "blocking": has_table,
         "source_fingerprint": source_sha256,
-        "oracle_id": getattr(oracle, "id", None),
-        "oracle_type": oracle_type or None,
-        "oracle_content_fingerprint": oracle_fingerprint,
         "model_reported_unit_count": result.model_reported_unit_count,
         "observed_unit_count": len(actual),
         "prose_candidate_count": len(result.prose_candidates),
-        "prose_coverage": "unmeasured" if prose_is_present else "not-applicable",
-        "source_units": [unit.staging_value() for unit in actual],
-        "missing_units": sorted(missing, key=_unit_sort),
-        "unexpected_units": sorted(unexpected, key=_unit_sort),
-        "duplicate_keys": sorted(duplicate_keys, key=_unit_sort),
-        "context_mismatched_units": sorted(context_mismatches, key=_unit_sort),
-        "disposition_mismatched_units": sorted(
-            disposition_mismatches, key=_unit_sort
+        "prose_coverage": (
+            "unmeasured"
+            if (mode == "prose" or bool(result.prose_candidates))
+            else "not-applicable"
         ),
-        "omission_units": sorted(omissions, key=_unit_sort),
+        "source_units": [unit.staging_value() for unit in actual],
+        "duplicate_keys": sorted(duplicate_keys, key=_unit_sort),
         **dispositions,
     }
     block["coverage_block_fingerprint"] = _canonical_fingerprint(block)

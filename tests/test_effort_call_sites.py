@@ -263,3 +263,60 @@ def test_refresh_skips_the_jpdb_stages_when_there_is_no_key(
     assert code == 1
 
 
+
+# ---------------------------------------------------------------------------
+# The allow-lists themselves
+# ---------------------------------------------------------------------------
+#
+# Ported from the gating case `model-request-effort-support` when M8.4 deleted
+# the corpus. The tests above pin that each *site* resolves depth from the model
+# it sends; these pin what the two allow-lists actually contain, which no site
+# test can see. Measured before writing: deleting `mythos-5`, or `opus-4-8` and
+# `opus-4-7`, or `sonnet-5` and `fable-5` from `_XHIGH_MODELS`, or trimming
+# `sonnet-4-6` out of `_ADAPTIVE_THINKING_MODELS`, each left the whole suite
+# green — so every pass would have quietly stopped asking for the depth it was
+# configured for, on models nobody had a test for.
+
+#: (model id, sent xhigh effort, sent adaptive thinking).
+#: The two columns are deliberately not the same set: Opus 4.6 and Sonnet 4.6
+#: think adaptively but reject the xhigh level, which is the pairing bug the
+#: separate lists exist to prevent.
+_DEPTH_TABLE = (
+    ("claude-opus-5", True, True),
+    ("claude-opus-4-8", True, True),
+    ("claude-opus-4-7", True, True),
+    ("claude-sonnet-5", True, True),
+    ("claude-fable-5", True, True),
+    ("claude-mythos-5", True, True),
+    ("claude-opus-4-6", False, True),
+    ("claude-sonnet-4-6", False, True),
+    ("claude-opus-4-5", False, False),
+    ("claude-sonnet-4-5", False, False),
+    ("claude-haiku-4-5-20251001", False, False),
+    ("some-unreleased-model", False, False),
+)
+
+
+@pytest.mark.parametrize("model,xhigh,thinks", _DEPTH_TABLE, ids=lambda v: str(v))
+def test_the_request_body_asks_each_model_for_the_depth_it_accepts(
+    model: str, xhigh: bool, thinks: bool
+) -> None:
+    """Both keys are checked for *absence*, never for a `None` value.
+
+    A model that rejects `effort` answers the key with a 400 whatever its
+    value, so `"effort": None` is not a softer version of not sending it — it
+    is the same outage. `effort_for` returning `None` for such a model is
+    already well pinned; what was not is which ids that covers.
+    """
+    body = claude_client._request_body(
+        model, [], "x", enrich.ai_schema(), 100, claude_client.effort_for(model)
+    )
+
+    if xhigh:
+        assert body["output_config"]["effort"] == claude_client.DEFAULT_EFFORT
+    else:
+        assert "effort" not in body["output_config"]
+    if thinks:
+        assert body["thinking"] == {"type": "adaptive"}
+    else:
+        assert "thinking" not in body

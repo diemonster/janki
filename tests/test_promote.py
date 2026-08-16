@@ -836,19 +836,28 @@ def test_a_coverage_approval_for_an_old_block_is_refused(
     assert json.loads((root / "vocabulary.json").read_text(encoding="utf-8")) == []
 
 
-def test_a_bare_matched_label_cannot_bypass_the_oracle(
+def test_a_hand_edited_coverage_status_cannot_recompute_its_way_past_the_gate(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """The block hash is not the gate; re-deriving the facts is.
+
+    This used to prove that a bare `status: matched` could not bypass the
+    approved oracle. M8.4 deleted the oracle, and what survives is the stronger
+    half: promote regenerates the coverage block from the source units in the
+    file and refuses when the stored one disagrees. Recomputing
+    `coverage_block_fingerprint` after the edit — which any careful hand-editor
+    would do — does not help, because the fingerprint covers what the editor
+    wrote rather than what the units imply.
+    """
     root = project(tmp_path, [])
     staged = root / "staging" / "fake-matched.yaml"
     staged.parent.mkdir(parents=True, exist_ok=True)
     coverage = unmeasured_coverage()
-    coverage["status"] = "matched"
+    # Schema-valid on its face — `selection` is a real status and `blocking`
+    # agrees with it — but the units in the file are a table's, so regenerating
+    # the block yields `unmeasured`. The schema alone cannot tell.
+    coverage["status"] = "selection"
     coverage["blocking"] = False
-    coverage["oracle_id"] = "fake-oracle"
-    coverage["oracle_type"] = "exhaustive"
-    coverage["oracle_content_fingerprint"] = "b" * 64
-    # This simulates a hand edit, including a correctly recomputed block hash.
     coverage["coverage_block_fingerprint"] = coverage_block_fingerprint(coverage)
     write_staging(staged, [record()], extraction_meta(coverage))
 
@@ -857,14 +866,14 @@ def test_a_bare_matched_label_cannot_bypass_the_oracle(
     )
 
     assert code == 1
-    assert "coverage-oracle-missing" in capsys.readouterr().err
+    assert "coverage-facts-stale" in capsys.readouterr().err
     assert json.loads((root / "vocabulary.json").read_text(encoding="utf-8")) == []
 
 
 @pytest.mark.parametrize(
     "damage",
     [
-        lambda block: block.pop("omission_units"),
+        lambda block: block.pop("duplicate_keys"),
         lambda block: block.__setitem__("model_reported_unit_count", True),
     ],
 )

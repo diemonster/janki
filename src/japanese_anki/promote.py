@@ -31,11 +31,10 @@ from __future__ import annotations
 import re
 from collections.abc import Container, Iterable, Sequence
 from dataclasses import dataclass, field, replace
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from japanese_anki import enrich, extract, hardening, jpdb
+from japanese_anki import enrich, extract, jpdb
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import contains_kanji, stable_record_id
 from japanese_anki.models import (
@@ -76,7 +75,7 @@ class PromoteError(JankiError):
     pass
 
 
-def check_coverage(meta: dict[str, Any], root: Path | None = None) -> None:
+def check_coverage(meta: dict[str, Any]) -> None:
     """Apply the coverage gate before promotion can read clients or write data."""
     try:
         require_resolved_coverage(meta)
@@ -85,61 +84,19 @@ def check_coverage(meta: dict[str, Any], root: Path | None = None) -> None:
     block = meta.get("coverage")
     if not isinstance(block, dict):
         return
-    oracle_id = block.get("oracle_id")
-    status = block.get("status")
-    if status in {"matched", "mismatch"} and not oracle_id:
-        raise PromoteError(
-            "[coverage-oracle-missing] exhaustive coverage has no oracle ID"
-        )
-    if not oracle_id:
-        _verify_coverage_facts(meta, block, None, None)
-        return
-    if root is None:
-        raise PromoteError(
-            "[coverage-oracle-unverified] repository root is needed to verify the "
-            "coverage oracle"
-        )
-    if not isinstance(oracle_id, str) or not re.fullmatch(
-        r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", oracle_id
-    ):
-        raise PromoteError("[coverage-oracle-invalid] coverage oracle ID is invalid")
-    oracle_paths = [
-        path
-        for suffix in (".yaml", ".yml")
-        if (path := root / "quality" / "oracles" / f"{oracle_id}{suffix}").exists()
-    ]
-    if len(oracle_paths) != 1:
-        raise PromoteError(
-            f"[coverage-oracle-missing] coverage oracle {oracle_id!r} must have "
-            "exactly one .yaml or .yml file"
-        )
-    try:
-        oracle = hardening.load_oracle_file(root, oracle_paths[0])
-    except JankiError as exc:
-        raise PromoteError(f"[coverage-oracle-invalid] {exc}") from exc
-    expected_oracle_fingerprint = hardening.oracle_content_fingerprint(oracle)
-    if not oracle.approved:
-        raise PromoteError(
-            f"[coverage-oracle-unapproved] coverage oracle {oracle.id!r} is a draft"
-        )
-    if (
-        oracle.source_fingerprint != block.get("source_fingerprint")
-        or oracle.type != block.get("oracle_type")
-        or expected_oracle_fingerprint != block.get("oracle_content_fingerprint")
-    ):
-        raise PromoteError(
-            "[coverage-oracle-stale] coverage does not match the approved oracle's "
-            "source, type, and content fingerprint"
-        )
-    _verify_coverage_facts(meta, block, oracle, expected_oracle_fingerprint)
+    _verify_coverage_facts(meta, block)
 
 
-def _verify_coverage_facts(
-    meta: dict[str, Any],
-    block: dict[str, Any],
-    oracle: hardening.UnitOracle | None,
-    oracle_fingerprint: str | None,
-) -> None:
+def _verify_coverage_facts(meta: dict[str, Any], block: dict[str, Any]) -> None:
+    """Re-derive the coverage facts and refuse a staging file that disagrees.
+
+    What survives the M8.4 deletion of the approved-oracle apparatus. The
+    oracle answered "did the model return everything a human said was on this
+    page" — the pilot programme's question, cancelled with it. This answers a
+    question that is still worth asking and needs nobody's approval: do the
+    numbers in this file follow from the source units recorded beside them, or
+    has one been edited without the other?
+    """
     raw_units = block.get("source_units")
     if not isinstance(raw_units, list):
         raise PromoteError(
@@ -207,8 +164,6 @@ def _verify_coverage_facts(
         extract.ExtractionResult(tuple(candidates), tuple(units), reported_count),
         source_sha256=str(block.get("source_fingerprint", "")),
         mode=mode,
-        oracle=oracle,
-        oracle_fingerprint=oracle_fingerprint,
     )
     stored_facts = {
         key: value
@@ -222,8 +177,8 @@ def _verify_coverage_facts(
     }
     if stored_facts != regenerated_facts:
         raise PromoteError(
-            "[coverage-facts-stale] coverage facts do not match the stored source "
-            "units and approved oracle"
+            "[coverage-facts-stale] coverage facts do not match the stored "
+            "source units"
         )
 
 

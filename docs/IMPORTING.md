@@ -205,8 +205,16 @@ export ANTHROPIC_API_KEY='...'
 janki extract ~/Downloads/lesson-3.pdf ~/Desktop/IMG_0421.HEIC
 ```
 
-A file outside `data/inbox/` is copied into `data/inbox/scans/` first. A file
-already anywhere in the durable inbox is used where it lies. This durable path
+It asks first. Extraction is the one command that sends **your own
+documents** to a paid model, so it lists the files and names the model and
+waits for a `y`. A bare Enter means no. `--yes` consents in advance for a
+scripted run; without it an unattended run refuses and sends nothing, because
+there is nobody there to answer.
+
+A file outside `data/inbox/` is copied into `data/inbox/scans/` first — and
+that copy happens whether or not you then consent, so a refused run still
+leaves the file in the inbox, which is tracked. A file already anywhere in the
+durable inbox is used where it lies. This durable path
 — never a desktop path — is what every extracted record cites. A desktop path
 will not exist in six months; the evidence behind a card has to.
 
@@ -223,8 +231,9 @@ read from, and the model's own confidence.
 `--mode table` transcribes a vocabulary list row by row; `--mode prose` mines
 running text for words worth a card and says why. Omit it and the model judges
 each page, which is right when one document holds both. `--model ID` overrides
-the configured model for one run, and `--force` overwrites a staging file you
-have already started reviewing.
+the configured model for one run, `--force` overwrites a staging file you have
+already started reviewing, and `--yes` skips the consent prompt described
+above.
 
 Two things it will not do. It never writes to `vocabulary.json` — extraction
 proposes, you accept. And it never accepts a truncated answer: if the model runs

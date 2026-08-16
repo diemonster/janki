@@ -89,7 +89,18 @@ def test_word_decks_are_nonempty_and_do_not_share_stable_ids() -> None:
         for path in status.deck_files(config)
         if anki.deck_kind(path) in {"", "vocabulary"}
     ]
-    assert len(paths) >= 2, [path.as_posix() for path in paths]
+    # Named, not counted. `>= 2` is satisfied by a subset, so a deck that
+    # stopped being a word deck — a typo in `kind:`, a file moved out of the
+    # tree — would leave this gate silently while the assertion still passed.
+    # The deleted `deck-membership-partition` case pinned the exact list; this
+    # is that half, kept.
+    assert {path.relative_to(config.root).as_posix() for path in paths} == {
+        "data/decks/m7-camera-vertical-dialogue.yaml",
+        "data/decks/m7-mixed-tsumori.yaml",
+        "data/decks/m7-native-teform-table.yaml",
+        "data/decks/verbs.yaml",
+        "data/decks/yotsuba.yaml",
+    }, [path.as_posix() for path in paths]
     memberships: dict[str, set[str]] = {}
     for path in paths:
         name = path.relative_to(config.root).as_posix()

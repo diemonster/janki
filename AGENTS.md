@@ -76,28 +76,29 @@ or second-guesses what came back.
 - Identify verb group, transitivity, and common conjugations when known.
 - Flag uncertain readings, pitch accent, meanings, or usage rather than guessing.
 
-## Hardening rules
+## When janki gets something wrong
 
-*Scope (2026-08-15): a finding records a defect in janki's own machinery —
-importers, packaging, provenance, repairs. A wrong or thin model answer is a
-template problem, never a finding. M8.3 slims this corpus to plain tests.*
+*Rewritten 2026-08-15 (M8.4). This was a set of rules for operating a
+findings-and-cases corpus: `quality/findings.yaml`, replay cases with pinned
+fixtures, pilot reports, `janki harden status` and `replay`. Most of that value
+was ordinary regression testing wearing ceremony, and it is deleted. The loop
+below is what is left, and it is the loop every other project already uses.*
 
-- Follow `docs/HARDENING.md` when real deck work exposes a defect.
-- Classify a correction as `content-specific` or `systemic` before you
-  generalize it. When uncertain, keep it content-specific and staged.
-- A systemic defect is not complete when only the current row is corrected.
-  Preserve the reproduction and complete the finding, case, production fix,
-  full replay, and `make gates`, or record the finding as open or deferred.
-- Do not manufacture a general validator from one content-specific correction.
-- Record each systemic defect in `quality/findings.yaml`. Record a
-  content-specific correction only in its pilot report. Do not create a finding
-  for it.
-- Run `janki harden status` after you edit a finding, pilot, oracle, or case.
-  Run `janki harden replay` after you change production behavior or a case.
-  Status is read-only. Edit reviewed YAML by hand so comments and decisions
-  remain visible.
-- Do not mark a finding as `fixed` until a passing gating case and a production
-  fix reference exist. Case and finding links must point both ways.
+- A defect in janki's own machinery — an importer, packaging, provenance, a
+  repair, a CLI contract — gets a **failing test first, then the fix**. The
+  test goes beside its subject in `tests/`, named for the behaviour rather than
+  the bug.
+- **A wrong or thin model answer is not a defect in janki.** It is a template
+  problem, and the fix is a clearer prompt (`docs/DESIGN.md`). Do not add a
+  check that reads Japanese to catch it.
+- Prove a new test actually catches its subject: break the production code in
+  the single way the test names, confirm that test fails, and restore. A test
+  that passes against its own mutation is documentation, not a guard — this
+  repository has produced several, and mutation is the only thing that found
+  them.
+- Do not generalize one specific correction into a validator. Fix the record,
+  or ask the template for something better.
+
 - Automatic repairs are default-deny. Their only allowed target fields are
   `furigana`, `romaji`, `examples[*].furigana`, `examples[*].romaji`, `audio`,
   `image`, and `frequency_rank`. The canonical
@@ -106,17 +107,17 @@ template problem, never a finding. M8.3 slims this corpus to plain tests.*
   contract change adds it with an invariant and adversarial fixtures.
 - Never repair or propose a change to an existing record's `id`, `expression`,
   or `reading`. These fields determine Anki identity and review history.
-- The user owns live-eval consent, redistribution approval for owner-provided
-  material, human unit-oracle acceptance, manual coverage acceptance,
-  ambiguous new-identity resolution,
-  existing-identity migration, accepted-risk approval, and baseline acceptance.
-  An agent must not infer, generate, grant, or widen one of these decisions. It
-  must not answer an approval prompt as the user.
-- An agent may record a user decision only when the approval names every exact
-  fingerprint, scope, decision, and reason required by `docs/HARDENING.md`. A
-  broad request to finish work is not an approval. If exact approval is absent,
-  keep it false or missing and stop that route or use material that does not
-  need the approval.
+- The user owns consent to send their own material to a paid model
+  (`janki extract` asks, and `--yes` is how they answer in advance),
+  redistribution approval for owner-provided material, staging coverage
+  acceptance, ambiguous new-identity resolution, existing-identity migration,
+  and accepted-risk approval. An agent must not infer, generate, grant, or
+  widen one of these decisions. **It must not answer an approval prompt as the
+  user** — which is why the extract gate refuses on a non-TTY rather than
+  proceeding.
+- A broad request to finish work is not an approval for any of the above. If
+  exact approval is absent, stop that route or use material that does not need
+  it.
 
 ## Card-design rules
 

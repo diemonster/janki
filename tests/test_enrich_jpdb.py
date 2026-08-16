@@ -67,6 +67,12 @@ def parse_response(*entries: tuple[Any, list[Any]]) -> dict[str, Any]:
 HANASU = vocab(1562350, 4280520068, "話す", "はなす", ["LHLL"], 200, ["vt", "v5", "v5s"])
 HANASU_FURIGANA = [["話", "はな"], "す"]
 
+# 凄い: jpdb states no verb class for an い-adjective, so its part of speech is
+# what has to carry the inflection. The `adv` code leads, which is why the word
+# class is decided by precedence rather than by taking the first code.
+SUGOI = vocab(1379180, 333, "凄い", "すごい", ["LHHH"], 3100, ["adv", "adj-i"])
+SUGOI_FURIGANA = [["凄", "すご"], "い"]
+
 # 一日: the homograph the forced-furigana path exists for.
 ICHINICHI = vocab(1579110, 111, "一日", "いちにち", ["LHHH"], 900, ["n"])
 TSUITACHI = vocab(1579110, 222, "一日", "ついたち", ["LHHL"], 1400, ["n"])
@@ -172,6 +178,31 @@ def test_every_field_jpdb_states_or_janki_computes_is_filled() -> None:
     assert enriched.conjugations["negative"] == "話さない"
     assert result.looked_up == 1
     assert result.warnings == []
+
+
+def test_an_i_adjective_is_conjugated_from_its_part_of_speech() -> None:
+    """jpdb has no verb class for an い-adjective, so `verb_group` is empty and
+    the part of speech is the only thing that can drive the table.
+
+    Narrowing the `verb_group or part_of_speech` fallback to `verb_group` alone
+    leaves every jpdb-enriched い-adjective with `conjugations: {}` — a whole
+    word class silently losing its drill forms — and, measured after M8.4
+    deleted the case that pinned this, left the suite green. The label
+    precedence has its own test; this pins that the label reaches `conjugate`.
+    """
+    api = FakeApi({"凄い": parse_response((SUGOI_FURIGANA, SUGOI))})
+
+    result = enrich_records(
+        client_for(api),
+        [record(id="word:凄い:すごい", expression="凄い", reading="すごい",
+                meanings=["amazing"])],
+    )
+
+    enriched = result.records[0]
+    assert enriched.part_of_speech == "i-adjective"
+    assert enriched.verb_group == "", "jpdb states no class for an い-adjective"
+    assert enriched.conjugations["negative"] == "凄くない"
+    assert enriched.conjugations["past"] == "凄かった"
 
 
 def test_the_reading_is_never_written_even_when_jpdb_states_one() -> None:
@@ -424,6 +455,16 @@ def test_a_suru_stem_entry_cannot_settle_a_provisional_claim() -> None:
     assert updated.meanings == ["to study"]
     assert provisional_fields(updated) == ["meanings"]
     assert any("stay provisional" in warning for warning in result.warnings)
+    # One pinned parse, not two. Reconciliation asks for the exact identity and
+    # always will; what the suru allowance skips is the *reading check's* own
+    # pinned re-ask, which is redundant here — the allowance has already
+    # explained why the entry's spelling differs from the record's. Removing
+    # the guard buys a second request whose only possible answer is the one
+    # already in hand, and if it fails to resolve the record is refused and
+    # nothing is written, which is the symptom the allowance exists to prevent.
+    forced = [body for endpoint, body in api.bodies
+              if endpoint == "parse" and "furigana" in body]
+    assert len(forced) == 1, "the reading check does not re-ask for a suru compound"
 
 
 def test_a_record_without_a_reading_holds_reconciliation() -> None:

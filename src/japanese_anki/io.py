@@ -741,7 +741,7 @@ def _merge_one(
             )
     if "examples" in filled and new.source.type != "extract":
         # An incoming curated source's examples that filled the hole are the
-        # user's own data — curated by arrival, HARDENING.md's words — but the
+        # user's own data — curated by arrival — but the
         # merged record keeps its first-seen extract origin, which demands a
         # stamp nobody could type. The fill event itself is the provenance, so
         # it mints acceptance for exactly those sentences, through the same

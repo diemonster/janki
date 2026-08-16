@@ -284,6 +284,37 @@ def test_an_external_source_does_not_duplicate_an_existing_colliding_copy(
     assert list(scan_inbox.iterdir()) == [existing]
 
 
+def test_the_collision_error_names_only_the_file_whose_content_differs(
+    tmp_path: Path,
+) -> None:
+    """The message tells you which file to move aside, so it must not name one
+    that is fine.
+
+    The same source can match one durable namesake byte for byte *and* conflict
+    with another. Only the second is a problem, and only the second is
+    actionable — but the sentence claims the files it names "have the same
+    basename but different content", which is false about the identical copy
+    and sends the reader to rename a file that would not have helped.
+
+    Ported from the gating case `input-external-existing-name-collision`, whose
+    oracle observed exactly this list. Measured before writing: passing
+    `conflicts + matches` to `_durable_name_collision` left the whole suite
+    green — the refusal was pinned, its subject was not.
+    """
+    inbox = tmp_path / "data" / "inbox"
+    scan_inbox = inbox / "scans"
+    differs = write(inbox / "lesson.pdf", PDF + b" root")
+    identical = write(scan_inbox / "lesson.pdf", PDF + b" scan")
+    source = write(tmp_path / "desk" / "lesson.pdf", PDF + b" scan")
+
+    with pytest.raises(InputError) as raised:
+        prepare_inputs([source], scan_inbox, inbox_root=inbox)
+
+    message = str(raised.value)
+    assert str(differs) in message, "the file that actually collides is named"
+    assert str(identical) not in message, "the byte-identical copy is not"
+
+
 def test_an_external_source_reuses_a_case_only_same_content_copy(
     tmp_path: Path,
 ) -> None:

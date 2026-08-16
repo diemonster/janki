@@ -193,6 +193,31 @@ def test_the_instructions_preserve_the_exact_headword_spelling() -> None:
     assert "do not\nreplace a kana-only expression with kanji" in enrich.AI_INSTRUCTIONS
 
 
+def test_the_instructions_state_the_furigana_notation_contract() -> None:
+    """The only thing standing between a malformed ruby field and a card.
+
+    Ported from the gating case `furigana-full-width-separator` when M8.4
+    deleted the corpus, and the one clause in this prompt nobody had written a
+    test for. Nothing audits the notation afterwards — the M8 deletions retired
+    the spill warning, its repair, and the paid review — while
+    `regenerate_example_romaji` still *reads* the field, so a group whose
+    separator Anki cannot read silently drops a word from the reconstructed
+    reading, from the romaji, and from the audio. Asking is the whole of the
+    protection, so the asking is what gets pinned.
+
+    Two assertions, because the halves fail independently: without the base
+    rule the base widens (話 becomes 毎日話), and without the separator rule the
+    space goes missing — and either one alone produces the same silent drop.
+
+    Read from the assembled prompt rather than the bare constant, so this keeps
+    holding when M7.6P moves the text into a template file.
+    """
+    text = enrich.AI_INSTRUCTIONS + "\n" + ai_prompt(record())
+
+    assert "The base is exactly the characters that reading" in text
+    assert "an ASCII space separates each group" in text
+
+
 def test_recent_sentences_ride_along_as_variety_pressure() -> None:
     # Asked for twenty verbs in a row, a model writes twenty variations of
     # 毎日〜ます unless it can see that it already did.
@@ -380,6 +405,64 @@ def test_an_accepted_extracted_example_is_annotated_in_place_not_replaced() -> N
 
     assert [ex.japanese for ex in outcome.record.examples] == ["日本語を話します。"]
     assert outcome.record.examples[0].english == "I speak Japanese."
+
+
+def test_an_in_place_fill_keeps_the_clip_and_regenerates_the_romaji() -> None:
+    """The three halves of the in-place fill the sibling above does not reach.
+
+    Ported from the gating case `ai-existing-example-annotations` when M8.4
+    deleted the corpus. That case observed the whole merged example; the pytest
+    twin asserted only the English, so three single edits in
+    `_fill_existing_example_annotations` left the suite green:
+
+    * dropping `or incoming.furigana`, so an empty furigana hole never fills —
+      the field the card's ruby and the audio both come from;
+    * writing `audio=""` into the replacement, which strands a paid clip and,
+      because clips are addressed by content, orphans the file too;
+    * skipping the romaji regeneration, which leaves romaji describing the
+      sentence as it was before the furigana arrived.
+
+    The romaji is the sharpest of the three: it is *derived*, so a stale value
+    is not obviously wrong to read — it is simply not what the card now says.
+    """
+    accepted = record(
+        source=SourceReference(
+            type="extract",
+            imported_from="page.jpg",
+            raw_fields={"example_authority": short_fingerprint("日本語を話します。")},
+        ),
+        examples=[
+            ExampleSentence(
+                japanese="日本語を話します。",
+                audio="audio/janki-kept.mp3",
+                # Deliberately present and wrong. With this empty, "regenerated"
+                # and "populated because it was empty" are indistinguishable —
+                # and the merge policy every neighbouring field in the same
+                # `replace()` uses is `old.X or incoming.X`, so applying it
+                # uniformly to a *derived* field would strand this value with
+                # nothing objecting.
+                romaji="stale-before-the-furigana-arrived",
+            )
+        ],
+    )
+
+    outcome = apply_ai_result(
+        accepted,
+        answer(
+            generated(
+                "日本語を話します。",
+                furigana="日本語[にほんご]を 話[はな]します。",
+                english="I speak Japanese.",
+            )
+        ),
+    )
+
+    [filled] = outcome.record.examples
+    assert filled.audio == "audio/janki-kept.mp3", "the paid clip survives the fill"
+    assert filled.furigana == "日本語[にほんご]を 話[はな]します。"
+    # `o`, not `wo`: the particle を is romanized as it is said, which is also
+    # proof the value came from the romaji module rather than a naive transliteration.
+    assert filled.romaji == "nihongoohanashimasu.", "regenerated from that furigana"
 
 
 def test_each_stored_annotation_wins_over_the_models_own() -> None:
