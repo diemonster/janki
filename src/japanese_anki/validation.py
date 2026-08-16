@@ -254,17 +254,19 @@ def validate_record(record: VocabularyRecord, source: str = "") -> list[Validati
         elif record.reading and len(pattern) != len(_kana(record.reading)) + 1:
             # A warning, not an error: that the pattern covers the particle slot
             # is community-verified rather than documented, so a mismatch means
-            # "look at this", not "this file is wrong". Audio generation (M5.1)
-            # refuses such a pattern instead of guessing the alignment, so the
-            # record simply gets no audio until someone checks it.
+            # "look at this", not "this file is wrong". Audio generation does
+            # not refuse it — since 2026-08-15 the word is voiced with the
+            # engine's own accent and the clip is marked `accent_unverified`,
+            # so the cost of leaving this is a card that sounds plausible and
+            # is not checked, rather than a silent card.
             add(
                 "warning",
                 "pitch-accent-length",
                 f"{label} {pattern!r} has {len(pattern)} position(s) for a "
                 f"{len(_kana(record.reading))}-kana reading; "
                 f"{len(_kana(record.reading)) + 1} were expected (one per kana "
-                "plus the following particle) and audio generation will skip "
-                "this record rather than guess",
+                "plus the following particle), so the accent cannot be forced "
+                "and this word is voiced with the engine's own",
             )
     for index, example in enumerate(record.examples, start=1):
         if example.japanese and not example.english:

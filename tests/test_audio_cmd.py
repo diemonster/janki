@@ -1083,3 +1083,51 @@ def test_the_word_rate_does_not_reach_the_openai_sentence_provider(tmp_path: Pat
     assert sentences.speed == 1.0, "the word engine's rate stayed out of it"
 
 
+
+
+def test_correcting_an_unusable_pattern_revoices_the_clip(tmp_path: Path) -> None:
+    """The trap the fallback created, and the reason the fingerprint describes
+    the utterance rather than the stored pattern.
+
+    A curator typing an accent in a Japanese IME gets fullwidth ＬＨＬ.
+    `to_aquestalk` refuses it, so the word takes the guess path. They then
+    retype it in ASCII — which is exactly what `janki build`'s
+    `invalid-pitch-accent` error asks for. Fingerprinted over the raw pattern
+    the two collide under NFKC, so the clip stayed current, no warning fired
+    (the pattern parses now), and the ledger said `accent_unverified` forever.
+    """
+    guessed, provider, book = run(
+        [record(pitch_accent=[], audio_accent="ＬＨＬ")], tmp_path, words=True
+    )
+    stored = f"audio/{guessed.written['word:橋:はし'][0]}"
+    assert provider.said == [("はし", False)], "refused, so voiced as a guess"
+
+    fixed, provider, book = run(
+        [record(pitch_accent=[], audio_accent="LHL", audio=stored)],
+        tmp_path, words=True, book=book,
+    )
+
+    assert provider.said == [("ハシ'", True)], "the correction is re-voiced, forced"
+    assert fixed.up_to_date == 0
+
+
+def test_the_upgrade_clears_the_unverified_mark_from_the_ledger(tmp_path: Path) -> None:
+    """The durable half. A clip re-voiced as forced must stop being *recorded*
+    as a guess, or every later reader — and any future report — still believes
+    it is one.
+
+    Measured: merging a new audio reference over the old entry rather than
+    replacing it keeps the stale tag through a forced re-voice, and the whole
+    suite stayed green.
+    """
+    guessed, _, book = run([record(pitch_accent=[])], tmp_path, words=True)
+    stored = f"audio/{guessed.written['word:橋:はし'][0]}"
+    entry = book.records["word:橋:はし"]["audio"][0]
+    assert entry[audio_cmd.ACCENT_UNVERIFIED] is True, "the premise"
+
+    run(
+        [record(pitch_accent=["LHL"], audio=stored)], tmp_path, words=True, book=book
+    )
+
+    [entry] = [a for a in book.records["word:橋:はし"]["audio"] if a["of"] == "word"]
+    assert audio_cmd.ACCENT_UNVERIFIED not in entry, "the mark is gone, not merged"

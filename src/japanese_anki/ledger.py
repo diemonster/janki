@@ -283,8 +283,39 @@ def example_audio_filename_fingerprint(
 
 
 def word_audio_content_fingerprint(record: VocabularyRecord) -> str:
-    """What word audio says: ``fp(reading + selected pitch pattern)``."""
-    return short_fingerprint(record.reading + _selected_pitch_pattern(record))
+    """What word audio actually *says* — the utterance, not the stored pattern.
+
+    The AquesTalk notation when the pattern can be forced, and the bare reading
+    when it cannot, because those are the two different things the engine is
+    sent and the clip has to go stale between them.
+
+    Fingerprinting the raw pattern instead was a trap. ``short_fingerprint``
+    normalizes NFKC and ``pitch.select_pattern`` does not, so a fullwidth
+    ``ＬＨＬ`` — what a Japanese IME produces while you are already typing kana
+    — and an ASCII ``LHL`` hash identically. `to_aquestalk` refuses the first
+    and accepts the second, so a curator who typed the pattern in full width,
+    got a guessed clip, then corrected it to ASCII would find the clip
+    unchanged: same fingerprint, so `_is_current` calls it up to date, no
+    warning fires because the pattern now parses, and the ledger goes on saying
+    `accent_unverified` forever. Over the utterance the two differ, which is
+    the whole point.
+    """
+    pattern = _selected_pitch_pattern(record)
+    return short_fingerprint(record.reading + _spoken_form(record, pattern))
+
+
+def _spoken_form(record: VocabularyRecord, pattern: str) -> str:
+    """The AquesTalk string a forced clip would use, or ``""`` for a guess."""
+    if not pattern:
+        return ""
+    from japanese_anki import pitch
+
+    try:
+        return pitch.to_aquestalk(record.reading, pattern)
+    except pitch.PitchError:
+        # Unusable: the clip is voiced with the engine's own accent, which is
+        # the same utterance a record with no pattern at all produces.
+        return ""
 
 
 def example_audio_content_fingerprint(example: ExampleSentence) -> str:

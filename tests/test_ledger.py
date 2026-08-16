@@ -27,6 +27,7 @@ from japanese_anki.ledger import (
     word_audio_filename_fingerprint,
 )
 from japanese_anki.models import ExampleSentence, VocabularyRecord
+from japanese_anki.pitch import to_aquestalk
 
 TODAY = date.today().isoformat()
 
@@ -717,17 +718,27 @@ def test_word_content_fingerprint_follows_the_selected_accent() -> None:
     # A record with no pattern is fingerprinted on the reading alone. Once a
     # pattern exists, audio generated without one is detectably out of date.
     assert word_audio_content_fingerprint(_accented(record, "LHHH")) != plain
+    # Over the *utterance*, not the stored pattern: the AquesTalk string the
+    # engine is actually sent. Fingerprinting the raw pattern let a fullwidth
+    # ＬＨＬ and an ASCII LHL collide under NFKC, so correcting one to the other
+    # left the guessed clip permanently current.
     assert word_audio_content_fingerprint(_accented(record, "LHHH")) == short_fingerprint(
-        record.reading + "LHHH"
+        record.reading + to_aquestalk(record.reading, "LHHH")
     )
 
 
 def test_an_audio_accent_override_wins_over_the_jpdb_pattern() -> None:
     record = _record()
     accented = _accented(record, "LHHH")
-    accented.audio_accent = "HLL"
+    # A *usable* override — one per kana plus the particle slot. An unfitting
+    # one is not "the override winning", it is the record having no pattern the
+    # engine can force, and the fingerprint now says so by matching the
+    # no-pattern case.
+    accented.audio_accent = "HLLL"
 
-    assert word_audio_content_fingerprint(accented) == short_fingerprint(record.reading + "HLL")
+    assert word_audio_content_fingerprint(accented) == short_fingerprint(
+        record.reading + to_aquestalk(record.reading, "HLLL")
+    )
 
 
 # -- queries -----------------------------------------------------------------
@@ -912,7 +923,9 @@ def test_the_word_audio_fingerprint_uses_pitch_select_pattern() -> None:
         pitch_accent=["", "LHL"],
     )
 
-    assert ledger_module.word_audio_content_fingerprint(record) == short_fingerprint("はしLHL")
+    assert ledger_module.word_audio_content_fingerprint(record) == short_fingerprint(
+        "はし" + to_aquestalk("はし", "LHL")
+    )
     assert pitch.select_pattern(record) == "LHL"
 
 

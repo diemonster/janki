@@ -55,14 +55,26 @@ DIRECTORY = Path("prompts")
 #: whitespace, then strip the marks — let `"\u200b \u200b"` through, because
 #: the space survives the first and the marks survive the second.
 #:
-#: Built from `str.strip`'s own set rather than a hand-written list of spaces,
-#: which is how the first attempt at this dropped U+001C–U+001F, U+0085,
-#: U+2028 and U+2029: they are whitespace to `str.strip` and were absent from
-#: the literal, so a file holding one of them alone started passing a guard it
-#: used to fail.
-_ZERO_WIDTH = "\ufeff\u200b\u200c\u200d\u200e\u200f\u2060\u2062\u00ad\u180e"
+#: The whitespace half is taken from `str`'s own definition rather than a
+#: hand-written list of spaces, which is how an earlier attempt dropped
+#: U+001C–U+001F, U+0085, U+2028 and U+2029: they are whitespace to `str.strip`
+#: and were absent from the literal, so a file holding one alone started
+#: passing a guard it used to fail. Bounded at U+3000, the highest whitespace
+#: code point — scanning all 0x110000 cost 54 ms at import, a quarter of
+#: janki's cold start, to rediscover the same 29 characters.
+#:
+#: The rest are the Cc and Cf ranges that render as nothing. This does not
+#: catch every invisible character Unicode has — U+3164 HANGUL FILLER and
+#: U+2800 BRAILLE PATTERN BLANK are letters and symbols by category, and a file
+#: of one of those still reads as content. The guard is for a truncated or
+#: emptied prompt, not for an adversary.
 _INVISIBLE = (
-    "".join(chr(c) for c in range(0x110000) if chr(c).isspace()) + _ZERO_WIDTH
+    "".join(chr(c) for c in range(0x3001) if chr(c).isspace())
+    + "".join(chr(c) for c in range(0x00, 0x20))
+    + "\x7f\u00ad\u061c\u180e"
+    + "".join(chr(c) for c in range(0x200B, 0x2010))
+    + "".join(chr(c) for c in range(0x2060, 0x2065))
+    + "\ufeff\ufff9\ufffa\ufffb"
 )
 
 

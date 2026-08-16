@@ -17,11 +17,15 @@ the plan names the gap. The sentence states the design, not the present.
 **1. Intake.** Sources arrive and are preserved immutably under `data/inbox/`,
 with provenance. Nothing ever edits a source.
 
-**2. The AI pass (Claude Opus 5).** One template prompt per input shape asks
-for everything the cards need in one answer: the Japanese, the English
-translation, furigana giving each kanji's *contextual* reading as used in that
-sentence, the kanji themselves, usage patterns worth teaching, register. The
-answer fills the data model. Prompts are template files, readable without
+**2. The AI passes (Claude Opus 5).** A template prompt per input shape and
+pass asks for what the cards need: the Japanese, the English translation,
+furigana giving each kanji's *contextual* reading as used in that sentence,
+usage patterns worth teaching, register. Together the answers fill the data
+model. *Today that is four passes — `extract` reads a source for candidates,
+`enrich --ai` writes the sentences and notes, `--polish-meanings` rewrites the
+glosses, `patterns` reads a handout for the grammar it teaches. Consolidating
+them into one rich template per input shape is the open half of M7.6P, not
+something already true.* Prompts are template files, readable without
 opening Python, and they are the quality mechanism: **when the output is wrong
 or thin, expand the template.** A bare word list (the CSV path) has no source
 sentences, so it gets its own template that writes them; everything else about
@@ -37,12 +41,22 @@ anti-pattern.** The retired jpdb sentence oracle is the cautionary measurement:
 **3. Enrichment.** Facts from outside, and deterministic derivation janki
 owns:
 
-- **jpdb** — word details: frequency, pitch accent for card display.
-- **KANJIDIC** — kanji details: meanings, readings, stroke order.
-- **OpenAI TTS** — audio for words and example sentences. It renders natural
-  Japanese, pitch accent included. The only steering is prose instructions in
-  config; if a single clip needs help, the reading rides along in that clip's
-  instructions.
+- **jpdb** — what a dictionary knows about a word: furigana, romaji, part of
+  speech, verb group, transitivity, conjugations, pitch accent, frequency rank. It
+  is also the reading witness at the promote gate, where a reading it
+  contradicts is held back rather than minted into a permanent record ID.
+- **KANJIDIC** — kanji meanings, readings and stroke *count*. Stroke **order**
+  comes from KanjiVG, a separate source under CC BY-SA 3.0 that a shared deck
+  must credit.
+- **VOICEVOX** — audio for words, with the pitch accent **forced**. It is the
+  only engine here that can force one, which is why it voices the words: left
+  to guess, an engine renders 橋 and 箸 identically, and telling those apart is
+  what a pitch card is for. A word with no usable pattern is still voiced, with
+  the engine's own accent and a ledger mark saying so.
+- **OpenAI TTS** — audio for example *sentences*, read naturally. A sentence
+  carries context that disambiguates, and no accent data janki has covers a
+  whole sentence. Steering is prose instructions in config; if one clip needs
+  help, the reading rides along in that clip's instructions.
 - **Derivation** — mechanics janki owns: romaji transliterated from the
   model's furigana (for a bare word, from its reading), and the conjugation
   tables that fill the Conjugations field and build the drill decks.
@@ -51,9 +65,10 @@ owns:
 
 Enrichment adds facts about *words* and *files*. It never judges sentences.
 
-**4. Compile.** genanki builds the decks. Deterministic note IDs and GUIDs
+**4. Compile.** genanki builds the decks. Deterministic **GUIDs** — note ids
+are timestamps genanki mints per build, and the GUID is what Anki matches on
 make rebuilds update cards instead of duplicating them; the ledger records
-what shipped; no record belongs to more than one word deck.
+what shipped; no record belongs to more than one word deck — a convention the deck files keep, checked by a test over the real decks rather than enforced by the builder, which filters each deck without looking at the others.
 
 ## Mechanisms the pipeline rests on
 
