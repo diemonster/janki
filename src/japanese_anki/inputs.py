@@ -46,6 +46,7 @@ __all__ = [
     "IMAGE_TYPES",
     "InputError",
     "PreparedInput",
+    "inside",
     "prepare_inputs",
 ]
 
@@ -89,6 +90,11 @@ class PreparedInput:
     data_b64: str
     origin_path: Path
     source_sha256: str = ""
+    #: Whether *this* run wrote the file at ``origin_path`` into the inbox.
+    #: False when the source was already durable and used in place, or when it
+    #: matched a file the inbox already held. A caller reporting what a run left
+    #: behind needs this: the path alone cannot distinguish the two.
+    copied: bool = False
 
     def content_block(self) -> dict[str, Any]:
         """The API content block for this input.
@@ -216,8 +222,15 @@ def _copy_into_inbox(
     data: bytes,
     *,
     inbox_root: Path | None = None,
-) -> Path:
-    """Return the inbox copy of ``source``, making one if it is not there yet.
+) -> tuple[Path, bool]:
+    """Return the inbox path for ``source`` and whether this call wrote it.
+
+    The flag is not cosmetic. Four of the five ways out of here return a file
+    that was *already* in the inbox — used in place, matched by name, matched
+    by fingerprint, or already holding these exact bytes — and only the last
+    one copies. A caller that wants to tell a user "this is now in your inbox"
+    cannot work that out from the returned path, because a path under the inbox
+    is what every branch returns.
 
     A file already under the durable ``inbox_root`` is used where it lies —
     re-running an extraction over any inbox file must not copy it again. The
@@ -244,7 +257,7 @@ def _copy_into_inbox(
         )
         if conflicts:
             raise _durable_name_collision(source, conflicts)
-        return source
+        return source, False
 
     scan_inbox.mkdir(parents=True, exist_ok=True)
     target = scan_inbox / source.name
@@ -252,7 +265,7 @@ def _copy_into_inbox(
     if matches and conflicts:
         raise _durable_name_collision(source, conflicts)
     if matches:
-        return target if target in matches else matches[0]
+        return (target if target in matches else matches[0]), False
     if conflicts or _occupied(target):
         # Content-addressed, via the project's one fingerprint helper: the hex
         # digest goes through it rather than a second hashing scheme.
@@ -271,10 +284,10 @@ def _copy_into_inbox(
         if fingerprint_matches:
             return (
                 target if target in fingerprint_matches else fingerprint_matches[0]
-            )
+            ), False
         if _occupied(target):
             if inside(target, durable_root) and _read(target) == data:
-                return target
+                return target, False
             raise InputError(
                 f"Cannot store {source}: {target} already holds different content "
                 "under the fingerprint of these bytes. Move that file aside — janki "
@@ -315,7 +328,7 @@ def _copy_into_inbox(
         raise InputError(
             f"Could not copy {source} into {scan_inbox}: {exc}.{leftover}"
         ) from exc
-    return target
+    return target, True
 
 
 def _heic_to_jpeg(
@@ -399,7 +412,7 @@ def prepare_inputs(
         kind, media_type, convert = _classify(source)
         data = _read(source)
         source_sha256 = hashlib.sha256(data).hexdigest()
-        stored = _copy_into_inbox(
+        stored, copied = _copy_into_inbox(
             source, scan_inbox, data, inbox_root=inbox_root
         )
         if convert:
@@ -412,6 +425,7 @@ def prepare_inputs(
                 data_b64=_encode(data),
                 origin_path=stored,
                 source_sha256=source_sha256,
+                copied=copied,
             )
         )
     return prepared

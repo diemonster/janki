@@ -623,13 +623,19 @@ def test_an_unattended_run_refuses_to_send_rather_than_assuming_consent(
     assert code == 1
     assert call.calls == [], "nothing was sent"
     assert not (root / "staging" / "lesson.pdf.yaml").exists()
-    err = capsys.readouterr().err
-    assert "Refusing" in err
-    # And it says what it *kept*. The inbox copy already happened, into a
-    # tracked directory, so reporting only "Nothing was sent." would read as
-    # "nothing happened" while a private document waits for the next git add.
-    assert "kept in the inbox" in err
-    assert (root / "inbox" / "lesson.pdf").exists(), "the copy really did happen"
+    captured = capsys.readouterr()
+    assert "Refusing" in captured.err
+    # And it says what it *kept*, by path. The inbox copy already happened,
+    # into a tracked directory, so reporting only "Nothing was sent." would
+    # read as "nothing happened" while a private document waits for the next
+    # git add. Asserting the phrase alone let a message naming no file — or
+    # the wrong one — pass, so the path is what is pinned.
+    kept = root / "inbox" / "lesson.pdf"
+    assert kept.exists(), "the copy really did happen"
+    assert f"kept in the inbox: {kept}" in captured.out
+    # One stream: `2>/dev/null` must not strip the qualification off
+    # "Nothing was sent."
+    assert "Nothing was sent." in captured.out
 
 
 @pytest.mark.parametrize(
@@ -687,6 +693,35 @@ def test_aborting_the_prompt_is_a_no(
     assert call.calls == [], "nothing was sent"
     assert code == 1
     assert not (root / "staging" / "lesson.pdf.yaml").exists()
+
+
+def test_a_file_already_in_the_inbox_is_not_announced_as_kept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The refusal reports what this run *stored*, not what happens to sit
+    under the inbox.
+
+    Every branch of `_copy_into_inbox` returns a path inside the inbox —
+    including the four that copy nothing — so the first version of this
+    message, which asked "is this path under the inbox", announced
+    `kept in the inbox: …` for a file the run never touched. Telling someone
+    their own already-filed evidence was just deposited by a run they refused
+    is a small lie in a message whose entire job is to be trusted.
+    """
+    root = default_inbox_project(tmp_path)
+    source = root / "data" / "inbox" / "lesson.pdf"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(PDF)
+    call = FakeCall(ok(candidate()))
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
+
+    code = cli.main(["--root", str(root), "extract", str(source)])
+
+    out = capsys.readouterr().out
+    assert code == 1 and call.calls == []
+    assert "Nothing was sent." in out
+    assert "kept in the inbox" not in out, "this run stored nothing"
+    assert source.exists(), "and it is still where it always was"
 
 
 def test_the_consent_prompt_names_the_files_and_the_model(

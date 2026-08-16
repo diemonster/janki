@@ -867,12 +867,17 @@ def test_a_coverage_approval_for_an_old_block_is_refused(
 def test_a_malformed_source_unit_is_named_field_by_field(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], damage: Any, expected: str
 ) -> None:
-    """`_coverage_fact` is a live promote gate that had no test of its own.
+    """The per-unit shape checks a hand-edited staging file has to pass.
 
-    Measured: disabling its field-set check, its fingerprint check or its
-    disposition check each left the whole suite green — before this change and
-    after it, so it was already blind and M8.4 narrowed a blind validator. The
-    surviving `coverage-facts-stale` test exercises a different function
+    Measured: disabling `_coverage_fact`'s fingerprint or disposition check
+    left the whole suite green — before this change and after it, so M8.4
+    narrowed an already-blind validator. Those are the first two params. The
+    third, a missing field, is caught one level up by
+    `_validate_coverage_block`'s own `source_units` check rather than by
+    `_coverage_fact`; its sibling test below covers `_coverage_fact`'s exact
+    -field-set rule, which only an *unknown* key can reach.
+
+    The surviving `coverage-facts-stale` test exercises a different function
     (`promote._verify_coverage_facts`), which re-derives the block rather than
     checking the shape of what it reads.
 
@@ -896,22 +901,26 @@ def test_a_malformed_source_unit_is_named_field_by_field(
     assert expected in capsys.readouterr().err
 
 
-def test_a_disposition_entry_missing_a_field_is_refused(
+def test_a_disposition_entry_with_an_unknown_key_is_refused(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """`_coverage_fact`'s own exact-field-set check.
 
     `source_units` entries never reach it — they have a separate field check
     one line earlier — so the disposition lists are the only route, and
-    deleting `set(value) != fields` was invisible without this. A disposition
-    entry short a field is a hand-edit that silently changes which unit the
-    list is talking about.
+    deleting `set(value) != fields` was invisible without this.
     """
     root = project(tmp_path, [])
     staged = root / "staging" / "damaged-fact.yaml"
     staged.parent.mkdir(parents=True, exist_ok=True)
     coverage = unmeasured_coverage_with_units()
-    coverage["candidate_units"][0].pop("ordinal")
+    # An *extra* key, not a missing one. Every missing field is independently
+    # caught (page/ordinal, section, fingerprint, disposition each have their
+    # own check), so popping one proved the refusal but not this check. A
+    # hand-typed key is what only the exact-field-set test refuses — and
+    # without it the junk round-trips through `read_staging` into `validate`,
+    # `status --staged` and everything else built on it.
+    coverage["candidate_units"][0]["surprise"] = "typed by hand"
     coverage["coverage_block_fingerprint"] = coverage_block_fingerprint(coverage)
     write_staging(staged, [record()], extraction_meta(coverage))
 

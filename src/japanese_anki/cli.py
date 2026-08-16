@@ -40,7 +40,6 @@ from japanese_anki.exporters.anki import (
 from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.importers import anki_deck, jpdb_import, jpdb_reviews
 from japanese_anki.importers.shirabe import import_file, inspect_file
-from japanese_anki.inputs import inside as inputs_inside
 from japanese_anki.inputs import prepare_inputs
 from japanese_anki.io import (
     MERGE_LABELS,
@@ -2454,14 +2453,21 @@ def command_extract(args: argparse.Namespace) -> int:
         # `git add`. Enforcing the ordering instead would mean copying after
         # consent, which costs the collision and readability checks that make
         # the prompt's file list accurate in the first place.
-        copied = [
-            item.origin_path
-            for item in prepared
-            if inputs_inside(item.origin_path, config.scan_inbox.resolve())
-        ]
-        print("Nothing was sent.")
-        for path in copied:
-            print(f"  kept in the inbox: {path}", file=sys.stderr)
+        #
+        # `item.copied`, not "is this path under the inbox": every branch of
+        # `_copy_into_inbox` returns a path under the inbox, including the four
+        # that copy nothing, so a containment test announces files this run
+        # never touched.
+        copied = [item.origin_path for item in prepared if item.copied]
+        # One stream, because these lines qualify the sentence above them.
+        # Split across stdout and stderr, `2>/dev/null` prints exactly
+        # "Nothing was sent." with its qualification dropped, and a pipe can
+        # reorder them.
+        told = ["Nothing was sent."]
+        told += [f"  kept in the inbox: {path}" for path in copied]
+        if copied:
+            told.append("  Delete those if you did not want them stored.")
+        print("\n".join(told))
         return 1
 
     written = 0
