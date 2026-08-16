@@ -467,12 +467,14 @@ def test_a_block_the_gate_would_reject_is_never_paid_for(
 
 @pytest.mark.parametrize(
     "reason",
-    # Every one of these is a YAML 1.1 bareword that PyYAML resolves to a
-    # non-string. `y` and `1.0` were tried and dropped: 1.1 does not resolve a
-    # lone `y`, and ruamel's own 1.2 resolver already quotes `1.0`, so neither
-    # could fail without the fix.
-    ["no", "on", "off", "yes", "true", "12:30"],
-    ids=["no", "on", "off", "yes", "true", "sexagesimal"],
+    # Measured, not guessed: each of these is emitted *bare* by ruamel's 1.2
+    # resolver and read back by PyYAML 1.1 as a non-string, so each fails
+    # without the quoting fix. Three candidates were tried and dropped for
+    # failing that test — `y` (1.1 does not resolve it), `1.0` and `true`
+    # (ruamel already quotes both, so they could never fail). Check a new one
+    # the same way before adding it.
+    ["no", "on", "off", "yes", "12:30"],
+    ids=["no", "on", "off", "yes", "sexagesimal"],
 )
 def test_an_approval_survives_both_yaml_dialects(tmp_path: Path, reason: str) -> None:
     """The hazard `rewrite_staging` documents, arriving from the other side.

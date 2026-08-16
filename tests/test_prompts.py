@@ -99,8 +99,26 @@ def test_an_empty_prompt_is_refused_like_a_missing_one(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "raw", [b"\xef\xbb\xbf", "\u200b".encode(), "\ufeff  \n".encode()],
-    ids=["bom", "zero-width-space", "bom-and-space"],
+    "raw",
+    [
+        b"\xef\xbb\xbf",
+        "\u200b".encode(),
+        "\ufeff  \n".encode(),
+        # The two that a *two-pass* strip lets through: whitespace between the
+        # marks survives the first pass, the marks survive the second. Without
+        # these the guard could be reverted to two passes undetected.
+        "\u200b \u200b".encode(),
+        "\ufeff \u200b".encode(),
+        # And the whitespace a hand-written space list omits. `str.strip`
+        # removes these; a literal set of "the spaces I could think of" did
+        # not, so a file holding one alone started passing a guard it had
+        # failed the day before.
+        "\u2029".encode(),
+        "\u0085".encode(),
+        b"\x1f",
+    ],
+    ids=["bom", "zwsp", "bom-and-space", "zwsp-space-zwsp", "bom-space-zwsp",
+         "paragraph-separator", "next-line", "unit-separator"],
 )
 def test_a_prompt_of_only_invisible_characters_is_refused(
     tmp_path: Path, raw: bytes
@@ -401,40 +419,13 @@ def test_each_enrichment_command_sends_its_own_template(
         assert not any(prompts.load(REPO_ROOT, other) in t for t in seen), (
             f"{other}.md was sent instead"
         )
-    # The style guide leads every pass and its own send was unpinned at three
-    # of four sites: dropping it left the suite green while every card in the
-    # run stopped being written to this project's conventions.
+    # The style guide leads every pass, and its own send was unpinned at five
+    # of the six sites that make one — measured, after an earlier comment here
+    # guessed "three of four". Dropping it left the suite green while every
+    # card in the run stopped being written to this project's conventions.
     assert any(prompts.load(REPO_ROOT, "style-guide") in text for text in seen), (
         "the style guide was not sent"
     )
-
-
-
-def test_extraction_sends_the_template_for_the_mode_it_was_asked_for(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """`--mode table` must send `extract-table.md` and not one of its siblings.
-
-    The three files ask for genuinely different work — exhaustive row
-    accounting versus selective prose reading — so a mode wired to the wrong
-    template produces a coverage record that means something else entirely.
-    """
-    from japanese_anki import cli
-
-    root = _wiring_project(tmp_path)
-    source = root / "inbox" / "lesson.pdf"
-    source.parent.mkdir(parents=True, exist_ok=True)
-    source.write_bytes(b"%PDF-1.4\n%x\n")
-    seen = _sent_system(monkeypatch)
-
-    cli.main(["--root", str(root), "extract", "--yes", "--mode", "table", str(source)])
-
-    assert seen
-    assert any(prompts.load(REPO_ROOT, "extract-table") in t for t in seen)
-    for other in ("extract-prose", "extract-auto"):
-        assert not any(prompts.load(REPO_ROOT, other) in t for t in seen), other
-
-
 
 
 @pytest.mark.parametrize(
@@ -508,6 +499,14 @@ def test_every_extraction_mode_sends_its_own_file(
     assert any(prompts.load(REPO_ROOT, wanted) in t for t in seen), wanted
     for other in {"extract-table", "extract-prose", "extract-auto"} - {wanted}:
         assert not any(prompts.load(REPO_ROOT, other) in t for t in seen), other
+    # The style guide too, and it matters more here than anywhere: the same
+    # variable feeds `prompt_provenance`, which writes
+    # `style_guide_fingerprint` unconditionally. Send nothing and the committed
+    # staging file records the sha of the empty string — permanent provenance
+    # naming a guide the run never sent.
+    assert any(prompts.load(REPO_ROOT, "style-guide") in t for t in seen), (
+        "the style guide was not sent"
+    )
 
 
 def test_the_patterns_command_sends_the_patterns_template(
@@ -529,9 +528,10 @@ def test_the_patterns_command_sends_the_patterns_template(
     assert seen, "the command reached the model"
     assert any(prompts.load(REPO_ROOT, "patterns") in t for t in seen)
     assert not any(prompts.load(REPO_ROOT, "approve-coverage") in t for t in seen)
-    # The style guide leads every pass and its own send was unpinned at three
-    # of four sites: dropping it left the suite green while every card in the
-    # run stopped being written to this project's conventions.
+    # The style guide leads every pass, and its own send was unpinned at five
+    # of the six sites that make one — measured, after an earlier comment here
+    # guessed "three of four". Dropping it left the suite green while every
+    # card in the run stopped being written to this project's conventions.
     assert any(prompts.load(REPO_ROOT, "style-guide") in text for text in seen), (
         "the style guide was not sent"
     )

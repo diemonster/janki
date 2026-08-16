@@ -1465,3 +1465,33 @@ def test_a_stored_part_of_speech_cannot_unlock_a_transitivity() -> None:
     )
 
     assert result.records[0].transitivity == ""
+
+
+@pytest.mark.parametrize(
+    "codes,derived,expected",
+    [
+        (["v5u", "vt"], "verb", "transitive"),
+        (["v1", "vi"], "verb", "intransitive"),
+        (["exp", "v5r", "vt"], "expression", "transitive"),
+        (["n", "vs", "vi"], "noun", ""),
+        (["n", "vs", "vt"], "noun", ""),
+        (["aux-v", "vi", "suf", "vt", "vs"], "verb", ""),
+    ],
+    ids=["godan-vt", "ichidan-vi", "expression", "suru-noun", "suru-stem", "both-ways"],
+)
+def test_transitivity_for_states_only_what_cannot_contradict_the_label(
+    codes: list[str], derived: str, expected: str
+) -> None:
+    """The rule itself, called directly.
+
+    It shipped with only indirect coverage through `enrich_records`, which
+    could not distinguish "the gate refused" from "the dictionary said
+    nothing" — the two produce the same empty field. Here they are separate
+    rows: `suru-noun` is the gate refusing a real `vi`, `both-ways` is
+    `pos_to_transitivity` declining to pick between `vt` and `vi` on a word
+    tagged both.
+    """
+    from japanese_anki import jpdb
+
+    assert jpdb.pos_to_part_of_speech(codes) == derived, "the premise"
+    assert jpdb.transitivity_for(codes, derived) == expected

@@ -152,6 +152,21 @@ def test_an_entry_becomes_a_record_with_every_field_jpdb_stated() -> None:
     assert record.source.imported_from == "Lesson 1"
 
 
+def test_a_suru_noun_is_imported_without_a_transitivity() -> None:
+    """The importer is the *other* writer of this field, and it was unpinned.
+
+    JMdict tags a noun that takes する with `vt`/`vi` too — 仕事 is
+    `["n", "vs", "vi"]` — so a bare dictionary answer puts "intransitive" on a
+    record whose own part of speech says "noun". `enrich --jpdb` was fixed for
+    this; `import-jpdb` writes the same field from the same codes and had no
+    test, so the two could drift apart silently.
+    """
+    record = _record(part_of_speech=["n", "vs", "vi"])
+
+    assert record.part_of_speech == "noun"
+    assert record.transitivity == "", "a noun states no transitivity"
+
+
 def test_meanings_keep_one_line_per_sense_rather_than_one_per_gloss() -> None:
     # The exporter renders one <br> line per meanings entry and the production
     # template uses the whole field as the prompt, so 話す's three senses must

@@ -49,13 +49,20 @@ __all__ = [
 #: `templates/` (that is the card HTML).
 DIRECTORY = Path("prompts")
 
-#: Characters that occupy a file without instructing anything. Stripped in one
-#: pass together with whitespace: two passes let `"\u200b \u200b"` through,
-#: because the space survives the first and the marks survive the second.
+#: Characters that occupy a file without instructing anything.
+#:
+#: Stripped in **one** pass together with whitespace. Two passes — strip
+#: whitespace, then strip the marks — let `"\u200b \u200b"` through, because
+#: the space survives the first and the marks survive the second.
+#:
+#: Built from `str.strip`'s own set rather than a hand-written list of spaces,
+#: which is how the first attempt at this dropped U+001C–U+001F, U+0085,
+#: U+2028 and U+2029: they are whitespace to `str.strip` and were absent from
+#: the literal, so a file holding one of them alone started passing a guard it
+#: used to fail.
+_ZERO_WIDTH = "\ufeff\u200b\u200c\u200d\u200e\u200f\u2060\u2062\u00ad\u180e"
 _INVISIBLE = (
-    "\t\n\r\v\f \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005"
-    "\u2006\u2007\u2008\u2009\u200a\u202f\u205f\u3000"
-    "\ufeff\u200b\u200c\u200d\u200e\u200f\u2060\u2062\u00ad\u180e"
+    "".join(chr(c) for c in range(0x110000) if chr(c).isspace()) + _ZERO_WIDTH
 )
 
 

@@ -943,11 +943,10 @@ def transitivity_for(codes: Any, part_of_speech: str) -> str:
 
     A verb class is not the test. ``pos_to_verb_group`` calls that same 仕事
     ``suru``, so gating on it lets the contradiction straight through. What
-    decides it is the label the card is going to show: anything but ``noun``
-    can carry a transitivity — a verb, an ``expression`` like 家を売る whose
-    codes are ``["exp", "v5r", "vt"]``, or a する-compound record whose stored
-    label already says verb. Only "noun" and "transitive" is the pair that
-    cannot both be true.
+    decides it is the label *this pass derives*: anything but ``noun`` can
+    carry a transitivity — a verb, or an ``expression`` like 家を売る whose
+    codes are ``["exp", "v5r", "vt"]``. Only "noun" and "transitive" is the
+    pair that cannot both be true.
 
     ``part_of_speech`` must be **this pass's own derived label**, never the
     record's stored one. A stored value is uncontrolled text — a source column
