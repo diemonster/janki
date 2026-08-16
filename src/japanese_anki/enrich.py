@@ -111,6 +111,7 @@ ENRICHABLE_FIELDS: tuple[str, ...] = (
     "romaji",
     "part_of_speech",
     "verb_group",
+    "transitivity",
     "conjugations",
     "pitch_accent",
     "frequency_rank",
@@ -413,6 +414,12 @@ def _proposals(
         "romaji": kana_to_romaji(record.reading) if kana_reading else "",
         "part_of_speech": part_of_speech,
         "verb_group": verb_group,
+        # The one field with no filler since the hand-paste era: set at import
+        # and backfilled by nothing, while jpdb's own vt/vi codes carried the
+        # dictionary's answer the whole time. `pos_to_transitivity` returns ""
+        # for a word tagged both — する is ["aux-v", "vi", "suf", "vt", "vs"] —
+        # so an ambiguous word still shows nothing rather than a coin flip.
+        "transitivity": jpdb.pos_to_transitivity(codes),
         # Same rule the importer applies: jpdb has no verb class for an
         # い-adjective, so the part of speech is what carries its inflection.
         "conjugations": conjugate(

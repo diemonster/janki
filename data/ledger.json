@@ -53,6 +53,14 @@
           ],
           "kind": "ai",
           "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "transitivity"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
         }
       ],
       "exports": {
@@ -676,6 +684,14 @@
           ],
           "kind": "ai",
           "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "transitivity"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
         }
       ],
       "exports": {
@@ -819,6 +835,14 @@
           ],
           "kind": "ai",
           "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "transitivity"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
         }
       ],
       "exports": {
@@ -1253,6 +1277,14 @@
           ],
           "kind": "polish",
           "model": "claude-opus-5"
+        },
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "transitivity"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
         }
       ],
       "exports": {
@@ -1523,6 +1555,14 @@
           ],
           "kind": "ai",
           "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "transitivity"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
         }
       ],
       "exports": {
@@ -1796,6 +1836,14 @@
           ],
           "kind": "ai",
           "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "transitivity"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
         }
       ],
       "exports": {
@@ -2203,6 +2251,14 @@
           ],
           "kind": "ai",
           "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "transitivity"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
         }
       ],
       "exports": {
@@ -2432,6 +2488,14 @@
           ],
           "kind": "ai",
           "model": "gpt-5.6-sol"
+        },
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "transitivity"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
         }
       ],
       "exports": {
@@ -3276,6 +3340,14 @@
           ],
           "kind": "polish",
           "model": "claude-opus-5"
+        },
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "transitivity"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
         }
       ],
       "exports": {
@@ -4707,6 +4779,14 @@
           ],
           "kind": "ai",
           "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "transitivity"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
         }
       ],
       "exports": {
@@ -4939,6 +5019,14 @@
           ],
           "kind": "polish",
           "model": "claude-opus-5"
+        },
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "transitivity"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
         }
       ],
       "exports": {
@@ -5603,6 +5691,14 @@
           ],
           "kind": "polish",
           "model": "claude-opus-5"
+        },
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "transitivity"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
         }
       ],
       "exports": {
@@ -6923,6 +7019,14 @@
           ],
           "kind": "polish",
           "model": "claude-opus-5"
+        },
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "transitivity"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
         }
       ],
       "exports": {

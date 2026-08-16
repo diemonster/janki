@@ -205,6 +205,38 @@ def test_an_i_adjective_is_conjugated_from_its_part_of_speech() -> None:
     assert enriched.conjugations["past"] == "凄かった"
 
 
+def test_transitivity_is_filled_from_the_dictionarys_own_codes() -> None:
+    """The last field with no filler, wired at last.
+
+    `transitivity` was set at import and backfilled by nothing since the
+    hand-paste era, while jpdb's `vt`/`vi` codes carried the dictionary's
+    answer the whole time — 話す comes back `["vt", "v5", "v5s"]`.
+    """
+    result = enrich_records(client_for(hanasu_api()), [record()])
+
+    assert result.records[0].transitivity == "transitive"
+    assert "transitivity" in result.changes["word:話す:はなす"]
+
+
+def test_a_word_the_dictionary_tags_both_ways_gets_no_transitivity() -> None:
+    """する is `["aux-v", "vi", "suf", "vt", "vs"]` — measured, not guessed.
+
+    Which one is true depends on the sense, so there is no single answer to
+    state, and stating one anyway is the guess this project does not make. An
+    empty field is the honest card; `usage_notes` is where a real distinction
+    belongs.
+    """
+    both = vocab(1157170, 9, "する", "する", ["LH"], 10, ["aux-v", "vi", "suf", "vt", "vs"])
+    api = FakeApi({"する": parse_response(([["する", "する"]], both))})
+
+    result = enrich_records(
+        client_for(api),
+        [record(id="word:する:する", expression="する", reading="する", meanings=["to do"])],
+    )
+
+    assert result.records[0].transitivity == "", "tagged both ways, so neither"
+
+
 def test_the_reading_is_never_written_even_when_jpdb_states_one() -> None:
     # The reading is half of stable_record_id: writing it would re-ID the
     # record and orphan its Anki review history.
@@ -492,6 +524,7 @@ def test_a_record_with_nothing_to_fill_never_reaches_the_network() -> None:
         romaji="hanasu",
         part_of_speech="verb",
         verb_group="godan",
+        transitivity="transitive",
         conjugations={"polite": "話します"},
         pitch_accent=["LHLL"],
         frequency_rank=200,
@@ -910,6 +943,7 @@ def test_a_marks_only_run_still_saves_the_records(
             furigana="話[はな]す",
             romaji="hanasu",
             verb_group="godan",
+            transitivity="transitive",
             conjugations={"plain": "話す"},
             pitch_accent=["LHLL"],
             frequency_rank=200,
@@ -946,6 +980,7 @@ def test_a_marks_only_run_still_asks_before_writing(
             furigana="話[はな]す",
             romaji="hanasu",
             verb_group="godan",
+            transitivity="transitive",
             conjugations={"plain": "話す"},
             pitch_accent=["LHLL"],
             frequency_rank=200,

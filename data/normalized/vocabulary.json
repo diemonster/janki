@@ -11,7 +11,7 @@
     ],
     "part_of_speech": "godan verb (u-verb)",
     "verb_group": "godan",
-    "transitivity": "",
+    "transitivity": "intransitive",
     "examples": [
       {
         "japanese": "明日、公園であそぶの？",
@@ -462,7 +462,7 @@
     ],
     "part_of_speech": "verb (ru-verb)",
     "verb_group": "ichidan",
-    "transitivity": "",
+    "transitivity": "intransitive",
     "examples": [
       {
         "japanese": "あさはやくおきないつもりです。",
@@ -566,7 +566,7 @@
     ],
     "part_of_speech": "godan verb (u-verb)",
     "verb_group": "godan",
-    "transitivity": "",
+    "transitivity": "intransitive",
     "examples": [
       {
         "japanese": "夏休みに、沖縄の海でおよぐつもりです。",
@@ -892,7 +892,7 @@
     ],
     "part_of_speech": "verb",
     "verb_group": "ichidan",
-    "transitivity": "",
+    "transitivity": "transitive",
     "examples": [
       {
         "japanese": "誕生日に、妻が新しいヘッドホンをくれました。",
@@ -1113,7 +1113,7 @@
     ],
     "part_of_speech": "godan verb (u-verb)",
     "verb_group": "godan",
-    "transitivity": "",
+    "transitivity": "intransitive",
     "examples": [
       {
         "japanese": "この魚は、水がないとしにます。",
@@ -1334,7 +1334,7 @@
     ],
     "part_of_speech": "godan verb (u-verb)",
     "verb_group": "godan",
-    "transitivity": "",
+    "transitivity": "intransitive",
     "examples": [
       {
         "japanese": "来年、京都にすむつもりです。",
@@ -1657,7 +1657,7 @@
     ],
     "part_of_speech": "godan verb (u-verb)",
     "verb_group": "godan",
-    "transitivity": "",
+    "transitivity": "transitive",
     "examples": [
       {
         "japanese": "旅行の写真をたくさんとるつもりです。",
@@ -1853,7 +1853,7 @@
     ],
     "part_of_speech": "verb (ru-verb)",
     "verb_group": "ichidan",
-    "transitivity": "",
+    "transitivity": "intransitive",
     "examples": [
       {
         "japanese": "夜おそくにねるつもりです。",
@@ -2464,7 +2464,7 @@
     ],
     "part_of_speech": "verb",
     "verb_group": "godan",
-    "transitivity": "",
+    "transitivity": "transitive",
     "examples": [
       {
         "japanese": "電車の窓から乗り出さないでください。",
@@ -3612,7 +3612,7 @@
     ],
     "part_of_speech": "verb",
     "verb_group": "godan",
-    "transitivity": "",
+    "transitivity": "intransitive",
     "examples": [
       {
         "japanese": "来月、東京に引っ越すつもりです。",
@@ -3807,7 +3807,7 @@
     ],
     "part_of_speech": "verb",
     "verb_group": "godan",
-    "transitivity": "",
+    "transitivity": "transitive",
     "examples": [
       {
         "japanese": "駅で友達に手を振りました。",
@@ -4301,7 +4301,7 @@
     ],
     "part_of_speech": "verb",
     "verb_group": "godan",
-    "transitivity": "",
+    "transitivity": "intransitive",
     "examples": [
       {
         "japanese": "電車は七時に東京に着きます。",
@@ -4865,7 +4865,7 @@
     "frequency_rank": 100,
     "source": {
       "type": "manual",
-      "imported_from": "",
+      "imported_from": "data/decks/verbs.yaml (inline notes)",
       "row": null,
       "raw_fields": {}
     }
@@ -5112,7 +5112,7 @@
     "frequency_rank": 200,
     "source": {
       "type": "manual",
-      "imported_from": "",
+      "imported_from": "data/decks/verbs.yaml (inline notes)",
       "row": null,
       "raw_fields": {}
     }
@@ -5359,7 +5359,7 @@
     ],
     "part_of_speech": "verb",
     "verb_group": "godan",
-    "transitivity": "",
+    "transitivity": "transitive",
     "examples": [
       {
         "japanese": "危ないので、子どもの手を離しません。",
@@ -5470,7 +5470,7 @@
     "frequency_rank": 200,
     "source": {
       "type": "manual",
-      "imported_from": "",
+      "imported_from": "data/decks/verbs.yaml (inline notes)",
       "row": null,
       "raw_fields": {}
     }
