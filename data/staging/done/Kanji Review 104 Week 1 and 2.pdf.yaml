@@ -1,0 +1,773 @@
+source_file: Kanji Review 104 Week 1 and 2.pdf
+extracted_at: '2026-08-16'
+model: claude-opus-5
+prompt_provenance:
+  source_sha256: d75967df4e7becbcdde3ba6abac5f685df7b760d8a7f234a38d7667d102473b0
+  mode: auto
+  provider: anthropic
+  model: claude-opus-5
+  response_schema_version: 2
+  system_prompt_fingerprint: aba57e098a341e2f73f7f6ff8961254d5e650ed106e57ba7cb783a8f737e37f4
+  style_guide_fingerprint: 418704c8197845d87af002df9934b484661bd161134543418ed1273419944b9b
+  user_prompt_fingerprint: bf9154918be3910d7c1af1e9ca6fe9399bc5024e9a8a657a5718418f66861661
+coverage:
+  version: 1
+  status: selection
+  blocking: false
+  source_fingerprint: d75967df4e7becbcdde3ba6abac5f685df7b760d8a7f234a38d7667d102473b0
+  model_reported_unit_count: 0
+  observed_unit_count: 0
+  prose_candidate_count: 24
+  prose_coverage: unmeasured
+  source_units: []
+  duplicate_keys: []
+  candidate_units: []
+  duplicate_units: []
+  non_vocabulary_units: []
+  unreadable_units: []
+  coverage_block_fingerprint: 029a8ae281ddbf8b1646d4e1b98b3bdceaa77d005f912d13579da3d7c0b4ef9c
+review_notes: Promoted 23 record(s) from this file.
+records:
+- id: word:昼:ひる
+  expression: 昼
+  reading: ひる
+  furigana: ''
+  romaji: hiru
+  meanings:
+  - noon
+  - daytime
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: high
+      page: '1'
+      context: '1. A: ________ のひるの __________ はどうですか。'
+      inclusion_reason: Everyday time-of-day noun appearing in the exercise sentence.
+      provisional_fields: meanings:cc445a1c079d,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:雨:あめ
+  expression: 雨
+  reading: あめ
+  furigana: ''
+  romaji: ame
+  meanings:
+  - rain
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: high
+      page: '1'
+      context: 'B: ひるは _____ がふります。でも _____ は _____ が _______________。/ あめ'
+      inclusion_reason: Weather kanji targeted twice in this week's practice.
+      provisional_fields: meanings:aa44b9c1e6ca,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:降る:ふる
+  expression: 降る
+  reading: ふる
+  furigana: ''
+  romaji: furu
+  meanings:
+  - to fall (rain, snow)
+  part_of_speech: godan verb
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: high
+      page: '1'
+      context: 'B: ひるは _____ がふります。でも _____ は _____ が _______________。'
+      inclusion_reason: Standard weather verb paired with 雨/雪 in the exercise.
+      provisional_fields: meanings:660e8454485a,part_of_speech:7d85ef394d51
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:夜:よる
+  expression: 夜
+  reading: よる
+  furigana: ''
+  romaji: yoru
+  meanings:
+  - night
+  - evening
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: high
+      page: '1'
+      context: 'B: ひるは _____ がふります。でも _____ は _____ が _______________。/ よる'
+      inclusion_reason: Basic time-of-day noun targeted for kanji conversion.
+      provisional_fields: meanings:24c295ef2d1b,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:止む:やむ
+  expression: 止む
+  reading: やむ
+  furigana: ''
+  romaji: yamu
+  meanings:
+  - to stop (of rain, wind)
+  - to cease
+  part_of_speech: godan verb
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: medium
+      page: '1'
+      context: 'B: ひるは _____ がふります。でも _____ は _____ が _______________。/ やみます'
+      inclusion_reason: The hiragana やみます is to be rewritten with the kanji 止; useful weather verb contrasting
+        with 止まる.
+      provisional_fields: meanings:dbc0c326149c,part_of_speech:7d85ef394d51
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:雪:ゆき
+  expression: 雪
+  reading: ゆき
+  furigana: ''
+  romaji: yuki
+  meanings:
+  - snow
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: high
+      page: '1'
+      context: 2. とうきょうはあまり _____ がふりません。/ ゆき
+      inclusion_reason: Weather kanji targeted in the exercise.
+      provisional_fields: meanings:5117508a924a,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:東京:とうきょう
+  expression: 東京
+  reading: とうきょう
+  furigana: ''
+  romaji: toukyou
+  meanings:
+  - Tokyo
+  part_of_speech: proper noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: high
+      page: '1'
+      context: 2. とうきょうはあまり _____ がふりません。
+      inclusion_reason: Place name written in hiragana to be converted to kanji.
+      provisional_fields: meanings:b65aa53c760e,part_of_speech:1e6a32319743
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:止まる:とまる
+  expression: 止まる
+  reading: とまる
+  furigana: ''
+  romaji: tomaru
+  meanings:
+  - to stop
+  - to come to a halt
+  part_of_speech: godan verb
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: high
+      page: '1'
+      context: 3. エスカレーター*が ____________________。/ とまっています
+      inclusion_reason: Intransitive verb targeted for kanji conversion; contrasts with 止む.
+      provisional_fields: meanings:c69122c4eb4a,part_of_speech:7d85ef394d51
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:エスカレーター:エスカレーター
+  expression: エスカレーター
+  reading: エスカレーター
+  furigana: ''
+  romaji: esukareetaa
+  meanings:
+  - escalator
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: high
+      page: '1'
+      context: 3. エスカレーター*が ____________________。(*エスカレーター = escalator)
+      inclusion_reason: Loanword explicitly glossed in the worksheet.
+      provisional_fields: meanings:035155961ebe,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:雨天中止:うてんちゅうし
+  expression: 雨天中止
+  reading: うてんちゅうし
+  furigana: ''
+  romaji: utenchuushi
+  meanings:
+  - cancelled in case of rain
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: medium
+      page: '1'
+      context: 4. このイベントは ____________________ です。/ 雨天中止
+      inclusion_reason: Set phrase seen on event notices; reading is not printed, so confirm at review.
+      provisional_fields: meanings:7afd38c4601d,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:イベント:イベント
+  expression: イベント
+  reading: イベント
+  furigana: ''
+  romaji: ibento
+  meanings:
+  - event
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: high
+      page: '1'
+      context: 4. このイベントは ____________________ です。
+      inclusion_reason: Common loanword used in the exercise sentence.
+      provisional_fields: meanings:4a132c4321de,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:早朝:そうちょう
+  expression: 早朝
+  reading: そうちょう
+  furigana: ''
+  romaji: souchou
+  meanings:
+  - early morning
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: medium
+      page: '1'
+      context: 5. __________ のひこうきは _________ です。でも _______________ のがにがてです。/ そうちょう
+      inclusion_reason: Hiragana そうちょう to be rewritten as 早朝; useful travel word.
+      provisional_fields: meanings:1736f801be3c,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:飛行機:ひこうき
+  expression: 飛行機
+  reading: ひこうき
+  furigana: ''
+  romaji: hikouki
+  meanings:
+  - airplane
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: high
+      page: '1'
+      context: 5. __________ のひこうきは _________ です。
+      inclusion_reason: Travel noun written in hiragana to be converted to kanji.
+      provisional_fields: meanings:1565adba9d64,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:安い:やすい
+  expression: 安い
+  reading: やすい
+  furigana: ''
+  romaji: yasui
+  meanings:
+  - cheap
+  - inexpensive
+  part_of_speech: い-adjective
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: high
+      page: '1'
+      context: 5. __________ のひこうきは _________ です。/ やすい
+      inclusion_reason: Basic adjective targeted for kanji conversion.
+      provisional_fields: meanings:a03800747d04,part_of_speech:a74c141072a1
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:起きる:おきる
+  expression: 起きる
+  reading: おきる
+  furigana: ''
+  romaji: okiru
+  meanings:
+  - to get up
+  - to wake up
+  part_of_speech: ichidan verb
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: high
+      page: '1'
+      context: 5. ... でも _______________ のがにがてです。/ 早く起きる
+      inclusion_reason: Appears in the kanji phrase 早く起きる; core daily-routine verb.
+      provisional_fields: meanings:46db77578b44,part_of_speech:3b26c79ab45a
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:苦手:にがて
+  expression: 苦手
+  reading: にがて
+  furigana: ''
+  romaji: nigate
+  meanings:
+  - not good at
+  - weak point
+  part_of_speech: noun / な-adjective
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: high
+      page: '1'
+      context: 5. ... でも _______________ のがにがてです。
+      inclusion_reason: Useful expression for talking about weaknesses, written in hiragana here.
+      provisional_fields: meanings:40c2f3da464b,part_of_speech:21b5668de01f
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:今年:ことし
+  expression: 今年
+  reading: ことし
+  furigana: ''
+  romaji: kotoshi
+  meanings:
+  - this year
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: high
+      page: '1'
+      context: 今年2月オープン！ホテルモモカ
+      inclusion_reason: Kanji reading targeted in the Part 2 hotel guide.
+      provisional_fields: meanings:b96765ef7e4f,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:二人:ふたり
+  expression: 二人
+  reading: ふたり
+  furigana: ''
+  romaji: futari
+  meanings:
+  - two people
+  part_of_speech: noun (counter)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: high
+      page: '1'
+      context: 二人で 2万3000円！
+      inclusion_reason: Irregular counter reading tested in the hotel guide.
+      provisional_fields: meanings:fa2e9014beca,part_of_speech:730e8ccb23f9
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:夕食:ゆうしょく
+  expression: 夕食
+  reading: ゆうしょく
+  furigana: ''
+  romaji: yuushoku
+  meanings:
+  - dinner
+  - evening meal
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: high
+      page: '1'
+      context: '🍽夕食⚪︎ チェックイン: 十六時 から 二十一時 まで'
+      inclusion_reason: Hotel/restaurant vocabulary whose reading is asked for.
+      provisional_fields: meanings:c9d6ab463f84,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:朝食:ちょうしょく
+  expression: 朝食
+  reading: ちょうしょく
+  furigana: ''
+  romaji: choushoku
+  meanings:
+  - breakfast
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: high
+      page: '1'
+      context: '☀️朝食⚪︎ チェックアウト: 十時半まで'
+      inclusion_reason: Hotel vocabulary paired with 夕食; reading is the exercise target.
+      provisional_fields: meanings:f023248cb676,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:半:はん
+  expression: 半
+  reading: はん
+  furigana: ''
+  romaji: han
+  meanings:
+  - half
+  - half past (the hour)
+  part_of_speech: suffix
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: high
+      page: '1'
+      context: 'チェックアウト: 十時半まで'
+      inclusion_reason: Time suffix needed to read 十時半 in the hotel guide.
+      provisional_fields: meanings:910858ba2a71,part_of_speech:f95dfbda0350
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:明日:あした
+  expression: 明日
+  reading: あした
+  furigana: ''
+  romaji: ''
+  meanings:
+  - tomorrow
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: medium
+      page: '1'
+      context: '1. A: ________ のひるの __________ はどうですか。/ 明日 てんき'
+      inclusion_reason: Core time word practiced as kanji-to-hiragana conversion; reading could also be
+        あす, so review should confirm.
+      provisional_fields: meanings:1415518d69b3,part_of_speech:ee6cded62768
+- id: word:天気:てんき
+  expression: 天気
+  reading: てんき
+  furigana: ''
+  romaji: ''
+  meanings:
+  - weather
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: high
+      page: '1'
+      context: '1. A: ________ のひるの __________ はどうですか。/ てんき'
+      inclusion_reason: Target kanji word for this exercise (hiragana てんき to be rewritten in kanji).
+      provisional_fields: meanings:a620f00b66c5,part_of_speech:ee6cded62768

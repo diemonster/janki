@@ -1,0 +1,1972 @@
+source_file: Kanji Practice Sheet No.112-123.pdf
+extracted_at: '2026-08-16'
+model: claude-opus-5
+prompt_provenance:
+  source_sha256: 4c8d08e2d84a8557063a51383714e13546a60b5527cbf9476c772e888a8df932
+  mode: auto
+  provider: anthropic
+  model: claude-opus-5
+  response_schema_version: 2
+  system_prompt_fingerprint: aba57e098a341e2f73f7f6ff8961254d5e650ed106e57ba7cb783a8f737e37f4
+  style_guide_fingerprint: 418704c8197845d87af002df9934b484661bd161134543418ed1273419944b9b
+  user_prompt_fingerprint: 8fcaaa5252130c61e052de2616ae15fa0797827d2b8c3c5d8f3426e1135d42b1
+coverage:
+  version: 1
+  status: unmeasured
+  blocking: true
+  source_fingerprint: 4c8d08e2d84a8557063a51383714e13546a60b5527cbf9476c772e888a8df932
+  model_reported_unit_count: 46
+  observed_unit_count: 46
+  prose_candidate_count: 0
+  prose_coverage: not-applicable
+  source_units:
+  - page: 1
+    section: kanji-112
+    ordinal: 1
+    context_fingerprint: 0c436d71a1f8a10acd1ad02dcc57f27958cd331bfd8ef73dc09d4d6b6f3a5a12
+    disposition: non-vocabulary
+    context: 電 (electric) Radical 雨 rain　おんよみ でん
+    reason: Kanji headword entry (character, radical and readings); 電 is not used alone as a word.
+  - page: 1
+    section: kanji-112
+    ordinal: 2
+    context_fingerprint: 5283091a76f18263f06175fce8bbd27a143dc03c079600a8a833a5bccb66942a
+    disposition: candidate
+    context: 電話する　to make a phone call
+  - page: 1
+    section: kanji-112
+    ordinal: 3
+    context_fingerprint: 062b303327ce2f9959374e1d46db250f38cb2fcfb45aa1f22ee93bf129f3b168
+    disposition: candidate
+    context: 電気　electricity
+  - page: 1
+    section: kanji-113
+    ordinal: 1
+    context_fingerprint: 82bdc3def0cb1cf22e330efd160db586442c04b6a7d52daaa65bb83651b9222d
+    disposition: candidate
+    context: 車 (car) Pictogram　くんよみ くるま／おんよみ しゃ
+  - page: 1
+    section: kanji-113
+    ordinal: 2
+    context_fingerprint: 8c5373ca0078d5985be9f7808bef71ecc01ad66202f36bee8f5de2d3b1b287ec
+    disposition: candidate
+    context: 白い車　white car
+  - page: 1
+    section: kanji-113
+    ordinal: 3
+    context_fingerprint: 2e292953afe3dc8e64bc6c3995e3afcff61d627ac05ce338a98c947d1b35c0b8
+    disposition: candidate
+    context: 電車　train
+  - page: 1
+    section: kanji-113
+    ordinal: 4
+    context_fingerprint: 519183e060e409a7c00b0ae9f6f0cf5f210d767bded3c7436796ebb7a5867a9f
+    disposition: candidate
+    context: 救急車　ambulance
+  - page: 1
+    section: kanji-114
+    ordinal: 1
+    context_fingerprint: c66101b46142c060ce64aaab74e92ef9d4bb81b9d141e992dfa966b69977e9f5
+    disposition: candidate
+    context: 道 (road) Radical 辶 road　くんよみ みち／おんよみ どう
+  - page: 1
+    section: kanji-114
+    ordinal: 2
+    context_fingerprint: 0670fce7cd5c530d4b68981cdbe94d93e8bf0ccb18a37253d05d8da42340c3de
+    disposition: candidate
+    context: 道にまよう to get lost
+  - page: 1
+    section: kanji-114
+    ordinal: 3
+    context_fingerprint: 9d3ebe4cf8aa746a954b57ea66f77d4656e5d94f630031bc4a0f1526e44afac5
+    disposition: candidate
+    context: 北海道　Hokkaido
+  - page: 1
+    section: kanji-114
+    ordinal: 4
+    context_fingerprint: c8b713f8fdc659393d75809cba180b49285acce55a87c732d4c67f210da07d0c
+    disposition: candidate
+    context: 道路　road
+  - page: 1
+    section: kanji-114
+    ordinal: 5
+    context_fingerprint: c545d2ed8a8939d394fe3202fd652c89d18b233feb0158827a63d75eed2bf480
+    disposition: candidate
+    context: 茶道　tea ceremony
+  - page: 1
+    section: kanji-115
+    ordinal: 1
+    context_fingerprint: 6a6c7adf01749cba0d4a4276244d6d154b00c6b6262f6f3b444daec0aaf7d3b6
+    disposition: candidate
+    context: 神 (god) Radical ネ altar　くんよみ かみ／おんよみ しん・じん
+  - page: 1
+    section: kanji-115
+    ordinal: 2
+    context_fingerprint: 413bbb42654e5b7949823f26225d7e614b3842b16d5517e983e403a376d059b3
+    disposition: candidate
+    context: 神様　god
+  - page: 1
+    section: kanji-115
+    ordinal: 3
+    context_fingerprint: ea7e3e692e68e54b087017b4f298087a1f0f270b2fe205a162a5025b9a8ceab5
+    disposition: candidate
+    context: 神社　shrine
+  - page: 2
+    section: kanji-116
+    ordinal: 1
+    context_fingerprint: 88d9beb4d19191fa2d81fe70e9274dd2f12a0f6fddeee978da7b3e13eda2a568
+    disposition: non-vocabulary
+    context: 社 (company) Radical ネ altar　おんよみ しゃ・じゃ
+    reason: Kanji headword entry (character, radical and readings); no standalone word given.
+  - page: 2
+    section: kanji-116
+    ordinal: 2
+    context_fingerprint: c2c8dab8d6a45637a259256bf4c5cf2606dd7e1c345db857829661e8139cffea
+    disposition: candidate
+    context: 会社　company
+  - page: 2
+    section: kanji-116
+    ordinal: 3
+    context_fingerprint: c24890c5e214db2f97a4b59c2c3ef2fc4549b4a082fc36756ea495f9ad83624e
+    disposition: candidate
+    context: 社会人　working adult
+  - page: 2
+    section: kanji-116
+    ordinal: 4
+    context_fingerprint: ea7e3e692e68e54b087017b4f298087a1f0f270b2fe205a162a5025b9a8ceab5
+    disposition: duplicate
+    context: 神社　shrine
+    reason: Same word already captured on page 1, section kanji-115, ordinal 3.
+  - page: 2
+    section: kanji-117
+    ordinal: 1
+    context_fingerprint: a327f34ccad3227357affdf28f7b8cbc86f25fecf825506b7251c3f26fcfa304
+    disposition: non-vocabulary
+    context: 帰 (return) Radical 巾 part of broom　くんよみ かえ-る／おんよみ き
+    reason: Kanji headword entry; the verb 帰る appears as its own row.
+  - page: 2
+    section: kanji-117
+    ordinal: 2
+    context_fingerprint: ebed0aa6cc583ca9529308163c7720cbbf835ce3ed397991dcb8faa37754a8e6
+    disposition: candidate
+    context: 帰る　go home
+  - page: 2
+    section: kanji-117
+    ordinal: 3
+    context_fingerprint: 4a2f1104f91dde9dde8dc99f9c24c8fe10ca4163cda9ec688fe59eb4d6d1e382
+    disposition: candidate
+    context: 帰り道　on the way home
+  - page: 2
+    section: kanji-117
+    ordinal: 4
+    context_fingerprint: a97e0cb5857e0ceeb1bcf706ad2e18720419965c456c4cdd8fc20596518019a6
+    disposition: candidate
+    context: 帰国　return to one's home
+  - page: 2
+    section: kanji-118
+    ordinal: 1
+    context_fingerprint: 9e3486e910cedc56337945934fd05525ba75a0c3106afe2f10a1fe2ba29bf64e
+    disposition: candidate
+    context: 貝 (shellfish) Pictogram shell　くんよみ かい／おんよみ ばい
+  - page: 2
+    section: kanji-118
+    ordinal: 2
+    context_fingerprint: fb04ed0ae1093a240ba2e6841e4577d8d8090181ecfd18e96c1adf058d1eed60
+    disposition: candidate
+    context: 貝がら　seashell
+  - page: 2
+    section: kanji-119
+    ordinal: 1
+    context_fingerprint: d5cb7672de552ed63394319545e7788c84e225926dbdb31d218bb843000663fd
+    disposition: non-vocabulary
+    context: 買 (buy) Radical 貝 shell　くんよみ か-う／おんよみ ばい
+    reason: Kanji headword entry; the verb 買う appears in the example row 車を買う.
+  - page: 2
+    section: kanji-119
+    ordinal: 2
+    context_fingerprint: 9f6beffae5ced084fd8431c8c5a1b3e0290d6f111621da9feefb5a87d247a3af
+    disposition: candidate
+    context: 車を買う　to buy a car
+  - page: 2
+    section: kanji-119
+    ordinal: 3
+    context_fingerprint: 619ebbddeabfc88e964c90a2d7994fb27221a8ed9280ecd62597e39f2b6ed6a1
+    disposition: candidate
+    context: 買い物　shopping
+  - page: 2
+    section: kanji-119
+    ordinal: 4
+    context_fingerprint: 237b8c8a564e5e3f9de500a6f5422fecb4124f75218f2b458d58f9b4251b845a
+    disposition: candidate
+    context: 売買　sell and buy
+  - page: 3
+    section: kanji-120
+    ordinal: 1
+    context_fingerprint: d42dfeb62920bc4d7b090a15fe8851df354c739de337de5f9845308adde0cb67
+    disposition: non-vocabulary
+    context: 売 (sell) Radical 士 sell　くんよみ う／おんよみ ばい
+    reason: Kanji headword entry; the verb 売る appears in the example row 家を売る.
+  - page: 3
+    section: kanji-120
+    ordinal: 2
+    context_fingerprint: 12bb50b8cebd2cf6a6f1a78e1b2453ebfb48cbc7484236693ec8f1a0f1f3d82d
+    disposition: candidate
+    context: 家を売る　to sell a house
+  - page: 3
+    section: kanji-120
+    ordinal: 3
+    context_fingerprint: 493e7a2e90f2181963b76f4c27950446f32374aa3bc5d5d8ecdb9a387bff78a4
+    disposition: duplicate
+    context: 売買　buy and sell
+    reason: Same word already captured on page 2, section kanji-119, ordinal 4.
+  - page: 3
+    section: kanji-120
+    ordinal: 4
+    context_fingerprint: 69708ecb15ed2f8333905518d55c2e65d2000762fdcdb639c743b59788f6f64b
+    disposition: candidate
+    context: 売店　stand; stall
+  - page: 3
+    section: kanji-121
+    ordinal: 1
+    context_fingerprint: 8f840ec23d668ca2b110f7b9781404a3d4db8e18a3db581b9cf1ba3b6f2058c8
+    disposition: non-vocabulary
+    context: 市 (city) Radical 巾 fabric　くんよみ いち／おんよみ し
+    reason: Kanji headword entry; 市 is not used alone as a beginner word with the reading given.
+  - page: 3
+    section: kanji-121
+    ordinal: 2
+    context_fingerprint: b144d0b23b48bd27afd3859d46d2dd135417d5e2e07b192e5dbb1040bd39c946
+    disposition: candidate
+    context: 魚市場　fish market
+  - page: 3
+    section: kanji-121
+    ordinal: 3
+    context_fingerprint: 39b8c4694705d81e023d23a703053eca9dcb306801451dc914861290626ca97f
+    disposition: candidate
+    context: 都市　city
+  - page: 3
+    section: kanji-121
+    ordinal: 4
+    context_fingerprint: b19f4e64d33b4faa02ae56d4c07dd408d6fd7391e0ec660340fce618e6195b02
+    disposition: candidate
+    context: 名古屋市　Nagoya City
+  - page: 3
+    section: kanji-122
+    ordinal: 1
+    context_fingerprint: e4f3092abdf1f566ae51b28acb8050bdb11ab9669b3c862d42a08547d9e561fb
+    disposition: candidate
+    context: 元 (origin) Pictogram　くんよみ もと／おんよみ げん・がん
+  - page: 3
+    section: kanji-122
+    ordinal: 2
+    context_fingerprint: 137bcb3f3eabb2beeedf41f6751a424ca559809a2762f3602fd923447e5805b3
+    disposition: candidate
+    context: 元々　originally
+  - page: 3
+    section: kanji-122
+    ordinal: 3
+    context_fingerprint: ab68dafd0754ccca6d7746eb4661673b88c91d8eca7f9494773782326fdbe687
+    disposition: candidate
+    context: 大元　root cause
+  - page: 3
+    section: kanji-122
+    ordinal: 4
+    context_fingerprint: a068ab386a5641839f7647c5d43ad61ea65c51869d6ef10d08ef1ca4003d79c0
+    disposition: candidate
+    context: 足元にご注意ください　please mind your step
+  - page: 3
+    section: kanji-122
+    ordinal: 5
+    context_fingerprint: c0fd4dbf55297e1c16bd6e8e3a14123be8605810ece5cc0182198bec3ebbd05f
+    disposition: candidate
+    context: 元気　energetic, lively, healthy
+  - page: 3
+    section: kanji-122
+    ordinal: 6
+    context_fingerprint: efd5ef1f234cb5cbbd46ca224ea7f8ce72ff0330913f2050c1aaa9ae8c5da02c
+    disposition: candidate
+    context: 元日　the first day of the year
+  - page: 3
+    section: kanji-123
+    ordinal: 1
+    context_fingerprint: 706c73ea0a7ab86a006249c2494aa4f24786a95cf49d6fba8bfb88ec2a7bb6d0
+    disposition: non-vocabulary
+    context: 有 (have; being) Radical 月 meat radical　くんよみ あ-る／おんよみ ゆう
+    reason: Kanji headword entry; only a verb stem (有る) is shown, not a listed vocabulary item.
+  - page: 3
+    section: kanji-123
+    ordinal: 2
+    context_fingerprint: 41ea49f0ee4c6c46f8ca70560a6f978dd96de11b9d160825283abf903641500b
+    disposition: candidate
+    context: 有名　famous
+  - page: 3
+    section: kanji-123
+    ordinal: 3
+    context_fingerprint: eb5f70d772b55751bc87c8ed9066717785f9a42d6acdfa1c4d198ac6a67cd23a
+    disposition: candidate
+    context: 有料　cost money
+  duplicate_keys: []
+  candidate_units:
+  - page: 1
+    section: kanji-112
+    ordinal: 2
+    context_fingerprint: 5283091a76f18263f06175fce8bbd27a143dc03c079600a8a833a5bccb66942a
+    disposition: candidate
+  - page: 1
+    section: kanji-112
+    ordinal: 3
+    context_fingerprint: 062b303327ce2f9959374e1d46db250f38cb2fcfb45aa1f22ee93bf129f3b168
+    disposition: candidate
+  - page: 1
+    section: kanji-113
+    ordinal: 1
+    context_fingerprint: 82bdc3def0cb1cf22e330efd160db586442c04b6a7d52daaa65bb83651b9222d
+    disposition: candidate
+  - page: 1
+    section: kanji-113
+    ordinal: 2
+    context_fingerprint: 8c5373ca0078d5985be9f7808bef71ecc01ad66202f36bee8f5de2d3b1b287ec
+    disposition: candidate
+  - page: 1
+    section: kanji-113
+    ordinal: 3
+    context_fingerprint: 2e292953afe3dc8e64bc6c3995e3afcff61d627ac05ce338a98c947d1b35c0b8
+    disposition: candidate
+  - page: 1
+    section: kanji-113
+    ordinal: 4
+    context_fingerprint: 519183e060e409a7c00b0ae9f6f0cf5f210d767bded3c7436796ebb7a5867a9f
+    disposition: candidate
+  - page: 1
+    section: kanji-114
+    ordinal: 1
+    context_fingerprint: c66101b46142c060ce64aaab74e92ef9d4bb81b9d141e992dfa966b69977e9f5
+    disposition: candidate
+  - page: 1
+    section: kanji-114
+    ordinal: 2
+    context_fingerprint: 0670fce7cd5c530d4b68981cdbe94d93e8bf0ccb18a37253d05d8da42340c3de
+    disposition: candidate
+  - page: 1
+    section: kanji-114
+    ordinal: 3
+    context_fingerprint: 9d3ebe4cf8aa746a954b57ea66f77d4656e5d94f630031bc4a0f1526e44afac5
+    disposition: candidate
+  - page: 1
+    section: kanji-114
+    ordinal: 4
+    context_fingerprint: c8b713f8fdc659393d75809cba180b49285acce55a87c732d4c67f210da07d0c
+    disposition: candidate
+  - page: 1
+    section: kanji-114
+    ordinal: 5
+    context_fingerprint: c545d2ed8a8939d394fe3202fd652c89d18b233feb0158827a63d75eed2bf480
+    disposition: candidate
+  - page: 1
+    section: kanji-115
+    ordinal: 1
+    context_fingerprint: 6a6c7adf01749cba0d4a4276244d6d154b00c6b6262f6f3b444daec0aaf7d3b6
+    disposition: candidate
+  - page: 1
+    section: kanji-115
+    ordinal: 2
+    context_fingerprint: 413bbb42654e5b7949823f26225d7e614b3842b16d5517e983e403a376d059b3
+    disposition: candidate
+  - page: 1
+    section: kanji-115
+    ordinal: 3
+    context_fingerprint: ea7e3e692e68e54b087017b4f298087a1f0f270b2fe205a162a5025b9a8ceab5
+    disposition: candidate
+  - page: 2
+    section: kanji-116
+    ordinal: 2
+    context_fingerprint: c2c8dab8d6a45637a259256bf4c5cf2606dd7e1c345db857829661e8139cffea
+    disposition: candidate
+  - page: 2
+    section: kanji-116
+    ordinal: 3
+    context_fingerprint: c24890c5e214db2f97a4b59c2c3ef2fc4549b4a082fc36756ea495f9ad83624e
+    disposition: candidate
+  - page: 2
+    section: kanji-117
+    ordinal: 2
+    context_fingerprint: ebed0aa6cc583ca9529308163c7720cbbf835ce3ed397991dcb8faa37754a8e6
+    disposition: candidate
+  - page: 2
+    section: kanji-117
+    ordinal: 3
+    context_fingerprint: 4a2f1104f91dde9dde8dc99f9c24c8fe10ca4163cda9ec688fe59eb4d6d1e382
+    disposition: candidate
+  - page: 2
+    section: kanji-117
+    ordinal: 4
+    context_fingerprint: a97e0cb5857e0ceeb1bcf706ad2e18720419965c456c4cdd8fc20596518019a6
+    disposition: candidate
+  - page: 2
+    section: kanji-118
+    ordinal: 1
+    context_fingerprint: 9e3486e910cedc56337945934fd05525ba75a0c3106afe2f10a1fe2ba29bf64e
+    disposition: candidate
+  - page: 2
+    section: kanji-118
+    ordinal: 2
+    context_fingerprint: fb04ed0ae1093a240ba2e6841e4577d8d8090181ecfd18e96c1adf058d1eed60
+    disposition: candidate
+  - page: 2
+    section: kanji-119
+    ordinal: 2
+    context_fingerprint: 9f6beffae5ced084fd8431c8c5a1b3e0290d6f111621da9feefb5a87d247a3af
+    disposition: candidate
+  - page: 2
+    section: kanji-119
+    ordinal: 3
+    context_fingerprint: 619ebbddeabfc88e964c90a2d7994fb27221a8ed9280ecd62597e39f2b6ed6a1
+    disposition: candidate
+  - page: 2
+    section: kanji-119
+    ordinal: 4
+    context_fingerprint: 237b8c8a564e5e3f9de500a6f5422fecb4124f75218f2b458d58f9b4251b845a
+    disposition: candidate
+  - page: 3
+    section: kanji-120
+    ordinal: 2
+    context_fingerprint: 12bb50b8cebd2cf6a6f1a78e1b2453ebfb48cbc7484236693ec8f1a0f1f3d82d
+    disposition: candidate
+  - page: 3
+    section: kanji-120
+    ordinal: 4
+    context_fingerprint: 69708ecb15ed2f8333905518d55c2e65d2000762fdcdb639c743b59788f6f64b
+    disposition: candidate
+  - page: 3
+    section: kanji-121
+    ordinal: 2
+    context_fingerprint: b144d0b23b48bd27afd3859d46d2dd135417d5e2e07b192e5dbb1040bd39c946
+    disposition: candidate
+  - page: 3
+    section: kanji-121
+    ordinal: 3
+    context_fingerprint: 39b8c4694705d81e023d23a703053eca9dcb306801451dc914861290626ca97f
+    disposition: candidate
+  - page: 3
+    section: kanji-121
+    ordinal: 4
+    context_fingerprint: b19f4e64d33b4faa02ae56d4c07dd408d6fd7391e0ec660340fce618e6195b02
+    disposition: candidate
+  - page: 3
+    section: kanji-122
+    ordinal: 1
+    context_fingerprint: e4f3092abdf1f566ae51b28acb8050bdb11ab9669b3c862d42a08547d9e561fb
+    disposition: candidate
+  - page: 3
+    section: kanji-122
+    ordinal: 2
+    context_fingerprint: 137bcb3f3eabb2beeedf41f6751a424ca559809a2762f3602fd923447e5805b3
+    disposition: candidate
+  - page: 3
+    section: kanji-122
+    ordinal: 3
+    context_fingerprint: ab68dafd0754ccca6d7746eb4661673b88c91d8eca7f9494773782326fdbe687
+    disposition: candidate
+  - page: 3
+    section: kanji-122
+    ordinal: 4
+    context_fingerprint: a068ab386a5641839f7647c5d43ad61ea65c51869d6ef10d08ef1ca4003d79c0
+    disposition: candidate
+  - page: 3
+    section: kanji-122
+    ordinal: 5
+    context_fingerprint: c0fd4dbf55297e1c16bd6e8e3a14123be8605810ece5cc0182198bec3ebbd05f
+    disposition: candidate
+  - page: 3
+    section: kanji-122
+    ordinal: 6
+    context_fingerprint: efd5ef1f234cb5cbbd46ca224ea7f8ce72ff0330913f2050c1aaa9ae8c5da02c
+    disposition: candidate
+  - page: 3
+    section: kanji-123
+    ordinal: 2
+    context_fingerprint: 41ea49f0ee4c6c46f8ca70560a6f978dd96de11b9d160825283abf903641500b
+    disposition: candidate
+  - page: 3
+    section: kanji-123
+    ordinal: 3
+    context_fingerprint: eb5f70d772b55751bc87c8ed9066717785f9a42d6acdfa1c4d198ac6a67cd23a
+    disposition: candidate
+  duplicate_units:
+  - page: 2
+    section: kanji-116
+    ordinal: 4
+    context_fingerprint: ea7e3e692e68e54b087017b4f298087a1f0f270b2fe205a162a5025b9a8ceab5
+    disposition: duplicate
+  - page: 3
+    section: kanji-120
+    ordinal: 3
+    context_fingerprint: 493e7a2e90f2181963b76f4c27950446f32374aa3bc5d5d8ecdb9a387bff78a4
+    disposition: duplicate
+  non_vocabulary_units:
+  - page: 1
+    section: kanji-112
+    ordinal: 1
+    context_fingerprint: 0c436d71a1f8a10acd1ad02dcc57f27958cd331bfd8ef73dc09d4d6b6f3a5a12
+    disposition: non-vocabulary
+  - page: 2
+    section: kanji-116
+    ordinal: 1
+    context_fingerprint: 88d9beb4d19191fa2d81fe70e9274dd2f12a0f6fddeee978da7b3e13eda2a568
+    disposition: non-vocabulary
+  - page: 2
+    section: kanji-117
+    ordinal: 1
+    context_fingerprint: a327f34ccad3227357affdf28f7b8cbc86f25fecf825506b7251c3f26fcfa304
+    disposition: non-vocabulary
+  - page: 2
+    section: kanji-119
+    ordinal: 1
+    context_fingerprint: d5cb7672de552ed63394319545e7788c84e225926dbdb31d218bb843000663fd
+    disposition: non-vocabulary
+  - page: 3
+    section: kanji-120
+    ordinal: 1
+    context_fingerprint: d42dfeb62920bc4d7b090a15fe8851df354c739de337de5f9845308adde0cb67
+    disposition: non-vocabulary
+  - page: 3
+    section: kanji-121
+    ordinal: 1
+    context_fingerprint: 8f840ec23d668ca2b110f7b9781404a3d4db8e18a3db581b9cf1ba3b6f2058c8
+    disposition: non-vocabulary
+  - page: 3
+    section: kanji-123
+    ordinal: 1
+    context_fingerprint: 706c73ea0a7ab86a006249c2494aa4f24786a95cf49d6fba8bfb88ec2a7bb6d0
+    disposition: non-vocabulary
+  unreadable_units: []
+  coverage_block_fingerprint: ae8b1bce1c888e76a035994246485222ba97f996358820ef7052a376ca456d72
+  approval:
+    authority: model
+    model: claude-opus-5
+    prompt_fingerprint: 4ec74f4f1acc5a5ae122a8953b6adfdc6954d093a08b033b747a217fa4d2646f
+    source_fingerprint: 4c8d08e2d84a8557063a51383714e13546a60b5527cbf9476c772e888a8df932
+    coverage_block_fingerprint: ae8b1bce1c888e76a035994246485222ba97f996358820ef7052a376ca456d72
+    accepted_dispositions:
+      candidate_units:
+      - page: 1
+        section: kanji-112
+        ordinal: 2
+        context_fingerprint: 5283091a76f18263f06175fce8bbd27a143dc03c079600a8a833a5bccb66942a
+        disposition: candidate
+      - page: 1
+        section: kanji-112
+        ordinal: 3
+        context_fingerprint: 062b303327ce2f9959374e1d46db250f38cb2fcfb45aa1f22ee93bf129f3b168
+        disposition: candidate
+      - page: 1
+        section: kanji-113
+        ordinal: 1
+        context_fingerprint: 82bdc3def0cb1cf22e330efd160db586442c04b6a7d52daaa65bb83651b9222d
+        disposition: candidate
+      - page: 1
+        section: kanji-113
+        ordinal: 2
+        context_fingerprint: 8c5373ca0078d5985be9f7808bef71ecc01ad66202f36bee8f5de2d3b1b287ec
+        disposition: candidate
+      - page: 1
+        section: kanji-113
+        ordinal: 3
+        context_fingerprint: 2e292953afe3dc8e64bc6c3995e3afcff61d627ac05ce338a98c947d1b35c0b8
+        disposition: candidate
+      - page: 1
+        section: kanji-113
+        ordinal: 4
+        context_fingerprint: 519183e060e409a7c00b0ae9f6f0cf5f210d767bded3c7436796ebb7a5867a9f
+        disposition: candidate
+      - page: 1
+        section: kanji-114
+        ordinal: 1
+        context_fingerprint: c66101b46142c060ce64aaab74e92ef9d4bb81b9d141e992dfa966b69977e9f5
+        disposition: candidate
+      - page: 1
+        section: kanji-114
+        ordinal: 2
+        context_fingerprint: 0670fce7cd5c530d4b68981cdbe94d93e8bf0ccb18a37253d05d8da42340c3de
+        disposition: candidate
+      - page: 1
+        section: kanji-114
+        ordinal: 3
+        context_fingerprint: 9d3ebe4cf8aa746a954b57ea66f77d4656e5d94f630031bc4a0f1526e44afac5
+        disposition: candidate
+      - page: 1
+        section: kanji-114
+        ordinal: 4
+        context_fingerprint: c8b713f8fdc659393d75809cba180b49285acce55a87c732d4c67f210da07d0c
+        disposition: candidate
+      - page: 1
+        section: kanji-114
+        ordinal: 5
+        context_fingerprint: c545d2ed8a8939d394fe3202fd652c89d18b233feb0158827a63d75eed2bf480
+        disposition: candidate
+      - page: 1
+        section: kanji-115
+        ordinal: 1
+        context_fingerprint: 6a6c7adf01749cba0d4a4276244d6d154b00c6b6262f6f3b444daec0aaf7d3b6
+        disposition: candidate
+      - page: 1
+        section: kanji-115
+        ordinal: 2
+        context_fingerprint: 413bbb42654e5b7949823f26225d7e614b3842b16d5517e983e403a376d059b3
+        disposition: candidate
+      - page: 1
+        section: kanji-115
+        ordinal: 3
+        context_fingerprint: ea7e3e692e68e54b087017b4f298087a1f0f270b2fe205a162a5025b9a8ceab5
+        disposition: candidate
+      - page: 2
+        section: kanji-116
+        ordinal: 2
+        context_fingerprint: c2c8dab8d6a45637a259256bf4c5cf2606dd7e1c345db857829661e8139cffea
+        disposition: candidate
+      - page: 2
+        section: kanji-116
+        ordinal: 3
+        context_fingerprint: c24890c5e214db2f97a4b59c2c3ef2fc4549b4a082fc36756ea495f9ad83624e
+        disposition: candidate
+      - page: 2
+        section: kanji-117
+        ordinal: 2
+        context_fingerprint: ebed0aa6cc583ca9529308163c7720cbbf835ce3ed397991dcb8faa37754a8e6
+        disposition: candidate
+      - page: 2
+        section: kanji-117
+        ordinal: 3
+        context_fingerprint: 4a2f1104f91dde9dde8dc99f9c24c8fe10ca4163cda9ec688fe59eb4d6d1e382
+        disposition: candidate
+      - page: 2
+        section: kanji-117
+        ordinal: 4
+        context_fingerprint: a97e0cb5857e0ceeb1bcf706ad2e18720419965c456c4cdd8fc20596518019a6
+        disposition: candidate
+      - page: 2
+        section: kanji-118
+        ordinal: 1
+        context_fingerprint: 9e3486e910cedc56337945934fd05525ba75a0c3106afe2f10a1fe2ba29bf64e
+        disposition: candidate
+      - page: 2
+        section: kanji-118
+        ordinal: 2
+        context_fingerprint: fb04ed0ae1093a240ba2e6841e4577d8d8090181ecfd18e96c1adf058d1eed60
+        disposition: candidate
+      - page: 2
+        section: kanji-119
+        ordinal: 2
+        context_fingerprint: 9f6beffae5ced084fd8431c8c5a1b3e0290d6f111621da9feefb5a87d247a3af
+        disposition: candidate
+      - page: 2
+        section: kanji-119
+        ordinal: 3
+        context_fingerprint: 619ebbddeabfc88e964c90a2d7994fb27221a8ed9280ecd62597e39f2b6ed6a1
+        disposition: candidate
+      - page: 2
+        section: kanji-119
+        ordinal: 4
+        context_fingerprint: 237b8c8a564e5e3f9de500a6f5422fecb4124f75218f2b458d58f9b4251b845a
+        disposition: candidate
+      - page: 3
+        section: kanji-120
+        ordinal: 2
+        context_fingerprint: 12bb50b8cebd2cf6a6f1a78e1b2453ebfb48cbc7484236693ec8f1a0f1f3d82d
+        disposition: candidate
+      - page: 3
+        section: kanji-120
+        ordinal: 4
+        context_fingerprint: 69708ecb15ed2f8333905518d55c2e65d2000762fdcdb639c743b59788f6f64b
+        disposition: candidate
+      - page: 3
+        section: kanji-121
+        ordinal: 2
+        context_fingerprint: b144d0b23b48bd27afd3859d46d2dd135417d5e2e07b192e5dbb1040bd39c946
+        disposition: candidate
+      - page: 3
+        section: kanji-121
+        ordinal: 3
+        context_fingerprint: 39b8c4694705d81e023d23a703053eca9dcb306801451dc914861290626ca97f
+        disposition: candidate
+      - page: 3
+        section: kanji-121
+        ordinal: 4
+        context_fingerprint: b19f4e64d33b4faa02ae56d4c07dd408d6fd7391e0ec660340fce618e6195b02
+        disposition: candidate
+      - page: 3
+        section: kanji-122
+        ordinal: 1
+        context_fingerprint: e4f3092abdf1f566ae51b28acb8050bdb11ab9669b3c862d42a08547d9e561fb
+        disposition: candidate
+      - page: 3
+        section: kanji-122
+        ordinal: 2
+        context_fingerprint: 137bcb3f3eabb2beeedf41f6751a424ca559809a2762f3602fd923447e5805b3
+        disposition: candidate
+      - page: 3
+        section: kanji-122
+        ordinal: 3
+        context_fingerprint: ab68dafd0754ccca6d7746eb4661673b88c91d8eca7f9494773782326fdbe687
+        disposition: candidate
+      - page: 3
+        section: kanji-122
+        ordinal: 4
+        context_fingerprint: a068ab386a5641839f7647c5d43ad61ea65c51869d6ef10d08ef1ca4003d79c0
+        disposition: candidate
+      - page: 3
+        section: kanji-122
+        ordinal: 5
+        context_fingerprint: c0fd4dbf55297e1c16bd6e8e3a14123be8605810ece5cc0182198bec3ebbd05f
+        disposition: candidate
+      - page: 3
+        section: kanji-122
+        ordinal: 6
+        context_fingerprint: efd5ef1f234cb5cbbd46ca224ea7f8ce72ff0330913f2050c1aaa9ae8c5da02c
+        disposition: candidate
+      - page: 3
+        section: kanji-123
+        ordinal: 2
+        context_fingerprint: 41ea49f0ee4c6c46f8ca70560a6f978dd96de11b9d160825283abf903641500b
+        disposition: candidate
+      - page: 3
+        section: kanji-123
+        ordinal: 3
+        context_fingerprint: eb5f70d772b55751bc87c8ed9066717785f9a42d6acdfa1c4d198ac6a67cd23a
+        disposition: candidate
+      duplicate_units:
+      - page: 2
+        section: kanji-116
+        ordinal: 4
+        context_fingerprint: ea7e3e692e68e54b087017b4f298087a1f0f270b2fe205a162a5025b9a8ceab5
+        disposition: duplicate
+      - page: 3
+        section: kanji-120
+        ordinal: 3
+        context_fingerprint: 493e7a2e90f2181963b76f4c27950446f32374aa3bc5d5d8ecdb9a387bff78a4
+        disposition: duplicate
+      non_vocabulary_units:
+      - page: 1
+        section: kanji-112
+        ordinal: 1
+        context_fingerprint: 0c436d71a1f8a10acd1ad02dcc57f27958cd331bfd8ef73dc09d4d6b6f3a5a12
+        disposition: non-vocabulary
+      - page: 2
+        section: kanji-116
+        ordinal: 1
+        context_fingerprint: 88d9beb4d19191fa2d81fe70e9274dd2f12a0f6fddeee978da7b3e13eda2a568
+        disposition: non-vocabulary
+      - page: 2
+        section: kanji-117
+        ordinal: 1
+        context_fingerprint: a327f34ccad3227357affdf28f7b8cbc86f25fecf825506b7251c3f26fcfa304
+        disposition: non-vocabulary
+      - page: 2
+        section: kanji-119
+        ordinal: 1
+        context_fingerprint: d5cb7672de552ed63394319545e7788c84e225926dbdb31d218bb843000663fd
+        disposition: non-vocabulary
+      - page: 3
+        section: kanji-120
+        ordinal: 1
+        context_fingerprint: d42dfeb62920bc4d7b090a15fe8851df354c739de337de5f9845308adde0cb67
+        disposition: non-vocabulary
+      - page: 3
+        section: kanji-121
+        ordinal: 1
+        context_fingerprint: 8f840ec23d668ca2b110f7b9781404a3d4db8e18a3db581b9cf1ba3b6f2058c8
+        disposition: non-vocabulary
+      - page: 3
+        section: kanji-123
+        ordinal: 1
+        context_fingerprint: 706c73ea0a7ab86a006249c2494aa4f24786a95cf49d6fba8bfb88ec2a7bb6d0
+        disposition: non-vocabulary
+      unreadable_units: []
+    accepted_mismatches:
+      duplicate_keys: []
+    unmeasured: true
+    reason: 'The three pages are kanji-practice tables, four blocks per page (112–123), each with a headword
+      cell (character, radical, readings) plus its green kunyomi and pink onyomi example rows; I walked
+      all twelve blocks and every example row is present in the record in order — including the empty-reading
+      cells at 112 kunyomi, 118 onyomi and 123 kunyomi, which correctly yield no entries. The 46 recorded
+      items match the 46 rows I counted (15 on p1, 14 on p2, 17 on p3), and dispositions hold up: headwords
+      are filed as non-vocabulary or as candidates depending on whether the character stands alone as
+      a word (both defensible), and the two duplicates 神社 (p2 kanji-116 #4 after p1 kanji-115 #3) and
+      売買 (p3 kanji-120 #3 after p2 kanji-119 #4) are genuine second occurrences. Only the NIHONGODEKITA
+      footer banner is unlisted, which is not a list or table row.'
+    approved_at: '2026-08-16'
+review_notes: Promoted 37 record(s) from this file.
+records:
+- id: word:電話する:でんわする
+  expression: 電話する
+  reading: でんわする
+  furigana: ''
+  romaji: denwasuru
+  meanings:
+  - to make a phone call
+  - to telephone
+  part_of_speech: verb (suru)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '1'
+      context: 電話する　to make a phone call
+      provisional_fields: meanings:aaf03afbefc9,part_of_speech:40faf04bea2f
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:電気:でんき
+  expression: 電気
+  reading: でんき
+  furigana: ''
+  romaji: denki
+  meanings:
+  - electricity
+  - electric light
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '1'
+      context: 電気　electricity
+      provisional_fields: meanings:c522faddfa44,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:白い車:しろいくるま
+  expression: 白い車
+  reading: しろいくるま
+  furigana: ''
+  romaji: shiroikuruma
+  meanings:
+  - white car
+  part_of_speech: noun phrase
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '1'
+      context: 白い車　white car
+      provisional_fields: meanings:3de2eca72fd1,part_of_speech:6571179980ff
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:電車:でんしゃ
+  expression: 電車
+  reading: でんしゃ
+  furigana: ''
+  romaji: densha
+  meanings:
+  - train
+  - electric train
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '1'
+      context: 電車　train
+      provisional_fields: meanings:362893c31651,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:救急車:きゅうきゅうしゃ
+  expression: 救急車
+  reading: きゅうきゅうしゃ
+  furigana: ''
+  romaji: kyuukyuusha
+  meanings:
+  - ambulance
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '1'
+      context: 救急車　ambulance
+      provisional_fields: meanings:0bd2c063c7e9,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:道:みち
+  expression: 道
+  reading: みち
+  furigana: ''
+  romaji: michi
+  meanings:
+  - road
+  - street
+  - way
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '1'
+      context: 道 (road) Radical 辶 road　くんよみ みち／おんよみ どう
+      provisional_fields: meanings:613a7b891f5d,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:道にまよう:みちにまよう
+  expression: 道にまよう
+  reading: みちにまよう
+  furigana: ''
+  romaji: michinimayou
+  meanings:
+  - to get lost
+  - to lose one's way
+  part_of_speech: expression (verb phrase)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '1'
+      context: 道にまよう to get lost
+      provisional_fields: meanings:a1df69628705,part_of_speech:93b10ec08638
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:北海道:ほっかいどう
+  expression: 北海道
+  reading: ほっかいどう
+  furigana: ''
+  romaji: hokkaidou
+  meanings:
+  - Hokkaido
+  part_of_speech: proper noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '1'
+      context: 北海道　Hokkaido
+      provisional_fields: meanings:03539cc8dc89,part_of_speech:1e6a32319743
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:道路:どうろ
+  expression: 道路
+  reading: どうろ
+  furigana: ''
+  romaji: douro
+  meanings:
+  - road
+  - roadway
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '1'
+      context: 道路　road
+      provisional_fields: meanings:7da1675d4336,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:茶道:さどう
+  expression: 茶道
+  reading: さどう
+  furigana: ''
+  romaji: sadou
+  meanings:
+  - tea ceremony
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '1'
+      context: 茶道　tea ceremony
+      provisional_fields: meanings:a38cb82a2921,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:神:かみ
+  expression: 神
+  reading: かみ
+  furigana: ''
+  romaji: kami
+  meanings:
+  - god
+  - deity
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '1'
+      context: 神 (god) Radical ネ altar　くんよみ かみ／おんよみ しん・じん
+      provisional_fields: meanings:d75ee73d6db2,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:神様:かみさま
+  expression: 神様
+  reading: かみさま
+  furigana: ''
+  romaji: kamisama
+  meanings:
+  - god
+  - deity (polite)
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '1'
+      context: 神様　god
+      provisional_fields: meanings:130d47434305,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:神社:じんじゃ
+  expression: 神社
+  reading: じんじゃ
+  furigana: ''
+  romaji: jinja
+  meanings:
+  - Shinto shrine
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '1'
+      context: 神社　shrine
+      provisional_fields: meanings:ff52a03421f8,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:会社:かいしゃ
+  expression: 会社
+  reading: かいしゃ
+  furigana: ''
+  romaji: kaisha
+  meanings:
+  - company
+  - firm
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '2'
+      context: 会社　company
+      provisional_fields: meanings:b63da4ba1e9d,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:社会人:しゃかいじん
+  expression: 社会人
+  reading: しゃかいじん
+  furigana: ''
+  romaji: shakaijin
+  meanings:
+  - working adult
+  - member of society
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '2'
+      context: 社会人　working adult
+      provisional_fields: meanings:54eb918823d7,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:帰る:かえる
+  expression: 帰る
+  reading: かえる
+  furigana: ''
+  romaji: kaeru
+  meanings:
+  - to go home
+  - to return
+  part_of_speech: verb (godan, intransitive)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '2'
+      context: 帰る　go home
+      provisional_fields: meanings:9d5d90880111,part_of_speech:1db9001e5c28
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:帰り道:かえりみち
+  expression: 帰り道
+  reading: かえりみち
+  furigana: ''
+  romaji: kaerimichi
+  meanings:
+  - the way home
+  - on the way home
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '2'
+      context: 帰り道　on the way home
+      provisional_fields: meanings:fae96569de94,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:帰国:きこく
+  expression: 帰国
+  reading: きこく
+  furigana: ''
+  romaji: kikoku
+  meanings:
+  - returning to one's home country
+  part_of_speech: noun (suru verb)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '2'
+      context: 帰国　return to one's home
+      provisional_fields: meanings:0d772bdb7cf7,part_of_speech:8a534c60bb71
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:貝:かい
+  expression: 貝
+  reading: かい
+  furigana: ''
+  romaji: kai
+  meanings:
+  - shellfish
+  - shell
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '2'
+      context: 貝 (shellfish) Pictogram shell　くんよみ かい／おんよみ ばい
+      provisional_fields: meanings:71c491a389af,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:貝がら:かいがら
+  expression: 貝がら
+  reading: かいがら
+  furigana: ''
+  romaji: kaigara
+  meanings:
+  - seashell
+  - shell
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '2'
+      context: 貝がら　seashell
+      provisional_fields: meanings:4e55700ddfc9,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:車を買う:くるまをかう
+  expression: 車を買う
+  reading: くるまをかう
+  furigana: ''
+  romaji: kurumaokau
+  meanings:
+  - to buy a car
+  part_of_speech: expression (verb phrase)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '2'
+      context: 車を買う　to buy a car
+      provisional_fields: meanings:b58a4a2b97da,part_of_speech:93b10ec08638
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:買い物:かいもの
+  expression: 買い物
+  reading: かいもの
+  furigana: ''
+  romaji: kaimono
+  meanings:
+  - shopping
+  - purchase
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '2'
+      context: 買い物　shopping
+      provisional_fields: meanings:176db71f1978,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:売買:ばいばい
+  expression: 売買
+  reading: ばいばい
+  furigana: ''
+  romaji: baibai
+  meanings:
+  - buying and selling
+  - trade
+  part_of_speech: noun (suru verb)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '2'
+      context: 売買　sell and buy
+      provisional_fields: meanings:523acb531c53,part_of_speech:8a534c60bb71
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:家を売る:いえをうる
+  expression: 家を売る
+  reading: いえをうる
+  furigana: ''
+  romaji: ieouru
+  meanings:
+  - to sell a house
+  part_of_speech: expression (verb phrase)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '3'
+      context: 家を売る　to sell a house
+      provisional_fields: meanings:d918db7a7e05,part_of_speech:93b10ec08638
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:売店:ばいてん
+  expression: 売店
+  reading: ばいてん
+  furigana: ''
+  romaji: baiten
+  meanings:
+  - stand
+  - stall
+  - kiosk
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '3'
+      context: 売店　stand; stall
+      provisional_fields: meanings:0a940aa31e10,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:魚市場:うおいちば
+  expression: 魚市場
+  reading: うおいちば
+  furigana: ''
+  romaji: uoichiba
+  meanings:
+  - fish market
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '3'
+      context: 魚市場　fish market
+      provisional_fields: meanings:111c5cc62c25,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:都市:とし
+  expression: 都市
+  reading: とし
+  furigana: ''
+  romaji: toshi
+  meanings:
+  - city
+  - urban area
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '3'
+      context: 都市　city
+      provisional_fields: meanings:2521591ab199,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:名古屋市:なごやし
+  expression: 名古屋市
+  reading: なごやし
+  furigana: ''
+  romaji: nagoyashi
+  meanings:
+  - Nagoya City
+  part_of_speech: proper noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '3'
+      context: 名古屋市　Nagoya City
+      provisional_fields: meanings:014c8bf77e0d,part_of_speech:1e6a32319743
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:元:もと
+  expression: 元
+  reading: もと
+  furigana: ''
+  romaji: moto
+  meanings:
+  - origin
+  - source
+  - basis
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: medium
+      page: '3'
+      context: 元 (origin) Pictogram　くんよみ もと／おんよみ げん・がん
+      provisional_fields: meanings:a21ba69a6bc2,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:元々:もともと
+  expression: 元々
+  reading: もともと
+  furigana: ''
+  romaji: motomoto
+  meanings:
+  - originally
+  - from the start
+  part_of_speech: adverb
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '3'
+      context: 元々　originally
+      provisional_fields: meanings:7b0ec6bae063,part_of_speech:d6877fa9a2b2
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:大元:おおもと
+  expression: 大元
+  reading: おおもと
+  furigana: ''
+  romaji: oomoto
+  meanings:
+  - root cause
+  - fundamental origin
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '3'
+      context: 大元　root cause
+      provisional_fields: meanings:2f45ea1fbc72,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:足元にご注意ください:あしもとにごちゅういください
+  expression: 足元にご注意ください
+  reading: あしもとにごちゅういください
+  furigana: ''
+  romaji: ashimotonigochuuikudasai
+  meanings:
+  - Please mind your step.
+  part_of_speech: expression
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '3'
+      context: 足元にご注意ください　please mind your step
+      example: 足元にご注意ください。
+      provisional_fields: meanings:ce4028513ba0,part_of_speech:123240b106c3
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:元日:がんじつ
+  expression: 元日
+  reading: がんじつ
+  furigana: ''
+  romaji: ganjitsu
+  meanings:
+  - New Year's Day
+  - the first day of the year
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '3'
+      context: 元日　the first day of the year
+      provisional_fields: meanings:7bf255de820c,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:有料:ゆうりょう
+  expression: 有料
+  reading: ゆうりょう
+  furigana: ''
+  romaji: yuuryou
+  meanings:
+  - fee-charging
+  - not free
+  - paid
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '3'
+      context: 有料　cost money
+      provisional_fields: meanings:441c7020d176,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:車:くるま
+  expression: 車
+  reading: くるま
+  furigana: ''
+  romaji: ''
+  meanings:
+  - car
+  - vehicle
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '1'
+      context: 車 (car) Pictogram　くんよみ くるま／おんよみ しゃ
+      provisional_fields: meanings:1b1bf89c2ddc,part_of_speech:ee6cded62768
+- id: word:元気:げんき
+  expression: 元気
+  reading: げんき
+  furigana: ''
+  romaji: ''
+  meanings:
+  - energetic
+  - lively
+  - healthy
+  part_of_speech: na-adjective / noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '3'
+      context: 元気　energetic, lively, healthy
+      provisional_fields: meanings:ec991a06defc,part_of_speech:7a9d13ee940e
+- id: word:有名:ゆうめい
+  expression: 有名
+  reading: ゆうめい
+  furigana: ''
+  romaji: ''
+  meanings:
+  - famous
+  - well-known
+  part_of_speech: na-adjective
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Practice Sheet No.112-123.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Practice Sheet No.112-123.pdf
+      confidence: high
+      page: '3'
+      context: 有名　famous
+      provisional_fields: meanings:da7ef6e6638c,part_of_speech:b772b84f04b0

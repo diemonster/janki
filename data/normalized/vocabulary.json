@@ -182,6 +182,43 @@
     }
   },
   {
+    "id": "word:いす:いす",
+    "expression": "いす",
+    "reading": "いす",
+    "furigana": "",
+    "romaji": "isu",
+    "meanings": [
+      "chair"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "104 Week 8 Writing Homework.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "104 Week 8 Writing Homework.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "3. Q：だれがいすにすわっていますか。",
+        "inclusion_reason": "Common furniture noun used with the に particle.",
+        "example": "だれがいすにすわっていますか。",
+        "provisional_fields": "meanings:b2709d3efd5a,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:いる:いる",
     "expression": "いる",
     "reading": "いる",
@@ -504,6 +541,45 @@
         "context": "日曜日 あさ䛿やくおきないつもりです。",
         "inclusion_reason": "Core daily-routine verb, shown here in negative form.",
         "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"},{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:おさけ:おさけ",
+    "expression": "おさけ",
+    "reading": "おさけ",
+    "furigana": "",
+    "romaji": "osake",
+    "meanings": [
+      "sake",
+      "alcohol",
+      "alcoholic drink"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "104 Week 8 Writing Homework.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "104 Week 8 Writing Homework.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "a. よくおさけ(を)飲む？",
+        "inclusion_reason": "Core everyday noun used in the interview prompt; commonly written お酒.",
+        "example": "よくおさけ(を)飲む？",
+        "provisional_fields": "meanings:cefb5693ff7a,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -832,6 +908,120 @@
     }
   },
   {
+    "id": "word:かう:かう",
+    "expression": "かう",
+    "reading": "かう",
+    "furigana": "",
+    "romaji": "kau",
+    "meanings": [
+      "to keep (a pet)",
+      "to raise (an animal)"
+    ],
+    "part_of_speech": "verb (godan, transitive)",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "104 Week 8 Writing Homework.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "104 Week 8 Writing Homework.pdf",
+        "confidence": "medium",
+        "page": "1",
+        "context": "c. ペット(を)かって(い)る？",
+        "inclusion_reason": "Verb for keeping pets (飼う); easily confused with 買う, so worth a card.",
+        "example": "ペット(を)かって(い)る？",
+        "provisional_fields": "meanings:7e29990372e3,part_of_speech:0a8731a8d8e3",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:かける:かける",
+    "expression": "かける",
+    "reading": "かける",
+    "furigana": "",
+    "romaji": "kakeru",
+    "meanings": [
+      "to wear (glasses)",
+      "to put on (glasses)"
+    ],
+    "part_of_speech": "verb (ichidan, transitive)",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "104 Week 8 Writing Homework.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "104 Week 8 Writing Homework.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "1. Q：だれがめがねをかけていますか。",
+        "inclusion_reason": "One of the specific 'wearing' verbs contrasted in this lesson.",
+        "example": "だれがめがねをかけていますか。",
+        "provisional_fields": "meanings:1b7791d0f80e,part_of_speech:9d0afde8e086",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:かぶる:かぶる",
+    "expression": "かぶる",
+    "reading": "かぶる",
+    "furigana": "",
+    "romaji": "kaburu",
+    "meanings": [
+      "to wear (on the head)",
+      "to put on (a hat)"
+    ],
+    "part_of_speech": "verb (godan, transitive)",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "104 Week 8 Writing Homework.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "104 Week 8 Writing Homework.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "A：しゅんさんがかぶっています。",
+        "inclusion_reason": "Wearing verb for headwear, contrasted with かける and はく.",
+        "example": "しゅんさんがかぶっています。",
+        "provisional_fields": "meanings:7977fe3ecd90,part_of_speech:0a8731a8d8e3",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:かんじ:かんじ",
     "expression": "かんじ",
     "reading": "かんじ",
@@ -876,6 +1066,43 @@
         "page": "1",
         "context": "木曜日 かんじを勉強するつもりです。",
         "inclusion_reason": "Study-related noun used in the Thursday cell.",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:くつ:くつ",
+    "expression": "くつ",
+    "reading": "くつ",
+    "furigana": "",
+    "romaji": "kutsu",
+    "meanings": [
+      "shoes"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "104 Week 8 Writing Homework.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "104 Week 8 Writing Homework.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "4. Q：だれが白いくつをはいていますか。",
+        "inclusion_reason": "Clothing noun paired with the verb はく.",
+        "example": "だれが白いくつをはいていますか。",
+        "provisional_fields": "meanings:2a358a951d3a,part_of_speech:ee6cded62768",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
@@ -1466,6 +1693,44 @@
     }
   },
   {
+    "id": "word:すわる:すわる",
+    "expression": "すわる",
+    "reading": "すわる",
+    "furigana": "",
+    "romaji": "suwaru",
+    "meanings": [
+      "to sit",
+      "to sit down"
+    ],
+    "part_of_speech": "verb (godan, intransitive)",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "104 Week 8 Writing Homework.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "104 Week 8 Writing Homework.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "3. Q：だれがいすにすわっていますか。",
+        "inclusion_reason": "Basic posture verb (座る) used with に in the drill.",
+        "example": "だれがいすにすわっていますか。",
+        "provisional_fields": "meanings:17c1371723b3,part_of_speech:1db9001e5c28",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:そう言えば:そういえば",
     "expression": "そう言えば",
     "reading": "そういえば",
@@ -1576,6 +1841,43 @@
         "anki_Front": "<div>それは 「そりゃ」</div>",
         "anki_Back": "<div>それは 「そりゃ」</div><div>“That is”</div>",
         "anki_Add Reverse": ""
+      }
+    }
+  },
+  {
+    "id": "word:だれ:だれ",
+    "expression": "だれ",
+    "reading": "だれ",
+    "furigana": "",
+    "romaji": "dare",
+    "meanings": [
+      "who"
+    ],
+    "part_of_speech": "pronoun (interrogative)",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "104 Week 8 Writing Homework.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "104 Week 8 Writing Homework.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "1. Q：だれがめがねをかけていますか。",
+        "inclusion_reason": "Question word that drives the whole particle が exercise.",
+        "example": "だれがめがねをかけていますか。",
+        "provisional_fields": "meanings:5880b85ec2ad,part_of_speech:c7a6553a26c9",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -1706,6 +2008,45 @@
         "confidence": "high",
         "page": "1",
         "context": "とる → って",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:どうやって:どうやって",
+    "expression": "どうやって",
+    "reading": "どうやって",
+    "furigana": "",
+    "romaji": "douyatte",
+    "meanings": [
+      "how",
+      "by what means",
+      "in what way"
+    ],
+    "part_of_speech": "expression / adverb",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "104 Week 8 Writing Homework.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "104 Week 8 Writing Homework.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "b. うちから仕事までどうやって行く？",
+        "inclusion_reason": "Useful question expression for asking means of transportation.",
+        "example": "うちから仕事までどうやって行く？",
+        "provisional_fields": "meanings:116e80e2ccfc,part_of_speech:6f219c7d2ec0",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
@@ -1896,6 +2237,44 @@
         "inclusion_reason": "Core daily-routine verb paired with おきる.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:0aaf91263374b884efeee9b41d91b4c3e05a24680c2ef300c74f003b6c63d48e"
+      }
+    }
+  },
+  {
+    "id": "word:はく:はく",
+    "expression": "はく",
+    "reading": "はく",
+    "furigana": "",
+    "romaji": "haku",
+    "meanings": [
+      "to wear (below the waist)",
+      "to put on (shoes, pants)"
+    ],
+    "part_of_speech": "verb (godan, transitive)",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "104 Week 8 Writing Homework.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "104 Week 8 Writing Homework.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "4. Q：だれが白いくつをはいていますか。",
+        "inclusion_reason": "Wearing verb specific to footwear and lower-body clothing.",
+        "example": "だれが白いくつをはいていますか。",
+        "provisional_fields": "meanings:b212de346980,part_of_speech:0a8731a8d8e3",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -2111,6 +2490,44 @@
     }
   },
   {
+    "id": "word:めがね:めがね",
+    "expression": "めがね",
+    "reading": "めがね",
+    "furigana": "",
+    "romaji": "megane",
+    "meanings": [
+      "glasses",
+      "eyeglasses"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "104 Week 8 Writing Homework.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "104 Week 8 Writing Homework.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "1. Q：だれがめがねをかけていますか。",
+        "inclusion_reason": "Clothing/accessory noun needed for the wearing-verb practice.",
+        "example": "だれがめがねをかけていますか。",
+        "provisional_fields": "meanings:efd2b61648ce,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:もう:もう",
     "expression": "もう",
     "reading": "もう",
@@ -2272,6 +2689,78 @@
     }
   },
   {
+    "id": "word:イベント:イベント",
+    "expression": "イベント",
+    "reading": "イベント",
+    "furigana": "",
+    "romaji": "ibento",
+    "meanings": [
+      "event"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week 1 and 2.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "4. このイベントは ____________________ です。",
+        "inclusion_reason": "Common loanword used in the exercise sentence.",
+        "provisional_fields": "meanings:4a132c4321de,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:エスカレーター:エスカレーター",
+    "expression": "エスカレーター",
+    "reading": "エスカレーター",
+    "furigana": "",
+    "romaji": "esukareetaa",
+    "meanings": [
+      "escalator"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week 1 and 2.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "3. エスカレーター*が ____________________。(*エスカレーター = escalator)",
+        "inclusion_reason": "Loanword explicitly glossed in the worksheet.",
+        "provisional_fields": "meanings:035155961ebe,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:ジャンボ:ジャンボ",
     "expression": "ジャンボ",
     "reading": "ジャンボ",
@@ -2326,6 +2815,43 @@
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\">Jumbo (name)</span>",
         "anki_Add Reverse": "",
         "janki_pitch_accent_source": "jpdb:b899a3cb574e8547112a02b4540d8eae50adc481e5164095d910afc863f5d323"
+      }
+    }
+  },
+  {
+    "id": "word:ペット:ペット",
+    "expression": "ペット",
+    "reading": "ペット",
+    "furigana": "",
+    "romaji": "petto",
+    "meanings": [
+      "pet"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "104 Week 8 Writing Homework.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "104 Week 8 Writing Homework.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "c. ペット(を)かって(い)る？",
+        "inclusion_reason": "Loanword noun central to one of the interview questions.",
+        "example": "ペット(を)かって(い)る？",
+        "provisional_fields": "meanings:658734568e7e,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -2423,6 +2949,44 @@
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>いっぱい</div><div>A lot, a full container</div></span>",
         "anki_Add Reverse": "y",
         "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[1].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:上手:じょうず",
+    "expression": "上手",
+    "reading": "じょうず",
+    "furigana": "",
+    "romaji": "jouzu",
+    "meanings": [
+      "skillful",
+      "good at"
+    ],
+    "part_of_speech": "na-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "104 Week 8 Writing Homework.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "104 Week 8 Writing Homework.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "e. 何をするのが上手？",
+        "inclusion_reason": "Key na-adjective for describing ability, used with the が pattern.",
+        "example": "何をするのが上手？",
+        "provisional_fields": "meanings:1804d220b7af,part_of_speech:b772b84f04b0",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -2592,6 +3156,42 @@
     }
   },
   {
+    "id": "word:二人:ふたり",
+    "expression": "二人",
+    "reading": "ふたり",
+    "furigana": "",
+    "romaji": "futari",
+    "meanings": [
+      "two people"
+    ],
+    "part_of_speech": "noun (counter)",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week 1 and 2.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "二人で 2万3000円！",
+        "inclusion_reason": "Irregular counter reading tested in the hotel guide.",
+        "provisional_fields": "meanings:fa2e9014beca,part_of_speech:730e8ccb23f9",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:人:ひと",
     "expression": "人",
     "reading": "ひと",
@@ -2685,6 +3285,42 @@
     }
   },
   {
+    "id": "word:今年:ことし",
+    "expression": "今年",
+    "reading": "ことし",
+    "furigana": "",
+    "romaji": "kotoshi",
+    "meanings": [
+      "this year"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week 1 and 2.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "今年2月オープン！ホテルモモカ",
+        "inclusion_reason": "Kanji reading targeted in the Part 2 hotel guide.",
+        "provisional_fields": "meanings:b96765ef7e4f,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:今日:きょう",
     "expression": "今日",
     "reading": "きょう",
@@ -2738,6 +3374,45 @@
         "anki_Front": "<div>今日</div>",
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>きょう</div><div>Today</div></span>",
         "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:仕事:しごと",
+    "expression": "仕事",
+    "reading": "しごと",
+    "furigana": "",
+    "romaji": "shigoto",
+    "meanings": [
+      "job",
+      "work",
+      "occupation"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "104 Week 8 Writing Homework.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "104 Week 8 Writing Homework.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "b. うちから仕事までどうやって行く？",
+        "inclusion_reason": "Key noun in the commute question; frequent beginner vocabulary.",
+        "example": "うちから仕事までどうやって行く？",
+        "provisional_fields": "meanings:af16d5619b02,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -2853,6 +3528,42 @@
     }
   },
   {
+    "id": "word:会社:かいしゃ",
+    "expression": "会社",
+    "reading": "かいしゃ",
+    "furigana": "",
+    "romaji": "kaisha",
+    "meanings": [
+      "company",
+      "firm"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "会社　company",
+        "provisional_fields": "meanings:b63da4ba1e9d,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:体温:たいおん",
     "expression": "体温",
     "reading": "たいおん",
@@ -2884,6 +3595,43 @@
         "context": "体温(たいおん) = body temperature",
         "example": "体温が38度以上の方は病院に来る前にお電話ください。",
         "provisional_fields": "meanings:06e47419e04a,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:何時:なんじ",
+    "expression": "何時",
+    "reading": "なんじ",
+    "furigana": "",
+    "romaji": "nanji",
+    "meanings": [
+      "what time"
+    ],
+    "part_of_speech": "expression / noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "104 Week 8 Writing Homework.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "104 Week 8 Writing Homework.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "d. よく何時におきる？",
+        "inclusion_reason": "Basic time question word appearing in the prompt.",
+        "example": "よく何時におきる？",
+        "provisional_fields": "meanings:1db7f608a492,part_of_speech:55adb7f98aa0",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
@@ -3059,6 +3807,115 @@
         "anki_Front": "<div>俺</div>",
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>おれ</div><div>Masculine form of \"I”</div></span>",
         "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:元:もと",
+    "expression": "元",
+    "reading": "もと",
+    "furigana": "",
+    "romaji": "moto",
+    "meanings": [
+      "origin",
+      "source",
+      "basis"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "medium",
+        "page": "3",
+        "context": "元 (origin) Pictogram　くんよみ もと／おんよみ げん・がん",
+        "provisional_fields": "meanings:a21ba69a6bc2,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:元々:もともと",
+    "expression": "元々",
+    "reading": "もともと",
+    "furigana": "",
+    "romaji": "motomoto",
+    "meanings": [
+      "originally",
+      "from the start"
+    ],
+    "part_of_speech": "adverb",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "元々　originally",
+        "provisional_fields": "meanings:7b0ec6bae063,part_of_speech:d6877fa9a2b2",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:元日:がんじつ",
+    "expression": "元日",
+    "reading": "がんじつ",
+    "furigana": "",
+    "romaji": "ganjitsu",
+    "meanings": [
+      "New Year's Day",
+      "the first day of the year"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "元日　the first day of the year",
+        "provisional_fields": "meanings:7bf255de820c,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -3607,6 +4464,41 @@
     }
   },
   {
+    "id": "word:北海道:ほっかいどう",
+    "expression": "北海道",
+    "reading": "ほっかいどう",
+    "furigana": "",
+    "romaji": "hokkaidou",
+    "meanings": [
+      "Hokkaido"
+    ],
+    "part_of_speech": "proper noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "北海道　Hokkaido",
+        "provisional_fields": "meanings:03539cc8dc89,part_of_speech:1e6a32319743",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:午前:ごぜん",
     "expression": "午前",
     "reading": "ごぜん",
@@ -3674,6 +4566,43 @@
         "page": "1",
         "context": "午後（13:30〜16:00）",
         "provisional_fields": "meanings:ac8863e57bc7,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:半:はん",
+    "expression": "半",
+    "reading": "はん",
+    "furigana": "",
+    "romaji": "han",
+    "meanings": [
+      "half",
+      "half past (the hour)"
+    ],
+    "part_of_speech": "suffix",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week 1 and 2.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "チェックアウト: 十時半まで",
+        "inclusion_reason": "Time suffix needed to read 十時半 in the hotel guide.",
+        "provisional_fields": "meanings:910858ba2a71,part_of_speech:f95dfbda0350",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
@@ -3747,6 +4676,114 @@
     }
   },
   {
+    "id": "word:名古屋市:なごやし",
+    "expression": "名古屋市",
+    "reading": "なごやし",
+    "furigana": "",
+    "romaji": "nagoyashi",
+    "meanings": [
+      "Nagoya City"
+    ],
+    "part_of_speech": "proper noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "名古屋市　Nagoya City",
+        "provisional_fields": "meanings:014c8bf77e0d,part_of_speech:1e6a32319743",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:売店:ばいてん",
+    "expression": "売店",
+    "reading": "ばいてん",
+    "furigana": "",
+    "romaji": "baiten",
+    "meanings": [
+      "stand",
+      "stall",
+      "kiosk"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "売店　stand; stall",
+        "provisional_fields": "meanings:0a940aa31e10,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:売買:ばいばい",
+    "expression": "売買",
+    "reading": "ばいばい",
+    "furigana": "",
+    "romaji": "baibai",
+    "meanings": [
+      "buying and selling",
+      "trade"
+    ],
+    "part_of_speech": "noun (suru verb)",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "売買　sell and buy",
+        "provisional_fields": "meanings:523acb531c53,part_of_speech:8a534c60bb71",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:夏休み:なつやすみ",
     "expression": "夏休み",
     "reading": "なつやすみ",
@@ -3800,6 +4837,116 @@
         "anki_Front": "<div>夏休み</div>",
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>なつやすみ</div><div>Summer break, summer vacation</div></span>",
         "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:夕食:ゆうしょく",
+    "expression": "夕食",
+    "reading": "ゆうしょく",
+    "furigana": "",
+    "romaji": "yuushoku",
+    "meanings": [
+      "dinner",
+      "evening meal"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week 1 and 2.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "🍽夕食⚪︎ チェックイン: 十六時 から 二十一時 まで",
+        "inclusion_reason": "Hotel/restaurant vocabulary whose reading is asked for.",
+        "provisional_fields": "meanings:c9d6ab463f84,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:夜:よる",
+    "expression": "夜",
+    "reading": "よる",
+    "furigana": "",
+    "romaji": "yoru",
+    "meanings": [
+      "night",
+      "evening"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week 1 and 2.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "B: ひるは _____ がふります。でも _____ は _____ が _______________。/ よる",
+        "inclusion_reason": "Basic time-of-day noun targeted for kanji conversion.",
+        "provisional_fields": "meanings:24c295ef2d1b,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:大元:おおもと",
+    "expression": "大元",
+    "reading": "おおもと",
+    "furigana": "",
+    "romaji": "oomoto",
+    "meanings": [
+      "root cause",
+      "fundamental origin"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "大元　root cause",
+        "provisional_fields": "meanings:2f45ea1fbc72,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -3967,6 +5114,43 @@
     }
   },
   {
+    "id": "word:安い:やすい",
+    "expression": "安い",
+    "reading": "やすい",
+    "furigana": "",
+    "romaji": "yasui",
+    "meanings": [
+      "cheap",
+      "inexpensive"
+    ],
+    "part_of_speech": "い-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week 1 and 2.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "5. __________ のひこうきは _________ です。/ やすい",
+        "inclusion_reason": "Basic adjective targeted for kanji conversion.",
+        "provisional_fields": "meanings:a03800747d04,part_of_speech:a74c141072a1",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:家:いえ",
     "expression": "家",
     "reading": "いえ",
@@ -4020,6 +5204,41 @@
         "anki_Front": "<div>家</div>",
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>いえ</div><div>House</div></span>",
         "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:家を売る:いえをうる",
+    "expression": "家を売る",
+    "reading": "いえをうる",
+    "furigana": "",
+    "romaji": "ieouru",
+    "meanings": [
+      "to sell a house"
+    ],
+    "part_of_speech": "expression (verb phrase)",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "家を売る　to sell a house",
+        "provisional_fields": "meanings:d918db7a7e05,part_of_speech:93b10ec08638",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -4122,6 +5341,113 @@
         "inclusion_reason": "Appears in the set polite phrase 差し支えなければ (\"if you don't mind\").",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]",
         "janki_pitch_accent_source": "jpdb:5c893ea13a801f27b066756cd6323ce2f36bd1fee2802a9ffbee3c2c5d380edb"
+      }
+    }
+  },
+  {
+    "id": "word:帰り道:かえりみち",
+    "expression": "帰り道",
+    "reading": "かえりみち",
+    "furigana": "",
+    "romaji": "kaerimichi",
+    "meanings": [
+      "the way home",
+      "on the way home"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "帰り道　on the way home",
+        "provisional_fields": "meanings:fae96569de94,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:帰る:かえる",
+    "expression": "帰る",
+    "reading": "かえる",
+    "furigana": "",
+    "romaji": "kaeru",
+    "meanings": [
+      "to go home",
+      "to return"
+    ],
+    "part_of_speech": "verb (godan, intransitive)",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "帰る　go home",
+        "provisional_fields": "meanings:9d5d90880111,part_of_speech:1db9001e5c28",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:帰国:きこく",
+    "expression": "帰国",
+    "reading": "きこく",
+    "furigana": "",
+    "romaji": "kikoku",
+    "meanings": [
+      "returning to one's home country"
+    ],
+    "part_of_speech": "noun (suru verb)",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "帰国　return to one's home",
+        "provisional_fields": "meanings:0d772bdb7cf7,part_of_speech:8a534c60bb71",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -4532,6 +5858,41 @@
     }
   },
   {
+    "id": "word:救急車:きゅうきゅうしゃ",
+    "expression": "救急車",
+    "reading": "きゅうきゅうしゃ",
+    "furigana": "",
+    "romaji": "kyuukyuusha",
+    "meanings": [
+      "ambulance"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "救急車　ambulance",
+        "provisional_fields": "meanings:0bd2c063c7e9,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:新来:しんらい",
     "expression": "新来",
     "reading": "しんらい",
@@ -4665,6 +6026,42 @@
     }
   },
   {
+    "id": "word:早朝:そうちょう",
+    "expression": "早朝",
+    "reading": "そうちょう",
+    "furigana": "",
+    "romaji": "souchou",
+    "meanings": [
+      "early morning"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week 1 and 2.pdf",
+        "confidence": "medium",
+        "page": "1",
+        "context": "5. __________ のひこうきは _________ です。でも _______________ のがにがてです。/ そうちょう",
+        "inclusion_reason": "Hiragana そうちょう to be rewritten as 早朝; useful travel word.",
+        "provisional_fields": "meanings:1736f801be3c,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:明日:あした",
     "expression": "明日",
     "reading": "あした",
@@ -4760,6 +6157,43 @@
         "page": "1",
         "context": "水曜日 あそびにいかないつもりです。 映画をみるつもりです。",
         "inclusion_reason": "Common noun with kanji reading.",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:昼:ひる",
+    "expression": "昼",
+    "reading": "ひる",
+    "furigana": "",
+    "romaji": "hiru",
+    "meanings": [
+      "noon",
+      "daytime"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week 1 and 2.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "1. A: ________ のひるの __________ はどうですか。",
+        "inclusion_reason": "Everyday time-of-day noun appearing in the exercise sentence.",
+        "provisional_fields": "meanings:cc445a1c079d,part_of_speech:ee6cded62768",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
@@ -4985,6 +6419,79 @@
     }
   },
   {
+    "id": "word:有料:ゆうりょう",
+    "expression": "有料",
+    "reading": "ゆうりょう",
+    "furigana": "",
+    "romaji": "yuuryou",
+    "meanings": [
+      "fee-charging",
+      "not free",
+      "paid"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "有料　cost money",
+        "provisional_fields": "meanings:441c7020d176,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:朝食:ちょうしょく",
+    "expression": "朝食",
+    "reading": "ちょうしょく",
+    "furigana": "",
+    "romaji": "choushoku",
+    "meanings": [
+      "breakfast"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week 1 and 2.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "☀️朝食⚪︎ チェックアウト: 十時半まで",
+        "inclusion_reason": "Hotel vocabulary paired with 夕食; reading is the exercise target.",
+        "provisional_fields": "meanings:f023248cb676,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:来る:くる",
     "expression": "来る",
     "reading": "くる",
@@ -5088,6 +6595,42 @@
     }
   },
   {
+    "id": "word:東京:とうきょう",
+    "expression": "東京",
+    "reading": "とうきょう",
+    "furigana": "",
+    "romaji": "toukyou",
+    "meanings": [
+      "Tokyo"
+    ],
+    "part_of_speech": "proper noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week 1 and 2.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "2. とうきょうはあまり _____ がふりません。",
+        "inclusion_reason": "Place name written in hiragana to be converted to kanji.",
+        "provisional_fields": "meanings:b65aa53c760e,part_of_speech:1e6a32319743",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:歌手:かしゅ",
     "expression": "歌手",
     "reading": "かしゅ",
@@ -5118,6 +6661,80 @@
         "page": "1",
         "context": "歌手",
         "provisional_fields": "meanings:8b07f14038f3,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:止まる:とまる",
+    "expression": "止まる",
+    "reading": "とまる",
+    "furigana": "",
+    "romaji": "tomaru",
+    "meanings": [
+      "to stop",
+      "to come to a halt"
+    ],
+    "part_of_speech": "godan verb",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week 1 and 2.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "3. エスカレーター*が ____________________。/ とまっています",
+        "inclusion_reason": "Intransitive verb targeted for kanji conversion; contrasts with 止む.",
+        "provisional_fields": "meanings:c69122c4eb4a,part_of_speech:7d85ef394d51",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:止む:やむ",
+    "expression": "止む",
+    "reading": "やむ",
+    "furigana": "",
+    "romaji": "yamu",
+    "meanings": [
+      "to stop (of rain, wind)",
+      "to cease"
+    ],
+    "part_of_speech": "godan verb",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week 1 and 2.pdf",
+        "confidence": "medium",
+        "page": "1",
+        "context": "B: ひるは _____ がふります。でも _____ は _____ が _______________。/ やみます",
+        "inclusion_reason": "The hiragana やみます is to be rewritten with the kanji 止; useful weather verb contrasting with 止まる.",
+        "provisional_fields": "meanings:dbc0c326149c,part_of_speech:7d85ef394d51",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
@@ -5225,6 +6842,78 @@
         "inclusion_reason": "Underlined item is 東京病院; the card covers the vocabulary word 病院 (東京 is a place name).",
         "example": "体温が38度以上の方は病院に来る前にお電話ください。",
         "provisional_fields": "meanings:7240f0e9bd9c,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:白い:しろい",
+    "expression": "白い",
+    "reading": "しろい",
+    "furigana": "",
+    "romaji": "shiroi",
+    "meanings": [
+      "white"
+    ],
+    "part_of_speech": "i-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "104 Week 8 Writing Homework.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "104 Week 8 Writing Homework.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "4. Q：だれが白いくつをはいていますか。",
+        "inclusion_reason": "Basic color adjective modifying a noun in the exercise.",
+        "example": "だれが白いくつをはいていますか。",
+        "provisional_fields": "meanings:b1aa8c2548a1,part_of_speech:e4ecca77b823",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:白い車:しろいくるま",
+    "expression": "白い車",
+    "reading": "しろいくるま",
+    "furigana": "",
+    "romaji": "shiroikuruma",
+    "meanings": [
+      "white car"
+    ],
+    "part_of_speech": "noun phrase",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "白い車　white car",
+        "provisional_fields": "meanings:3de2eca72fd1,part_of_speech:6571179980ff",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
@@ -5365,6 +7054,42 @@
     }
   },
   {
+    "id": "word:社会人:しゃかいじん",
+    "expression": "社会人",
+    "reading": "しゃかいじん",
+    "furigana": "",
+    "romaji": "shakaijin",
+    "meanings": [
+      "working adult",
+      "member of society"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "社会人　working adult",
+        "provisional_fields": "meanings:54eb918823d7,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:祈祷:きとう",
     "expression": "祈祷",
     "reading": "きとう",
@@ -5461,6 +7186,113 @@
         "inclusion_reason": "Common noun in religious and celebratory contexts.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]",
         "janki_pitch_accent_source": "jpdb:98ff7e88a81b9d3651d25ee798d36d9529af79cd4ffb6fb9a3059d5e50d0ee72"
+      }
+    }
+  },
+  {
+    "id": "word:神:かみ",
+    "expression": "神",
+    "reading": "かみ",
+    "furigana": "",
+    "romaji": "kami",
+    "meanings": [
+      "god",
+      "deity"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "神 (god) Radical ネ altar　くんよみ かみ／おんよみ しん・じん",
+        "provisional_fields": "meanings:d75ee73d6db2,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:神様:かみさま",
+    "expression": "神様",
+    "reading": "かみさま",
+    "furigana": "",
+    "romaji": "kamisama",
+    "meanings": [
+      "god",
+      "deity (polite)"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "神様　god",
+        "provisional_fields": "meanings:130d47434305,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:神社:じんじゃ",
+    "expression": "神社",
+    "reading": "じんじゃ",
+    "furigana": "",
+    "romaji": "jinja",
+    "meanings": [
+      "Shinto shrine"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "神社　shrine",
+        "provisional_fields": "meanings:ff52a03421f8,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -5746,6 +7578,78 @@
         "inclusion_reason": "High-frequency noun with the ～に興味がある pattern.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]",
         "janki_pitch_accent_source": "jpdb:3ef2ccb06d2be21b40ce805bbb34c92444288f773d0de5f4c85ccd18b23c4ccf"
+      }
+    }
+  },
+  {
+    "id": "word:苦手:にがて",
+    "expression": "苦手",
+    "reading": "にがて",
+    "furigana": "",
+    "romaji": "nigate",
+    "meanings": [
+      "not good at",
+      "weak point"
+    ],
+    "part_of_speech": "noun / な-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week 1 and 2.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "5. ... でも _______________ のがにがてです。",
+        "inclusion_reason": "Useful expression for talking about weaknesses, written in hiragana here.",
+        "provisional_fields": "meanings:40c2f3da464b,part_of_speech:21b5668de01f",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:茶道:さどう",
+    "expression": "茶道",
+    "reading": "さどう",
+    "furigana": "",
+    "romaji": "sadou",
+    "meanings": [
+      "tea ceremony"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "茶道　tea ceremony",
+        "provisional_fields": "meanings:a38cb82a2921,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -6162,6 +8066,78 @@
     }
   },
   {
+    "id": "word:貝:かい",
+    "expression": "貝",
+    "reading": "かい",
+    "furigana": "",
+    "romaji": "kai",
+    "meanings": [
+      "shellfish",
+      "shell"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "貝 (shellfish) Pictogram shell　くんよみ かい／おんよみ ばい",
+        "provisional_fields": "meanings:71c491a389af,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:貝がら:かいがら",
+    "expression": "貝がら",
+    "reading": "かいがら",
+    "furigana": "",
+    "romaji": "kaigara",
+    "meanings": [
+      "seashell",
+      "shell"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "貝がら　seashell",
+        "provisional_fields": "meanings:4e55700ddfc9,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:貴方:あなた",
     "expression": "貴方",
     "reading": "あなた",
@@ -6204,6 +8180,42 @@
         "context": "その前に差し支えなければ黄金律の修復について貴方の見解を伺いたく",
         "inclusion_reason": "Kanji spelling of あなた, glossed with ruby here; worth recognizing in print.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:買い物:かいもの",
+    "expression": "買い物",
+    "reading": "かいもの",
+    "furigana": "",
+    "romaji": "kaimono",
+    "meanings": [
+      "shopping",
+      "purchase"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "買い物　shopping",
+        "provisional_fields": "meanings:176db71f1978,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -6273,6 +8285,79 @@
     }
   },
   {
+    "id": "word:起きる:おきる",
+    "expression": "起きる",
+    "reading": "おきる",
+    "furigana": "",
+    "romaji": "okiru",
+    "meanings": [
+      "to get up",
+      "to wake up"
+    ],
+    "part_of_speech": "ichidan verb",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week 1 and 2.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "5. ... でも _______________ のがにがてです。/ 早く起きる",
+        "inclusion_reason": "Appears in the kanji phrase 早く起きる; core daily-routine verb.",
+        "provisional_fields": "meanings:46db77578b44,part_of_speech:3b26c79ab45a",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:足元にご注意ください:あしもとにごちゅういください",
+    "expression": "足元にご注意ください",
+    "reading": "あしもとにごちゅういください",
+    "furigana": "",
+    "romaji": "ashimotonigochuuikudasai",
+    "meanings": [
+      "Please mind your step."
+    ],
+    "part_of_speech": "expression",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "足元にご注意ください　please mind your step",
+        "example": "足元にご注意ください。",
+        "provisional_fields": "meanings:ce4028513ba0,part_of_speech:123240b106c3",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:車:くるま",
     "expression": "車",
     "reading": "くるま",
@@ -6317,6 +8402,222 @@
         "page": "1",
         "context": "金曜日 うんどうするつもりです。 トヨタ䛾車を買うつもりです。",
         "inclusion_reason": "Basic kanji noun in the Friday plan cell.",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:車を買う:くるまをかう",
+    "expression": "車を買う",
+    "reading": "くるまをかう",
+    "furigana": "",
+    "romaji": "kurumaokau",
+    "meanings": [
+      "to buy a car"
+    ],
+    "part_of_speech": "expression (verb phrase)",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "車を買う　to buy a car",
+        "provisional_fields": "meanings:b58a4a2b97da,part_of_speech:93b10ec08638",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:道:みち",
+    "expression": "道",
+    "reading": "みち",
+    "furigana": "",
+    "romaji": "michi",
+    "meanings": [
+      "road",
+      "street",
+      "way"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "道 (road) Radical 辶 road　くんよみ みち／おんよみ どう",
+        "provisional_fields": "meanings:613a7b891f5d,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:道にまよう:みちにまよう",
+    "expression": "道にまよう",
+    "reading": "みちにまよう",
+    "furigana": "",
+    "romaji": "michinimayou",
+    "meanings": [
+      "to get lost",
+      "to lose one's way"
+    ],
+    "part_of_speech": "expression (verb phrase)",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "道にまよう to get lost",
+        "provisional_fields": "meanings:a1df69628705,part_of_speech:93b10ec08638",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:道路:どうろ",
+    "expression": "道路",
+    "reading": "どうろ",
+    "furigana": "",
+    "romaji": "douro",
+    "meanings": [
+      "road",
+      "roadway"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "道路　road",
+        "provisional_fields": "meanings:7da1675d4336,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:都市:とし",
+    "expression": "都市",
+    "reading": "とし",
+    "furigana": "",
+    "romaji": "toshi",
+    "meanings": [
+      "city",
+      "urban area"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "都市　city",
+        "provisional_fields": "meanings:2521591ab199,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:降る:ふる",
+    "expression": "降る",
+    "reading": "ふる",
+    "furigana": "",
+    "romaji": "furu",
+    "meanings": [
+      "to fall (rain, snow)"
+    ],
+    "part_of_speech": "godan verb",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week 1 and 2.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "B: ひるは _____ がふります。でも _____ は _____ が _______________。",
+        "inclusion_reason": "Standard weather verb paired with 雨/雪 in the exercise.",
+        "provisional_fields": "meanings:660e8454485a,part_of_speech:7d85ef394d51",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
@@ -6390,6 +8691,150 @@
     }
   },
   {
+    "id": "word:雨:あめ",
+    "expression": "雨",
+    "reading": "あめ",
+    "furigana": "",
+    "romaji": "ame",
+    "meanings": [
+      "rain"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week 1 and 2.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "B: ひるは _____ がふります。でも _____ は _____ が _______________。/ あめ",
+        "inclusion_reason": "Weather kanji targeted twice in this week's practice.",
+        "provisional_fields": "meanings:aa44b9c1e6ca,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:雨天中止:うてんちゅうし",
+    "expression": "雨天中止",
+    "reading": "うてんちゅうし",
+    "furigana": "",
+    "romaji": "utenchuushi",
+    "meanings": [
+      "cancelled in case of rain"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week 1 and 2.pdf",
+        "confidence": "medium",
+        "page": "1",
+        "context": "4. このイベントは ____________________ です。/ 雨天中止",
+        "inclusion_reason": "Set phrase seen on event notices; reading is not printed, so confirm at review.",
+        "provisional_fields": "meanings:7afd38c4601d,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:雪:ゆき",
+    "expression": "雪",
+    "reading": "ゆき",
+    "furigana": "",
+    "romaji": "yuki",
+    "meanings": [
+      "snow"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week 1 and 2.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "2. とうきょうはあまり _____ がふりません。/ ゆき",
+        "inclusion_reason": "Weather kanji targeted in the exercise.",
+        "provisional_fields": "meanings:5117508a924a,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:電気:でんき",
+    "expression": "電気",
+    "reading": "でんき",
+    "furigana": "",
+    "romaji": "denki",
+    "meanings": [
+      "electricity",
+      "electric light"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "電気　electricity",
+        "provisional_fields": "meanings:c522faddfa44,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:電話:でんわ",
     "expression": "電話",
     "reading": "でんわ",
@@ -6423,6 +8868,114 @@
         "inclusion_reason": "Underlined as お電話; card covers the base word 電話.",
         "example": "病院に来る前にお電話ください。",
         "provisional_fields": "meanings:3b92ac97167b,part_of_speech:69ad9b062648",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:電話する:でんわする",
+    "expression": "電話する",
+    "reading": "でんわする",
+    "furigana": "",
+    "romaji": "denwasuru",
+    "meanings": [
+      "to make a phone call",
+      "to telephone"
+    ],
+    "part_of_speech": "verb (suru)",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "電話する　to make a phone call",
+        "provisional_fields": "meanings:aaf03afbefc9,part_of_speech:40faf04bea2f",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:電車:でんしゃ",
+    "expression": "電車",
+    "reading": "でんしゃ",
+    "furigana": "",
+    "romaji": "densha",
+    "meanings": [
+      "train",
+      "electric train"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "電車　train",
+        "provisional_fields": "meanings:362893c31651,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:飛行機:ひこうき",
+    "expression": "飛行機",
+    "reading": "ひこうき",
+    "furigana": "",
+    "romaji": "hikouki",
+    "meanings": [
+      "airplane"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week 1 and 2.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "5. __________ のひこうきは _________ です。",
+        "inclusion_reason": "Travel noun written in hiragana to be converted to kanji.",
+        "provisional_fields": "meanings:1565adba9d64,part_of_speech:ee6cded62768",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
@@ -6554,6 +9107,41 @@
         "sid": "2839775424",
         "deck": "Anki Test - Top 20 Verbs",
         "card_state": "locked,new"
+      }
+    }
+  },
+  {
+    "id": "word:魚市場:うおいちば",
+    "expression": "魚市場",
+    "reading": "うおいちば",
+    "furigana": "",
+    "romaji": "uoichiba",
+    "meanings": [
+      "fish market"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Practice Sheet No.112-123.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Practice Sheet No.112-123.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "魚市場　fish market",
+        "provisional_fields": "meanings:111c5cc62c25,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },

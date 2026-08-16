@@ -1,0 +1,696 @@
+source_file: 104 Week 8 Writing Homework.pdf
+extracted_at: '2026-08-16'
+model: claude-opus-5
+prompt_provenance:
+  source_sha256: d47154a5092bfaf8660f8313a175c70f2e7daacbc4c90698a9ba1fe080191ff1
+  mode: auto
+  provider: anthropic
+  model: claude-opus-5
+  response_schema_version: 2
+  system_prompt_fingerprint: aba57e098a341e2f73f7f6ff8961254d5e650ed106e57ba7cb783a8f737e37f4
+  style_guide_fingerprint: 418704c8197845d87af002df9934b484661bd161134543418ed1273419944b9b
+  user_prompt_fingerprint: 77308b715db50ea71424cf08ea9b2728a40eb2c75915921606431342a6ab8f51
+coverage:
+  version: 1
+  status: selection
+  blocking: false
+  source_fingerprint: d47154a5092bfaf8660f8313a175c70f2e7daacbc4c90698a9ba1fe080191ff1
+  model_reported_unit_count: 0
+  observed_unit_count: 0
+  prose_candidate_count: 20
+  prose_coverage: unmeasured
+  source_units: []
+  duplicate_keys: []
+  candidate_units: []
+  duplicate_units: []
+  non_vocabulary_units: []
+  unreadable_units: []
+  coverage_block_fingerprint: 1374ba9541125bad13ed2826cd00ab7c3ed1b8d42e99033692974d394c9bd4dc
+review_notes: Promoted 20 record(s) from this file.
+records:
+- id: word:おさけ:おさけ
+  expression: おさけ
+  reading: おさけ
+  furigana: ''
+  romaji: osake
+  meanings:
+  - sake
+  - alcohol
+  - alcoholic drink
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: 104 Week 8 Writing Homework.pdf
+    row: null
+    raw_fields:
+      extracted_from: 104 Week 8 Writing Homework.pdf
+      confidence: high
+      page: '1'
+      context: a. よくおさけ(を)飲む？
+      inclusion_reason: Core everyday noun used in the interview prompt; commonly written お酒.
+      example: よくおさけ(を)飲む？
+      provisional_fields: meanings:cefb5693ff7a,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:仕事:しごと
+  expression: 仕事
+  reading: しごと
+  furigana: ''
+  romaji: shigoto
+  meanings:
+  - job
+  - work
+  - occupation
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: 104 Week 8 Writing Homework.pdf
+    row: null
+    raw_fields:
+      extracted_from: 104 Week 8 Writing Homework.pdf
+      confidence: high
+      page: '1'
+      context: b. うちから仕事までどうやって行く？
+      inclusion_reason: Key noun in the commute question; frequent beginner vocabulary.
+      example: うちから仕事までどうやって行く？
+      provisional_fields: meanings:af16d5619b02,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:どうやって:どうやって
+  expression: どうやって
+  reading: どうやって
+  furigana: ''
+  romaji: douyatte
+  meanings:
+  - how
+  - by what means
+  - in what way
+  part_of_speech: expression / adverb
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: 104 Week 8 Writing Homework.pdf
+    row: null
+    raw_fields:
+      extracted_from: 104 Week 8 Writing Homework.pdf
+      confidence: high
+      page: '1'
+      context: b. うちから仕事までどうやって行く？
+      inclusion_reason: Useful question expression for asking means of transportation.
+      example: うちから仕事までどうやって行く？
+      provisional_fields: meanings:116e80e2ccfc,part_of_speech:6f219c7d2ec0
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:ペット:ペット
+  expression: ペット
+  reading: ペット
+  furigana: ''
+  romaji: petto
+  meanings:
+  - pet
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: 104 Week 8 Writing Homework.pdf
+    row: null
+    raw_fields:
+      extracted_from: 104 Week 8 Writing Homework.pdf
+      confidence: high
+      page: '1'
+      context: c. ペット(を)かって(い)る？
+      inclusion_reason: Loanword noun central to one of the interview questions.
+      example: ペット(を)かって(い)る？
+      provisional_fields: meanings:658734568e7e,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:かう:かう
+  expression: かう
+  reading: かう
+  furigana: ''
+  romaji: kau
+  meanings:
+  - to keep (a pet)
+  - to raise (an animal)
+  part_of_speech: verb (godan, transitive)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: 104 Week 8 Writing Homework.pdf
+    row: null
+    raw_fields:
+      extracted_from: 104 Week 8 Writing Homework.pdf
+      confidence: medium
+      page: '1'
+      context: c. ペット(を)かって(い)る？
+      inclusion_reason: Verb for keeping pets (飼う); easily confused with 買う, so worth a card.
+      example: ペット(を)かって(い)る？
+      provisional_fields: meanings:7e29990372e3,part_of_speech:0a8731a8d8e3
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:何時:なんじ
+  expression: 何時
+  reading: なんじ
+  furigana: ''
+  romaji: nanji
+  meanings:
+  - what time
+  part_of_speech: expression / noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: 104 Week 8 Writing Homework.pdf
+    row: null
+    raw_fields:
+      extracted_from: 104 Week 8 Writing Homework.pdf
+      confidence: high
+      page: '1'
+      context: d. よく何時におきる？
+      inclusion_reason: Basic time question word appearing in the prompt.
+      example: よく何時におきる？
+      provisional_fields: meanings:1db7f608a492,part_of_speech:55adb7f98aa0
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:上手:じょうず
+  expression: 上手
+  reading: じょうず
+  furigana: ''
+  romaji: jouzu
+  meanings:
+  - skillful
+  - good at
+  part_of_speech: na-adjective
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: 104 Week 8 Writing Homework.pdf
+    row: null
+    raw_fields:
+      extracted_from: 104 Week 8 Writing Homework.pdf
+      confidence: high
+      page: '1'
+      context: e. 何をするのが上手？
+      inclusion_reason: Key na-adjective for describing ability, used with the が pattern.
+      example: 何をするのが上手？
+      provisional_fields: meanings:1804d220b7af,part_of_speech:b772b84f04b0
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:だれ:だれ
+  expression: だれ
+  reading: だれ
+  furigana: ''
+  romaji: dare
+  meanings:
+  - who
+  part_of_speech: pronoun (interrogative)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: 104 Week 8 Writing Homework.pdf
+    row: null
+    raw_fields:
+      extracted_from: 104 Week 8 Writing Homework.pdf
+      confidence: high
+      page: '2'
+      context: 1. Q：だれがめがねをかけていますか。
+      inclusion_reason: Question word that drives the whole particle が exercise.
+      example: だれがめがねをかけていますか。
+      provisional_fields: meanings:5880b85ec2ad,part_of_speech:c7a6553a26c9
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:めがね:めがね
+  expression: めがね
+  reading: めがね
+  furigana: ''
+  romaji: megane
+  meanings:
+  - glasses
+  - eyeglasses
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: 104 Week 8 Writing Homework.pdf
+    row: null
+    raw_fields:
+      extracted_from: 104 Week 8 Writing Homework.pdf
+      confidence: high
+      page: '2'
+      context: 1. Q：だれがめがねをかけていますか。
+      inclusion_reason: Clothing/accessory noun needed for the wearing-verb practice.
+      example: だれがめがねをかけていますか。
+      provisional_fields: meanings:efd2b61648ce,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:かける:かける
+  expression: かける
+  reading: かける
+  furigana: ''
+  romaji: kakeru
+  meanings:
+  - to wear (glasses)
+  - to put on (glasses)
+  part_of_speech: verb (ichidan, transitive)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: 104 Week 8 Writing Homework.pdf
+    row: null
+    raw_fields:
+      extracted_from: 104 Week 8 Writing Homework.pdf
+      confidence: high
+      page: '2'
+      context: 1. Q：だれがめがねをかけていますか。
+      inclusion_reason: One of the specific 'wearing' verbs contrasted in this lesson.
+      example: だれがめがねをかけていますか。
+      provisional_fields: meanings:1b7791d0f80e,part_of_speech:9d0afde8e086
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:いす:いす
+  expression: いす
+  reading: いす
+  furigana: ''
+  romaji: isu
+  meanings:
+  - chair
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: 104 Week 8 Writing Homework.pdf
+    row: null
+    raw_fields:
+      extracted_from: 104 Week 8 Writing Homework.pdf
+      confidence: high
+      page: '2'
+      context: 3. Q：だれがいすにすわっていますか。
+      inclusion_reason: Common furniture noun used with the に particle.
+      example: だれがいすにすわっていますか。
+      provisional_fields: meanings:b2709d3efd5a,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:すわる:すわる
+  expression: すわる
+  reading: すわる
+  furigana: ''
+  romaji: suwaru
+  meanings:
+  - to sit
+  - to sit down
+  part_of_speech: verb (godan, intransitive)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: 104 Week 8 Writing Homework.pdf
+    row: null
+    raw_fields:
+      extracted_from: 104 Week 8 Writing Homework.pdf
+      confidence: high
+      page: '2'
+      context: 3. Q：だれがいすにすわっていますか。
+      inclusion_reason: Basic posture verb (座る) used with に in the drill.
+      example: だれがいすにすわっていますか。
+      provisional_fields: meanings:17c1371723b3,part_of_speech:1db9001e5c28
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:白い:しろい
+  expression: 白い
+  reading: しろい
+  furigana: ''
+  romaji: shiroi
+  meanings:
+  - white
+  part_of_speech: i-adjective
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: 104 Week 8 Writing Homework.pdf
+    row: null
+    raw_fields:
+      extracted_from: 104 Week 8 Writing Homework.pdf
+      confidence: high
+      page: '2'
+      context: 4. Q：だれが白いくつをはいていますか。
+      inclusion_reason: Basic color adjective modifying a noun in the exercise.
+      example: だれが白いくつをはいていますか。
+      provisional_fields: meanings:b1aa8c2548a1,part_of_speech:e4ecca77b823
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:くつ:くつ
+  expression: くつ
+  reading: くつ
+  furigana: ''
+  romaji: kutsu
+  meanings:
+  - shoes
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: 104 Week 8 Writing Homework.pdf
+    row: null
+    raw_fields:
+      extracted_from: 104 Week 8 Writing Homework.pdf
+      confidence: high
+      page: '2'
+      context: 4. Q：だれが白いくつをはいていますか。
+      inclusion_reason: Clothing noun paired with the verb はく.
+      example: だれが白いくつをはいていますか。
+      provisional_fields: meanings:2a358a951d3a,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:はく:はく
+  expression: はく
+  reading: はく
+  furigana: ''
+  romaji: haku
+  meanings:
+  - to wear (below the waist)
+  - to put on (shoes, pants)
+  part_of_speech: verb (godan, transitive)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: 104 Week 8 Writing Homework.pdf
+    row: null
+    raw_fields:
+      extracted_from: 104 Week 8 Writing Homework.pdf
+      confidence: high
+      page: '2'
+      context: 4. Q：だれが白いくつをはいていますか。
+      inclusion_reason: Wearing verb specific to footwear and lower-body clothing.
+      example: だれが白いくつをはいていますか。
+      provisional_fields: meanings:b212de346980,part_of_speech:0a8731a8d8e3
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:かぶる:かぶる
+  expression: かぶる
+  reading: かぶる
+  furigana: ''
+  romaji: kaburu
+  meanings:
+  - to wear (on the head)
+  - to put on (a hat)
+  part_of_speech: verb (godan, transitive)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: 104 Week 8 Writing Homework.pdf
+    row: null
+    raw_fields:
+      extracted_from: 104 Week 8 Writing Homework.pdf
+      confidence: high
+      page: '2'
+      context: A：しゅんさんがかぶっています。
+      inclusion_reason: Wearing verb for headwear, contrasted with かける and はく.
+      example: しゅんさんがかぶっています。
+      provisional_fields: meanings:7977fe3ecd90,part_of_speech:0a8731a8d8e3
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:飲む:のむ
+  expression: 飲む
+  reading: のむ
+  furigana: ''
+  romaji: ''
+  meanings:
+  - to drink
+  part_of_speech: verb (godan, transitive)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: 104 Week 8 Writing Homework.pdf
+    row: null
+    raw_fields:
+      extracted_from: 104 Week 8 Writing Homework.pdf
+      confidence: high
+      page: '1'
+      context: a. よくおさけ(を)飲む？
+      inclusion_reason: High-frequency godan verb appearing in the reported-speech drill.
+      example: よくおさけ(を)飲む？
+      provisional_fields: meanings:e59eeec9b35b,part_of_speech:0a8731a8d8e3
+- id: word:行く:いく
+  expression: 行く
+  reading: いく
+  furigana: ''
+  romaji: ''
+  meanings:
+  - to go
+  part_of_speech: verb (godan, intransitive)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: 104 Week 8 Writing Homework.pdf
+    row: null
+    raw_fields:
+      extracted_from: 104 Week 8 Writing Homework.pdf
+      confidence: high
+      page: '1'
+      context: b. うちから仕事までどうやって行く？
+      inclusion_reason: Essential motion verb used in the prompt.
+      example: うちから仕事までどうやって行く？
+      provisional_fields: meanings:20ae5c128ceb,part_of_speech:1db9001e5c28
+- id: word:おきる:おきる
+  expression: おきる
+  reading: おきる
+  furigana: ''
+  romaji: ''
+  meanings:
+  - to get up
+  - to wake up
+  part_of_speech: verb (ichidan, intransitive)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: 104 Week 8 Writing Homework.pdf
+    row: null
+    raw_fields:
+      extracted_from: 104 Week 8 Writing Homework.pdf
+      confidence: high
+      page: '1'
+      context: d. よく何時におきる？
+      inclusion_reason: Daily-routine verb (起きる) used in the schedule question.
+      example: よく何時におきる？
+      provisional_fields: meanings:46db77578b44,part_of_speech:e8b57c460716
+- id: word:とる:とる
+  expression: とる
+  reading: とる
+  furigana: ''
+  romaji: ''
+  meanings:
+  - to take (a photo)
+  part_of_speech: verb (godan, transitive)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: 104 Week 8 Writing Homework.pdf
+    row: null
+    raw_fields:
+      extracted_from: 104 Week 8 Writing Homework.pdf
+      confidence: medium
+      page: '2'
+      context: A：こうじさんがとっています。
+      inclusion_reason: Verb from the answer line; likely 撮る (taking a picture) in this BBQ scene.
+      example: こうじさんがとっています。
+      provisional_fields: meanings:ed5a164bf37f,part_of_speech:0a8731a8d8e3

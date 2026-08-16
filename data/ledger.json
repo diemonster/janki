@@ -252,6 +252,19 @@
         }
       ]
     },
+    "word:いす:いす": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "104 Week 8 Writing Homework.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:いる:いる": {
       "added_at": "2026-08-09",
       "audio": [
@@ -702,6 +715,24 @@
           "ref": "m7-mixed-tsumori-pages-27-30.pdf",
           "seen_at": "2026-08-13",
           "type": "extract"
+        },
+        {
+          "ref": "104 Week 8 Writing Homework.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:おさけ:おさけ": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "104 Week 8 Writing Homework.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
         }
       ]
     },
@@ -1137,6 +1168,45 @@
         }
       ]
     },
+    "word:かう:かう": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "104 Week 8 Writing Homework.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:かける:かける": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "104 Week 8 Writing Homework.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:かぶる:かぶる": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "104 Week 8 Writing Homework.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:かんじ:かんじ": {
       "added_at": "2026-08-13",
       "audio": [
@@ -1197,6 +1267,19 @@
         {
           "ref": "m7-mixed-tsumori-pages-27-30.pdf",
           "seen_at": "2026-08-13",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:くつ:くつ": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "104 Week 8 Writing Homework.pdf",
+          "seen_at": "2026-08-16",
           "type": "extract"
         }
       ]
@@ -1951,6 +2034,19 @@
         }
       ]
     },
+    "word:すわる:すわる": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "104 Week 8 Writing Homework.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:そう言えば:そういえば": {
       "added_at": "2026-08-11",
       "audio": [
@@ -2109,6 +2205,19 @@
           "ref": "Yotsubato Volume 1 Reading Pack Vocab",
           "seen_at": "2026-08-12",
           "type": "anki"
+        }
+      ]
+    },
+    "word:だれ:だれ": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "104 Week 8 Writing Homework.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
         }
       ]
     },
@@ -2274,6 +2383,24 @@
         {
           "ref": "m7-mixed-tsumori-pages-27-30.pdf",
           "seen_at": "2026-08-13",
+          "type": "extract"
+        },
+        {
+          "ref": "104 Week 8 Writing Homework.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:どうやって:どうやって": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "104 Week 8 Writing Homework.pdf",
+          "seen_at": "2026-08-16",
           "type": "extract"
         }
       ]
@@ -2505,6 +2632,19 @@
         {
           "ref": "m7-mixed-tsumori-pages-27-30.pdf",
           "seen_at": "2026-08-13",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:はく:はく": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "104 Week 8 Writing Homework.pdf",
+          "seen_at": "2026-08-16",
           "type": "extract"
         }
       ]
@@ -2800,6 +2940,19 @@
         }
       ]
     },
+    "word:めがね:めがね": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "104 Week 8 Writing Homework.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:もう:もう": {
       "added_at": "2026-08-11",
       "audio": [
@@ -3002,6 +3155,32 @@
         }
       ]
     },
+    "word:イベント:イベント": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:エスカレーター:エスカレーター": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:ジャンボ:ジャンボ": {
       "added_at": "2026-08-12",
       "audio": [
@@ -3083,6 +3262,19 @@
           "ref": "Yotsubato Volume 1 Reading Pack Vocab",
           "seen_at": "2026-08-12",
           "type": "anki"
+        }
+      ]
+    },
+    "word:ペット:ペット": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "104 Week 8 Writing Homework.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
         }
       ]
     },
@@ -3185,6 +3377,19 @@
           "ref": "Yotsubato Volume 1 Reading Pack Vocab",
           "seen_at": "2026-08-11",
           "type": "anki"
+        }
+      ]
+    },
+    "word:上手:じょうず": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "104 Week 8 Writing Homework.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
         }
       ]
     },
@@ -3387,6 +3592,19 @@
         }
       ]
     },
+    "word:二人:ふたり": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:人:ひと": {
       "added_at": "2026-08-11",
       "audio": [
@@ -3467,6 +3685,19 @@
       "sources": [
         {
           "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:今年:ことし": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
           "seen_at": "2026-08-16",
           "type": "extract"
         }
@@ -3560,6 +3791,19 @@
         }
       ]
     },
+    "word:仕事:しごと": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "104 Week 8 Writing Homework.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:以上:いじょう": {
       "added_at": "2026-08-16",
       "audio": [],
@@ -3599,6 +3843,19 @@
         }
       ]
     },
+    "word:会社:かいしゃ": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:体温:たいおん": {
       "added_at": "2026-08-16",
       "audio": [],
@@ -3607,6 +3864,19 @@
       "sources": [
         {
           "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:何時:なんじ": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "104 Week 8 Writing Homework.pdf",
           "seen_at": "2026-08-16",
           "type": "extract"
         }
@@ -3837,6 +4107,45 @@
         }
       ]
     },
+    "word:元:もと": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:元々:もともと": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:元日:がんじつ": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:元気:げんき": {
       "added_at": "2026-08-12",
       "audio": [
@@ -3914,6 +4223,11 @@
           "ref": "Yotsubato Volume 1 Reading Pack Vocab",
           "seen_at": "2026-08-12",
           "type": "anki"
+        },
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
         }
       ]
     },
@@ -4394,6 +4708,19 @@
         }
       ]
     },
+    "word:北海道:ほっかいどう": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:午前:ごぜん": {
       "added_at": "2026-08-16",
       "audio": [],
@@ -4415,6 +4742,19 @@
       "sources": [
         {
           "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:半:はん": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
           "seen_at": "2026-08-16",
           "type": "extract"
         }
@@ -4501,6 +4841,45 @@
         }
       ]
     },
+    "word:名古屋市:なごやし": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:売店:ばいてん": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:売買:ばいばい": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:夏休み:なつやすみ": {
       "added_at": "2026-08-11",
       "audio": [
@@ -4573,6 +4952,45 @@
         }
       ]
     },
+    "word:夕食:ゆうしょく": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:夜:よる": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:大元:おおもと": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:大学院:だいがくいん": {
       "added_at": "2026-08-16",
       "audio": [],
@@ -4594,6 +5012,11 @@
       "sources": [
         {
           "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        },
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
           "seen_at": "2026-08-16",
           "type": "extract"
         }
@@ -4684,6 +5107,19 @@
         }
       ]
     },
+    "word:安い:やすい": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:家:いえ": {
       "added_at": "2026-08-11",
       "audio": [
@@ -4753,6 +5189,19 @@
           "ref": "Yotsubato Volume 1 Reading Pack Vocab",
           "seen_at": "2026-08-11",
           "type": "anki"
+        }
+      ]
+    },
+    "word:家を売る:いえをうる": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
         }
       ]
     },
@@ -4842,6 +5291,45 @@
         {
           "ref": "IMG_4563.jpg",
           "seen_at": "2026-08-13",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:帰り道:かえりみち": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:帰る:かえる": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:帰国:きこく": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
           "type": "extract"
         }
       ]
@@ -5328,6 +5816,19 @@
         }
       ]
     },
+    "word:救急車:きゅうきゅうしゃ": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:新来:しんらい": {
       "added_at": "2026-08-13",
       "audio": [
@@ -5486,6 +5987,19 @@
         }
       ]
     },
+    "word:早朝:そうちょう": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:明日:あした": {
       "added_at": "2026-08-11",
       "audio": [
@@ -5551,6 +6065,11 @@
           "ref": "Yotsubato Volume 1 Reading Pack Vocab",
           "seen_at": "2026-08-11",
           "type": "anki"
+        },
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
         }
       ]
     },
@@ -5619,6 +6138,19 @@
         },
         {
           "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:昼:ひる": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
           "seen_at": "2026-08-16",
           "type": "extract"
         }
@@ -5811,6 +6343,37 @@
           "ref": "Kanji Review 104 Week11.pdf",
           "seen_at": "2026-08-16",
           "type": "extract"
+        },
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:有料:ゆうりょう": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:朝食:ちょうしょく": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
         }
       ]
     },
@@ -5918,6 +6481,19 @@
         }
       ]
     },
+    "word:東京:とうきょう": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:歌手:かしゅ": {
       "added_at": "2026-08-16",
       "audio": [],
@@ -5926,6 +6502,32 @@
       "sources": [
         {
           "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:止まる:とまる": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:止む:やむ": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
           "seen_at": "2026-08-16",
           "type": "extract"
         }
@@ -5965,6 +6567,32 @@
       "sources": [
         {
           "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:白い:しろい": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "104 Week 8 Writing Homework.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:白い車:しろいくるま": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
           "seen_at": "2026-08-16",
           "type": "extract"
         }
@@ -6138,6 +6766,19 @@
         }
       ]
     },
+    "word:社会人:しゃかいじん": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:祈祷:きとう": {
       "added_at": "2026-08-13",
       "audio": [
@@ -6268,6 +6909,45 @@
         {
           "ref": "IMG_4563.jpg",
           "seen_at": "2026-08-13",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:神:かみ": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:神様:かみさま": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:神社:じんじゃ": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
           "type": "extract"
         }
       ]
@@ -6633,6 +7313,32 @@
         }
       ]
     },
+    "word:苦手:にがて": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:茶道:さどう": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:行く:いく": {
       "added_at": "2026-08-07",
       "audio": [
@@ -6712,6 +7418,11 @@
           "ref": "Anki Test - Top 20 Verbs",
           "seen_at": "2026-08-09",
           "type": "jpdb"
+        },
+        {
+          "ref": "104 Week 8 Writing Homework.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
         }
       ]
     },
@@ -7126,6 +7837,32 @@
         }
       ]
     },
+    "word:貝:かい": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:貝がら:かいがら": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:貴方:あなた": {
       "added_at": "2026-08-13",
       "audio": [
@@ -7164,6 +7901,19 @@
         {
           "ref": "IMG_4563.jpg",
           "seen_at": "2026-08-13",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:買い物:かいもの": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
           "type": "extract"
         }
       ]
@@ -7246,6 +7996,32 @@
         }
       ]
     },
+    "word:起きる:おきる": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:足元にご注意ください:あしもとにごちゅういください": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:車:くるま": {
       "added_at": "2026-08-13",
       "audio": [
@@ -7307,6 +8083,89 @@
         {
           "ref": "m7-mixed-tsumori-pages-27-30.pdf",
           "seen_at": "2026-08-13",
+          "type": "extract"
+        },
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:車を買う:くるまをかう": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:道:みち": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:道にまよう:みちにまよう": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:道路:どうろ": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:都市:とし": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:降る:ふる": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
+          "seen_at": "2026-08-16",
           "type": "extract"
         }
       ]
@@ -7401,6 +8260,58 @@
         }
       ]
     },
+    "word:雨:あめ": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:雨天中止:うてんちゅうし": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:雪:ゆき": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:電気:でんき": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:電話:でんわ": {
       "added_at": "2026-08-16",
       "audio": [],
@@ -7409,6 +8320,45 @@
       "sources": [
         {
           "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:電話する:でんわする": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:電車:でんしゃ": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:飛行機:ひこうき": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
           "seen_at": "2026-08-16",
           "type": "extract"
         }
@@ -7571,6 +8521,24 @@
           "ref": "Anki Test - Top 20 Verbs",
           "seen_at": "2026-08-09",
           "type": "jpdb"
+        },
+        {
+          "ref": "104 Week 8 Writing Homework.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:魚市場:うおいちば": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
         }
       ]
     },

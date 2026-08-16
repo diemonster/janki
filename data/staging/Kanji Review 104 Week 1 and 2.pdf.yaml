@@ -1,0 +1,63 @@
+source_file: Kanji Review 104 Week 1 and 2.pdf
+extracted_at: '2026-08-16'
+model: claude-opus-5
+prompt_provenance:
+  source_sha256: d75967df4e7becbcdde3ba6abac5f685df7b760d8a7f234a38d7667d102473b0
+  mode: auto
+  provider: anthropic
+  model: claude-opus-5
+  response_schema_version: 2
+  system_prompt_fingerprint: aba57e098a341e2f73f7f6ff8961254d5e650ed106e57ba7cb783a8f737e37f4
+  style_guide_fingerprint: 418704c8197845d87af002df9934b484661bd161134543418ed1273419944b9b
+  user_prompt_fingerprint: bf9154918be3910d7c1af1e9ca6fe9399bc5024e9a8a657a5718418f66861661
+coverage:
+  version: 1
+  status: selection
+  blocking: false
+  source_fingerprint: d75967df4e7becbcdde3ba6abac5f685df7b760d8a7f234a38d7667d102473b0
+  model_reported_unit_count: 0
+  observed_unit_count: 0
+  prose_candidate_count: 24
+  prose_coverage: unmeasured
+  source_units: []
+  duplicate_keys: []
+  candidate_units: []
+  duplicate_units: []
+  non_vocabulary_units: []
+  unreadable_units: []
+  coverage_block_fingerprint: 029a8ae281ddbf8b1646d4e1b98b3bdceaa77d005f912d13579da3d7c0b4ef9c
+records:
+- id: word:九分:きゅうふん
+  expression: 九分
+  reading: きゅうふん
+  furigana: ''
+  romaji: kyuufun
+  meanings:
+  - nine minutes
+  part_of_speech: noun (counter)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank:
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row:
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: medium
+      page: '1'
+      context: フェリーターミナルからバスで九分
+      inclusion_reason: Counter reading practice underlined in the hotel guide; confirm きゅうふん vs. 
+        くふん at review.
+      provisional_fields: meanings:56f129f48fc2,part_of_speech:730e8ccb23f9
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      hold_reason: reading not in the dictionary
