@@ -40,6 +40,7 @@ from japanese_anki.exporters.anki import (
 from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.importers import anki_deck, jpdb_import, jpdb_reviews
 from japanese_anki.importers.shirabe import import_file, inspect_file
+from japanese_anki.inputs import inside as inputs_inside
 from japanese_anki.inputs import prepare_inputs
 from japanese_anki.io import (
     MERGE_LABELS,
@@ -2446,7 +2447,21 @@ def command_extract(args: argparse.Namespace) -> int:
     ]
 
     if not _confirm_live_model(prepared, model, args.yes):
+        # Says what was *kept*, not only what was not sent. `prepare_inputs`
+        # ran above and copied any outside file into the durable inbox, which
+        # is tracked — so "Nothing was sent." alone reads as "nothing
+        # happened" while a private document sits staged for the next
+        # `git add`. Enforcing the ordering instead would mean copying after
+        # consent, which costs the collision and readability checks that make
+        # the prompt's file list accurate in the first place.
+        copied = [
+            item.origin_path
+            for item in prepared
+            if inputs_inside(item.origin_path, config.scan_inbox.resolve())
+        ]
         print("Nothing was sent.")
+        for path in copied:
+            print(f"  kept in the inbox: {path}", file=sys.stderr)
         return 1
 
     written = 0

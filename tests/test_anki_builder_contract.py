@@ -90,10 +90,13 @@ def test_word_decks_are_nonempty_and_do_not_share_stable_ids() -> None:
         if anki.deck_kind(path) in {"", "vocabulary"}
     ]
     # Named, not counted. `>= 2` is satisfied by a subset, so a deck that
-    # stopped being a word deck — a typo in `kind:`, a file moved out of the
-    # tree — would leave this gate silently while the assertion still passed.
-    # The deleted `deck-membership-partition` case pinned the exact list; this
-    # is that half, kept.
+    # stopped being a word deck would leave this gate silently while the
+    # assertion still passed. Not a *typo* in `kind:` — `deck_kind` already
+    # refuses an unknown one — but the valid-but-wrong cases it cannot catch:
+    # `verbs.yaml` gaining `kind: pattern`, or a deck blanking its kind. Both
+    # measured. The deleted `deck-membership-partition` case pinned the exact
+    # list; this is that half, kept, and the cost is one line to update when a
+    # deck is legitimately added.
     assert {path.relative_to(config.root).as_posix() for path in paths} == {
         "data/decks/m7-camera-vertical-dialogue.yaml",
         "data/decks/m7-mixed-tsumori.yaml",

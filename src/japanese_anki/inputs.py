@@ -148,7 +148,7 @@ def _read(path: Path) -> bytes:
         raise InputError(f"Could not read {path}: {exc}") from exc
 
 
-def _inside(source: Path, root: Path) -> bool:
+def inside(source: Path, root: Path) -> bool:
     """Return whether an existing source resolves inside ``root``."""
     try:
         return source.resolve(strict=True).is_relative_to(root.resolve())
@@ -188,7 +188,7 @@ def _durable_namesakes(
             )
         except OSError:
             continue
-        if same_file or not candidate.is_file() or not _inside(candidate, durable_root):
+        if same_file or not candidate.is_file() or not inside(candidate, durable_root):
             continue
         if _read(candidate) == data:
             matches.append(candidate)
@@ -238,7 +238,7 @@ def _copy_into_inbox(
     """
     scan_inbox = Path(scan_inbox)
     durable_root = Path(inbox_root) if inbox_root is not None else scan_inbox
-    if _inside(source, durable_root):
+    if inside(source, durable_root):
         _, conflicts = _durable_namesakes(
             source.name, durable_root, data, exclude=source
         )
@@ -273,7 +273,7 @@ def _copy_into_inbox(
                 target if target in fingerprint_matches else fingerprint_matches[0]
             )
         if _occupied(target):
-            if _inside(target, durable_root) and _read(target) == data:
+            if inside(target, durable_root) and _read(target) == data:
                 return target
             raise InputError(
                 f"Cannot store {source}: {target} already holds different content "

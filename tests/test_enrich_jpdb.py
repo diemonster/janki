@@ -455,13 +455,16 @@ def test_a_suru_stem_entry_cannot_settle_a_provisional_claim() -> None:
     assert updated.meanings == ["to study"]
     assert provisional_fields(updated) == ["meanings"]
     assert any("stay provisional" in warning for warning in result.warnings)
-    # One pinned parse, not two. Reconciliation asks for the exact identity and
-    # always will; what the suru allowance skips is the *reading check's* own
-    # pinned re-ask, which is redundant here — the allowance has already
-    # explained why the entry's spelling differs from the record's. Removing
-    # the guard buys a second request whose only possible answer is the one
-    # already in hand, and if it fails to resolve the record is refused and
-    # nothing is written, which is the symptom the allowance exists to prevent.
+    # One pinned parse, not two. The surviving one is the kana-homograph retry,
+    # which fires whenever jpdb's reading and spelling both differ from the
+    # record's — measured, not assumed: a non-provisional record makes the same
+    # three calls, so reconciliation is not what asks for it. What the suru
+    # allowance skips is the *reading check's* own pinned re-ask on top of that,
+    # redundant here because the allowance has already explained why 勉強's
+    # entry spells differently from 勉強する. Removing the guard buys a second
+    # request whose only possible answer is the one already in hand, and if it
+    # fails to resolve the record is refused and nothing is written — the
+    # symptom the allowance exists to prevent.
     forced = [body for endpoint, body in api.bodies
               if endpoint == "parse" and "furigana" in body]
     assert len(forced) == 1, "the reading check does not re-ask for a suru compound"

@@ -734,6 +734,24 @@ def test_the_archive_records_where_the_rows_came_from(
 # --- the extraction coverage gate ------------------------------------------
 
 
+def unmeasured_coverage_with_units() -> dict[str, Any]:
+    """A coverage block carrying one real source unit, so the per-unit shape
+    checks have something to read."""
+    unit = extract.SourceUnit(
+        page=1,
+        section="vocabulary",
+        ordinal=1,
+        context="話す　はなす　to speak",
+        context_fingerprint=extract.context_fingerprint("話す　はなす　to speak"),
+        disposition="candidate",
+        reason="",
+    )
+    result = extract.ExtractionResult(
+        candidates=(), source_units=(unit,), model_reported_unit_count=1
+    )
+    return extract.coverage_block(result, source_sha256="a" * 64, mode="table")
+
+
 def unmeasured_coverage() -> dict[str, Any]:
     result = extract.ExtractionResult(candidates=(), source_units=(), model_reported_unit_count=0)
     return extract.coverage_block(
@@ -834,6 +852,75 @@ def test_a_coverage_approval_for_an_old_block_is_refused(
     assert code == 1
     assert "coverage-approval-stale" in capsys.readouterr().err
     assert json.loads((root / "vocabulary.json").read_text(encoding="utf-8")) == []
+
+
+@pytest.mark.parametrize(
+    "damage,expected",
+    [
+        (lambda unit: unit.__setitem__("context_fingerprint", "not-a-sha"),
+         "context_fingerprint"),
+        (lambda unit: unit.__setitem__("disposition", "maybe"), "disposition"),
+        (lambda unit: unit.pop("section"), "source_units[0] fields are invalid"),
+    ],
+    ids=["bad-fingerprint", "bad-disposition", "missing-field"],
+)
+def test_a_malformed_source_unit_is_named_field_by_field(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], damage: Any, expected: str
+) -> None:
+    """`_coverage_fact` is a live promote gate that had no test of its own.
+
+    Measured: disabling its field-set check, its fingerprint check or its
+    disposition check each left the whole suite green — before this change and
+    after it, so it was already blind and M8.4 narrowed a blind validator. The
+    surviving `coverage-facts-stale` test exercises a different function
+    (`promote._verify_coverage_facts`), which re-derives the block rather than
+    checking the shape of what it reads.
+
+    A staging file is hand-editable YAML by design, so the shape check is what
+    stands between a typo in a source unit and a promote that reads it as
+    something else.
+    """
+    root = project(tmp_path, [])
+    staged = root / "staging" / "damaged.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    coverage = unmeasured_coverage_with_units()
+    damage(coverage["source_units"][0])
+    coverage["coverage_block_fingerprint"] = coverage_block_fingerprint(coverage)
+    write_staging(staged, [record()], extraction_meta(coverage))
+
+    code = cli.main(
+        ["--root", str(root), "promote", str(staged), "--skip-reading-check"]
+    )
+
+    assert code == 1
+    assert expected in capsys.readouterr().err
+
+
+def test_a_disposition_entry_missing_a_field_is_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`_coverage_fact`'s own exact-field-set check.
+
+    `source_units` entries never reach it — they have a separate field check
+    one line earlier — so the disposition lists are the only route, and
+    deleting `set(value) != fields` was invisible without this. A disposition
+    entry short a field is a hand-edit that silently changes which unit the
+    list is talking about.
+    """
+    root = project(tmp_path, [])
+    staged = root / "staging" / "damaged-fact.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    coverage = unmeasured_coverage_with_units()
+    coverage["candidate_units"][0].pop("ordinal")
+    coverage["coverage_block_fingerprint"] = coverage_block_fingerprint(coverage)
+    write_staging(staged, [record()], extraction_meta(coverage))
+
+    code = cli.main(
+        ["--root", str(root), "promote", str(staged), "--skip-reading-check"]
+    )
+
+    assert code == 1
+    assert "candidate_units[0] must have exactly" in capsys.readouterr().err
 
 
 def test_a_hand_edited_coverage_status_cannot_recompute_its_way_past_the_gate(

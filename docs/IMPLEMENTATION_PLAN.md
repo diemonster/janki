@@ -3104,8 +3104,9 @@ Depends on: M7.6T
 Files: `janki.toml`, `src/japanese_anki/claude_client.py`,
 `src/japanese_anki/review.py`, `src/japanese_anki/qc.py`,
 `src/japanese_anki/enrich.py`, `src/japanese_anki/cli.py`,
-`src/japanese_anki/config.py`, `docs/HARDENING.md`, `docs/ENRICHMENT.md`,
-`docs/DESIGN_V2.md`, `README.md`, new cases and tests.
+`src/japanese_anki/config.py`, `docs/ENRICHMENT.md`,
+`docs/DESIGN_V2.md`, `README.md`, and new tests. *(`docs/HARDENING.md` and
+"new cases" were deleted with the corpus in M8.4.)*
 
 **The line.** The LLM reads the source, segments it, assigns readings *in
 context*, and writes the sentences. jpdb answers one question about a word it
@@ -3386,8 +3387,11 @@ Use these slices, each a finding plus a reproducing case plus a fix, ordered so
    sentences. A repair that has never fired, driven by boundaries that are
    sometimes wrong, could only ever introduce the error it was written to
    prevent. `_learner_load_excess` was then one of two consumers of the parse and has since been deleted; `verify_example_furigana` was then the parse's last consumer, and slice 7 retired it.
-9. Update `docs/HARDENING.md`, full replay, `make gates`, one local review
-   cycle.
+9. Run `make gates` and one local review cycle. *(2026-08-15: this slice
+   originally said "update `docs/HARDENING.md`, full replay" — both were
+   deleted by M8.4, and `make gates` no longer runs a replay step. This is the
+   only slice of this milestone still open, so it is corrected rather than
+   stamped as history.)*
 
 Do not run a paid semantic review as part of this task. The first review after
 it lands is the milestone measurement.
@@ -3656,8 +3660,9 @@ Files: `qc.py`, `kanji.py`, `enrich.py`, `models.py`, `validation.py`,
 Most of the corpus's value was ordinary regression testing wearing ceremony —
 prose invariants, fingerprint pinning, findings opened for synthetic probes.
 Migrate the replay cases that guard artifact behaviour (importers, packaging,
-provenance, repairs — 26 of 37 measured portable) into plain pytest; the
-other 11 die with their owners in M8.2/M8.3. Then delete `hardening.py`,
+provenance, repairs) into plain pytest. *(The "26 of 37 portable" estimate
+written here when the milestone was drafted was superseded by the measurement
+below: 25 cases survived M8.2 and M8.3, and the real split is 18/2/5.)* Then delete `hardening.py`,
 `hardening_replay.py` (including the dead `render-build` runner no case ever
 used), `janki harden`, `quality/`, and `docs/HARDENING.md`.
 
@@ -3677,12 +3682,12 @@ replay excluded* — `tests/test_hardening_replay.py` parametrizes over
 catches its own mutation. The honest baseline is 1909, not 2028: that file
 (47 tests) and `tests/test_hardening.py` (72) both die with the apparatus.
 
-Of 25 cases: **22 are redundant** with existing pytest tests, each confirmed
-by a named non-replay failure. **Two die outright** — `m7-mixed-tsumori-coverage`
+Of 25 cases: **18 are redundant** with existing pytest tests, each confirmed by
+a named non-replay failure. **Two die outright** — `m7-mixed-tsumori-coverage`
 and `m7-native-teform-table-coverage` feed an empty candidate list and assert
 an empty result, with byte-identical fixtures; they observe no production
 behaviour at all, and their content is pilot bookkeeping for a cancelled
-programme. **Three carry real coverage** and get tests before the corpus goes:
+programme. **Five carry real coverage** and get tests before the corpus goes:
 
 - `input-external-existing-name-collision` → `tests/test_inputs.py`. The
   refusal is covered; *which files the error names* is not. Passing
@@ -3711,6 +3716,25 @@ programme. **Three carry real coverage** and get tests before the corpus goes:
 - `derived-romaji-repair` → `tests/test_repairs.py`. The repaired value was
   covered; the version, evidence algorithm and provenance sentence stamped
   beside it were not — the audit trail a person reads months later.
+
+*A second round, after review, found that "redundant" had been too generous.
+Eight of the eighteen pinned **multi-part** results whose secondary halves
+nothing else guarded, and one deletion took three assertions with it that had
+nothing to do with oracles — including the only test in the repository checking
+that an API key never reaches a committed staging file. Six more tests were
+written and mutation-verified: the staging file's provenance block and its
+absence of secrets; that an い-adjective is conjugated from its part of speech
+(jpdb states no verb class for one, so narrowing `verb_group or
+part_of_speech` silently emptied a whole word class's drill forms); that the
+disposition lists partition `source_units` rather than sampling a deduplicated
+view of them; that `inclusion_reason` survives into `raw_fields`; that only an
+explicit yes at the consent prompt sends anything; and the word-deck list named
+rather than counted.*
+
+*The lesson worth keeping: the risk in deleting a corpus is not the cases you
+know are load-bearing, it is the ones a survey calls redundant because their
+headline behaviour is covered while a second assertion in the same oracle is
+not.*
 
 *Done 2026-08-15, with one scope correction found in execution. The
 **coverage-oracle apparatus had to go with the corpus**, which the milestone

@@ -623,7 +623,13 @@ def test_an_unattended_run_refuses_to_send_rather_than_assuming_consent(
     assert code == 1
     assert call.calls == [], "nothing was sent"
     assert not (root / "staging" / "lesson.pdf.yaml").exists()
-    assert "Refusing" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "Refusing" in err
+    # And it says what it *kept*. The inbox copy already happened, into a
+    # tracked directory, so reporting only "Nothing was sent." would read as
+    # "nothing happened" while a private document waits for the next git add.
+    assert "kept in the inbox" in err
+    assert (root / "inbox" / "lesson.pdf").exists(), "the copy really did happen"
 
 
 @pytest.mark.parametrize(
@@ -651,6 +657,36 @@ def test_only_an_explicit_yes_sends_the_files(
 
     assert bool(call.calls) is sent
     assert code == (0 if sent else 1)
+
+
+@pytest.mark.parametrize("abort", [EOFError, KeyboardInterrupt], ids=["eof", "ctrl-c"])
+def test_aborting_the_prompt_is_a_no(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, abort: type[BaseException]
+) -> None:
+    """Ctrl-C at the prompt is the most natural way to say stop, and it was the
+    one answer nothing pinned.
+
+    Measured: flipping the `except (EOFError, KeyboardInterrupt)` handler's
+    `return False` to `return True` left the whole suite green — so a person
+    who saw the file list, thought better of it, and hit Ctrl-C would have sent
+    the document anyway. An interrupt is not an explicit yes, and this gate
+    accepts nothing less.
+    """
+    root = project(tmp_path)
+    call = FakeCall(ok(candidate()))
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)
+
+    def interrupted(_prompt: str = "") -> str:
+        raise abort()
+
+    monkeypatch.setattr("builtins.input", interrupted)
+
+    code = cli.main(["--root", str(root), "extract", str(source_pdf(tmp_path))])
+
+    assert call.calls == [], "nothing was sent"
+    assert code == 1
+    assert not (root / "staging" / "lesson.pdf.yaml").exists()
 
 
 def test_the_consent_prompt_names_the_files_and_the_model(
