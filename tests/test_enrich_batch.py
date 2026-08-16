@@ -16,6 +16,7 @@ from typing import Any
 
 import pytest
 
+from conftest import seed_prompts
 from japanese_anki import claude_client, cli, enrich, ledger
 from japanese_anki.errors import JankiError
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
@@ -172,8 +173,7 @@ def project(tmp_path: Path, records: list[VocabularyRecord]) -> Path:
         'enrich_model = "claude-opus-5"\n',
         encoding="utf-8",
     )
-    (tmp_path / "docs").mkdir(exist_ok=True)
-    (tmp_path / "docs" / "JAPANESE_STYLE_GUIDE.md").write_text("Guide.", encoding="utf-8")
+    seed_prompts(tmp_path)
     (tmp_path / "vocabulary.json").write_text(
         json.dumps([item.to_dict() for item in records], ensure_ascii=False),
         encoding="utf-8",
@@ -292,7 +292,7 @@ def test_the_batch_prompt_has_no_variety_pressure(tmp_path: Path) -> None:
     # Every request is built before any answer exists, so there is nothing for
     # a later prompt to have seen. Said out loud because it is a real
     # difference in what the two paths produce.
-    requests, ids = enrich.batch_requests(many(3), model="m", style_guide="guide")
+    requests, ids = enrich.batch_requests(many(3), model="m", style_guide="guide", instructions="I")
 
     contents = [item["params"]["messages"][0]["content"] for item in requests]
     assert len(requests) == 3
@@ -311,7 +311,7 @@ def test_the_batch_carries_the_same_reviewed_patterns_as_the_immediate_path() ->
     requests, _ = enrich.batch_requests(
         many(2), model="m", style_guide="guide",
         taught=format_patterns([Pattern("〜んだ", "explains")]),
-    )
+        instructions="I")
 
     contents = [item["params"]["messages"][0]["content"] for item in requests]
     assert all("〜んだ" in text for text in contents)
@@ -320,7 +320,7 @@ def test_the_batch_carries_the_same_reviewed_patterns_as_the_immediate_path() ->
 def test_the_batch_asks_for_the_long_cache_window() -> None:
     # A five-minute window does not survive the span a batch's requests are read
     # over; the style guide leads every one of them.
-    requests, _ = enrich.batch_requests(many(1), model="m", style_guide="guide")
+    requests, _ = enrich.batch_requests(many(1), model="m", style_guide="guide", instructions="I")
 
     system = requests[0]["params"]["system"]
     assert system[-1]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}

@@ -255,10 +255,15 @@ The rates are per million tokens, and the batch API halves both:
 2026-08-31. Check the Anthropic pricing page before planning a large run —
 this table is a snapshot, not a source of truth.
 
-What janki actually sends is small and fixed: `JAPANESE_STYLE_GUIDE.md`
-plus a paragraph of instructions as the system prompt — together under a
-thousand tokens — and then one line per record naming the word, its reading and
-what janki already knows. One call per record, every time.
+What janki actually sends is small, fixed, and **readable**:
+`prompts/style-guide.md` plus one more file as the system prompt — together
+under a thousand tokens — and then one line per record naming the word, its
+reading and what janki already knows. One call per record, every time.
+
+Which file depends on the pass — `prompts/enrich-examples.md` for `--ai`,
+`prompts/polish-meanings.md` for `--polish-meanings`. They are sent byte for
+byte, so what you read there is what the model reads, and editing one changes
+the next run with no rebuild. See [prompts/README.md](../prompts/README.md).
 
 That makes the output the variable, and the part worth measuring rather than
 predicting: the models janki uses think before they answer, and thinking is billed as
@@ -268,9 +273,11 @@ before pointing a pass at a few thousand. A rough floor for planning is a cent o
 two per record on `claude-opus-5`, half that batched — but treat a number you
 measured on your own collection as the real one.
 
-Prompt caching is asked for on the system prefix, and with the style guide as
+Prompt caching is asked for on the system prefix, and with the prompts as
 shipped that prefix is probably below the per-model minimum for caching to
-happen at all. The API does not say when it misses the minimum, so budget as if
+happen at all. Editing a prompt to be substantially longer would change that
+— in both directions: a longer prefix may start caching, and it certainly
+costs more per uncached call. The API does not say when it misses the minimum, so budget as if
 every call re-sends it.
 
 `janki enrich --jpdb` costs nothing in tokens — jpdb is a dictionary API, not a

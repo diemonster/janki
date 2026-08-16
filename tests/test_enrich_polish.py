@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 
+from conftest import seed_prompts
 from japanese_anki import claude_client, cli, enrich
 from japanese_anki.claude_client import CallResult, Refusal
 from japanese_anki.enrich import (
@@ -69,8 +70,7 @@ def project(tmp_path: Path, records: list[VocabularyRecord]) -> Path:
         'staging_dir = "staging"\n',
         encoding="utf-8",
     )
-    (tmp_path / "docs").mkdir(exist_ok=True)
-    (tmp_path / "docs" / "JAPANESE_STYLE_GUIDE.md").write_text("Guide.", encoding="utf-8")
+    seed_prompts(tmp_path)
     (tmp_path / "vocabulary.json").write_text(
         json.dumps([item.to_dict() for item in records], ensure_ascii=False),
         encoding="utf-8",
@@ -231,7 +231,7 @@ def test_a_refusal_costs_that_record_not_the_run(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(enrich.claude_client, "parse_call", call)
 
     outcomes = list(
-        enrich.polish_meanings(records, model="m", style_guide="g")
+        enrich.polish_meanings(records, model="m", style_guide="g", instructions="I")
     )
 
     assert outcomes[0].warning.startswith("word:聞く:きく")
@@ -243,7 +243,11 @@ def test_a_truncated_answer_is_never_accepted(monkeypatch: pytest.MonkeyPatch) -
     call = FakeCall(CallResult(None, "max_tokens", None))
     monkeypatch.setattr(enrich.claude_client, "parse_call", call)
 
-    (outcome,) = list(enrich.polish_meanings([record()], model="m", style_guide="g"))
+    (outcome,) = list(
+        enrich.polish_meanings(
+            [record()], model="m", style_guide="g", instructions="I"
+        )
+    )
 
     assert outcome.proposed is None
     assert "max_tokens" in outcome.warning
@@ -258,7 +262,7 @@ def test_the_pass_is_lazy_so_walking_away_costs_what_was_asked_for(
     call = FakeCall(*[ok("to ask") for _ in range(5)])
     monkeypatch.setattr(enrich.claude_client, "parse_call", call)
 
-    stream = enrich.polish_meanings(records, model="m", style_guide="g")
+    stream = enrich.polish_meanings(records, model="m", style_guide="g", instructions="I")
     next(stream)
     next(stream)
 

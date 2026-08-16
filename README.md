@@ -252,7 +252,7 @@ recoverable and a build reproducible.
 | [docs/CARD_DESIGN.md](docs/CARD_DESIGN.md) | What a card shows and why |
 | [docs/NOTETYPE_UPGRADE.md](docs/NOTETYPE_UPGRADE.md) | Adding a field to a notetype already in Anki |
 | [docs/SHIRABE_WORKFLOW.md](docs/SHIRABE_WORKFLOW.md) | Capturing words on the phone, end to end |
-| [docs/JAPANESE_STYLE_GUIDE.md](docs/JAPANESE_STYLE_GUIDE.md) | The Japanese every generated sentence is held to |
+| [prompts/](prompts/) | **Every instruction janki sends a model.** Markdown, sent byte for byte, yours to edit |
 | [AGENTS.md](AGENTS.md) | Standing instructions for working on janki itself |
 
 Design and history, for anyone changing janki rather than using it:

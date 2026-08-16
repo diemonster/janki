@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 import yaml
 
+from conftest import seed_prompts
 from japanese_anki import cli, enrich
 from japanese_anki.claude_client import CallResult, Refusal
 from japanese_anki.enrich import (
@@ -619,7 +620,7 @@ def test_a_refusal_costs_that_record_not_the_run(
     second = record(id="word:食べる:たべる", expression="食べる", reading="たべる",
                     verb_group="ichidan")
 
-    result = enrich.enrich_ai([first, second], model="m", style_guide="S")
+    result = enrich.enrich_ai([first, second], model="m", style_guide="S", instructions="I")
 
     assert "word:食べる:たべる" in result.changes
     assert "word:話す:はなす" not in result.changes
@@ -633,7 +634,7 @@ def test_a_truncated_answer_is_never_accepted(monkeypatch: pytest.MonkeyPatch) -
         enrich.claude_client, "parse_call", FakeCall(CallResult(None, "max_tokens", None))
     )
 
-    result = enrich.enrich_ai([record()], model="m", style_guide="S")
+    result = enrich.enrich_ai([record()], model="m", style_guide="S", instructions="I")
 
     assert result.changes == {}
     assert "max_tokens" in result.warnings[0]
@@ -653,7 +654,7 @@ def test_variety_pressure_grows_as_the_run_goes(
                verb_group="ichidan"),
     ]
 
-    enrich.enrich_ai(records, model="m", style_guide="S")
+    enrich.enrich_ai(records, model="m", style_guide="S", instructions="I")
 
     assert "毎日話します。" not in call.calls[0]["content"]
     assert "毎日話します。" in call.calls[1]["content"]
@@ -667,8 +668,7 @@ def project(tmp_path: Path, records: list[VocabularyRecord]) -> Path:
         'staging_dir = "staging"\n',
         encoding="utf-8",
     )
-    (tmp_path / "docs").mkdir(exist_ok=True)
-    (tmp_path / "docs" / "JAPANESE_STYLE_GUIDE.md").write_text("Guide.", encoding="utf-8")
+    seed_prompts(tmp_path)
     (tmp_path / "vocabulary.json").write_text(
         json.dumps([item.to_dict() for item in records], ensure_ascii=False),
         encoding="utf-8",

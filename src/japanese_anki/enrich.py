@@ -1265,6 +1265,7 @@ def enrich_ai(
     *,
     model: str,
     style_guide: str,
+    instructions: str,
     force_fields: Sequence[str] = (),
     ids: Sequence[str] | None = None,
     client: Any | None = None,
@@ -1281,7 +1282,7 @@ def enrich_ai(
     result = AiResult(records=list(records))
     positions = {record.id: index for index, record in enumerate(result.records)}
     targets = ai_targets(result.records, ids)
-    blocks = claude_client.system_blocks(style_guide, AI_INSTRUCTIONS)
+    blocks = claude_client.system_blocks(style_guide, instructions)
     caller = parse_call or claude_client.parse_call
     options = dict(call_options or {})
     recent: list[str] = []
@@ -1542,6 +1543,7 @@ def polish_meanings(
     *,
     model: str,
     style_guide: str,
+    instructions: str,
     ids: Sequence[str] | None = None,
     client: Any | None = None,
 ) -> Iterator[PolishOutcome]:
@@ -1552,7 +1554,7 @@ def polish_meanings(
     making. Driving it from the CLI's loop means declining the first proposal
     and walking away costs one call, not one per record in the collection.
     """
-    blocks = claude_client.system_blocks(style_guide, POLISH_INSTRUCTIONS)
+    blocks = claude_client.system_blocks(style_guide, instructions)
     for record in polish_targets(records, ids):
         try:
             call = claude_client.parse_call(
@@ -1624,6 +1626,7 @@ def batch_requests(
     *,
     model: str,
     style_guide: str,
+    instructions: str,
     ids: Sequence[str] | None = None,
     taught: str = "",
 ) -> tuple[list[dict[str, Any]], list[str]]:
@@ -1639,7 +1642,7 @@ def batch_requests(
     a collection would have got the unsteered version.
     """
     targets = ai_targets(records, ids)
-    blocks = claude_client.system_blocks(style_guide, AI_INSTRUCTIONS, cache_ttl="1h")
+    blocks = claude_client.system_blocks(style_guide, instructions, cache_ttl="1h")
     record_ids = [record.id for record in targets]
     batch_key_map(record_ids)
     requests = [
@@ -1661,12 +1664,13 @@ def polish_batch_requests(
     *,
     model: str,
     style_guide: str,
+    instructions: str,
     ids: Sequence[str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[str], dict[str, str]]:
     """Anthropic batch entries for a meaning-polish pass."""
     targets = polish_targets(records, ids)
     blocks = claude_client.system_blocks(
-        style_guide, POLISH_INSTRUCTIONS, cache_ttl="1h"
+        style_guide, instructions, cache_ttl="1h"
     )
     record_ids = [record.id for record in targets]
     prompt_fingerprints = {

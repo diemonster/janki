@@ -213,6 +213,7 @@ def extract_patterns(
     prepared: PreparedInput,
     *,
     model: str,
+    instructions: str,
     style_guide: str = "",
     client: Any | None = None,
 ) -> PatternSet:
@@ -223,9 +224,9 @@ def extract_patterns(
     fewer patterns, and nothing downstream could tell the difference.
     """
     blocks = (
-        claude_client.system_blocks(style_guide, INSTRUCTIONS)
+        claude_client.system_blocks(style_guide, instructions)
         if style_guide
-        else claude_client.system_blocks(INSTRUCTIONS)
+        else claude_client.system_blocks(instructions)
     )
     call = claude_client.parse_call(
         model,

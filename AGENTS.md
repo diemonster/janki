@@ -24,8 +24,12 @@ or second-guesses what came back.
   from dictionaries, and shaping reviewed content into an Anki deck. Structural
   contracts — identifiers, fingerprints, field counts, file provenance — are
   the project's, because they are about the artifact rather than the language.
-- **Prompts are templates and belong in files**, stated plainly enough that
-  someone can read what the model was asked for without reading Python.
+- **Prompts are templates and belong in files.** They do, now: every
+  instruction janki sends is Markdown under `prompts/`, sent byte for byte and
+  re-read on every run. Change what a pass asks for by editing the file, never
+  by adding code that fixes up the answer. A prompt needing a branch in its
+  instruction prose is two prompts — that is why extraction's three modes are
+  three complete files rather than one file plus three rule blocks.
 - **janki's logic enriches the card; it never audits the model.** Review
   gates and hardening rules aimed at proving the model wrong are the same
   anti-pattern as reading Japanese in code: writing a rules engine for

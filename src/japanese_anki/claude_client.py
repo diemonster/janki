@@ -34,6 +34,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from japanese_anki import prompts
 from japanese_anki.errors import JankiError
 
 __all__ = [
@@ -144,7 +145,7 @@ def effort_for(model: str) -> str | None:
 
 #: The style guide, relative to the project root. Every AI pass sends it, which
 #: is why it is worth a cache breakpoint.
-STYLE_GUIDE_PATH = Path("docs") / "JAPANESE_STYLE_GUIDE.md"
+STYLE_GUIDE_PATH = prompts.DIRECTORY / "style-guide.md"
 
 #: Stop reasons that mean the answer is whole and worth validating. Everything
 #: else — ``refusal``, ``max_tokens``, ``pause_turn`` — leaves partial or absent
@@ -268,19 +269,13 @@ def build_client(api_key: str | None = None) -> Any:
 def read_style_guide(root: Path) -> str:
     """The project's Japanese style guide, for the system prompt.
 
-    A missing guide is an error rather than an empty string: every AI pass is
-    supposed to be writing to this project's conventions, and silently dropping
-    them would produce plausible output that quietly ignores the rules the
-    repository exists to enforce.
+    It lives in `prompts/` and loads like every other prompt, because that is
+    what it is: text sent to a model byte for byte. It kept a named reader of
+    its own only because it moved there later than the rest — every AI pass
+    leads with it, so it is the one prompt with a fixed position rather than a
+    pass that selects it.
     """
-    path = Path(root) / STYLE_GUIDE_PATH
-    try:
-        return path.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise JankiError(
-            f"Could not read the style guide at {path}: {exc}. Every AI pass sends "
-            "it as system context, so janki will not run one without it."
-        ) from exc
+    return prompts.load(root, "style-guide")
 
 
 def system_blocks(

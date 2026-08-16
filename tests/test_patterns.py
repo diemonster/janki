@@ -77,7 +77,7 @@ def test_a_lesson_deck_yields_the_grammar_it_teaches(monkeypatch: pytest.MonkeyP
     ])
     monkeypatch.setattr(patterns_module.claude_client, "parse_call", fake_call(parsed))
 
-    result = extract_patterns(FakeInput(), model="test-model")
+    result = extract_patterns(FakeInput(), model="test-model", instructions="I")
 
     assert result.kind == "lesson"
     assert [p.template for p in result.patterns] == ["〜の？", "ない form + つもり"]
@@ -91,7 +91,7 @@ def test_a_pattern_document_is_labelled_as_one(monkeypatch: pytest.MonkeyPatch) 
     parsed = Parsed("pattern", "Te-form Song", [Item("う・つ・る → って", "godan て-form")])
     monkeypatch.setattr(patterns_module.claude_client, "parse_call", fake_call(parsed))
 
-    assert extract_patterns(FakeInput("teform.pdf"), model="m").kind == "pattern"
+    assert extract_patterns(FakeInput("teform.pdf"), model="m", instructions="I").kind == "pattern"
 
 
 def test_a_kind_the_model_invents_becomes_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -101,7 +101,7 @@ def test_a_kind_the_model_invents_becomes_unknown(monkeypatch: pytest.MonkeyPatc
         fake_call(Parsed("worksheet", "", [Item("〜たい")])),
     )
 
-    assert extract_patterns(FakeInput(), model="m").kind == "unknown"
+    assert extract_patterns(FakeInput(), model="m", instructions="I").kind == "unknown"
 
 
 def test_a_pattern_with_no_template_is_dropped(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -110,7 +110,9 @@ def test_a_pattern_with_no_template_is_dropped(monkeypatch: pytest.MonkeyPatch) 
     parsed = Parsed("lesson", "", [Item("", "something"), Item("〜んだ", "explains")])
     monkeypatch.setattr(patterns_module.claude_client, "parse_call", fake_call(parsed))
 
-    assert [p.template for p in extract_patterns(FakeInput(), model="m").patterns] == ["〜んだ"]
+    found = extract_patterns(FakeInput(), model="m", instructions="I")
+
+    assert [p.template for p in found.patterns] == ["〜んだ"]
 
 
 def test_a_truncated_answer_is_refused_not_salvaged(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -121,7 +123,7 @@ def test_a_truncated_answer_is_refused_not_salvaged(monkeypatch: pytest.MonkeyPa
     )
 
     with pytest.raises(PatternError, match="max_tokens"):
-        extract_patterns(FakeInput(), model="m")
+        extract_patterns(FakeInput(), model="m", instructions="I")
 
 
 def test_a_refusal_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -132,7 +134,7 @@ def test_a_refusal_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     with pytest.raises(PatternError, match="declined"):
-        extract_patterns(FakeInput(), model="m")
+        extract_patterns(FakeInput(), model="m", instructions="I")
 
 
 # --- nothing unreviewed steers a sentence -----------------------------------

@@ -6,11 +6,12 @@ developer's real Anki collection**, and **no test opens a billed API client.**
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
 
-from japanese_anki import claude_client, collection, status
+from japanese_anki import claude_client, collection, prompts, status
 
 
 @pytest.fixture(scope="session")
@@ -85,3 +86,22 @@ def _no_billed_client(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRe
         )
 
     monkeypatch.setattr(claude_client, "build_client", refuse)
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def seed_prompts(root: Path) -> Path:
+    """Copy this checkout's real `prompts/` into a temp project.
+
+    The repository's own files, not stubs. A temp project that invented its
+    own prompt text would let a CLI test pass while the shipped template said
+    something else entirely — and these files are the deliverable now, so the
+    suite should exercise them. Cheap enough to do per project: seven small
+    Markdown files.
+    """
+    target = Path(root) / prompts.DIRECTORY
+    target.mkdir(parents=True, exist_ok=True)
+    for source in (REPO_ROOT / prompts.DIRECTORY).glob("*.md"):
+        shutil.copy2(source, target / source.name)
+    return target

@@ -57,7 +57,7 @@ __all__ = [
     "source_fingerprint",
     "staging_path",
     "staging_targets",
-    "system_prompt",
+    "prompt_name",
     "unusable",
     "unusable_note",
 ]
@@ -251,57 +251,23 @@ def candidate_schema() -> Any:
     return Extraction
 
 
-_TABLE_RULES = """\
-This page is a vocabulary list or table. Account for every row in source_units,
-in source order. Give each row a stable page, section slug, and ordinal. Copy
-its full text to context. Give it exactly one disposition: candidate,
-duplicate, non-vocabulary, or unreadable. A candidate unit must have exactly one
-candidate with source_kind set to table and with the same page, section,
-ordinal, and context. Every other unit must give a reason and must not have a
-candidate. Keep repeated rows as separate units. Do not add, merge, or correct
-rows. If a reading looks wrong, transcribe it and mark the candidate low
-confidence."""
+def prompt_name(mode: str | None) -> str:
+    """The template one extraction mode sends.
 
-_PROSE_RULES = """\
-This page is running text. Pick out the vocabulary worth making a card for and
-say why in inclusion_reason. Skip words that are trivially common, and skip any
-word in the known-words list below. Quote the sentence you found each word in
-as its context."""
-
-_AUTO_RULES = """\
-Judge each page for itself. For each vocabulary list or table, account for every
-row in source_units. Give each row a stable page, section slug, ordinal,
-verbatim context, and one disposition: candidate, duplicate, non-vocabulary,
-or unreadable. Link each candidate unit to exactly one candidate with the same
-key and context. Keep repeated rows as separate units. For running text, select
-the words worth a card. Set source_kind to table or prose on every candidate.
-One document may contain both. Prose selection is not exhaustive."""
-
-_ALWAYS = """\
-Report the page number and the verbatim line each candidate came from, so a
-human can find it again. Never invent a reading: if the source does not give
-one and you are not certain, leave reading empty and let the review supply it —
-an invented reading becomes a permanent, uncorrectable record ID. Mark your own
-confidence honestly; "low" is a useful answer and a wrong "high" is not."""
-
-
-def system_prompt(mode: str | None) -> str:
-    """The instructions for one extraction mode."""
+    A name, not a text: the modes are three separate files under `prompts/`
+    rather than one file with three rule blocks, because the work they ask for
+    genuinely differs and a reader of `extract-table.md` should not have to
+    mentally delete the prose paragraphs. Mode validation stays here, in the
+    module that owns what a mode means.
+    """
     if mode is None:
-        rules = _AUTO_RULES
-    elif mode == "table":
-        rules = _TABLE_RULES
-    elif mode == "prose":
-        rules = _PROSE_RULES
-    else:
-        raise ExtractError(
-            f"Unknown mode '{mode}'. Use one of: {', '.join(MODES)}, or omit "
-            "--mode to let the model judge each page.",
-            code="extract-mode-unknown",
-        )
-    return (
-        "You are reading Japanese study material and proposing vocabulary "
-        "records for a human to review.\n\n" + rules + "\n\n" + _ALWAYS
+        return "extract-auto"
+    if mode in MODES:
+        return f"extract-{mode}"
+    raise ExtractError(
+        f"Unknown mode '{mode}'. Use one of: {', '.join(MODES)}, or omit "
+        "--mode to let the model judge each page.",
+        code="extract-mode-unknown",
     )
 
 
@@ -362,12 +328,12 @@ def prompt_provenance(
     *,
     model: str,
     style_guide: str,
+    system: str,
     mode: str | None,
     known: Sequence[str] = (),
     source_sha256: str | None = None,
 ) -> dict[str, Any]:
     """The stable inputs needed to explain a later model-output change."""
-    system = system_prompt(mode)
     user = prompt_for(prepared.origin_path.name, known)
     return {
         "source_sha256": source_sha256 or source_fingerprint(prepared.origin_path),
@@ -386,6 +352,7 @@ def extract_candidates(
     *,
     model: str,
     style_guide: str,
+    system: str,
     mode: str | None = None,
     known: Sequence[str] = (),
     client: Any | None = None,
@@ -402,7 +369,7 @@ def extract_candidates(
     try:
         parsed, stop_reason, refusal = claude_client.parse_call(
             model,
-            claude_client.system_blocks(style_guide, system_prompt(mode)),
+            claude_client.system_blocks(style_guide, system),
             [
                 prepared.content_block(),
                 {

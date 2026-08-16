@@ -204,7 +204,11 @@ def test_a_missing_style_guide_stops_the_pass_rather_than_sending_nothing(
     with pytest.raises(JankiError) as excinfo:
         read_style_guide(tmp_path)
 
-    assert "style guide" in str(excinfo.value)
+    # Names the file, which is now `prompts/style-guide.md` — the guide loads
+    # through the prompt loader because that is what it is: text sent to a
+    # model byte for byte.
+    assert "prompts/style-guide.md" in str(excinfo.value)
+    assert "will not run a pass without it" in str(excinfo.value)
 
 
 def test_the_real_style_guide_is_where_this_module_looks_for_it() -> None:

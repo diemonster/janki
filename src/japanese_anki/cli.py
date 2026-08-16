@@ -22,6 +22,7 @@ from japanese_anki import (
     migrate,
     patterns,
     promote,
+    prompts,
     repairs,
     status,
 )
@@ -1308,6 +1309,7 @@ def _enrich_ai(
     )
     result = enrich.enrich_ai(
         records,
+        instructions=prompts.load(config.root, "enrich-examples"),
         model=model,
         style_guide=style_guide,
         force_fields=force_fields,
@@ -1486,6 +1488,7 @@ def _batch_submit(
     )
     requests, pending_ids = enrich.batch_requests(
         records,
+        instructions=prompts.load(config.root, "enrich-examples"),
         model=model,
         style_guide=style_guide,
         ids=args.ids or None,
@@ -1547,6 +1550,7 @@ def _polish_batch_submit(config: ProjectConfig, args: argparse.Namespace) -> int
     model = args.model or config.polish_model
     requests, pending_ids, prompt_fingerprints = enrich.polish_batch_requests(
         records,
+        instructions=prompts.load(config.root, "polish-meanings"),
         model=model,
         style_guide=claude_client.read_style_guide(config.root),
         ids=args.ids or None,
@@ -2288,7 +2292,11 @@ def _polish_meanings(config: ProjectConfig, args: argparse.Namespace) -> int:
     # only when the timing is lucky.
     try:
         for outcome in enrich.polish_meanings(
-            records, model=model, style_guide=style_guide, ids=args.ids or None
+            records,
+            instructions=prompts.load(config.root, "polish-meanings"),
+            model=model,
+            style_guide=style_guide,
+            ids=args.ids or None,
         ):
             if outcome.warning:
                 print(f"warning: {outcome.warning}", file=sys.stderr)
@@ -2413,6 +2421,10 @@ def command_extract(args: argparse.Namespace) -> int:
     """
     config = _load_config(args)
     style_guide = claude_client.read_style_guide(config.root)
+    # Read once for the run, like the style guide: every input in a batch is
+    # extracted under the same instructions, and re-reading per file would let
+    # a mid-run edit split one command across two prompts.
+    system = prompts.load(config.root, extract.prompt_name(args.mode))
     model = args.model or config.extract_model
     prepared = prepare_inputs(
         [path for path in args.files],
@@ -2478,6 +2490,7 @@ def command_extract(args: argparse.Namespace) -> int:
             item,
             model=model,
             style_guide=style_guide,
+            system=system,
             mode=args.mode,
             known=skip_list,
         )
@@ -2499,6 +2512,7 @@ def command_extract(args: argparse.Namespace) -> int:
                 item,
                 model=model,
                 style_guide=style_guide,
+                system=system,
                 mode=args.mode,
                 known=skip_list,
                 source_sha256=source_fingerprints[index],
@@ -3721,6 +3735,7 @@ def command_patterns(args: argparse.Namespace) -> int:
             found = patterns.extract_patterns(
                 prepared,
                 model=config.extract_model,
+                instructions=prompts.load(config.root, "patterns"),
                 style_guide=claude_client.read_style_guide(config.root),
             )
         except JankiError as exc:

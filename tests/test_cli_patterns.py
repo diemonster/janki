@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 
+from conftest import seed_prompts
 from japanese_anki import cli
 from japanese_anki import patterns as patterns_module
 from japanese_anki.claude_client import CallResult
@@ -46,6 +47,7 @@ def project(tmp_path: Path, records: list[dict] | None = None) -> Path:
         json.dumps(COLLECTION if records is None else records, ensure_ascii=False),
         encoding="utf-8",
     )
+    seed_prompts(tmp_path)
     return tmp_path
 
 

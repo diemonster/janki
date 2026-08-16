@@ -14,9 +14,10 @@ from typing import Any
 import pytest
 import yaml
 
-from japanese_anki import cli, extract
+from conftest import seed_prompts
+from japanese_anki import cli, extract, prompts
 from japanese_anki.claude_client import CallResult, Refusal
-from japanese_anki.extract import ExtractError, build_records, known_ids, system_prompt
+from japanese_anki.extract import ExtractError, build_records, known_ids, prompt_name
 from japanese_anki.inputs import PreparedInput
 from japanese_anki.models import PROVISIONAL_FIELDS_KEY, VocabularyRecord, provisional_fields
 from japanese_anki.staging import read_staging
@@ -124,18 +125,28 @@ def table_ok(*candidates: Any, units: list[Any] | None = None, count: int = 0) -
 # --- the prompt --------------------------------------------------------------
 
 
-def test_each_mode_gets_its_own_rules() -> None:
-    table = system_prompt("table")
-    prose = system_prompt("prose")
-    auto = system_prompt(None)
+def test_each_mode_gets_its_own_shipped_prompt_file() -> None:
+    """Read from `prompts/`, not from a constant.
+
+    These are the files a person edits, so the assertions belong on the files
+    themselves — a clause deleted from `extract-table.md` should fail here,
+    which is the whole reason the prompts are a reviewable artifact rather
+    than string literals in Python.
+    """
+    root = Path(__file__).resolve().parents[1]
+    table = prompts.load(root, prompt_name("table"))
+    prose = prompts.load(root, prompt_name("prose"))
+    auto = prompts.load(root, prompt_name(None))
 
     assert "Account for every row" in table
     assert "worth making a card for" in prose
     assert "Judge each page for itself" in auto
-    # The rule that matters most is in all three: an invented reading becomes a
-    # permanent, uncorrectable record ID.
+    # Each file stands alone — no shared block is concatenated at send time —
+    # so the rule that matters most has to be present in all three. An invented
+    # reading becomes a permanent, uncorrectable record ID.
     for text in (table, prose, auto):
         assert "Never invent a reading" in text
+        assert text.startswith("You are reading Japanese study material")
 
 
 def test_context_normalization_is_one_stable_production_rule() -> None:
@@ -147,7 +158,7 @@ def test_context_normalization_is_one_stable_production_rule() -> None:
 
 def test_an_unknown_mode_is_refused() -> None:
     with pytest.raises(ExtractError) as excinfo:
-        system_prompt("poetry")
+        prompt_name("poetry")
 
     assert "table" in str(excinfo.value)
 
@@ -164,6 +175,7 @@ def test_the_known_word_list_rides_in_the_user_turn_not_the_system_blocks(
         prepared(tmp_path),
         model="claude-opus-5",
         style_guide="STYLE",
+        system="S",
         mode="prose",
         known=["食べる"],
     )
@@ -185,7 +197,7 @@ def test_the_file_is_sent_as_its_content_block(
     monkeypatch.setattr(extract.claude_client, "parse_call", call)
     item = prepared(tmp_path)
 
-    extract.extract_candidates(item, model="claude-opus-5", style_guide="S")
+    extract.extract_candidates(item, model="claude-opus-5", style_guide="S", system="S")
 
     assert call.calls[0]["content"][0] == item.content_block()
 
@@ -205,8 +217,8 @@ def test_a_refusal_reports_the_category(
 
     with pytest.raises(ExtractError) as excinfo:
         extract.extract_candidates(
-            prepared(tmp_path), model="claude-opus-5", style_guide="S"
-        )
+            prepared(tmp_path), model="claude-opus-5", style_guide="S",
+        system="S")
 
     message = str(excinfo.value)
     assert "cyber" in message and "policy decline" in message
@@ -222,8 +234,8 @@ def test_a_refusal_with_no_details_still_fails_cleanly(
 
     with pytest.raises(ExtractError):
         extract.extract_candidates(
-            prepared(tmp_path), model="claude-opus-5", style_guide="S"
-        )
+            prepared(tmp_path), model="claude-opus-5", style_guide="S",
+        system="S")
 
 
 def test_a_truncated_answer_is_never_accepted(
@@ -239,8 +251,8 @@ def test_a_truncated_answer_is_never_accepted(
 
     with pytest.raises(ExtractError) as excinfo:
         extract.extract_candidates(
-            prepared(tmp_path), model="claude-opus-5", style_guide="S"
-        )
+            prepared(tmp_path), model="claude-opus-5", style_guide="S",
+        system="S")
 
     message = str(excinfo.value)
     assert "cut off" in message
@@ -259,8 +271,8 @@ def test_any_other_incomplete_stop_is_also_refused(
 
     with pytest.raises(ExtractError) as excinfo:
         extract.extract_candidates(
-            prepared(tmp_path), model="claude-opus-5", style_guide="S"
-        )
+            prepared(tmp_path), model="claude-opus-5", style_guide="S",
+        system="S")
 
     assert "pause_turn" in str(excinfo.value)
 
@@ -387,8 +399,8 @@ def test_table_candidates_must_link_to_source_units_one_to_one(
 
     with pytest.raises(ExtractError) as excinfo:
         extract.extract_candidates(
-            prepared(tmp_path), model="claude-opus-5", style_guide="S", mode="table"
-        )
+            prepared(tmp_path), model="claude-opus-5", style_guide="S", mode="table",
+        system="S")
 
     assert excinfo.value.code == "extract-candidate-unit-link"
 
@@ -571,10 +583,7 @@ def project(tmp_path: Path, records: list[VocabularyRecord] | None = None) -> Pa
         'scan_inbox = "inbox"\n',
         encoding="utf-8",
     )
-    (tmp_path / "docs").mkdir(exist_ok=True)
-    (tmp_path / "docs" / "JAPANESE_STYLE_GUIDE.md").write_text(
-        "Prefer natural English.", encoding="utf-8"
-    )
+    seed_prompts(tmp_path)
     if records is not None:
         (tmp_path / "vocabulary.json").write_text(
             json.dumps([item.to_dict() for item in records], ensure_ascii=False),
@@ -922,10 +931,10 @@ def test_the_staging_file_records_its_provenance_and_never_the_api_key(
 def test_prompt_fingerprints_change_with_the_prompt_not_the_path(tmp_path: Path) -> None:
     item = prepared(tmp_path)
     base = extract.prompt_provenance(
-        item, model="m", style_guide="style", mode="prose", known=()
+        item, model="m", style_guide="style", system="S", mode="prose", known=()
     )
     changed = extract.prompt_provenance(
-        item, model="m", style_guide="style", mode="prose", known=("話す",)
+        item, model="m", style_guide="style", system="S", mode="prose", known=("話す",)
     )
     assert base["system_prompt_fingerprint"] == changed["system_prompt_fingerprint"]
     assert base["user_prompt_fingerprint"] != changed["user_prompt_fingerprint"]

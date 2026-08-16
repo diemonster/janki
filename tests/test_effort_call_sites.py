@@ -65,6 +65,7 @@ def test_enrichment_resolves_effort_from_the_model_it_writes_with(
         [_record()],
         model=model,
         style_guide="g",
+        instructions="I",
         parse_call=caller,
         ids=["word:話す:はなす"],
         call_options={"effort": claude_client.effort_for(model)},
@@ -82,7 +83,7 @@ def test_a_batch_entry_resolves_effort_from_its_own_model(
     of a submitted batch at once, hours after anyone was watching."""
     # An unenriched record, so the pass has something to target.
     bare = replace(_record(), examples=[], usage_notes="")
-    requests, _ = enrich.batch_requests([bare], model=model, style_guide="g")
+    requests, _ = enrich.batch_requests([bare], model=model, style_guide="g", instructions="I")
 
     assert requests
     assert requests[0]["params"]["output_config"].get("effort") == expected
@@ -140,8 +141,8 @@ def test_extraction_resolves_effort_from_the_model_it_reads_with(
     client = _BodyCapture('{"candidates": [], "source_units": []}')
 
     extract.extract_candidates(
-        _prepared(tmp_path), model=model, style_guide="g", client=client
-    )
+        _prepared(tmp_path), model=model, style_guide="g", client=client,
+        system="S")
 
     assert client.bodies, "extraction never called the model"
     assert client.bodies[0]["output_config"].get("effort") == expected
@@ -157,8 +158,8 @@ def test_pattern_reading_resolves_effort_from_its_own_model(
     client = _BodyCapture('{"kind": "grammar", "title": "t", "patterns": []}')
 
     patterns.extract_patterns(
-        _prepared(tmp_path), model=model, style_guide="g", client=client
-    )
+        _prepared(tmp_path), model=model, style_guide="g", client=client,
+        instructions="I")
 
     assert client.bodies, "pattern reading never called the model"
     assert client.bodies[0]["output_config"].get("effort") == expected
@@ -203,7 +204,7 @@ def test_meaning_polish_resolves_effort_from_its_own_model(
         enrich.polish_meanings(
             [_record()], model=model, style_guide="g", client=client,
             ids=["word:話す:はなす"],
-        )
+        instructions="I")
     )
 
     assert client.bodies, "polish never called the model"
@@ -218,8 +219,8 @@ def test_a_polish_batch_entry_resolves_effort_from_its_own_model(
     """The other batch builder. An unsupported value here fails every row of a
     submitted batch at once, hours after anyone was watching."""
     requests, _ids, _fps = enrich.polish_batch_requests(
-        [_record()], model=model, style_guide="g", ids=["word:話す:はなす"]
-    )
+        [_record()], model=model, style_guide="g", ids=["word:話す:はなす"],
+        instructions="I")
 
     assert requests
     assert requests[0]["params"]["output_config"].get("effort") == expected

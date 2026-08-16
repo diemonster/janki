@@ -3407,7 +3407,36 @@ Use these slices, each a finding plus a reproducing case plus a fix, ordered so
 Do not run a paid semantic review as part of this task. The first review after
 it lands is the milestone measurement.
 
-### [ ] M7.6P Prompts are templates, and the prompt does the work
+### [~] M7.6P Prompts are templates, and the prompt does the work
+
+*Half done 2026-08-16 — the lift landed, the consolidation did not.*
+
+**Done: items 1–4.** `prompts/` exists with seven files a person edits and a
+README that maps them; `src/japanese_anki/prompts.py` is the loader — a file
+read, re-read every call, no cache, a missing file naming its own full path.
+`docs/JAPANESE_STYLE_GUIDE.md` moved to `prompts/style-guide.md` and loads the
+same way, because it is a prompt. `extract`'s three modes are three complete
+files rather than one plus three rule blocks, which duplicates a closing
+paragraph and is the intended trade: reading one file requires reading no
+others. The instruction text is threaded from the CLI exactly as `style_guide`
+already was, so no module below the CLI touches the filesystem.
+`tests/test_prompts.py` pins the loader's promises and the shipped files —
+including that `prompts/` holds exactly the files a pass sends plus the README,
+so a leftover draft cannot masquerade as live.
+
+**Not done: item 5, the consolidation.** One rich template for a source that
+carries sentences and one for a bare word list — absorbing `extract`'s prompt
+into `enrich --ai` — is a change to *what is asked*, not where it lives. It
+belongs after someone has read the templates as they now stand. The pydantic
+`Field(description=…)` strings still ship instructions inside the JSON schema
+and are still in Python (item 1 names them); `--ai` batch submissions still
+record no template fingerprint, though `extract`'s staging provenance does —
+its `system_prompt_fingerprint` is now the sha-256 of the prompt file's own
+bytes, pinned by a test.
+
+Files: `prompts/`, `src/japanese_anki/prompts.py`, `extract.py`, `enrich.py`,
+`patterns.py`, `claude_client.py`, `cli.py`, `tests/test_prompts.py`,
+`tests/conftest.py`, `README.md`, `AGENTS.md`, `docs/ENRICHMENT.md`.
 
 *The standing rule, recorded here because this project keeps drifting from it.*
 janki asks a model to read Japanese. When the answer is wrong or thin, the fix
