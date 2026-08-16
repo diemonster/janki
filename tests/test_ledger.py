@@ -1032,3 +1032,42 @@ def test_a_stale_fetch_cannot_clear_a_newer_same_batch_journal(tmp_path: Path) -
     assert current is not None
     assert current.text == newer.text
     assert current.accepted_meanings == {"one": ["newer review"]}
+
+
+def test_the_tracked_ledger_agrees_with_the_records_it_describes() -> None:
+    """`status --rebuild` must stay a no-op on a healthy repository.
+
+    The cross-module contract stated at `cli.run_import` and `migrate.migrate_inline`:
+    a source reference's `ref` is the same string the record carries as
+    `source.imported_from`, because rebuild reconstructs the reference from the
+    record. A reference's identity is every key but the date, so any divergence
+    has the documented recovery command *append* a second near-duplicate
+    reference to each affected record and report it as a recovery.
+
+    Nothing pinned this against the real committed ledger, and it drifted: a
+    commit that filled `imported_from` on the three hand-seeded records left
+    their ledger refs empty, so those three would have doubled on the next
+    rebuild.
+    """
+    import json
+
+    root = Path(__file__).resolve().parents[1]
+    records = json.loads(
+        (root / "data" / "normalized" / "vocabulary.json").read_text(encoding="utf-8")
+    )
+    book = json.loads((root / "data" / "ledger.json").read_text(encoding="utf-8"))
+
+    diverging = []
+    for record in records:
+        stated = record["source"].get("imported_from", "")
+        if not stated:
+            continue
+        entry = book["records"].get(record["id"], {})
+        refs = {source.get("ref", "") for source in entry.get("sources", [])}
+        if refs and stated not in refs:
+            diverging.append((record["id"], stated, sorted(refs)))
+
+    assert diverging == [], (
+        "these records would gain a duplicate source reference on "
+        f"`janki status --rebuild`: {diverging}"
+    )
