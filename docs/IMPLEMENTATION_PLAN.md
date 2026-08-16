@@ -3709,8 +3709,12 @@ used), `janki harden`, `quality/`, and `docs/HARDENING.md`.
 Governance that outlives the apparatus moves to simple homes: **live-model
 consent** — the gate on sending a private source to a billed API — becomes a
 plain y/N confirmation on `janki extract` naming the file and the model;
-redistribution notes live in the deck docs; staging coverage acceptance and
-repair proposals already live outside the corpus and are untouched. A new
+redistribution notes live in the deck docs; staging coverage acceptance
+already lives outside the corpus and is untouched. *(Repair proposals were
+named here too — that sentence was falsified the same day by d7ee435,
+which deleted the proposal machinery outright after M8.3 removed its only
+producer. The open decision this milestone recorded is therefore
+resolved: deleted, not re-instanced.)* A new
 defect in janki's machinery gets a failing test first and a fix second — the
 ordinary loop, no YAML. The immutable inbox and provenance rules are design,
 not corpus, and are unaffected.

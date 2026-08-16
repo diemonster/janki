@@ -72,6 +72,44 @@ def test_a_recorded_repair_carries_its_version_evidence_and_provenance(
     )
 
 
+def test_direct_apply_refuses_a_repair_that_is_not_ingest_safe(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--apply` writes without asking, so it may only run repairs declared
+    safe to run without asking.
+
+    This guard lost its only test when M8.4 deleted the proposal machinery —
+    the test was written against a `proposal-only` declaration, and went with
+    it. The guard still ships and is still reachable, because `revoked` is the
+    other mode a declaration can carry; measured after that deletion, removing
+    the whole check left the suite green. A revoked repair applied silently is
+    a transform someone withdrew being run over a collection anyway.
+    """
+    from dataclasses import replace as dc_replace
+
+    from japanese_anki import cli
+
+    root, normalized, _staging = project(tmp_path, [record(romaji="wrong")])
+    base = repairs.REGISTRY.get("record-romaji-from-reading")
+    assert base is not None
+    revoked = dc_replace(base, code="test-revoked", mode="revoked")
+    monkeypatch_registry = repairs.RepairRegistry([revoked])
+    before = normalized.read_bytes()
+
+    original = repairs.REGISTRY
+    repairs.REGISTRY = monkeypatch_registry
+    try:
+        code = cli.main(
+            ["--root", str(root), "repair", str(normalized), "--apply", "test-revoked"]
+        )
+    finally:
+        repairs.REGISTRY = original
+
+    assert code == 1
+    assert "only ingest-safe" in capsys.readouterr().err
+    assert normalized.read_bytes() == before, "nothing was written"
+
+
 def test_seed_repair_has_two_near_misses_and_is_idempotent(tmp_path: Path) -> None:
     declaration = repairs.REGISTRY.select(["record-romaji-from-reading"])
     document = safe_document(tmp_path, record(romaji="wrong"))

@@ -48,13 +48,20 @@ grading the model's Japanese — that approach was built, measured, and deleted
 (38 of 155 sentences flagged, not one true positive). If a card comes back thin
 or wrong, the fix is here, in the asking.
 
-**Everything sent is fingerprinted.** The sha-256 of each file goes into
-staging archives and batch records, so a card can be traced to the exact text
-that produced it even after the file has moved on.
+**Extraction and the coverage check record which prompt they sent.** The
+sha-256 of the file's own bytes goes into the staging archive
+(`prompt_provenance.system_prompt_fingerprint`) and into a coverage approval,
+so a card from those passes can be traced to the exact text that produced it
+via `git log prompts/`. The other passes do not yet: `--polish-meanings`
+fingerprints the *record's* user turn rather than the template, and `patterns`
+records nothing. Worth closing, and not closed.
 
 ## Changing one
 
 Edit the file, run the pass, look at the output. If a clause matters enough
-that removing it should break something, `tests/test_enrich_ai.py`'s prompt
-section is where that assertion goes — a retired clause should be a failing
-test, not a silent weakening.
+that removing it should break something, `tests/test_prompts.py` is where that
+assertion goes — it reads these files, so a retired clause is a failing test
+rather than a silent weakening. Assertions living in `tests/test_enrich_ai.py`
+must read the file too: they once read a Python constant holding a byte-identical
+copy, which meant deleting a clause from the file here changed nothing anyone
+would notice.

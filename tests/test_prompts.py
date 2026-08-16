@@ -10,6 +10,7 @@ than quietly weaken a card.
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -65,6 +66,45 @@ def test_an_edit_takes_effect_with_no_rebuild(tmp_path: Path) -> None:
     path.write_text("Second.\n", encoding="utf-8")
 
     assert prompts.load(tmp_path, "shifting") == "Second.\n"
+
+
+def test_crlf_is_not_silently_normalised(tmp_path: Path) -> None:
+    """"Sent byte for byte" has to survive a checkout with `core.autocrlf` on.
+
+    `read_text` translates CRLF to LF. That makes the request differ from the
+    file invisibly, and — worse — makes the sha-256 recorded in a staging
+    archive match no version of the file in `git log prompts/`, so a card's
+    provenance names a prompt that never existed.
+    """
+    (tmp_path / prompts.DIRECTORY).mkdir()
+    (tmp_path / prompts.DIRECTORY / "windows.md").write_bytes(b"One.\r\nTwo.\r\n")
+
+    text = prompts.load(tmp_path, "windows")
+
+    assert text == "One.\r\nTwo.\r\n"
+    assert prompts.fingerprint(text) == hashlib.sha256(
+        (tmp_path / prompts.DIRECTORY / "windows.md").read_bytes()
+    ).hexdigest(), "the recorded sha is the file's own"
+
+
+def test_an_empty_prompt_is_refused_like_a_missing_one(tmp_path: Path) -> None:
+    """The same failure as a missing file, arriving by a different door: a
+    truncated prompt buys a full paid pass with no instructions and returns
+    something that looks like an answer."""
+    (tmp_path / prompts.DIRECTORY).mkdir()
+    (tmp_path / prompts.DIRECTORY / "blank.md").write_text("   \n\n", encoding="utf-8")
+
+    with pytest.raises(prompts.PromptError, match="is empty"):
+        prompts.load(tmp_path, "blank")
+
+
+def test_a_prompt_that_is_not_utf8_says_so(tmp_path: Path) -> None:
+    """Rather than escaping as a raw UnicodeDecodeError the CLI cannot format."""
+    (tmp_path / prompts.DIRECTORY).mkdir()
+    (tmp_path / prompts.DIRECTORY / "sjis.md").write_bytes("日本語".encode("shift_jis"))
+
+    with pytest.raises(prompts.PromptError, match="not UTF-8"):
+        prompts.load(tmp_path, "sjis")
 
 
 def test_a_missing_prompt_names_its_full_path(tmp_path: Path) -> None:
@@ -162,3 +202,75 @@ def test_a_staging_files_provenance_is_the_prompt_files_own_sha(tmp_path: Path) 
     )
 
     assert recorded["system_prompt_fingerprint"] == prompts.fingerprint(text)
+
+
+# --- the prompts actually reach the model ---------------------------------------
+#
+# The gap a review found after M7.6P shipped: every pass could have dropped its
+# instructions, or been wired to the *wrong* file, with the whole suite green.
+# The loader tests above prove a file is read; these prove the text is sent, and
+# that each pass sends its own.
+
+
+def _system_text(blocks: object) -> str:
+    """Flatten whatever `system_blocks` produced into one searchable string."""
+    if isinstance(blocks, str):
+        return blocks
+    out = []
+    for block in blocks or ():
+        out.append(block.get("text", "") if isinstance(block, dict) else str(block))
+    return "\n".join(out)
+
+
+def _recorder(result: object):
+    sent: list[str] = []
+
+    def call(_model, blocks, _content, _schema, _client=None, **_options):
+        sent.append(_system_text(blocks))
+        return result
+
+    call.sent = sent  # type: ignore[attr-defined]
+    return call
+
+
+def test_the_enrichment_pass_sends_the_file_it_was_given() -> None:
+    """Dropping `instructions` from the system blocks left the suite green, and
+    so did wiring this pass to `polish-meanings.md`. A pass sending the wrong
+    prompt asks the model for the wrong work and reports success."""
+    from japanese_anki import enrich
+    from japanese_anki.claude_client import CallResult
+    from japanese_anki.models import SourceReference, VocabularyRecord
+
+    call = _recorder(CallResult(None, "refusal", None))
+    record = VocabularyRecord(
+        id="word:話す:はなす", expression="話す", reading="はなす",
+        meanings=["to speak"],
+        source=SourceReference(type="shirabe", imported_from="x.csv"),
+    )
+
+    enrich.enrich_ai(
+        [record], model="m", style_guide="G",
+        instructions=prompts.load(REPO_ROOT, "enrich-examples"),
+        ids=["word:話す:はなす"], parse_call=call,
+    )
+
+    [sent] = call.sent
+    assert "Write one natural example sentence" in sent or "example" in sent.lower()
+    assert prompts.load(REPO_ROOT, "enrich-examples") in sent, "verbatim, not a paraphrase"
+    assert "G" in sent, "and the style guide leads it"
+
+
+def test_each_pass_would_notice_being_handed_another_passes_prompt() -> None:
+    """The two enrichment prompts are different documents and must stay so.
+
+    Swapping `enrich-examples.md` and `polish-meanings.md` at their call sites
+    was undetectable. This does not pin the wiring by itself — the test above
+    does — but it pins the premise that makes that test meaningful: if the two
+    files ever became interchangeable, nothing downstream could tell.
+    """
+    examples = prompts.load(REPO_ROOT, "enrich-examples")
+    polish = prompts.load(REPO_ROOT, "polish-meanings")
+
+    assert examples != polish
+    assert "gloss" in polish.lower(), "polish is about the English glosses"
+    assert "example sentence" in examples.lower(), "examples is about sentences"

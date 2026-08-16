@@ -218,6 +218,28 @@ def test_transitivity_is_filled_from_the_dictionarys_own_codes() -> None:
     assert "transitivity" in result.changes["word:話す:はなす"]
 
 
+def test_a_noun_is_not_given_a_transitivity() -> None:
+    """JMdict tags suru-nouns with vt/vi too — 仕事 is ["n", "vs", "vi"] — but
+    transitivity is a property of a verb.
+
+    Writing it on a record whose own part of speech says "noun" puts a
+    contradiction on the card, which shows the field unconditionally and has no
+    validation rule for it.
+    """
+    shigoto = vocab(1330910, 4, "仕事", "しごと", ["LHH"], 300, ["n", "vs", "vi"])
+    api = FakeApi({"仕事": parse_response(([["仕事", "しごと"]], shigoto))})
+
+    result = enrich_records(
+        client_for(api),
+        [record(id="word:仕事:しごと", expression="仕事", reading="しごと",
+                meanings=["work"])],
+    )
+
+    enriched = result.records[0]
+    assert enriched.part_of_speech == "noun"
+    assert enriched.transitivity == "", "a noun has no transitivity to state"
+
+
 def test_a_word_the_dictionary_tags_both_ways_gets_no_transitivity() -> None:
     """する is `["aux-v", "vi", "suf", "vt", "vs"]` — measured, not guessed.
 

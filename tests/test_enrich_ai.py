@@ -18,7 +18,7 @@ import pytest
 import yaml
 
 from conftest import seed_prompts
-from japanese_anki import cli, enrich
+from japanese_anki import cli, enrich, prompts
 from japanese_anki.claude_client import CallResult, Refusal
 from japanese_anki.enrich import (
     ai_prompt,
@@ -31,6 +31,8 @@ from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.jpdb import JpdbClient
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
 from japanese_anki.staging import read_staging
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def generated(
@@ -190,8 +192,17 @@ def test_the_prompt_carries_what_janki_knows_about_the_word() -> None:
 
 
 def test_the_instructions_preserve_the_exact_headword_spelling() -> None:
-    assert "Use the exact spelling shown in Expression" in enrich.AI_INSTRUCTIONS
-    assert "do not\nreplace a kana-only expression with kanji" in enrich.AI_INSTRUCTIONS
+    """Read from `prompts/enrich-examples.md`, the file that is actually sent.
+
+    Asserting against a Python constant was the bug M7.6P was supposed to end
+    and did not: the constant survived the commit, byte-identical to the file,
+    so these assertions guarded a copy nothing sends. Deleting the clause from
+    the shipped file left the suite green.
+    """
+    shipped = prompts.load(REPO_ROOT, "enrich-examples")
+
+    assert "Use the exact spelling shown in Expression" in shipped
+    assert "do not\nreplace a kana-only expression with kanji" in shipped
 
 
 def test_the_instructions_state_the_furigana_notation_contract() -> None:
@@ -210,10 +221,11 @@ def test_the_instructions_state_the_furigana_notation_contract() -> None:
     rule the base widens (話 becomes 毎日話), and without the separator rule the
     space goes missing — and either one alone produces the same silent drop.
 
-    Read from the assembled prompt rather than the bare constant, so this keeps
-    holding when M7.6P moves the text into a template file.
+    Read from the shipped file plus the assembled user turn. The constant this
+    once read is gone — it survived M7.6P's first commit and made these
+    assertions guard a copy nothing sends.
     """
-    text = enrich.AI_INSTRUCTIONS + "\n" + ai_prompt(record())
+    text = prompts.load(REPO_ROOT, "enrich-examples") + "\n" + ai_prompt(record())
 
     assert "The base is exactly the characters that reading" in text
     assert "an ASCII space separates each group" in text

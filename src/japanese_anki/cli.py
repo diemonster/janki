@@ -65,10 +65,12 @@ from japanese_anki.staging import (
     StagingError,
     check_rewritable,
     coverage_acceptance_requirements,
+    coverage_block_fingerprint,
     prune_staging,
     read_staging,
     record_coverage_approval,
     rewrite_staging,
+    validate_coverage_facts,
     write_staging,
 )
 from japanese_anki.tts import openai_tts, voicevox
@@ -2827,8 +2829,11 @@ def _durable_source(config: ProjectConfig, name: str) -> Path:
 
     Basename because that is what staging records — an absolute path would be
     stale in any other clone. The inbox refuses two files under one basename
-    (`inputs._durable_namesakes`), which is what makes a bare name enough to
-    find exactly one file here.
+    only when their *content differs*, so two byte-identical namesakes are
+    permitted upstream and land here as an ambiguity. That is why this refuses
+    rather than picking: either file would give the same bytes today, but
+    choosing silently would mean a later edit to one of them changed which page
+    a coverage check read, with nothing recording the choice.
     """
     root = _durable_inbox_root(config)
     matches = [
@@ -2866,6 +2871,12 @@ def _model_accepts_coverage(
             file=sys.stderr,
         )
         return False
+    # Everything the gate can decide offline, decided before spending. A stale
+    # block fingerprint or malformed provenance is free to detect and fatal
+    # either way; finding out afterwards meant paying for a verdict, writing
+    # it down, then refusing — and leaving a file that could not be promoted
+    # or re-approved without hand-deleting the approval just written.
+    validate_coverage_facts(meta)
 
     source_name = str(meta.get("source_file") or "").strip()
     if not source_name:
@@ -2908,7 +2919,14 @@ def _model_accepts_coverage(
             "model": verdict.model,
             "prompt_fingerprint": verdict.prompt_fingerprint,
             "source_fingerprint": block["source_fingerprint"],
-            "coverage_block_fingerprint": block["coverage_block_fingerprint"],
+            # Recomputed, never copied from the file. This is the only field
+            # binding the approval to the account the model actually read —
+            # `coverage_acceptance_requirements` repeats the disposition lists
+            # but not `source_units`, which is what `format_account` shows it.
+            # Copying the stored value let a truncated block be approved and
+            # then restored, leaving a permanent record that a model examined
+            # a page it was never shown.
+            "coverage_block_fingerprint": coverage_block_fingerprint(block),
             **coverage_acceptance_requirements(block),
             "reason": verdict.reason,
             "approved_at": date.today().isoformat(),
@@ -3820,6 +3838,11 @@ def command_patterns(args: argparse.Namespace) -> int:
     skipped: list[str] = []
     read: list[str] = []
     fresh: list[patterns.PatternSet] = []
+    # Read once for the run, like extract does and for the same reason: every
+    # document in one invocation is read under the same instructions, and a
+    # per-file read would let an edit mid-run split one command across two
+    # prompts.
+    pattern_instructions = prompts.load(config.root, "patterns")
     for prepared in prepared_inputs:
         # Before the read, not after it. `reviewed` is the one piece of
         # human-entered state in this file and `extract_patterns` always returns
@@ -3841,7 +3864,7 @@ def command_patterns(args: argparse.Namespace) -> int:
             found = patterns.extract_patterns(
                 prepared,
                 model=config.extract_model,
-                instructions=prompts.load(config.root, "patterns"),
+                instructions=pattern_instructions,
                 style_guide=claude_client.read_style_guide(config.root),
             )
         except JankiError as exc:

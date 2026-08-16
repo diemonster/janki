@@ -193,8 +193,11 @@ def test_the_approval_lands_without_disturbing_the_reviewers_file(
 
     written = path.read_text(encoding="utf-8")
     assert "# A reviewer's note that must survive." in written
-    assert "authority: model" in written
-    assert "reason: Accounted for." in written
+    # Double-quoted, because ruamel writes YAML 1.2 and `read_staging` reads
+    # PyYAML's 1.1: a bare `no`, `on` or `12:30` would round-trip into False,
+    # True or 750 and fail the very approval just recorded.
+    assert 'authority: "model"' in written
+    assert 'reason: "Accounted for."' in written
 
 
 def test_a_second_approval_does_not_overwrite_the_first(tmp_path: Path) -> None:
@@ -304,8 +307,179 @@ def test_an_owner_approval_still_needs_no_model_fields() -> None:
     resolve(block)
 
 
+@pytest.mark.parametrize("blank", ["", "   "], ids=["empty", "whitespace"])
+@pytest.mark.parametrize("field", ["model", "prompt_fingerprint"])
+def test_a_model_approval_with_a_blank_provenance_field_is_refused(
+    field: str, blank: str
+) -> None:
+    """Present-but-empty is the shape a hand-edit produces, and it satisfies a
+    field-set check while carrying no information. The guard existed; nothing
+    pinned it, so deleting it left the suite green."""
+    with pytest.raises(StagingError, match=f"needs {field}"):
+        resolve(approved_block(**{field: blank}))
+
+
 def test_an_invented_authority_is_refused() -> None:
     """Only two things may accept a page: the owner, or a model on the owner's
     standing instruction. A third value would be an approval nobody can trace."""
     with pytest.raises(StagingError, match="authority must be"):
         resolve(approved_block(authority="looked-fine-to-me"))
+
+
+# --- the CLI path, which had no test at all -------------------------------------
+
+
+def project_with_source(tmp_path: Path) -> tuple[Path, Path]:
+    """A project holding one inbox PDF and a staging file extracted from it."""
+    import json
+
+    from conftest import seed_prompts
+    from japanese_anki.extract import ExtractionResult, SourceUnit, coverage_block
+    from japanese_anki.staging import coverage_block_fingerprint
+
+    (tmp_path / "janki.toml").write_text(
+        '[paths]\nnormalized_file = "vocabulary.json"\n'
+        'staging_dir = "staging"\nscan_inbox = "inbox"\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "vocabulary.json").write_text("[]", encoding="utf-8")
+    seed_prompts(tmp_path)
+    source = tmp_path / "inbox" / "lesson.pdf"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"%PDF-1.4\n%real\n")
+
+    import hashlib
+
+    sha = hashlib.sha256(source.read_bytes()).hexdigest()
+    units = tuple(
+        SourceUnit(
+            page=1, section="vocabulary", ordinal=n,
+            context=f"row {n}",
+            context_fingerprint=hashlib.sha256(f"row {n}".encode()).hexdigest(),
+            disposition="candidate", reason="",
+        )
+        for n in (1, 2, 3)
+    )
+    block = coverage_block(
+        ExtractionResult(candidates=(), source_units=units, model_reported_unit_count=3),
+        source_sha256=sha,
+        mode="table",
+    )
+    staged = tmp_path / "staging" / "lesson.pdf.yaml"
+    staged.parent.mkdir(parents=True)
+    staged.write_text(
+        "source_file: lesson.pdf\n"
+        f"coverage: {json.dumps(block)}\n"
+        "prompt_provenance:\n"
+        f"  source_sha256: '{sha}'\n"
+        "  mode: table\n  provider: anthropic\n  model: m\n"
+        "  response_schema_version: 2\n"
+        f"  system_prompt_fingerprint: '{'c' * 64}'\n"
+        f"  style_guide_fingerprint: '{'d' * 64}'\n"
+        f"  user_prompt_fingerprint: '{'e' * 64}'\n"
+        "records:\n"
+        "  - id: 'word:話す:はなす'\n    expression: 話す\n    reading: はなす\n"
+        "    meanings: ['to speak']\n",
+        encoding="utf-8",
+    )
+    assert coverage_block_fingerprint(block) == block["coverage_block_fingerprint"]
+    return tmp_path, staged
+
+
+def test_the_recorded_fingerprint_matches_the_block_that_was_approved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The field binding an approval to the account the model was shown.
+
+    `coverage_acceptance_requirements` repeats the disposition lists but not
+    `source_units`, and `format_account` builds what the model reads *from*
+    `source_units` — so this fingerprint is the only thing tying the recorded
+    verdict to the account that produced it. Truncate the units, approve the
+    short account, restore the block, and a stale fingerprint would leave a
+    permanent record claiming a model found a page complete that it never saw.
+
+    **This test cannot tell a recompute from a copy, and does not claim to.**
+    The sibling below is what closes that hole: validation now runs before the
+    call, and it refuses any block whose stored fingerprint disagrees with its
+    own facts — so by the time this value is written the two are equal by
+    construction. `coverage_block_fingerprint(block)` is kept at the write
+    anyway, as the form that stays correct if that ordering is ever changed.
+    """
+    from japanese_anki import cli
+    from japanese_anki.staging import coverage_block_fingerprint, read_staging
+
+    root, staged = project_with_source(tmp_path)
+    monkeypatch.setattr(
+        cli.coverage, "review_coverage",
+        lambda *a, **k: coverage.CoverageVerdict(True, "Accounted for.", "m", "f" * 64),
+    )
+    _records, meta = read_staging(staged)
+    # A file whose stored fingerprint disagrees with its own facts is refused
+    # outright now, so the honest check is that what we write matches the
+    # recomputed value rather than whatever the file happened to carry.
+    cli._model_accepts_coverage(  # noqa: SLF001
+        cli._load_config(SimpleNamespace(root=root)), staged, meta
+    )
+
+    _records, after = read_staging(staged)
+    block = after["coverage"]
+    assert block["approval"]["coverage_block_fingerprint"] == (
+        coverage_block_fingerprint(block)
+    )
+
+
+def test_a_block_the_gate_would_reject_is_never_paid_for(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Validate first, spend second.
+
+    A stale block fingerprint is free to detect and fatal either way. Finding
+    out after the call meant paying for a verdict, writing it into the file,
+    and *then* refusing — leaving a staging file that could neither be
+    promoted nor re-approved without hand-deleting the approval it had just
+    been given.
+    """
+    from japanese_anki import cli
+    from japanese_anki.staging import StagingError, read_staging
+
+    root, staged = project_with_source(tmp_path)
+    staged.write_text(
+        staged.read_text(encoding="utf-8").replace("row 1", "row 1 EDITED"),
+        encoding="utf-8",
+    )
+    calls: list[object] = []
+    monkeypatch.setattr(
+        cli.coverage, "review_coverage",
+        lambda *a, **k: calls.append(1) or coverage.CoverageVerdict(True, "ok", "m", "f"),
+    )
+    _records, meta = read_staging(staged)
+
+    with pytest.raises(StagingError, match="coverage-block-stale"):
+        cli._model_accepts_coverage(  # noqa: SLF001
+            cli._load_config(SimpleNamespace(root=root)), staged, meta
+        )
+
+    assert calls == [], "nothing was sent"
+    assert "approval" not in staged.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("reason", ["no", "on", "12:30", "y"], ids=list("abcd"))
+def test_an_approval_survives_both_yaml_dialects(tmp_path: Path, reason: str) -> None:
+    """The hazard `rewrite_staging` documents, arriving from the other side.
+
+    This writes through ruamel (YAML 1.2) into a file `read_staging` reads back
+    with PyYAML (YAML 1.1). Bare, `no` becomes False, `on` becomes True and
+    `12:30` becomes 750 — so an approval whose reason is one of those words
+    would fail the very check it was written to satisfy, and the file could not
+    be promoted or re-approved without hand-deleting it. Every string is
+    emitted double-quoted so the round trip is the identity.
+    """
+    from japanese_anki.staging import read_staging
+
+    path = tmp_path / "lesson.pdf.yaml"
+    path.write_text(STAGING, encoding="utf-8")
+
+    record_coverage_approval(path, {"authority": "model", "reason": reason})
+
+    _records, meta = read_staging(path)
+    assert meta["coverage"]["approval"]["reason"] == reason

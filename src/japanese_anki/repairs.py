@@ -62,14 +62,11 @@ AUTOMATIC_FIELDS = frozenset(
 )
 IDENTITY_FIELDS = frozenset({"id", "expression", "reading"})
 STRUCTURED_RECORD_FIELDS = frozenset({"examples", "source"})
-SCHEMA_VERSION = 1
-ABSENT_REVISION = "absent"
 
 _SLUG = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 _VERSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 _PATH = re.compile(r"(?P<field>[a-z_]+)(?:\[(?P<index>\d+)\]\.(?P<nested>[a-z_]+))?\Z")
 _PATTERN = re.compile(r"(?P<field>[a-z_]+)(?:\[\*\]\.(?P<nested>[a-z_]+))?\Z")
-_SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
 
 class RepairError(JankiError):

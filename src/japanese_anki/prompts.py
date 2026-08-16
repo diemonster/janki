@@ -74,12 +74,33 @@ def load(root: Path, name: str) -> str:
     """
     path = path_for(root, name)
     try:
-        return path.read_text(encoding="utf-8")
+        # Bytes, then decode. `read_text` translates CRLF to LF, which would
+        # make "sent byte for byte" false on any checkout with `core.autocrlf`
+        # on and — worse — make the recorded sha-256 match no version of the
+        # file in `git log prompts/`.
+        raw = path.read_bytes()
     except OSError as exc:
         raise PromptError(
             f"Could not read the prompt at {path}: {exc}. Every model call sends "
             "one, so janki will not run a pass without it."
         ) from exc
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise PromptError(
+            f"The prompt at {path} is not UTF-8: {exc}. Prompts are Markdown "
+            "and are sent as written, so janki will not guess an encoding."
+        ) from exc
+    if not text.strip():
+        # An empty file is the failure this module exists to prevent, arriving
+        # by a different door: a truncated or emptied prompt would buy a full
+        # paid pass with no instructions and report success.
+        raise PromptError(
+            f"The prompt at {path} is empty. A pass with no instructions costs "
+            "the same as one with them and returns something that looks like an "
+            "answer, so janki will not run it."
+        )
+    return text
 
 
 def fingerprint(text: str) -> str:

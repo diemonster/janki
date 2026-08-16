@@ -10,7 +10,6 @@ import secrets
 import stat
 import tempfile
 from collections.abc import Iterable, Sequence
-from contextlib import ExitStack
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -119,25 +118,6 @@ def exclusive_path_lock(path: Path) -> Iterable[None]:
                 yield
             finally:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-
-
-@contextlib.contextmanager
-def exclusive_path_locks(paths: Iterable[Path]) -> Iterable[None]:
-    """Lock several targets in one canonical order.
-
-    A transaction that touches records, staging, an archive, and a journal must
-    never choose a different lock order from another transaction. Real paths
-    are deduplicated before sorting, so aliases cannot acquire the same lock
-    twice or reverse two locks.
-    """
-    targets = sorted(
-        {Path(os.path.realpath(path)) for path in paths},
-        key=lambda path: os.fsencode(path),
-    )
-    with ExitStack() as stack:
-        for target in targets:
-            stack.enter_context(exclusive_path_lock(target))
-        yield
 
 
 @dataclass(frozen=True, slots=True)
@@ -358,88 +338,6 @@ def atomic_write_text_bound(
         raise
     except OSError as exc:
         raise DataError(f"Could not write {target}: {exc.strerror or exc}") from exc
-    finally:
-        os.close(directory_fd)
-
-
-def unlink_path_bound(
-    path: Path,
-    *,
-    expected_revision: str,
-    expected_identity: tuple[int, int] | None = None,
-) -> None:
-    """Remove one exact regular file without following a changed path."""
-    target = Path(path).absolute()
-    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
-    directory_flags |= getattr(os, "O_NOFOLLOW", 0)
-    try:
-        directory_fd = os.open(target.parent, directory_flags)
-    except OSError as exc:
-        raise DataError(f"Could not open target directory for {target}: {exc}") from exc
-    try:
-        try:
-            descriptor = os.open(
-                target.name,
-                os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
-                dir_fd=directory_fd,
-            )
-        except OSError as exc:
-            raise DataError(f"Bound removal target changed: {target}") from exc
-        try:
-            details = os.fstat(descriptor)
-            if not stat.S_ISREG(details.st_mode):
-                raise DataError(f"Bound removal target is not regular: {target}")
-            if expected_identity is not None and (
-                details.st_dev,
-                details.st_ino,
-            ) != expected_identity:
-                raise DataError(f"Bound removal target changed identity: {target}")
-            digest = hashlib.sha256()
-            while chunk := os.read(descriptor, 1024 * 1024):
-                digest.update(chunk)
-            if digest.hexdigest() != expected_revision:
-                raise DataError(f"Bound removal target changed content: {target}")
-            after_hash = os.fstat(descriptor)
-            if (
-                after_hash.st_dev,
-                after_hash.st_ino,
-                after_hash.st_size,
-                after_hash.st_mtime_ns,
-            ) != (
-                details.st_dev,
-                details.st_ino,
-                details.st_size,
-                details.st_mtime_ns,
-            ):
-                raise DataError(f"Bound removal target changed content: {target}")
-        finally:
-            os.close(descriptor)
-        try:
-            final_details = os.stat(
-                target.name,
-                dir_fd=directory_fd,
-                follow_symlinks=False,
-            )
-        except OSError as exc:
-            raise DataError(f"Bound removal target changed: {target}") from exc
-        if (
-            final_details.st_dev,
-            final_details.st_ino,
-            final_details.st_size,
-            final_details.st_mtime_ns,
-        ) != (
-            details.st_dev,
-            details.st_ino,
-            details.st_size,
-            details.st_mtime_ns,
-        ):
-            raise DataError(f"Bound removal target changed before removal: {target}")
-        os.unlink(target.name, dir_fd=directory_fd)
-        os.fsync(directory_fd)
-    except DataError:
-        raise
-    except OSError as exc:
-        raise DataError(f"Could not remove {target}: {exc.strerror or exc}") from exc
     finally:
         os.close(directory_fd)
 

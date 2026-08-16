@@ -33,6 +33,7 @@ from typing import Any
 
 import yaml
 from ruamel.yaml import YAML, YAMLError
+from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 
 from japanese_anki.errors import JankiError
 from japanese_anki.io import (
@@ -365,10 +366,24 @@ def _validate_prompt_provenance(
             )
 
 
-def require_resolved_coverage(meta: Mapping[str, Any]) -> None:
-    """Refuse an unresolved M7.4 coverage block; allow legacy files."""
+def validate_coverage_facts(
+    meta: Mapping[str, Any],
+) -> tuple[Mapping[str, Any], str, str, str] | None:
+    """Everything about a coverage block except whether anyone accepted it.
+
+    Returns the facts an acceptance check would need when one is required, or
+    ``None`` when the block needs no acceptance at all (a prose-only
+    extraction) or carries no coverage.
+
+    Split out so a caller that is about to *buy* an acceptance can find out
+    first whether the block is even valid. Running it afterwards meant a
+    staging file with a stale fingerprint or malformed provenance — all of it
+    detectable offline and for free — spent a paid model call, recorded an
+    approval, and only then refused, leaving a file nobody could promote
+    without hand-deleting the approval it had just written.
+    """
     if "coverage" not in meta:
-        return
+        return None
     block = meta["coverage"]
     if not isinstance(block, Mapping):
         raise StagingError("[coverage-block-invalid] coverage must be a mapping")
@@ -407,8 +422,26 @@ def require_resolved_coverage(meta: Mapping[str, Any]) -> None:
             "[coverage-block-invalid] coverage blocking state does not match its status"
         )
     if not should_block:
-        return
+        return None
+    # The three values the acceptance check needs, already derived and already
+    # validated here. Returned rather than recomputed so the two halves cannot
+    # disagree about which block they are talking about.
+    return block, source_fingerprint, fingerprint, status
 
+
+def require_resolved_coverage(meta: Mapping[str, Any]) -> None:
+    """Refuse an unresolved M7.4 coverage block; allow legacy files."""
+    pending = validate_coverage_facts(meta)
+    if pending is not None:
+        _require_acceptance(*pending)
+
+
+def _require_acceptance(
+    block: Mapping[str, Any],
+    source_fingerprint: str,
+    fingerprint: str,
+    status: str,
+) -> None:
     approval = block.get("approval")
     if not isinstance(approval, Mapping):
         raise StagingError(
@@ -740,11 +773,26 @@ def record_coverage_approval(path: Path, approval: Mapping[str, Any]) -> Path:
 
 
 def _plain(value: Any) -> Any:
-    """Ordinary containers, so ruamel renders a block rather than a repr."""
+    """Ordinary containers, and strings quoted so both dialects agree.
+
+    The hazard `rewrite_staging` documents, arriving from the other side. This
+    writes through ruamel (YAML 1.2) into a file `read_staging` reads back with
+    PyYAML (YAML 1.1), and the two disagree about bare words: 1.1 reads ``no``
+    as ``False``, ``on`` as ``True`` and ``12:30`` as the sexagesimal integer
+    750. A reason of "no", or a section slug of ``on`` inside the repeated
+    disposition lists — both of which the field rules permit — would be written
+    bare and read back as something else, failing the very approval just
+    recorded and wedging the file until someone deleted it by hand.
+
+    So every string is emitted double-quoted. Round-tripping through both
+    dialects is then the identity, whatever the text says.
+    """
     if isinstance(value, Mapping):
         return {key: _plain(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
         return [_plain(item) for item in value]
+    if isinstance(value, str):
+        return DoubleQuotedScalarString(value)
     return value
 
 
