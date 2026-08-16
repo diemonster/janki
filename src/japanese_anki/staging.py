@@ -104,6 +104,7 @@ META_KEYS: tuple[str, ...] = (
 )
 
 _RECORDS_KEY = "records"
+_COVERAGE_KEY = "coverage"
 
 # ``read_staging`` parses by suffix (via ``load_structured``), so a staging file
 # written under any other suffix would be write-only: the write succeeds and
@@ -137,6 +138,15 @@ _COVERAGE_REQUIRED = {
     *_COVERAGE_MISMATCHES,
 }
 _UNIT_DISPOSITIONS = {"candidate", "duplicate", "non-vocabulary", "unreadable"}
+#: Who may accept an unmeasured coverage block.
+#:
+#: ``repository-owner`` is a person deciding. ``model`` is `janki promote
+#: --accept-coverage` recording that a model read the page and the record
+#: together and found the record complete — the owner's decision moved up a
+#: level, from "is this page accounted for" to "is a model allowed to answer
+#: that". The distinction is kept in the data because a card promoted on a
+#: model's word should say so forever.
+COVERAGE_AUTHORITIES = frozenset({"repository-owner", "model"})
 _SECTION = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 _PROMPT_PROVENANCE_FIELDS = {
     "source_sha256",
@@ -405,7 +415,7 @@ def require_resolved_coverage(meta: Mapping[str, Any]) -> None:
             f"[coverage-unresolved] coverage is {status}; repository-owner approval "
             f"must name source {source_fingerprint} and coverage block {fingerprint}"
         )
-    allowed = {
+    required = {
         "authority",
         "source_fingerprint",
         "coverage_block_fingerprint",
@@ -415,16 +425,31 @@ def require_resolved_coverage(meta: Mapping[str, Any]) -> None:
         "reason",
         "approved_at",
     }
-    if set(approval) != allowed:
-        raise StagingError(
-            "[coverage-approval-invalid] coverage approval fields do not match the "
-            "required owner-approval schema"
-        )
-    if approval.get("authority") != "repository-owner":
+    authority = approval.get("authority")
+    if authority not in COVERAGE_AUTHORITIES:
         raise StagingError(
             "[coverage-approval-invalid] coverage approval authority must be "
-            "repository-owner"
+            + " or ".join(sorted(COVERAGE_AUTHORITIES))
         )
+    # A model's approval carries who answered and what it was asked, because
+    # those are the two things that make it reviewable later: the same page can
+    # be accepted by one prompt and refused by the next, and a reader deciding
+    # whether to trust this line needs to know which asking produced it. An
+    # owner's approval carries neither — a person is their own provenance.
+    if authority == "model":
+        required |= {"model", "prompt_fingerprint"}
+    if set(approval) != required:
+        raise StagingError(
+            "[coverage-approval-invalid] coverage approval fields do not match the "
+            f"schema for a {authority} approval"
+        )
+    if authority == "model":
+        for name in ("model", "prompt_fingerprint"):
+            value = approval.get(name)
+            if not isinstance(value, str) or not value.strip():
+                raise StagingError(
+                    f"[coverage-approval-invalid] a model approval needs {name}"
+                )
     if (
         approval.get("source_fingerprint") != source_fingerprint
         or approval.get("coverage_block_fingerprint") != fingerprint
@@ -678,6 +703,49 @@ def rewrite_staging(path: Path, records: Sequence[VocabularyRecord]) -> Path:
     _parser().dump(document, buffer)
     atomic_write_text(path, buffer.getvalue())
     return path
+
+
+@_path_locked
+def record_coverage_approval(path: Path, approval: Mapping[str, Any]) -> Path:
+    """Write a coverage approval into a staging file, changing nothing else.
+
+    Through the same round-trip :func:`rewrite_staging` uses, and for the same
+    reason: a staging file under review holds work that exists nowhere else,
+    and a load-then-dump through the record schema would silently drop the
+    reviewer's comments and any key janki has no field for. This sets exactly
+    one key — ``coverage.approval`` — and leaves every byte around it alone.
+
+    Refuses a file that already carries one. An approval is a decision about a
+    specific coverage block, and quietly replacing it would let a second run
+    overwrite a person's recorded reasoning with a model's.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise StagingError(f"No staging file to approve at {path}.")
+    document = _load_document(path)
+    block = document.get(_COVERAGE_KEY)
+    if not isinstance(block, MutableMapping):
+        raise StagingError(f"{path} carries no coverage block to approve.")
+    if "approval" in block:
+        raise StagingError(
+            f"{path} already carries a coverage approval. Remove it first if you "
+            "mean to replace the recorded decision."
+        )
+    block["approval"] = _plain(approval)
+
+    buffer = io.StringIO()
+    _parser().dump(document, buffer)
+    atomic_write_text(path, buffer.getvalue())
+    return path
+
+
+def _plain(value: Any) -> Any:
+    """Ordinary containers, so ruamel renders a block rather than a repr."""
+    if isinstance(value, Mapping):
+        return {key: _plain(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain(item) for item in value]
+    return value
 
 
 @_path_locked

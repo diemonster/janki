@@ -113,12 +113,27 @@ below is what is left, and it is the loop every other project already uses.*
   or `reading`. These fields determine Anki identity and review history.
 - The user owns consent to send their own material to a paid model
   (`janki extract` asks, and `--yes` is how they answer in advance),
-  redistribution approval for owner-provided material, staging coverage
-  acceptance, ambiguous new-identity resolution, existing-identity migration,
-  and accepted-risk approval. An agent must not infer, generate, grant, or
-  widen one of these decisions. **It must not answer an approval prompt as the
-  user** — which is why the extract gate refuses on a non-TTY rather than
-  proceeding.
+  redistribution approval for owner-provided material, ambiguous new-identity
+  resolution, existing-identity migration, and accepted-risk approval. An agent
+  must not infer, generate, grant, or widen one of these decisions. **It must
+  not answer an approval prompt as the user** — which is why the extract gate
+  refuses on a non-TTY rather than proceeding.
+- **Staging coverage acceptance is the exception, decided 2026-08-16.** It was
+  on the list above until the owner measured what it cost: since M8.4 deleted
+  oracles every extraction lands `unmeasured`, and the approval block repeats
+  every source unit's facts — 168 lines of YAML per page, hand-transcribed,
+  with the actual judgment buried in six of them. The owner's decision moved up
+  a level: not "is this page accounted for" but "may a model answer that".
+  `janki promote --accept-coverage` runs `prompts/approve-coverage.md`, shows
+  the model the page itself and janki's account of it, and records the verdict
+  with `authority: model`, the model id and the prompt's fingerprint — so a
+  card promoted on a model's word says so permanently and a reader can tell
+  which asking produced it. A refusal stops the promote. The flag is opt-in;
+  without it the approval is still the owner's to write.
+- That exception is narrow on purpose, and it is **not** the review subsystem
+  returning. Coverage is a count — is everything on the page in the record —
+  which DESIGN.md puts in janki's business. The moment a prompt asks a model
+  whether the *Japanese* is any good, it has become the thing M8.2 deleted.
 - A broad request to finish work is not an approval for any of the above. If
   exact approval is absent, stop that route or use material that does not need
   it.

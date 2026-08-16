@@ -3814,7 +3814,40 @@ Files: `hardening.py`, `hardening_replay.py`, `cli.py`, `Makefile`,
 `tests/test_hardening_replay.py`, `tests/test_hardening.py`,
 `tests/test_inputs.py`, `tests/test_effort_call_sites.py`.
 
-### [ ] M8.5 Real sources through the real pipeline
+### [~] M8.5 Real sources through the real pipeline
+
+*Started 2026-08-16. `transitivity` and `imported_from` are done (701000b).
+One source is through end to end; five remain.*
+
+**The first real page found two things, and neither was where I expected.**
+`Kanji Review 104 Week11.pdf` extracted cleanly — 30 candidates, 0 validation
+errors — and then `promote` refused it: coverage is `unmeasured`, and since
+M8.4 deleted oracles that is now the only outcome a table extraction can have.
+The approval that clears it repeats every source unit's facts: **168 lines of
+YAML per page**, hand-written, with the judgment that actually matters living
+in about six of them. That is transcription wearing the costume of review, and
+it would have been paid five more times.
+
+**Decided by the owner: a model may answer it.** `promote --accept-coverage`
+sends `prompts/approve-coverage.md`, the page itself (the same base64 block
+extraction was given, re-prepared from the inbox and fingerprint-checked
+against what the extraction recorded), and janki's account of the page. The
+verdict is written with `authority: model`, the model id and the prompt's
+fingerprint. This overturns a standing AGENTS.md rule; the reasoning, and the
+line that keeps it from being M8.2's review subsystem returning, are recorded
+there.
+
+*The first run of the checker refused the page — and it was my prompt that was
+wrong, not the extraction.* It reported the red sentence at the bottom
+(体温が38度以上の方は…) as missing from the record. True, and permitted:
+`extract-auto.md` asks for exhaustive `source_units` from **lists and tables**
+and says prose selection is explicitly not exhaustive, so a sentence has no
+entry of its own and words drawn from it cite it as context. My checker
+demanded everything on the page, which would have refused every page carrying
+running text, forever. Corrected to state both standards; the same page then
+approved with a reason naming the distinction. Two prompts disagreeing about a
+contract is a failure mode worth remembering — the fix is in the file, and the
+test now pins that the checker knows prose is not exhaustive.
 
 Replaces the cancelled pilot program (M7.6B, M7.6C, M7.7, M7.W — stamped
 below). The goal survives without the harness: run each collected real source

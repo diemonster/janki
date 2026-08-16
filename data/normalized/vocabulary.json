@@ -2330,6 +2330,43 @@
     }
   },
   {
+    "id": "word:一度:いちど",
+    "expression": "一度",
+    "reading": "いちど",
+    "furigana": "",
+    "romaji": "ichido",
+    "meanings": [
+      "once",
+      "one time"
+    ],
+    "part_of_speech": "noun, adverb",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "一度",
+        "example": "もう一度こちらにサインしてください。",
+        "provisional_fields": "meanings:5b9186c65c7e,part_of_speech:c14fd3588fd7",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:一杯:いっぱい",
     "expression": "一杯",
     "reading": "いっぱい",
@@ -2386,6 +2423,42 @@
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>いっぱい</div><div>A lot, a full container</div></span>",
         "anki_Add Reverse": "y",
         "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[1].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:上映中:じょうえいちゅう",
+    "expression": "上映中",
+    "reading": "じょうえいちゅう",
+    "furigana": "",
+    "romaji": "joueichuu",
+    "meanings": [
+      "now showing (a film)",
+      "currently screening"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "じょうえいちゅう",
+        "provisional_fields": "meanings:73c216bd84e4,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -2576,6 +2649,42 @@
     }
   },
   {
+    "id": "word:今:いま",
+    "expression": "今",
+    "reading": "いま",
+    "furigana": "",
+    "romaji": "ima",
+    "meanings": [
+      "now",
+      "at present"
+    ],
+    "part_of_speech": "noun, adverb",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "いま",
+        "provisional_fields": "meanings:175971d8dc66,part_of_speech:c14fd3588fd7",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:今日:きょう",
     "expression": "今日",
     "reading": "きょう",
@@ -2629,6 +2738,153 @@
         "anki_Front": "<div>今日</div>",
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>きょう</div><div>Today</div></span>",
         "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:以上:いじょう",
+    "expression": "以上",
+    "reading": "いじょう",
+    "furigana": "",
+    "romaji": "ijou",
+    "meanings": [
+      "or more",
+      "or above"
+    ],
+    "part_of_speech": "noun, suffix",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "以上(いじょう) = X or above",
+        "example": "体温が38度以上の方は病院に来る前にお電話ください。",
+        "provisional_fields": "meanings:c76d90f58b2b,part_of_speech:2db5cb0907a0",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:休み:やすみ",
+    "expression": "休み",
+    "reading": "やすみ",
+    "furigana": "",
+    "romaji": "yasumi",
+    "meanings": [
+      "holiday",
+      "day off",
+      "closed"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "休み",
+        "provisional_fields": "meanings:9c4cf4b4e46e,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:会う:あう",
+    "expression": "会う",
+    "reading": "あう",
+    "furigana": "",
+    "romaji": "au",
+    "meanings": [
+      "to meet",
+      "to see (a person)"
+    ],
+    "part_of_speech": "verb (godan, intransitive)",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "あいました",
+        "inclusion_reason": "Prompt gives the past polite form あいました; card uses the dictionary form.",
+        "provisional_fields": "meanings:170836f6afe2,part_of_speech:1db9001e5c28",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:体温:たいおん",
+    "expression": "体温",
+    "reading": "たいおん",
+    "furigana": "",
+    "romaji": "taion",
+    "meanings": [
+      "body temperature"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "体温(たいおん) = body temperature",
+        "example": "体温が38度以上の方は病院に来る前にお電話ください。",
+        "provisional_fields": "meanings:06e47419e04a,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -2863,6 +3119,78 @@
         "anki_Front": "<div>元気</div>",
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>げんき</div><div>Healthy, vigor, spirits, energy</div></span>",
         "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:先生:せんせい",
+    "expression": "先生",
+    "reading": "せんせい",
+    "furigana": "",
+    "romaji": "sensei",
+    "meanings": [
+      "teacher",
+      "doctor (as a title)"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "田中先生*",
+        "inclusion_reason": "Underlined item is 田中先生; the card covers 先生 (田中 is a surname). The page notes that doctors are also called 先生.",
+        "provisional_fields": "meanings:f7019c84a678,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:先週:せんしゅう",
+    "expression": "先週",
+    "reading": "せんしゅう",
+    "furigana": "",
+    "romaji": "senshuu",
+    "meanings": [
+      "last week"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "せんしゅう",
+        "provisional_fields": "meanings:42d0527b6306,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -3150,6 +3478,81 @@
     }
   },
   {
+    "id": "word:前:まえ",
+    "expression": "前",
+    "reading": "まえ",
+    "furigana": "",
+    "romaji": "mae",
+    "meanings": [
+      "before",
+      "in front of"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "体温が38度以上の方は病院に来る前にお電話ください。",
+        "inclusion_reason": "Underlined for reading practice; used here in the ～る前に pattern.",
+        "example": "病院に来る前にお電話ください。",
+        "provisional_fields": "meanings:50cc641855bb,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:勉強:べんきょう",
+    "expression": "勉強",
+    "reading": "べんきょう",
+    "furigana": "",
+    "romaji": "benkyou",
+    "meanings": [
+      "study",
+      "studying"
+    ],
+    "part_of_speech": "noun, suru-verb",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "勉強",
+        "example": "来年大学院でビジネスの勉強をするつもりです。",
+        "provisional_fields": "meanings:4acdbf0647a9,part_of_speech:69ad9b062648",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:勉強する:べんきょうする",
     "expression": "勉強する",
     "reading": "べんきょうする",
@@ -3199,6 +3602,78 @@
         "page": "1",
         "context": "火曜日 友達と晩ご飯を食べるつもりです。 日本語を勉強するつもりです。",
         "inclusion_reason": "High-frequency suru verb in the plan cells.",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:午前:ごぜん",
+    "expression": "午前",
+    "reading": "ごぜん",
+    "furigana": "",
+    "romaji": "gozen",
+    "meanings": [
+      "a.m.",
+      "morning"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "午前（9:30〜12:00）",
+        "provisional_fields": "meanings:48a5e27a3409,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:午後:ごご",
+    "expression": "午後",
+    "reading": "ごご",
+    "furigana": "",
+    "romaji": "gogo",
+    "meanings": [
+      "p.m.",
+      "afternoon"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "午後（13:30〜16:00）",
+        "provisional_fields": "meanings:ac8863e57bc7,part_of_speech:ee6cded62768",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
@@ -3325,6 +3800,112 @@
         "anki_Front": "<div>夏休み</div>",
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>なつやすみ</div><div>Summer break, summer vacation</div></span>",
         "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:大学院:だいがくいん",
+    "expression": "大学院",
+    "reading": "だいがくいん",
+    "furigana": "",
+    "romaji": "daigakuin",
+    "meanings": [
+      "graduate school"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "だいがくいん",
+        "example": "来年大学院でビジネスの勉強をするつもりです。",
+        "provisional_fields": "meanings:761f24715d0d,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:天気:てんき",
+    "expression": "天気",
+    "reading": "てんき",
+    "furigana": "",
+    "romaji": "tenki",
+    "meanings": [
+      "weather"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "天気",
+        "provisional_fields": "meanings:a620f00b66c5,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:子:こ",
+    "expression": "子",
+    "reading": "こ",
+    "furigana": "",
+    "romaji": "ko",
+    "meanings": [
+      "child"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "子*",
+        "provisional_fields": "meanings:31eec9be1471,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -3598,6 +4179,44 @@
         "anki_Front": "<div>店</div>",
         "anki_Back": "<div>みせ</div><div>Store</div>",
         "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:度:ど",
+    "expression": "度",
+    "reading": "ど",
+    "furigana": "",
+    "romaji": "do",
+    "meanings": [
+      "degree (temperature)",
+      "counter for degrees"
+    ],
+    "part_of_speech": "counter",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "体温が38度以上の方は病院に来る前にお電話ください。",
+        "inclusion_reason": "Underlined for reading practice in the notice; useful counter for temperature.",
+        "example": "体温が38度以上の方は病院に来る前にお電話ください。",
+        "provisional_fields": "meanings:805df1778938,part_of_speech:ebd7de7795d3",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -3963,6 +4582,43 @@
     }
   },
   {
+    "id": "word:方:かた",
+    "expression": "方",
+    "reading": "かた",
+    "furigana": "",
+    "romaji": "kata",
+    "meanings": [
+      "person (polite)"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "体温が38度以上の方は病院に来る前にお電話ください。",
+        "inclusion_reason": "Underlined for reading practice; polite reading かた contrasts with ほう.",
+        "example": "体温が38度以上の方は病院に来る前にお電話ください。",
+        "provisional_fields": "meanings:a5bb33e47a8d,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:日本語:にほんご",
     "expression": "日本語",
     "reading": "にほんご",
@@ -4109,6 +4765,42 @@
     }
   },
   {
+    "id": "word:時間:じかん",
+    "expression": "時間",
+    "reading": "じかん",
+    "furigana": "",
+    "romaji": "jikan",
+    "meanings": [
+      "time",
+      "hour"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "診察*時間",
+        "provisional_fields": "meanings:e36e15cd7032,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:晩ご飯:ばんごはん",
     "expression": "晩ご飯",
     "reading": "ばんごはん",
@@ -4222,6 +4914,77 @@
     }
   },
   {
+    "id": "word:月曜日:げつようび",
+    "expression": "月曜日",
+    "reading": "げつようび",
+    "furigana": "",
+    "romaji": "getsuyoubi",
+    "meanings": [
+      "Monday"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "月曜日",
+        "provisional_fields": "meanings:2b2da7c7b06e,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:有名:ゆうめい",
+    "expression": "有名",
+    "reading": "ゆうめい",
+    "furigana": "",
+    "romaji": "yuumei",
+    "meanings": [
+      "famous",
+      "well-known"
+    ],
+    "part_of_speech": "na-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "ゆうめい",
+        "provisional_fields": "meanings:da7ef6e6638c,part_of_speech:b772b84f04b0",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:来る:くる",
     "expression": "来る",
     "reading": "くる",
@@ -4285,6 +5048,184 @@
         "sid": "1154899103",
         "deck": "Anki Test - Top 20 Verbs",
         "card_state": "locked,new"
+      }
+    }
+  },
+  {
+    "id": "word:来年:らいねん",
+    "expression": "来年",
+    "reading": "らいねん",
+    "furigana": "",
+    "romaji": "rainen",
+    "meanings": [
+      "next year"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "来年",
+        "example": "来年大学院でビジネスの勉強をするつもりです。",
+        "provisional_fields": "meanings:693dd6da2a16,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:歌手:かしゅ",
+    "expression": "歌手",
+    "reading": "かしゅ",
+    "furigana": "",
+    "romaji": "kashu",
+    "meanings": [
+      "singer"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "歌手",
+        "provisional_fields": "meanings:8b07f14038f3,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:水曜日:すいようび",
+    "expression": "水曜日",
+    "reading": "すいようび",
+    "furigana": "",
+    "romaji": "suiyoubi",
+    "meanings": [
+      "Wednesday"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "水曜日",
+        "provisional_fields": "meanings:d8baa7812e8a,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:火曜日:かようび",
+    "expression": "火曜日",
+    "reading": "かようび",
+    "furigana": "",
+    "romaji": "kayoubi",
+    "meanings": [
+      "Tuesday"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "火曜日",
+        "provisional_fields": "meanings:b314cd8a6350,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:病院:びょういん",
+    "expression": "病院",
+    "reading": "びょういん",
+    "furigana": "",
+    "romaji": "byouin",
+    "meanings": [
+      "hospital"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "東京病院",
+        "inclusion_reason": "Underlined item is 東京病院; the card covers the vocabulary word 病院 (東京 is a place name).",
+        "example": "体温が38度以上の方は病院に来る前にお電話ください。",
+        "provisional_fields": "meanings:7240f0e9bd9c,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -5055,6 +5996,41 @@
     }
   },
   {
+    "id": "word:診察:しんさつ",
+    "expression": "診察",
+    "reading": "しんさつ",
+    "furigana": "",
+    "romaji": "shinsatsu",
+    "meanings": [
+      "medical examination"
+    ],
+    "part_of_speech": "noun, suru-verb",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "*診察(しんさつ) = medical examination",
+        "provisional_fields": "meanings:1d7281c5b45d,part_of_speech:69ad9b062648",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
     "id": "word:話す:はなす",
     "expression": "話す",
     "reading": "はなす",
@@ -5410,6 +6386,44 @@
         "anki_Front": "<div>離す</div>",
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>はなす</div><div>To separate, release</div></span>",
         "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:電話:でんわ",
+    "expression": "電話",
+    "reading": "でんわ",
+    "furigana": "",
+    "romaji": "denwa",
+    "meanings": [
+      "telephone",
+      "phone call"
+    ],
+    "part_of_speech": "noun, suru-verb",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [],
+    "conjugations": {},
+    "tags": [],
+    "usage_notes": "",
+    "audio": "",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "Kanji Review 104 Week11.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "Kanji Review 104 Week11.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "体温が38度以上の方は病院に来る前にお電話ください。",
+        "inclusion_reason": "Underlined as お電話; card covers the base word 電話.",
+        "example": "病院に来る前にお電話ください。",
+        "provisional_fields": "meanings:3b92ac97167b,part_of_speech:69ad9b062648",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },

@@ -14,6 +14,7 @@ from japanese_anki import (
     audio_cmd,
     claude_client,
     codex_client,
+    coverage,
     enrich,
     extract,
     jpdb,
@@ -63,8 +64,10 @@ from japanese_anki.staging import (
     STAGING_SUFFIXES,
     StagingError,
     check_rewritable,
+    coverage_acceptance_requirements,
     prune_staging,
     read_staging,
+    record_coverage_approval,
     rewrite_staging,
     write_staging,
 )
@@ -2819,6 +2822,101 @@ def command_repair(args: argparse.Namespace) -> int:
     return 0
 
 
+def _durable_source(config: ProjectConfig, name: str) -> Path:
+    """The inbox file a staging file names, found by basename.
+
+    Basename because that is what staging records — an absolute path would be
+    stale in any other clone. The inbox refuses two files under one basename
+    (`inputs._durable_namesakes`), which is what makes a bare name enough to
+    find exactly one file here.
+    """
+    root = _durable_inbox_root(config)
+    matches = [
+        path
+        for path in root.rglob("*")
+        if path.is_file() and path.name.casefold() == name.casefold()
+    ]
+    if not matches:
+        raise PromoteError(
+            f"Could not find {name} under {root}. Coverage is checked against "
+            "the page itself, so the source has to still be in the inbox."
+        )
+    if len(matches) > 1:
+        listed = ", ".join(str(path) for path in sorted(matches))
+        raise PromoteError(f"More than one {name} under {root}: {listed}.")
+    return matches[0]
+
+
+def _model_accepts_coverage(
+    config: ProjectConfig, path: Path, meta: dict[str, Any]
+) -> bool:
+    """Show a model the page and janki's account of it, and record the verdict.
+
+    The owner's decision, moved up a level: they are not deciding whether this
+    page is accounted for, they are deciding that a model may decide it. So the
+    verdict is written down with the model id and the prompt's fingerprint
+    beside it, and a refusal stops the promote with the model's own words
+    rather than a code.
+    """
+    block = meta.get("coverage")
+    if not isinstance(block, dict):
+        print(
+            f"{path.name} carries no coverage block, so there is nothing to "
+            "accept; promote it without --accept-coverage.",
+            file=sys.stderr,
+        )
+        return False
+
+    source_name = str(meta.get("source_file") or "").strip()
+    if not source_name:
+        raise PromoteError(f"{path.name} does not say which source it was read from.")
+    origin = _durable_source(config, source_name)
+    [prepared] = prepare_inputs(
+        [origin], config.scan_inbox, inbox_root=_durable_inbox_root(config)
+    )
+    recorded = str(block.get("source_fingerprint") or "")
+    if prepared.source_sha256 != recorded:
+        raise PromoteError(
+            f"{origin} is not the file this staging was read from: it now "
+            f"fingerprints {prepared.source_sha256[:12]}, and the extraction "
+            f"recorded {recorded[:12]}. Checking coverage against different "
+            "bytes would answer a question about the wrong page."
+        )
+
+    model = config.extract_model
+    print(f"Checking {source_name} against its coverage record with {model}...")
+    verdict = coverage.review_coverage(
+        prepared,
+        block,
+        model=model,
+        instructions=prompts.load(config.root, "approve-coverage"),
+    )
+    print(f"  {verdict.reason}")
+    if not verdict.approved:
+        print(
+            f"{model} did not accept the coverage for {source_name}. Nothing was "
+            "promoted — fix the extraction, or approve it yourself in the "
+            "staging file.",
+            file=sys.stderr,
+        )
+        return False
+
+    record_coverage_approval(
+        path,
+        {
+            "authority": "model",
+            "model": verdict.model,
+            "prompt_fingerprint": verdict.prompt_fingerprint,
+            "source_fingerprint": block["source_fingerprint"],
+            "coverage_block_fingerprint": block["coverage_block_fingerprint"],
+            **coverage_acceptance_requirements(block),
+            "reason": verdict.reason,
+            "approved_at": date.today().isoformat(),
+        },
+    )
+    return True
+
+
 def command_promote(args: argparse.Namespace) -> int:
     """Move a reviewed staging file's records into the normalized collection.
 
@@ -2842,6 +2940,14 @@ def command_promote(args: argparse.Namespace) -> int:
         )
 
     records, meta = read_staging(path)
+    if args.accept_coverage:
+        # Before `check_coverage`, because it is what makes that gate pass.
+        # Writes the approval into the staging file and re-reads, so the file
+        # on disk is the record — an approval held only in memory would let a
+        # promote succeed leaving nothing behind that says why.
+        if not _model_accepts_coverage(config, path, meta):
+            return 1
+        records, meta = read_staging(path)
     # Coverage is an owner-review gate. Check it before a reading client is
     # created and before records, ledger, archive, or staging content can move.
     # A file written before M7.4 has no block and remains valid.
@@ -4321,6 +4427,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     promote_parser.add_argument(
         "file", type=_path, metavar="FILE", help="The staging file to promote."
+    )
+    promote_parser.add_argument(
+        "--accept-coverage",
+        action="store_true",
+        help=(
+            "Let the extract model check this page's coverage record against "
+            "the page itself and record its verdict, instead of approving the "
+            "block by hand. A paid call; a refusal stops the promote."
+        ),
     )
     promote_parser.add_argument(
         "--skip-reading-check",

@@ -28,6 +28,7 @@ SHIPPED = (
     "enrich-examples",
     "polish-meanings",
     "patterns",
+    "approve-coverage",
 )
 
 

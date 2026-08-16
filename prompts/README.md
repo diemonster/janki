@@ -19,9 +19,12 @@ of why the asking changed.
 | `enrich-examples.md` | `janki enrich --ai` | system |
 | `polish-meanings.md` | `janki enrich --polish-meanings` | system |
 | `patterns.md` | `janki patterns` | system |
+| `approve-coverage.md` | `janki promote --accept-coverage` | system |
 
 The **user turn** is not a file. It is the record's own data — the expression,
-the reading, what janki already knows about the word — composed by Python.
+the reading, what janki already knows about the word — composed by Python. For
+the passes that read a source, it also carries the page itself: the same
+base64 image or PDF, so the model is looking at what you are looking at.
 That is data, not instruction, and it is the only thing the model sees that is
 not written here.
 

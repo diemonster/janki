@@ -3086,6 +3086,19 @@
         }
       ]
     },
+    "word:一度:いちど": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:一杯:いっぱい": {
       "added_at": "2026-08-11",
       "audio": [
@@ -3172,6 +3185,19 @@
           "ref": "Yotsubato Volume 1 Reading Pack Vocab",
           "seen_at": "2026-08-11",
           "type": "anki"
+        }
+      ]
+    },
+    "word:上映中:じょうえいちゅう": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
         }
       ]
     },
@@ -3433,6 +3459,19 @@
         }
       ]
     },
+    "word:今:いま": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:今日:きょう": {
       "added_at": "2026-08-11",
       "audio": [
@@ -3518,6 +3557,58 @@
           "ref": "Yotsubato Volume 1 Reading Pack Vocab",
           "seen_at": "2026-08-11",
           "type": "anki"
+        }
+      ]
+    },
+    "word:以上:いじょう": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:休み:やすみ": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:会う:あう": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:体温:たいおん": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
         }
       ]
     },
@@ -3823,6 +3914,32 @@
           "ref": "Yotsubato Volume 1 Reading Pack Vocab",
           "seen_at": "2026-08-12",
           "type": "anki"
+        }
+      ]
+    },
+    "word:先生:せんせい": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:先週:せんしゅう": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
         }
       ]
     },
@@ -4170,6 +4287,32 @@
         }
       ]
     },
+    "word:前:まえ": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:勉強:べんきょう": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:勉強する:べんきょうする": {
       "added_at": "2026-08-13",
       "audio": [
@@ -4247,6 +4390,32 @@
         {
           "ref": "m7-mixed-tsumori-pages-27-30.pdf",
           "seen_at": "2026-08-13",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:午前:ごぜん": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:午後:ごご": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
           "type": "extract"
         }
       ]
@@ -4401,6 +4570,45 @@
           "ref": "Yotsubato Volume 1 Reading Pack Vocab",
           "seen_at": "2026-08-11",
           "type": "anki"
+        }
+      ]
+    },
+    "word:大学院:だいがくいん": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:天気:てんき": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:子:こ": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
         }
       ]
     },
@@ -4707,6 +4915,19 @@
           "ref": "Yotsubato Volume 1 Reading Pack Vocab",
           "seen_at": "2026-08-11",
           "type": "anki"
+        }
+      ]
+    },
+    "word:度:ど": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
         }
       ]
     },
@@ -5173,6 +5394,19 @@
         }
       ]
     },
+    "word:方:かた": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:日本語:にほんご": {
       "added_at": "2026-08-13",
       "audio": [
@@ -5382,6 +5616,24 @@
           "ref": "m7-mixed-tsumori-pages-27-30.pdf",
           "seen_at": "2026-08-13",
           "type": "extract"
+        },
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:時間:じかん": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
         }
       ]
     },
@@ -5536,6 +5788,32 @@
         }
       ]
     },
+    "word:月曜日:げつようび": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:有名:ゆうめい": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:来る:くる": {
       "added_at": "2026-08-09",
       "audio": [
@@ -5619,6 +5897,76 @@
           "ref": "Anki Test - Top 20 Verbs",
           "seen_at": "2026-08-09",
           "type": "jpdb"
+        },
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:来年:らいねん": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:歌手:かしゅ": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:水曜日:すいようび": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:火曜日:かようび": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:病院:びょういん": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
         }
       ]
     },
@@ -6597,6 +6945,19 @@
         }
       ]
     },
+    "word:診察:しんさつ": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:話す:はなす": {
       "added_at": "2026-08-07",
       "audio": [
@@ -7037,6 +7398,19 @@
           "ref": "Yotsubato Volume 1 Reading Pack Vocab",
           "seen_at": "2026-08-12",
           "type": "anki"
+        }
+      ]
+    },
+    "word:電話:でんわ": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week11.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
         }
       ]
     },

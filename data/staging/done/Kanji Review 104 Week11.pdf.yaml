@@ -1,0 +1,1520 @@
+source_file: Kanji Review 104 Week11.pdf
+extracted_at: '2026-08-16'
+model: claude-opus-5
+prompt_provenance:
+  source_sha256: e9584dccdece1f8a90263887e29c19888df1b508a39ed05a7cf191b7f23e5bfa
+  mode: auto
+  provider: anthropic
+  model: claude-opus-5
+  response_schema_version: 2
+  system_prompt_fingerprint: aba57e098a341e2f73f7f6ff8961254d5e650ed106e57ba7cb783a8f737e37f4
+  style_guide_fingerprint: 418704c8197845d87af002df9934b484661bd161134543418ed1273419944b9b
+  user_prompt_fingerprint: 502ff1cd03be47e52bbf430e509daec2b12c3fb09dcb9bf6b487a42b98d90511
+coverage:
+  version: 1
+  status: unmeasured
+  blocking: true
+  source_fingerprint: e9584dccdece1f8a90263887e29c19888df1b508a39ed05a7cf191b7f23e5bfa
+  model_reported_unit_count: 31
+  observed_unit_count: 31
+  prose_candidate_count: 5
+  prose_coverage: unmeasured
+  source_units:
+  - page: 1
+    section: part1-prompts
+    ordinal: 1
+    context_fingerprint: 8367af70168eb6e7e3e11897d49b79776290a23ad540399402c4e0238439b327
+    disposition: candidate
+    context: せんしゅう
+  - page: 1
+    section: part1-prompts
+    ordinal: 2
+    context_fingerprint: 09bc2c097aeb1a43a332b2485b179dcba105a7df05b65c9ce78bf1c466a8d0a4
+    disposition: candidate
+    context: ゆうめい
+  - page: 1
+    section: part1-prompts
+    ordinal: 3
+    context_fingerprint: cfb624b8a25bf9de5beba4c2d1f5b01654de512834dfa55c3a03e27a013a1a2c
+    disposition: candidate
+    context: 歌手
+  - page: 1
+    section: part1-prompts
+    ordinal: 4
+    context_fingerprint: 54152ce3dcdf136d56bcffbb705a4efc5f684558754b34b7abd24fa9d4e01313
+    disposition: candidate
+    context: あいました
+  - page: 1
+    section: part1-prompts
+    ordinal: 5
+    context_fingerprint: 91f3baf763cdc915101769a81801ab7eb356da102affeb68e5facca293e05b22
+    disposition: candidate
+    context: いま
+  - page: 1
+    section: part1-prompts
+    ordinal: 6
+    context_fingerprint: 450d291fe7456c962a81e9ffd1ed1e937bd949257ede0f92c4335ec32c20e283
+    disposition: candidate
+    context: じょうえいちゅう
+  - page: 1
+    section: part1-prompts
+    ordinal: 7
+    context_fingerprint: 04ca9ce92e062535420d1951c89dfe2daebb483b498e722b23dc3156f91fadbb
+    disposition: candidate
+    context: えいが
+  - page: 1
+    section: part1-prompts
+    ordinal: 8
+    context_fingerprint: bc79d84d3df7763a5abf9d8981e367c8d45d696c9051a3fe12c320a29e005585
+    disposition: candidate
+    context: 天気
+  - page: 1
+    section: part1-prompts
+    ordinal: 9
+    context_fingerprint: e887db8cc86b5c68486d2e7ed0ee13aa49d82c6da49a8f99f1d89cbe0930e41a
+    disposition: candidate
+    context: 子*
+  - page: 1
+    section: part1-prompts
+    ordinal: 10
+    context_fingerprint: e4eec3025cd7c347deef7c730572936671b661fccc75868ea2120bb7dec0cbb6
+    disposition: candidate
+    context: 一度
+  - page: 1
+    section: part1-prompts
+    ordinal: 11
+    context_fingerprint: 0bdba7888b3d097346ee79c1c70cd88a4f7c6c1cf8bd198616ecda35adb3b5c1
+    disposition: candidate
+    context: 来年
+  - page: 1
+    section: part1-prompts
+    ordinal: 12
+    context_fingerprint: 37c84724d99013474aa56177d691ff1dcb65efa40620951747a8a22fe16e3151
+    disposition: candidate
+    context: だいがくいん
+  - page: 1
+    section: part1-prompts
+    ordinal: 13
+    context_fingerprint: 1d0c7e303d2eee3ec3fe55850fe2f3ec5f10fe95089a54933c161d794d7fe02f
+    disposition: candidate
+    context: 勉強
+  - page: 1
+    section: part2-schedule
+    ordinal: 1
+    context_fingerprint: 0957e6e96a43f3839e9a05266eff187a45f700ac46ed142bb5d23bdf4f9c89bc
+    disposition: candidate
+    context: 東京病院
+  - page: 1
+    section: part2-schedule
+    ordinal: 2
+    context_fingerprint: 06cc3cd32db45817f1e395e1ea8eab1c92fcc4e0b1bb5a6db6e7e95a5940c4bb
+    disposition: candidate
+    context: 診察*時間
+  - page: 1
+    section: part2-schedule
+    ordinal: 3
+    context_fingerprint: 175bb7f22f8f61520195c6e6fe4a861e6a0b0ceccd60dfb1f3d07216d86e0be6
+    disposition: candidate
+    context: 月曜日
+  - page: 1
+    section: part2-schedule
+    ordinal: 4
+    context_fingerprint: 119679184c636326f44ff0aa437a7b7e5d2cdd5eef95e9eb6fc6746fdda5a285
+    disposition: candidate
+    context: 火曜日
+  - page: 1
+    section: part2-schedule
+    ordinal: 5
+    context_fingerprint: a4b6bf54a5705987405feaae03e28a1964cd986975520286c44f5630117f3c0f
+    disposition: candidate
+    context: 水曜日
+  - page: 1
+    section: part2-schedule
+    ordinal: 6
+    context_fingerprint: 2186f4994eb4e0abc0e0daf8f8a8cb4a68d73dd886f387b842cead37395e8043
+    disposition: candidate
+    context: 午前（9:30〜12:00）
+  - page: 1
+    section: part2-schedule
+    ordinal: 7
+    context_fingerprint: b4af1b83a7b7a787c85a08490c5f33e366dfb4619643cdba6686e9f5e4b1d386
+    disposition: candidate
+    context: 田中先生*
+  - page: 1
+    section: part2-schedule
+    ordinal: 8
+    context_fingerprint: 27cad35e135b124ae9c164633343fe92183bfdeae37413120c2cb2f75f46c144
+    disposition: candidate
+    context: 休み
+  - page: 1
+    section: part2-schedule
+    ordinal: 9
+    context_fingerprint: f8292deb5396156d832a97b04e9d6e7d95ac622b9843e38bd8ca7b5291c70be2
+    disposition: duplicate
+    context: 田中先生
+    reason: Repeat of the Monday a.m. cell; 先生 already captured and 田中 is a surname.
+  - page: 1
+    section: part2-schedule
+    ordinal: 10
+    context_fingerprint: 4488730264f39fb1c370983ae3e0e0d0b8c4d55f658a931a3de65b77a2ad8cbe
+    disposition: candidate
+    context: 午後（13:30〜16:00）
+  - page: 1
+    section: part2-schedule
+    ordinal: 11
+    context_fingerprint: 61a589b7440067260b835e6c55c400b7b8e22f9881bba0c236f988ff182552f3
+    disposition: duplicate
+    context: 中山先生
+    reason: 先生 already captured; 中山 is a surname, not vocabulary.
+  - page: 1
+    section: part2-schedule
+    ordinal: 12
+    context_fingerprint: 61a589b7440067260b835e6c55c400b7b8e22f9881bba0c236f988ff182552f3
+    disposition: duplicate
+    context: 中山先生
+    reason: Repeated schedule cell; 先生 already captured.
+  - page: 1
+    section: part2-schedule
+    ordinal: 13
+    context_fingerprint: 61a589b7440067260b835e6c55c400b7b8e22f9881bba0c236f988ff182552f3
+    disposition: duplicate
+    context: 中山先生
+    reason: Repeated schedule cell; 先生 already captured.
+  - page: 1
+    section: notes
+    ordinal: 1
+    context_fingerprint: 2745466e719fc714893ac6994ad52c5f11bdb6a82652df4d9ef61b28b8919c86
+    disposition: non-vocabulary
+    context: (*天気の子 = Weathering with You, Japanese Film from 2019)
+    reason: Explanatory note giving a film title, not a vocabulary entry.
+  - page: 1
+    section: notes
+    ordinal: 2
+    context_fingerprint: 40cecab5661adf6f9e7837520d4eb9921a59a0bfafa24d71fb7baebf41beb468
+    disposition: candidate
+    context: '*診察(しんさつ) = medical examination'
+  - page: 1
+    section: notes
+    ordinal: 3
+    context_fingerprint: 7b93a658156f5ca4c787b0780c0d081c350161eff95f3acd5745d060e76eb80f
+    disposition: candidate
+    context: 体温(たいおん) = body temperature
+  - page: 1
+    section: notes
+    ordinal: 4
+    context_fingerprint: de6aaeddc779d307933c7a272008c9316913bf211b9282e75278e83cddf63e2b
+    disposition: candidate
+    context: 以上(いじょう) = X or above
+  - page: 1
+    section: notes
+    ordinal: 5
+    context_fingerprint: ef957e728e29405eb45e370fcd8b904a387c78a41cd82b2c816f2d5465390ee0
+    disposition: non-vocabulary
+    context: '*Often doctors are also referred to as 先生, even though they are not school teachers or coaches'
+    reason: Usage note about 先生, which is already captured from the schedule.
+  duplicate_keys: []
+  candidate_units:
+  - page: 1
+    section: notes
+    ordinal: 2
+    context_fingerprint: 40cecab5661adf6f9e7837520d4eb9921a59a0bfafa24d71fb7baebf41beb468
+    disposition: candidate
+  - page: 1
+    section: notes
+    ordinal: 3
+    context_fingerprint: 7b93a658156f5ca4c787b0780c0d081c350161eff95f3acd5745d060e76eb80f
+    disposition: candidate
+  - page: 1
+    section: notes
+    ordinal: 4
+    context_fingerprint: de6aaeddc779d307933c7a272008c9316913bf211b9282e75278e83cddf63e2b
+    disposition: candidate
+  - page: 1
+    section: part1-prompts
+    ordinal: 1
+    context_fingerprint: 8367af70168eb6e7e3e11897d49b79776290a23ad540399402c4e0238439b327
+    disposition: candidate
+  - page: 1
+    section: part1-prompts
+    ordinal: 2
+    context_fingerprint: 09bc2c097aeb1a43a332b2485b179dcba105a7df05b65c9ce78bf1c466a8d0a4
+    disposition: candidate
+  - page: 1
+    section: part1-prompts
+    ordinal: 3
+    context_fingerprint: cfb624b8a25bf9de5beba4c2d1f5b01654de512834dfa55c3a03e27a013a1a2c
+    disposition: candidate
+  - page: 1
+    section: part1-prompts
+    ordinal: 4
+    context_fingerprint: 54152ce3dcdf136d56bcffbb705a4efc5f684558754b34b7abd24fa9d4e01313
+    disposition: candidate
+  - page: 1
+    section: part1-prompts
+    ordinal: 5
+    context_fingerprint: 91f3baf763cdc915101769a81801ab7eb356da102affeb68e5facca293e05b22
+    disposition: candidate
+  - page: 1
+    section: part1-prompts
+    ordinal: 6
+    context_fingerprint: 450d291fe7456c962a81e9ffd1ed1e937bd949257ede0f92c4335ec32c20e283
+    disposition: candidate
+  - page: 1
+    section: part1-prompts
+    ordinal: 7
+    context_fingerprint: 04ca9ce92e062535420d1951c89dfe2daebb483b498e722b23dc3156f91fadbb
+    disposition: candidate
+  - page: 1
+    section: part1-prompts
+    ordinal: 8
+    context_fingerprint: bc79d84d3df7763a5abf9d8981e367c8d45d696c9051a3fe12c320a29e005585
+    disposition: candidate
+  - page: 1
+    section: part1-prompts
+    ordinal: 9
+    context_fingerprint: e887db8cc86b5c68486d2e7ed0ee13aa49d82c6da49a8f99f1d89cbe0930e41a
+    disposition: candidate
+  - page: 1
+    section: part1-prompts
+    ordinal: 10
+    context_fingerprint: e4eec3025cd7c347deef7c730572936671b661fccc75868ea2120bb7dec0cbb6
+    disposition: candidate
+  - page: 1
+    section: part1-prompts
+    ordinal: 11
+    context_fingerprint: 0bdba7888b3d097346ee79c1c70cd88a4f7c6c1cf8bd198616ecda35adb3b5c1
+    disposition: candidate
+  - page: 1
+    section: part1-prompts
+    ordinal: 12
+    context_fingerprint: 37c84724d99013474aa56177d691ff1dcb65efa40620951747a8a22fe16e3151
+    disposition: candidate
+  - page: 1
+    section: part1-prompts
+    ordinal: 13
+    context_fingerprint: 1d0c7e303d2eee3ec3fe55850fe2f3ec5f10fe95089a54933c161d794d7fe02f
+    disposition: candidate
+  - page: 1
+    section: part2-schedule
+    ordinal: 1
+    context_fingerprint: 0957e6e96a43f3839e9a05266eff187a45f700ac46ed142bb5d23bdf4f9c89bc
+    disposition: candidate
+  - page: 1
+    section: part2-schedule
+    ordinal: 2
+    context_fingerprint: 06cc3cd32db45817f1e395e1ea8eab1c92fcc4e0b1bb5a6db6e7e95a5940c4bb
+    disposition: candidate
+  - page: 1
+    section: part2-schedule
+    ordinal: 3
+    context_fingerprint: 175bb7f22f8f61520195c6e6fe4a861e6a0b0ceccd60dfb1f3d07216d86e0be6
+    disposition: candidate
+  - page: 1
+    section: part2-schedule
+    ordinal: 4
+    context_fingerprint: 119679184c636326f44ff0aa437a7b7e5d2cdd5eef95e9eb6fc6746fdda5a285
+    disposition: candidate
+  - page: 1
+    section: part2-schedule
+    ordinal: 5
+    context_fingerprint: a4b6bf54a5705987405feaae03e28a1964cd986975520286c44f5630117f3c0f
+    disposition: candidate
+  - page: 1
+    section: part2-schedule
+    ordinal: 6
+    context_fingerprint: 2186f4994eb4e0abc0e0daf8f8a8cb4a68d73dd886f387b842cead37395e8043
+    disposition: candidate
+  - page: 1
+    section: part2-schedule
+    ordinal: 7
+    context_fingerprint: b4af1b83a7b7a787c85a08490c5f33e366dfb4619643cdba6686e9f5e4b1d386
+    disposition: candidate
+  - page: 1
+    section: part2-schedule
+    ordinal: 8
+    context_fingerprint: 27cad35e135b124ae9c164633343fe92183bfdeae37413120c2cb2f75f46c144
+    disposition: candidate
+  - page: 1
+    section: part2-schedule
+    ordinal: 10
+    context_fingerprint: 4488730264f39fb1c370983ae3e0e0d0b8c4d55f658a931a3de65b77a2ad8cbe
+    disposition: candidate
+  duplicate_units:
+  - page: 1
+    section: part2-schedule
+    ordinal: 9
+    context_fingerprint: f8292deb5396156d832a97b04e9d6e7d95ac622b9843e38bd8ca7b5291c70be2
+    disposition: duplicate
+  - page: 1
+    section: part2-schedule
+    ordinal: 11
+    context_fingerprint: 61a589b7440067260b835e6c55c400b7b8e22f9881bba0c236f988ff182552f3
+    disposition: duplicate
+  - page: 1
+    section: part2-schedule
+    ordinal: 12
+    context_fingerprint: 61a589b7440067260b835e6c55c400b7b8e22f9881bba0c236f988ff182552f3
+    disposition: duplicate
+  - page: 1
+    section: part2-schedule
+    ordinal: 13
+    context_fingerprint: 61a589b7440067260b835e6c55c400b7b8e22f9881bba0c236f988ff182552f3
+    disposition: duplicate
+  non_vocabulary_units:
+  - page: 1
+    section: notes
+    ordinal: 1
+    context_fingerprint: 2745466e719fc714893ac6994ad52c5f11bdb6a82652df4d9ef61b28b8919c86
+    disposition: non-vocabulary
+  - page: 1
+    section: notes
+    ordinal: 5
+    context_fingerprint: ef957e728e29405eb45e370fcd8b904a387c78a41cd82b2c816f2d5465390ee0
+    disposition: non-vocabulary
+  unreadable_units: []
+  coverage_block_fingerprint: b55fb032953efdb7ad0147fc18e2f0cc597b59a6746a80289dbf2141c2e2eed0
+  approval:
+    authority: model
+    model: claude-opus-5
+    prompt_fingerprint: 4ec74f4f1acc5a5ae122a8953b6adfdc6954d093a08b033b747a217fa4d2646f
+    source_fingerprint: e9584dccdece1f8a90263887e29c19888df1b508a39ed05a7cf191b7f23e5bfa
+    coverage_block_fingerprint: b55fb032953efdb7ad0147fc18e2f0cc597b59a6746a80289dbf2141c2e2eed0
+    accepted_dispositions:
+      candidate_units:
+      - page: 1
+        section: notes
+        ordinal: 2
+        context_fingerprint: 40cecab5661adf6f9e7837520d4eb9921a59a0bfafa24d71fb7baebf41beb468
+        disposition: candidate
+      - page: 1
+        section: notes
+        ordinal: 3
+        context_fingerprint: 7b93a658156f5ca4c787b0780c0d081c350161eff95f3acd5745d060e76eb80f
+        disposition: candidate
+      - page: 1
+        section: notes
+        ordinal: 4
+        context_fingerprint: de6aaeddc779d307933c7a272008c9316913bf211b9282e75278e83cddf63e2b
+        disposition: candidate
+      - page: 1
+        section: part1-prompts
+        ordinal: 1
+        context_fingerprint: 8367af70168eb6e7e3e11897d49b79776290a23ad540399402c4e0238439b327
+        disposition: candidate
+      - page: 1
+        section: part1-prompts
+        ordinal: 2
+        context_fingerprint: 09bc2c097aeb1a43a332b2485b179dcba105a7df05b65c9ce78bf1c466a8d0a4
+        disposition: candidate
+      - page: 1
+        section: part1-prompts
+        ordinal: 3
+        context_fingerprint: cfb624b8a25bf9de5beba4c2d1f5b01654de512834dfa55c3a03e27a013a1a2c
+        disposition: candidate
+      - page: 1
+        section: part1-prompts
+        ordinal: 4
+        context_fingerprint: 54152ce3dcdf136d56bcffbb705a4efc5f684558754b34b7abd24fa9d4e01313
+        disposition: candidate
+      - page: 1
+        section: part1-prompts
+        ordinal: 5
+        context_fingerprint: 91f3baf763cdc915101769a81801ab7eb356da102affeb68e5facca293e05b22
+        disposition: candidate
+      - page: 1
+        section: part1-prompts
+        ordinal: 6
+        context_fingerprint: 450d291fe7456c962a81e9ffd1ed1e937bd949257ede0f92c4335ec32c20e283
+        disposition: candidate
+      - page: 1
+        section: part1-prompts
+        ordinal: 7
+        context_fingerprint: 04ca9ce92e062535420d1951c89dfe2daebb483b498e722b23dc3156f91fadbb
+        disposition: candidate
+      - page: 1
+        section: part1-prompts
+        ordinal: 8
+        context_fingerprint: bc79d84d3df7763a5abf9d8981e367c8d45d696c9051a3fe12c320a29e005585
+        disposition: candidate
+      - page: 1
+        section: part1-prompts
+        ordinal: 9
+        context_fingerprint: e887db8cc86b5c68486d2e7ed0ee13aa49d82c6da49a8f99f1d89cbe0930e41a
+        disposition: candidate
+      - page: 1
+        section: part1-prompts
+        ordinal: 10
+        context_fingerprint: e4eec3025cd7c347deef7c730572936671b661fccc75868ea2120bb7dec0cbb6
+        disposition: candidate
+      - page: 1
+        section: part1-prompts
+        ordinal: 11
+        context_fingerprint: 0bdba7888b3d097346ee79c1c70cd88a4f7c6c1cf8bd198616ecda35adb3b5c1
+        disposition: candidate
+      - page: 1
+        section: part1-prompts
+        ordinal: 12
+        context_fingerprint: 37c84724d99013474aa56177d691ff1dcb65efa40620951747a8a22fe16e3151
+        disposition: candidate
+      - page: 1
+        section: part1-prompts
+        ordinal: 13
+        context_fingerprint: 1d0c7e303d2eee3ec3fe55850fe2f3ec5f10fe95089a54933c161d794d7fe02f
+        disposition: candidate
+      - page: 1
+        section: part2-schedule
+        ordinal: 1
+        context_fingerprint: 0957e6e96a43f3839e9a05266eff187a45f700ac46ed142bb5d23bdf4f9c89bc
+        disposition: candidate
+      - page: 1
+        section: part2-schedule
+        ordinal: 2
+        context_fingerprint: 06cc3cd32db45817f1e395e1ea8eab1c92fcc4e0b1bb5a6db6e7e95a5940c4bb
+        disposition: candidate
+      - page: 1
+        section: part2-schedule
+        ordinal: 3
+        context_fingerprint: 175bb7f22f8f61520195c6e6fe4a861e6a0b0ceccd60dfb1f3d07216d86e0be6
+        disposition: candidate
+      - page: 1
+        section: part2-schedule
+        ordinal: 4
+        context_fingerprint: 119679184c636326f44ff0aa437a7b7e5d2cdd5eef95e9eb6fc6746fdda5a285
+        disposition: candidate
+      - page: 1
+        section: part2-schedule
+        ordinal: 5
+        context_fingerprint: a4b6bf54a5705987405feaae03e28a1964cd986975520286c44f5630117f3c0f
+        disposition: candidate
+      - page: 1
+        section: part2-schedule
+        ordinal: 6
+        context_fingerprint: 2186f4994eb4e0abc0e0daf8f8a8cb4a68d73dd886f387b842cead37395e8043
+        disposition: candidate
+      - page: 1
+        section: part2-schedule
+        ordinal: 7
+        context_fingerprint: b4af1b83a7b7a787c85a08490c5f33e366dfb4619643cdba6686e9f5e4b1d386
+        disposition: candidate
+      - page: 1
+        section: part2-schedule
+        ordinal: 8
+        context_fingerprint: 27cad35e135b124ae9c164633343fe92183bfdeae37413120c2cb2f75f46c144
+        disposition: candidate
+      - page: 1
+        section: part2-schedule
+        ordinal: 10
+        context_fingerprint: 4488730264f39fb1c370983ae3e0e0d0b8c4d55f658a931a3de65b77a2ad8cbe
+        disposition: candidate
+      duplicate_units:
+      - page: 1
+        section: part2-schedule
+        ordinal: 9
+        context_fingerprint: f8292deb5396156d832a97b04e9d6e7d95ac622b9843e38bd8ca7b5291c70be2
+        disposition: duplicate
+      - page: 1
+        section: part2-schedule
+        ordinal: 11
+        context_fingerprint: 61a589b7440067260b835e6c55c400b7b8e22f9881bba0c236f988ff182552f3
+        disposition: duplicate
+      - page: 1
+        section: part2-schedule
+        ordinal: 12
+        context_fingerprint: 61a589b7440067260b835e6c55c400b7b8e22f9881bba0c236f988ff182552f3
+        disposition: duplicate
+      - page: 1
+        section: part2-schedule
+        ordinal: 13
+        context_fingerprint: 61a589b7440067260b835e6c55c400b7b8e22f9881bba0c236f988ff182552f3
+        disposition: duplicate
+      non_vocabulary_units:
+      - page: 1
+        section: notes
+        ordinal: 1
+        context_fingerprint: 2745466e719fc714893ac6994ad52c5f11bdb6a82652df4d9ef61b28b8919c86
+        disposition: non-vocabulary
+      - page: 1
+        section: notes
+        ordinal: 5
+        context_fingerprint: ef957e728e29405eb45e370fcd8b904a387c78a41cd82b2c816f2d5465390ee0
+        disposition: non-vocabulary
+      unreadable_units: []
+    accepted_mismatches:
+      duplicate_keys: []
+    unmeasured: true
+    reason: 'Part 1''s four numbered items yield thirteen underlined prompts (せんしゅう through 勉強), and all
+      thirteen are present in part1-prompts #1-13 in page order; the Part 2 hospital schedule has thirteen
+      cells (東京病院, 診察*時間, the three weekday headers, the 午前/午後 row labels and the six doctor/休み cells),
+      and all thirteen appear in part2-schedule #1-13. The three footnotes are accounted for in notes:
+      the film-title gloss and the 先生 usage note as non-vocabulary, and the 診察/体温/以上 glosses split into
+      three candidates. The repeated 田中先生 and 中山先生 cells filed as duplicate are defensible (先生 already
+      captured from the first cell, the rest being surnames), and the red sentence at the bottom is running
+      text that needs no entry of its own.'
+    approved_at: '2026-08-16'
+review_notes: Promoted 30 record(s) from this file.
+records:
+- id: word:先週:せんしゅう
+  expression: 先週
+  reading: せんしゅう
+  furigana: ''
+  romaji: senshuu
+  meanings:
+  - last week
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: せんしゅう
+      provisional_fields: meanings:42d0527b6306,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:有名:ゆうめい
+  expression: 有名
+  reading: ゆうめい
+  furigana: ''
+  romaji: yuumei
+  meanings:
+  - famous
+  - well-known
+  part_of_speech: na-adjective
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: ゆうめい
+      provisional_fields: meanings:da7ef6e6638c,part_of_speech:b772b84f04b0
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:歌手:かしゅ
+  expression: 歌手
+  reading: かしゅ
+  furigana: ''
+  romaji: kashu
+  meanings:
+  - singer
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 歌手
+      provisional_fields: meanings:8b07f14038f3,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:会う:あう
+  expression: 会う
+  reading: あう
+  furigana: ''
+  romaji: au
+  meanings:
+  - to meet
+  - to see (a person)
+  part_of_speech: verb (godan, intransitive)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: あいました
+      inclusion_reason: Prompt gives the past polite form あいました; card uses the dictionary form.
+      provisional_fields: meanings:170836f6afe2,part_of_speech:1db9001e5c28
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:今:いま
+  expression: 今
+  reading: いま
+  furigana: ''
+  romaji: ima
+  meanings:
+  - now
+  - at present
+  part_of_speech: noun, adverb
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: いま
+      provisional_fields: meanings:175971d8dc66,part_of_speech:c14fd3588fd7
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:上映中:じょうえいちゅう
+  expression: 上映中
+  reading: じょうえいちゅう
+  furigana: ''
+  romaji: joueichuu
+  meanings:
+  - now showing (a film)
+  - currently screening
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: じょうえいちゅう
+      provisional_fields: meanings:73c216bd84e4,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:天気:てんき
+  expression: 天気
+  reading: てんき
+  furigana: ''
+  romaji: tenki
+  meanings:
+  - weather
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 天気
+      provisional_fields: meanings:a620f00b66c5,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:子:こ
+  expression: 子
+  reading: こ
+  furigana: ''
+  romaji: ko
+  meanings:
+  - child
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 子*
+      provisional_fields: meanings:31eec9be1471,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:一度:いちど
+  expression: 一度
+  reading: いちど
+  furigana: ''
+  romaji: ichido
+  meanings:
+  - once
+  - one time
+  part_of_speech: noun, adverb
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 一度
+      example: もう一度こちらにサインしてください。
+      provisional_fields: meanings:5b9186c65c7e,part_of_speech:c14fd3588fd7
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:来年:らいねん
+  expression: 来年
+  reading: らいねん
+  furigana: ''
+  romaji: rainen
+  meanings:
+  - next year
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 来年
+      example: 来年大学院でビジネスの勉強をするつもりです。
+      provisional_fields: meanings:693dd6da2a16,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:大学院:だいがくいん
+  expression: 大学院
+  reading: だいがくいん
+  furigana: ''
+  romaji: daigakuin
+  meanings:
+  - graduate school
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: だいがくいん
+      example: 来年大学院でビジネスの勉強をするつもりです。
+      provisional_fields: meanings:761f24715d0d,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:勉強:べんきょう
+  expression: 勉強
+  reading: べんきょう
+  furigana: ''
+  romaji: benkyou
+  meanings:
+  - study
+  - studying
+  part_of_speech: noun, suru-verb
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 勉強
+      example: 来年大学院でビジネスの勉強をするつもりです。
+      provisional_fields: meanings:4acdbf0647a9,part_of_speech:69ad9b062648
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:病院:びょういん
+  expression: 病院
+  reading: びょういん
+  furigana: ''
+  romaji: byouin
+  meanings:
+  - hospital
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 東京病院
+      inclusion_reason: Underlined item is 東京病院; the card covers the vocabulary word 病院 (東京 is a place
+        name).
+      example: 体温が38度以上の方は病院に来る前にお電話ください。
+      provisional_fields: meanings:7240f0e9bd9c,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:時間:じかん
+  expression: 時間
+  reading: じかん
+  furigana: ''
+  romaji: jikan
+  meanings:
+  - time
+  - hour
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 診察*時間
+      provisional_fields: meanings:e36e15cd7032,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:月曜日:げつようび
+  expression: 月曜日
+  reading: げつようび
+  furigana: ''
+  romaji: getsuyoubi
+  meanings:
+  - Monday
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 月曜日
+      provisional_fields: meanings:2b2da7c7b06e,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:火曜日:かようび
+  expression: 火曜日
+  reading: かようび
+  furigana: ''
+  romaji: kayoubi
+  meanings:
+  - Tuesday
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 火曜日
+      provisional_fields: meanings:b314cd8a6350,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:水曜日:すいようび
+  expression: 水曜日
+  reading: すいようび
+  furigana: ''
+  romaji: suiyoubi
+  meanings:
+  - Wednesday
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 水曜日
+      provisional_fields: meanings:d8baa7812e8a,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:午前:ごぜん
+  expression: 午前
+  reading: ごぜん
+  furigana: ''
+  romaji: gozen
+  meanings:
+  - a.m.
+  - morning
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 午前（9:30〜12:00）
+      provisional_fields: meanings:48a5e27a3409,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:先生:せんせい
+  expression: 先生
+  reading: せんせい
+  furigana: ''
+  romaji: sensei
+  meanings:
+  - teacher
+  - doctor (as a title)
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 田中先生*
+      inclusion_reason: Underlined item is 田中先生; the card covers 先生 (田中 is a surname). The page notes
+        that doctors are also called 先生.
+      provisional_fields: meanings:f7019c84a678,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:休み:やすみ
+  expression: 休み
+  reading: やすみ
+  furigana: ''
+  romaji: yasumi
+  meanings:
+  - holiday
+  - day off
+  - closed
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 休み
+      provisional_fields: meanings:9c4cf4b4e46e,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:午後:ごご
+  expression: 午後
+  reading: ごご
+  furigana: ''
+  romaji: gogo
+  meanings:
+  - p.m.
+  - afternoon
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 午後（13:30〜16:00）
+      provisional_fields: meanings:ac8863e57bc7,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:診察:しんさつ
+  expression: 診察
+  reading: しんさつ
+  furigana: ''
+  romaji: shinsatsu
+  meanings:
+  - medical examination
+  part_of_speech: noun, suru-verb
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: '*診察(しんさつ) = medical examination'
+      provisional_fields: meanings:1d7281c5b45d,part_of_speech:69ad9b062648
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:体温:たいおん
+  expression: 体温
+  reading: たいおん
+  furigana: ''
+  romaji: taion
+  meanings:
+  - body temperature
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 体温(たいおん) = body temperature
+      example: 体温が38度以上の方は病院に来る前にお電話ください。
+      provisional_fields: meanings:06e47419e04a,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:以上:いじょう
+  expression: 以上
+  reading: いじょう
+  furigana: ''
+  romaji: ijou
+  meanings:
+  - or more
+  - or above
+  part_of_speech: noun, suffix
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 以上(いじょう) = X or above
+      example: 体温が38度以上の方は病院に来る前にお電話ください。
+      provisional_fields: meanings:c76d90f58b2b,part_of_speech:2db5cb0907a0
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:度:ど
+  expression: 度
+  reading: ど
+  furigana: ''
+  romaji: do
+  meanings:
+  - degree (temperature)
+  - counter for degrees
+  part_of_speech: counter
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 体温が38度以上の方は病院に来る前にお電話ください。
+      inclusion_reason: Underlined for reading practice in the notice; useful counter for temperature.
+      example: 体温が38度以上の方は病院に来る前にお電話ください。
+      provisional_fields: meanings:805df1778938,part_of_speech:ebd7de7795d3
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:方:かた
+  expression: 方
+  reading: かた
+  furigana: ''
+  romaji: kata
+  meanings:
+  - person (polite)
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 体温が38度以上の方は病院に来る前にお電話ください。
+      inclusion_reason: Underlined for reading practice; polite reading かた contrasts with ほう.
+      example: 体温が38度以上の方は病院に来る前にお電話ください。
+      provisional_fields: meanings:a5bb33e47a8d,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:前:まえ
+  expression: 前
+  reading: まえ
+  furigana: ''
+  romaji: mae
+  meanings:
+  - before
+  - in front of
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 体温が38度以上の方は病院に来る前にお電話ください。
+      inclusion_reason: Underlined for reading practice; used here in the ～る前に pattern.
+      example: 病院に来る前にお電話ください。
+      provisional_fields: meanings:50cc641855bb,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:電話:でんわ
+  expression: 電話
+  reading: でんわ
+  furigana: ''
+  romaji: denwa
+  meanings:
+  - telephone
+  - phone call
+  part_of_speech: noun, suru-verb
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 体温が38度以上の方は病院に来る前にお電話ください。
+      inclusion_reason: Underlined as お電話; card covers the base word 電話.
+      example: 病院に来る前にお電話ください。
+      provisional_fields: meanings:3b92ac97167b,part_of_speech:69ad9b062648
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:映画:えいが
+  expression: 映画
+  reading: えいが
+  furigana: ''
+  romaji: ''
+  meanings:
+  - movie
+  - film
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: えいが
+      provisional_fields: meanings:b30755d14f6c,part_of_speech:ee6cded62768
+- id: word:来る:くる
+  expression: 来る
+  reading: くる
+  furigana: ''
+  romaji: ''
+  meanings:
+  - to come
+  part_of_speech: verb (irregular)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week11.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week11.pdf
+      confidence: high
+      page: '1'
+      context: 体温が38度以上の方は病院に来る前にお電話ください。
+      inclusion_reason: Underlined for reading practice; core irregular verb.
+      example: 体温が38度以上の方は病院に来る前にお電話ください。
+      provisional_fields: meanings:af81c47e917d,part_of_speech:3c4eeec0669c
