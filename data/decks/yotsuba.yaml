@@ -8,8 +8,11 @@ deck:
     production: true
     reading: false
   source: ../normalized/vocabulary.json
-  # The tag `import-anki` puts on everything it reads. Every other deck selects
+  # The tag `import-anki` puts on everything it reads. Every word deck selects
   # on a tag of its own, so no two claim the same record — same source file,
   # same GUIDs, and an overlap means each import moves notes between decks.
-  # A test asserts it.
+  # `tests/test_anki_builder_contract.py` asserts that for the nine word decks.
+  # The two conjugation decks are not in it and do re-use these records; their
+  # notes are GUID-namespaced (`drill:<form>:<id>`) under their own model, so
+  # they are different notes rather than the same note in two places.
   include_tags: [anki]

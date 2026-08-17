@@ -474,6 +474,33 @@ def _compatible_pitch_patterns(
     return valid, invalid
 
 
+def _unusable_detail(reading: str, patterns: Sequence[str]) -> str:
+    """Every unusable pattern with *its own* reason.
+
+    One reason for a whole list was the same defect one message for both
+    refusal shapes was: `['LHHHHH', 'LHH']` against かんーぱい is one long-vowel
+    problem and one length problem, and naming only the first sends a curator
+    to check the wrong thing for the second.
+    """
+    return ", ".join(
+        f"{pattern} ({_why_unusable(reading, pattern)})" for pattern in patterns
+    ) + f" cannot be used for reading {reading}"
+
+
+def _what_became_of_the_rest(valid: Sequence[str], written: bool) -> str:
+    """What the record actually ended up with, in the three ways it can end."""
+    if not valid:
+        return "jpdb offered no usable pattern, so none was written"
+    if written:
+        return f"the {len(valid)} that can was written" if len(valid) == 1 else (
+            f"the {len(valid)} that can were written"
+        )
+    return (
+        "the rest are usable but were not written — this record already "
+        "carries an accent, and jpdb does not overwrite one"
+    )
+
+
 def _why_unusable(reading: str, pattern: str) -> str:
     """The reason this pattern cannot be spoken, in the words the check gives.
 
@@ -487,12 +514,17 @@ def _why_unusable(reading: str, pattern: str) -> str:
         pitch.to_aquestalk(reading, pattern)
     except pitch.PitchError as exc:
         detail = str(exc).rstrip(".")
+        # Anchored markers, not a bare ": ". Both messages interpolate the
+        # pattern and the reading ahead of their real separator, so splitting
+        # on the first colon-space could cut inside the data — a reading
+        # containing one would yield "い': expected 5 characters …".
+        for marker in (" for VOICEVOX: ", "': "):
+            head, found, tail = detail.partition(marker)
+            if found:
+                detail = tail
+                break
         # The long-vowel refusal carries its own trailing advice about what the
         # clip will sound like; the caller is about to say that itself.
-        for marker in (" for VOICEVOX: ", ": "):
-            if marker in detail:
-                detail = detail.split(marker, 1)[1]
-                break
         return detail.split(". The word is voiced")[0]
     return "it renders — nothing is wrong with it"
 
@@ -703,18 +735,18 @@ def enrich_records(
         _valid_pitch, invalid_pitch = _compatible_pitch_patterns(
             record.reading, entry.get("pitch_accent")
         )
+        updated, changes = _apply(record, proposals, [*wanted, *reconcile])
+        # After `_apply`, not before. What happens to the usable patterns is
+        # `_wanted`'s decision, not this pass's: a record that already carries
+        # an accent keeps it and jpdb's is discarded, so a warning written
+        # ahead of the write told a curator jpdb's pattern was now on the
+        # record while the record still had its own.
         if invalid_pitch:
             result.warnings.append(
-                f"{record_id}: jpdb pitch pattern(s) {', '.join(invalid_pitch)} "
-                f"cannot be used for reading {record.reading} "
-                f"({_why_unusable(record.reading, invalid_pitch[0])}); "
-                + (
-                    "pitch accent was not written"
-                    if not _valid_pitch
-                    else f"kept the {len(_valid_pitch)} that can"
-                )
+                f"{record_id}: jpdb pitch pattern(s) "
+                f"{_unusable_detail(record.reading, invalid_pitch)}; "
+                + _what_became_of_the_rest(_valid_pitch, "pitch_accent" in changes)
             )
-        updated, changes = _apply(record, proposals, [*wanted, *reconcile])
         if "pitch_accent" in changes:
             updated = pitch.bind_source(updated)
         # By this point the entry is the exact identity — the spelling matched

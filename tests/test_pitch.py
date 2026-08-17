@@ -468,6 +468,7 @@ def test_the_aquestalk_spelling_never_becomes_the_records_own() -> None:
         ("enrich", "_why_unusable"): "asks the refusal for its reason; keeps the reason",
         ("jpdb_import", "_speakable"): "asks only whether a pattern converts at all",
         ("ledger", "_spoken_form"): "hashes what a clip says; the digest is stored, not the text",
+        ("promote", "_unspeakable_patterns"): "asks only whether a pattern converts at all",
     }
 
     # Every module in the package, not the three that call it today: a leak
@@ -579,6 +580,13 @@ def test_a_kana_the_engine_refuses_is_refused_here_rather_than_sent() -> None:
 
     The membership assertion above pins that `ヵ` is out of the table; this
     pins what being out of it *does*, which is the half a curator would notice.
+
+    Neither mutation it catches is its alone — putting `ヵ` back also fails the
+    membership test, and un-refusing also fails the three
+    `test_a_long_vowel_with_no_vowel_to_repeat_is_refused` params — and it
+    passes against the commit before the one that added it. It is kept as the
+    behavioural half of a pair whose other half asserts on a private dict, not
+    as a unique catcher.
     """
     with pytest.raises(PitchError, match="no vowel to repeat"):
         to_aquestalk("ゕー", "HLL")

@@ -182,6 +182,24 @@ def _verify_coverage_facts(meta: dict[str, Any], block: dict[str, Any]) -> None:
         )
 
 
+def _unspeakable_patterns(record: VocabularyRecord) -> list[str]:
+    """Which of this record's stored patterns cannot make a forced clip.
+
+    The same rendering test `enrich` and `import-jpdb` apply, so all three
+    commands that can put an accent into the collection agree about what is
+    usable and each says so in its own terms.
+    """
+    from japanese_anki import pitch
+
+    unusable = []
+    for pattern in record.pitch_accent:
+        try:
+            pitch.to_aquestalk(record.reading, pattern)
+        except pitch.PitchError:
+            unusable.append(pattern)
+    return unusable
+
+
 @dataclass(slots=True)
 class PromoteResult:
     """What a promote pass decided, row by row.
@@ -300,6 +318,27 @@ def check_readings(
                 f"neither the {EXAMPLE_AUTHORITY_STAGING!r} sentinel nor a "
                 "bound acceptance — it accepts nothing. Retype the sentinel "
                 "exactly to accept this row's examples."
+            )
+        # The last door a pitch pattern can come through. `enrich --jpdb`
+        # refuses an unspeakable pattern and `import-jpdb` names one; a staging
+        # file carries `pitch_accent` as a first-class field, so a hand-written
+        # or held-back row could put one into the collection with nothing said
+        # anywhere — and `docs/AUDIO.md` claimed the state was always visible.
+        # Named, not held: an accent is not identity, the clip still gets made
+        # in the engine's own voice, and holding a whole row over it would be
+        # out of proportion.
+        unspeakable = _unspeakable_patterns(resolved)
+        if unspeakable:
+            result.warnings.append(
+                f"{record.id}: pitch pattern(s) {', '.join(unspeakable)} cannot "
+                f"be spoken for reading {resolved.reading}"
+                + (
+                    "; its word audio uses the engine's own accent."
+                    if resolved.pitch_accent
+                    and resolved.pitch_accent[0] in unspeakable
+                    else f"; its word audio uses {resolved.pitch_accent[0]}, "
+                    "which is fine."
+                )
             )
         # `remint_blocked` means the set is *incomplete*, not wrong: an id in it
         # was positively proved present, and `remint` would leave that row alone

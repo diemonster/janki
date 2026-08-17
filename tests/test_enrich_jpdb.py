@@ -718,8 +718,51 @@ def test_a_pattern_janki_can_use_survives_one_it_cannot() -> None:
     assert result.records[0].pitch_accent == ["LHL"], "the usable one was kept"
     [warning] = result.warnings
     assert "LHLL" in warning
-    assert "kept the 1 that can" in warning
-    assert "was not written" not in warning
+    assert "the 1 that can was written" in warning
+    assert "no usable pattern" not in warning
+
+
+def test_the_warning_does_not_claim_a_write_that_did_not_happen() -> None:
+    """`_wanted` decides, and it does not overwrite an accent already on file.
+
+    The warning was emitted before `_apply` ran, so it reported the *split* —
+    "kept the 1 that can" — as though the split were the outcome. For a record
+    that already carries its own accent the split is discarded: jpdb fills
+    empty fields, and a curator reading that line would believe jpdb's pattern
+    had replaced the one they are looking at.
+    """
+    hashi = vocab(1000001, 556, "はし", "はし", ["LHL", "LHLL"], 500, ["n"])
+    api = FakeApi(unforced={"はし": parse_response((None, hashi))})
+    target = record(
+        id="word:はし:はし", expression="はし", reading="はし", pitch_accent=["HLL"]
+    )
+
+    result = enrich_records(client_for(api), [target])
+
+    assert result.records[0].pitch_accent == ["HLL"], "the record kept its own"
+    [warning] = result.warnings
+    assert "were not written" in warning or "not written" in warning
+    assert "was written" not in warning, "nothing was"
+
+
+def test_each_unusable_pattern_gets_its_own_reason() -> None:
+    """Two patterns, two different problems, and one of them named twice.
+
+    `['LHHHHH', 'LHH']` against かんーぱい is a long-vowel refusal and a length
+    refusal. Reporting the first one's reason for both is the same defect as
+    reporting "does not fit the reading" for a pattern that fits it.
+    """
+    kanpai = vocab(1000002, 557, "かんーぱい", "かんーぱい", ["LHHHHH", "LHH"], 900, ["n"])
+    api = FakeApi(unforced={"かんーぱい": parse_response((None, kanpai))})
+    target = record(
+        id="word:かんーぱい:かんーぱい", expression="かんーぱい", reading="かんーぱい"
+    )
+
+    result = enrich_records(client_for(api), [target])
+
+    [warning] = result.warnings
+    assert "LHHHHH ('ン' has no vowel to repeat)" in warning
+    assert "LHH (expected 6 characters" in warning
 
 
 def test_an_unrelated_kana_parse_retries_with_the_stored_reading() -> None:

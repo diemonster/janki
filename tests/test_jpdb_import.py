@@ -357,6 +357,31 @@ def test_importing_a_deck_walks_decks_then_pairs_then_a_batched_lookup() -> None
     assert result.needs_reading == []
 
 
+def _client_returning(entry: dict[str, Any]) -> tuple[JpdbClient, RoutingTransport]:
+    """A real `JpdbClient` whose lookup answers with one entry of your choosing.
+
+    Not a `SimpleNamespace` with a hand-written `lookup_vocabulary` signature:
+    that swallows keyword arguments, so a rename in the real client would leave
+    such a test green. `test_the_lookup_fixture_still_matches_the_fields_the_
+    client_asks_for` exists to keep this file honest, and a fake client opts
+    out of it.
+    """
+    decks = _fixture(DECKS_FIXTURE)
+    lookup = _fixture(LOOKUP_FIXTURE)
+    pair = [entry["vid"], entry["sid"]]
+    # The row in wire order — the same `request_fields` the fixture declares and
+    # `test_the_lookup_fixture_still_matches_the_fields_the_client_asks_for`
+    # checks against the client, so a field the client starts asking for lands
+    # here as a KeyError rather than as a silently absent value.
+    lookup["request_list"] = [pair]
+    lookup["response"]["vocabulary_info"] = [
+        [entry[field] for field in lookup["request_fields"]]
+    ]
+    decks["deck_vocabulary"]["1"] = {"vocabulary": [pair]}
+    transport = RoutingTransport(decks, lookup)
+    return _client(transport), transport
+
+
 def test_an_unspeakable_pattern_is_kept_and_said_out_loud() -> None:
     """The route by which an unusable accent reached a record silently.
 
@@ -371,21 +396,37 @@ def test_an_unspeakable_pattern_is_kept_and_said_out_loud() -> None:
     `ン` ends on no vowel for the `ー` to repeat. A length check alone passes
     it, which is why the check here renders instead.
     """
-    from types import SimpleNamespace
-
     entry = _entry(spelling="かんーぱい", reading="かんーぱい", pitch_accent=["LHHHHH"])
-    client = SimpleNamespace(
-        list_deck_vocabulary=lambda _id: [{"vid": entry["vid"], "sid": entry["sid"]}],
-        lookup_vocabulary=lambda _pairs, _fields, **_options: [entry],
-    )
+    client, _transport = _client_returning(entry)
 
     result = import_deck(client, {"id": 1, "name": "Lesson 1"})
 
     [record] = result.records
     assert record.pitch_accent == ["LHHHHH"], "kept, not dropped"
-    assert len(result.warnings) == 1, result.warnings
-    assert "LHHHHH" in result.warnings[0]
-    assert "cannot be spoken" in result.warnings[0]
+    [warning] = result.warnings
+    assert "LHHHHH" in warning
+    assert "cannot be spoken" in warning
+    assert "engine's own accent" in warning, "and index 0 is the unusable one"
+
+
+def test_an_unusable_pattern_after_a_usable_one_costs_nothing_and_says_so() -> None:
+    """`select_pattern` voices `pitch_accent[0]`, so position decides the cost.
+
+    The first version of this warning said the clip fell back to the engine's
+    own accent whenever *any* pattern was unusable. With `['LHLL', 'LHL']` the
+    clip is forced from `LHLL` and is perfectly good — the warning sent a
+    curator hunting a fallback that never happened, which is the same defect
+    the sibling enrich warning had.
+    """
+    entry = _entry(pitch_accent=["LHLL", "LHL"])
+    client, _transport = _client_returning(entry)
+
+    result = import_deck(client, {"id": 1, "name": "Lesson 1"})
+
+    [warning] = result.warnings
+    assert "LHL" in warning
+    assert "uses LHLL, which is fine" in warning
+    assert "engine's own" not in warning
 
 
 def test_every_imported_record_carries_its_deck_as_the_source_ref() -> None:

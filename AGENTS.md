@@ -187,8 +187,9 @@ below is what is left, and it is the loop every other project already uses.*
     reader to it; it is a record of what a model once said, not state.
 11. `dist/`: generated `.apkg` and preview files — **not** committed.
 
-Only `dist/` is disposable. Everything under `data/` is tracked — the media,
-the staging files, and three `.gitkeep`s (`data/inbox/shirabe/`,
+Only `dist/`'s *contents* are disposable — the directory itself is held open
+by a tracked `.gitkeep` like the others. Everything under `data/` is tracked:
+the media, the staging files, and three `.gitkeep`s (`data/inbox/shirabe/`,
 `data/media/`, `data/staging/`) so those directories exist in a fresh clone
 whether or not they have contents yet — because the repository, not Anki's
 database and not an uncommitted working tree, is the source of truth.

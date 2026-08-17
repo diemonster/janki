@@ -24,12 +24,13 @@ instructions would produce plausible output that ignores every rule this
 directory exists to state — the expensive kind of wrong, because it looks
 like success.
 
-**Two passes record which prompt they sent, and the rest do not.** Extraction stores
-the system and style-guide digests in every staging file's
-`prompt_provenance`, and a coverage approval stores the digest of the
-instructions the approving model was given; a card from those can be traced to
-its exact text through `git log prompts/`. The rest cannot: `--ai` records no
-fingerprint, `--polish-meanings` fingerprints the record's user turn rather
+**Extraction and the coverage check record which prompt they sent.**
+Extraction stores the system and style-guide digests in the `prompt_provenance`
+of every staging file *it* writes — `import-anki` writes staging files too and
+records none — and a coverage approval stores the digest of the instructions
+the approving model was given; a card from either can be traced to its exact
+text through `git log prompts/`. The other three passes cannot: `--ai` records
+no fingerprint, `--polish-meanings` fingerprints the record's user turn rather
 than the template, and `patterns` records nothing. `prompts/README.md` says the
 same, and it is worth closing.
 """

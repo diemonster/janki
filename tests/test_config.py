@@ -184,6 +184,12 @@ def test_an_enrich_model_alone_no_longer_sets_the_polish_model(
     change is invisible unless it is pinned: a project naming only
     `enrich_model` now polishes with the default, not with its enrichment
     model, and would quietly start billing a different model than before.
+
+    It does not guard the commit that added it. The shim was deleted in
+    908c92e, which removed the old test correctly and shipped no replacement;
+    this arrived a commit later, so it passes against the code it is presented
+    as guarding. It is still a unique catcher — restoring the fallback fails
+    this and nothing else — and that is what it is for from here.
     """
     _write_config(
         tmp_path,

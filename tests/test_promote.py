@@ -139,6 +139,36 @@ def test_a_real_alternate_reading_passes_with_a_warning() -> None:
     assert "homograph" in result.warnings[0]
 
 
+def test_an_unspeakable_pitch_pattern_is_named_rather_than_promoted_silently() -> None:
+    """The third door, and the one nothing was watching.
+
+    `enrich --jpdb` refuses a pattern it cannot render and `import-jpdb` names
+    one, but `pitch_accent` is a first-class staging field: a hand-written row,
+    or one held back for reading review and later released, could carry an
+    unspeakable pattern straight into the collection with nothing said. Its
+    word audio then comes out in the engine's own accent — the exact silent
+    outcome the pitch work exists to prevent — while the card still draws a
+    pitch diagram from it.
+
+    Named, not held: an accent is not identity, and holding a whole row over
+    one would be out of proportion to a clip that still gets made.
+    """
+    # ぱんーや: five kana, so six characters is the right length, and `ン` still
+    # ends on no vowel for the `ー` to repeat.
+    staged = record(
+        id="word:ぱんーや:ぱんーや",
+        expression="ぱんーや",
+        reading="ぱんーや",
+        pitch_accent=["LHHHHH"],
+    )
+
+    result = check_readings([staged], skip_reading_check=True)
+
+    assert [item.id for item in result.promoted] == ["word:ぱんーや:ぱんーや"]
+    assert any("LHHHHH" in warning for warning in result.warnings), result.warnings
+    assert any("engine's own accent" in w for w in result.warnings)
+
+
 def test_a_reading_no_entry_lists_is_held_back() -> None:
     # Far likelier a transcription slip than a discovery, and the reading is
     # half of an ID that cannot be corrected later.

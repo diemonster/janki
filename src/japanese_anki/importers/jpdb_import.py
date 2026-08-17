@@ -26,7 +26,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from japanese_anki import jpdb
+from japanese_anki import jpdb, pitch
 from japanese_anki.conjugation import conjugate
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import contains_kanji, stable_record_id
@@ -217,15 +217,24 @@ def select_decks(
 def _speakable(reading: str, pattern: str) -> bool:
     """Whether a forced clip can be made from this reading and pattern.
 
-    The same test `enrich` applies before writing one — rendering, not just
-    length — so the two commands agree about which patterns are usable and a
-    record cannot arrive by one route carrying what the other refuses.
+    The same *test* `enrich` applies before writing one — rendering, not just
+    length — so the two commands agree about which patterns are usable. They
+    deliberately disagree about what to do: enrich writes only the usable ones,
+    and an import keeps everything jpdb said and names what cannot be spoken.
+    So a record can arrive by import carrying a pattern enrich would refuse,
+    and `select_pattern` reads index 0 — an unusable pattern there is a clip in
+    the engine's own accent, which is why the import says which case it is.
     """
-    from japanese_anki import pitch
-
     try:
         pitch.to_aquestalk(reading, pattern)
     except pitch.PitchError:
+        return False
+    except (TypeError, AttributeError):
+        # Not reachable from the wire — `jpdb.accent_patterns` and
+        # `models._string_list` both coerce to `str` — but this runs on every
+        # record of every import, and an import that dies on a malformed
+        # pattern loses a whole deck over an accent. Unrenderable is the right
+        # answer for something that is not a pattern at all.
         return False
     return True
 
@@ -297,21 +306,33 @@ def import_deck(
             )
             needs_reading.append(annotate(record, hold_reason="reading contains kanji"))
             continue
-        # Kept, not dropped: jpdb's answer is data a human may want to correct,
-        # and the audio falls back to the engine's own accent either way. But
-        # said out loud — `janki enrich --jpdb` refuses these patterns and warns,
-        # so an import that took the same pattern silently was the one route by
+        # Kept, not dropped: jpdb's answer is data a human may want to correct.
+        # But said out loud — `janki enrich --jpdb` refuses these patterns and
+        # warns, so an import that took the same pattern silently was a route by
         # which an unspeakable accent reached a record with nothing said.
+        #
+        # What it costs depends on *which* pattern: `pitch.select_pattern`
+        # voices the first one, so an unusable pattern after a usable one costs
+        # nothing at all, and saying otherwise sends a curator hunting a
+        # fallback that never happened. 17 of the collection's records carry
+        # more than one pattern, which is exactly the population that misfires.
         unusable = [
             pattern
             for pattern in record.pitch_accent
             if not _speakable(record.reading, pattern)
         ]
         if unusable:
+            voiced = record.pitch_accent[0] if record.pitch_accent else ""
             warnings.append(
                 f"{where}: jpdb pitch pattern(s) {', '.join(unusable)} for "
                 f"{record.expression} cannot be spoken with a forced accent; "
-                "kept on the record, but its word audio uses the engine's own."
+                + (
+                    "kept on the record, and its word audio uses the engine's "
+                    "own accent."
+                    if voiced in unusable
+                    else f"kept on the record — its word audio uses {voiced}, "
+                    "which is fine."
+                )
             )
         records.append(record)
 

@@ -238,17 +238,20 @@ def _spell_long_vowels(units: list[str]) -> list[str]:
     Refuses rather than emitting a `ー` the engine will 400 on, wherever the
     kana before it has no row in :data:`_LONG_VOWEL_FOR`: a `ー` that opens a
     reading with nothing before it at all, a `ー` after `ン` or `ッ`, which end
-    on no vowel, and a `ー` after anything the table deliberately omits — `ヵ`,
-    `ヷヸヹヺ`, half-width katakana.
+    on no vowel, and a `ー` after anything with no row at all: `ヵ`, which the
+    engine refuses either way, and everything :func:`_to_katakana` passes
+    through without converting — `ヷヸヹヺ`, `・ヽヾヿ`, half-width katakana,
+    and anything that is not kana.
+
     What a :class:`PitchError` here means depends on who asked. `audio_cmd`
     and the ledger voice the word with the engine's own accent — the same
     fallback as a record with no pattern at all, a worse clip than a forced one
     and a far better outcome than a failed request or an invented mora. jpdb
     enrichment asks a different question: it uses this to test whether a
-    pattern converts, so a refusal there classifies jpdb's pattern as
-    *unusable* and `pitch_accent` is not written at all. That is warned, not
-    silent, and it costs the record its pitch diagram as well as its forced
-    accent.
+    pattern converts, and files the refused ones as *unusable*. That is a
+    split, not a rejection — jpdb often offers several and the usable ones are
+    written — so the cost is only total when every offered pattern is refused
+    and the record had no accent of its own. It is warned in every case.
     """
     spelled: list[str] = []
     for unit in units:

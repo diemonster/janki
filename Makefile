@@ -35,12 +35,11 @@ JANKI := $(RUN) -m japanese_anki
 
 help:
 	@echo "janki — make targets:"
-	@grep -hE '^## [a-z-]+:' "$(ROOT)/Makefile" \
-		| sed -e 's/^## /  /' -e 's|\$$(VOICEVOX_CONTAINER)|$(VOICEVOX_CONTAINER)|g' \
-		| sort
+	@grep -hE '^## [a-z-]+:' "$(ROOT)/Makefile" | sed -e 's/^## /  /' | sort
+	@echo "  (VOICEVOX_CONTAINER is $(VOICEVOX_CONTAINER); VOICEVOX_URL is $(VOICEVOX_URL).)"
 	@echo
 	@echo "  Helpers: bootstrap, lint, test, build-sample, build-all, preview, clean."
-	@echo "  check is an alias for gates."
+	@echo "  check is an alias for gates; help is this, and is what a bare 'make' runs."
 
 bootstrap:
 	@cd "$(ROOT)" && ./scripts/bootstrap.sh
@@ -164,7 +163,7 @@ voicevox:
 	echo "  than slow, 'docker restart $(VOICEVOX_CONTAINER)'." >&2; \
 	exit 1
 
-## voicevox-stop: stop the container named $(VOICEVOX_CONTAINER).
+## voicevox-stop: stop the engine container (VOICEVOX_CONTAINER).
 #
 # Not "the one this Makefile started" — it cannot know that. An engine you
 # opened as the VOICEVOX app is not a container at all, which is the case that

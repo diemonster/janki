@@ -7,7 +7,11 @@ deck:
   model_name: "Japanese Pattern"
   description: "Everything janki can conjugate, drilled into its te-form. Answers computed by janki, never transcribed."
   # Not "every verb": membership is whatever `drill_cards` can build a te-form
-  # for, which today is 51 records — 46 of the collection's 48 verbs (two carry
-  # no usable class), plus 4 i-adjectives and 1 expression, which also take the
-  # form. The deck is defined by the conjugation, not by the part of speech.
+  # for. Today that is 51 records — 46 verbs, 4 i-adjectives and 1 expression.
+  # Counting `part_of_speech` on a word boundary, the collection holds 48
+  # verbs, so two are missing: はく and まつ, whose `part_of_speech` string
+  # `conjugate` cannot resolve and which carry no `verb_group` either. Records
+  # with a `verb_group` are not automatically in — 13 suru-nouns have one and
+  # still produce no te-form card. The deck is defined by the conjugation it
+  # can build, not by the part of speech.
   output: "teform-drill.apkg"
