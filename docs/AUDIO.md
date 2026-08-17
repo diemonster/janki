@@ -75,17 +75,20 @@ pattern changes from one unusable value to another. `janki audio --force`
 re-voices regardless.
 
 `janki audio` names every one of these on every run, with the record id and
-the reason, and that is the backstop: however a pattern got onto a record —
-`--prefer-incoming` on a merge, an inline `notes:` block, a hand edit of
-`vocabulary.json` — the run that voices it says so.
+the reason, and that is the backstop for anything in the collection: a merge
+that took `--prefer-incoming`, a hand edit of `vocabulary.json`, a pattern that
+was fine until its reading was corrected. It reads `vocabulary.json` only, so a
+record living in a deck's inline `notes:` block is outside it — those are read
+by the exporter alone and are never voiced at all.
 
 Three commands say it *earlier*, which is the point: before a clip exists to be
 wrong. `janki enrich --jpdb` refuses to write an unusable pattern and names the
 reason. `janki import-jpdb` keeps it — jpdb's answer is data you may want to
 correct — and names it, saying whether it is the pattern the clip will actually
-use. `janki promote` checks a staged row, which is the only door `audio_accent`
-comes through, and `audio_accent` is the one that reaches the synthesizer when
-it is set.
+use. `janki promote` checks a staged row, and checks `audio_accent` as well as
+`pitch_accent`, because `audio_accent` is the one that reaches the synthesizer
+when it is set — and it is the one no importer and no enrichment pass writes,
+so promote is where a hand-typed one is first seen.
 
 This is still the one case where filling in an accent does not by itself
 replace the clip.

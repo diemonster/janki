@@ -184,34 +184,49 @@ def _verify_coverage_facts(meta: dict[str, Any], block: dict[str, Any]) -> None:
 
 
 def _unspeakable_patterns(record: VocabularyRecord) -> tuple[list[str], bool]:
-    """Every stored pattern that cannot make a forced clip, and whether the
-    *chosen* one is among them.
+    """Every stored pattern that cannot make a forced clip, named by its field,
+    and whether the *chosen* one is among them.
 
     `audio_accent` is checked, not just `pitch_accent`, and it is checked
     first, because :func:`pitch.select_pattern` reads it first — it is the
-    pattern that actually reaches the synthesizer when it is set. It is also
-    the more hand-written of the two: no importer writes it and it is not in
-    `ENRICHABLE_FIELDS`, so a staging file is the *only* door it comes through,
-    which is the whole argument for checking here. Reading `pitch_accent` alone
-    both missed an unspeakable `audio_accent` entirely and blamed a
-    `pitch_accent` that nothing was going to use.
+    pattern that actually reaches the synthesizer when it is set. It is the
+    more hand-written of the two: no importer writes it and it is not in
+    `ENRICHABLE_FIELDS`, so promote is where a hand-typed one is first seen —
+    not the only way it can arrive, since it is mergeable and a hand edit of
+    `vocabulary.json` sets it, but the earliest. Reading `pitch_accent` alone
+    both missed an
+    unspeakable `audio_accent` entirely and blamed a `pitch_accent`
+    that nothing was going to use.
 
-    `validation.py` says the same thing about the same field: "it is the
-    pattern audio generation actually uses when set, so a typo there is the one
-    that reaches the synthesizer".
+    Each pattern carries its field name because they are edited separately and
+    a curator told "pitch pattern LHLL is wrong" on a record whose
+    `pitch_accent` is empty has been sent to the wrong line of the file.
+    `validation.py` labels them the same way, and says why this field is the
+    one that matters: "it is the pattern audio generation actually uses when
+    set, so a typo there is the one that reaches the synthesizer".
+
+    Comparison is on the canonical form — stripped and upper-cased, as
+    `select_pattern` returns it — because `pitch._LEVELS` accepts `h`/`l` as
+    well as `H`/`L`. A record whose accent is typed in lower case renders
+    perfectly well, and comparing raw strings would report the chosen pattern
+    as fine when it is the broken one.
     """
     chosen = pitch_module.select_pattern(record)
-    stored = [record.audio_accent, *record.pitch_accent]
-    unusable = []
-    for pattern in stored:
-        if not pattern.strip() or pattern in unusable:
+    stored = [("audio_accent", record.audio_accent)]
+    stored += [("pitch_accent", pattern) for pattern in record.pitch_accent]
+    unusable: list[str] = []
+    seen: set[str] = set()
+    for field_name, pattern in stored:
+        canonical = pattern.strip().upper()
+        if not canonical or canonical in seen:
             continue
+        seen.add(canonical)
         try:
             pitch_module.to_aquestalk(record.reading, pattern)
         except pitch_module.PitchError:
-            unusable.append(pattern)
+            unusable.append(f"{field_name} {pattern}")
     chosen_is_unusable = bool(
-        chosen and any(pattern.strip().upper() == chosen for pattern in unusable)
+        chosen and any(entry.split(" ", 1)[1].strip().upper() == chosen for entry in unusable)
     )
     return unusable, chosen_is_unusable
 
@@ -352,7 +367,7 @@ def check_readings(
         unspeakable, chosen_is_unusable = _unspeakable_patterns(resolved)
         if unspeakable:
             result.warnings.append(
-                f"{record.id}: pitch pattern(s) {', '.join(unspeakable)} cannot "
+                f"{record.id}: {', '.join(unspeakable)} cannot "
                 f"be spoken for reading {resolved.reading}"
                 + (
                     "; its word audio uses the engine's own accent."

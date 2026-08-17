@@ -528,11 +528,12 @@ def _why_unusable(reading: str, pattern: str) -> str:
         detail = str(exc).rstrip(".")
         # Anchored markers, not a bare ": ". Both messages interpolate the
         # pattern and the reading ahead of their real separator, so splitting
-        # on the first colon-space cut inside the data — and it is the
-        # *pattern* that can carry one, being a hand-typed field: `"L: H"`
-        # defeated the bare marker. A pattern containing the anchor itself
-        # (`"A': B"`) still mis-splits; the message stays readable and the
-        # value is visible in the line above it.
+        # on the first colon-space cut inside the data: `"L: H"` defeated the
+        # bare marker. The patterns here come off jpdb's wire response rather
+        # than from anything typed locally, so this is defensive rather than
+        # load-bearing — a pattern containing the anchor itself (`"A': B"`)
+        # still mis-splits, and the caller prints the pattern immediately
+        # before this reason, so a mangled one is visible beside its value.
         for marker in (" for VOICEVOX: ", "': "):
             head, found, tail = detail.partition(marker)
             if found:

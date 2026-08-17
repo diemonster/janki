@@ -47,10 +47,10 @@ case "$1" in
              [ -n "$STUB_RUNNING" ] && echo abc123
              exit 0 ;;
     esac ;;
-  start)   echo "STUB-CALLED: docker start" >&2; exit ${STUB_START_RC:-0} ;;
-  restart) echo "STUB-FORBIDDEN: docker restart" >&2; exit 0 ;;
-  run)     exit ${STUB_RUN_RC:-0} ;;
-  rm)      echo "STUB-FORBIDDEN: docker rm" >&2; exit 0 ;;
+  start)   echo "start" >> "$STUB_CALLS"; exit ${STUB_START_RC:-0} ;;
+  restart) echo "restart" >> "$STUB_CALLS"; exit 0 ;;
+  run)     echo "run" >> "$STUB_CALLS"; exit ${STUB_RUN_RC:-0} ;;
+  rm)      echo "rm" >> "$STUB_CALLS"; exit 0 ;;
   *)       exit 0 ;;
 esac
 """
@@ -70,6 +70,7 @@ class Run:
     code: int
     out: str
     err: str
+    calls: list[str]
 
     @property
     def text(self) -> str:
@@ -102,15 +103,25 @@ def _which(tool: str) -> str | None:
 
 
 def _make(target: str, path: Path, **env: str) -> Run:
-    """Run one make target with `path` as the *whole* PATH."""
+    """Run one make target with `path` as the *whole* PATH.
+
+    Which docker subcommands ran is read from a file the stub appends to, not
+    from its output. An earlier version had the stub print to stderr, which the
+    recipe silences with `2>/dev/null 2>&1` on four of its own lines — so a
+    mutation that added such a redirect to a forbidden call would have gone
+    undetected by a test whose whole job is to detect it.
+    """
+    calls = path / "docker-calls"
+    calls.unlink(missing_ok=True)
     result = subprocess.run(
         ["make", "-C", str(PROJECT_ROOT), target],
         capture_output=True,
         text=True,
-        env={**os.environ, "PATH": str(path), **env},
+        env={**os.environ, "PATH": str(path), "STUB_CALLS": str(calls), **env},
         check=False,
     )
-    return Run(result.returncode, result.stdout, result.stderr)
+    ran = calls.read_text(encoding="utf-8").split() if calls.exists() else []
+    return Run(result.returncode, result.stdout, result.stderr, ran)
 
 
 @pytest.fixture
@@ -218,7 +229,12 @@ def test_the_engine_already_answering_starts_nothing(stubs: Path) -> None:
 
     assert run.code == 0
     assert "already answering" in run.text
-    assert "STUB-FORBIDDEN" not in run.text
+    # Not just the message: deleting the `exit 0` that follows it leaves the
+    # recipe running on, so `make voicevox` starts a *second* container against
+    # an engine already serving port 50021 — and the message is still printed.
+    # This is the same vacuous-absence hole its sibling had.
+    assert run.calls == [], f"docker was touched: {run.calls}"
+    assert "running voicevox" not in run.text
 
 
 def test_a_running_container_is_started_not_restarted(stubs: Path) -> None:
@@ -236,13 +252,12 @@ def test_a_running_container_is_started_not_restarted(stubs: Path) -> None:
     """
     run = _make("voicevox", stubs, STUB_EXISTS="1", STUB_RUNNING="1")
 
-    # The stub reports the call on stderr — the recipe sends docker's stdout to
-    # /dev/null — rather than the recipe's own echo: the "starting the existing"
-    # line prints *before* `docker start` runs, so asserting on it passes even
-    # when the call itself is gone.
-    assert "STUB-CALLED: docker start" in run.text, "the container was started"
-    assert "running voicevox" not in run.text, "and no second one was created"
-    assert "STUB-FORBIDDEN: docker restart" not in run.text
+    # Read from the stub's call log, not from the recipe's own echo: the
+    # "starting the existing" line prints *before* `docker start` runs, so
+    # asserting on it passes even when the call itself is gone.
+    assert "start" in run.calls, "the container was started"
+    assert "run" not in run.calls, "and no second one was created"
+    assert "restart" not in run.calls
 
 
 def test_a_failed_create_does_not_delete_a_container(stubs: Path) -> None:
@@ -252,8 +267,25 @@ def test_a_failed_create_does_not_delete_a_container(stubs: Path) -> None:
     run = _make("voicevox", stubs, STUB_RUN_RC="125")
 
     assert run.code != 0
-    assert "STUB-FORBIDDEN: docker rm" not in run.text
+    assert "rm" not in run.calls, f"docker rm ran: {run.calls}"
     assert "could not start the container" in run.text
+
+
+def test_a_missing_docker_points_at_the_app_instead(tmp_path: Path) -> None:
+    """The sibling of the curl guard, which had a test while this did not.
+
+    No docker and no engine is a real state — someone who runs the VOICEVOX app
+    and has never installed Docker — and the useful answer is the app's URL,
+    not sixty seconds of polling.
+    """
+    stubs = _bin(tmp_path, curl=CURL_STUB, sleep="#!/bin/sh\nexit 0\n")
+
+    run = _make("voicevox", stubs)
+
+    assert run.code != 0
+    assert "docker is not installed" in run.text
+    assert "voicevox.hiroshiba.jp" in run.text, "it says what to do instead"
+    assert "60 tries" not in run.text
 
 
 def test_a_missing_curl_is_named_rather_than_polled_out(tmp_path: Path) -> None:

@@ -26,9 +26,11 @@ like success.
 
 **Extraction and the coverage check record which prompt they sent.**
 Extraction stores the system and style-guide digests in the `prompt_provenance`
-of every staging file *it* writes; the other writers of staging — the
-importers, the needs-reading diversion, `enrich --ai`'s staging route —
-record none. A coverage approval stores the digest of the instructions
+of every staging file *it* writes. Staging has four other writers —
+`import-anki`, the needs-reading diversion the other importers hold rows back
+through, `enrich --ai`'s staging route, and promote's own archive — and none of
+them records a prompt, because none of them sends one. A coverage approval
+stores the digest of the instructions
 the approving model was given; a card from either can be traced to its exact
 text through `git log prompts/`. The other three passes cannot: `--ai` records
 no fingerprint, `--polish-meanings` fingerprints the record's user turn rather

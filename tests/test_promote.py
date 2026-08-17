@@ -158,8 +158,9 @@ def test_an_unspeakable_pitch_pattern_is_named_rather_than_promoted_silently() -
     result = check_readings([staged], skip_reading_check=True)
 
     assert [item.id for item in result.promoted] == ["word:はし:はし"]
-    assert any("LHLL" in warning for warning in result.warnings), result.warnings
-    assert any("engine's own accent" in w for w in result.warnings)
+    [warning] = result.warnings
+    assert "pitch_accent LHLL" in warning, "named by the field it is stored in"
+    assert "engine's own accent" in warning
 
 
 def test_the_length_check_is_not_the_whole_test_at_promote_either() -> None:
@@ -181,7 +182,9 @@ def test_the_length_check_is_not_the_whole_test_at_promote_either() -> None:
     result = check_readings([staged], skip_reading_check=True)
 
     assert result.promoted, "named, not held"
-    assert any("has no vowel to repeat" not in w and "LHHHHH" in w for w in result.warnings)
+    [warning] = result.warnings
+    assert "LHHHHH" in warning
+    assert "cannot be spoken" in warning
 
 
 def test_promote_checks_the_pattern_that_actually_reaches_the_synthesizer() -> None:
@@ -203,12 +206,54 @@ def test_promote_checks_the_pattern_that_actually_reaches_the_synthesizer() -> N
     silent = check_readings([unspeakable_choice], skip_reading_check=True)
     misblamed = check_readings([good_choice], skip_reading_check=True)
 
-    assert any("LHLL" in w for w in silent.warnings), "audio_accent is checked"
-    assert any("engine's own accent" in w for w in silent.warnings)
+    [silent_warning] = silent.warnings
+    assert "audio_accent LHLL" in silent_warning, "checked, and named by its field"
+    assert "engine's own accent" in silent_warning
 
-    assert any("LHLL" in w for w in misblamed.warnings), "and still reported"
-    assert any("uses LHL, which is fine" in w for w in misblamed.warnings)
-    assert not any("engine's own" in w for w in misblamed.warnings)
+    [misblamed_warning] = misblamed.warnings
+    assert "pitch_accent LHLL" in misblamed_warning, "still reported"
+    assert "uses LHL, which is fine" in misblamed_warning
+    assert "engine's own" not in misblamed_warning
+
+
+def test_a_lower_case_accent_is_compared_in_its_canonical_form() -> None:
+    """`pitch._LEVELS` accepts `h`/`l`, and `select_pattern` upper-cases.
+
+    So a record whose accent is typed in lower case renders perfectly well, and
+    the message about *which* pattern the clip uses has to compare the two in
+    the same form. Comparing raw strings reported the chosen pattern as fine
+    when it was the broken one — measured, and it survived the whole suite.
+    """
+    staged = record(
+        id="word:はし:はし", expression="はし", reading="はし", pitch_accent=["lhll"]
+    )
+
+    result = check_readings([staged], skip_reading_check=True)
+
+    [warning] = result.warnings
+    assert "lhll" in warning, "reported as the curator typed it"
+    assert "engine's own accent" in warning, "and recognised as the chosen one"
+
+
+def test_one_pattern_in_two_spellings_is_reported_once() -> None:
+    """`audio_accent: lhll` with `pitch_accent: [LHLL]` is one pattern.
+
+    The dedup was an exact-string comparison while everything around it — the
+    selection, the fingerprints, the chosen-pattern check — normalises, so the
+    same pattern twice read as two problems.
+    """
+    staged = record(
+        id="word:はし:はし",
+        expression="はし",
+        reading="はし",
+        audio_accent="lhll",
+        pitch_accent=["LHLL"],
+    )
+
+    result = check_readings([staged], skip_reading_check=True)
+
+    [warning] = result.warnings
+    assert warning.count("LHLL") + warning.count("lhll") == 1, warning
 
 
 def test_a_reading_no_entry_lists_is_held_back() -> None:

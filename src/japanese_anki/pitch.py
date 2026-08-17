@@ -235,15 +235,18 @@ _LONG_VOWEL_FOR = {
 def _spell_long_vowels(units: list[str]) -> list[str]:
     """Replace each `ー` with the vowel of the mora it lengthens.
 
-    Refuses rather than emitting a `ー` the engine will 400 on, wherever the
-    kana before it has no row in :data:`_LONG_VOWEL_FOR`: a `ー` that opens a
-    reading with nothing before it at all, a `ー` after `ン` or `ッ`, which end
-    on no vowel, and a `ー` after anything else with no row: `ヵ`, which the
-    engine refuses spelled or bare, and every kana :func:`_to_katakana` leaves
-    alone — `ヷヸヹヺ`, `ヽヾヿ` and their hiragana counterparts `ゝゞゟ`, the
-    small katakana extensions `ㇰ`–`ㇿ`, the marks `・`, `゠` and the bare
-    combining dakuten, half-width katakana *other than* `ｰ` (which is folded),
-    and anything that is not kana at all.
+    Refuses rather than emitting a `ー` the engine will 400 on. The rule is
+    the table and nothing else: a `ー` is respelled when the character before
+    it has a row in :data:`_LONG_VOWEL_FOR`, and refused when it does not.
+
+    Stated as a rule rather than a list because the list is 126 codepoints
+    long and two attempts at enumerating it were wrong — it takes in the
+    moraic consonants `ン` and `ッ`, `ヵ`, the combining and iteration marks,
+    the small katakana extensions, half-width katakana other than `ｰ` (which
+    :func:`_to_katakana` folds), the Kana Supplement and Extended blocks, and
+    a `ー` opening a reading with nothing before it at all. What they have in
+    common is only that the table does not answer for them, which is the
+    thing worth knowing.
 
     The lookup is on the last character of the previous already-respelled unit,
     not on the reading's raw kana, which is why `カｰー` renders: the half-width
