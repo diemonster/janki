@@ -2613,6 +2613,15 @@
           ],
           "kind": "jpdb",
           "model": "jpdb"
+        },
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5"
         }
       ],
       "exports": {},
@@ -2869,7 +2878,17 @@
           "voice": 13
         }
       ],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -3739,6 +3758,15 @@
           ],
           "kind": "jpdb",
           "model": "jpdb"
+        },
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5"
         }
       ],
       "exports": {},
@@ -6600,6 +6628,15 @@
           ],
           "kind": "jpdb",
           "model": "jpdb"
+        },
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "examples",
+            "usage_notes"
+          ],
+          "kind": "ai",
+          "model": "claude-opus-5"
         }
       ],
       "exports": {},

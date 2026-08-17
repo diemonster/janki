@@ -2069,12 +2069,29 @@
     "part_of_speech": "expression",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "駅までどうやって行きますか。",
+        "furigana": "駅[えき]までどうやって 行[い]きますか。",
+        "romaji": "ekimadedouyatteikimasuka.",
+        "english": "How do you get to the station?",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "このカレー、どうやって作るの？",
+        "furigana": "このカレー、どうやって 作[つく]るの？",
+        "romaji": "konokaree, douyattetsukuruno?",
+        "english": "How do you make this curry?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "104-week-8-writing-homework"
     ],
-    "usage_notes": "",
+    "usage_notes": "どうやって asks about the means or method of doing something, so it needs a verb after it: どうやって行く／作る／使う. Don't confuse it with どうして, which asks why. When you want to ask what something is like rather than how it is done, use plain どう (この映画はどうでしたか).",
     "audio": "audio/janki-f6c7a53a4cfb.wav",
     "image": "",
     "pitch_accent": [
@@ -2300,12 +2317,29 @@
     "part_of_speech": "verb (godan, transitive)",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "山に行くとき、いつもこの靴をはきます。",
+        "furigana": "山[やま]に 行[い]くとき、いつもこの 靴[くつ]をはきます。",
+        "romaji": "yamaniikutoki, itsumokonokutsuohakimasu.",
+        "english": "When I go hiking in the mountains, I always wear these shoes.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "明日はこの新しいジーンズをはくつもりなんだ。",
+        "furigana": "明日[あした]はこの 新[あたら]しいジーンズをはくつもりなんだ。",
+        "romaji": "ashitahakonoatarashiijiinzuohakutsumorinanda.",
+        "english": "I'm planning to wear these new jeans tomorrow.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "104-week-8-writing-homework"
     ],
-    "usage_notes": "",
+    "usage_notes": "はく covers only things you put on from the waist down — shoes, socks, pants, skirts. Use きる for shirts, jackets and dresses, かぶる for hats, and かける for glasses. It is usually written in kana (the kanji 履く for footwear, 穿く for trousers, are less common).",
     "audio": "audio/janki-8ea15f9928a5.wav",
     "image": "",
     "pitch_accent": [],
@@ -3038,12 +3072,29 @@
     "part_of_speech": "na-adjective",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "妻は料理が上手です。",
+        "furigana": "妻[つま]は 料理[りょうり]が 上手[じょうず]です。",
+        "romaji": "tsumaharyourigajouzudesu.",
+        "english": "My wife is good at cooking.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "山田くん、歌上手なの？",
+        "furigana": "山田[やまだ]くん、 歌[うた] 上手[じょうず]なの？",
+        "romaji": "yamadakun, utajouzunano?",
+        "english": "Yamada, are you good at singing?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "104-week-8-writing-homework"
     ],
-    "usage_notes": "",
+    "usage_notes": "The skill takes が: 〜が上手です. As a な-adjective it needs な before a noun (上手な人). It is normally used to praise other people; saying 私は日本語が上手です about yourself sounds boastful, so use 得意（とくい）for your own strengths, or the negative 上手じゃありません to be modest.",
     "audio": "audio/janki-91b3c2fb6717.wav",
     "image": "",
     "pitch_accent": [
@@ -5749,12 +5800,29 @@
     "part_of_speech": "counter",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "今日の東京は三十五度です。",
+        "furigana": "今日[きょう]の 東京[とうきょう]は 三十五[さんじゅうご] 度[ど]です。",
+        "romaji": "kyounotoukyouhasanjuugododesu.",
+        "english": "Tokyo is thirty-five degrees today.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "外、今何度なの？",
+        "furigana": "外[そと]、 今[いま] 何度[なんど]なの？",
+        "romaji": "soto, imanandonano?",
+        "english": "How many degrees is it outside right now?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "度 is the counter for degrees of temperature and angles (三十度), and also counts occurrences: 一度 (once), 二度 (twice). 何度 therefore means both \"how many degrees\" and \"how many times\" — context decides. Numbers attach directly with no sound changes (いちど, にど, さんど).",
     "audio": "audio/janki-7cf807eca94a.wav",
     "image": "",
     "pitch_accent": [
