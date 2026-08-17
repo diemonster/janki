@@ -1180,6 +1180,12 @@ class AiOutcome:
     #: warning reports what this function did rather than re-deriving it from
     #: proxies.
     preserved: bool = False
+    #: Romaji the model supplied that does not transliterate its own sentence,
+    #: one message per example. Carried rather than printed here because a
+    #: disagreement between a sentence and its romaji is a fact about the
+    #: answer, and the caller decides whether that reaches a terminal, a
+    #: staging file, or both.
+    romaji_rejected: list[str] = field(default_factory=list)
 
 
 def _fill_existing_example_annotations(
@@ -1213,7 +1219,7 @@ def _fill_existing_example_annotations(
             ),
         )
         if updated.furigana or not contains_kanji(updated.japanese):
-            updated = qc.regenerate_example_romaji(updated)
+            updated, _rejected = qc.settle_example_romaji(updated)
         merged.append(updated)
     return merged
 
@@ -1235,11 +1241,12 @@ def apply_ai_result(
     What remains is fill discipline and derivation: stored examples are
     preserved unless ``--force-fields examples`` asks otherwise, existing
     annotations win over the model's, an unrecognized speech level reads as
-    polite, and romaji is regenerated from the furigana, always, whatever
-    arrived.
+    polite, and romaji is checked against the reading rather than rebuilt from
+    it — see :func:`qc.settle_example_romaji` for why the rebuild had to go.
     """
     outcome = AiOutcome(record=record)
     kept: list[ExampleSentence] = []
+    romaji_warnings: list[str] = []
 
     for item in getattr(parsed, "examples", []) or []:
         register = str(getattr(item, "speech_level", "") or "").strip().lower()
@@ -1256,7 +1263,10 @@ def apply_ai_result(
         )
         if not example.japanese:
             continue
-        kept.append(qc.regenerate_example_romaji(example))
+        settled, rejected = qc.settle_example_romaji(example)
+        if rejected:
+            romaji_warnings.append(rejected)
+        kept.append(settled)
 
     proposals: dict[str, Any] = {
         "examples": kept,
@@ -1305,6 +1315,7 @@ def apply_ai_result(
         updated, changes = _apply(record, proposals, writable)
     outcome.record = updated
     outcome.changes = changes
+    outcome.romaji_rejected = romaji_warnings
     return outcome
 
 
@@ -1430,6 +1441,13 @@ def absorb_ai_call(
             "sentences were discarded — pass --force-fields examples to "
             "replace them."
         )
+    for rejected in outcome.romaji_rejected:
+        # The sentence and its romaji disagree. janki kept the sentence and
+        # replaced the romaji with what the reading actually transliterates
+        # to, which is the safe half — but the disagreement itself says the
+        # answer was not internally consistent, and that is a human's to look
+        # at rather than something to repair quietly.
+        result.warnings.append(f"{record.id}: {rejected}")
     if outcome.changes:
         result.records[positions[record.id]] = outcome.record
         result.changes[record.id] = {

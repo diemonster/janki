@@ -53,9 +53,10 @@ pass through, because neither carries a reading that could be got wrong.
 
 from __future__ import annotations
 
+import re
 import unicodedata
 
-__all__ = ["kana_to_romaji"]
+__all__ = ["accepting_pattern", "kana_to_romaji"]
 
 _SOKUON = "っ"
 _SYLLABIC_N = "ん"
@@ -155,6 +156,62 @@ _PUNCTUATION: dict[str, str] = {
 _TRANSPARENT_CATEGORIES = frozenset({"Pc", "Pd", "Ps", "Pe", "Pi", "Pf", "Po", "Zs"})
 
 
+#: What each ambiguous kana may legitimately be spelled as. Both are particles
+#: read differently from the syllable they are written with, and which one a
+#: given は is cannot be known without word segmentation — so a *verifier*
+#: accepts either, where the generator has to pick one and picks the kana.
+_PARTICLE_ALTERNATIVES = {"は": ("ha", "wa"), "へ": ("he", "e")}
+
+
+def accepting_pattern(kana: str) -> str:
+    """A regex matching every spelling of ``kana`` a romanizer may defensibly
+    produce, ignoring word spacing.
+
+    For checking someone *else's* romaji rather than writing janki's own. The
+    caller is a model that can segment — which is the thing :func:`kana_to_romaji`
+    deliberately cannot do — so its output may legitimately differ from this
+    module's in exactly three ways, and no others:
+
+    * **word spaces**, anywhere, which is the whole reason to ask;
+    * **は as `wa` and へ as `e`** when they are particles, which needs the
+      segmentation to know;
+    * the **apostrophe** in ``n'``, which a writer may or may not type.
+
+    Everything else — every consonant, every vowel, every geminate, every long
+    vowel — has to agree exactly. So a romaji that matches this says the same
+    thing the kana does, and one that does not is rejected rather than
+    silently kept. That is the guarantee `qc` cares about: a learner reading
+    romaji is reading it *because* they cannot yet read the kana, so they
+    cannot catch it being wrong.
+
+    Returns ``""`` for kana this module cannot romanize at all, which callers
+    must treat as "cannot verify" rather than as "matches nothing".
+    """
+    scanned = _scan(kana)
+    if scanned is None:
+        return ""
+    parts = [r"\s*"]
+    for source, piece in scanned:
+        alternatives = _PARTICLE_ALTERNATIVES.get(source)
+        if alternatives:
+            parts.append("(?:" + "|".join(alternatives) + ")")
+        elif piece == "n'":
+            parts.append("n'?")
+        elif not piece.strip():
+            # Whitespace the *furigana* carried. It is ruby notation, not a
+            # word boundary, so it neither has to be there nor has to be
+            # absent — the `\s*` between every piece already allows both.
+            continue
+        else:
+            # Stripped before escaping: the punctuation table spells 。 as
+            # ". " and 、 as ", ", and escaping that trailing space would make
+            # it mandatory — so a sentence ending in "." rather than ". "
+            # would fail to match itself.
+            parts.append(re.escape(piece.strip()))
+        parts.append(r"\s*")
+    return "".join(parts)
+
+
 def _to_hiragana(text: str) -> str:
     """Fold katakana onto hiragana so one table serves both scripts."""
     folded: list[str] = []
@@ -230,8 +287,28 @@ def kana_to_romaji(kana: str) -> str:
     string. See the module docstring for the dialect and its known limits
     (particle は/へ, and no word segmentation).
     """
+    scanned = _scan(kana)
+    if scanned is None:
+        return ""
+    pieces = [piece for _source, piece in scanned]
+    # Whitespace is a word separator a caller supplied (furigana segments), so
+    # it survives; the runs the punctuation table introduces are collapsed.
+    return " ".join("".join(pieces).split())
+
+
+def _scan(kana: str) -> list[tuple[str, str]] | None:
+    """``kana`` as ``(source unit, romaji piece)`` pairs, or ``None``.
+
+    Split out from :func:`kana_to_romaji` so :func:`accepting_pattern` can walk
+    the same scan and widen a single decision per unit, rather than keeping a
+    second copy of the gemination, prolongation and syllabic-``n`` rules that
+    would drift from this one. The source unit rides along because the two
+    ambiguous kana — は and へ — are only identifiable before romanization:
+    ``ha`` in the output could have come from は or from a は inside a word,
+    and by then they are the same three letters.
+    """
     text = _to_hiragana(unicodedata.normalize("NFKC", kana))
-    romanized: list[str] = []
+    romanized: list[tuple[str, str]] = []
     last_vowel: str | None = None
     index = 0
 
@@ -240,13 +317,13 @@ def kana_to_romaji(kana: str) -> str:
 
         if char == _SOKUON:
             following = _read_unit(text, index + 1)
-            romanized.append(_geminate(following[0] if following else ""))
+            romanized.append((char, _geminate(following[0] if following else "")))
             index += 1
             continue
 
         if char == _SYLLABIC_N:
             following = _read_unit(text, index + 1)
-            romanized.append(_syllabic_n(following[0] if following else ""))
+            romanized.append((char, _syllabic_n(following[0] if following else "")))
             # ん ends on a consonant, so a ー after it has no vowel to repeat.
             last_vowel = None
             index += 1
@@ -254,33 +331,32 @@ def kana_to_romaji(kana: str) -> str:
 
         if char == _LONG_VOWEL_MARK:
             if last_vowel is None:
-                return ""
-            romanized.append(last_vowel)
+                return None
+            romanized.append((char, last_vowel))
             index += 1
             continue
 
         unit = _read_unit(text, index)
         if unit is not None:
-            syllable, index = unit
-            romanized.append(syllable)
+            syllable, next_index = unit
+            romanized.append((text[index:next_index], syllable))
+            index = next_index
             last_vowel = syllable[-1] if syllable[-1] in _VOWELS else None
             continue
 
         replacement = _PUNCTUATION.get(char)
         if replacement is not None:
-            romanized.append(replacement)
+            romanized.append((char, replacement))
             last_vowel = None
             index += 1
             continue
 
         if _is_transparent(char):
-            romanized.append(char)
+            romanized.append((char, char))
             last_vowel = None
             index += 1
             continue
 
-        return ""
+        return None
 
-    # Whitespace is a word separator a caller supplied (furigana segments), so
-    # it survives; the runs the punctuation table introduces are collapsed.
-    return " ".join("".join(romanized).split())
+    return romanized

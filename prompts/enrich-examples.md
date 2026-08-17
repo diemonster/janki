@@ -35,8 +35,15 @@ Readings are contextual and that is your judgement to make: 行 is い in 行く
 ぎょう in 銀行, 話 is はな in 話す and わ in 会話. Give the reading this sentence
 uses. Kana already in the base stay as they are — they are their own reading.
 
-Do not fill in romaji — janki generates that from the furigana and discards
-whatever you send.
+Write the romaji too, and put the spaces where the words are: `kyou wa osake
+nomanai no?`, not `kyouhaosakenomanaino?`. Spell the particles as they are
+*said* — は is `wa`, へ is `e`, を is `o`. Long vowels are written out (`ou`,
+`uu`, `ii`), never with macrons; `ん` is always `n`, with an apostrophe before
+a vowel or `y` so `kin'en` cannot be read as `ki-ne-n`.
+
+Where the words are is the one thing here janki cannot work out for itself —
+it has the reading but not the segmentation — so this is your judgement, and
+it checks your answer against the reading letter by letter before keeping it.
 
 Say nothing you are not sure of. An empty usage note is a fine answer; an
 invented nuance is not.

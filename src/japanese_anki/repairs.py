@@ -608,7 +608,11 @@ def _example_romaji_values(before: Mapping[str, Any]) -> list[str]:
         before["examples[*].romaji"],
         strict=True,
     ):
-        repaired = qc.regenerate_example_romaji(
+        # `settle`, not `regenerate`: a romaji that verifies against the
+        # reading is kept with its word spacing, so this repair no longer
+        # flattens a correctly segmented value into an unsegmented one every
+        # time it runs.
+        repaired, _rejected = qc.settle_example_romaji(
             ExampleSentence(japanese=japanese, furigana=furigana, romaji=romaji)
         )
         values.append(repaired.romaji)
@@ -668,7 +672,7 @@ REGISTRY = RepairRegistry(
                 "examples[*].furigana",
                 "examples[*].romaji",
             ),
-            evidence={"algorithm": "japanese_anki.qc.regenerate_example_romaji"},
+            evidence={"algorithm": "japanese_anki.qc.settle_example_romaji"},
             precondition=_example_romaji_pre,
             transformation=_example_romaji_transform,
             postcondition=_example_romaji_post,

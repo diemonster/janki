@@ -17,7 +17,7 @@ from japanese_anki.models import ExampleSentence
 from japanese_anki.qc import (
     furigana_pairs,
     furigana_reading,
-    regenerate_example_romaji,
+    settle_example_romaji,
 )
 
 
@@ -66,25 +66,63 @@ def test_furigana_pairs_reads_anki_notation(
 
 
 def test_romaji_is_rebuilt_from_the_furigana() -> None:
-    rebuilt = regenerate_example_romaji(
+    rebuilt, _rejected = settle_example_romaji(
         example(furigana="毎日[まいにち] 日本語[にほんご]を 話[はな]します。")
     )
 
     assert rebuilt.romaji == "mainichinihongoohanashimasu."
 
 
-def test_model_supplied_romaji_is_discarded_not_checked() -> None:
-    # A wrong romaji is invisible to a learner who is reading it *because* they
-    # cannot yet read the kana.
-    rebuilt = regenerate_example_romaji(
+def test_a_supplied_romaji_that_says_something_else_is_replaced_and_named() -> None:
+    """A wrong romaji is invisible to a learner reading it *because* they
+    cannot yet read the kana — so it is replaced rather than kept, and the
+    disagreement is reported rather than repaired quietly."""
+    rebuilt, rejected = settle_example_romaji(
         example(furigana="話[はな]す", romaji="totally wrong")
     )
 
     assert rebuilt.romaji == "hanasu"
+    assert "does not transliterate" in rejected
+    assert "totally wrong" in rejected
+
+
+def test_a_supplied_romaji_that_agrees_keeps_its_word_spacing() -> None:
+    """The whole point of checking instead of rebuilding.
+
+    `kyou wa osake nomanai no?` and `kyouhaosakenomanaino?` say the same thing;
+    only the first is readable. Word spacing is segmentation, segmentation is
+    parsing, and parsing is the model's job — janki's job is making sure the
+    letters still say what the kana says.
+    """
+    rebuilt, rejected = settle_example_romaji(
+        example(
+            japanese="今日はおさけ飲まないの？",
+            furigana="今日[きょう]はおさけ 飲[の]まないの？",
+            romaji="kyou wa osake nomanai no?",
+        )
+    )
+
+    assert rebuilt.romaji == "kyou wa osake nomanai no?"
+    assert rejected == ""
+
+
+def test_a_particle_may_be_spelled_either_way_but_nothing_else_may() -> None:
+    """は is `ha` or `wa` and へ is `he` or `e`, because which one it is needs
+    the segmentation janki does not have. Every other letter has to agree."""
+    kept, _ = settle_example_romaji(
+        example(japanese="がっこうへいく。", furigana="", romaji="gakkou e iku.")
+    )
+    assert kept.romaji == "gakkou e iku.", "へ as the particle e"
+
+    replaced, rejected = settle_example_romaji(
+        example(japanese="がっこうへいく。", furigana="", romaji="gakkou e kuru.")
+    )
+    assert replaced.romaji == "gakkouheiku.", "a different verb is not a spelling"
+    assert rejected
 
 
 def test_an_all_kana_sentence_needs_no_furigana() -> None:
-    rebuilt = regenerate_example_romaji(
+    rebuilt, _rejected = settle_example_romaji(
         example(japanese="ねこはかわいい。", furigana="", romaji="stale")
     )
 
@@ -93,7 +131,7 @@ def test_an_all_kana_sentence_needs_no_furigana() -> None:
 
 def test_kanji_with_no_furigana_yields_no_romaji_rather_than_a_guess() -> None:
     # Transliterating kanji is exactly the invention this function removes.
-    rebuilt = regenerate_example_romaji(
+    rebuilt, _rejected = settle_example_romaji(
         example(japanese="毎日話します。", furigana="", romaji="stale")
     )
 
@@ -103,7 +141,7 @@ def test_kanji_with_no_furigana_yields_no_romaji_rather_than_a_guess() -> None:
 def test_regenerating_changes_nothing_else() -> None:
     original = example(romaji="stale")
 
-    rebuilt = regenerate_example_romaji(original)
+    rebuilt, _rejected = settle_example_romaji(original)
 
     assert rebuilt.japanese == original.japanese
     assert rebuilt.furigana == original.furigana
@@ -134,7 +172,7 @@ def test_per_kanji_furigana_keeps_its_sokuon() -> None:
     # segments 日本語 per kanji, so treating them as boundaries splits one word
     # into three and deletes the っ, which has nothing to geminate at the end of
     # a run.
-    rebuilt = regenerate_example_romaji(
+    rebuilt, _rejected = settle_example_romaji(
         ExampleSentence(
             japanese="日本語を話す。",
             furigana="日[にっ] 本[ぽん] 語[ご]を 話[はな]す。",
@@ -148,7 +186,7 @@ def test_latin_text_in_a_sentence_keeps_its_spaces() -> None:
     # Only the space Anki's notation requires before a ruby group is notation;
     # a space between two ASCII words is content, and kana_to_romaji passes
     # Latin through verbatim.
-    rebuilt = regenerate_example_romaji(
+    rebuilt, _rejected = settle_example_romaji(
         ExampleSentence(
             japanese="「Hello World」と言った。",
             furigana="「Hello World」と 言[い]った。",
@@ -162,7 +200,7 @@ def test_a_full_width_space_outside_a_ruby_group_is_content() -> None:
     # Only the ASCII space Anki's notation requires before a group is dropped.
     # A full-width space someone typed between two runs is content, and
     # kana_to_romaji renders it as a separator.
-    rebuilt = regenerate_example_romaji(
+    rebuilt, _rejected = settle_example_romaji(
         ExampleSentence(japanese="話す　よ", furigana="話[はな]す　よ")
     )
 
@@ -174,9 +212,10 @@ def test_the_docstrings_romaji_examples_are_what_the_code_returns() -> None:
     # These values are the design record for this function, and both were
     # wrong once: nippongoo was carried over from a sentence where を supplied
     # the extra o.
-    assert regenerate_example_romaji(
+    settled, _rejected = settle_example_romaji(
         ExampleSentence(japanese="日本語", furigana="日[にっ] 本[ぽん] 語[ご]")
-    ).romaji == "nippongo"
+    )
+    assert settled.romaji == "nippongo"
     # A typed space immediately before a ruby group is indistinguishable from
     # notation and goes with it.
     assert furigana_reading("本を 食[た]べる") == "本をたべる"

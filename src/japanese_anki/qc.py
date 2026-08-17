@@ -7,7 +7,7 @@ remains reads notation:
 
 * :func:`furigana_pairs` — the ``(base, reading)`` groups a field states.
 * :func:`furigana_reading` — the kana a field spells, notation spaces dropped.
-* :func:`regenerate_example_romaji` — romaji rebuilt from that reading.
+* :func:`settle_example_romaji` — romaji checked against that reading.
   Model-supplied romaji is discarded outright: romaji is a mechanical
   transliteration, so there is no reason to accept a guess at one.
 
@@ -25,12 +25,12 @@ from japanese_anki.identifiers import (
 from japanese_anki.models import (
     ExampleSentence,
 )
-from japanese_anki.romaji import kana_to_romaji
+from japanese_anki.romaji import accepting_pattern, kana_to_romaji
 
 __all__ = [
     "furigana_pairs",
     "furigana_reading",
-    "regenerate_example_romaji",
+    "settle_example_romaji",
 ]
 
 # One bracketed group in Anki furigana notation: the run of characters before
@@ -86,41 +86,50 @@ def furigana_reading(furigana: str) -> str:
     return "".join(out)
 
 
-def regenerate_example_romaji(example: ExampleSentence) -> ExampleSentence:
-    """The example with its romaji rebuilt from its furigana.
+def settle_example_romaji(example: ExampleSentence) -> tuple[ExampleSentence, str]:
+    """The example with its romaji settled, and why, if a supplied one was
+    thrown away.
 
-    Whatever romaji the example arrived with is discarded rather than checked.
-    Romaji is a mechanical transliteration of a reading janki already has, so
-    there is nothing a model could contribute but an opportunity to be wrong —
-    and a wrong romaji is invisible to a learner who is reading it *because*
-    they cannot yet read the kana.
+    **Checked, not regenerated.** Romaji word spacing *is* word segmentation,
+    and segmentation is parsing — the model's job, not janki's (`DESIGN.md`,
+    "the LLM parses, the dictionaries enrich"). This function used to discard
+    whatever romaji arrived and rebuild it from the furigana, on the reasoning
+    that a wrong romaji is invisible to a learner who is reading it *because*
+    they cannot yet read the kana. The reasoning is right; the conclusion was
+    wrong. Furigana spacing is Anki's ruby notation rather than word
+    boundaries, so rebuilding could only ever produce `hahanidenwao` for
+    母に電話を, and it spelled the topic particle は as `ha`. It traded an
+    occasionally wrong romaji for a reliably wrong one.
 
-    A sentence with no furigana is romanized from its own text, which is right
-    when it holds no kanji and refuses to guess when it does: transliterating
-    kanji is exactly the invention this function exists to remove.
+    So a supplied romaji is *verified* against the reading janki already has.
+    :func:`romaji.accepting_pattern` allows word spaces anywhere, は as `wa`,
+    へ as `e`, and an optional apostrophe in `n'`, and requires every other
+    letter to agree. A romaji that matches says what the kana says and is
+    kept, spacing and all. One that does not is replaced by the mechanical
+    transliteration and *named*: a rejection means the sentence and its romaji
+    disagree, which is worth a human's attention rather than a silent repair.
 
-    **The ASCII space before a ruby group is dropped; everything else stays.**
-    That space is Anki's notation, and jpdb segments per kanji, so the verified
-    furigana for 日本語 — ``日[にっ] 本[ぽん] 語[ご]`` — romanizes as
-    ``nippongo``. Keeping those spaces would give ``ni pon go``: one word split
-    into three, with the っ deleted because a sokuon at the end of a run has
-    nothing to geminate.
-
-    The rule is positional, not intentional, so a space someone *typed* right
-    before a ruby group goes too — ``本を 食[た]べる`` reads ``本をたべる``,
-    with the typed space gone. In that position a word space and a notation
-    space are indistinguishable in the field. Everywhere else content spacing
-    survives into the romaji: quoted Latin keeps its words apart, and so does a
-    full-width space between two runs.
-
-    What this does *not* do is insert word boundaries that were not already
-    there. Real ones need the parse's tokens, which this function is not given;
-    a caller that has one (M4.2) can do better, and :mod:`romaji` is built to
-    accept it. The other inherited limit is :mod:`romaji`'s own: は and へ
-    romanize as ``ha`` and ``he`` even as particles, because telling a particle
-    from a syllable needs segmentation that module deliberately does not have.
+    An example with no romaji is transliterated with no complaint — the
+    ordinary path for records that predate the prompt asking for one, and for
+    every pass that sends no model at all.
     """
     reading = (
         furigana_reading(example.furigana) if example.furigana else example.japanese
     )
-    return replace(example, romaji=kana_to_romaji(reading) if reading else "")
+    mechanical = kana_to_romaji(reading) if reading else ""
+    supplied = (example.romaji or "").strip()
+    if not supplied:
+        return replace(example, romaji=mechanical), ""
+
+    pattern = accepting_pattern(reading) if reading else ""
+    if not pattern:
+        # Nothing to check against: the reading still holds kanji, so janki
+        # does not know what it says either. Keeping the supplied value would
+        # be trusting it for precisely the reason it cannot be trusted.
+        return replace(example, romaji=mechanical), ""
+    if re.fullmatch(pattern, supplied):
+        return replace(example, romaji=" ".join(supplied.split())), ""
+    return replace(example, romaji=mechanical), (
+        f"romaji {supplied!r} does not transliterate {reading!r}; "
+        f"replaced with {mechanical!r}"
+    )
