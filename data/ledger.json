@@ -6,7 +6,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "653440d43bed",
+          "content_fp": "3faae91959a4",
           "file": "janki-42dd98e0f259.wav",
           "of": "word",
           "provider": "voicevox",
@@ -79,7 +79,7 @@
       "audio": [
         {
           "at": "2026-08-09",
-          "content_fp": "5b24d597f358",
+          "content_fp": "beefdcadf6c3",
           "file": "janki-b00627d9e72d.wav",
           "of": "word",
           "provider": "voicevox",
@@ -170,7 +170,7 @@
       "audio": [
         {
           "at": "2026-08-12",
-          "content_fp": "f19b9c05205a",
+          "content_fp": "3bf093f98c65",
           "file": "janki-aaa4faa66204.wav",
           "of": "word",
           "provider": "voicevox",
@@ -255,7 +255,18 @@
     "word:いす:いす": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -270,7 +281,7 @@
       "audio": [
         {
           "at": "2026-08-09",
-          "content_fp": "1d96be4648f3",
+          "content_fp": "2a236ac47302",
           "file": "janki-386c2ae02790.wav",
           "of": "word",
           "provider": "voicevox",
@@ -353,7 +364,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "983527074b55",
+          "content_fp": "50cde8f562f4",
           "file": "janki-c318fd8ec975.wav",
           "of": "word",
           "provider": "voicevox",
@@ -417,7 +428,7 @@
       "audio": [
         {
           "at": "2026-08-15",
-          "content_fp": "14cf8cedd9b2",
+          "content_fp": "316296cda4a6",
           "file": "janki-1a0bd2e56b99.wav",
           "of": "word",
           "provider": "voicevox",
@@ -496,7 +507,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "ec02c90ca8cf",
+          "content_fp": "a3122e8e262a",
           "file": "janki-5134a84c8b8f.wav",
           "of": "word",
           "provider": "voicevox",
@@ -641,7 +652,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "a52581899e35",
+          "content_fp": "bb5cce08f92d",
           "file": "janki-72a954d78a1e.wav",
           "of": "word",
           "provider": "voicevox",
@@ -726,7 +737,18 @@
     "word:おさけ:おさけ": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -741,7 +763,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "8e1c4234cec6",
+          "content_fp": "b3ddca5ca843",
           "file": "janki-6e8a64d89a97.wav",
           "of": "word",
           "provider": "voicevox",
@@ -805,7 +827,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "73d1f8ddd3d6",
+          "content_fp": "ffeb3b2c7f6d",
           "file": "janki-d8da2004541b.wav",
           "of": "word",
           "provider": "voicevox",
@@ -892,7 +914,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "0f5106209485",
+          "content_fp": "55aa10136c2d",
           "file": "janki-6e34949dd6e5.wav",
           "of": "word",
           "provider": "voicevox",
@@ -956,7 +978,7 @@
       "audio": [
         {
           "at": "2026-08-12",
-          "content_fp": "cc66242f47fc",
+          "content_fp": "6ad23294f350",
           "file": "janki-77b5ed04aa46.wav",
           "of": "word",
           "provider": "voicevox",
@@ -1023,7 +1045,7 @@
       "audio": [
         {
           "at": "2026-08-12",
-          "content_fp": "6e9d36ce2b2a",
+          "content_fp": "a6c80bf049a0",
           "file": "janki-32225c7435ac.wav",
           "of": "word",
           "provider": "voicevox",
@@ -1102,7 +1124,7 @@
       "audio": [
         {
           "at": "2026-08-11",
-          "content_fp": "5110aad98ecd",
+          "content_fp": "486d381ab814",
           "file": "janki-7b5e5a4dc8a9.wav",
           "of": "word",
           "provider": "voicevox",
@@ -1168,23 +1190,25 @@
         }
       ]
     },
-    "word:かう:かう": {
-      "added_at": "2026-08-16",
-      "audio": [],
-      "enriched": [],
-      "exports": {},
-      "sources": [
-        {
-          "ref": "104 Week 8 Writing Homework.pdf",
-          "seen_at": "2026-08-16",
-          "type": "extract"
-        }
-      ]
-    },
     "word:かける:かける": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent",
+            "transitivity",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -1197,7 +1221,21 @@
     "word:かぶる:かぶる": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -1212,7 +1250,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "8148bdaa99a6",
+          "content_fp": "506a34d82b8f",
           "file": "janki-c8070f38509a.wav",
           "of": "word",
           "provider": "voicevox",
@@ -1274,7 +1312,18 @@
     "word:くつ:くつ": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -1289,7 +1338,7 @@
       "audio": [
         {
           "at": "2026-08-12",
-          "content_fp": "93dc4f0b6fcb",
+          "content_fp": "2d959bda56c5",
           "file": "janki-bd3f4bb95f9d.wav",
           "of": "word",
           "provider": "voicevox",
@@ -1386,7 +1435,7 @@
       "audio": [
         {
           "at": "2026-08-11",
-          "content_fp": "46146615262b",
+          "content_fp": "2152793c0346",
           "file": "janki-e77c383856c0.wav",
           "of": "word",
           "provider": "voicevox",
@@ -1457,7 +1506,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "29683044042b",
+          "content_fp": "ca4f89a7e85f",
           "file": "janki-35bfad89fa62.wav",
           "of": "word",
           "provider": "voicevox",
@@ -1530,7 +1579,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "9413fc0c2dba",
+          "content_fp": "3625afbabe72",
           "file": "janki-19200cadbecd.wav",
           "of": "word",
           "provider": "voicevox",
@@ -1603,7 +1652,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "58d5377c8572",
+          "content_fp": "d90c38b02df5",
           "file": "janki-67c320e1c683.wav",
           "of": "word",
           "provider": "voicevox",
@@ -1664,7 +1713,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "d5d50f8c5a20",
+          "content_fp": "cb2d3ecff10b",
           "file": "janki-2a897f0becd1.wav",
           "of": "word",
           "provider": "voicevox",
@@ -1728,7 +1777,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "ec9271eb1e34",
+          "content_fp": "e416a616525c",
           "file": "janki-7f9f35da1566.wav",
           "of": "word",
           "provider": "voicevox",
@@ -1792,7 +1841,7 @@
       "audio": [
         {
           "at": "2026-08-11",
-          "content_fp": "05f06bece6f5",
+          "content_fp": "6eef5a64443b",
           "file": "janki-dbf49e9b81e2.wav",
           "of": "word",
           "provider": "voicevox",
@@ -1871,7 +1920,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "3a248a0ea262",
+          "content_fp": "0aa82bca8529",
           "file": "janki-3186c61f0654.wav",
           "of": "word",
           "provider": "voicevox",
@@ -1945,7 +1994,7 @@
       "audio": [
         {
           "at": "2026-08-09",
-          "content_fp": "58291dd3098b",
+          "content_fp": "d36f521bb369",
           "file": "janki-e0446a52d4d9.wav",
           "of": "word",
           "provider": "voicevox",
@@ -2037,7 +2086,22 @@
     "word:すわる:すわる": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent",
+            "transitivity",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -2052,7 +2116,7 @@
       "audio": [
         {
           "at": "2026-08-11",
-          "content_fp": "9e439f9a90f5",
+          "content_fp": "0455c914c98d",
           "file": "janki-61bca5c71302.wav",
           "of": "word",
           "provider": "voicevox",
@@ -2211,7 +2275,18 @@
     "word:だれ:だれ": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -2226,7 +2301,7 @@
       "audio": [
         {
           "at": "2026-08-09",
-          "content_fp": "5c10965b82e0",
+          "content_fp": "e71272ec23c5",
           "file": "janki-64e328bba286.wav",
           "of": "word",
           "provider": "voicevox",
@@ -2312,7 +2387,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "4346f92ee286",
+          "content_fp": "fb659582a655",
           "file": "janki-f3d0be3f58d8.wav",
           "of": "word",
           "provider": "voicevox",
@@ -2395,7 +2470,19 @@
     "word:どうやって:どうやって": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -2410,7 +2497,7 @@
       "audio": [
         {
           "at": "2026-08-12",
-          "content_fp": "8805f516265f",
+          "content_fp": "5ca86bdc6ca5",
           "file": "janki-f21f711f95ed.wav",
           "of": "word",
           "provider": "voicevox",
@@ -2481,7 +2568,7 @@
       "audio": [
         {
           "at": "2026-08-09",
-          "content_fp": "2c4bbe4d8cf2",
+          "content_fp": "f3376ee6cdf8",
           "file": "janki-f31ba6e5b044.wav",
           "of": "word",
           "provider": "voicevox",
@@ -2567,7 +2654,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "3b1173c83874",
+          "content_fp": "5407559b8890",
           "file": "janki-878f2b36576f.wav",
           "of": "word",
           "provider": "voicevox",
@@ -2654,7 +2741,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "f0b7d614b7b2",
+          "content_fp": "6f7c5360e34a",
           "file": "janki-b9db7c6bcc3c.wav",
           "of": "word",
           "provider": "voicevox",
@@ -2718,7 +2805,7 @@
       "audio": [
         {
           "at": "2026-08-12",
-          "content_fp": "99acf4410af7",
+          "content_fp": "fe83df781d7d",
           "file": "janki-1f746221e446.wav",
           "of": "word",
           "provider": "voicevox",
@@ -2796,7 +2883,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "09c918a4917b",
+          "content_fp": "2f9a32104700",
           "file": "janki-a40ae63e2050.wav",
           "of": "word",
           "provider": "voicevox",
@@ -2868,7 +2955,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "bfead156da68",
+          "content_fp": "807c75efcc33",
           "file": "janki-13f36852d8a9.wav",
           "of": "word",
           "provider": "voicevox",
@@ -2943,7 +3030,18 @@
     "word:めがね:めがね": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -2958,7 +3056,7 @@
       "audio": [
         {
           "at": "2026-08-11",
-          "content_fp": "67d6cdd4c4eb",
+          "content_fp": "943e87f968df",
           "file": "janki-1399d8f539c2.wav",
           "of": "word",
           "provider": "voicevox",
@@ -3037,7 +3135,7 @@
       "audio": [
         {
           "at": "2026-08-12",
-          "content_fp": "5a407ee56b13",
+          "content_fp": "ab2afae20ff8",
           "file": "janki-92b3eafb5202.wav",
           "of": "word",
           "provider": "voicevox",
@@ -3103,7 +3201,7 @@
       "audio": [
         {
           "at": "2026-08-11",
-          "content_fp": "056255233f13",
+          "content_fp": "bfd5014dee70",
           "file": "janki-1dd3a6f5ad94.wav",
           "of": "word",
           "provider": "voicevox",
@@ -3158,7 +3256,17 @@
     "word:イベント:イベント": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -3171,7 +3279,17 @@
     "word:エスカレーター:エスカレーター": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -3186,7 +3304,7 @@
       "audio": [
         {
           "at": "2026-08-15",
-          "content_fp": "a4d33cf26f14",
+          "content_fp": "2f1b8aae4d4d",
           "file": "janki-8838d8eee68b.wav",
           "of": "word",
           "provider": "voicevox",
@@ -3268,7 +3386,18 @@
     "word:ペット:ペット": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -3281,7 +3410,20 @@
     "word:一度:いちど": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -3296,7 +3438,7 @@
       "audio": [
         {
           "at": "2026-08-11",
-          "content_fp": "250e6af54f58",
+          "content_fp": "36ee29faf282",
           "file": "janki-98a06b17b333.wav",
           "of": "word",
           "provider": "voicevox",
@@ -3383,7 +3525,19 @@
     "word:上手:じょうず": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -3411,7 +3565,7 @@
       "audio": [
         {
           "at": "2026-08-12",
-          "content_fp": "584b476a7f19",
+          "content_fp": "732821ed8d8c",
           "file": "janki-0dd8990e3d1f.wav",
           "of": "word",
           "provider": "voicevox",
@@ -3499,7 +3653,7 @@
       "audio": [
         {
           "at": "2026-08-12",
-          "content_fp": "94ea4d0aae41",
+          "content_fp": "7839fc1248d9",
           "file": "janki-23de581fbab1.wav",
           "of": "word",
           "provider": "voicevox",
@@ -3595,7 +3749,20 @@
     "word:二人:ふたり": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -3610,7 +3777,7 @@
       "audio": [
         {
           "at": "2026-08-11",
-          "content_fp": "c6d527ae856f",
+          "content_fp": "6da397116b5a",
           "file": "janki-0652292c7ea3.wav",
           "of": "word",
           "provider": "voicevox",
@@ -3680,7 +3847,20 @@
     "word:今:いま": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -3693,7 +3873,18 @@
     "word:今年:ことし": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -3708,7 +3899,7 @@
       "audio": [
         {
           "at": "2026-08-11",
-          "content_fp": "9a0ab72e84a9",
+          "content_fp": "741adb8d2cfa",
           "file": "janki-607081f13282.wav",
           "of": "word",
           "provider": "voicevox",
@@ -3794,7 +3985,20 @@
     "word:仕事:しごと": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -3807,7 +4011,20 @@
     "word:以上:いじょう": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -3820,7 +4037,19 @@
     "word:休み:やすみ": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -3833,7 +4062,23 @@
     "word:会う:あう": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent",
+            "transitivity",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -3846,7 +4091,19 @@
     "word:会社:かいしゃ": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -3859,7 +4116,19 @@
     "word:体温:たいおん": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -3872,7 +4141,20 @@
     "word:何時:なんじ": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -3887,7 +4169,7 @@
       "audio": [
         {
           "at": "2026-08-09",
-          "content_fp": "b784ead44f47",
+          "content_fp": "fad198c1299b",
           "file": "janki-9da29ec3f56e.wav",
           "of": "word",
           "provider": "voicevox",
@@ -3965,7 +4247,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "30b660f062ce",
+          "content_fp": "30e1cdb2f223",
           "file": "janki-3c7b20704aff.wav",
           "of": "word",
           "provider": "voicevox",
@@ -4032,7 +4314,7 @@
       "audio": [
         {
           "at": "2026-08-12",
-          "content_fp": "f6d87a1e4b56",
+          "content_fp": "e34d215833f6",
           "file": "janki-e45ff4d9a48c.wav",
           "of": "word",
           "provider": "voicevox",
@@ -4110,7 +4392,19 @@
     "word:元:もと": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -4123,7 +4417,20 @@
     "word:元々:もともと": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -4136,7 +4443,19 @@
     "word:元日:がんじつ": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -4151,7 +4470,7 @@
       "audio": [
         {
           "at": "2026-08-12",
-          "content_fp": "6544274bc353",
+          "content_fp": "5eb9c81e4b46",
           "file": "janki-3a1f58b50290.wav",
           "of": "word",
           "provider": "voicevox",
@@ -4234,7 +4553,19 @@
     "word:先生:せんせい": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -4247,7 +4578,19 @@
     "word:先週:せんしゅう": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -4262,7 +4605,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "2247d6e8ee48",
+          "content_fp": "a68da9331fce",
           "file": "janki-3e3bf4601e89.wav",
           "of": "word",
           "provider": "voicevox",
@@ -4307,7 +4650,7 @@
       "audio": [
         {
           "at": "2026-08-11",
-          "content_fp": "226eb9c34f6a",
+          "content_fp": "afb150e2221b",
           "file": "janki-760f3d8d1459.wav",
           "of": "word",
           "provider": "voicevox",
@@ -4366,7 +4709,7 @@
       "audio": [
         {
           "at": "2026-08-12",
-          "content_fp": "886fa0a63214",
+          "content_fp": "4a45be7f5631",
           "file": "janki-1028b76c1320.wav",
           "of": "word",
           "provider": "voicevox",
@@ -4446,7 +4789,7 @@
       "audio": [
         {
           "at": "2026-08-09",
-          "content_fp": "92adf28bc625",
+          "content_fp": "c514a8459e78",
           "file": "janki-17f3719438f1.wav",
           "of": "word",
           "provider": "voicevox",
@@ -4540,7 +4883,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "b5bd0ce1b89c",
+          "content_fp": "936d2e3892fc",
           "file": "janki-d8c299bfd738.wav",
           "of": "word",
           "provider": "voicevox",
@@ -4604,7 +4947,20 @@
     "word:前:まえ": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -4617,7 +4973,21 @@
     "word:勉強:べんきょう": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -4711,7 +5081,20 @@
     "word:北海道:ほっかいどう": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -4724,7 +5107,19 @@
     "word:午前:ごぜん": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -4737,7 +5132,19 @@
     "word:午後:ごご": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -4750,7 +5157,20 @@
     "word:半:はん": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -4765,7 +5185,7 @@
       "audio": [
         {
           "at": "2026-08-12",
-          "content_fp": "211a8bd2e738",
+          "content_fp": "c7b002554cd1",
           "file": "janki-47fc120a7b72.wav",
           "of": "word",
           "provider": "voicevox",
@@ -4844,7 +5264,47 @@
     "word:名古屋市:なごやし": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Practice Sheet No.112-123.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
+    "word:売る:うる": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "pitch_accent",
+            "romaji",
+            "transitivity",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -4857,7 +5317,19 @@
     "word:売店:ばいてん": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -4870,7 +5342,21 @@
     "word:売買:ばいばい": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -4885,7 +5371,7 @@
       "audio": [
         {
           "at": "2026-08-11",
-          "content_fp": "ce7d79ca3f3c",
+          "content_fp": "09f4b1fad4d6",
           "file": "janki-78c91ccf19c5.wav",
           "of": "word",
           "provider": "voicevox",
@@ -4955,7 +5441,19 @@
     "word:夕食:ゆうしょく": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -4968,7 +5466,19 @@
     "word:夜:よる": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -4994,7 +5504,18 @@
     "word:大学院:だいがくいん": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -5007,7 +5528,19 @@
     "word:天気:てんき": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -5022,25 +5555,12 @@
         }
       ]
     },
-    "word:子:こ": {
-      "added_at": "2026-08-16",
-      "audio": [],
-      "enriched": [],
-      "exports": {},
-      "sources": [
-        {
-          "ref": "Kanji Review 104 Week11.pdf",
-          "seen_at": "2026-08-16",
-          "type": "extract"
-        }
-      ]
-    },
     "word:学校:がっこう": {
       "added_at": "2026-08-11",
       "audio": [
         {
           "at": "2026-08-11",
-          "content_fp": "cc0ad8c1dcf6",
+          "content_fp": "e39fb73a59c8",
           "file": "janki-ef5fce16aa3e.wav",
           "of": "word",
           "provider": "voicevox",
@@ -5110,7 +5630,21 @@
     "word:安い:やすい": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -5125,7 +5659,7 @@
       "audio": [
         {
           "at": "2026-08-11",
-          "content_fp": "9ba9e9708d76",
+          "content_fp": "a0477d8dd6bf",
           "file": "janki-219c2d630bf1.wav",
           "of": "word",
           "provider": "voicevox",
@@ -5192,25 +5726,12 @@
         }
       ]
     },
-    "word:家を売る:いえをうる": {
-      "added_at": "2026-08-16",
-      "audio": [],
-      "enriched": [],
-      "exports": {},
-      "sources": [
-        {
-          "ref": "Kanji Practice Sheet No.112-123.pdf",
-          "seen_at": "2026-08-16",
-          "type": "extract"
-        }
-      ]
-    },
     "word:導き:みちびき": {
       "added_at": "2026-08-13",
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "b0bd43d95981",
+          "content_fp": "99c48e532513",
           "file": "janki-5ecc5507150f.wav",
           "of": "word",
           "provider": "voicevox",
@@ -5255,7 +5776,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "b09194911a10",
+          "content_fp": "476280dc6b08",
           "file": "janki-ed9a01c97cf4.wav",
           "of": "word",
           "provider": "voicevox",
@@ -5298,7 +5819,19 @@
     "word:帰り道:かえりみち": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -5311,7 +5844,23 @@
     "word:帰る:かえる": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent",
+            "transitivity",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -5324,7 +5873,21 @@
     "word:帰国:きこく": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -5339,7 +5902,7 @@
       "audio": [
         {
           "at": "2026-08-11",
-          "content_fp": "fb00a8b3309c",
+          "content_fp": "922b80c4fe9f",
           "file": "janki-e5c1f46c1a0f.wav",
           "of": "word",
           "provider": "voicevox",
@@ -5409,7 +5972,19 @@
     "word:度:ど": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -5424,7 +5999,7 @@
       "audio": [
         {
           "at": "2026-08-11",
-          "content_fp": "823fb7254822",
+          "content_fp": "df0cf91d0bf1",
           "file": "janki-66f7c1683bea.wav",
           "of": "word",
           "provider": "voicevox",
@@ -5514,7 +6089,7 @@
       "audio": [
         {
           "at": "2026-08-09",
-          "content_fp": "1dda97f7be32",
+          "content_fp": "cf7147bc2d77",
           "file": "janki-ac2fd86f940c.wav",
           "of": "word",
           "provider": "voicevox",
@@ -5592,7 +6167,7 @@
       "audio": [
         {
           "at": "2026-08-12",
-          "content_fp": "8364b13eb55f",
+          "content_fp": "ebd88c2ab325",
           "file": "janki-81b34f88168c.wav",
           "of": "word",
           "provider": "voicevox",
@@ -5664,7 +6239,7 @@
       "audio": [
         {
           "at": "2026-08-12",
-          "content_fp": "77cdf0e4e3e7",
+          "content_fp": "83a7fe5e4858",
           "file": "janki-cc544f6de0e1.wav",
           "of": "word",
           "provider": "voicevox",
@@ -5754,7 +6329,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "98b8097dcdda",
+          "content_fp": "d7131e602f17",
           "file": "janki-066577ea2544.wav",
           "of": "word",
           "provider": "voicevox",
@@ -5819,7 +6394,18 @@
     "word:救急車:きゅうきゅうしゃ": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -5834,7 +6420,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "7baf6b642e50",
+          "content_fp": "9a2c91d1e4c2",
           "file": "janki-9fd6917c99f9.wav",
           "of": "word",
           "provider": "voicevox",
@@ -5990,7 +6576,18 @@
     "word:早朝:そうちょう": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -6005,7 +6602,7 @@
       "audio": [
         {
           "at": "2026-08-11",
-          "content_fp": "133f457770fb",
+          "content_fp": "bb851c1e996b",
           "file": "janki-3dfc4db3666b.wav",
           "of": "word",
           "provider": "voicevox",
@@ -6078,7 +6675,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "3c925d36930a",
+          "content_fp": "529f2d797a16",
           "file": "janki-d133719324d2.wav",
           "of": "word",
           "provider": "voicevox",
@@ -6146,7 +6743,19 @@
     "word:昼:ひる": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -6159,7 +6768,19 @@
     "word:時間:じかん": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -6174,7 +6795,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "f5b23c52df6e",
+          "content_fp": "56b6cc579dc1",
           "file": "janki-1f2d01d8db84.wav",
           "of": "word",
           "provider": "voicevox",
@@ -6239,7 +6860,7 @@
       "audio": [
         {
           "at": "2026-08-09",
-          "content_fp": "f1dabf96a732",
+          "content_fp": "97aeca2949a2",
           "file": "janki-0113bbe0a2f7.wav",
           "of": "word",
           "provider": "voicevox",
@@ -6323,7 +6944,18 @@
     "word:月曜日:げつようび": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -6336,7 +6968,19 @@
     "word:有名:ゆうめい": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -6354,7 +6998,20 @@
     "word:有料:ゆうりょう": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -6367,7 +7024,18 @@
     "word:朝食:ちょうしょく": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -6382,7 +7050,7 @@
       "audio": [
         {
           "at": "2026-08-09",
-          "content_fp": "ee9fb5a43136",
+          "content_fp": "132fb9e9827d",
           "file": "janki-55495561dd17.wav",
           "of": "word",
           "provider": "voicevox",
@@ -6471,7 +7139,18 @@
     "word:来年:らいねん": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -6484,7 +7163,19 @@
     "word:東京:とうきょう": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -6497,7 +7188,18 @@
     "word:歌手:かしゅ": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -6510,7 +7212,23 @@
     "word:止まる:とまる": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent",
+            "transitivity",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -6523,7 +7241,23 @@
     "word:止む:やむ": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent",
+            "transitivity",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -6536,7 +7270,18 @@
     "word:水曜日:すいようび": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -6549,7 +7294,18 @@
     "word:火曜日:かようび": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -6562,7 +7318,19 @@
     "word:病院:びょういん": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -6575,24 +7343,23 @@
     "word:白い:しろい": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
           "ref": "104 Week 8 Writing Homework.pdf",
-          "seen_at": "2026-08-16",
-          "type": "extract"
-        }
-      ]
-    },
-    "word:白い車:しろいくるま": {
-      "added_at": "2026-08-16",
-      "audio": [],
-      "enriched": [],
-      "exports": {},
-      "sources": [
-        {
-          "ref": "Kanji Practice Sheet No.112-123.pdf",
           "seen_at": "2026-08-16",
           "type": "extract"
         }
@@ -6603,7 +7370,7 @@
       "audio": [
         {
           "at": "2026-08-12",
-          "content_fp": "18f33db5bea8",
+          "content_fp": "872be6f18bf4",
           "file": "janki-d00efc571798.wav",
           "of": "word",
           "provider": "voicevox",
@@ -6693,7 +7460,7 @@
       "audio": [
         {
           "at": "2026-08-09",
-          "content_fp": "bac24f66c71b",
+          "content_fp": "4a445c015a62",
           "file": "janki-071edb8b07e4.wav",
           "of": "word",
           "provider": "voicevox",
@@ -6769,7 +7536,19 @@
     "word:社会人:しゃかいじん": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -6784,7 +7563,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "8dc98acd9e6f",
+          "content_fp": "ee7fce0a491a",
           "file": "janki-85106483957f.wav",
           "of": "word",
           "provider": "voicevox",
@@ -6851,7 +7630,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "7d9bbca06b81",
+          "content_fp": "945ee6df04bf",
           "file": "janki-5ba4e06e89ff.wav",
           "of": "word",
           "provider": "voicevox",
@@ -6916,7 +7695,20 @@
     "word:神:かみ": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -6929,7 +7721,19 @@
     "word:神様:かみさま": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -6942,7 +7746,18 @@
     "word:神社:じんじゃ": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -6957,7 +7772,7 @@
       "audio": [
         {
           "at": "2026-08-11",
-          "content_fp": "2d6faae893a5",
+          "content_fp": "8aef32bf0473",
           "file": "janki-c4820250a45c.wav",
           "of": "word",
           "provider": "voicevox",
@@ -7113,7 +7928,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "181f2615ecaa",
+          "content_fp": "e058aa6d5b2b",
           "file": "janki-329814cd4ade.wav",
           "of": "word",
           "provider": "voicevox",
@@ -7179,7 +7994,7 @@
       "audio": [
         {
           "at": "2026-08-09",
-          "content_fp": "558bbaaefb11",
+          "content_fp": "8a852f463656",
           "file": "janki-6595c0599576.wav",
           "of": "word",
           "provider": "voicevox",
@@ -7265,7 +8080,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "bcadae1950f9",
+          "content_fp": "35c9b8848815",
           "file": "janki-abc8b4f42271.wav",
           "of": "word",
           "provider": "voicevox",
@@ -7316,7 +8131,20 @@
     "word:苦手:にがて": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -7329,7 +8157,19 @@
     "word:茶道:さどう": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -7344,7 +8184,7 @@
       "audio": [
         {
           "at": "2026-08-08",
-          "content_fp": "0695806ba5ed",
+          "content_fp": "8c2ee3ed3fd3",
           "file": "janki-eb61ba87f92e.wav",
           "of": "word",
           "provider": "voicevox",
@@ -7431,7 +8271,7 @@
       "audio": [
         {
           "at": "2026-08-09",
-          "content_fp": "380282e69c2b",
+          "content_fp": "2b647420d90d",
           "file": "janki-68c2f78696b2.wav",
           "of": "word",
           "provider": "voicevox",
@@ -7517,7 +8357,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "e14e668e151e",
+          "content_fp": "07a039090a2a",
           "file": "janki-66e2039eff3c.wav",
           "of": "word",
           "provider": "voicevox",
@@ -7583,7 +8423,7 @@
       "audio": [
         {
           "at": "2026-08-09",
-          "content_fp": "6f5403b13e1d",
+          "content_fp": "c747543ac516",
           "file": "janki-a932214a435d.wav",
           "of": "word",
           "provider": "voicevox",
@@ -7659,7 +8499,20 @@
     "word:診察:しんさつ": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "part_of_speech",
+            "pitch_accent",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -7674,7 +8527,7 @@
       "audio": [
         {
           "at": "2026-08-08",
-          "content_fp": "e4aa90ca99c5",
+          "content_fp": "e680a4cf4ba6",
           "file": "janki-acd6838cb46b.wav",
           "of": "word",
           "provider": "voicevox",
@@ -7756,7 +8609,7 @@
       "audio": [
         {
           "at": "2026-08-09",
-          "content_fp": "08b11211044d",
+          "content_fp": "f5cca68f8e11",
           "file": "janki-89c3853b31d6.wav",
           "of": "word",
           "provider": "voicevox",
@@ -7840,7 +8693,19 @@
     "word:貝:かい": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -7853,7 +8718,19 @@
     "word:貝がら:かいがら": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -7908,7 +8785,20 @@
     "word:買い物:かいもの": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -7923,7 +8813,7 @@
       "audio": [
         {
           "at": "2026-08-09",
-          "content_fp": "f728b805d89b",
+          "content_fp": "49f095ec2de9",
           "file": "janki-31ac0dfcc1ed.wav",
           "of": "word",
           "provider": "voicevox",
@@ -7999,24 +8889,27 @@
     "word:起きる:おきる": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent",
+            "transitivity",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
           "ref": "Kanji Review 104 Week 1 and 2.pdf",
-          "seen_at": "2026-08-16",
-          "type": "extract"
-        }
-      ]
-    },
-    "word:足元にご注意ください:あしもとにごちゅういください": {
-      "added_at": "2026-08-16",
-      "audio": [],
-      "enriched": [],
-      "exports": {},
-      "sources": [
-        {
-          "ref": "Kanji Practice Sheet No.112-123.pdf",
           "seen_at": "2026-08-16",
           "type": "extract"
         }
@@ -8027,7 +8920,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "9dcbe71ff9c7",
+          "content_fp": "24924800cd5f",
           "file": "janki-60636d5bd723.wav",
           "of": "word",
           "provider": "voicevox",
@@ -8092,23 +8985,22 @@
         }
       ]
     },
-    "word:車を買う:くるまをかう": {
-      "added_at": "2026-08-16",
-      "audio": [],
-      "enriched": [],
-      "exports": {},
-      "sources": [
-        {
-          "ref": "Kanji Practice Sheet No.112-123.pdf",
-          "seen_at": "2026-08-16",
-          "type": "extract"
-        }
-      ]
-    },
     "word:道:みち": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -8121,7 +9013,22 @@
     "word:道にまよう:みちにまよう": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -8134,7 +9041,19 @@
     "word:道路:どうろ": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -8147,7 +9066,20 @@
     "word:都市:とし": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -8160,7 +9092,23 @@
     "word:降る:ふる": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent",
+            "transitivity",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -8175,7 +9123,7 @@
       "audio": [
         {
           "at": "2026-08-12",
-          "content_fp": "e4aa90ca99c5",
+          "content_fp": "e680a4cf4ba6",
           "file": "janki-22cca7433636.wav",
           "of": "word",
           "provider": "voicevox",
@@ -8263,7 +9211,19 @@
     "word:雨:あめ": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -8276,7 +9236,20 @@
     "word:雨天中止:うてんちゅうし": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -8289,7 +9262,19 @@
     "word:雪:ゆき": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -8302,7 +9287,19 @@
     "word:電気:でんき": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -8315,7 +9312,21 @@
     "word:電話:でんわ": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -8325,23 +9336,22 @@
         }
       ]
     },
-    "word:電話する:でんわする": {
-      "added_at": "2026-08-16",
-      "audio": [],
-      "enriched": [],
-      "exports": {},
-      "sources": [
-        {
-          "ref": "Kanji Practice Sheet No.112-123.pdf",
-          "seen_at": "2026-08-16",
-          "type": "extract"
-        }
-      ]
-    },
     "word:電車:でんしゃ": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -8354,7 +9364,19 @@
     "word:飛行機:ひこうき": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -8369,7 +9391,7 @@
       "audio": [
         {
           "at": "2026-08-08",
-          "content_fp": "a34d447224fb",
+          "content_fp": "64cfe3aa0596",
           "file": "janki-d9debfd6e317.wav",
           "of": "word",
           "provider": "voicevox",
@@ -8451,7 +9473,7 @@
       "audio": [
         {
           "at": "2026-08-09",
-          "content_fp": "c2dd3a29bc89",
+          "content_fp": "5f7774c06119",
           "file": "janki-c1059a77bbe6.wav",
           "of": "word",
           "provider": "voicevox",
@@ -8529,10 +9551,50 @@
         }
       ]
     },
+    "word:飼う:かう": {
+      "added_at": "2026-08-16",
+      "audio": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "conjugations",
+            "frequency_rank",
+            "furigana",
+            "meanings",
+            "part_of_speech",
+            "pitch_accent",
+            "transitivity",
+            "verb_group"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "104 Week 8 Writing Homework.pdf",
+          "seen_at": "2026-08-16",
+          "type": "extract"
+        }
+      ]
+    },
     "word:魚市場:うおいちば": {
       "added_at": "2026-08-16",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-16",
+          "fields": [
+            "frequency_rank",
+            "furigana",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {
@@ -8547,7 +9609,7 @@
       "audio": [
         {
           "at": "2026-08-13",
-          "content_fp": "7f32a686b37e",
+          "content_fp": "c07c69c4691a",
           "file": "janki-672a2359cc41.wav",
           "of": "word",
           "provider": "voicevox",
