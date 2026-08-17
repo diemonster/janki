@@ -1,0 +1,15 @@
+deck:
+  name: "Brandon Japanese::104 Week 11 Kanji Review"
+  deck_id: 2059400121
+  description: "The Week 11 review: fill-in prompts and the hospital hours guide."
+  output: "104-week-11.apkg"
+  cards:
+    recognition: true
+    production: true
+    reading: false
+  source: ../normalized/vocabulary.json
+  # One deck per handout: each sheet is a unit of study, and its records were
+  # tagged with the source slug at import. `verbs.yaml` excludes the same tag,
+  # so the two never claim the same record — same source file, same GUIDs, and
+  # an overlap moves notes between decks on every import.
+  include_tags: [kanji-review-104-week11]

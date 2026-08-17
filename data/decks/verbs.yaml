@@ -15,6 +15,12 @@ deck:
     - m7-mixed-tsumori
     - m7-native-teform-table
     - m7-camera-vertical-dialogue
+    # One deck per handout owns these; without the exclusions every noun on a
+    # kanji sheet lands in a deck called "Every verb in the collection".
+    - kanji-review-104-week-1-and-2
+    - 104-week-8-writing-homework
+    - kanji-review-104-week11
+    - kanji-practice-sheet-no-112-123
   # No include_ids: every record in the source. The three that used to be
   # pinned here were a starter set for verifying the pipeline, and the other
   # seventeen sat in a second deck only so the two would not both claim the

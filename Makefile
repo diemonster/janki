@@ -1,4 +1,5 @@
-.PHONY: bootstrap gates test lint build-sample build-all preview clean check
+.PHONY: bootstrap gates test lint build-sample build-all preview clean check \
+        voicevox voicevox-stop audio
 
 # Everything below is anchored to this Makefile's own directory, never to the
 # shell's cwd and never to whatever `pytest`/`janki` happen to resolve to on
@@ -46,6 +47,53 @@ build-sample:
 
 build-all:
 	@$(JANKI) build --all
+
+# The engine `janki audio` needs for words. Local, free, offline — but it has
+# to be running, and the failure otherwise arrives *after* you have decided to
+# voice a hundred clips.
+#
+# The container name is the one `docs/AUDIO.md` and `scripts/voice-samples.py`
+# already use, so this adopts a running engine rather than fighting it.
+VOICEVOX_URL ?= http://localhost:50021
+VOICEVOX_CONTAINER ?= janki-voicevox
+VOICEVOX_IMAGE ?= voicevox/voicevox_engine:cpu-latest
+
+## voicevox: start the engine if it is not already answering, and wait for it.
+voicevox:
+	@if curl -sf -o /dev/null --max-time 2 "$(VOICEVOX_URL)/version"; then \
+		echo "voicevox: already answering at $(VOICEVOX_URL)"; \
+		exit 0; \
+	fi; \
+	if ! command -v docker >/dev/null 2>&1; then \
+		echo "voicevox: not answering at $(VOICEVOX_URL), and docker is not installed." >&2; \
+		echo "  Open the VOICEVOX app instead — https://voicevox.hiroshiba.jp/" >&2; \
+		exit 1; \
+	fi; \
+	if [ -n "$$(docker ps -aq -f name=^$(VOICEVOX_CONTAINER)$$)" ]; then \
+		echo "voicevox: starting the existing $(VOICEVOX_CONTAINER) container..."; \
+		docker start "$(VOICEVOX_CONTAINER)" >/dev/null; \
+	else \
+		echo "voicevox: running $(VOICEVOX_IMAGE) as $(VOICEVOX_CONTAINER)..."; \
+		docker run -d -p 50021:50021 --name "$(VOICEVOX_CONTAINER)" "$(VOICEVOX_IMAGE)" >/dev/null; \
+	fi; \
+	printf 'voicevox: waiting for the engine'; \
+	for _ in $$(seq 1 60); do \
+		if curl -sf -o /dev/null --max-time 2 "$(VOICEVOX_URL)/version"; then \
+			echo " — up."; exit 0; \
+		fi; \
+		printf '.'; sleep 1; \
+	done; \
+	echo; \
+	echo "voicevox: the engine did not answer within 60s. 'docker logs $(VOICEVOX_CONTAINER)' says why." >&2; \
+	exit 1
+
+## voicevox-stop: stop the engine this Makefile started.
+voicevox-stop:
+	@docker stop "$(VOICEVOX_CONTAINER)" >/dev/null 2>&1 && echo "voicevox: stopped." || echo "voicevox: nothing to stop."
+
+## audio: voice every record that needs it, starting the engine first.
+audio: voicevox
+	@$(JANKI) audio --words --examples
 
 preview:
 	@$(JANKI) preview data/decks/verbs.yaml --output dist/verbs-preview.html

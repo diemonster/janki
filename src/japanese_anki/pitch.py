@@ -174,6 +174,44 @@ def _accent_position(per_mora: Sequence[str], particle: str) -> int:
     return len(per_mora)
 
 
+#: Which vowel each kana row ends on, for spelling out a long vowel.
+#:
+#: VOICEVOX's kana mode rejects `ー` outright — `/accent_phrases?is_kana=true`
+#: answers 400 `UNKNOWN_TEXT` for `エスカレーター` with or without an accent
+#: mark, and for a bare `オー`. AquesTalk notation writes a long vowel as the
+#: vowel it lengthens (`オオ`, `コオヒイ`), so a reading carrying `ー` has to be
+#: respelled before it is sent. Measured against the running engine, not
+#: inferred: `オオ'`, `コオヒイ'` and `エスカレエタア'` all answer 200.
+_VOWEL_OF_ROW = {
+    "ア": "アカサタナハマヤラワガザダバパャァヮ",
+    "イ": "イキシチニヒミリギジヂビピィ",
+    "ウ": "ウクスツヌフムユルグズヅブプュゥッ",
+    "エ": "エケセテネヘメレゲゼデベペェ",
+    "オ": "オコソトノホモヨロヲゴゾドボポョォ",
+}
+_LONG_VOWEL_FOR = {
+    kana: vowel for vowel, row in _VOWEL_OF_ROW.items() for kana in row
+}
+
+
+def _spell_long_vowels(units: list[str]) -> list[str]:
+    """Replace each `ー` with the vowel of the mora it lengthens.
+
+    A `ー` that opens a reading has nothing to lengthen and is left alone; the
+    engine will refuse it, which is the honest outcome for a reading that
+    starts with a long-vowel mark.
+    """
+    spelled: list[str] = []
+    for unit in units:
+        if unit == "ー" and spelled:
+            previous = spelled[-1]
+            vowel = _LONG_VOWEL_FOR.get(previous[-1])
+            spelled.append(vowel or unit)
+        else:
+            spelled.append(unit)
+    return spelled
+
+
 def to_aquestalk(reading: str, pattern: str) -> str:
     """``reading`` in AquesTalk kana notation, with ``pattern``'s accent forced.
 
@@ -183,7 +221,7 @@ def to_aquestalk(reading: str, pattern: str) -> str:
     """
     per_mora, particle = _levels(reading, pattern)
     position = _accent_position(per_mora, particle)
-    units = [_to_katakana(mora) for mora in morae(reading)]
+    units = _spell_long_vowels([_to_katakana(mora) for mora in morae(reading)])
     units[position - 1] += ACCENT_MARK
     return "".join(units)
 

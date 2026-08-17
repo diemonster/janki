@@ -206,12 +206,15 @@ def test_a_drop_before_a_sokuon_moves_the_mark() -> None:
 
 
 def test_a_long_vowel_mark_is_a_mora() -> None:
-    # カード, atamadaka: カ'ード, not カー'ド.
-    assert to_aquestalk("かーど", "HLLL") == "カ'ード"
+    # カード, atamadaka: the accent is on カ, not on the ー that follows it.
+    # The ー is spelled out as the vowel it lengthens — VOICEVOX's kana mode
+    # answers 400 for カ'ード and 200 for カ'アド, so the old expectation here
+    # was pinning a string the engine has never accepted.
+    assert to_aquestalk("かーど", "HLLL") == "カ'アド"
 
 
 def test_a_katakana_reading_passes_through() -> None:
-    assert to_aquestalk("カード", "HLLL") == "カ'ード"
+    assert to_aquestalk("カード", "HLLL") == "カ'アド"
 
 
 def test_a_decomposed_dakuten_is_one_kana() -> None:
@@ -398,3 +401,37 @@ def test_a_flat_word_still_marks_its_one_transition() -> None:
     assert '<span class="mora high rise">る</span>' in rendered
     assert '<span class="mora particle high"></span>' in rendered
     assert "drop" not in rendered, "nothing falls in a heiban word"
+
+
+@pytest.mark.parametrize(
+    "reading,pattern,expected",
+    [
+        ("エスカレーター", "LHHHLLLL", "エスカレ'エタア"),
+        ("コーヒー", "LHHHL", "コオヒイ'"),
+        ("おおきい", "LHHHH", "オオキイ'"),
+    ],
+    ids=["escalator", "coffee", "already-spelled"],
+)
+def test_a_long_vowel_is_spelled_out_rather_than_marked(
+    reading: str, pattern: str, expected: str
+) -> None:
+    """VOICEVOX's kana mode rejects `ー` outright.
+
+    Found by running the real pipeline: `janki audio --words` died on
+    エスカレーター with `UNKNOWN_TEXT: ーター`. Measured against the engine
+    afterwards — `オー'` answers 400 and `オオ'` answers 200, and a bare
+    `エスカレーター` with no accent mark fails too, so it is the character and
+    not the mark placement. AquesTalk writes a long vowel as the vowel it
+    lengthens.
+
+    The `already-spelled` row is the control: a reading that never uses `ー`
+    must pass through untouched, or this would be rewriting readings rather
+    than respelling one character.
+    """
+    assert to_aquestalk(reading, pattern) == expected
+
+
+def test_a_reading_that_opens_with_a_long_vowel_is_left_for_the_engine() -> None:
+    """`ー` first has nothing to lengthen. Inventing a vowel there would be
+    guessing at a reading; the engine refusing it is the honest outcome."""
+    assert to_aquestalk("ーん", "LHH").startswith("ー")

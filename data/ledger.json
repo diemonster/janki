@@ -254,7 +254,17 @@
     },
     "word:いす:いす": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "ac21b2f6a0e0",
+          "file": "janki-ccbf9309114e.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -736,7 +746,17 @@
     },
     "word:おさけ:おさけ": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "b9e904a3f263",
+          "file": "janki-61b0f4c34374.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -1192,7 +1212,17 @@
     },
     "word:かける:かける": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "13f500f4f5ec",
+          "file": "janki-d0ce84460e69.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -1220,7 +1250,17 @@
     },
     "word:かぶる:かぶる": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "dd59b7205504",
+          "file": "janki-a35b46e9dc65.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -1311,7 +1351,17 @@
     },
     "word:くつ:くつ": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "e050366b45f4",
+          "file": "janki-53390fb279cb.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -1658,6 +1708,32 @@
           "provider": "voicevox",
           "speed": 0.7,
           "voice": 13
+        },
+        {
+          "at": "2026-08-16",
+          "content_fp": "ef0a4c83abc8",
+          "file": "janki-0d9f0b04de17.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        },
+        {
+          "at": "2026-08-16",
+          "content_fp": "5213b1026206",
+          "file": "janki-b93e967656a5.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
         }
       ],
       "enriched": [
@@ -1939,6 +2015,19 @@
           },
           "speed": 1.0,
           "voice": "onyx"
+        },
+        {
+          "at": "2026-08-16",
+          "content_fp": "aa0ec8da88dc",
+          "file": "janki-125dfc4cec7e.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
         }
       ],
       "enriched": [
@@ -2085,7 +2174,17 @@
     },
     "word:すわる:すわる": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "b4b76d5603e3",
+          "file": "janki-99e0583bf1de.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -2274,7 +2373,17 @@
     },
     "word:だれ:だれ": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "8e5af7c4a920",
+          "file": "janki-9a07c5a0d21d.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -2406,6 +2515,19 @@
           },
           "speed": 1.0,
           "voice": "onyx"
+        },
+        {
+          "at": "2026-08-16",
+          "content_fp": "b97883c00df0",
+          "file": "janki-bed8166e15d6.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
         }
       ],
       "enriched": [
@@ -2469,7 +2591,17 @@
     },
     "word:どうやって:どうやって": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "da93d8ff7bad",
+          "file": "janki-f6c7a53a4cfb.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -2725,7 +2857,18 @@
     },
     "word:はく:はく": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-08-16",
+          "content_fp": "d5b7a5f93961",
+          "file": "janki-8ea15f9928a5.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [],
       "exports": {},
       "sources": [
@@ -3029,7 +3172,17 @@
     },
     "word:めがね:めがね": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "85a6fd1ec222",
+          "file": "janki-a3f8394104f8.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -3255,7 +3408,17 @@
     },
     "word:イベント:イベント": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "10f2edaf0d1c",
+          "file": "janki-f66a4e7ed071.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -3278,7 +3441,17 @@
     },
     "word:エスカレーター:エスカレーター": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "a995ea020d6b",
+          "file": "janki-179c450fd116.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -3385,7 +3558,17 @@
     },
     "word:ペット:ペット": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "a9d7b9d674af",
+          "file": "janki-f947e3fc107d.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -3409,7 +3592,17 @@
     },
     "word:一度:いちど": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "f1564821e6b7",
+          "file": "janki-b68724cf38c3.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -3524,7 +3717,17 @@
     },
     "word:上手:じょうず": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "5a7f5ce436c5",
+          "file": "janki-91b3c2fb6717.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -3549,7 +3752,18 @@
     },
     "word:上映中:じょうえいちゅう": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-08-16",
+          "content_fp": "450d291fe745",
+          "file": "janki-98480561ff95.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [],
       "exports": {},
       "sources": [
@@ -3748,7 +3962,17 @@
     },
     "word:二人:ふたり": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "f3306f451646",
+          "file": "janki-4320cedbe19a.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -3846,7 +4070,17 @@
     },
     "word:今:いま": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "77541a45dea9",
+          "file": "janki-346ff4ffb5e5.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -3872,7 +4106,17 @@
     },
     "word:今年:ことし": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "b1c2cb5ef45a",
+          "file": "janki-6ef8cbf28d09.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -3984,7 +4228,17 @@
     },
     "word:仕事:しごと": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "3625afbabe72",
+          "file": "janki-7d8564cfcdc8.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -4010,7 +4264,17 @@
     },
     "word:以上:いじょう": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "6c4b81de5b4c",
+          "file": "janki-621f8f10bb41.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -4036,7 +4300,17 @@
     },
     "word:休み:やすみ": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "eeb5ac4e0bc4",
+          "file": "janki-4ac9debbd58b.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -4061,7 +4335,17 @@
     },
     "word:会う:あう": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "e4adca75cf42",
+          "file": "janki-3465d15a39d7.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -4090,7 +4374,17 @@
     },
     "word:会社:かいしゃ": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "8188913902e4",
+          "file": "janki-de9cbb6a2876.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -4115,7 +4409,17 @@
     },
     "word:体温:たいおん": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "52b586166969",
+          "file": "janki-136ee0c56cb4.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -4140,7 +4444,17 @@
     },
     "word:何時:なんじ": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "cbc524382b4a",
+          "file": "janki-a9f4e9f4857a.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -4391,7 +4705,17 @@
     },
     "word:元:もと": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "a7e140267753",
+          "file": "janki-f207fd04bfab.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -4416,7 +4740,17 @@
     },
     "word:元々:もともと": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "7d96aaa3cee7",
+          "file": "janki-4f4e333b4e59.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -4442,7 +4776,17 @@
     },
     "word:元日:がんじつ": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "b870d3db8044",
+          "file": "janki-1237316dd7e9.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -4552,7 +4896,17 @@
     },
     "word:先生:せんせい": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "4d298770eb28",
+          "file": "janki-fc88cdc8adb2.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -4577,7 +4931,17 @@
     },
     "word:先週:せんしゅう": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "eef9ed1e7e7e",
+          "file": "janki-1850a14fa0da.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -4611,6 +4975,19 @@
           "provider": "voicevox",
           "speed": 0.7,
           "voice": 13
+        },
+        {
+          "at": "2026-08-16",
+          "content_fp": "dbb0f7fdb35a",
+          "file": "janki-5b0103f40491.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
         }
       ],
       "enriched": [
@@ -4661,6 +5038,19 @@
           "at": "2026-08-11",
           "content_fp": "12c5fefdcdeb",
           "file": "janki-10cee848158e.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
+        },
+        {
+          "at": "2026-08-16",
+          "content_fp": "34997ffa4edc",
+          "file": "janki-f4d78ae1f05b.mp3",
           "of": "example",
           "provider": "openai",
           "settings": {
@@ -4946,7 +5336,17 @@
     },
     "word:前:まえ": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "20a701888ae3",
+          "file": "janki-3637d3f8b797.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -4972,7 +5372,17 @@
     },
     "word:勉強:べんきょう": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "eaa7c32294c4",
+          "file": "janki-6417891f4c85.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -5080,7 +5490,17 @@
     },
     "word:北海道:ほっかいどう": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "f9a20c4aedec",
+          "file": "janki-5f253cd979c6.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -5106,7 +5526,17 @@
     },
     "word:午前:ごぜん": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "91cc902ffad3",
+          "file": "janki-11f52b93ba64.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -5131,7 +5561,17 @@
     },
     "word:午後:ごご": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "97e781aa48c4",
+          "file": "janki-8ef0cd9546c2.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -5156,7 +5596,17 @@
     },
     "word:半:はん": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "c3abb614d784",
+          "file": "janki-a29c33308d21.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -5263,7 +5713,17 @@
     },
     "word:名古屋市:なごやし": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "01a845e7b8b3",
+          "file": "janki-4a568a718d6a.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -5288,7 +5748,17 @@
     },
     "word:売る:うる": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "ee23cee8f429",
+          "file": "janki-f83fe6e459da.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -5316,7 +5786,17 @@
     },
     "word:売店:ばいてん": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "69f74843039a",
+          "file": "janki-d89457d828c5.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -5341,7 +5821,17 @@
     },
     "word:売買:ばいばい": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "ca2a4d2e2e1d",
+          "file": "janki-451b0d1a6384.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -5440,7 +5930,17 @@
     },
     "word:夕食:ゆうしょく": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "4631765f634f",
+          "file": "janki-390cd1f3ac8d.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -5465,7 +5965,17 @@
     },
     "word:夜:よる": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "ceabb49d7134",
+          "file": "janki-623d7ab02844.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -5490,7 +6000,18 @@
     },
     "word:大元:おおもと": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-08-16",
+          "content_fp": "9f4df3bffa22",
+          "file": "janki-8dfe6d601936.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [],
       "exports": {},
       "sources": [
@@ -5503,7 +6024,17 @@
     },
     "word:大学院:だいがくいん": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "b040114822d3",
+          "file": "janki-26cdbd8fb801.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -5527,7 +6058,17 @@
     },
     "word:天気:てんき": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "b11d704c10af",
+          "file": "janki-a4ff9d865c2c.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -5629,7 +6170,17 @@
     },
     "word:安い:やすい": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "5cfbb39ade7f",
+          "file": "janki-7c8ed4ece0f8.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -5737,6 +6288,19 @@
           "provider": "voicevox",
           "speed": 0.7,
           "voice": 13
+        },
+        {
+          "at": "2026-08-16",
+          "content_fp": "278cd97fe171",
+          "file": "janki-f25445b603af.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
         }
       ],
       "enriched": [
@@ -5782,6 +6346,19 @@
           "provider": "voicevox",
           "speed": 0.7,
           "voice": 13
+        },
+        {
+          "at": "2026-08-16",
+          "content_fp": "906079cd8de0",
+          "file": "janki-245b905a02b3.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
         }
       ],
       "enriched": [
@@ -5818,7 +6395,17 @@
     },
     "word:帰り道:かえりみち": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "6bf517632fd5",
+          "file": "janki-ddc5909f775c.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -5843,7 +6430,17 @@
     },
     "word:帰る:かえる": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "54e111c7dd13",
+          "file": "janki-7bf0bb6e2269.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -5872,7 +6469,17 @@
     },
     "word:帰国:きこく": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "056ad005efd1",
+          "file": "janki-0551b20859a9.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -5971,7 +6578,17 @@
     },
     "word:度:ど": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "525b0c7c55a0",
+          "file": "janki-7cf807eca94a.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -6393,7 +7010,17 @@
     },
     "word:救急車:きゅうきゅうしゃ": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "1b724623bac2",
+          "file": "janki-3c7ea24722f8.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -6483,7 +7110,18 @@
     },
     "word:方:かた": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "accent_unverified": true,
+          "at": "2026-08-16",
+          "content_fp": "3a44727b3bfe",
+          "file": "janki-817f49c9923a.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [],
       "exports": {},
       "sources": [
@@ -6575,7 +7213,17 @@
     },
     "word:早朝:そうちょう": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "5589b2274e5f",
+          "file": "janki-1886c5bd64b1.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -6742,7 +7390,17 @@
     },
     "word:昼:ひる": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "4d1713c54878",
+          "file": "janki-7ce7c8246166.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -6767,7 +7425,17 @@
     },
     "word:時間:じかん": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "39a4c42404d0",
+          "file": "janki-8fd7d60a10d5.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -6943,7 +7611,17 @@
     },
     "word:月曜日:げつようび": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "dc5509481a5b",
+          "file": "janki-32dec0ad58f4.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -6967,7 +7645,17 @@
     },
     "word:有名:ゆうめい": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "534d447307a1",
+          "file": "janki-b153b26481cf.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -6997,7 +7685,17 @@
     },
     "word:有料:ゆうりょう": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "07d57c4c32a0",
+          "file": "janki-9f42b1b7db98.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -7023,7 +7721,17 @@
     },
     "word:朝食:ちょうしょく": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "b73c893ce635",
+          "file": "janki-e5d39f4e1e20.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -7138,7 +7846,17 @@
     },
     "word:来年:らいねん": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "d19cc5864a58",
+          "file": "janki-2f3c73ebb757.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -7162,7 +7880,17 @@
     },
     "word:東京:とうきょう": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "d6e4061f216a",
+          "file": "janki-dd8c3534c7ff.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -7187,7 +7915,17 @@
     },
     "word:歌手:かしゅ": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "c218be4bc5f9",
+          "file": "janki-dac3db177961.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -7211,7 +7949,17 @@
     },
     "word:止まる:とまる": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "64dd2b37a590",
+          "file": "janki-db36ae465ff0.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -7240,7 +7988,17 @@
     },
     "word:止む:やむ": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "54f84b34b3a1",
+          "file": "janki-4a716f4b3cf3.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -7269,7 +8027,17 @@
     },
     "word:水曜日:すいようび": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "2d5d15ac6310",
+          "file": "janki-76358aaf18d4.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -7293,7 +8061,17 @@
     },
     "word:火曜日:かようび": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "bca861260886",
+          "file": "janki-94032add4843.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -7317,7 +8095,17 @@
     },
     "word:病院:びょういん": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "32e4638c1764",
+          "file": "janki-11be211eac62.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -7342,7 +8130,17 @@
     },
     "word:白い:しろい": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "8db09fc5dcb6",
+          "file": "janki-6e95a09bb72a.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -7535,7 +8333,17 @@
     },
     "word:社会人:しゃかいじん": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "8ee89ccc4e8a",
+          "file": "janki-279edb06c101.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -7694,7 +8502,17 @@
     },
     "word:神:かみ": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "964692897b1c",
+          "file": "janki-98e171d610ee.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -7720,7 +8538,17 @@
     },
     "word:神様:かみさま": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "d2f32f4a1be4",
+          "file": "janki-5a75b21c3246.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -7745,7 +8573,17 @@
     },
     "word:神社:じんじゃ": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "8410b60a5e31",
+          "file": "janki-3d78c6d75895.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -8086,6 +8924,19 @@
           "provider": "voicevox",
           "speed": 0.7,
           "voice": 13
+        },
+        {
+          "at": "2026-08-16",
+          "content_fp": "ea985ff0b3df",
+          "file": "janki-18d7ab3c4938.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
         }
       ],
       "enriched": [
@@ -8130,7 +8981,17 @@
     },
     "word:苦手:にがて": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "977a787b492b",
+          "file": "janki-4184b29181d8.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -8156,7 +9017,17 @@
     },
     "word:茶道:さどう": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "11314125c859",
+          "file": "janki-0995e1412ba4.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -8498,7 +9369,17 @@
     },
     "word:診察:しんさつ": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "bb5d02694f79",
+          "file": "janki-6eb95f5a6925.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -8692,7 +9573,17 @@
     },
     "word:貝:かい": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "dffdf7543e59",
+          "file": "janki-c5a2857c5417.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -8717,7 +9608,17 @@
     },
     "word:貝がら:かいがら": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "4eac9419de94",
+          "file": "janki-c68653d18d85.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -8752,6 +9653,19 @@
           "provider": "voicevox",
           "speed": 0.7,
           "voice": 13
+        },
+        {
+          "at": "2026-08-16",
+          "content_fp": "a06a2ad5ea83",
+          "file": "janki-283c63ebde6c.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
         }
       ],
       "enriched": [
@@ -8784,7 +9698,17 @@
     },
     "word:買い物:かいもの": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "277ca91defb8",
+          "file": "janki-45dae1e17f1a.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -8888,7 +9812,17 @@
     },
     "word:起きる:おきる": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "bb5cce08f92d",
+          "file": "janki-0621127aa4f2.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -8987,7 +9921,17 @@
     },
     "word:道:みち": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "69e9bab58ff3",
+          "file": "janki-ffa530a357c3.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -9012,7 +9956,17 @@
     },
     "word:道にまよう:みちにまよう": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "81f239c51243",
+          "file": "janki-22437e9b3ca1.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -9040,7 +9994,17 @@
     },
     "word:道路:どうろ": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "c4302b7f190a",
+          "file": "janki-e2a5fbecaa35.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -9065,7 +10029,17 @@
     },
     "word:都市:とし": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "05c3dbe5a117",
+          "file": "janki-8bfcc4eccb84.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -9091,7 +10065,17 @@
     },
     "word:降る:ふる": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "5b28f3841e20",
+          "file": "janki-acadce0d7f92.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -9210,7 +10194,17 @@
     },
     "word:雨:あめ": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "88fc52aed1a7",
+          "file": "janki-a2c9a0264184.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -9235,7 +10229,17 @@
     },
     "word:雨天中止:うてんちゅうし": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "266644cfe127",
+          "file": "janki-b938f8ec8265.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -9261,7 +10265,17 @@
     },
     "word:雪:ゆき": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "f5a596557604",
+          "file": "janki-3d5d61b95def.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -9286,7 +10300,17 @@
     },
     "word:電気:でんき": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "c366120a5fa2",
+          "file": "janki-f2631eb53d06.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -9311,7 +10335,17 @@
     },
     "word:電話:でんわ": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "1b380586607f",
+          "file": "janki-e5da56c56030.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -9338,7 +10372,17 @@
     },
     "word:電車:でんしゃ": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "bd30e84a68f7",
+          "file": "janki-daa26b49fea0.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -9363,7 +10407,17 @@
     },
     "word:飛行機:ひこうき": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "6f7c5360e34a",
+          "file": "janki-d18299572d14.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -9553,7 +10607,17 @@
     },
     "word:飼う:かう": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "5b4509184379",
+          "file": "janki-a872bdc659a2.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -9582,7 +10646,17 @@
     },
     "word:魚市場:うおいちば": {
       "added_at": "2026-08-16",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-16",
+          "content_fp": "38dad3c3f2dc",
+          "file": "janki-aee52cbf4769.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 13
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-16",
@@ -9615,6 +10689,19 @@
           "provider": "voicevox",
           "speed": 0.7,
           "voice": 13
+        },
+        {
+          "at": "2026-08-16",
+          "content_fp": "029b8cf639c8",
+          "file": "janki-417a1c8035b4.mp3",
+          "of": "example",
+          "provider": "openai",
+          "settings": {
+            "instructions": "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried.",
+            "model": "gpt-4o-mini-tts"
+          },
+          "speed": 1.0,
+          "voice": "onyx"
         }
       ],
       "enriched": [

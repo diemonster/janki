@@ -98,6 +98,10 @@ def test_word_decks_are_nonempty_and_do_not_share_stable_ids() -> None:
     # list; this is that half, kept, and the cost is one line to update when a
     # deck is legitimately added.
     assert {path.relative_to(config.root).as_posix() for path in paths} == {
+        "data/decks/104-week-1-2.yaml",
+        "data/decks/104-week-8.yaml",
+        "data/decks/104-week-11.yaml",
+        "data/decks/kanji-practice-112-123.yaml",
         "data/decks/m7-camera-vertical-dialogue.yaml",
         "data/decks/m7-mixed-tsumori.yaml",
         "data/decks/m7-native-teform-table.yaml",
