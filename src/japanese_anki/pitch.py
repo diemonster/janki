@@ -238,10 +238,16 @@ def _spell_long_vowels(units: list[str]) -> list[str]:
     Refuses rather than emitting a `ー` the engine will 400 on, wherever the
     kana before it has no row in :data:`_LONG_VOWEL_FOR`: a `ー` that opens a
     reading with nothing before it at all, a `ー` after `ン` or `ッ`, which end
-    on no vowel, and a `ー` after anything with no row at all: `ヵ`, which the
-    engine refuses either way, and everything :func:`_to_katakana` passes
-    through without converting — `ヷヸヹヺ`, `・ヽヾヿ`, half-width katakana,
-    and anything that is not kana.
+    on no vowel, and a `ー` after anything else with no row: `ヵ`, which the
+    engine refuses spelled or bare, and every kana :func:`_to_katakana` leaves
+    alone — `ヷヸヹヺ`, `ヽヾヿ` and their hiragana counterparts `ゝゞゟ`, the
+    small katakana extensions `ㇰ`–`ㇿ`, the marks `・`, `゠` and the bare
+    combining dakuten, half-width katakana *other than* `ｰ` (which is folded),
+    and anything that is not kana at all.
+
+    The lookup is on the last character of the previous already-respelled unit,
+    not on the reading's raw kana, which is why `カｰー` renders: the half-width
+    mark becomes `ア` and the second `ー` then has a vowel to repeat.
 
     What a :class:`PitchError` here means depends on who asked. `audio_cmd`
     and the ledger voice the word with the engine's own accent — the same
@@ -249,9 +255,11 @@ def _spell_long_vowels(units: list[str]) -> list[str]:
     and a far better outcome than a failed request or an invented mora. jpdb
     enrichment asks a different question: it uses this to test whether a
     pattern converts, and files the refused ones as *unusable*. That is a
-    split, not a rejection — jpdb often offers several and the usable ones are
-    written — so the cost is only total when every offered pattern is refused
-    and the record had no accent of its own. It is warned in every case.
+    split, not a rejection: jpdb often offers several, and the usable ones are
+    then offered to the record — which takes them only if it has no accent
+    already, because jpdb fills empty fields and does not overwrite. So the
+    cost of a refusal is total only for a record with no accent and no other
+    usable pattern. Warned in every case, with what actually happened.
     """
     spelled: list[str] = []
     for unit in units:

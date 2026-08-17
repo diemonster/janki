@@ -23,6 +23,7 @@ slow test that someone eventually deletes.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -46,7 +47,7 @@ case "$1" in
              [ -n "$STUB_RUNNING" ] && echo abc123
              exit 0 ;;
     esac ;;
-  start)   exit ${STUB_START_RC:-0} ;;
+  start)   echo "STUB-CALLED: docker start" >&2; exit ${STUB_START_RC:-0} ;;
   restart) echo "STUB-FORBIDDEN: docker restart" >&2; exit 0 ;;
   run)     exit ${STUB_RUN_RC:-0} ;;
   rm)      echo "STUB-FORBIDDEN: docker rm" >&2; exit 0 ;;
@@ -227,9 +228,20 @@ def test_a_running_container_is_started_not_restarted(stubs: Path) -> None:
     This branch is reached whenever curl failed, and "curl failed" includes an
     engine that is up and still loading — so `restart` fixes the rare wedged
     case by breaking the common slow one. The stub screams if it is called.
+
+    The positive assertion is not decoration. Asserting only the *absence* of
+    the scream passes when the branch never runs at all: deleting the
+    `docker start` call, or deleting the whole existing-container branch so
+    every run creates a second container, both left this green.
     """
     run = _make("voicevox", stubs, STUB_EXISTS="1", STUB_RUNNING="1")
 
+    # The stub reports the call on stderr — the recipe sends docker's stdout to
+    # /dev/null — rather than the recipe's own echo: the "starting the existing"
+    # line prints *before* `docker start` runs, so asserting on it passes even
+    # when the call itself is gone.
+    assert "STUB-CALLED: docker start" in run.text, "the container was started"
+    assert "running voicevox" not in run.text, "and no second one was created"
     assert "STUB-FORBIDDEN: docker restart" not in run.text
 
 
@@ -281,5 +293,12 @@ def test_help_lists_every_target_and_expands_the_container_name(stubs: Path) -> 
         and not line.split(":", 1)[0].strip().endswith(("?", ":"))
         and " " not in line.split(":", 1)[0]
     }
-    missing = sorted(name for name in targets if name not in run.out)
+    # Word boundaries, not substrings: a new `build:` target would otherwise be
+    # "found" inside `build-sample` in the Helpers line, and the same holds for
+    # `all`, `run`, `voice` and `sample`.
+    missing = sorted(
+        name
+        for name in targets
+        if not re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", run.out)
+    )
     assert not missing, f"help does not mention: {missing}"

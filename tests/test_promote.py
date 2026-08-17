@@ -143,30 +143,72 @@ def test_an_unspeakable_pitch_pattern_is_named_rather_than_promoted_silently() -
     """The third door, and the one nothing was watching.
 
     `enrich --jpdb` refuses a pattern it cannot render and `import-jpdb` names
-    one, but `pitch_accent` is a first-class staging field: a hand-written row,
-    or one held back for reading review and later released, could carry an
-    unspeakable pattern straight into the collection with nothing said. Its
-    word audio then comes out in the engine's own accent — the exact silent
-    outcome the pitch work exists to prevent — while the card still draws a
-    pitch diagram from it.
+    one, but `pitch_accent` is a first-class staging field: a hand-written row
+    could put an unspeakable pattern into the collection, and the first anyone
+    hears of it is the next `janki audio` run.
 
     Named, not held: an accent is not identity, and holding a whole row over
     one would be out of proportion to a clip that still gets made.
     """
-    # ぱんーや: five kana, so six characters is the right length, and `ン` still
-    # ends on no vowel for the `ー` to repeat.
+    # はし is two kana, so three characters is the right length. `LHLL` is four.
     staged = record(
-        id="word:ぱんーや:ぱんーや",
-        expression="ぱんーや",
-        reading="ぱんーや",
+        id="word:はし:はし", expression="はし", reading="はし", pitch_accent=["LHLL"]
+    )
+
+    result = check_readings([staged], skip_reading_check=True)
+
+    assert [item.id for item in result.promoted] == ["word:はし:はし"]
+    assert any("LHLL" in warning for warning in result.warnings), result.warnings
+    assert any("engine's own accent" in w for w in result.warnings)
+
+
+def test_the_length_check_is_not_the_whole_test_at_promote_either() -> None:
+    """`_unspeakable_patterns` renders; it does not measure.
+
+    `LHHHHH` fits かんーぱい exactly — five kana, six characters — and still
+    cannot be spoken, because `ン` ends on no vowel for the `ー` to repeat. A
+    length-only check passes it, and the first version of the test above used a
+    four-kana reading by mistake, so a length-only mutation survived the entire
+    suite.
+    """
+    staged = record(
+        id="word:かんーぱい:かんーぱい",
+        expression="かんーぱい",
+        reading="かんーぱい",
         pitch_accent=["LHHHHH"],
     )
 
     result = check_readings([staged], skip_reading_check=True)
 
-    assert [item.id for item in result.promoted] == ["word:ぱんーや:ぱんーや"]
-    assert any("LHHHHH" in warning for warning in result.warnings), result.warnings
-    assert any("engine's own accent" in w for w in result.warnings)
+    assert result.promoted, "named, not held"
+    assert any("has no vowel to repeat" not in w and "LHHHHH" in w for w in result.warnings)
+
+
+def test_promote_checks_the_pattern_that_actually_reaches_the_synthesizer() -> None:
+    """`audio_accent` first, because `select_pattern` reads it first.
+
+    Two failures came from checking `pitch_accent` alone. An unspeakable
+    `audio_accent` — the *more* hand-written field, since no importer writes it
+    and enrichment does not touch it, so a staging file is its only door —
+    passed promote with nothing said at all. And a record with a good
+    `audio_accent` and a bad `pitch_accent` was told its clip fell back to the
+    engine's own accent when the clip was forced perfectly well: the same
+    defect, in the same words, that the round before this one fixed in the
+    importer.
+    """
+    hashi = {"id": "word:はし:はし", "expression": "はし", "reading": "はし"}
+    unspeakable_choice = record(**hashi, audio_accent="LHLL")
+    good_choice = record(**hashi, audio_accent="LHL", pitch_accent=["LHLL"])
+
+    silent = check_readings([unspeakable_choice], skip_reading_check=True)
+    misblamed = check_readings([good_choice], skip_reading_check=True)
+
+    assert any("LHLL" in w for w in silent.warnings), "audio_accent is checked"
+    assert any("engine's own accent" in w for w in silent.warnings)
+
+    assert any("LHLL" in w for w in misblamed.warnings), "and still reported"
+    assert any("uses LHL, which is fine" in w for w in misblamed.warnings)
+    assert not any("engine's own" in w for w in misblamed.warnings)
 
 
 def test_a_reading_no_entry_lists_is_held_back() -> None:

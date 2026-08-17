@@ -745,6 +745,27 @@ def test_the_warning_does_not_claim_a_write_that_did_not_happen() -> None:
     assert "was written" not in warning, "nothing was"
 
 
+def test_a_forced_rerun_that_lands_the_same_value_is_not_called_an_overwrite() -> None:
+    """"Not written" covers two different things, and only one is a refusal.
+
+    `_apply` records no change when the new value equals the old, so
+    `--force-fields pitch_accent` on a record whose accent jpdb agrees with
+    produces an empty diff — which the warning read as "jpdb does not overwrite
+    one". The field was forced; jpdb simply had nothing different to say.
+    """
+    hashi = vocab(1000003, 558, "はし", "はし", ["LHL", "LHLL"], 500, ["n"])
+    api = FakeApi(unforced={"はし": parse_response((None, hashi))})
+    target = record(
+        id="word:はし:はし", expression="はし", reading="はし", pitch_accent=["LHL"]
+    )
+
+    result = enrich_records(client_for(api), [target], force_fields=["pitch_accent"])
+
+    [warning] = result.warnings
+    assert "what the record already carried" in warning
+    assert "does not overwrite" not in warning, "it was forced, not declined"
+
+
 def test_each_unusable_pattern_gets_its_own_reason() -> None:
     """Two patterns, two different problems, and one of them named twice.
 

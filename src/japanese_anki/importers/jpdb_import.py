@@ -229,13 +229,6 @@ def _speakable(reading: str, pattern: str) -> bool:
         pitch.to_aquestalk(reading, pattern)
     except pitch.PitchError:
         return False
-    except (TypeError, AttributeError):
-        # Not reachable from the wire — `jpdb.accent_patterns` and
-        # `models._string_list` both coerce to `str` — but this runs on every
-        # record of every import, and an import that dies on a malformed
-        # pattern loses a whole deck over an accent. Unrenderable is the right
-        # answer for something that is not a pattern at all.
-        return False
     return True
 
 
@@ -322,7 +315,10 @@ def import_deck(
             if not _speakable(record.reading, pattern)
         ]
         if unusable:
-            voiced = record.pitch_accent[0] if record.pitch_accent else ""
+            # `unusable` is built by iterating `pitch_accent`, so a non-empty
+            # one means a non-empty list — no guard, because a guard here would
+            # hand an empty string to a message about which pattern is spoken.
+            voiced = record.pitch_accent[0]
             warnings.append(
                 f"{where}: jpdb pitch pattern(s) {', '.join(unusable)} for "
                 f"{record.expression} cannot be spoken with a forced accent; "

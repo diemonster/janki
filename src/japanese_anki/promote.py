@@ -35,6 +35,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from japanese_anki import enrich, extract, jpdb
+from japanese_anki import pitch as pitch_module
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import contains_kanji, stable_record_id
 from japanese_anki.models import (
@@ -182,22 +183,37 @@ def _verify_coverage_facts(meta: dict[str, Any], block: dict[str, Any]) -> None:
         )
 
 
-def _unspeakable_patterns(record: VocabularyRecord) -> list[str]:
-    """Which of this record's stored patterns cannot make a forced clip.
+def _unspeakable_patterns(record: VocabularyRecord) -> tuple[list[str], bool]:
+    """Every stored pattern that cannot make a forced clip, and whether the
+    *chosen* one is among them.
 
-    The same rendering test `enrich` and `import-jpdb` apply, so all three
-    commands that can put an accent into the collection agree about what is
-    usable and each says so in its own terms.
+    `audio_accent` is checked, not just `pitch_accent`, and it is checked
+    first, because :func:`pitch.select_pattern` reads it first — it is the
+    pattern that actually reaches the synthesizer when it is set. It is also
+    the more hand-written of the two: no importer writes it and it is not in
+    `ENRICHABLE_FIELDS`, so a staging file is the *only* door it comes through,
+    which is the whole argument for checking here. Reading `pitch_accent` alone
+    both missed an unspeakable `audio_accent` entirely and blamed a
+    `pitch_accent` that nothing was going to use.
+
+    `validation.py` says the same thing about the same field: "it is the
+    pattern audio generation actually uses when set, so a typo there is the one
+    that reaches the synthesizer".
     """
-    from japanese_anki import pitch
-
+    chosen = pitch_module.select_pattern(record)
+    stored = [record.audio_accent, *record.pitch_accent]
     unusable = []
-    for pattern in record.pitch_accent:
+    for pattern in stored:
+        if not pattern.strip() or pattern in unusable:
+            continue
         try:
-            pitch.to_aquestalk(record.reading, pattern)
-        except pitch.PitchError:
+            pitch_module.to_aquestalk(record.reading, pattern)
+        except pitch_module.PitchError:
             unusable.append(pattern)
-    return unusable
+    chosen_is_unusable = bool(
+        chosen and any(pattern.strip().upper() == chosen for pattern in unusable)
+    )
+    return unusable, chosen_is_unusable
 
 
 @dataclass(slots=True)
@@ -319,6 +335,12 @@ def check_readings(
                 "bound acceptance — it accepts nothing. Retype the sentinel "
                 "exactly to accept this row's examples."
             )
+        # After the structural and reading holds, before the remint one — so a
+        # row held for an unverifiable id is still warned about audio it is not
+        # getting yet. Left that way deliberately: the row stays in staging and
+        # is re-checked next run, and a curator fixing the id wants to know
+        # about the accent in the same pass rather than the one after.
+        #
         # The last door a pitch pattern can come through. `enrich --jpdb`
         # refuses an unspeakable pattern and `import-jpdb` names one; a staging
         # file carries `pitch_accent` as a first-class field, so a hand-written
@@ -327,17 +349,16 @@ def check_readings(
         # Named, not held: an accent is not identity, the clip still gets made
         # in the engine's own voice, and holding a whole row over it would be
         # out of proportion.
-        unspeakable = _unspeakable_patterns(resolved)
+        unspeakable, chosen_is_unusable = _unspeakable_patterns(resolved)
         if unspeakable:
             result.warnings.append(
                 f"{record.id}: pitch pattern(s) {', '.join(unspeakable)} cannot "
                 f"be spoken for reading {resolved.reading}"
                 + (
                     "; its word audio uses the engine's own accent."
-                    if resolved.pitch_accent
-                    and resolved.pitch_accent[0] in unspeakable
-                    else f"; its word audio uses {resolved.pitch_accent[0]}, "
-                    "which is fine."
+                    if chosen_is_unusable
+                    else f"; its word audio uses "
+                    f"{pitch_module.select_pattern(resolved)}, which is fine."
                 )
             )
         # `remint_blocked` means the set is *incomplete*, not wrong: an id in it

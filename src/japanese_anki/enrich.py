@@ -487,14 +487,26 @@ def _unusable_detail(reading: str, patterns: Sequence[str]) -> str:
     ) + f" cannot be used for reading {reading}"
 
 
-def _what_became_of_the_rest(valid: Sequence[str], written: bool) -> str:
-    """What the record actually ended up with, in the three ways it can end."""
+def _what_became_of_the_rest(
+    valid: Sequence[str], written: bool, stored: Sequence[str]
+) -> str:
+    """What the record actually ended up with, in the four ways it can end.
+
+    ``written`` is "``pitch_accent`` appears in the diff", and `_apply` records
+    no change when the new value equals the old — so "not written" covers two
+    different things and only one of them is about jpdb declining to overwrite.
+    A `--force-fields pitch_accent` re-run that lands the same value would
+    otherwise be told the record "already carries an accent and jpdb does not
+    overwrite one", which is the wrong reason for a field that *was* forced.
+    """
     if not valid:
         return "jpdb offered no usable pattern, so none was written"
     if written:
         return f"the {len(valid)} that can was written" if len(valid) == 1 else (
             f"the {len(valid)} that can were written"
         )
+    if list(stored) == list(valid):
+        return "the rest are usable and are what the record already carried"
     return (
         "the rest are usable but were not written — this record already "
         "carries an accent, and jpdb does not overwrite one"
@@ -516,8 +528,11 @@ def _why_unusable(reading: str, pattern: str) -> str:
         detail = str(exc).rstrip(".")
         # Anchored markers, not a bare ": ". Both messages interpolate the
         # pattern and the reading ahead of their real separator, so splitting
-        # on the first colon-space could cut inside the data — a reading
-        # containing one would yield "い': expected 5 characters …".
+        # on the first colon-space cut inside the data — and it is the
+        # *pattern* that can carry one, being a hand-typed field: `"L: H"`
+        # defeated the bare marker. A pattern containing the anchor itself
+        # (`"A': B"`) still mis-splits; the message stays readable and the
+        # value is visible in the line above it.
         for marker in (" for VOICEVOX: ", "': "):
             head, found, tail = detail.partition(marker)
             if found:
@@ -745,7 +760,9 @@ def enrich_records(
             result.warnings.append(
                 f"{record_id}: jpdb pitch pattern(s) "
                 f"{_unusable_detail(record.reading, invalid_pitch)}; "
-                + _what_became_of_the_rest(_valid_pitch, "pitch_accent" in changes)
+                + _what_became_of_the_rest(
+                    _valid_pitch, "pitch_accent" in changes, updated.pitch_accent
+                )
             )
         if "pitch_accent" in changes:
             updated = pitch.bind_source(updated)

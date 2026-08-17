@@ -74,13 +74,21 @@ all — so they fingerprint the same, and the clip does not re-voice when the
 pattern changes from one unusable value to another. `janki audio --force`
 re-voices regardless.
 
-All three commands that can put a pattern on a record say so when it is one of
-these. `janki enrich --jpdb` refuses to write it and names the reason.
-`janki import-jpdb` keeps it — jpdb's answer is data you may want to correct —
-and names it, saying whether it is the pattern the clip will actually use.
-`janki promote` names one on a staged row, which is how a hand-written accent
-gets checked. So the state is visible whichever door it comes through, but this
-is the one case where filling in an accent does not by itself replace the clip.
+`janki audio` names every one of these on every run, with the record id and
+the reason, and that is the backstop: however a pattern got onto a record —
+`--prefer-incoming` on a merge, an inline `notes:` block, a hand edit of
+`vocabulary.json` — the run that voices it says so.
+
+Three commands say it *earlier*, which is the point: before a clip exists to be
+wrong. `janki enrich --jpdb` refuses to write an unusable pattern and names the
+reason. `janki import-jpdb` keeps it — jpdb's answer is data you may want to
+correct — and names it, saying whether it is the pattern the clip will actually
+use. `janki promote` checks a staged row, which is the only door `audio_accent`
+comes through, and `audio_accent` is the one that reaches the synthesizer when
+it is set.
+
+This is still the one case where filling in an accent does not by itself
+replace the clip.
 
 `--prune` removes clips no record references any more, taking their ledger
 entries with them.
