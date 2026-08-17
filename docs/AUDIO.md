@@ -74,12 +74,15 @@ all — so they fingerprint the same, and the clip does not re-voice when the
 pattern changes from one unusable value to another. `janki audio --force`
 re-voices regardless.
 
-`janki audio` names every one of these on every run, with the record id and
-the reason, and that is the backstop for anything in the collection: a merge
-that took `--prefer-incoming`, a hand edit of `vocabulary.json`, a pattern that
-was fine until its reading was corrected. It reads `vocabulary.json` only, so a
-record living in a deck's inline `notes:` block is outside it — those are read
-by the exporter alone and are never voiced at all.
+`janki audio --words` names every one of these it voices, with the record id
+and the reason, and that is the backstop for anything in the collection: a
+merge that took `--prefer-incoming`, a hand edit of `vocabulary.json`, a
+pattern that was fine until its reading was corrected. Two gaps in it are worth
+knowing. A run without `--words` — `--examples` alone — names none of them,
+because the check lives in the word-audio path. And it reads `vocabulary.json`
+only, so a record living in a deck's inline `notes:` block is never voiced and
+never checked; `janki status` and `janki validate` do count those records, so
+they are not invisible, just unvoiced.
 
 Three commands say it *earlier*, which is the point: before a clip exists to be
 wrong. `janki enrich --jpdb` refuses to write an unusable pattern and names the
@@ -87,8 +90,10 @@ reason. `janki import-jpdb` keeps it — jpdb's answer is data you may want to
 correct — and names it, saying whether it is the pattern the clip will actually
 use. `janki promote` checks a staged row, and checks `audio_accent` as well as
 `pitch_accent`, because `audio_accent` is the one that reaches the synthesizer
-when it is set — and it is the one no importer and no enrichment pass writes,
-so promote is where a hand-typed one is first seen.
+when it is set. No importer and no enrichment pass writes it, so a staged row
+is the usual place a hand-typed one first appears — though not the only one: it
+is a mergeable field, so `janki migrate-inline` can carry one in from a deck's
+inline note without passing through promote at all.
 
 This is still the one case where filling in an accent does not by itself
 replace the clip.

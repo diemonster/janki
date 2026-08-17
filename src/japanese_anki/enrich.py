@@ -529,11 +529,15 @@ def _why_unusable(reading: str, pattern: str) -> str:
         # Anchored markers, not a bare ": ". Both messages interpolate the
         # pattern and the reading ahead of their real separator, so splitting
         # on the first colon-space cut inside the data: `"L: H"` defeated the
-        # bare marker. The patterns here come off jpdb's wire response rather
-        # than from anything typed locally, so this is defensive rather than
-        # load-bearing — a pattern containing the anchor itself (`"A': B"`)
-        # still mis-splits, and the caller prints the pattern immediately
-        # before this reason, so a mangled one is visible beside its value.
+        # bare marker.
+        #
+        # `"': "` anchors on the closing quote of the *reading*'s repr, which
+        # is what the length message interpolates. A reading containing `': `
+        # would still mis-split — it is a stored, hand-editable field, so that
+        # is not impossible, only unlikely for kana. The failure is cosmetic
+        # either way: the caller prints the pattern immediately before this
+        # reason, so a mangled explanation sits beside the value it is about,
+        # and a message matching neither marker is passed through whole.
         for marker in (" for VOICEVOX: ", "': "):
             head, found, tail = detail.partition(marker)
             if found:

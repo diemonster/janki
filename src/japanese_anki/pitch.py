@@ -239,14 +239,15 @@ def _spell_long_vowels(units: list[str]) -> list[str]:
     the table and nothing else: a `ー` is respelled when the character before
     it has a row in :data:`_LONG_VOWEL_FOR`, and refused when it does not.
 
-    Stated as a rule rather than a list because the list is 126 codepoints
-    long and two attempts at enumerating it were wrong — it takes in the
-    moraic consonants `ン` and `ッ`, `ヵ`, the combining and iteration marks,
-    the small katakana extensions, half-width katakana other than `ｰ` (which
-    :func:`_to_katakana` folds), the Kana Supplement and Extended blocks, and
-    a `ー` opening a reading with nothing before it at all. What they have in
-    common is only that the table does not answer for them, which is the
-    thing worth knowing.
+Stated as a rule because three attempts at enumerating the other
+    side of it were each wrong, and the third was wrong about how many there
+    were. The set is not worth counting: it takes in the moraic consonants
+    `ン` and `ッ`, `ヵ`, the combining and iteration marks, the small katakana
+    extensions, half-width katakana other than `ｰ` (which :func:`_to_katakana`
+    folds), the Kana Supplement and Extended blocks, everything that is not
+    kana at all, and a `ー` opening a reading with nothing before it. What
+    they have in common is only that the table does not answer for them, and
+    that is the whole of what a reader needs.
 
     The lookup is on the last character of the previous already-respelled unit,
     not on the reading's raw kana, which is why `カｰー` renders: the half-width

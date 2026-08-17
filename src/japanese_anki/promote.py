@@ -198,12 +198,14 @@ def _unspeakable_patterns(record: VocabularyRecord) -> tuple[list[str], bool]:
     unspeakable `audio_accent` entirely and blamed a `pitch_accent`
     that nothing was going to use.
 
-    Each pattern carries its field name because they are edited separately and
-    a curator told "pitch pattern LHLL is wrong" on a record whose
-    `pitch_accent` is empty has been sent to the wrong line of the file.
-    `validation.py` labels them the same way, and says why this field is the
-    one that matters: "it is the pattern audio generation actually uses when
-    set, so a typo there is the one that reaches the synthesizer".
+    Each pattern carries its field name, and `pitch_accent` entries carry their
+    index, because they are edited separately and a curator told "pitch pattern
+    LHLL is wrong" on a record whose `pitch_accent` is empty — or whose
+    `pitch_accent` has three entries — has been sent to the wrong line of the
+    file. `validation.py` labels them `pitch_accent[0]` for the same reason,
+    and says why this field is the one that matters: "it is the pattern audio
+    generation actually uses when set, so a typo there is the one that reaches
+    the synthesizer".
 
     Comparison is on the canonical form — stripped and upper-cased, as
     `select_pattern` returns it — because `pitch._LEVELS` accepts `h`/`l` as
@@ -212,8 +214,14 @@ def _unspeakable_patterns(record: VocabularyRecord) -> tuple[list[str], bool]:
     as fine when it is the broken one.
     """
     chosen = pitch_module.select_pattern(record)
+    # `audio_accent` first, because `select_pattern` reads it first: when both
+    # hold the same pattern the curator must be sent to the field the
+    # synthesizer actually uses, not to the one that happens to sort first.
     stored = [("audio_accent", record.audio_accent)]
-    stored += [("pitch_accent", pattern) for pattern in record.pitch_accent]
+    stored += [
+        (f"pitch_accent[{index}]", pattern)
+        for index, pattern in enumerate(record.pitch_accent)
+    ]
     unusable: list[str] = []
     seen: set[str] = set()
     for field_name, pattern in stored:

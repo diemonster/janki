@@ -35,6 +35,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 #: A stub `docker` whose behaviour each test picks with environment variables,
 #: so one script covers every branch and the tests read as a table.
 DOCKER_STUB = """#!/bin/sh
+# Loudly, not silently: `echo >> ""` fails the redirect and `/bin/sh` carries
+# on to the exit status, so an unset STUB_CALLS would make every call invisible
+# in the log while the recipe proceeded normally — a test asserting "docker was
+# not touched" would pass because the recorder was broken.
+if [ -z "$STUB_CALLS" ]; then
+  echo "docker stub: STUB_CALLS is not set, so calls cannot be recorded" >&2
+  exit 111
+fi
 case "$1" in
   info)
     exit ${STUB_INFO_RC:-0} ;;
@@ -107,9 +115,9 @@ def _make(target: str, path: Path, **env: str) -> Run:
 
     Which docker subcommands ran is read from a file the stub appends to, not
     from its output. An earlier version had the stub print to stderr, which the
-    recipe silences with `2>/dev/null 2>&1` on four of its own lines — so a
-    mutation that added such a redirect to a forbidden call would have gone
-    undetected by a test whose whole job is to detect it.
+    `voicevox` recipe silences with `>/dev/null 2>&1` on three of its own lines
+    — so a mutation that added such a redirect to a forbidden call would have
+    gone undetected by a test whose whole job is to detect it.
     """
     calls = path / "docker-calls"
     calls.unlink(missing_ok=True)
@@ -136,6 +144,37 @@ def stubs(tmp_path: Path) -> Path:
     )
 
 
+#: Every line the recipe can print, in the order it can print them. A guard
+#: that fails to stop the recipe is invisible to `run.code != 0` — the next
+#: guard exits and the test is satisfied by someone else's failure. So each
+#: guard test asserts on what comes *after* it instead: nothing.
+LATER_MESSAGES = [
+    "already answering",
+    "docker is not installed",
+    "daemon is not running",
+    "'docker ps' failed",
+    "starting the existing",
+    "running voicevox",
+    "waiting for the engine",
+    "60 tries",
+]
+
+
+def _assert_stopped_at(run: Run, message: str) -> None:
+    """The recipe printed `message` and then stopped — really stopped.
+
+    Checks three things a bare `run.code != 0` does not: the named message is
+    present, no *later* message is, and no docker subcommand ran after it. The
+    last two are what catch a guard whose `exit 1` is deleted, which is the
+    exact shape this file has been broken by three times.
+    """
+    assert message in run.text, run.text
+    index = LATER_MESSAGES.index(message)
+    for later in LATER_MESSAGES[index + 1:]:
+        assert later not in run.text, f"ran on past {message!r} to {later!r}"
+    assert run.code != 0
+
+
 def test_a_dead_daemon_is_named_rather_than_waited_out(stubs: Path) -> None:
     """`docker info` failing means every later docker call fails too.
 
@@ -145,9 +184,8 @@ def test_a_dead_daemon_is_named_rather_than_waited_out(stubs: Path) -> None:
     """
     run = _make("voicevox", stubs, STUB_INFO_RC="1")
 
-    assert run.code != 0
-    assert "daemon is not running" in run.text
-    assert "waiting for the engine" not in run.text, "it never got that far"
+    _assert_stopped_at(run, "daemon is not running")
+    assert run.calls == [], f"docker was told to do something: {run.calls}"
 
 
 def test_a_docker_ps_that_fails_before_the_loop_stops_the_run(stubs: Path) -> None:
@@ -158,9 +196,8 @@ def test_a_docker_ps_that_fails_before_the_loop_stops_the_run(stubs: Path) -> No
     """
     run = _make("voicevox", stubs, STUB_PS_AQ_RC="1")
 
-    assert run.code != 0
-    assert "'docker ps' failed" in run.text
-    assert "running voicevox" not in run.text, "it must not claim to have started one"
+    _assert_stopped_at(run, "'docker ps' failed")
+    assert run.calls == [], f"docker was told to do something: {run.calls}"
 
 
 def test_a_docker_ps_that_fails_inside_the_loop_stops_the_run(stubs: Path) -> None:
@@ -233,7 +270,7 @@ def test_the_engine_already_answering_starts_nothing(stubs: Path) -> None:
     # recipe running on, so `make voicevox` starts a *second* container against
     # an engine already serving port 50021 — and the message is still printed.
     # This is the same vacuous-absence hole its sibling had.
-    assert run.calls == [], f"docker was touched: {run.calls}"
+    assert run.calls == [], f"docker was told to start or create: {run.calls}"
     assert "running voicevox" not in run.text
 
 
@@ -266,9 +303,32 @@ def test_a_failed_create_does_not_delete_a_container(stubs: Path) -> None:
     another `make audio` is using. The stub screams if it is called."""
     run = _make("voicevox", stubs, STUB_RUN_RC="125")
 
-    assert run.code != 0
-    assert "rm" not in run.calls, f"docker rm ran: {run.calls}"
     assert "could not start the container" in run.text
+    assert "rm" not in run.calls, f"docker rm ran: {run.calls}"
+    # And it stopped there. Without the `exit 1` the recipe falls into the wait
+    # loop and finishes by blaming "the container exited while starting up" —
+    # a container that was never created.
+    assert "waiting for the engine" not in run.text
+    assert "exited while starting up" not in run.text
+    assert run.code != 0
+
+
+def test_a_failed_start_does_not_delete_the_container_either(stubs: Path) -> None:
+    """The twin of the failed-create test, for the branch taken on every run
+    after the first — and the one with no test at all until now.
+
+    `STUB_START_RC` had been a knob with no users. The hazard is identical and
+    a little sharper here: the recipe's own error text suggests
+    `docker rm -f` as the remedy, which is the most likely thing for someone to
+    automate into the branch, and doing so destroys a container another
+    `make audio` may be waiting on.
+    """
+    run = _make("voicevox", stubs, STUB_EXISTS="1", STUB_START_RC="1")
+
+    assert "'docker start" in run.text and "failed" in run.text
+    assert "rm" not in run.calls, f"docker rm ran: {run.calls}"
+    assert "waiting for the engine" not in run.text, "and it stopped there"
+    assert run.code != 0
 
 
 def test_a_missing_docker_points_at_the_app_instead(tmp_path: Path) -> None:
@@ -282,10 +342,8 @@ def test_a_missing_docker_points_at_the_app_instead(tmp_path: Path) -> None:
 
     run = _make("voicevox", stubs)
 
-    assert run.code != 0
-    assert "docker is not installed" in run.text
+    _assert_stopped_at(run, "docker is not installed")
     assert "voicevox.hiroshiba.jp" in run.text, "it says what to do instead"
-    assert "60 tries" not in run.text
 
 
 def test_a_missing_curl_is_named_rather_than_polled_out(tmp_path: Path) -> None:
@@ -297,7 +355,13 @@ def test_a_missing_curl_is_named_rather_than_polled_out(tmp_path: Path) -> None:
 
     assert run.code != 0
     assert "curl is not installed" in run.text
-    assert "60 tries" not in run.text
+    # Not `_assert_stopped_at`: with curl absent there is no probe, so the
+    # "already answering" line cannot appear and the ordering check has nothing
+    # to anchor on. The call log is the real assertion — deleting this guard's
+    # `exit 1` used to leave the recipe creating a container anyway.
+    for later in LATER_MESSAGES[1:]:
+        assert later not in run.text, f"ran on past the curl guard to {later!r}"
+    assert run.calls == [], f"docker was told to do something: {run.calls}"
 
 
 def test_help_lists_every_target_and_expands_the_container_name(stubs: Path) -> None:

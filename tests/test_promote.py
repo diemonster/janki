@@ -159,7 +159,7 @@ def test_an_unspeakable_pitch_pattern_is_named_rather_than_promoted_silently() -
 
     assert [item.id for item in result.promoted] == ["word:はし:はし"]
     [warning] = result.warnings
-    assert "pitch_accent LHLL" in warning, "named by the field it is stored in"
+    assert "pitch_accent[0] LHLL" in warning, "named by the field and entry"
     assert "engine's own accent" in warning
 
 
@@ -211,7 +211,7 @@ def test_promote_checks_the_pattern_that_actually_reaches_the_synthesizer() -> N
     assert "engine's own accent" in silent_warning
 
     [misblamed_warning] = misblamed.warnings
-    assert "pitch_accent LHLL" in misblamed_warning, "still reported"
+    assert "pitch_accent[0] LHLL" in misblamed_warning, "still reported"
     assert "uses LHL, which is fine" in misblamed_warning
     assert "engine's own" not in misblamed_warning
 
@@ -254,6 +254,36 @@ def test_one_pattern_in_two_spellings_is_reported_once() -> None:
 
     [warning] = result.warnings
     assert warning.count("LHLL") + warning.count("lhll") == 1, warning
+    # And it is `audio_accent`'s spelling that survives, not `pitch_accent`'s.
+    # Building the list the other way round leaves the count at one and sends
+    # the curator to the field the synthesizer does not use — which is the
+    # defect this whole check exists to fix, one level down.
+    assert "audio_accent lhll" in warning, warning
+
+
+def test_every_unusable_pattern_is_named_not_just_the_first() -> None:
+    """Two broken patterns in two fields, and both have to be said.
+
+    Reporting only the first left the second silent: the curator fixes
+    `audio_accent`, re-promotes, and hears about `pitch_accent` on the next
+    pass — or not at all, if the row has moved on. The index is there because
+    `pitch_accent` is a list and "pitch_accent is wrong" does not say which
+    entry.
+    """
+    staged = record(
+        id="word:はし:はし",
+        expression="はし",
+        reading="はし",
+        audio_accent="LHLL",
+        pitch_accent=["LHL", "LHHH"],
+    )
+
+    result = check_readings([staged], skip_reading_check=True)
+
+    [warning] = result.warnings
+    assert "audio_accent LHLL" in warning
+    assert "pitch_accent[1] LHHH" in warning, "the second entry, named by index"
+    assert "pitch_accent[0]" not in warning, "the usable one is not reported"
 
 
 def test_a_reading_no_entry_lists_is_held_back() -> None:
