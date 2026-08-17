@@ -515,3 +515,76 @@ def test_noninteractive_apply_writes_only_the_checked_exact_plan(
 
     assert result == 0
     assert load_records(normalized)[0].romaji == "neko"
+
+
+def test_punctuation_swallowed_into_a_ruby_base_is_pushed_back_out() -> None:
+    """Anki delimits ruby groups by spaces, so a missing one hands the comma
+    to the word after it.
+
+    `先週[せんしゅう]、家族[かぞく]` makes `、家族` the base, and Anki draws
+    かぞく over the comma as well as the word — confirmed against Anki's own
+    renderer rather than inferred from the notation. The reading loses the
+    comma too, which is how this surfaced: the romaji built from that reading
+    had no comma in it either.
+
+    Structural, not a judgement about Japanese: punctuation cannot carry a
+    reading, so a base that begins with one is a typing slip with nothing to
+    decide.
+    """
+    from japanese_anki.qc import furigana_pairs
+    from japanese_anki.repairs import _spaced_furigana
+
+    broken = "先週[せんしゅう]、家族[かぞく]と 山[やま]に 登[のぼ]りました。"
+    assert ("、家族", "かぞく") in furigana_pairs(broken), "the defect, as parsed"
+
+    fixed = _spaced_furigana(broken)
+
+    assert ("家族", "かぞく") in furigana_pairs(fixed)
+    assert not any("、" in base for base, reading in furigana_pairs(fixed) if reading)
+
+
+def test_a_comma_with_no_ruby_group_after_it_is_left_alone() -> None:
+    """The lookahead requires a `[` with no space before it. A comma followed
+    by plain kana has no ruby group to be swallowed into, so there is nothing
+    to repair and inserting a space would be editing the notation for its own
+    sake."""
+    from japanese_anki.repairs import _spaced_furigana
+
+    untouched = "山に登るときは、いつも 帽子[ぼうし]をかぶります。"
+
+    assert _spaced_furigana(untouched) == untouched
+
+
+def test_the_furigana_spacing_repair_is_idempotent() -> None:
+    """A space already there defeats the lookahead, so a second run is a
+    no-op — which is what lets this sit in an ingest-safe repair that may run
+    on every import."""
+    from japanese_anki.repairs import _spaced_furigana
+
+    once = _spaced_furigana("先週[せんしゅう]、家族[かぞく]と 山[やま]に 登[のぼ]りました。")
+
+    assert _spaced_furigana(once) == once
+
+
+def test_the_repair_gives_back_kana_the_base_swallowed_not_just_punctuation() -> None:
+    """`休[やす]みに、京都[きょうと]` loses more than the comma.
+
+    The base runs from the previous space, so it is `みに、京都` — the kana of
+    休み is inside it too. The reading came out らいしゅうのやす…きょうと with
+    みに gone entirely, and the card drew きょうと over five characters.
+
+    What must not change is the sentence being annotated, which is why the
+    postcondition compares that rather than the reading: the reading is
+    supposed to change here.
+    """
+    from japanese_anki.qc import furigana_reading
+    from japanese_anki.repairs import _annotated_text, _spaced_furigana
+
+    broken = "来週[らいしゅう]の 休[やす]みに、京都[きょうと]へ 行[い]くつもりです。"
+
+    fixed = _spaced_furigana(broken)
+
+    assert "みに" not in furigana_reading(broken), "the defect: kana was eaten"
+    assert "やすみに、きょうと" in furigana_reading(fixed), "and is given back"
+    sentence = "来週の休みに、京都へ行くつもりです。"
+    assert _annotated_text(broken) == _annotated_text(fixed) == sentence

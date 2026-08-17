@@ -22,7 +22,9 @@ an answer that departs from them is rejected rather than corrected:
 - **`ん` is always `n`**, including before `b`, `p` and `m`: `konban`,
   `shinbun`, `sanpo`. Write `n'` before a vowel or `y` — `kin'en`, `hon'ya` —
   because `kinen` would read as `ki-ne-n`, a different word.
-- **A small っ doubles the next consonant**: `gakkou`, `itte`, `zasshi`.
+- **A small っ doubles the next consonant**: `gakkou`, `itte`, `zasshi`. The
+  exception is before `ch`, where Hepburn writes `t` rather than doubling the
+  `c`: そっち is `sotchi`, まっちゃ is `matcha` — never `socchi` or `maccha`.
 - **Keep the sentence's own punctuation** where it is: `、` becomes a comma,
   `。` a full stop, `？` a question mark, `！` an exclamation mark.
 - **Lower case throughout**, except a proper noun, which takes a capital:

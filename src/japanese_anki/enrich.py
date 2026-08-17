@@ -33,12 +33,14 @@ from __future__ import annotations
 import functools
 import hashlib
 import json
+import re
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, is_dataclass, replace
 from dataclasses import fields as dc_fields
 from typing import Any
 
 from japanese_anki import claude_client, jpdb, pitch, qc
+from japanese_anki import romaji as romaji_module
 from japanese_anki.conjugation import conjugate
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import (
@@ -2012,26 +2014,36 @@ def romaji_targets(records: Sequence[VocabularyRecord]) -> list[VocabularyRecord
 
 
 def _romaji_needs_spacing(example: ExampleSentence) -> bool:
-    """Whether this example's romaji is the unsegmented machine output.
+    """Whether this example's romaji is missing, unsegmented, or stale.
 
-    Exactly that, by equality — not a guess from how many spaces it holds.
-    Counting spaces read `komban, hahanidenwao kakerutsumoridesu.` as already
-    segmented, because 、 and 。 put spaces in of their own accord and the
-    furigana's ruby spacing put in one more. Two spaces, four merged words,
-    and the record was skipped by the pass that exists to fix it.
+    Three conditions, and the third is the one that is easy to leave out.
 
-    The mechanical transliteration is reproducible from the reading, so
-    "nobody has segmented this" is a question with an exact answer.
+    *Unsegmented* is decided by equality with the mechanical transliteration,
+    not by counting spaces: `komban, hahanidenwao kakerutsumoridesu.` holds two
+    spaces — one from 、 and one from ruby notation — and four merged words, so
+    a space-counting test skipped the record this pass exists to fix.
+
+    *Stale* is romaji that no longer transliterates its own reading, which
+    happens when the reading changes underneath it. The furigana spacing repair
+    does exactly that: it gives back a comma, and sometimes kana, that a ruby
+    base had swallowed. A romaji segmented against the old reading is then
+    describing a sentence the record no longer holds — and it is not equal to
+    the mechanical output either, so nothing but this check would find it.
     """
     romaji = (example.romaji or "").strip()
-    if not romaji:
-        return bool(example.japanese)
     reading = (
         qc.furigana_reading(example.furigana)
         if example.furigana
         else example.japanese
     )
-    return bool(reading) and romaji == kana_to_romaji(reading)
+    if not romaji:
+        return bool(example.japanese)
+    if not reading:
+        return False
+    if romaji == kana_to_romaji(reading):
+        return True
+    pattern = romaji_module.accepting_pattern(reading)
+    return bool(pattern) and not re.fullmatch(pattern, romaji, re.IGNORECASE)
 
 
 def romaji_prompt(record: VocabularyRecord) -> str:

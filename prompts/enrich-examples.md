@@ -31,6 +31,11 @@ reading is drawn back over whatever precedes it. So 毎日話します。 is
 `毎日話[はな]します。`, both of which say はな is the reading of 毎日話 and lose
 毎日 from what the card speaks.
 
+Put a space after punctuation when a ruby group follows it —
+`先週[せんしゅう]、 家族[かぞく]` and not `先週[せんしゅう]、家族[かぞく]`. Anki
+delimits ruby groups by spaces, so without it the comma joins the word after it
+and the reading is drawn over both.
+
 Readings are contextual and that is your judgement to make: 行 is い in 行く and
 ぎょう in 銀行, 話 is はな in 話す and わ in 会話. Give the reading this sentence
 uses. Kana already in the base stay as they are — they are their own reading.

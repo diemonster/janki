@@ -646,6 +646,84 @@ def _example_romaji_post(
     )
 
 
+#: Punctuation immediately followed by a ruby group, which means the space
+#: between them is missing. Anki delimits ruby groups by spaces, so
+#: `先週[せんしゅう]、家族[かぞく]` makes `、家族` the base and draws かぞく
+#: over the comma as well as the word — confirmed against Anki's own renderer,
+#: not inferred. The lookahead requires a `[` with no space before it, so a
+#: comma followed by plain kana is left alone: there is no ruby group for it
+#: to be swallowed into.
+#: A bracketed reading, for recovering the text underneath the annotation.
+_RUBY_READING = re.compile(r"\[[^\]]*\]")
+
+_RUBY_AFTER_PUNCTUATION = re.compile(r"([、。？！，,.?!])(?=[^\s\[\]]*\[)")
+
+
+def _spaced_furigana(value: str) -> str:
+    """``value`` with the missing space after punctuation restored.
+
+    Structural, not a judgement about Japanese: punctuation cannot carry a
+    reading, so a ruby base that begins with one is a typing slip and there is
+    nothing to decide. Idempotent — a space already there defeats the
+    lookahead — so re-running changes nothing.
+    """
+    return _RUBY_AFTER_PUNCTUATION.sub(r"\1 ", value)
+
+
+def _example_furigana_values(before: Mapping[str, Any]) -> list[str]:
+    return [_spaced_furigana(value) for value in before["examples[*].furigana"]]
+
+
+def _example_furigana_pre(before: Mapping[str, Any], evidence: Mapping[str, Any]) -> bool:
+    del evidence
+    return tuple(_example_furigana_values(before)) != before["examples[*].furigana"]
+
+
+def _example_furigana_transform(
+    before: Mapping[str, Any], evidence: Mapping[str, Any]
+) -> Mapping[str, Any]:
+    del evidence
+    return {
+        f"examples[{index}].furigana": value
+        for index, value in enumerate(_example_furigana_values(before))
+        if value != before["examples[*].furigana"][index]
+    }
+
+
+def _example_furigana_post(
+    before: Mapping[str, Any], planned: Mapping[str, Any], evidence: Mapping[str, Any]
+) -> bool:
+    del evidence
+    expected = _example_furigana_values(before)
+    if any(
+        planned.get(f"examples[{index}].furigana", old) != expected[index]
+        for index, old in enumerate(before["examples[*].furigana"])
+    ):
+        return False
+    # The sentence being annotated must not change — only where the ruby
+    # brackets sit within it.
+    #
+    # Not a comparison of *readings*: this repair deliberately changes those.
+    # A base that swallowed `、京都` also swallowed the `みに` before it, so
+    # 休みに vanished from the reading entirely and the card drew きょうと over
+    # five characters. Restoring the space gives both back. Comparing readings
+    # would therefore fail on every real case, and the escape hatch that first
+    # papered over it was wide enough to hide a dropped character.
+    #
+    # Stripping the readings out of the notation leaves the sentence it
+    # annotates, and *that* is what may not move.
+    return all(
+        _annotated_text(old) == _annotated_text(expected[index])
+        for index, old in enumerate(before["examples[*].furigana"])
+    )
+
+
+def _annotated_text(furigana: str) -> str:
+    """The sentence a furigana field annotates: its readings and spacing gone."""
+    return _RUBY_READING.sub("", furigana).replace(" ", "").replace("\u3000", "")
+
+
+
 REGISTRY = RepairRegistry(
     (
         RepairDeclaration(
@@ -660,6 +738,22 @@ REGISTRY = RepairRegistry(
             transformation=_record_romaji_transform,
             postcondition=_record_romaji_post,
             provenance="Derived Hepburn romaji from the stored kana reading.",
+        ),
+        RepairDeclaration(
+            code="example-furigana-space-after-punctuation",
+            version="1.0.0",
+            phase="ingest",
+            mode="ingest-safe",
+            allowed_fields=("examples[*].furigana",),
+            input_fields=("examples[*].furigana",),
+            evidence={"algorithm": "japanese_anki.repairs._spaced_furigana"},
+            precondition=_example_furigana_pre,
+            transformation=_example_furigana_transform,
+            postcondition=_example_furigana_post,
+            provenance=(
+                "Restored the space between punctuation and a following ruby "
+                "group, which Anki needs to keep the punctuation out of the base."
+            ),
         ),
         RepairDeclaration(
             code="example-romaji-from-furigana",

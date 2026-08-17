@@ -16,7 +16,10 @@ Every vocabulary note should have:
 
 ## Preferred enrichments
 
-- Anki-formatted furigana.
+- Anki-formatted furigana: a space before every ruby group, punctuation
+  included — `今[いま]、 東京[とうきょう]`, never `今[いま]、東京[とうきょう]`,
+  because Anki takes everything since the last space as the base and would
+  draw the reading over the comma too.
 - Hepburn romaji.
 - Part of speech.
 - Verb group for verbs.

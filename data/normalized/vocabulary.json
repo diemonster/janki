@@ -3340,8 +3340,8 @@
     "examples": [
       {
         "japanese": "その映画は今、東京でも上映中です。",
-        "furigana": "その 映画[えいが]は 今[いま]、東京[とうきょう]でも 上映中[じょうえいちゅう]です。",
-        "romaji": "sonoeigahaimatoukyoudemojoueichuudesu.",
+        "furigana": "その 映画[えいが]は 今[いま]、 東京[とうきょう]でも 上映中[じょうえいちゅう]です。",
+        "romaji": "sono eiga wa ima, Toukyou de mo jouei-chuu desu.",
         "english": "That movie is now showing in Tokyo too.",
         "audio": "",
         "register": "polite"
@@ -3349,7 +3349,7 @@
       {
         "japanese": "あのアニメ、まだ上映中なの？",
         "furigana": "あのアニメ、まだ 上映中[じょうえいちゅう]なの？",
-        "romaji": "ano anime, mada jouei chuu na no?",
+        "romaji": "ano anime, mada jouei-chuu na no?",
         "english": "Is that anime still showing?",
         "audio": "",
         "register": "casual"
@@ -3375,7 +3375,7 @@
         "page": "1",
         "context": "じょうえいちゅう",
         "provisional_fields": "meanings:73c216bd84e4,part_of_speech:ee6cded62768",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-furigana-space-after-punctuation\",\"evidence\":{\"algorithm\":\"japanese_anki.repairs._spaced_furigana\"},\"fields\":[\"examples[0].furigana\"],\"provenance\":\"Restored the space between punctuation and a following ruby group, which Anki needs to keep the punctuation out of the base.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -3931,8 +3931,8 @@
     "examples": [
       {
         "japanese": "来週の休みに、京都へ行くつもりです。",
-        "furigana": "来週[らいしゅう]の 休[やす]みに、京都[きょうと]へ 行[い]くつもりです。",
-        "romaji": "raishuu no yasu Kyouto e iku tsumori desu.",
+        "furigana": "来週[らいしゅう]の 休[やす]みに、 京都[きょうと]へ 行[い]くつもりです。",
+        "romaji": "raishuu no yasumi ni, Kyouto e iku tsumori desu.",
         "english": "On next week's day off, I'm planning to go to Kyoto.",
         "audio": "",
         "register": "polite"
@@ -3967,7 +3967,7 @@
         "confidence": "high",
         "page": "1",
         "context": "休み",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-furigana-space-after-punctuation\",\"evidence\":{\"algorithm\":\"japanese_anki.repairs._spaced_furigana\"},\"fields\":[\"examples[0].furigana\"],\"provenance\":\"Restored the space between punctuation and a following ruby group, which Anki needs to keep the punctuation out of the base.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:820f7dc6ef6965c75fd35e8c49065e9a1f04d2f7a13d7c686016fec55429dc67"
       }
     }
@@ -4697,16 +4697,16 @@
     "examples": [
       {
         "japanese": "先週、家族と山に登りました。",
-        "furigana": "先週[せんしゅう]、家族[かぞく]と 山[やま]に 登[のぼ]りました。",
-        "romaji": "senshuukazokutoyamaninoborimashita.",
+        "furigana": "先週[せんしゅう]、 家族[かぞく]と 山[やま]に 登[のぼ]りました。",
+        "romaji": "senshuu, kazoku to yama ni noborimashita.",
         "english": "Last week I climbed a mountain with my family.",
         "audio": "",
         "register": "polite"
       },
       {
         "japanese": "先週、京都に行ったんだ。",
-        "furigana": "先週[せんしゅう]、京都[きょうと]に 行[い]ったんだ。",
-        "romaji": "senshuukyoutoniittanda.",
+        "furigana": "先週[せんしゅう]、 京都[きょうと]に 行[い]ったんだ。",
+        "romaji": "senshuu, Kyouto ni itta n da.",
         "english": "I went to Kyoto last week, you see.",
         "audio": "",
         "register": "casual"
@@ -4733,7 +4733,7 @@
         "confidence": "high",
         "page": "1",
         "context": "せんしゅう",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-furigana-space-after-punctuation\",\"evidence\":{\"algorithm\":\"japanese_anki.repairs._spaced_furigana\"},\"fields\":[\"examples[0].furigana\",\"examples[1].furigana\"],\"provenance\":\"Restored the space between punctuation and a following ruby group, which Anki needs to keep the punctuation out of the base.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:f5b5e79bc6bd69eefb9fbd409b0ee62fa868fcd4b742eaa92f36e4833206586d"
       }
     }
@@ -5858,8 +5858,8 @@
     "examples": [
       {
         "japanese": "今日の夜、日本語を勉強するつもりです。",
-        "furigana": "今日[きょう]の 夜[よる]、日本語[にほんご]を 勉強[べんきょう]するつもりです。",
-        "romaji": "kyounoyorunihongoobenkyousurutsumoridesu.",
+        "furigana": "今日[きょう]の 夜[よる]、 日本語[にほんご]を 勉強[べんきょう]するつもりです。",
+        "romaji": "kyou no yoru, nihongo o benkyou suru tsumori desu.",
         "english": "I'm planning to study Japanese tonight.",
         "audio": "",
         "register": "polite"
@@ -5895,7 +5895,7 @@
         "page": "1",
         "context": "B: ひるは _____ がふります。でも _____ は _____ が _______________。/ よる",
         "inclusion_reason": "Basic time-of-day noun targeted for kanji conversion.",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-furigana-space-after-punctuation\",\"evidence\":{\"algorithm\":\"japanese_anki.repairs._spaced_furigana\"},\"fields\":[\"examples[0].furigana\"],\"provenance\":\"Restored the space between punctuation and a following ruby group, which Anki needs to keep the punctuation out of the base.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:2e2979fa0e8b300d6ec14459904978f727c08fc91373751ac15a06ad2d4a02aa"
       }
     }
@@ -6028,16 +6028,16 @@
     "examples": [
       {
         "japanese": "今日はいい天気だから、公園を散歩するつもりです。",
-        "furigana": "今日[きょう]はいい 天気[てんき]だから、公園[こうえん]を 散歩[さんぽ]するつもりです。",
-        "romaji": "kyou wa ii tenki kouen o sanpo suru tsumori desu.",
+        "furigana": "今日[きょう]はいい 天気[てんき]だから、 公園[こうえん]を 散歩[さんぽ]するつもりです。",
+        "romaji": "kyou wa ii tenki dakara, kouen o sanpo suru tsumori desu.",
         "english": "The weather is nice today, so I'm planning to take a walk in the park.",
         "audio": "",
         "register": "polite"
       },
       {
         "japanese": "ねえ、明日の天気は雨なの？",
-        "furigana": "ねえ、明日[あした]の 天気[てんき]は 雨[あめ]なの？",
-        "romaji": "ashita no tenki wa ame na no?",
+        "furigana": "ねえ、 明日[あした]の 天気[てんき]は 雨[あめ]なの？",
+        "romaji": "nee, ashita no tenki wa ame na no?",
         "english": "Hey, is tomorrow's weather going to be rainy?",
         "audio": "",
         "register": "casual"
@@ -6064,7 +6064,7 @@
         "confidence": "high",
         "page": "1",
         "context": "天気",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.settle_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.settle_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"},{\"code\":\"example-furigana-space-after-punctuation\",\"evidence\":{\"algorithm\":\"japanese_anki.repairs._spaced_furigana\"},\"fields\":[\"examples[0].furigana\",\"examples[1].furigana\"],\"provenance\":\"Restored the space between punctuation and a following ruby group, which Anki needs to keep the punctuation out of the base.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:2dc48b85dc0253e7e4ab7f349292b26f208f7d2b55ec3aa4de9af3cc8c8663c5"
       }
     }
@@ -7862,16 +7862,16 @@
     "examples": [
       {
         "japanese": "来年、日本へ行くつもりです。",
-        "furigana": "来年[らいねん]、日本[にほん]へ 行[い]くつもりです。",
-        "romaji": "rainennihonheikutsumoridesu.",
+        "furigana": "来年[らいねん]、 日本[にほん]へ 行[い]くつもりです。",
+        "romaji": "rainen, Nihon e iku tsumori desu.",
         "english": "I'm planning to go to Japan next year.",
         "audio": "",
         "register": "polite"
       },
       {
         "japanese": "来年、東京に住むんだ。",
-        "furigana": "来年[らいねん]、東京[とうきょう]に 住[す]むんだ。",
-        "romaji": "rainentoukyounisumunda.",
+        "furigana": "来年[らいねん]、 東京[とうきょう]に 住[す]むんだ。",
+        "romaji": "rainen, Toukyou ni sumun da.",
         "english": "I'm going to be living in Tokyo next year.",
         "audio": "",
         "register": "casual"
@@ -7899,7 +7899,7 @@
         "page": "1",
         "context": "来年",
         "example": "来年大学院でビジネスの勉強をするつもりです。",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-furigana-space-after-punctuation\",\"evidence\":{\"algorithm\":\"japanese_anki.repairs._spaced_furigana\"},\"fields\":[\"examples[0].furigana\",\"examples[1].furigana\"],\"provenance\":\"Restored the space between punctuation and a following ruby group, which Anki needs to keep the punctuation out of the base.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:9f3b6254314fec9fc003ae9ac1a57dfd4b814af227df857e68a47768aa1d2442"
       }
     }
@@ -8099,8 +8099,8 @@
     "examples": [
       {
         "japanese": "雨が止みましたから、散歩に行きます。",
-        "furigana": "雨[あめ]が 止[や]みましたから、散歩[さんぽ]に 行[い]きます。",
-        "romaji": "ame ga ya sanpo ni ikimasu.",
+        "furigana": "雨[あめ]が 止[や]みましたから、 散歩[さんぽ]に 行[い]きます。",
+        "romaji": "ame ga yamimashita kara, sanpo ni ikimasu.",
         "english": "The rain has stopped, so I'm going for a walk.",
         "audio": "",
         "register": "polite"
@@ -8144,7 +8144,7 @@
         "page": "1",
         "context": "B: ひるは _____ がふります。でも _____ は _____ が _______________。/ やみます",
         "inclusion_reason": "The hiragana やみます is to be rewritten with the kanji 止; useful weather verb contrasting with 止まる.",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.settle_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.settle_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"},{\"code\":\"example-furigana-space-after-punctuation\",\"evidence\":{\"algorithm\":\"japanese_anki.repairs._spaced_furigana\"},\"fields\":[\"examples[0].furigana\"],\"provenance\":\"Restored the space between punctuation and a following ruby group, which Anki needs to keep the punctuation out of the base.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:b0292acb5109c31a5704e3a6318ee31c018f39f4d17c56b0b9758f91d3071eca"
       }
     }
@@ -8700,8 +8700,8 @@
       },
       {
         "japanese": "このヘッドホン、音が神なんだよ。",
-        "furigana": "この ヘッドホン、音[おと]が 神[かみ]なんだよ。",
-        "romaji": "kono oto ga kami nan da yo.",
+        "furigana": "この ヘッドホン、 音[おと]が 神[かみ]なんだよ。",
+        "romaji": "kono heddohon, oto ga kami nan da yo.",
         "english": "These headphones — the sound is incredible, you know.",
         "audio": "",
         "register": "casual"
@@ -8728,7 +8728,7 @@
         "confidence": "high",
         "page": "1",
         "context": "神 (god) Radical ネ altar　くんよみ かみ／おんよみ しん・じん",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-furigana-space-after-punctuation\",\"evidence\":{\"algorithm\":\"japanese_anki.repairs._spaced_furigana\"},\"fields\":[\"examples[1].furigana\"],\"provenance\":\"Restored the space between punctuation and a following ruby group, which Anki needs to keep the punctuation out of the base.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:5d43ed4291f4e6c53e0343aa3acecedd95f38b22690113d3f009fed29ee57e85"
       }
     }
@@ -10591,7 +10591,7 @@
       {
         "japanese": "そっちも雪降ってるの？",
         "furigana": "そっちも 雪[ゆき] 降[ふ]ってるの？",
-        "romaji": "sotchimoyukifutteruno?",
+        "romaji": "sotchi mo yuki futteru no?",
         "english": "Is it snowing where you are too?",
         "audio": "",
         "register": "casual"
