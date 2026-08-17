@@ -1404,3 +1404,43 @@ def test_a_short_romaji_response_is_refused_whole_rather_than_zipped() -> None:
     assert updated == record, "nothing was written"
     assert len(warnings) == 1
     assert "asked for 2 romaji line(s) and got 1" in warnings[0]
+
+
+def test_romaji_that_no_longer_matches_its_reading_is_targeted_again() -> None:
+    """The third condition, and the one that is easy to leave out.
+
+    A romaji can be segmented — so not equal to the mechanical output — and
+    still be stale, because the *reading* changed underneath it. The furigana
+    spacing repair does exactly that: it gives back a comma, and sometimes
+    whole clauses, that a ruby base had swallowed. Eleven sentences were left
+    describing Japanese the record no longer held, and neither the "empty" nor
+    the "unsegmented" test could see them.
+    """
+    from dataclasses import replace
+
+    from japanese_anki.enrich import romaji_targets
+    from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
+
+    # Segmented, and correct for this reading.
+    good = ExampleSentence(
+        japanese="先週、家族と山に登りました。",
+        furigana="先週[せんしゅう]、 家族[かぞく]と 山[やま]に 登[のぼ]りました。",
+        romaji="senshuu, kazoku to yama ni noborimashita.",
+    )
+    record = VocabularyRecord(
+        id="word:先週:せんしゅう",
+        expression="先週",
+        reading="せんしゅう",
+        meanings=["last week"],
+        source=SourceReference(type="extract", imported_from="lesson.pdf"),
+        examples=[good],
+    )
+    assert romaji_targets([record]) == [], "nothing to do while they agree"
+
+    # The same romaji against a reading that says something else.
+    moved = replace(
+        good, furigana="来年[らいねん]、 家族[かぞく]と 山[やま]に 登[のぼ]りました。"
+    )
+    stale = replace(record, examples=[moved])
+
+    assert romaji_targets([stale]) == [stale], "stale, and neither empty nor unsegmented"

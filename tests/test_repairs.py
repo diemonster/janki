@@ -588,3 +588,66 @@ def test_the_repair_gives_back_kana_the_base_swallowed_not_just_punctuation() ->
     assert "やすみに、きょうと" in furigana_reading(fixed), "and is given back"
     sentence = "来週の休みに、京都へ行くつもりです。"
     assert _annotated_text(broken) == _annotated_text(fixed) == sentence
+
+
+def test_the_furigana_postcondition_refuses_a_transform_that_loses_text() -> None:
+    """The check that caught two wrong versions of itself.
+
+    This repair moves ruby brackets and nothing else, so the sentence being
+    annotated may not change. Comparing *readings* cannot express that — the
+    repair is supposed to change those — and an earlier version compared
+    kana-only, which failed on 休みに because the repair gives kana back too.
+
+    Reached by replacing the transformation, because the postcondition's first
+    guard — does the plan match what the transform produced — catches every
+    bad *plan* before this second guard sees it. What this half exists for is a
+    bad *transform*, which is a future edit to `_spaced_furigana` rather than
+    anything a caller can pass in. A first attempt at this test asserted on a
+    dropped word and passed against the guard above, not against this one.
+    """
+    import japanese_anki.repairs as repairs_module
+
+    before = {
+        "examples[*].furigana": (
+            "先週[せんしゅう]、家族[かぞく]と 山[やま]に 登[のぼ]りました。",
+        )
+    }
+    original = repairs_module._spaced_furigana
+    try:
+        # A transform that spaces correctly *and* drops a word.
+        repairs_module._spaced_furigana = lambda value: (
+            "先週[せんしゅう]、 家族[かぞく]と 登[のぼ]りました。"
+        )
+        planned = repairs_module._example_furigana_transform(before, {})
+        assert not repairs_module._example_furigana_post(before, planned, {}), (
+            "a transform that loses 山 must be refused"
+        )
+
+        # And one that rewrites a reading rather than moving a bracket.
+        repairs_module._spaced_furigana = lambda value: (
+            "先週[せんしゅう]、 家族[かぞく]と 山[やま]に 登[くだ]りました。"
+        )
+        planned = repairs_module._example_furigana_transform(before, {})
+        assert repairs_module._example_furigana_post(before, planned, {}), (
+            "a changed *reading* is invisible here by design — the annotated "
+            "sentence is identical, and reading correctness is not this "
+            "repair's business"
+        )
+    finally:
+        repairs_module._spaced_furigana = original
+
+
+def test_the_furigana_postcondition_accepts_the_real_transform() -> None:
+    """The live path, so the guard above cannot pass by rejecting everything."""
+    from japanese_anki.repairs import _example_furigana_post, _example_furigana_transform
+
+    before = {
+        "examples[*].furigana": (
+            "先週[せんしゅう]、家族[かぞく]と 山[やま]に 登[のぼ]りました。",
+        )
+    }
+
+    planned = _example_furigana_transform(before, {})
+
+    assert planned["examples[0].furigana"].startswith("先週[せんしゅう]、 家族")
+    assert _example_furigana_post(before, planned, {})
