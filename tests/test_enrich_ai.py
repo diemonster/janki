@@ -1444,3 +1444,125 @@ def test_romaji_that_no_longer_matches_its_reading_is_targeted_again() -> None:
     stale = replace(record, examples=[moved])
 
     assert romaji_targets([stale]) == [stale], "stale, and neither empty nor unsegmented"
+
+
+def _romaji_project(tmp_path: Path) -> Path:
+    """A project holding one record whose romaji is the machine output."""
+    import json
+
+    from conftest import seed_prompts
+
+    (tmp_path / "janki.toml").write_text(
+        '[paths]\nnormalized_file = "vocabulary.json"\nstaging_dir = "staging"\n'
+        'scan_inbox = "inbox"\npatterns_file = "patterns.json"\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps(
+            [
+                {
+                    "id": "word:話す:はなす",
+                    "expression": "話す",
+                    "reading": "はなす",
+                    "meanings": ["to speak"],
+                    "source": {"type": "shirabe", "imported_from": "x.csv"},
+                    "examples": [
+                        {
+                            "japanese": "毎日話します。",
+                            "furigana": "毎日[まいにち] 話[はな]します。",
+                            "romaji": "mainichihanashimasu.",
+                        }
+                    ],
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    seed_prompts(tmp_path)
+    return tmp_path
+
+
+def test_the_romaji_pass_refuses_an_unknown_id_rather_than_reporting_success(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A typo'd id filters the target list to nothing, and "nothing to do" is
+    indistinguishable from "already done".
+
+    Every other pass raises on an unknown id. This one printed "Every example's
+    romaji is already segmented" and exited 0, which is the answer a user gets
+    for a job that never ran.
+    """
+    from japanese_anki import cli
+
+    root = _romaji_project(tmp_path)
+
+    code = cli.main(
+        ["--root", str(root), "enrich", "--romaji", "--yes", "word:nope:nope"]
+    )
+
+    assert code == 1
+    assert "No record with id" in capsys.readouterr().err
+
+
+def test_the_romaji_pass_refuses_flags_it_would_ignore(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """"A flag the running pass never reads is a typo, not a no-op" — the rule
+    `cli.py` states four lines above the gate that did not list `--romaji`.
+
+    `--staging` named a file this pass never opens, and the run went ahead:
+    one billed call per record, and the collection rewritten instead of the
+    file the user named.
+    """
+    from japanese_anki import cli
+
+    root = _romaji_project(tmp_path)
+    staged = root / "staging" / "held.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    staged.write_text("records: []\n", encoding="utf-8")
+
+    assert cli.main(
+        ["--root", str(root), "enrich", "--romaji", "--staging", str(staged), "--yes"]
+    ) == 1
+    assert "Run them separately" in capsys.readouterr().err
+
+    assert cli.main(
+        ["--root", str(root), "enrich", "--romaji", "--force-fields", "examples", "--yes"]
+    ) == 1
+    assert "nothing for --force-fields" in capsys.readouterr().err
+
+
+def test_the_romaji_pass_records_what_it_spent_in_the_ledger(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every other model pass writes a ledger entry; this one wrote none.
+
+    A billed rewrite of every example in the collection that leaves no
+    operational trace is one `status --rebuild` cannot reconstruct and one
+    nobody can audit after the fact.
+    """
+    from types import SimpleNamespace
+
+    from japanese_anki import claude_client, cli, enrich, ledger
+
+    root = _romaji_project(tmp_path)
+
+    def call(_model, _blocks, _content, _schema, _client=None, **_options):
+        return claude_client.CallResult(
+            SimpleNamespace(romaji=["mainichi hanashimasu."]), "end_turn", None
+        )
+
+    for module in (claude_client, cli, enrich):
+        monkeypatch.setattr(
+            getattr(module, "claude_client", module), "parse_call", call, raising=False
+        )
+    monkeypatch.setattr(claude_client, "parse_call", call)
+
+    cli.main(["--root", str(root), "enrich", "--romaji", "--yes"])
+
+    book = ledger.load(root / "data" / "ledger.json")
+    entries = book.enrichment_for("word:話す:はなす") if hasattr(book, "enrichment_for") else None
+    raw = (root / "data" / "ledger.json").read_text(encoding="utf-8")
+    assert "romaji" in raw, "the pass names itself in the ledger"
+    del entries

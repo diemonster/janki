@@ -341,13 +341,33 @@ class RepairRegistry:
         return tuple(self._by_code.values())
 
     def select(self, codes: Sequence[str] = ()) -> tuple[RepairDeclaration, ...]:
+        """The named repairs, always in registry order.
+
+        Not the caller's order. Repairs are not independent: derivations read
+        fields other repairs correct, so
+        `example-romaji-from-furigana example-furigana-space-after-punctuation`
+        on one command line derived romaji from furigana that the *next*
+        declaration was about to fix — both recorded as successful, with the
+        romaji describing a sentence the record was one step from no longer
+        holding.
+
+        Registry order is the sorted code order, which puts each field's
+        correction before the derivations that read it today. That is luck
+        rather than design; what is not luck is that a caller can no longer
+        invert it by typing the codes the other way round.
+        """
         names = tuple(codes) if codes else tuple(self._by_code)
         if len(set(names)) != len(names):
             raise RepairError("Repair code list contains duplicates")
         unknown = [name for name in names if name not in self._by_code]
         if unknown:
             raise RepairError("Unknown repair code(s): " + ", ".join(unknown))
-        return tuple(self._by_code[name] for name in names)
+        wanted = set(names)
+        return tuple(
+            declaration
+            for code, declaration in self._by_code.items()
+            if code in wanted
+        )
 
     def get(self, code: str) -> RepairDeclaration | None:
         return self._by_code.get(code)
@@ -646,17 +666,32 @@ def _example_romaji_post(
     )
 
 
-#: Punctuation immediately followed by a ruby group, which means the space
-#: between them is missing. Anki delimits ruby groups by spaces, so
-#: `先週[せんしゅう]、家族[かぞく]` makes `、家族` the base and draws かぞく
-#: over the comma as well as the word — confirmed against Anki's own renderer,
-#: not inferred. The lookahead requires a `[` with no space before it, so a
-#: comma followed by plain kana is left alone: there is no ruby group for it
-#: to be swallowed into.
 #: A bracketed reading, for recovering the text underneath the annotation.
 _RUBY_READING = re.compile(r"\[[^\]]*\]")
 
-_RUBY_AFTER_PUNCTUATION = re.compile(r"([、。？！，,.?!])(?=[^\s\[\]]*\[)")
+#: Japanese sentence punctuation immediately followed by a ruby group, which
+#: means the space between them is missing. Anki delimits ruby groups by
+#: spaces, so `先週[せんしゅう]、家族[かぞく]` makes `、家族` the base and draws
+#: かぞく over the comma as well as the word — confirmed against Anki's own
+#: renderer, not inferred.
+#:
+#: Full-width only. ASCII `,` and `.` are digit and decimal separators, not
+#: sentence punctuation, so including them turned `1,000円[えん]` into
+#: `1, 000円[えん]` — a *worse* base than it started with, and a space inside a
+#: number that `furigana_reading`, the romaji derivation and TTS all go on to
+#: read. `?` and `!` are out for the same reason: a Japanese sentence ends in
+#: ？ or ！, and an ASCII one is likelier to sit inside quoted Latin.
+#:
+#: A closing quote or bracket goes with the punctuation, so `「はい。」と家族`
+#: gains its space after the 」 rather than before it. Inserting before would
+#: leave the base `」と家族` exactly as it was and add a stray space for
+#: nothing.
+#:
+#: The lookahead crosses any run of non-space, non-bracket characters, so it
+#: also fires on `は、いい 天気[てんき]`, where `いい` stays in the base either
+#: way and only the comma comes out. That is strictly better and not a full
+#: fix; a full one would need to know where words end.
+_RUBY_AFTER_PUNCTUATION = re.compile(r"([、。？！，][」』）】〉》]*)(?=[^\s\[\]]*\[)")
 
 
 def _spaced_furigana(value: str) -> str:
@@ -757,7 +792,13 @@ REGISTRY = RepairRegistry(
         ),
         RepairDeclaration(
             code="example-romaji-from-furigana",
-            version="1.1.0",
+            # 1.2.0, not 1.1.0: the algorithm changed under it. `version` is
+            # written into each record's `janki_repairs` provenance and into
+            # the pinned plan fingerprint, so leaving it would have two
+            # different behaviours claiming the same name — 1.1.0 meaning
+            # always-rebuild on records repaired before 2026-08-17, and
+            # 1.1.0 meaning check-then-keep on records repaired after.
+            version="1.2.0",
             phase="ingest",
             mode="ingest-safe",
             allowed_fields=("examples[*].romaji",),

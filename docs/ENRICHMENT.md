@@ -138,8 +138,13 @@ call per record and overwrites every curated value it names. Name ids there too.
 Nothing it writes is audited (see above). What janki still does with the
 answer is fill discipline and derivation: stored examples are preserved unless
 `--force-fields examples` asks otherwise, existing annotations win over the
-model's, and romaji is always regenerated from the furigana, whatever the
-model sent.
+model's, and romaji is *checked* against the reading rather than rebuilt from
+it. Word spacing in romaji is word segmentation, which janki does not do, so a
+rebuild could only ever run the words together — `hahanidenwao` for 母に電話を.
+The model's romaji is kept when every letter transliterates the reading janki
+already holds, and replaced by the mechanical form, with a warning, when it
+does not. `janki enrich --romaji` buys that spacing for records written before
+the prompt asked for it.
 
 At fifty records or more the proposals go to `data/staging/ai-enrichment.yaml`
 and through `janki promote` instead of a terminal diff, because nobody reads

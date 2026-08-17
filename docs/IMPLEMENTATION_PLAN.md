@@ -1317,7 +1317,7 @@ decides which characters a reading belongs to. (3) `example_contains_target`
 searches the plain sentence, never the furigana, which carries bracketed
 readings that would match text no reader sees. A word janki has no verb class
 for contributes only its dictionary form — the right answer rather than a guess.
-(4) `regenerate_example_romaji` returns a new example rather than mutating, and
+(4) `settle_example_romaji` returns a new example rather than mutating, and
 inherits `kana_to_romaji`'s refusal: kanji with no furigana yields `""`, never a
 part-transliterated string. One test runs against the committed live `/parse`
 capture rather than a hand-written fixture, because jpdb segments 日本語 per
@@ -1333,8 +1333,9 @@ Design: DESIGN_V2 "AI integration > Mechanical QC".
   M2.4's conjugated forms), `verify_example_furigana(example,
   parse_response)` (compare against jpdb `/parse` of the sentence via
   M2.1's contract; returns verified | mismatch), and
-  `regenerate_example_romaji(example)` (M2.3 from verified furigana —
-  model-supplied romaji is always discarded).
+  `settle_example_romaji(example)` (M2.3 from verified furigana; *checked*
+  rather than rebuilt since 2026-08-17 — a supplied romaji that transliterates
+  the reading is kept for its word spacing, which janki cannot derive).
 - Unit tests with canned parse fixtures; no network.
 
 ### [x] M4.2 `janki enrich --ai`
@@ -3320,7 +3321,7 @@ Use these slices, each a finding plus a reproducing case plus a fix, ordered so
    *(Moot: M8.3 deleted `verify_example_furigana`, `furigana_base`'s checking
    caller, `impossible_character_furigana`, `example_content_holds` and
    `spilled_furigana_groups`. `qc.py` is three notation functions now —
-   `furigana_pairs`, `furigana_reading`, `regenerate_example_romaji` — and
+   `furigana_pairs`, `furigana_reading`, `settle_example_romaji` — and
    none of them judges.)*
 2. ~~The review completeness gate.~~ *(Moot — see above.)*
 3. `effort` as a parameter, `"xhigh"` wherever the model accepts it; the
@@ -3686,7 +3687,7 @@ Stays, reclassified: `conjugation.py` — the drill decks and the Conjugations
 field are stage-3 derivation, now named in DESIGN.md; its audit callers die
 above. The promote-time reading check and する predicate stay — a word fact
 from a dictionary. `furigana_reading`, `furigana_base`, and
-`regenerate_example_romaji` stay — notation arithmetic that renders and never
+`settle_example_romaji` stays — notation arithmetic that renders and never
 judges. Every gating case and finding owned by a deleted check retires in the
 same commit.
 

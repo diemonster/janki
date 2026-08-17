@@ -1001,12 +1001,20 @@ def command_import_jpdb_reviews(args: argparse.Namespace) -> int:
 STAGING_FILE_NAME = "ai-enrichment.yaml"
 
 
-def _confirm_enrich(count: int, assume_yes: bool) -> bool:
+def _confirm_enrich(count: int, assume_yes: bool, question: str = "") -> bool:
+    """Ask before writing, or — with ``question`` — before spending.
+
+    The default asks about the write, which is right for a pass that has
+    already gathered its answers. A pass that bills per record has to ask
+    first: `--romaji` printed "nothing is written until you say so", ran a
+    call for every record in the collection, and only then offered a choice
+    the user had already paid for either way.
+    """
     if assume_yes or not sys.stdin.isatty():
         # Same rule as --replace: fat-finger protection, not CI protection.
         return True
     try:
-        answer = input(f"Write these changes to {count} record(s)? [y/N] ")
+        answer = input(question or f"Write these changes to {count} record(s)? [y/N] ")
     except (EOFError, KeyboardInterrupt):
         print()
         return False
@@ -1064,6 +1072,10 @@ def command_enrich(args: argparse.Namespace) -> int:
     ``--ai`` writes what it does not, ``--polish-meanings`` rewrites English that
     is already there. One is required, because "enrich" without saying how is
     a command whose meaning depends on which pass is newest.
+
+    Four of them now, and the exclusivity list below is the only place that
+    knows it — a pass added without a line there runs alongside another and
+    the second write wins.
     """
     passes = [
         name
@@ -1079,8 +1091,9 @@ def command_enrich(args: argparse.Namespace) -> int:
         raise JankiError(
             "enrich takes one pass at a time: --jpdb fills what a dictionary "
             "knows, --ai writes what it does not, --polish-meanings rewrites "
-            f"English that is already there. Got {', '.join(passes)}. Run them "
-            "separately so each shows you its own diff."
+            "English that is already there, --romaji puts word boundaries into "
+            f"example romaji. Got {', '.join(passes)}. Run them separately so "
+            "each shows you its own diff."
         )
     if not passes:
         raise JankiError(
@@ -1131,13 +1144,19 @@ def command_enrich(args: argparse.Namespace) -> int:
             "there is no field list to widen. It always overwrites — that is "
             "what it is for, and why it confirms one record at a time."
         )
+    if args.romaji and args.force_fields:
+        raise JankiError(
+            "enrich --romaji rewrites one derived field and nothing else, so "
+            "there is nothing for --force-fields to unlock. It fills any "
+            "example whose romaji is missing, unsegmented, or stale."
+        )
     force_fields = enrich.parse_force_fields(args.force_fields, ai=args.ai)
     if args.staging is not None and (force_fields or args.ids):
         raise JankiError(
             "enrich --staging proposes readings for held rows and writes nothing "
             "else, so it takes neither --force-fields nor record ids."
         )
-    if args.staging is not None and (args.ai or args.polish_meanings):
+    if args.staging is not None and (args.ai or args.polish_meanings or args.romaji):
         raise JankiError(
             "enrich --staging annotates held rows with the reading jpdb proposes; "
             f"{passes[0]} writes into records that already exist. Run them "
@@ -2266,12 +2285,14 @@ def _confirm_polish(assume_yes: bool) -> str:
 def _segment_romaji(config: ProjectConfig, args: argparse.Namespace) -> int:
     """Put word boundaries into example romaji.
 
-    A whole-run confirmation rather than the per-record one `--polish-meanings`
-    uses, because the two passes ask different things of a reader. Polishing
-    replaces English a human may have typed, so every proposal is a judgement.
+    One confirmation, in front of the whole run, rather than the per-record one
+    `--polish-meanings` uses. The two passes ask different things of a reader:
+    polishing replaces English a human may have typed, so every proposal is a
+    judgement, and its prompt has to interleave so `quit` stops the spending.
     This replaces a derived field with a better derivation of the same reading,
-    and every line is already checked against that reading before it is
-    offered — so what is left to confirm is the run, not the rows.
+    and every line is checked against that reading before it lands — so the
+    only decision worth taking is whether to spend at all, and it is taken
+    before the first call rather than after the last.
     """
     output_path = config.normalized_file.resolve()
     output_revision = records_revision(output_path)
@@ -2281,6 +2302,14 @@ def _segment_romaji(config: ProjectConfig, args: argparse.Namespace) -> int:
         return 0
 
     model = args.model or config.enrich_model
+    if args.ids:
+        known = {record.id for record in records}
+        missing = [record_id for record_id in args.ids if record_id not in known]
+        if missing:
+            raise JankiError(
+                "No record with id " + ", ".join(missing) + f" in {output_path}. "
+                "A typo here would otherwise report success over an empty set."
+            )
     targets = enrich.romaji_targets(records)
     if args.ids:
         targets = [record for record in targets if record.id in set(args.ids)]
@@ -2289,13 +2318,27 @@ def _segment_romaji(config: ProjectConfig, args: argparse.Namespace) -> int:
         return 0
 
     sentences = sum(len(record.examples) for record in targets)
+    # Asked *before* the calls, not after them. "Nothing is written until you
+    # say so" was true and beside the point: the spending happens in the loop,
+    # so a confirmation at the end let someone decline a run they had already
+    # paid for in full. `--polish-meanings` interleaves its prompt so `quit`
+    # stops after one call; this pass writes one derived field and is not worth
+    # confirming per record, so the decision goes in front of the whole run.
     print(
         f"Segmenting {sentences} sentence(s) across {len(targets)} record(s) "
-        f"with {model}. Nothing is written until you say so."
+        f"with {model} — one billed call per record."
     )
+    if not _confirm_enrich(
+        len(targets),
+        args.yes,
+        f"Send {len(targets)} record(s) to {model}? [y/N] ",
+    ):
+        print("Nothing sent.")
+        return 0
 
     positions = {record.id: index for index, record in enumerate(records)}
     updated = list(records)
+    touched: list[str] = []
     changed = 0
     warnings: list[str] = []
 
@@ -2310,6 +2353,7 @@ def _segment_romaji(config: ProjectConfig, args: argparse.Namespace) -> int:
             if outcome.proposed is None:
                 continue
             updated[positions[outcome.record.id]] = outcome.proposed
+            touched.append(outcome.record.id)
             changed += 1
             for before, after in zip(
                 outcome.record.examples, outcome.proposed.examples, strict=True
@@ -2328,11 +2372,18 @@ def _segment_romaji(config: ProjectConfig, args: argparse.Namespace) -> int:
     if not changed:
         print("No romaji changed.")
         return 0
-    if not _confirm_enrich(changed, args.yes):
-        print("Nothing written.")
-        return 0
 
     save_records_json(output_path, updated, expected=output_revision)
+    # The ledger, like every other pass that spends a model call. Without it a
+    # billed rewrite of the whole collection leaves no operational trace and
+    # `status --rebuild` cannot say it happened.
+    book = ledger.load(config.ledger_file)
+    for record_id in touched:
+        book.record_enriched(
+            record_id, kind="romaji", model=model, fields=("examples",)
+        )
+    if (ledger_error := _save_ledger(book)) is not None:
+        print(f"warning: {ledger_error}", file=sys.stderr)
     print(f"Segmented romaji on {changed} record(s) in {output_path}.")
     return 0
 

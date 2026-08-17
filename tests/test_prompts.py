@@ -562,6 +562,55 @@ def test_the_recorded_provenance_names_the_guide_that_was_sent(
     )
 
 
+def test_the_romaji_command_sends_the_romaji_template_and_no_style_guide(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`--romaji` is the second pass that deliberately omits the style guide.
+
+    It writes spaces into letters janki already chose, so a guide to natural
+    phrasing is an invitation to improve a sentence that is not up for
+    revision. Sending it would also be undetectable: the answer would still
+    verify, just with a different sentence behind it.
+    """
+    import json
+
+    from japanese_anki import cli
+
+    root = _wiring_project(tmp_path)
+    # One record whose romaji is the unsegmented machine output.
+    (root / "vocabulary.json").write_text(
+        json.dumps(
+            [
+                {
+                    "id": "word:話す:はなす",
+                    "expression": "話す",
+                    "reading": "はなす",
+                    "meanings": ["to speak"],
+                    "source": {"type": "shirabe", "imported_from": "x.csv"},
+                    "examples": [
+                        {
+                            "japanese": "毎日話します。",
+                            "furigana": "毎日[まいにち] 話[はな]します。",
+                            "romaji": "mainichihanashimasu.",
+                        }
+                    ],
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    seen = _sent_system(monkeypatch)
+
+    cli.main(["--root", str(root), "enrich", "--romaji", "--yes"])
+
+    assert seen, "the command reached the model"
+    assert any(prompts.load(REPO_ROOT, "romaji") in text for text in seen)
+    assert not any(prompts.load(REPO_ROOT, "style-guide") in text for text in seen), (
+        "the style guide must not ride along on this pass"
+    )
+
+
 def test_the_patterns_command_sends_the_patterns_template(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

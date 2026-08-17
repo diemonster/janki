@@ -651,3 +651,62 @@ def test_the_furigana_postcondition_accepts_the_real_transform() -> None:
 
     assert planned["examples[0].furigana"].startswith("先週[せんしゅう]、 家族")
     assert _example_furigana_post(before, planned, {})
+
+
+def test_repair_order_does_not_follow_the_command_line() -> None:
+    """Repairs are not independent, so the caller must not be able to reorder
+    them into a wrong answer.
+
+    `example-romaji-from-furigana` reads the field
+    `example-furigana-space-after-punctuation` corrects. Asked for in that
+    order, `select` used to return them in that order: romaji derived from
+    furigana the next declaration was about to fix, both recorded as
+    successful, and the romaji describing a sentence the record was one step
+    from no longer holding.
+    """
+    from japanese_anki.repairs import REGISTRY
+
+    codes = ("example-romaji-from-furigana", "example-furigana-space-after-punctuation")
+
+    forward = [d.code for d in REGISTRY.select(codes)]
+    backward = [d.code for d in REGISTRY.select(tuple(reversed(codes)))]
+
+    assert forward == backward
+    assert forward.index("example-furigana-space-after-punctuation") < forward.index(
+        "example-romaji-from-furigana"
+    ), "the field is corrected before the derivation that reads it"
+
+
+def test_the_furigana_repair_leaves_numbers_and_latin_alone() -> None:
+    """ASCII `,` and `.` are digit and decimal separators, not sentence
+    punctuation.
+
+    Including them made `1,000円[えん]` into `1, 000円[えん]` — the base goes
+    from `1,000円` to `000円`, which is *worse*, and a space lands inside a
+    number that `furigana_reading`, the romaji derivation and TTS all read.
+    This repair is `ingest-safe` and runs unattended inside `janki extract`,
+    so a false positive here corrupts without anyone watching.
+    """
+    from japanese_anki.repairs import _spaced_furigana
+
+    for untouched in (
+        "1,000円[えん]と2,500円[えん]",
+        "3.14は円周率[えんしゅうりつ]です",
+        'Say "hi." to 田中[たなか]',
+    ):
+        assert _spaced_furigana(untouched) == untouched, untouched
+
+
+def test_a_closing_quote_keeps_the_space_on_its_outside() -> None:
+    """`「はい。」と家族[かぞく]` needs the space after the 」, not before it.
+
+    Before it, the base stays `」と家族` — exactly what it was — and the field
+    gains a stray space for nothing.
+    """
+    from japanese_anki.qc import furigana_pairs
+    from japanese_anki.repairs import _spaced_furigana
+
+    fixed = _spaced_furigana("「はい。」と家族[かぞく]")
+
+    assert fixed == "「はい。」 と家族[かぞく]"
+    assert ("と家族", "かぞく") in furigana_pairs(fixed)
