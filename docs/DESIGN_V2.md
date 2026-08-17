@@ -1,4 +1,4 @@
-> **Historical.** `docs/DESIGN.md` is the leading design document. Parts of this file describe subsystems that are already deleted (the jpdb sentence oracle, the model-audit checks, review gating and its `review_model` config, the hardening corpus and its coverage oracles, the repair-proposal flow, and the Azure TTS provider with its `azure_voice`/`azure_region` keys and `AZURE_SPEECH_KEY`) or scheduled for deletion by the remaining M8 milestones (VOICEVOX steering for sentences); it is kept only as a record of how the project got here. **Nothing in it is a working example — the `janki.toml` block below is the config as it was designed, not as it loads today**, and pasting it produces unknown-key warnings.
+> **Historical.** `docs/DESIGN.md` is the leading design document. Parts of this file describe subsystems that are already deleted (the jpdb sentence oracle, the model-audit checks, review gating and its `review_model` config, the hardening corpus and its coverage oracles, the repair-proposal flow, and the Azure TTS provider with its `azure_voice`/`azure_region` keys and `AZURE_SPEECH_KEY`) or scheduled for deletion by the remaining M8 milestones (VOICEVOX steering for sentences); it is kept only as a record of how the project got here. **Nothing in it is a working example.** The `janki.toml` block below is the config as it was designed rather than as it loads today: most of its keys still resolve, three warn as unknown, and the prose around it names environment variables and future work that are no longer either.
 
 # Design v2: Multi-Source, AI-First Pipeline
 
@@ -652,7 +652,9 @@ azure_region = "westus2"
 Secrets are environment-only: `ANTHROPIC_API_KEY`, `JPDB_API_KEY`,
 `AZURE_SPEECH_KEY`. Config loading starts *warning* on unknown keys and
 sections (today typos are silently ignored — with three new sections that
-becomes an actual foot-gun).
+becomes an actual foot-gun). *(Historical, both halves: `AZURE_SPEECH_KEY` is
+read by nothing — the live third key is `OPENAI_API_KEY` — and the unknown-key
+warning shipped, in `config.check_unknown_keys`.)*
 
 ## Costs (order of magnitude, standard API prices, Aug 2026)
 

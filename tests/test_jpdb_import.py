@@ -357,6 +357,37 @@ def test_importing_a_deck_walks_decks_then_pairs_then_a_batched_lookup() -> None
     assert result.needs_reading == []
 
 
+def test_an_unspeakable_pattern_is_kept_and_said_out_loud() -> None:
+    """The route by which an unusable accent reached a record silently.
+
+    `janki enrich --jpdb` renders every pattern before writing it and warns
+    about the ones it refuses. The importer wrote whatever jpdb returned, so
+    the same pattern arriving by import produced a record whose word audio
+    quietly used the engine's own accent with nothing said anywhere. It is kept
+    rather than dropped — jpdb's answer is data a human may want to correct —
+    but it is now named.
+
+    `LHHHHH` is the *right length* for かんーぱい and still cannot be spoken:
+    `ン` ends on no vowel for the `ー` to repeat. A length check alone passes
+    it, which is why the check here renders instead.
+    """
+    from types import SimpleNamespace
+
+    entry = _entry(spelling="かんーぱい", reading="かんーぱい", pitch_accent=["LHHHHH"])
+    client = SimpleNamespace(
+        list_deck_vocabulary=lambda _id: [{"vid": entry["vid"], "sid": entry["sid"]}],
+        lookup_vocabulary=lambda _pairs, _fields, **_options: [entry],
+    )
+
+    result = import_deck(client, {"id": 1, "name": "Lesson 1"})
+
+    [record] = result.records
+    assert record.pitch_accent == ["LHHHHH"], "kept, not dropped"
+    assert len(result.warnings) == 1, result.warnings
+    assert "LHHHHH" in result.warnings[0]
+    assert "cannot be spoken" in result.warnings[0]
+
+
 def test_every_imported_record_carries_its_deck_as_the_source_ref() -> None:
     # run_import's cross-module contract: source_ref must equal what the
     # importer wrote as source.imported_from, or `status --rebuild` appends a

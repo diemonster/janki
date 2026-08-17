@@ -443,8 +443,10 @@ def test_the_aquestalk_spelling_never_becomes_the_records_own() -> None:
 
     So the respelling may exist only in transit, and this pins the set of
     places it can be in transit *at*: every `to_aquestalk` call in the package,
-    checked against the three that read the answer and throw it away. Leaks
-    arrive as a new caller, which is what this sees.
+    checked against the ones that read the answer without keeping the kana.
+    Leaks arrive as a new caller, which is what this sees — it has already
+    caught two, both benign, and both had to justify themselves in `READERS`
+    before the suite went green again.
 
     The other shape — one of these three storing the answer instead — is
     already caught: making `ledger._spoken_form` assign to `record.reading`
@@ -463,6 +465,8 @@ def test_the_aquestalk_spelling_never_becomes_the_records_own() -> None:
     READERS = {
         ("audio_cmd", "_word_audio"): "builds the request; the answer is sent, never stored",
         ("enrich", "_compatible_pitch_patterns"): "asks only whether a pattern converts at all",
+        ("enrich", "_why_unusable"): "asks the refusal for its reason; keeps the reason",
+        ("jpdb_import", "_speakable"): "asks only whether a pattern converts at all",
         ("ledger", "_spoken_form"): "hashes what a clip says; the digest is stored, not the text",
     }
 
@@ -564,6 +568,20 @@ def test_a_long_vowel_heading_a_multi_kana_mora_is_respelled_too() -> None:
     respelling exists to close. `カ'アョ` answers 200.
     """
     assert to_aquestalk("かーょ", "HLLL") == "カ'アョ"
+
+
+def test_a_kana_the_engine_refuses_is_refused_here_rather_than_sent() -> None:
+    """`ヵ` has a vowel and the engine still will not take it.
+
+    Measured: `ヵ'` and `ヵア'` both answer 400. So a row for it would have
+    turned one failed request into another, where refusing gets a clip in the
+    engine's own accent — a real clip rather than an error.
+
+    The membership assertion above pins that `ヵ` is out of the table; this
+    pins what being out of it *does*, which is the half a curator would notice.
+    """
+    with pytest.raises(PitchError, match="no vowel to repeat"):
+        to_aquestalk("ゕー", "HLL")
 
 
 def test_the_halfwidth_prolonged_mark_is_respelled_too() -> None:

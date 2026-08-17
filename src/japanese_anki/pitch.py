@@ -201,7 +201,8 @@ def _accent_position(per_mora: Sequence[str], particle: str) -> int:
 #: respelled before it is sent. Measured against the running engine, not
 #: inferred: `オオ'`, `コオヒイ'` and `エスカレエタア'` all answer 200.
 #:
-#: Every kana the engine will take a spelled long vowel for. `ヴ` is here —
+#: The vowel each kana ends on, where repeating it is the right thing. `ヴ`
+#: is here —
 #: `_to_katakana` advertises `ゔ`→`ヴ` and `ヴウ'` answers 200 — as are `ヰ`,
 #: `ヱ` and `ヶ`, measured at 200 the same way.
 #:
@@ -209,8 +210,9 @@ def _accent_position(per_mora: Sequence[str], particle: str) -> int:
 #: refusal rather than a guess:
 #:
 #: - `ン` and `ッ` end on no vowel, so there is no answer to lengthen them
-#:   with. `ッ` was briefly mapped to `ウ`, which the engine accepts and then
-#:   pronounces with a /u/ that is not in the word.
+#:   with. The engine is no help here: it accepts `ンオ'` and `ッウ'` happily
+#:   and pronounces the invented mora. `ッ` was briefly mapped to `ウ` for
+#:   exactly that reason — it looked like it worked.
 #: - `ヵ` has a vowel and the engine refuses it anyway: `ヵ'` and `ヵア'` both
 #:   answer 400. A row here would trade one failed request for another, where
 #:   refusing gets a real clip in the engine's own accent.
@@ -233,9 +235,11 @@ _LONG_VOWEL_FOR = {
 def _spell_long_vowels(units: list[str]) -> list[str]:
     """Replace each `ー` with the vowel of the mora it lengthens.
 
-    Refuses rather than emitting a `ー` the engine will 400 on, in the two
-    cases where there is no vowel to repeat: a `ー` that opens a reading, with
-    nothing before it, and a `ー` after `ン` or `ッ`, which end on no vowel.
+    Refuses rather than emitting a `ー` the engine will 400 on, wherever the
+    kana before it has no row in :data:`_LONG_VOWEL_FOR`: a `ー` that opens a
+    reading with nothing before it at all, a `ー` after `ン` or `ッ`, which end
+    on no vowel, and a `ー` after anything the table deliberately omits — `ヵ`,
+    `ヷヸヹヺ`, half-width katakana.
     What a :class:`PitchError` here means depends on who asked. `audio_cmd`
     and the ledger voice the word with the engine's own accent — the same
     fallback as a record with no pattern at all, a worse clip than a forced one

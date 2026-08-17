@@ -72,10 +72,16 @@ the reading, or a long vowel with no vowel to repeat. Those clips are voiced
 with the engine's own accent, which is the same utterance as no pattern at
 all — so they fingerprint the same, and the clip does not re-voice when the
 pattern changes from one unusable value to another. `janki audio --force`
-re-voices regardless. The pattern is reported unusable when jpdb offers it, so
-this is visible rather than silent, but it is the one case where filling in an
-accent does not by itself replace the clip. `--prune` removes clips no record references any more, taking their
-ledger entries with them.
+re-voices regardless.
+
+Both commands that can put a pattern on a record say so when it is one of
+these: `janki enrich --jpdb` refuses to write it, and `janki import jpdb`
+keeps it — jpdb's answer is data you may want to correct — and names it. So
+the state is visible when it arrives, but this is the one case where filling
+in an accent does not by itself replace the clip.
+
+`--prune` removes clips no record references any more, taking their ledger
+entries with them.
 
 ## Choosing a voice
 

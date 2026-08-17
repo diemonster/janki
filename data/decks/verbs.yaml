@@ -1,7 +1,7 @@
 deck:
   name: "Brandon Japanese::Starter Verbs"
   deck_id: 2059400111
-  description: "Twenty common verbs — jpdb's top-20 list, and three seeded by hand."
+  description: "Twenty common verbs: seventeen from jpdb's top-20 list, three seeded by hand."
   output: "sample-verbs.apkg"
   cards:
     recognition: true
@@ -17,8 +17,9 @@ deck:
   # verbs in other decks. The next record imported without a source tag would
   # have landed here too, whatever part of speech it was.
   #
-  # Seventeen of the twenty came from jpdb; 行く, 話す and 食べる were written
-  # by hand into this file to verify the pipeline, and carry the same tag.
+  # Seventeen of the twenty came from jpdb. 行く, 話す and 食べる were written
+  # by hand as inline notes in this file to verify the pipeline, migrated out to
+  # the collection by fa33bc0, and carry `source.type: manual` and the same tag.
   #
   # The tag selects the same twenty records the exclusions did — verified
   # identical before the swap — so no note moved deck and no GUID changed.

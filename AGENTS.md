@@ -188,9 +188,10 @@ below is what is left, and it is the loop every other project already uses.*
 11. `dist/`: generated `.apkg` and preview files — **not** committed.
 
 Only `dist/` is disposable. Everything under `data/` is tracked — the media,
-the staging files, and the one `.gitkeep`, in `data/inbox/shirabe/`, that holds
-a genuinely empty directory open — because the repository, not Anki's database
-and not an uncommitted working tree, is the source of truth.
+the staging files, and three `.gitkeep`s (`data/inbox/shirabe/`,
+`data/media/`, `data/staging/`) so those directories exist in a fresh clone
+whether or not they have contents yet — because the repository, not Anki's
+database and not an uncommitted working tree, is the source of truth.
 
 A new import must not erase manually curated examples, notes, conjugations, or furigana.
 

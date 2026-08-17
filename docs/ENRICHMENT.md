@@ -309,11 +309,13 @@ unified exec, multi-agent, app/plugin, browser/computer, local-image, and web
 tools for that call. The model therefore has no local file-reading tool through
 which a prompt embedded in a source gloss could retrieve host data.
 
-For upgrade compatibility, an older `[ai]` table that has `enrich_model` but no
-`enrich_provider` keeps its original meaning: Anthropic is selected and that
-model remains the default for enrichment and meaning polish. Add
-`enrich_provider = "codex"` explicitly when migrating that configuration to
-Codex-backed enrichment.
+`enrich_provider` defaults to `anthropic`, so an `[ai]` table naming only
+`enrich_model` still selects Anthropic and still enriches with that model. It
+no longer *polishes* with it: `polish_model` has its own default and takes no
+hint from `enrich_model`. Set both if you want both to be the same. (Until
+2026-08-16 `enrich_model` alone set the polish model too, as an upgrade shim
+for configs written before providers existed. janki is unreleased and the shim
+is gone.)
 
 Message Batches are an Anthropic API feature. For an `--ai` batch, set
 `enrich_provider = "anthropic"` and choose a Claude `enrich_model`; polish

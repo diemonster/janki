@@ -661,24 +661,32 @@ def test_a_homograph_is_re_parsed_with_the_stored_reading_forced() -> None:
     assert enriched.pitch_accent == []
     assert enriched.frequency_rank == 1400
     assert len(result.warnings) == 1
-    assert "do not fit reading ついたち" in result.warnings[0]
+    # The reason, not a generic "does not fit": this one really is a length
+    # mismatch, and the sibling test below covers the pattern that fits the
+    # reading exactly and still cannot be spoken.
+    assert "cannot be used for reading ついたち" in result.warnings[0]
+    assert "expected 5 characters" in result.warnings[0]
 
 
-def test_a_right_length_pattern_that_cannot_be_spoken_is_unusable_too() -> None:
+def test_a_right_length_pattern_that_cannot_be_spoken_says_why() -> None:
     """Fitting the reading is not the whole test — rendering it is.
 
-    The existing coverage here is a length mismatch. This is the other shape:
-    `ンー` is five morae and `LHHHH` is five levels plus the particle, so the
-    length check passes and `to_aquestalk` still refuses — `ン` ends on no
-    vowel, so there is nothing for the `ー` to repeat, and VOICEVOX answers 400
-    for the bare mark.
+    かんーぱい is five kana, so a usable pattern is six characters, and
+    `LHHHHH` is six: the length check passes and `to_aquestalk` still refuses,
+    because `ン` ends on no vowel for the `ー` to repeat.
 
-    The consequence is worth pinning because it is larger than the audio: an
-    unusable pattern is not written, so the record loses its pitch *diagram*
-    too, which renders from `pitch_accent`.
+    The refusal itself is not new — `to_aquestalk` has behaved this way since
+    the long-vowel work, and `test_a_long_vowel_with_no_vowel_to_repeat_is_
+    refused` pins it directly. What is pinned here is the *message*: one
+    warning covered both refusal shapes and told the curator the pattern did
+    not fit the reading, which for this shape is false and sends them to check
+    the one thing that is already right.
+
+    And the consequence is larger than the audio: an unusable pattern is not
+    written, so a record with no other accent gets no pitch diagram either.
     """
-    kanーpai = vocab(1000000, 555, "かんーぱい", "かんーぱい", ["LHHHHH"], 900, ["n"])
-    api = FakeApi(unforced={"かんーぱい": parse_response((None, kanーpai))})
+    kanpai = vocab(1000000, 555, "かんーぱい", "かんーぱい", ["LHHHHH"], 900, ["n"])
+    api = FakeApi(unforced={"かんーぱい": parse_response((None, kanpai))})
     target = record(
         id="word:かんーぱい:かんーぱい", expression="かんーぱい", reading="かんーぱい"
     )
@@ -687,8 +695,31 @@ def test_a_right_length_pattern_that_cannot_be_spoken_is_unusable_too() -> None:
 
     enriched = result.records[0]
     assert enriched.pitch_accent == [], "not written, so no diagram either"
-    assert any("LHHHHH" in warning for warning in result.warnings), result.warnings
-    assert any("do not fit reading" in w for w in result.warnings)
+    [warning] = result.warnings
+    assert "LHHHHH" in warning
+    assert "has no vowel to repeat" in warning, "the real reason"
+    assert "expected" not in warning, "not the length — the length is correct"
+
+
+def test_a_pattern_janki_can_use_survives_one_it_cannot() -> None:
+    """A mixed list is not all-or-nothing, and the warning says so.
+
+    `_compatible_pitch_patterns` splits rather than rejecting, so jpdb offering
+    two patterns where one renders writes that one. The warning used to end
+    "pitch accent was not written" in every case, including this one, where an
+    accent *was* written.
+    """
+    hashi = vocab(1000001, 556, "はし", "はし", ["LHL", "LHLL"], 500, ["n"])
+    api = FakeApi(unforced={"はし": parse_response((None, hashi))})
+    target = record(id="word:はし:はし", expression="はし", reading="はし")
+
+    result = enrich_records(client_for(api), [target])
+
+    assert result.records[0].pitch_accent == ["LHL"], "the usable one was kept"
+    [warning] = result.warnings
+    assert "LHLL" in warning
+    assert "kept the 1 that can" in warning
+    assert "was not written" not in warning
 
 
 def test_an_unrelated_kana_parse_retries_with_the_stored_reading() -> None:

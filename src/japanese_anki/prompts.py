@@ -24,7 +24,7 @@ instructions would produce plausible output that ignores every rule this
 directory exists to state — the expensive kind of wrong, because it looks
 like success.
 
-**Two of the eight passes record which prompt they sent.** Extraction stores
+**Two passes record which prompt they sent, and the rest do not.** Extraction stores
 the system and style-guide digests in every staging file's
 `prompt_provenance`, and a coverage approval stores the digest of the
 instructions the approving model was given; a card from those can be traced to

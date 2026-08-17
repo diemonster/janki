@@ -214,6 +214,22 @@ def select_decks(
     return chosen
 
 
+def _speakable(reading: str, pattern: str) -> bool:
+    """Whether a forced clip can be made from this reading and pattern.
+
+    The same test `enrich` applies before writing one — rendering, not just
+    length — so the two commands agree about which patterns are usable and a
+    record cannot arrive by one route carrying what the other refuses.
+    """
+    from japanese_anki import pitch
+
+    try:
+        pitch.to_aquestalk(reading, pattern)
+    except pitch.PitchError:
+        return False
+    return True
+
+
 def import_deck(
     client: jpdb.JpdbClient,
     deck: Mapping[str, Any],
@@ -281,6 +297,22 @@ def import_deck(
             )
             needs_reading.append(annotate(record, hold_reason="reading contains kanji"))
             continue
+        # Kept, not dropped: jpdb's answer is data a human may want to correct,
+        # and the audio falls back to the engine's own accent either way. But
+        # said out loud — `janki enrich --jpdb` refuses these patterns and warns,
+        # so an import that took the same pattern silently was the one route by
+        # which an unspeakable accent reached a record with nothing said.
+        unusable = [
+            pattern
+            for pattern in record.pitch_accent
+            if not _speakable(record.reading, pattern)
+        ]
+        if unusable:
+            warnings.append(
+                f"{where}: jpdb pitch pattern(s) {', '.join(unusable)} for "
+                f"{record.expression} cannot be spoken with a forced accent; "
+                "kept on the record, but its word audio uses the engine's own."
+            )
         records.append(record)
 
     return ImportResult(

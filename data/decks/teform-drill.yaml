@@ -5,5 +5,9 @@ deck:
   deck_id: 2059400114
   model_id: 1607392351
   model_name: "Japanese Pattern"
-  description: "Every verb in the collection, drilled into its te-form. Answers computed by janki, never transcribed."
+  description: "Everything janki can conjugate, drilled into its te-form. Answers computed by janki, never transcribed."
+  # Not "every verb": membership is whatever `drill_cards` can build a te-form
+  # for, which today is 51 records — 46 of the collection's 48 verbs (two carry
+  # no usable class), plus 4 i-adjectives and 1 expression, which also take the
+  # form. The deck is defined by the conjugation, not by the part of speech.
   output: "teform-drill.apkg"

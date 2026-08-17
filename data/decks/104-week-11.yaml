@@ -9,7 +9,7 @@ deck:
     reading: false
   source: ../normalized/vocabulary.json
   # One deck per handout: each sheet is a unit of study, and its records were
-  # tagged with the source slug at import. `verbs.yaml` excludes the same tag,
-  # so the two never claim the same record — same source file, same GUIDs, and
-  # an overlap moves notes between decks on every import.
+  # tagged with the source slug at import. every other deck selects on a tag of its
+  # own, so no two claim the same record — same source file, same GUIDs, and an
+  # overlap moves notes between decks on every import. A test asserts it.
   include_tags: [kanji-review-104-week11]

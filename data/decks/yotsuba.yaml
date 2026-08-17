@@ -8,7 +8,8 @@ deck:
     production: true
     reading: false
   source: ../normalized/vocabulary.json
-  # The tag `import-anki` puts on everything it reads. The verb deck excludes
-  # the same tag, so the two never claim the same record — same source file,
+  # The tag `import-anki` puts on everything it reads. Every other deck selects
+  # on a tag of its own, so no two claim the same record — same source file,
   # same GUIDs, and an overlap means each import moves notes between decks.
+  # A test asserts it.
   include_tags: [anki]

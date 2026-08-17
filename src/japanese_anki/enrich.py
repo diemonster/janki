@@ -453,9 +453,14 @@ def _compatible_pitch_patterns(
 
     "Compatible" means :func:`pitch.to_aquestalk` renders it, which is a
     stricter test than "the right length": a pattern that fits the reading can
-    still name a long vowel with no vowel to repeat. Either way the pattern is
-    not written, the caller warns, and the record keeps no accent — so it also
-    keeps no pitch diagram, which renders from ``pitch_accent``.
+    still name a long vowel with no vowel to repeat.
+
+    A *split*, not a rejection. jpdb often offers several patterns, and the
+    usable ones are written while the caller warns about the rest — so an
+    unusable pattern does not by itself cost a record its accent. It does when
+    every offered pattern is unusable **and** the record had none stored: this
+    pass never blanks an accent it did not write, and a record that already has
+    one keeps it.
     """
     valid: list[str] = []
     invalid: list[str] = []
@@ -467,6 +472,29 @@ def _compatible_pitch_patterns(
         else:
             valid.append(pattern)
     return valid, invalid
+
+
+def _why_unusable(reading: str, pattern: str) -> str:
+    """The reason this pattern cannot be spoken, in the words the check gives.
+
+    One message covered both shapes and said "do not fit reading" for both.
+    That is right for a length mismatch and wrong for the other: a pattern can
+    fit the reading exactly and still be unrenderable, because a long vowel in
+    it has no vowel to repeat. Telling a curator the length is wrong when it is
+    not sends them to check the one thing that is already correct.
+    """
+    try:
+        pitch.to_aquestalk(reading, pattern)
+    except pitch.PitchError as exc:
+        detail = str(exc).rstrip(".")
+        # The long-vowel refusal carries its own trailing advice about what the
+        # clip will sound like; the caller is about to say that itself.
+        for marker in (" for VOICEVOX: ", ": "):
+            if marker in detail:
+                detail = detail.split(marker, 1)[1]
+                break
+        return detail.split(". The word is voiced")[0]
+    return "it renders — nothing is wrong with it"
 
 
 def _wanted(record: VocabularyRecord, force_fields: Sequence[str]) -> list[str]:
@@ -678,7 +706,13 @@ def enrich_records(
         if invalid_pitch:
             result.warnings.append(
                 f"{record_id}: jpdb pitch pattern(s) {', '.join(invalid_pitch)} "
-                f"do not fit reading {record.reading}; pitch accent was not written"
+                f"cannot be used for reading {record.reading} "
+                f"({_why_unusable(record.reading, invalid_pitch[0])}); "
+                + (
+                    "pitch accent was not written"
+                    if not _valid_pitch
+                    else f"kept the {len(_valid_pitch)} that can"
+                )
             )
         updated, changes = _apply(record, proposals, [*wanted, *reconcile])
         if "pitch_accent" in changes:

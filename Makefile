@@ -35,9 +35,12 @@ JANKI := $(RUN) -m japanese_anki
 
 help:
 	@echo "janki — make targets:"
-	@grep -hE '^## [a-z-]+:' "$(ROOT)/Makefile" | sed -e 's/^## /  /' | sort
+	@grep -hE '^## [a-z-]+:' "$(ROOT)/Makefile" \
+		| sed -e 's/^## /  /' -e 's|\$$(VOICEVOX_CONTAINER)|$(VOICEVOX_CONTAINER)|g' \
+		| sort
 	@echo
-	@echo "Undocumented helpers: bootstrap, lint, test, build-sample, build-all, preview, clean."
+	@echo "  Helpers: bootstrap, lint, test, build-sample, build-all, preview, clean."
+	@echo "  check is an alias for gates."
 
 bootstrap:
 	@cd "$(ROOT)" && ./scripts/bootstrap.sh
@@ -71,15 +74,21 @@ VOICEVOX_IMAGE ?= voicevox/voicevox_engine:cpu-latest
 
 ## voicevox: start the engine if it is not already answering, and wait for it.
 #
-# Every docker and curl step's exit status is checked, including the two command
-# substitutions. The recipe is one backslash-joined shell with no `set -e`, and
-# make only sees the last command, so an unchecked failure does not stop it — it
-# falls through to the poll loop and reports a 60-second timeout for something
-# that failed instantly. `docker info` succeeding does not make `docker ps`
+# Every docker and curl step's exit status is checked, including both command
+# substitutions — and *acted on*, which is a separate thing. Consulting a
+# substitution's status inside an `&&` is not enough: `if ok="$$(docker ps …)"
+# && [ -z "$$ok" ]` short-circuits false on a failing `ps`, so the loop keeps
+# polling and reports a 60-second timeout for something that failed instantly.
+# The recipe is one backslash-joined shell with no `set -e`, and make only sees
+# the last command, so nothing here stops on its own. `docker info` succeeding does not make `docker ps`
 # succeed: a draining daemon, a switched context or `DOCKER_HOST`, an
 # API-version mismatch. An unchecked `ps` failing empty routes the *create*
 # branch, which then announces a container it never ran — the original bug,
 # reachable again through a different door.
+#
+# The wait loop counts in the shell rather than through `seq`, which is not
+# POSIX: where it was missing the loop body never ran and the recipe fell
+# straight to the timeout message, the same failure shape as the unchecked curl.
 #
 # `docker start`, never `docker restart`. This is reached whenever curl failed,
 # and "curl failed" includes a container that is running and simply not
@@ -130,17 +139,24 @@ voicevox:
 		fi; \
 	fi; \
 	printf 'voicevox: waiting for the engine'; \
-	for _ in $$(seq 1 60); do \
+	tries=0; \
+	while [ "$$tries" -lt 60 ]; do \
 		if curl -sf -o /dev/null --max-time 2 "$(VOICEVOX_URL)/version"; then \
 			echo " — up."; exit 0; \
 		fi; \
-		if running="$$(docker ps -q -f name=^$(VOICEVOX_CONTAINER)$$)" && [ -z "$$running" ]; then \
+		if ! running="$$(docker ps -q -f name=^$(VOICEVOX_CONTAINER)$$)"; then \
+			echo; \
+			echo "voicevox: 'docker ps' stopped answering while waiting." >&2; \
+			echo "  The engine may be fine — check 'docker ps' and $(VOICEVOX_URL)/version." >&2; \
+			exit 1; \
+		fi; \
+		if [ -z "$$running" ]; then \
 			echo; \
 			echo "voicevox: the container exited while starting up." >&2; \
 			echo "  'docker logs $(VOICEVOX_CONTAINER)' says why." >&2; \
 			exit 1; \
 		fi; \
-		printf '.'; sleep 1; \
+		printf '.'; tries=$$((tries + 1)); sleep 1; \
 	done; \
 	echo; \
 	echo "voicevox: 60 tries and the engine never answered." >&2; \
