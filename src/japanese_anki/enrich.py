@@ -87,7 +87,12 @@ __all__ = [
     "polish_meanings",
     "polish_batch_requests",
     "polish_call_outcome",
+    "apply_romaji_result",
     "polish_prompt",
+    "romaji_prompt",
+    "romaji_schema",
+    "romaji_targets",
+    "segment_romaji",
     "polish_prompt_fingerprint",
     "polish_schema",
     "polish_targets",
@@ -1963,3 +1968,189 @@ def apply_batch_results(
         else:
             outcome.missing.append(record_id)
     return outcome
+
+
+# --- the romaji pass ----------------------------------------------------------
+#
+# Word spacing in romaji *is* word segmentation, and janki does not segment
+# Japanese — `romaji.py` says so in its own docstring, which is why the
+# mechanical transliteration runs words together. This pass buys the one thing
+# missing, from the component whose job is parsing, and buys nothing else: the
+# sentences are not rewritten, the readings are not re-derived, and every
+# answer is checked against the reading janki already holds before it is kept.
+
+
+def romaji_schema() -> Any:
+    """The Pydantic model a romaji response must match."""
+    from pydantic import BaseModel, Field
+
+    class SegmentedRomaji(BaseModel):
+        romaji: list[str] = Field(
+            default_factory=list,
+            description=(
+                "One romaji line per sentence given, in the same order, with "
+                "spaces at the word boundaries. Same count as the input: a "
+                "shorter list cannot be matched back to its sentences."
+            )
+        )
+
+    return SegmentedRomaji
+
+
+def romaji_targets(records: Sequence[VocabularyRecord]) -> list[VocabularyRecord]:
+    """Records with an example whose romaji has no word spacing to lose.
+
+    A single-word sentence is already correctly "segmented" and a sentence
+    whose romaji a model has already written is left alone, so re-running this
+    converges instead of re-asking about work that is done.
+    """
+    wanted = []
+    for record in records:
+        if any(_romaji_needs_spacing(example) for example in record.examples):
+            wanted.append(record)
+    return wanted
+
+
+def _romaji_needs_spacing(example: ExampleSentence) -> bool:
+    """Whether this example's romaji is the unsegmented machine output.
+
+    Exactly that, by equality — not a guess from how many spaces it holds.
+    Counting spaces read `komban, hahanidenwao kakerutsumoridesu.` as already
+    segmented, because 、 and 。 put spaces in of their own accord and the
+    furigana's ruby spacing put in one more. Two spaces, four merged words,
+    and the record was skipped by the pass that exists to fix it.
+
+    The mechanical transliteration is reproducible from the reading, so
+    "nobody has segmented this" is a question with an exact answer.
+    """
+    romaji = (example.romaji or "").strip()
+    if not romaji:
+        return bool(example.japanese)
+    reading = (
+        qc.furigana_reading(example.furigana)
+        if example.furigana
+        else example.japanese
+    )
+    return bool(reading) and romaji == kana_to_romaji(reading)
+
+
+def romaji_prompt(record: VocabularyRecord) -> str:
+    """The user turn: each sentence with the reading janki already has.
+
+    The reading is sent because it is the answer to everything except the
+    spacing — a model given only kanji would have to decide 話す is はなす
+    rather than わす, and that decision is already made and already stored.
+    Sending it removes the only way this pass could disagree with the record.
+    """
+    lines = [f"Word: {record.expression}", "Sentences:"]
+    for index, example in enumerate(record.examples, start=1):
+        reading = (
+            qc.furigana_reading(example.furigana)
+            if example.furigana
+            else example.japanese
+        )
+        lines.append(f"{index}. {example.japanese}")
+        lines.append(f"   reading: {reading}")
+    return "\n".join(lines)
+
+
+def apply_romaji_result(record: VocabularyRecord, parsed: Any) -> tuple[
+    VocabularyRecord, list[str]
+]:
+    """Fold segmented romaji into the record, keeping only what verifies.
+
+    A line is kept when it transliterates the sentence's own reading, and
+    dropped with a message when it does not — the same check
+    :func:`qc.settle_example_romaji` applies to the enrichment pass, for the
+    same reason: romaji is read by people who cannot read the kana beside it,
+    so nothing that says the wrong thing may reach a card.
+
+    A response with the wrong number of lines is refused whole rather than
+    zipped up to the shorter one. Lines are matched to sentences by position,
+    so a missing line silently shifts every one after it onto the wrong
+    sentence — which produces a perfectly well-formed romaji under the wrong
+    Japanese.
+    """
+    supplied = [str(value or "").strip() for value in getattr(parsed, "romaji", []) or []]
+    if len(supplied) != len(record.examples):
+        return record, [
+            f"{record.id}: asked for {len(record.examples)} romaji line(s) and got "
+            f"{len(supplied)}; kept the existing romaji rather than guessing which "
+            "line belongs to which sentence"
+        ]
+
+    warnings: list[str] = []
+    examples: list[ExampleSentence] = []
+    for example, line in zip(record.examples, supplied, strict=True):
+        if not line:
+            examples.append(example)
+            continue
+        settled, rejected = qc.settle_example_romaji(replace(example, romaji=line))
+        if rejected:
+            warnings.append(f"{record.id}: {rejected}")
+            examples.append(example)
+            continue
+        examples.append(settled)
+    return replace(record, examples=examples), warnings
+
+
+@dataclass(frozen=True, slots=True)
+class RomajiOutcome:
+    """One record's turn through the romaji pass."""
+
+    record: VocabularyRecord
+    proposed: VocabularyRecord | None = None
+    warnings: tuple[str, ...] = ()
+
+
+def segment_romaji(
+    records: Sequence[VocabularyRecord],
+    *,
+    model: str,
+    instructions: str,
+    ids: Sequence[str] | None = None,
+    client: Any | None = None,
+    effort: str = "low",
+) -> Iterator[RomajiOutcome]:
+    """Put word boundaries into example romaji, one record at a time.
+
+    **No style guide.** Every other pass leads with it because every other pass
+    writes Japanese; this one writes spaces into letters janki already chose,
+    and a guide to natural phrasing is an invitation to improve a sentence that
+    is not up for revision.
+
+    **Low effort by default.** Segmentation is recall, not reasoning — the
+    model either knows where 電話をかける divides or it does not, and thinking
+    longer about it mostly spends tokens. The caller can raise it.
+    """
+    wanted = set(ids or ())
+    for record in romaji_targets(records):
+        if wanted and record.id not in wanted:
+            continue
+        try:
+            call = claude_client.parse_call(
+                model,
+                claude_client.system_blocks(instructions),
+                romaji_prompt(record),
+                romaji_schema(),
+                client,
+                effort=effort,
+            )
+        except claude_client.ClaudeRequestError as exc:
+            yield RomajiOutcome(
+                record=record, warnings=(f"{record.id}: {exc}; left alone.",)
+            )
+            continue
+        parsed, stop_reason, refusal = call
+        if refusal is not None or parsed is None:
+            reason = "declined" if refusal is not None else f"returned nothing ({stop_reason})"
+            yield RomajiOutcome(
+                record=record, warnings=(f"{record.id}: the model {reason}; left alone.",)
+            )
+            continue
+        proposed, warnings = apply_romaji_result(record, parsed)
+        yield RomajiOutcome(
+            record=record,
+            proposed=proposed if proposed.examples != record.examples else None,
+            warnings=tuple(warnings),
+        )

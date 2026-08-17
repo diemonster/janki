@@ -102,12 +102,15 @@ def settle_example_romaji(example: ExampleSentence) -> tuple[ExampleSentence, st
     occasionally wrong romaji for a reliably wrong one.
 
     So a supplied romaji is *verified* against the reading janki already has.
-    :func:`romaji.accepting_pattern` allows word spaces anywhere, は as `wa`,
-    へ as `e`, and an optional apostrophe in `n'`, and requires every other
-    letter to agree. A romaji that matches says what the kana says and is
-    kept, spacing and all. One that does not is replaced by the mechanical
-    transliteration and *named*: a rejection means the sentence and its romaji
-    disagree, which is worth a human's attention rather than a silent repair.
+    :func:`romaji.accepting_pattern` allows word separators anywhere — a space
+    or the hyphen of `Tanaka-san` — は as `wa`, へ as `e`, an optional
+    apostrophe in `n'`, and any letter case, since a proper noun takes a
+    capital the kana does not record. Every other letter must agree.
+
+    A romaji that matches says what the kana says and is kept, spacing and
+    all. One that does not is replaced by the mechanical transliteration and
+    *named*: a rejection means the sentence and its romaji disagree, which is
+    worth a human's attention rather than a silent repair.
 
     An example with no romaji is transliterated with no complaint — the
     ordinary path for records that predate the prompt asking for one, and for
@@ -127,7 +130,7 @@ def settle_example_romaji(example: ExampleSentence) -> tuple[ExampleSentence, st
         # does not know what it says either. Keeping the supplied value would
         # be trusting it for precisely the reason it cannot be trusted.
         return replace(example, romaji=mechanical), ""
-    if re.fullmatch(pattern, supplied):
+    if re.fullmatch(pattern, supplied, re.IGNORECASE):
         return replace(example, romaji=" ".join(supplied.split())), ""
     return replace(example, romaji=mechanical), (
         f"romaji {supplied!r} does not transliterate {reading!r}; "

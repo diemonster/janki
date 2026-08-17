@@ -12,20 +12,23 @@ of why the asking changed.
 
 | File | Sent by | As |
 | --- | --- | --- |
-| `style-guide.md` | every pass below except `approve-coverage` | system context, first block |
+| `style-guide.md` | every pass below except `approve-coverage` and `romaji` | system context, first block |
 | `extract-auto.md` | `janki extract` with no `--mode` | system |
 | `extract-table.md` | `janki extract --mode table` | system |
 | `extract-prose.md` | `janki extract --mode prose` | system |
 | `enrich-examples.md` | `janki enrich --ai` | system |
 | `polish-meanings.md` | `janki enrich --polish-meanings` | system |
 | `patterns.md` | `janki patterns` | system |
+| `romaji.md` | `janki enrich --romaji` | system |
 | `approve-coverage.md` | `janki promote --accept-coverage` | system |
 
-The coverage check is the one pass that does not lead with the style guide.
+Two passes do not lead with the style guide.
 It is not judging Japanese — it counts whether the page is accounted for —
 and handing it a guide to writing good glosses is an invitation to volunteer
 opinions about them, which is exactly what `approve-coverage.md` tells it not
-to do.
+to do. The romaji pass is the other: it writes spaces into letters janki has
+already chosen, so a guide to natural phrasing would be an invitation to
+improve a sentence that is not up for revision.
 
 The **user turn** is not a file. It is the record's own data — the expression,
 the reading, what janki already knows about the word — composed by Python. For

@@ -1071,6 +1071,7 @@ def command_enrich(args: argparse.Namespace) -> int:
             ("--jpdb", args.jpdb),
             ("--ai", args.ai),
             ("--polish-meanings", args.polish_meanings),
+            ("--romaji", args.romaji),
         )
         if chosen
     ]
@@ -1144,7 +1145,7 @@ def command_enrich(args: argparse.Namespace) -> int:
         )
     # A flag the running pass never reads is a typo, not a no-op: silently
     # running a pass that ignores it answers a question the user did not ask.
-    if args.model and not (args.ai or args.polish_meanings):
+    if args.model and not (args.ai or args.polish_meanings or args.romaji):
         raise JankiError(
             "enrich --model applies to the passes that call a model. The --jpdb "
             "pass reads a dictionary, so it has no model to choose."
@@ -1160,6 +1161,9 @@ def command_enrich(args: argparse.Namespace) -> int:
     # --polish-meanings rewrites English and asks jpdb nothing, so it must not
     # require a key to run. Only `--jpdb` and `--staging` do now: they enrich
     # *from* the dictionary.
+    if args.romaji:
+        return _segment_romaji(config, args)
+
     if args.polish_meanings and not batch_flags:
         return _polish_meanings(config, args)
 
@@ -2257,6 +2261,80 @@ def _confirm_polish(assume_yes: bool) -> str:
     if answer in {"q", "quit"}:
         return "quit"
     return "yes" if answer in {"y", "yes"} else "no"
+
+
+def _segment_romaji(config: ProjectConfig, args: argparse.Namespace) -> int:
+    """Put word boundaries into example romaji.
+
+    A whole-run confirmation rather than the per-record one `--polish-meanings`
+    uses, because the two passes ask different things of a reader. Polishing
+    replaces English a human may have typed, so every proposal is a judgement.
+    This replaces a derived field with a better derivation of the same reading,
+    and every line is already checked against that reading before it is
+    offered — so what is left to confirm is the run, not the rows.
+    """
+    output_path = config.normalized_file.resolve()
+    output_revision = records_revision(output_path)
+    records = load_records(output_path) if output_path.exists() else []
+    if not records:
+        print(f"No records to enrich in {output_path}.")
+        return 0
+
+    model = args.model or config.enrich_model
+    targets = enrich.romaji_targets(records)
+    if args.ids:
+        targets = [record for record in targets if record.id in set(args.ids)]
+    if not targets:
+        print("Every example's romaji is already segmented. Nothing to do.")
+        return 0
+
+    sentences = sum(len(record.examples) for record in targets)
+    print(
+        f"Segmenting {sentences} sentence(s) across {len(targets)} record(s) "
+        f"with {model}. Nothing is written until you say so."
+    )
+
+    positions = {record.id: index for index, record in enumerate(records)}
+    updated = list(records)
+    changed = 0
+    warnings: list[str] = []
+
+    try:
+        for outcome in enrich.segment_romaji(
+            records,
+            instructions=prompts.load(config.root, "romaji"),
+            model=model,
+            ids=args.ids or None,
+        ):
+            warnings.extend(outcome.warnings)
+            if outcome.proposed is None:
+                continue
+            updated[positions[outcome.record.id]] = outcome.proposed
+            changed += 1
+            for before, after in zip(
+                outcome.record.examples, outcome.proposed.examples, strict=True
+            ):
+                if before.romaji != after.romaji:
+                    print(f"  {outcome.record.id}")
+                    print(f"    {before.romaji}")
+                    print(f" -> {after.romaji}")
+    except KeyboardInterrupt:
+        # Same rule as the polish pass: what was gathered before the interrupt
+        # is still offered, because re-asking for it costs another call.
+        print("\nInterrupted — offering what was gathered so far.")
+
+    for warning in warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    if not changed:
+        print("No romaji changed.")
+        return 0
+    if not _confirm_enrich(changed, args.yes):
+        print("Nothing written.")
+        return 0
+
+    save_records_json(output_path, updated, expected=output_revision)
+    print(f"Segmented romaji on {changed} record(s) in {output_path}.")
+    return 0
 
 
 def _polish_meanings(config: ProjectConfig, args: argparse.Namespace) -> int:
@@ -4316,6 +4394,14 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Propose better English glosses for records that already have some, "
             "confirmed one record at a time."
+        ),
+    )
+    enrich_parser.add_argument(
+        "--romaji",
+        action="store_true",
+        help=(
+            "Put word boundaries into example romaji. Rewrites no Japanese: "
+            "only the spacing and the spoken particles."
         ),
     )
     enrich_parser.add_argument(

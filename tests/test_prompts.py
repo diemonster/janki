@@ -29,6 +29,7 @@ SHIPPED = (
     "enrich-examples",
     "polish-meanings",
     "patterns",
+    "romaji",
     "approve-coverage",
 )
 

@@ -162,6 +162,10 @@ _TRANSPARENT_CATEGORIES = frozenset({"Pc", "Pd", "Ps", "Pe", "Pi", "Pf", "Po", "
 #: accepts either, where the generator has to pick one and picks the kana.
 _PARTICLE_ALTERNATIVES = {"は": ("ha", "wa"), "へ": ("he", "e")}
 
+#: What may sit between two pieces without changing what the letters say: a
+#: word space, or the hyphen romaji conventionally uses for a suffix.
+_SEPARATOR = r"[-\s]*"
+
 
 def accepting_pattern(kana: str) -> str:
     """A regex matching every spelling of ``kana`` a romanizer may defensibly
@@ -172,7 +176,12 @@ def accepting_pattern(kana: str) -> str:
     deliberately cannot do — so its output may legitimately differ from this
     module's in exactly three ways, and no others:
 
-    * **word spaces**, anywhere, which is the whole reason to ask;
+    * **word separators** — a space or a hyphen — anywhere, which is the whole
+      reason to ask. A hyphen because `Tanaka-san` and `Yamada-kun` are how
+      romaji conventionally joins a suffix, and rejecting them would mean the
+      prompt asking for a spelling the verifier refuses;
+    * **letter case**, since a proper noun takes a capital (`Nagoya`) and the
+      kana does not record one;
     * **は as `wa` and へ as `e`** when they are particles, which needs the
       segmentation to know;
     * the **apostrophe** in ``n'``, which a writer may or may not type.
@@ -190,7 +199,7 @@ def accepting_pattern(kana: str) -> str:
     scanned = _scan(kana)
     if scanned is None:
         return ""
-    parts = [r"\s*"]
+    parts = [_SEPARATOR]
     for source, piece in scanned:
         alternatives = _PARTICLE_ALTERNATIVES.get(source)
         if alternatives:
@@ -200,7 +209,7 @@ def accepting_pattern(kana: str) -> str:
         elif not piece.strip():
             # Whitespace the *furigana* carried. It is ruby notation, not a
             # word boundary, so it neither has to be there nor has to be
-            # absent — the `\s*` between every piece already allows both.
+            # absent — the separator between every piece already allows both.
             continue
         else:
             # Stripped before escaping: the punctuation table spells 。 as
@@ -208,7 +217,7 @@ def accepting_pattern(kana: str) -> str:
             # it mandatory — so a sentence ending in "." rather than ". "
             # would fail to match itself.
             parts.append(re.escape(piece.strip()))
-        parts.append(r"\s*")
+        parts.append(_SEPARATOR)
     return "".join(parts)
 
 

@@ -1330,3 +1330,77 @@ def test_the_preserve_warning_fires_even_for_accepted_stored_examples() -> None:
     )
 
     assert any("stored examples were preserved" in w for w in result.warnings)
+
+
+def test_a_sentence_whose_punctuation_supplied_a_space_is_still_unsegmented() -> None:
+    """Counting spaces is not the test; equality with the machine output is.
+
+    `komban, hahanidenwao kakerutsumoridesu.` holds two spaces — one from 、
+    and one from the furigana's ruby notation — and four merged words. A
+    space-counting heuristic read it as already segmented and the romaji pass
+    skipped the record it exists to fix.
+    """
+    from japanese_anki.enrich import romaji_targets
+    from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
+
+    record = VocabularyRecord(
+        id="word:かける:かける",
+        expression="かける",
+        reading="かける",
+        meanings=["to make (a call)"],
+        source=SourceReference(type="extract", imported_from="lesson.pdf"),
+        examples=[
+            ExampleSentence(
+                japanese="今晩、母に電話をかけるつもりです。",
+                furigana="今晩[こんばん]、 母[はは]に 電話[でんわ]を かけるつもりです。",
+                romaji="konban, hahanidenwao kakerutsumoridesu.",
+            )
+        ],
+    )
+
+    assert romaji_targets([record]) == [record]
+
+    segmented = record.examples[0].__class__(
+        japanese=record.examples[0].japanese,
+        furigana=record.examples[0].furigana,
+        romaji="konban, haha ni denwa o kakeru tsumori desu.",
+    )
+    from dataclasses import replace
+
+    assert romaji_targets([replace(record, examples=[segmented])]) == []
+
+
+def test_a_short_romaji_response_is_refused_whole_rather_than_zipped() -> None:
+    """Lines are matched to sentences by position, so a missing one shifts
+    every line after it onto the wrong sentence.
+
+    That produces a perfectly well-formed romaji under Japanese it does not
+    transliterate — and `settle_example_romaji` would catch each individual
+    mismatch, but only after the damage of deciding which line belongs where.
+    Refusing the response whole is the honest answer to "I cannot tell which
+    sentence you left out".
+    """
+    from types import SimpleNamespace
+
+    from japanese_anki.enrich import apply_romaji_result
+    from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
+
+    record = VocabularyRecord(
+        id="word:はし:はし",
+        expression="はし",
+        reading="はし",
+        meanings=["bridge"],
+        source=SourceReference(type="extract", imported_from="lesson.pdf"),
+        examples=[
+            ExampleSentence(japanese="はしをわたる。", furigana="", romaji="hashiowataru."),
+            ExampleSentence(japanese="はしはながい。", furigana="", romaji="hashihanagai."),
+        ],
+    )
+
+    updated, warnings = apply_romaji_result(
+        record, SimpleNamespace(romaji=["hashi o wataru."])
+    )
+
+    assert updated == record, "nothing was written"
+    assert len(warnings) == 1
+    assert "asked for 2 romaji line(s) and got 1" in warnings[0]

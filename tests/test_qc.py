@@ -106,6 +106,40 @@ def test_a_supplied_romaji_that_agrees_keeps_its_word_spacing() -> None:
     assert rejected == ""
 
 
+def test_a_proper_nouns_capital_and_a_suffixs_hyphen_are_not_disagreements() -> None:
+    """The prompt asks for both, so the verifier has to accept both.
+
+    Kana records neither: やまだくん is the same five morae whether it is
+    written `yamadakun` or `Yamada-kun`, and the second is what a reader
+    wants. Rejecting it made the prompt ask for a spelling the checker refused
+    — found by running the pass, not by reading it.
+    """
+    kept, rejected = settle_example_romaji(
+        example(
+            japanese="山田くん、歌上手なの？",
+            furigana="山田[やまだ]くん、 歌[うた] 上手[じょうず]なの？",
+            romaji="Yamada-kun, uta jouzu na no?",
+        )
+    )
+
+    assert kept.romaji == "Yamada-kun, uta jouzu na no?"
+    assert rejected == ""
+
+
+def test_a_different_word_is_still_a_disagreement() -> None:
+    """The separators and the case are the only slack. 上手 is not 下手."""
+    replaced, rejected = settle_example_romaji(
+        example(
+            japanese="山田くん、歌上手なの？",
+            furigana="山田[やまだ]くん、 歌[うた] 上手[じょうず]なの？",
+            romaji="Yamada-kun, uta heta na no?",
+        )
+    )
+
+    assert replaced.romaji == "yamadakun, utajouzunano?"
+    assert "does not transliterate" in rejected
+
+
 def test_a_particle_may_be_spelled_either_way_but_nothing_else_may() -> None:
     """は is `ha` or `wa` and へ is `he` or `e`, because which one it is needs
     the segmentation janki does not have. Every other letter has to agree."""
