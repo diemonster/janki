@@ -103,13 +103,22 @@ def test_a_sokuon_with_no_consonant_to_double_is_dropped(kana: str, expected: st
 @pytest.mark.parametrize(
     ("kana", "expected"),
     [
-        ("しんぶん", "shimbun"),
-        ("さんぽ", "sampo"),
-        ("せんぱい", "sempai"),
-        ("あんまり", "ammari"),
+        ("しんぶん", "shinbun"),
+        ("さんぽ", "sanpo"),
+        ("せんぱい", "senpai"),
+        ("あんまり", "anmari"),
+        ("こんばん", "konban"),
     ],
 )
-def test_n_becomes_m_before_b_p_and_m(kana: str, expected: str) -> None:
+def test_n_stays_n_before_b_p_and_m(kana: str, expected: str) -> None:
+    """Modern Hepburn, not the JR-station spelling.
+
+    These were `shimbun`, `sampo`, `sempai`, `ammari` until 2026-08-17. Both
+    dialects are correct romaji and the choice is the owner's; the argument
+    that settled it is that a learner typing the word back into an IME gets
+    `ん` from `n` and nothing at all from `m`, so `n` is the spelling that
+    round-trips through the tool they will actually use it in.
+    """
     assert kana_to_romaji(kana) == expected
 
 
@@ -225,11 +234,12 @@ def test_particle_ha_and_he_are_not_special_cased() -> None:
 
 
 def test_a_mixed_sentence_applies_every_rule_at_once() -> None:
-    # kyou (digraph) / gakkou (sokuon + ou) / shimbun (n -> m) / n'o (n before
-    # a vowel, here を) / koohii (katakana + prolongation marks) / 、。
+    # kyou (digraph) / gakkou (sokuon + ou) / shinbun (n stays n before b) /
+    # n'o (n before a vowel, here を) / koohii (katakana + prolongation marks)
+    # / 、。
     assert (
         kana_to_romaji("きょうはがっこうでしんぶんをよみ、コーヒーをのみました。")
-        == "kyouhagakkoudeshimbun'oyomi, koohiionomimashita."
+        == "kyouhagakkoudeshinbun'oyomi, koohiionomimashita."
     )
 
 

@@ -13,10 +13,15 @@ The dialect, and why each choice was made:
   records (``ryouri``, ``Kinosaki Onsen``), so a generated value and a
   hand-written one look alike. It is also the only spelling that survives a
   round trip through ASCII-only tooling.
-* **Traditional (JR-station) Hepburn for ``ん``**: ``m`` before ``b``/``p``/``m``
-  (しんぶん → ``shimbun``, さんぽ → ``sampo``), ``n'`` before a vowel or ``y``
-  (きんえん → ``kin'en``, ほんや → ``hon'ya``), plain ``n`` everywhere else.
-  The apostrophe is what keeps ``kin'en`` from being read as ``ki-ne-n``.
+* **Modern Hepburn for ``ん``**: always ``n``, including before ``b``/``p``/``m``
+  (しんぶん → ``shinbun``, こんばん → ``konban``), with ``n'`` before a vowel or
+  ``y`` (きんえん → ``kin'en``, ほんや → ``hon'ya``). The apostrophe is what keeps
+  ``kin'en`` from being read as ``ki-ne-n``.
+
+  Traditional JR-station Hepburn spells that ``m`` — ``shimbun``, ``sampo`` —
+  and this module did until 2026-08-17. The owner reads ``konban``, and a
+  learner typing a word back into an IME gets ``ん`` from ``n`` and nothing
+  from ``m``, so ``n`` is the spelling that round-trips.
 * **``を`` is always ``o``.** Hepburn romanizes both the word-internal kana and
   the object particle as ``o`` (``hon o yomu``), which is what this repository's
   existing example romaji already does, so the mapping is unambiguous.
@@ -198,10 +203,13 @@ def _geminate(following: str) -> str:
 
 
 def _syllabic_n(following: str) -> str:
-    """How ん is spelled before ``following`` (empty at the end of a run)."""
+    """How ん is spelled before ``following`` (empty at the end of a run).
+
+    Never ``m``: see the module docstring. The apostrophe before a vowel or
+    ``y`` is not cosmetic — without it ``kin'en`` reads as ``ki-ne-n``, which
+    is a different word.
+    """
     head = following[:1]
-    if head in _LABIALS:
-        return "m"
     if head in _VOWELS or head == "y":
         return "n'"
     return "n"

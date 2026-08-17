@@ -125,7 +125,7 @@
     "expression": "あんまり",
     "reading": "あんまり",
     "furigana": "",
-    "romaji": "ammari",
+    "romaji": "anmari",
     "meanings": [
       "not very",
       "not much",
@@ -177,7 +177,8 @@
         "anki_tags": "Yotsubato1",
         "anki_Front": "<div>あんまり</div>",
         "anki_Back": "<div>あんまり</div><div>Too much</div>",
-        "anki_Add Reverse": ""
+        "anki_Add Reverse": "",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -3030,7 +3031,7 @@
     "expression": "ジャンボ",
     "reading": "ジャンボ",
     "furigana": "",
-    "romaji": "jambo",
+    "romaji": "janbo",
     "meanings": [
       "Jumbo (name)"
     ],
@@ -3079,7 +3080,8 @@
         "anki_Front": "<div>ジャンボ</div>",
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\">Jumbo (name)</span>",
         "anki_Add Reverse": "",
-        "janki_pitch_accent_source": "jpdb:b899a3cb574e8547112a02b4540d8eae50adc481e5164095d910afc863f5d323"
+        "janki_pitch_accent_source": "jpdb:b899a3cb574e8547112a02b4540d8eae50adc481e5164095d910afc863f5d323",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
