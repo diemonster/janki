@@ -325,8 +325,16 @@ def test_each_pass_would_notice_being_handed_another_passes_prompt() -> None:
 # These drive the real commands and read what reached the model.
 
 
-def _sent_system(monkeypatch: pytest.MonkeyPatch) -> list[str]:
-    """Capture the system text of every model call a command makes."""
+def _sent_system(
+    monkeypatch: pytest.MonkeyPatch, parsed: object | None = None
+) -> list[str]:
+    """Capture the system text of every model call a command makes.
+
+    The default answer is a refusal, which is enough to see what was sent and
+    stops each command before it writes anything. Pass ``parsed`` when the test
+    needs the command to run to completion — what a command *records* about the
+    prompts it sent is only visible on the success path.
+    """
     from japanese_anki import claude_client
 
     seen: list[str] = []
@@ -337,6 +345,8 @@ def _sent_system(monkeypatch: pytest.MonkeyPatch) -> list[str]:
                 b.get("text", "") if isinstance(b, dict) else str(b) for b in blocks
             )
         )
+        if parsed is not None:
+            return claude_client.CallResult(parsed, "end_turn", None)
         return claude_client.CallResult(None, "refusal", None)
 
     # Patched on every module that holds a reference, not just the defining
@@ -419,10 +429,13 @@ def test_each_enrichment_command_sends_its_own_template(
         assert not any(prompts.load(REPO_ROOT, other) in t for t in seen), (
             f"{other}.md was sent instead"
         )
-    # The style guide leads every pass, and its own send was unpinned at five
-    # of the six sites that make one — measured, after an earlier comment here
-    # guessed "three of four". Dropping it left the suite green while every
-    # card in the run stopped being written to this project's conventions.
+    # The style guide too. `cli.py` hands it to six senders and to one
+    # recorder; replacing it with "" at each of the seven, one at a time, is
+    # caught at all seven now — six by assertions like this one and the
+    # seventh by the provenance test above, which was the last to be written.
+    # Dropping it leaves cards that are still cards, so nothing downstream
+    # notices: they are simply no longer written to this project's
+    # conventions.
     assert any(prompts.load(REPO_ROOT, "style-guide") in text for text in seen), (
         "the style guide was not sent"
     )
@@ -509,6 +522,45 @@ def test_every_extraction_mode_sends_its_own_file(
     )
 
 
+def test_the_recorded_provenance_names_the_guide_that_was_sent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The staging file's `style_guide_fingerprint`, from a real run.
+
+    `prompt_provenance` takes the guide as its own argument, so the send and
+    the record are two separate hands on the same variable and only the send
+    was pinned. Passing `""` to the record alone left the whole suite green
+    while every staging file committed a permanent provenance naming the sha
+    of the empty string — a card traceable to a guide no run ever sent, which
+    is worse than no provenance at all because it reads as an answer.
+
+    This drives `janki extract` to completion rather than checking the call,
+    because the file is the artifact that outlives the run.
+    """
+    from test_extract import candidate, extraction
+
+    from japanese_anki import cli
+    from japanese_anki.staging import read_staging
+
+    root = _wiring_project(tmp_path)
+    source = root / "inbox" / "lesson.pdf"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_bytes(b"%PDF-1.4\n%x\n")
+    _sent_system(monkeypatch, parsed=extraction(candidate()))
+
+    cli.main(["--root", str(root), "extract", "--yes", "--mode", "prose", str(source)])
+
+    [staged] = (root / "staging").glob("*.yaml")
+    _records, meta = read_staging(staged)
+    provenance = meta["prompt_provenance"]
+    assert provenance["style_guide_fingerprint"] == prompts.fingerprint(
+        prompts.load(REPO_ROOT, "style-guide")
+    )
+    assert provenance["system_prompt_fingerprint"] == prompts.fingerprint(
+        prompts.load(REPO_ROOT, "extract-prose")
+    )
+
+
 def test_the_patterns_command_sends_the_patterns_template(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -528,10 +580,13 @@ def test_the_patterns_command_sends_the_patterns_template(
     assert seen, "the command reached the model"
     assert any(prompts.load(REPO_ROOT, "patterns") in t for t in seen)
     assert not any(prompts.load(REPO_ROOT, "approve-coverage") in t for t in seen)
-    # The style guide leads every pass, and its own send was unpinned at five
-    # of the six sites that make one — measured, after an earlier comment here
-    # guessed "three of four". Dropping it left the suite green while every
-    # card in the run stopped being written to this project's conventions.
+    # The style guide too. `cli.py` hands it to six senders and to one
+    # recorder; replacing it with "" at each of the seven, one at a time, is
+    # caught at all seven now — six by assertions like this one and the
+    # seventh by the provenance test above, which was the last to be written.
+    # Dropping it leaves cards that are still cards, so nothing downstream
+    # notices: they are simply no longer written to this project's
+    # conventions.
     assert any(prompts.load(REPO_ROOT, "style-guide") in text for text in seen), (
         "the style guide was not sent"
     )

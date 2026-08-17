@@ -81,15 +81,28 @@ _HIRAGANA_START = "ぁ"
 _HIRAGANA_END = "ゖ"
 
 
+#: Half-width prolonged sound mark. The same character to a reader, a
+#: different codepoint to `NFC` — which `morae` uses, and which folds
+#: compatibility variants nowhere. Left alone it survives to the engine as
+#: itself and answers 400, the same failure `ー` does.
+_HALFWIDTH_LONG_VOWEL = "\uff70"
+
+
 def _to_katakana(text: str) -> str:
     """Hiragana to katakana, leaving everything else alone.
 
     A straight block shift rather than a table: the two blocks are
     codepoint-aligned across their whole range, ``ゔ`` → ``ヴ`` included. Kana
     already in katakana — a loanword reading — pass through untouched.
+
+    The one exception is the half-width prolonged sound mark, folded to the
+    full-width one so :func:`_spell_long_vowels` sees a single character to
+    respell rather than two spellings of it.
     """
     return "".join(
-        chr(ord(char) + 0x60) if _HIRAGANA_START <= char <= _HIRAGANA_END else char
+        chr(ord(char) + 0x60)
+        if _HIRAGANA_START <= char <= _HIRAGANA_END
+        else ("ー" if char == _HALFWIDTH_LONG_VOWEL else char)
         for char in text
     )
 
@@ -174,7 +187,12 @@ def _accent_position(per_mora: Sequence[str], particle: str) -> int:
     return len(per_mora)
 
 
-#: Which vowel each kana row ends on, for spelling out a long vowel.
+#: The vowel each kana ends on, for spelling out a long vowel **to VOICEVOX**.
+#:
+#: This is an input convention of one engine, not a respelling of Japanese.
+#: `エスカレーター` is written with `ー` and the record keeps it: `reading` is
+#: half of a record's permanent id. Only the string handed to the engine is
+#: respelled, and only in transit.
 #:
 #: VOICEVOX's kana mode rejects `ー` outright — `/accent_phrases?is_kana=true`
 #: answers 400 `UNKNOWN_TEXT` for `エスカレーター` with or without an accent
@@ -182,11 +200,18 @@ def _accent_position(per_mora: Sequence[str], particle: str) -> int:
 #: vowel it lengthens (`オオ`, `コオヒイ`), so a reading carrying `ー` has to be
 #: respelled before it is sent. Measured against the running engine, not
 #: inferred: `オオ'`, `コオヒイ'` and `エスカレエタア'` all answer 200.
+#:
+#: Every kana that *has* a vowel is here, `ヴ` included — `_to_katakana`
+#: advertises `ゔ`→`ヴ` and the engine takes `ヴウ'`. The two moraic consonants
+#: are deliberately absent: `ン` and `ッ` end on no vowel, so there is no
+#: answer to lengthen them with, and :func:`_spell_long_vowels` refuses rather
+#: than picking one. `ッ` was briefly mapped to `ウ`, which the engine accepts
+#: and then pronounces with a /u/ that is not in the word.
 _VOWEL_OF_ROW = {
-    "ア": "アカサタナハマヤラワガザダバパャァヮ",
-    "イ": "イキシチニヒミリギジヂビピィ",
-    "ウ": "ウクスツヌフムユルグズヅブプュゥッ",
-    "エ": "エケセテネヘメレゲゼデベペェ",
+    "ア": "アカサタナハマヤラワガザダバパャァヮヵ",
+    "イ": "イキシチニヒミリギジヂビピィヰ",
+    "ウ": "ウクスツヌフムユルグズヅブプュゥヴ",
+    "エ": "エケセテネヘメレゲゼデベペェヶヱ",
     "オ": "オコソトノホモヨロヲゴゾドボポョォ",
 }
 _LONG_VOWEL_FOR = {
@@ -197,18 +222,33 @@ _LONG_VOWEL_FOR = {
 def _spell_long_vowels(units: list[str]) -> list[str]:
     """Replace each `ー` with the vowel of the mora it lengthens.
 
-    A `ー` that opens a reading has nothing to lengthen and is left alone; the
-    engine will refuse it, which is the honest outcome for a reading that
-    starts with a long-vowel mark.
+    Refuses rather than emitting a `ー` the engine will 400 on, in the two
+    cases where there is no vowel to repeat: a `ー` that opens a reading, with
+    nothing before it, and a `ー` after `ン` or `ッ`, which end on no vowel.
+    A :class:`PitchError` here means the caller voices the word with the
+    engine's own accent — the same fallback as a record with no pattern at all
+    — which is a worse clip than a forced one and a far better outcome than a
+    failed request or an invented mora.
     """
     spelled: list[str] = []
     for unit in units:
-        if unit == "ー" and spelled:
-            previous = spelled[-1]
-            vowel = _LONG_VOWEL_FOR.get(previous[-1])
-            spelled.append(vowel or unit)
-        else:
+        if unit != "ー":
             spelled.append(unit)
+            continue
+        previous = spelled[-1] if spelled else ""
+        vowel = _LONG_VOWEL_FOR.get(previous[-1:])
+        if not vowel:
+            raise PitchError(
+                f"cannot spell out the long vowel in {''.join(units)!r} for "
+                "VOICEVOX: "
+                + (
+                    "it opens with 'ー', which has nothing to lengthen"
+                    if not previous
+                    else f"'{previous}' ends on no vowel to repeat"
+                )
+                + ". The word is voiced with the engine's own accent instead."
+            )
+        spelled.append(vowel)
     return spelled
 
 

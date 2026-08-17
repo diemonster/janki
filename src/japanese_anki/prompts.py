@@ -24,9 +24,12 @@ instructions would produce plausible output that ignores every rule this
 directory exists to state — the expensive kind of wrong, because it looks
 like success.
 
-The sha-256 of what was sent is recorded in staging archives and batch records
-(:func:`fingerprint`), so a card can always be traced to the exact text that
-produced it, and `git log prompts/` is the history of why the asking changed.
+The sha-256 of what was sent is recorded where a card's provenance is kept:
+extraction stores the system and style-guide digests in every staging file's
+`prompt_provenance`, and a coverage approval stores the digest of the
+instructions the approving model was given. So a card can be traced to the
+exact text that produced it, and `git log prompts/` is the history of why the
+asking changed.
 """
 
 from __future__ import annotations

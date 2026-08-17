@@ -1,28 +1,23 @@
 deck:
   name: "Brandon Japanese::Starter Verbs"
   deck_id: 2059400111
-  description: "Every verb in the collection."
+  description: "The twenty verbs imported from jpdb's top-20 list."
   output: "sample-verbs.apkg"
   cards:
     recognition: true
     production: true
     reading: false
   source: ../normalized/vocabulary.json
-  # Dedicated decks own Anki imports and hardening pilots. Do not claim their
-  # stable GUIDs here too, or imports move the same notes between decks.
-  exclude_tags:
-    - anki
-    - m7-mixed-tsumori
-    - m7-native-teform-table
-    - m7-camera-vertical-dialogue
-    # One deck per handout owns these; without the exclusions every noun on a
-    # kanji sheet lands in a deck called "Every verb in the collection".
-    - kanji-review-104-week-1-and-2
-    - 104-week-8-writing-homework
-    - kanji-review-104-week11
-    - kanji-practice-sheet-no-112-123
-  # No include_ids: every record in the source. The three that used to be
-  # pinned here were a starter set for verifying the pipeline, and the other
-  # seventeen sat in a second deck only so the two would not both claim the
-  # same records — same source file, same GUIDs, so an overlap means each
-  # import moves the notes between decks.
+  # Selected by what these records *are*, not by what they are not.
+  #
+  # This was a catch-all — every record minus eight exclusions — under the
+  # description "Every verb in the collection", which was false in both
+  # directions: it took whatever carried no other deck's tag (nouns included,
+  # before the handout decks existed), and it left 33 of the collection's 53
+  # verbs in other decks. The next record imported without a source tag would
+  # have landed here too, whatever part of speech it was.
+  #
+  # The tag selects the same twenty records the exclusions did — verified
+  # identical before the swap — so no note moved deck and no GUID changed.
+  include_tags:
+    - jpdb:anki-test-top-20-verbs

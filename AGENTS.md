@@ -24,9 +24,14 @@ or second-guesses what came back.
   from dictionaries, and shaping reviewed content into an Anki deck. Structural
   contracts — identifiers, fingerprints, field counts, file provenance — are
   the project's, because they are about the artifact rather than the language.
-- **Prompts are templates and belong in files.** They do, now: every
-  instruction janki sends is Markdown under `prompts/`, sent byte for byte and
-  re-read on every run. Change what a pass asks for by editing the file, never
+- **Prompts are templates and belong in files.** Every *system* prompt on the
+  Anthropic path is Markdown under `prompts/`, sent byte for byte and re-read
+  on every run. Three things are still instructions and still in Python, and
+  knowing which matters when you go looking for what a pass asked: the user
+  turn Python composes from the record's data, the pydantic
+  `Field(description=…)` strings that ship inside the JSON schema (several are
+  full sentences, not labels), and the Codex provider path, which strips and
+  rejoins the blocks and prepends its own preamble. Change what a pass asks for by editing the file, never
   by adding code that fixes up the answer. A prompt needing a branch in its
   instruction prose is two prompts — that is why extraction's three modes are
   three complete files rather than one file plus three rule blocks.
@@ -52,7 +57,9 @@ or second-guesses what came back.
 - Add or update tests for every supported input format and behavioral change.
 - Never modify files under `data/inbox/`.
 - Treat `dist/` as generated output.
-- Use deterministic note IDs and GUIDs so rebuilt decks update notes instead of duplicating them.
+- Use deterministic **GUIDs** (`genanki.guid_for(record.id)`) so rebuilt decks
+  update notes instead of duplicating them. Note *ids* are timestamps genanki
+  mints per build and are not stable — the GUID is what Anki matches on.
 - Surface source filename and row number in import errors.
 - Never silently discard an input row or unknown source column.
 - **Models for working on janki**: Claude Opus 5 across the board —
@@ -93,7 +100,7 @@ below is what is left, and it is the loop every other project already uses.*
   test goes beside its subject in `tests/`, named for the behaviour rather than
   the bug.
 - **A wrong or thin model answer is not a defect in janki.** It is a template
-  problem, and the fix is a clearer prompt (`docs/DESIGN.md`). Do not add a
+  problem, and the fix is a clearer prompt (`prompts/`). Do not add a
   check that reads Japanese to catch it.
 - Prove a new test actually catches its subject: break the production code in
   the single way the test names, confirm that test fails, and restore. A test
@@ -120,7 +127,9 @@ below is what is left, and it is the loop every other project already uses.*
   refuses on a non-TTY rather than proceeding.
 - **Staging coverage acceptance is the exception, decided 2026-08-16.** It was
   on the list above until the owner measured what it cost: since M8.4 deleted
-  oracles every extraction lands `unmeasured`, and the approval block repeats
+  oracles every extraction *carrying a table* lands `unmeasured` — a prose-only
+  source lands `selection`, which needs no approval at all — and the approval
+  block repeats
   every source unit's facts — 168 lines of YAML per page, hand-transcribed,
   with the actual judgment buried in six of them. The owner's decision moved up
   a level: not "is this page accounted for" but "may a model answer that".
@@ -153,24 +162,34 @@ below is what is left, and it is the loop every other project already uses.*
 2. `data/normalized/`: mechanical conversion into the canonical schema.
 3. `data/decks/`: curated deck definitions and human edits.
 4. `data/staging/`: rows an import held back for a human — **committed**, so a
-   reading typed in by hand is recoverable. Delete a staging file once its rows
-   have moved into `data/normalized/` and `janki status --rebuild` has run.
-5. `data/media/`: generated audio, content-addressed — **committed**, so a
-   rebuild is free (`docs/PROJECT_PLAN.md` design principle 6).
+   reading typed in by hand is recoverable. `janki promote` archives the file
+   to `data/staging/done/` and deletes the original itself once every row has
+   landed; do not delete one by hand, which skips the archive. A file that
+   survives a promote is one with rows still held back, and it says so.
+5. `data/staging/done/`: promoted staging files, kept verbatim — **committed**,
+   the record of what each source yielded and what a reviewer accepted.
 6. `data/kanji.json`: machine-written kanji reference data — **committed** and
    replaced by `janki kanji --refresh`; do not add fields by hand because the
    source schema does not preserve unknown keys.
-7. `data/ledger.json`: machine-written operational state — **committed**, never
+7. `data/patterns.json`: machine-written by `janki patterns` — **committed**.
+   Its `reviewed:` marks are human judgements, and re-reading a document clears
+   them, which is why `patterns` refuses a reviewed file without `--force`.
+8. `data/ledger.json`: machine-written operational state — **committed**, never
    hand-edited. `janki status --rebuild` reconstructs what records and media
-   still prove.
-8. `data/review.json`: the retired review subsystem's store — **committed**
-   as history and read by nothing since M8.2. Do not extend it or wire a
-   reader to it; it is a record of what a model once said, not state.
-9. `dist/`: generated `.apkg` and preview files — **not** committed.
+   still prove, and is a no-op on a healthy repository: a source reference's
+   `ref` is the record's own `source.imported_from`, so any divergence has
+   rebuild append a duplicate.
+9. `data/media/`: generated audio, content-addressed — **committed**, so a
+   rebuild is free (`docs/PROJECT_PLAN.md` design principle 6).
+10. `data/review.json`: the retired review subsystem's store — **committed**
+    as history and read by nothing since M8.2. Do not extend it or wire a
+    reader to it; it is a record of what a model once said, not state.
+11. `dist/`: generated `.apkg` and preview files — **not** committed.
 
-Only `dist/` is disposable. Everything under `data/` is tracked, down to the
-`.gitkeep` that holds an empty inbox open, because the repository — not Anki's
-database and not an uncommitted working tree — is the source of truth.
+Only `dist/` is disposable. Everything under `data/` is tracked, including the
+`.gitkeep` files that hold the empty directories open, because the repository —
+not Anki's database and not an uncommitted working tree — is the source of
+truth.
 
 A new import must not erase manually curated examples, notes, conjugations, or furigana.
 

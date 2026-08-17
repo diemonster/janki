@@ -214,7 +214,15 @@ def test_a_long_vowel_mark_is_a_mora() -> None:
 
 
 def test_a_katakana_reading_passes_through() -> None:
-    assert to_aquestalk("カード", "HLLL") == "カ'アド"
+    """A loanword reading already in katakana is not converted twice.
+
+    Its old input was カード, which the long-vowel fix now respells — so the
+    assertion became byte-identical to the test above it and this one stopped
+    covering anything. スキー would respell too; スポーツ would; a katakana
+    word without `ー` is what proves the pass-through.
+    """
+    assert to_aquestalk("テスト", "LHHH") == "テスト'"
+    assert to_aquestalk("てすと", "LHHH") == "テスト'", "same word, same output"
 
 
 def test_a_decomposed_dakuten_is_one_kana() -> None:
@@ -431,7 +439,116 @@ def test_a_long_vowel_is_spelled_out_rather_than_marked(
     assert to_aquestalk(reading, pattern) == expected
 
 
-def test_a_reading_that_opens_with_a_long_vowel_is_left_for_the_engine() -> None:
-    """`ー` first has nothing to lengthen. Inventing a vowel there would be
-    guessing at a reading; the engine refusing it is the honest outcome."""
-    assert to_aquestalk("ーん", "LHH").startswith("ー")
+def test_the_aquestalk_spelling_never_becomes_the_records_own() -> None:
+    """`オー`→`オオ` is one engine's input convention, not a respelling of Japanese.
+
+    エスカレーター is written with `ー` and the record keeps it: `reading` is
+    half of a record's permanent id, and a record whose reading was quietly
+    respelled would be a different word with a different id and a different
+    card.
+
+    So the respelling may exist only in transit, and this pins the set of
+    places it can be in transit *at*: every `to_aquestalk` call in the package,
+    checked against the three that read the answer and throw it away. Leaks
+    arrive as a new caller, which is what this sees.
+
+    The other shape — one of these three storing the answer instead — is
+    already caught, by eight ledger tests, because storing it changes what the
+    fingerprints say. A behavioural test cannot add anything here: the function
+    takes a string and returns one, so it *cannot* mutate a record, and handing
+    it a record's reading proves only that strings are immutable.
+    """
+    import ast
+    from pathlib import Path
+
+    import japanese_anki
+
+    #: Why each caller is allowed to ask, and what it does with the answer.
+    READERS = {
+        ("audio_cmd", "_word_audio"): "builds the request; the answer is sent, never stored",
+        ("enrich", "_compatible_pitch_patterns"): "asks only whether a pattern converts at all",
+        ("ledger", "_spoken_form"): "hashes what a clip says; the digest is stored, not the text",
+    }
+
+    # Every module in the package, not the three that call it today: a leak
+    # arrives as a *new* caller, so a scan of the known callers cannot see one.
+    found: dict[tuple[str, str], str] = {}
+    for path in sorted(Path(japanese_anki.__file__).parent.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            for inner in ast.walk(node):
+                func = getattr(inner, "func", None)
+                name = getattr(func, "attr", None) or getattr(func, "id", None)
+                if isinstance(inner, ast.Call) and name == "to_aquestalk":
+                    found[(path.stem, node.name)] = ast.unparse(inner)
+
+    assert set(found) == set(READERS), (
+        f"unexpected: {sorted(set(found) - set(READERS))}, "
+        f"gone: {sorted(set(READERS) - set(found))}"
+    )
+
+
+@pytest.mark.parametrize(
+    "reading,pattern",
+    [("ーん", "LHH"), ("あんー", "LHHH"), ("あっー", "HLLL")],
+    ids=["opens-with-one", "after-n", "after-small-tsu"],
+)
+def test_a_long_vowel_with_no_vowel_to_repeat_is_refused(
+    reading: str, pattern: str
+) -> None:
+    """The three positions where there is no answer, and none is guessed.
+
+    `ー` first has nothing before it. `ン` and `ッ` end on no vowel. The engine
+    would 400 on all three if the bare `ー` were passed through, and it accepts
+    `オンオ'` and `ア'ッウ` — so a guess is *available* here and is exactly what
+    must not happen: both invent a mora the word does not have. Refusing sends
+    the caller to the engine's own accent, which is a real if unforced clip.
+
+    This replaces a test that asserted `to_aquestalk("ーん", ...)` starts with
+    `ー`. That passed against the pre-fix code too — it was the one new
+    assertion in the long-vowel commit that did not fail on the mutation it
+    named.
+    """
+    with pytest.raises(PitchError, match="no vowel|nothing to lengthen"):
+        to_aquestalk(reading, pattern)
+
+
+def test_the_vowel_table_covers_every_kana_that_has_one() -> None:
+    """`ヴ` was missing, and the miss was silent.
+
+    The old fallback re-emitted the bare `ー`, so `ゔー` produced `ヴ'ー` — the
+    exact character the fix exists to remove, reaching the engine through an
+    undocumented path and 400ing there. `_to_katakana` advertises `ゔ`→`ヴ` and
+    the engine takes `ヴウ'`, so the row existed and was simply absent.
+
+    Every kana `_to_katakana` can produce is checked, so the next gap fails
+    here rather than in a synthesis run.
+    """
+    from japanese_anki.pitch import _LONG_VOWEL_FOR, _to_katakana
+
+    # No vowel to end on: the two moraic consonants, and the small forms that
+    # only ever attach to the kana before them.
+    vowelless = set("ンッ")
+    missing = sorted(
+        kana
+        for code in range(ord("ぁ"), ord("ゖ") + 1)
+        if (kana := _to_katakana(chr(code))) not in vowelless
+        and kana not in _LONG_VOWEL_FOR
+    )
+    assert not missing, f"kana with a vowel and no row: {missing}"
+    assert "ヴ" in _LONG_VOWEL_FOR and _LONG_VOWEL_FOR["ヴ"] == "ウ"
+    assert not (vowelless & set(_LONG_VOWEL_FOR)), "ン and ッ stay out"
+
+
+def test_the_halfwidth_prolonged_mark_is_respelled_too() -> None:
+    """`morae` normalizes NFC, which folds no compatibility variant.
+
+    U+FF70 is the same character to a reader and a different codepoint to the
+    engine, which 400s on it exactly as it does on `ー`. It is the encoding
+    class this project keeps hitting, so it is folded rather than left to
+    surface as a synthesis failure.
+    """
+    assert to_aquestalk("か\uff70ど", "HLLL") == "カ'アド"
+    assert to_aquestalk("かーど", "HLLL") == "カ'アド", "and the full-width one"

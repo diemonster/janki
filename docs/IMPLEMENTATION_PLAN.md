@@ -54,10 +54,12 @@ marked "supersedes design").
    nowhere else. Everything janki writes *from scratch* still goes
    through PyYAML; do not widen this.
 8. **Paid model calls are milestone operations, not routine verification.** Run
-   local validation and `make gates` before any live review.
-   Run the final semantic review once on a complete release candidate. If it
-   finds errors, rerun only the records whose content changed. Do not run a
-   paid advisory review after each small commit or on a media-only diff. Any
+   local validation and `make gates` first — they are free and they catch most
+   of it. *(Through 2026-08-15 this rule also described a "final semantic
+   review" over a release candidate; `janki review` was deleted in M8.2 and
+   there is no such pass. The paid calls that remain are `extract`, `enrich
+   --ai`, `--polish-meanings`, `patterns`, and `promote --accept-coverage`.)*
+   Do not run a paid pass after each small commit or on a media-only diff. Any
    additional broad live review needs explicit repository-owner approval.
    Tests and `make gates` never make a live request.
 
@@ -88,14 +90,12 @@ marked "supersedes design").
   `already_known`, `suggested_reading`) are stringified into that
   record's `source.raw_fields` so records round-trip through
   `VocabularyRecord.from_dict` unchanged.
-- **Unverified-furigana convention** (writer M4.2, reader M5.3): a
-  record-level key `source.raw_fields["furigana_unverified"]` holding a
-  comma-joined list of *content fingerprints of the flagged examples'
-  `japanese` text*. No per-example schema field. A merge keeps the
-  existing record's `source`, so this key is carried across one by
-  `io.CONTENT_ANNOTATIONS` — and only when the merge actually wrote
-  `examples`, since a flag about examples that were not kept is a lie in
-  the other direction.
+- ~~**Unverified-furigana convention**~~ *(deleted 2026-08-15 by M8.3 with the
+  furigana flag subsystem it served. `furigana_unverified`,
+  `io.CONTENT_ANNOTATIONS` and the flag's merge carry are all gone; nothing
+  writes or reads that key. Struck rather than removed because this section is
+  headed "used by everything after", and a reader who remembers the convention
+  should find out here that it went.)*
 - **Field-diff output** (shared helper, first built in M2.6, reused by
   M4.2/M4.3): per record, per field, one indented line of the form
   `<field>: <old> -> <new>` under a `<record id>` header.
@@ -223,12 +223,14 @@ Design: DESIGN_V2 "Configuration".
   (`data/inbox/scans`), `extract_model` / `enrich_model` (both
   `claude-opus-5`), `tts_provider` (`voicevox`), `voicevox_url`
   (`http://localhost:50021`), `voicevox_speaker` (int, 46),
-  `azure_voice` (`ja-JP-NanamiNeural`), `azure_region` (`westus2`).
+  ~~`azure_voice`, `azure_region`~~ *(deleted 2026-08-16 with the rest of the
+  Azure path — nothing read them; M5.7 dropped the provider)*.
   TOML sections: `[paths]`, `[ai]`, `[tts]`.
 - Unknown TOML keys/sections emit a warning to stderr naming the key
   and the nearest valid one (today typos are silently ignored).
 - Secrets are never read from TOML. Env vars only: `ANTHROPIC_API_KEY`,
-  `JPDB_API_KEY`, `AZURE_SPEECH_KEY`.
+  `JPDB_API_KEY`, `OPENAI_API_KEY` *(was `AZURE_SPEECH_KEY`; corrected
+  2026-08-16)*.
 - Tests: defaults when sections absent; overrides; unknown-key warning.
 
 ### [x] M1.3 Ledger module
@@ -2343,6 +2345,15 @@ Lane map: {M7.1} → {M7.2} → {M7.3} → {M7.4, M7.5} → {M7.6A} →
 
 ### [x] M7.1 The hardening protocol and safety contract
 
+> *Superseded 2026-08-15. The protocol this milestone built — `docs/HARDENING.md`,
+> the findings-and-cases corpus, the systemic-defect completion rule — was
+> deleted by M8.4, which replaced it with the ordinary loop: a failing test
+> first, then the fix. The **safety contract** survives and is enforced in
+> code: the repair allow-list, the identity-field prohibition, and the
+> approvals the owner keeps. Read `AGENTS.md` for the live version; the body
+> below is how it was built, not how it works.*
+
+
 *Done 2026-08-12. Added the deck-defect workflow and self-healing limits in
 `docs/HARDENING.md`. Added the systemic-defect completion rule, exact automatic
 repair allowlist, identity boundary, and user-only authority rules to
@@ -2430,6 +2441,12 @@ executable checks at the first boundary that uses the approval.
 
 ### [x] M7.2 Findings catalog + `janki harden status`
 
+> *Deleted 2026-08-15 by M8.4. There is no `janki harden`, no `hardening.py`,
+> no `quality/` directory. The catalog's durable content — what each finding
+> actually pinned — was migrated into `tests/`, and the five gaps that had no
+> test are named in M8.4's own record.*
+
+
 *Done 2026-08-12. Added strict, duplicate-key-safe schemas for the systemic
 finding catalog and pilot reports. Added the read-only `janki harden status`
 text and deterministic JSON reports. The status reports open and deferred
@@ -2487,6 +2504,12 @@ that is counted without becoming a systemic finding. Do not create a placeholder
 case parser merely to make M7.2 appear to resolve links before M7.3.
 
 ### [x] M7.3 Minimized case bundles + offline replay
+
+> *Deleted 2026-08-15 by M8.4. `make gates` is `lint test` plus one sample
+> deck build; the replay step and the 25 gating cases are gone. The eighteen
+> cases that were genuinely redundant with pytest died with the corpus, and the
+> five that were not became ordinary tests first.*
+
 
 *Done 2026-08-12. Added strict human-oracle and minimized-case schemas,
 fingerprinted and symlink-safe fixture loading, exact owner-approval binding,
@@ -2667,6 +2690,16 @@ table/prose reporting; prompt fingerprint changes; and no secrets or absolute
 paths in metadata.
 
 ### [x] M7.5 Named safe-repair registry + staged proposals
+
+> *Half deleted 2026-08-15. The **registry** survives and is the live
+> mechanism — default-deny, seven allowed fields, identity fields refused at
+> three points (`repairs.py`). The **staged proposal** half — proposal
+> documents, the two-phase journal, the archive, `repair --propose`,
+> `promote --accept-proposals`, and the `proposal-only` mode — was deleted by
+> d7ee435 after M8.3 removed its only producer. `REPAIR_MODES` is now
+> `("ingest-safe", "revoked")`. Everything below about proposals describes
+> code that no longer exists.*
+
 
 Depends on: M7.2, M7.3
 Files: new `src/japanese_anki/repairs.py`, `src/japanese_anki/cli.py`,
@@ -3084,7 +3117,7 @@ advisory review after a slice. Keep the review hooks disabled while the owner
 cost pause is in effect. Do not remove or change the disable marker as part of
 this task.
 
-### [ ] M7.6V Authority realignment — the LLM parses, the dictionaries enrich
+### [~] M7.6V Authority realignment — the LLM parses, the dictionaries enrich
 
 > *Correction 2026-08-15: sentences below promise that the paid review is "the
 > one this task keeps" and that deleted checks are replaced by "a prompt clause
@@ -3253,33 +3286,15 @@ decision — see slice 6 and the comment on `example-teaching-suitability` in
 `known_expressions` or the `example-learner-load` hold describes code that
 exists.
 
-**The review completeness gate.** `command_review` calls `_shipping_records`
-with no completeness check, so any later pass touching a fingerprinted field
-invalidates a paid read: **181 reads for 97 records**, 73 read more than once,
-61 the same day; of 84 superseded reads only 13 followed a blocking finding, so
-71 were waste — **84.5% of superseded reads**. Justified by input-determinism
-alone: the same card yields the same verdict. Four things the gate must get
-right, each of which is a way to build it wrong:
-
-- *Refuse on the class `build` refuses on* — errors, not warnings. A
-  warning-level content hold would otherwise be refused by review and refused
-  by `build` as unreviewed, with no exit named. (The learner-load hold was the
-  original example; it no longer exists.)
-- *"Pending" means a queued pass, not a fillable field.* `missing_enrichment`
-  is true forever for a record deliberately shipped without usage notes, which
-  M7.6T rule 5 explicitly allows. Zero of 97 records are pending today, so this
-  lands green and bites the camera records later.
-- *`missing_enrichment` is not sufficient by itself* — `--jpdb`,
-  `--polish-meanings`, `import`, `promote` and the furigana-separator repair
-  all rewrite fingerprinted fields. Name the offending pass in the refusal.
-- *Placement*: after the `--accept` branch at `cli.py:4468`, which returns
-  early and must not be gated; not inside the `if not todo:` block, which
-  `--force` skips; and decide deliberately whether an explicit
-  `janki review <id>` overrides the gate, as `ai_targets` does.
-
-Keep `--accept ... --because`. `review-pitch-fact-recheck` records the review
-raising *false blocking* findings after miscounting mora; the override is what
-rescued it.
+**The review completeness gate.** ~~Twenty-four lines of design for a gate on
+`command_review`.~~ *(Moot 2026-08-15: M8.2 deleted `janki review`,
+`command_review`, `_shipping_records`, `_refuse_unreviewed` and `enrich
+--accept`, and M8.3 deleted the flag subsystem the gate was to consult. The
+waste it measured — 181 reads for 97 records, 71 of 84 superseded reads
+carrying no blocking finding — is why the subsystem went rather than gained a
+gate. The placement anchor it gave, "after the `--accept` branch at
+`cli.py:4468`", now lands inside `promote --accept-coverage`; do not follow
+it.)*
 
 **Coverage the cases do not have.** No gating case supplies
 `sentence_responses` or `known_expressions`, and there is no `audio` runner in
@@ -3299,11 +3314,13 @@ Oracles are regenerated by hand — `case.yaml` pins each fixture's sha256 and n
 Use these slices, each a finding plus a reproducing case plus a fix, ordered so
 `make gates` is green at every commit boundary:
 
-1. Lift the base-versus-sentence check out from behind both short-circuits into
-   a standalone offline check, with its test. *(Was "with its case" — the
-   corpus went in M8.4.)*
-2. The review completeness gate. It removes no gate and needs no risk decision,
-   and it stops the waste immediately.
+1. ~~Lift the base-versus-sentence check out from behind both short-circuits.~~
+   *(Moot: M8.3 deleted `verify_example_furigana`, `furigana_base`'s checking
+   caller, `impossible_character_furigana`, `example_content_holds` and
+   `spilled_furigana_groups`. `qc.py` is three notation functions now —
+   `furigana_pairs`, `furigana_reading`, `regenerate_example_romaji` — and
+   none of them judges.)*
+2. ~~The review completeness gate.~~ *(Moot — see above.)*
 3. `effort` as a parameter, `"xhigh"` wherever the model accepts it; the
    streaming call shape and the widened exception boundary; fakes updated in
    both test files.

@@ -60,8 +60,6 @@ calmly, with natural pitch accent, and pause briefly at each comma. Do not \
 sound hurried."""
 voicevox_speed = 0.7                # 0.5–2.0; below 1 slows delivery without
                                     # dropping the pitch
-azure_voice = "ja-JP-NanamiNeural"
-azure_region = "westus2"
 
 # Secrets are never read from this file. Codex uses the CLI's existing login;
-# set ANTHROPIC_API_KEY, JPDB_API_KEY, and AZURE_SPEECH_KEY in the environment.
+# set ANTHROPIC_API_KEY, JPDB_API_KEY, and OPENAI_API_KEY in the environment.

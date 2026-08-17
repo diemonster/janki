@@ -118,6 +118,22 @@ def test_word_decks_are_nonempty_and_do_not_share_stable_ids() -> None:
     for left, right in combinations(memberships, 2):
         assert memberships[left].isdisjoint(memberships[right]), f"{left} <> {right}"
 
+    # And every record is in one. Disjointness alone was satisfied by decks
+    # that between them cover nothing, and the collection was a partition only
+    # because `verbs.yaml` was a catch-all: every record minus eight
+    # exclusions, so anything untagged fell into it. That made "Starter Verbs"
+    # the destination for the next noun imported without a source tag, which
+    # is why it now selects by tag instead — and why the property it was
+    # accidentally providing has to be asserted rather than arranged.
+    #
+    # A record in no deck is not an error janki can see: it builds, it
+    # promotes, it gets audio, and it never reaches Anki.
+    from japanese_anki.io import load_records
+
+    everything = {record.id for record in load_records(config.normalized_file)}
+    covered = set().union(*memberships.values())
+    assert not (everything - covered), sorted(everything - covered)
+
 
 def test_deck_files_discovers_nested_yaml(tmp_path: Path) -> None:
     deck_dir = tmp_path / "decks"

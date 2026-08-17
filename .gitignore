@@ -20,17 +20,18 @@ dist/*-preview.html
 # See AGENTS.md "Data lifecycle".
 
 # Secrets. Nothing in janki reads a .env file — keys come from the real
-# environment (JPDB_API_KEY, ANTHROPIC_API_KEY, AZURE_SPEECH_KEY). This
+# environment (JPDB_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY). This
 # entry exists so that a .env kept here for convenience can never be
 # committed by an "add everything" commit.
 .env
 .env.*
 !.env.example
 
-# Claude Code state and config, all of it local to a machine. settings.json
-# pins per-developer model choices and agents/ is personal tooling, so neither
-# is something a clone should inherit; AGENTS.md is the instructions that are
-# meant to be shared, and it is tracked.
+# Claude Code state, most of it local to a machine — reviews/ is generated
+# output and hooks/ holds a per-clone disable marker, so neither is something a
+# clone should inherit. settings.json and agents/ *are* tracked (the two
+# negations below): the model policy and the agent briefs are project
+# decisions, and versioning them is what keeps them from drifting invisibly.
 .claude/*
 !.claude/settings.json
 !.claude/agents/

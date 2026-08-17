@@ -1009,8 +1009,8 @@ def pinned_examples(record: VocabularyRecord) -> list[ExampleSentence]:
     machine-era sentence on an extract record that no reviewer's stamp
     covers) gets no mention at all: describing it to the model as content to
     preserve was the camera pilot's false-reviewed failure. First-class so
-    the replay runner observes the same selection the prompt renders, rather
-    than re-deriving it from the prompt's quoting.
+    a caller observes the same selection the prompt renders, rather than
+    re-deriving it from the prompt's quoting.
     """
     return [
         example

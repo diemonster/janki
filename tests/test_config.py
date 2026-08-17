@@ -46,8 +46,6 @@ def test_defaults_apply_when_the_new_sections_are_absent(
     assert config.tts_provider == "voicevox"
     assert config.voicevox_url == "http://localhost:50021"
     assert config.voicevox_speaker == 46
-    assert config.azure_voice == "ja-JP-NanamiNeural"
-    assert config.azure_region == "westus2"
     assert capsys.readouterr().err == ""
 
 
@@ -74,8 +72,6 @@ def test_new_sections_override_defaults_and_paths_resolve_against_the_root(
         provider = "azure"
         voicevox_url = "http://voice.local:1234"
         voicevox_speaker = 8
-        azure_voice = "ja-JP-KeitaNeural"
-        azure_region = "japaneast"
         """,
     )
 
@@ -96,8 +92,6 @@ def test_new_sections_override_defaults_and_paths_resolve_against_the_root(
     # Falsifiable now that _int refuses to coerce: a float or bool would raise
     # above, and a future coercion regression would fail here.
     assert type(config.voicevox_speaker) is int
-    assert config.azure_voice == "ja-JP-KeitaNeural"
-    assert config.azure_region == "japaneast"
     assert capsys.readouterr().err == ""
 
 
@@ -177,24 +171,6 @@ def test_an_unknown_enrichment_provider_is_rejected(tmp_path: Path) -> None:
     assert "enrich_provider" in str(caught.value)
     assert "codex" in str(caught.value)
     assert "anthropic" in str(caught.value)
-
-
-def test_a_legacy_enrich_model_keeps_its_anthropic_and_shared_model_meaning(
-    tmp_path: Path,
-) -> None:
-    _write_config(
-        tmp_path,
-        """
-        [ai]
-        enrich_model = "claude-sonnet-legacy"
-        """,
-    )
-
-    config = ProjectConfig.load(tmp_path)
-
-    assert config.enrich_provider == "anthropic"
-    assert config.enrich_model == "claude-sonnet-legacy"
-    assert config.polish_model == "claude-sonnet-legacy"
 
 
 def test_an_explicit_anthropic_provider_gets_an_anthropic_model_default(

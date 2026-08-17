@@ -59,8 +59,6 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "openai_voice",
         "openai_model",
         "openai_instructions",
-        "azure_voice",
-        "azure_region",
     ),
 }
 
@@ -250,7 +248,7 @@ def _warn_unknown_key(section: str, key: str) -> None:
     ):
         _warn(
             f"'{key}' in [{section}] is ignored; secrets are never read from janki.toml. "
-            "Set ANTHROPIC_API_KEY, JPDB_API_KEY, or AZURE_SPEECH_KEY in the environment."
+            "Set ANTHROPIC_API_KEY, JPDB_API_KEY, or OPENAI_API_KEY in the environment."
         )
         return
     valid = ", ".join(f"'{name}'" for name in KNOWN_KEYS[section])
@@ -326,8 +324,6 @@ class ProjectConfig:
     openai_voice: str
     openai_model: str
     openai_instructions: str
-    azure_voice: str
-    azure_region: str
 
     @classmethod
     def load(cls, root: Path | None = None) -> ProjectConfig:
@@ -356,16 +352,6 @@ class ProjectConfig:
         def project_path(value: str) -> Path:
             return (project_root / value).resolve()
 
-        ai_table = data.get("ai", {})
-        legacy_ai = (
-            isinstance(ai_table, Mapping)
-            and "enrich_model" in ai_table
-            and "enrich_provider" not in ai_table
-        )
-        # Before providers and per-pass models existed, ``enrich_model`` meant
-        # Anthropic for --ai and meaning polish. Preserve that exact
-        # configuration shape on upgrade; a newly configured Codex project
-        # names ``enrich_provider`` explicitly, as the generated config does.
         enrich_provider = _choice(
             data,
             "ai",
@@ -379,7 +365,6 @@ class ProjectConfig:
             "enrich_model",
             "claude-opus-5" if enrich_provider == "anthropic" else "gpt-5.6-sol",
         )
-        legacy_shared_model = enrich_model if legacy_ai else "claude-opus-5"
 
         return cls(
             root=project_root,
@@ -424,7 +409,7 @@ class ProjectConfig:
             enrich_reasoning_effort=_str(
                 data, "ai", "enrich_reasoning_effort", "ultra"
             ),
-            polish_model=_str(data, "ai", "polish_model", legacy_shared_model),
+            polish_model=_str(data, "ai", "polish_model", "claude-opus-5"),
             tts_provider=_str(data, "tts", "provider", "voicevox"),
             voicevox_url=_str(data, "tts", "voicevox_url", "http://localhost:50021"),
             voicevox_speaker=_int(data, "tts", "voicevox_speaker", 46),
@@ -436,6 +421,4 @@ class ProjectConfig:
             openai_instructions=_str(
                 data, "tts", "openai_instructions", openai_tts.DEFAULT_INSTRUCTIONS
             ),
-            azure_voice=_str(data, "tts", "azure_voice", "ja-JP-NanamiNeural"),
-            azure_region=_str(data, "tts", "azure_region", "westus2"),
         )

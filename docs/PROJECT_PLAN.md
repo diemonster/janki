@@ -48,7 +48,9 @@ Shirabe CSV / jpdb API / PDFs / manual YAML
    Phase 2 (task M1.1). `--prefer-incoming FIELD` is the deliberate opt-out,
    and it refuses the identity fields outright.
 4. Validation fails loudly rather than dropping data.
-5. Note IDs and Anki GUIDs are deterministic.
+5. Anki **GUIDs** are deterministic (`genanki.guid_for(record.id)`), which is
+   what makes a rebuild update rather than duplicate. Note *ids* are
+   timestamps genanki mints per build and are not stable.
 6. Generated packages can always be deleted and rebuilt; generated AI/TTS
    content is cached in the repo so rebuilds are free.
 7. Facts are looked up (jpdb dictionary data), judgment is generated

@@ -271,9 +271,10 @@ def read_style_guide(root: Path) -> str:
 
     It lives in `prompts/` and loads like every other prompt, because that is
     what it is: text sent to a model byte for byte. It kept a named reader of
-    its own only because it moved there later than the rest — every AI pass
-    leads with it, so it is the one prompt with a fixed position rather than a
-    pass that selects it.
+    its own only because it moved there later than the rest — every pass that
+    reads or writes Japanese leads with it, so it is the one prompt with a
+    fixed position rather than a pass that selects it. The coverage check is
+    the exception: it counts rather than judges, and `coverage.py` says why.
     """
     return prompts.load(root, "style-guide")
 

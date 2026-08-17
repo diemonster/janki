@@ -15,13 +15,30 @@ than take a recommendation.
 ## Getting VOICEVOX running
 
 It is a local engine: no account, no key, no per-character cost, and it works
-offline. Either install the [VOICEVOX app](https://voicevox.hiroshiba.jp/) and
-leave it open, or run the engine on its own:
+offline. The short way is:
 
 ```bash
-docker run --rm -p 50021:50021 --name janki-voicevox \
+make voicevox
+```
+
+which adopts an engine that is already answering, starts the `janki-voicevox`
+container if there is one, and pulls the image if there is not — then waits for
+it and fails with a real reason if it never comes up. `make audio-words` does
+that and voices the collection. `make voicevox-stop` stops the container.
+
+Otherwise, install the [VOICEVOX app](https://voicevox.hiroshiba.jp/) and leave
+it open, or run the engine yourself:
+
+```bash
+docker run -d -p 50021:50021 --name janki-voicevox \
   voicevox/voicevox_engine:cpu-latest
 ```
+
+Deliberately not `--rm`: the Makefile restarts a container of this name rather
+than creating a second one, and a `--rm` container disappears on stop, so the
+two spellings would fight over the name and over port 50021. If you have a
+`--rm` one running, it works fine — just stop it with `docker stop` rather than
+`make voicevox-stop`, which would delete it.
 
 janki talks to `http://localhost:50021` by default; set `tts.voicevox_url` if
 yours listens elsewhere. `janki audio` checks the engine is answering *before*
