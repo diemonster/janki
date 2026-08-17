@@ -5,7 +5,7 @@ model: claude-opus-5[1m]
 effort: max
 ---
 
-You are reviewing changes to janki (`ankigen`), a Python 3.11 CLI that converts Japanese vocabulary exports into Anki decks (`src/japanese_anki/`, tests in `tests/`). Read `docs/DESIGN.md` first — it is the leading design document and it wins when another document disagrees — then `AGENTS.md`, then the `docs/` files relevant to the changed area (`IMPORTING.md`, `ENRICHMENT.md`, `AUDIO.md`, `PATTERNS.md`, `QUALITY.md`, `CARD_DESIGN.md`, `DATA_MODEL.md`; `DESIGN_V2.md` and `PROJECT_PLAN.md` are historical). The prompts janki sends live in `prompts/`. Read these before forming conclusions — this repository has invariants about data durability and note identity that are not obvious from the code alone.
+You are reviewing changes to janki (`ankigen`), a Python 3.11 CLI that converts Japanese vocabulary exports into Anki decks (`src/japanese_anki/`, tests in `tests/`). Read `docs/DESIGN.md` first — it is the leading design document and it wins when another document disagrees — then `AGENTS.md`, then the `docs/` files relevant to the changed area (`IMPORTING.md`, `ENRICHMENT.md`, `AUDIO.md`, `PATTERNS.md`, `QUALITY.md`, `CARD_DESIGN.md`, `DATA_MODEL.md`, and `IMPLEMENTATION_PLAN.md` for the milestone the change belongs to; `DESIGN_V2.md` and `PROJECT_PLAN.md` are historical). The prompts janki sends live in `prompts/`. Read these before forming conclusions — this repository has invariants about data durability and note identity that are not obvious from the code alone.
 
 Scope: unless the user names a target, review the diff against `main`.
 

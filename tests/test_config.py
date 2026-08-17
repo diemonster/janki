@@ -173,6 +173,33 @@ def test_an_unknown_enrichment_provider_is_rejected(tmp_path: Path) -> None:
     assert "anthropic" in str(caught.value)
 
 
+def test_an_enrich_model_alone_no_longer_sets_the_polish_model(
+    tmp_path: Path,
+) -> None:
+    """`[ai] enrich_model` used to mean "and polish with this too".
+
+    That was an upgrade shim for configs written before providers and per-pass
+    models existed, and it is gone — janki is unreleased, so no such file is in
+    anyone's hands. The shape is still valid and still warning-free, so the
+    change is invisible unless it is pinned: a project naming only
+    `enrich_model` now polishes with the default, not with its enrichment
+    model, and would quietly start billing a different model than before.
+    """
+    _write_config(
+        tmp_path,
+        """
+        [ai]
+        enrich_model = "claude-sonnet-5"
+        """,
+    )
+
+    config = ProjectConfig.load(tmp_path)
+
+    assert config.enrich_provider == "anthropic", "still the default provider"
+    assert config.enrich_model == "claude-sonnet-5"
+    assert config.polish_model == "claude-opus-5", "the default, not the enrich model"
+
+
 def test_an_explicit_anthropic_provider_gets_an_anthropic_model_default(
     tmp_path: Path,
 ) -> None:

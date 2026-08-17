@@ -213,18 +213,6 @@ def test_a_long_vowel_mark_is_a_mora() -> None:
     assert to_aquestalk("かーど", "HLLL") == "カ'アド"
 
 
-def test_a_katakana_reading_passes_through() -> None:
-    """A loanword reading already in katakana is not converted twice.
-
-    Its old input was カード, which the long-vowel fix now respells — so the
-    assertion became byte-identical to the test above it and this one stopped
-    covering anything. スキー would respell too; スポーツ would; a katakana
-    word without `ー` is what proves the pass-through.
-    """
-    assert to_aquestalk("テスト", "LHHH") == "テスト'"
-    assert to_aquestalk("てすと", "LHHH") == "テスト'", "same word, same output"
-
-
 def test_a_decomposed_dakuten_is_one_kana() -> None:
     """が typed as か + U+3099 is two codepoints and one kana. Counting
     codepoints would reject a pattern that fits perfectly well."""
@@ -435,6 +423,12 @@ def test_a_long_vowel_is_spelled_out_rather_than_marked(
     The `already-spelled` row is the control: a reading that never uses `ー`
     must pass through untouched, or this would be rewriting readings rather
     than respelling one character.
+
+    These two katakana rows also carry what `test_a_katakana_reading_passes_
+    through` used to. That test was deleted rather than repaired: its input was
+    カード, which this fix respells, and every mutation it could still name —
+    `_HIRAGANA_END` extended so katakana converts twice — fails these two as
+    well. A test that cannot fail alone is not covering anything alone.
     """
     assert to_aquestalk(reading, pattern) == expected
 
@@ -453,10 +447,12 @@ def test_the_aquestalk_spelling_never_becomes_the_records_own() -> None:
     arrive as a new caller, which is what this sees.
 
     The other shape — one of these three storing the answer instead — is
-    already caught, by eight ledger tests, because storing it changes what the
-    fingerprints say. A behavioural test cannot add anything here: the function
-    takes a string and returns one, so it *cannot* mutate a record, and handing
-    it a record's reading proves only that strings are immutable.
+    already caught: making `ledger._spoken_form` assign to `record.reading`
+    fails eight tests, seven in `test_audio_cmd.py` and one in
+    `test_ledger.py`, because storing it changes what the fingerprints say.
+    A behavioural test cannot add anything here: the function takes a string
+    and returns one, so it *cannot* mutate a record, and handing it a record's
+    reading proves only that strings are immutable.
     """
     import ast
     from pathlib import Path
@@ -472,17 +468,31 @@ def test_the_aquestalk_spelling_never_becomes_the_records_own() -> None:
 
     # Every module in the package, not the three that call it today: a leak
     # arrives as a *new* caller, so a scan of the known callers cannot see one.
+    #
+    # Walked from every *call* outward to its enclosing scope, rather than from
+    # each `def` inward. The first attempt did the latter and skipped
+    # `ast.AsyncFunctionDef` — a sibling node type, not a subclass — along with
+    # module scope, class bodies, and module-level lambdas and comprehensions.
+    # A review added a caller in each of those shapes and the whole suite
+    # stayed green. `to_aquestalk` bound under another name is still invisible
+    # here; the import itself would have to be pinned to catch that.
     found: dict[tuple[str, str], str] = {}
     for path in sorted(Path(japanese_anki.__file__).parent.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
+        scope_of: dict[ast.AST, str] = {}
+        for parent in ast.walk(tree):
+            named = getattr(parent, "name", None) if isinstance(
+                parent, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
+            ) else None
+            for child in ast.iter_child_nodes(parent):
+                scope_of[child] = named or scope_of.get(parent, "<module>")
         for node in ast.walk(tree):
-            if not isinstance(node, ast.FunctionDef):
+            if not isinstance(node, ast.Call):
                 continue
-            for inner in ast.walk(node):
-                func = getattr(inner, "func", None)
-                name = getattr(func, "attr", None) or getattr(func, "id", None)
-                if isinstance(inner, ast.Call) and name == "to_aquestalk":
-                    found[(path.stem, node.name)] = ast.unparse(inner)
+            func = node.func
+            name = getattr(func, "attr", None) or getattr(func, "id", None)
+            if name == "to_aquestalk":
+                found[(path.stem, scope_of.get(node, "<module>"))] = ast.unparse(node)
 
     assert set(found) == set(READERS), (
         f"unexpected: {sorted(set(found) - set(READERS))}, "
@@ -523,14 +533,18 @@ def test_the_vowel_table_covers_every_kana_that_has_one() -> None:
     undocumented path and 400ing there. `_to_katakana` advertises `ゔ`→`ヴ` and
     the engine takes `ヴウ'`, so the row existed and was simply absent.
 
-    Every kana `_to_katakana` can produce is checked, so the next gap fails
-    here rather than in a synthesis run.
+    Every kana `_to_katakana` produces *from the hiragana block* is checked,
+    which is what it converts. What it passes through unchanged — `ヷヸヹヺ`,
+    half-width katakana, non-kana — has no row and is refused, and `ヵ` is
+    refused deliberately: the engine answers 400 for `ヵ'` and for `ヵア'`
+    alike, so a row would trade one failed request for another instead of
+    falling back to a clip in the engine's own accent.
     """
     from japanese_anki.pitch import _LONG_VOWEL_FOR, _to_katakana
 
-    # No vowel to end on: the two moraic consonants, and the small forms that
-    # only ever attach to the kana before them.
-    vowelless = set("ンッ")
+    # Out by design: the two moraic consonants end on no vowel, and `ヵ` the
+    # engine refuses spelled or bare.
+    vowelless = set("ンッ") | set("ヵ")
     missing = sorted(
         kana
         for code in range(ord("ぁ"), ord("ゖ") + 1)
@@ -539,7 +553,17 @@ def test_the_vowel_table_covers_every_kana_that_has_one() -> None:
     )
     assert not missing, f"kana with a vowel and no row: {missing}"
     assert "ヴ" in _LONG_VOWEL_FOR and _LONG_VOWEL_FOR["ヴ"] == "ウ"
-    assert not (vowelless & set(_LONG_VOWEL_FOR)), "ン and ッ stay out"
+    assert not (vowelless & set(_LONG_VOWEL_FOR)), "ン, ッ and ヵ stay out"
+
+
+def test_a_long_vowel_heading_a_multi_kana_mora_is_respelled_too() -> None:
+    """A small kana attaches to the mora before it, `ー` included.
+
+    `morae("かーょ")` is `['か', 'ーょ']`, so matching the bare mark alone left
+    `カ'ーョ` reaching the engine — 400, measured, through the one path the
+    respelling exists to close. `カ'アョ` answers 200.
+    """
+    assert to_aquestalk("かーょ", "HLLL") == "カ'アョ"
 
 
 def test_the_halfwidth_prolonged_mark_is_respelled_too() -> None:

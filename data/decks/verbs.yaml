@@ -1,7 +1,7 @@
 deck:
   name: "Brandon Japanese::Starter Verbs"
   deck_id: 2059400111
-  description: "The twenty verbs imported from jpdb's top-20 list."
+  description: "Twenty common verbs — jpdb's top-20 list, and three seeded by hand."
   output: "sample-verbs.apkg"
   cards:
     recognition: true
@@ -13,9 +13,12 @@ deck:
   # This was a catch-all — every record minus eight exclusions — under the
   # description "Every verb in the collection", which was false in both
   # directions: it took whatever carried no other deck's tag (nouns included,
-  # before the handout decks existed), and it left 33 of the collection's 53
+  # before the handout decks existed), and it left 28 of the collection's 48
   # verbs in other decks. The next record imported without a source tag would
   # have landed here too, whatever part of speech it was.
+  #
+  # Seventeen of the twenty came from jpdb; 行く, 話す and 食べる were written
+  # by hand into this file to verify the pipeline, and carry the same tag.
   #
   # The tag selects the same twenty records the exclusions did — verified
   # identical before the swap — so no note moved deck and no GUID changed.

@@ -201,14 +201,25 @@ def _accent_position(per_mora: Sequence[str], particle: str) -> int:
 #: respelled before it is sent. Measured against the running engine, not
 #: inferred: `オオ'`, `コオヒイ'` and `エスカレエタア'` all answer 200.
 #:
-#: Every kana that *has* a vowel is here, `ヴ` included — `_to_katakana`
-#: advertises `ゔ`→`ヴ` and the engine takes `ヴウ'`. The two moraic consonants
-#: are deliberately absent: `ン` and `ッ` end on no vowel, so there is no
-#: answer to lengthen them with, and :func:`_spell_long_vowels` refuses rather
-#: than picking one. `ッ` was briefly mapped to `ウ`, which the engine accepts
-#: and then pronounces with a /u/ that is not in the word.
+#: Every kana the engine will take a spelled long vowel for. `ヴ` is here —
+#: `_to_katakana` advertises `ゔ`→`ヴ` and `ヴウ'` answers 200 — as are `ヰ`,
+#: `ヱ` and `ヶ`, measured at 200 the same way.
+#:
+#: Three kinds of kana are deliberately absent, and for each the fallback is a
+#: refusal rather than a guess:
+#:
+#: - `ン` and `ッ` end on no vowel, so there is no answer to lengthen them
+#:   with. `ッ` was briefly mapped to `ウ`, which the engine accepts and then
+#:   pronounces with a /u/ that is not in the word.
+#: - `ヵ` has a vowel and the engine refuses it anyway: `ヵ'` and `ヵア'` both
+#:   answer 400. A row here would trade one failed request for another, where
+#:   refusing gets a real clip in the engine's own accent.
+#: - Everything `_to_katakana` passes through without converting — `ヷヸヹヺ`,
+#:   the half-width katakana block, anything not kana at all. `_to_katakana`
+#:   shifts the hiragana block and folds U+FF70; it is not a general
+#:   normalizer, and this table covers what it produces from hiragana.
 _VOWEL_OF_ROW = {
-    "ア": "アカサタナハマヤラワガザダバパャァヮヵ",
+    "ア": "アカサタナハマヤラワガザダバパャァヮ",
     "イ": "イキシチニヒミリギジヂビピィヰ",
     "ウ": "ウクスツヌフムユルグズヅブプュゥヴ",
     "エ": "エケセテネヘメレゲゼデベペェヶヱ",
@@ -225,14 +236,24 @@ def _spell_long_vowels(units: list[str]) -> list[str]:
     Refuses rather than emitting a `ー` the engine will 400 on, in the two
     cases where there is no vowel to repeat: a `ー` that opens a reading, with
     nothing before it, and a `ー` after `ン` or `ッ`, which end on no vowel.
-    A :class:`PitchError` here means the caller voices the word with the
-    engine's own accent — the same fallback as a record with no pattern at all
-    — which is a worse clip than a forced one and a far better outcome than a
-    failed request or an invented mora.
+    What a :class:`PitchError` here means depends on who asked. `audio_cmd`
+    and the ledger voice the word with the engine's own accent — the same
+    fallback as a record with no pattern at all, a worse clip than a forced one
+    and a far better outcome than a failed request or an invented mora. jpdb
+    enrichment asks a different question: it uses this to test whether a
+    pattern converts, so a refusal there classifies jpdb's pattern as
+    *unusable* and `pitch_accent` is not written at all. That is warned, not
+    silent, and it costs the record its pitch diagram as well as its forced
+    accent.
     """
     spelled: list[str] = []
     for unit in units:
-        if unit != "ー":
+        # `startswith`, not `==`: a small kana attaches to the mora before it,
+        # so `morae("かーょ")` is `['か', 'ーょ']` and the `ー` arrives heading a
+        # two-character unit. Matching the bare mark alone left `カ'ーョ` — 400,
+        # measured — reaching the engine through the one path this claims to
+        # have closed.
+        if not unit.startswith("ー"):
             spelled.append(unit)
             continue
         previous = spelled[-1] if spelled else ""
@@ -244,11 +265,11 @@ def _spell_long_vowels(units: list[str]) -> list[str]:
                 + (
                     "it opens with 'ー', which has nothing to lengthen"
                     if not previous
-                    else f"'{previous}' ends on no vowel to repeat"
+                    else f"'{previous}' has no vowel to repeat"
                 )
                 + ". The word is voiced with the engine's own accent instead."
             )
-        spelled.append(vowel)
+        spelled.append(vowel + unit[1:])
     return spelled
 
 

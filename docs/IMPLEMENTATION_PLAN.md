@@ -2506,9 +2506,10 @@ case parser merely to make M7.2 appear to resolve links before M7.3.
 ### [x] M7.3 Minimized case bundles + offline replay
 
 > *Deleted 2026-08-15 by M8.4. `make gates` is `lint test` plus one sample
-> deck build; the replay step and the 25 gating cases are gone. The eighteen
-> cases that were genuinely redundant with pytest died with the corpus, and the
-> five that were not became ordinary tests first.*
+> deck build; the replay step and the 25 gating cases are gone. The split M8.4
+> measured was 18/2/5: eighteen redundant with existing pytest tests, two that
+> observed no production behaviour at all, and five carrying real coverage that
+> became ordinary tests before the corpus went.*
 
 
 *Done 2026-08-12. Added strict human-oracle and minimized-case schemas,

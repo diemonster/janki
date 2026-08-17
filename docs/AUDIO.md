@@ -24,7 +24,9 @@ make voicevox
 which adopts an engine that is already answering, starts the `janki-voicevox`
 container if there is one, and pulls the image if there is not — then waits for
 it and fails with a real reason if it never comes up. `make audio-words` does
-that and voices the collection. `make voicevox-stop` stops the container.
+that and then voices the *words* — the local, free half. `make audio` adds the
+example sentences, which go through OpenAI and are billed. `make voicevox-stop`
+stops the container.
 
 Otherwise, install the [VOICEVOX app](https://voicevox.hiroshiba.jp/) and leave
 it open, or run the engine yourself:
@@ -34,11 +36,11 @@ docker run -d -p 50021:50021 --name janki-voicevox \
   voicevox/voicevox_engine:cpu-latest
 ```
 
-Deliberately not `--rm`: the Makefile restarts a container of this name rather
-than creating a second one, and a `--rm` container disappears on stop, so the
-two spellings would fight over the name and over port 50021. If you have a
-`--rm` one running, it works fine — just stop it with `docker stop` rather than
-`make voicevox-stop`, which would delete it.
+Deliberately not `--rm`: `make voicevox` starts a container of this name rather
+than creating a second one, and a `--rm` container disappears the moment it is
+stopped — so with `--rm` every stop costs you the image's loaded state and the
+next `make voicevox` has to create it again. A `--rm` container works fine
+otherwise; nothing here deletes it, it deletes itself.
 
 janki talks to `http://localhost:50021` by default; set `tts.voicevox_url` if
 yours listens elsewhere. `janki audio` checks the engine is answering *before*
@@ -59,10 +61,20 @@ janki audio --words --examples
 Both kinds are off unless asked for. Every word gets a clip: when janki has
 the pitch pattern it forces the accent, and when it does not the engine picks
 one — those clips are reported and tagged `accent_unverified` in the ledger.
-That is not permanent. Word audio is fingerprinted over the reading *and* the
-pattern, so once `janki enrich --jpdb` fills the accent the guessed clip reads
-as stale and the next `janki audio` replaces it with a forced one, no `--force`
-needed. `--prune` removes clips no record references any more, taking their
+That is usually not permanent. Word audio is fingerprinted over the reading and
+over **what the clip says** — the AquesTalk string a forced clip would use, not
+the stored pattern — so once `janki enrich --jpdb` fills a *usable* accent the
+guessed clip reads as stale and the next `janki audio` replaces it with a
+forced one, no `--force` needed.
+
+The exception is a pattern janki cannot convert: a length that does not match
+the reading, or a long vowel with no vowel to repeat. Those clips are voiced
+with the engine's own accent, which is the same utterance as no pattern at
+all — so they fingerprint the same, and the clip does not re-voice when the
+pattern changes from one unusable value to another. `janki audio --force`
+re-voices regardless. The pattern is reported unusable when jpdb offers it, so
+this is visible rather than silent, but it is the one case where filling in an
+accent does not by itself replace the clip. `--prune` removes clips no record references any more, taking their
 ledger entries with them.
 
 ## Choosing a voice

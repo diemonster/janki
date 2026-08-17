@@ -173,7 +173,8 @@ below is what is left, and it is the loop every other project already uses.*
    source schema does not preserve unknown keys.
 7. `data/patterns.json`: machine-written by `janki patterns` — **committed**.
    Its `reviewed:` marks are human judgements, and re-reading a document clears
-   them, which is why `patterns` refuses a reviewed file without `--force`.
+   them, which is why `patterns` *skips* a reviewed file unless `--force` —
+   it names what it skipped and reads the rest, rather than refusing the run.
 8. `data/ledger.json`: machine-written operational state — **committed**, never
    hand-edited. `janki status --rebuild` reconstructs what records and media
    still prove, and is a no-op on a healthy repository: a source reference's
@@ -186,10 +187,10 @@ below is what is left, and it is the loop every other project already uses.*
     reader to it; it is a record of what a model once said, not state.
 11. `dist/`: generated `.apkg` and preview files — **not** committed.
 
-Only `dist/` is disposable. Everything under `data/` is tracked, including the
-`.gitkeep` files that hold the empty directories open, because the repository —
-not Anki's database and not an uncommitted working tree — is the source of
-truth.
+Only `dist/` is disposable. Everything under `data/` is tracked — the media,
+the staging files, and the one `.gitkeep`, in `data/inbox/shirabe/`, that holds
+a genuinely empty directory open — because the repository, not Anki's database
+and not an uncommitted working tree, is the source of truth.
 
 A new import must not erase manually curated examples, notes, conjugations, or furigana.
 

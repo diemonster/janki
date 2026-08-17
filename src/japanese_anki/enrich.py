@@ -449,7 +449,14 @@ def _proposals(
 def _compatible_pitch_patterns(
     reading: str, value: Any
 ) -> tuple[list[str], list[str]]:
-    """Split jpdb patterns into compatible and unusable values."""
+    """Split jpdb patterns into compatible and unusable values.
+
+    "Compatible" means :func:`pitch.to_aquestalk` renders it, which is a
+    stricter test than "the right length": a pattern that fits the reading can
+    still name a long vowel with no vowel to repeat. Either way the pattern is
+    not written, the caller warns, and the record keeps no accent — so it also
+    keeps no pitch diagram, which renders from ``pitch_accent``.
+    """
     valid: list[str] = []
     invalid: list[str] = []
     for pattern in jpdb.accent_patterns(value):
@@ -1008,9 +1015,12 @@ def pinned_examples(record: VocabularyRecord) -> list[ExampleSentence]:
     accepted ones (:func:`models.example_accepted`). An unaccepted example (a
     machine-era sentence on an extract record that no reviewer's stamp
     covers) gets no mention at all: describing it to the model as content to
-    preserve was the camera pilot's false-reviewed failure. First-class so
-    a caller observes the same selection the prompt renders, rather than
-    re-deriving it from the prompt's quoting.
+    preserve was the camera pilot's false-reviewed failure.
+
+    A named function with one caller — :func:`ai_prompt`, which renders it —
+    because the rule it encodes is worth reading on its own. Its previous
+    justification was that the replay runner observed the same selection; M8.4
+    deleted that runner, and there is no second caller to name in its place.
     """
     return [
         example

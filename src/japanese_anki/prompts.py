@@ -24,12 +24,14 @@ instructions would produce plausible output that ignores every rule this
 directory exists to state — the expensive kind of wrong, because it looks
 like success.
 
-The sha-256 of what was sent is recorded where a card's provenance is kept:
-extraction stores the system and style-guide digests in every staging file's
+**Two of the eight passes record which prompt they sent.** Extraction stores
+the system and style-guide digests in every staging file's
 `prompt_provenance`, and a coverage approval stores the digest of the
-instructions the approving model was given. So a card can be traced to the
-exact text that produced it, and `git log prompts/` is the history of why the
-asking changed.
+instructions the approving model was given; a card from those can be traced to
+its exact text through `git log prompts/`. The rest cannot: `--ai` records no
+fingerprint, `--polish-meanings` fingerprints the record's user turn rather
+than the template, and `patterns` records nothing. `prompts/README.md` says the
+same, and it is worth closing.
 """
 
 from __future__ import annotations

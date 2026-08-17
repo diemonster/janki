@@ -664,6 +664,33 @@ def test_a_homograph_is_re_parsed_with_the_stored_reading_forced() -> None:
     assert "do not fit reading ついたち" in result.warnings[0]
 
 
+def test_a_right_length_pattern_that_cannot_be_spoken_is_unusable_too() -> None:
+    """Fitting the reading is not the whole test — rendering it is.
+
+    The existing coverage here is a length mismatch. This is the other shape:
+    `ンー` is five morae and `LHHHH` is five levels plus the particle, so the
+    length check passes and `to_aquestalk` still refuses — `ン` ends on no
+    vowel, so there is nothing for the `ー` to repeat, and VOICEVOX answers 400
+    for the bare mark.
+
+    The consequence is worth pinning because it is larger than the audio: an
+    unusable pattern is not written, so the record loses its pitch *diagram*
+    too, which renders from `pitch_accent`.
+    """
+    kanーpai = vocab(1000000, 555, "かんーぱい", "かんーぱい", ["LHHHHH"], 900, ["n"])
+    api = FakeApi(unforced={"かんーぱい": parse_response((None, kanーpai))})
+    target = record(
+        id="word:かんーぱい:かんーぱい", expression="かんーぱい", reading="かんーぱい"
+    )
+
+    result = enrich_records(client_for(api), [target])
+
+    enriched = result.records[0]
+    assert enriched.pitch_accent == [], "not written, so no diagram either"
+    assert any("LHHHHH" in warning for warning in result.warnings), result.warnings
+    assert any("do not fit reading" in w for w in result.warnings)
+
+
 def test_an_unrelated_kana_parse_retries_with_the_stored_reading() -> None:
     suru = vocab(1157170, 460825390, "する", "する", ["LHH"], 100, ["vs"])
     shinu = vocab(1310730, 851331686, "しぬ", "しぬ", ["LHH"], 30800, ["v5n"])
