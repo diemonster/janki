@@ -194,12 +194,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "新しいいすを買うつもりです。",
+        "furigana": "新[あたら]しいいすを 買[か]うつもりです。",
+        "romaji": "atarashiiisuokautsumoridesu.",
+        "english": "I'm planning to buy a new chair.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "このいす、新しいの？",
+        "furigana": "このいす、 新[あたら]しいの？",
+        "romaji": "konoisu, atarashiino?",
+        "english": "Is this chair new?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "104-week-8-writing-homework"
     ],
-    "usage_notes": "",
+    "usage_notes": "Everyday word for a chair or stool; often written 椅子 in kanji. You sit down on one with に: いすに座る. Chairs are counted with 〜脚(きゃく) or informally 〜つ. The \"post/position\" sense is figurative (大臣のいす = a minister's seat) and is normally written in kanji, so beginners can treat いす as simply \"chair.\"",
     "audio": "audio/janki-ccbf9309114e.wav",
     "image": "",
     "pitch_accent": [
@@ -561,12 +578,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "お正月に家族とおさけを飲むつもりです。",
+        "furigana": "お 正月[しょうがつ]に 家族[かぞく]とおさけを 飲[の]むつもりです。",
+        "romaji": "oshougatsunikazokutoosakeonomutsumoridesu.",
+        "english": "I'm planning to drink sake with my family on New Year's.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "今日はおさけ飲まないの？",
+        "furigana": "今日[きょう]はおさけ 飲[の]まないの？",
+        "romaji": "kyouhaosakenomanaino?",
+        "english": "You're not drinking tonight?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "104-week-8-writing-homework"
     ],
-    "usage_notes": "",
+    "usage_notes": "さけ with the polite お prefix is the everyday way to say it; bare 酒 sounds blunt or rough. Depending on context おさけ means alcohol in general (ビールもワインもおさけ) or Japanese rice wine specifically — say 日本酒 when you need to be clear. The verb is 飲む, and おさけが強い/弱い describes a high or low tolerance.",
     "audio": "audio/janki-61b0f4c34374.wav",
     "image": "",
     "pitch_accent": [
@@ -950,7 +984,24 @@
     "part_of_speech": "verb",
     "verb_group": "ichidan",
     "transitivity": "transitive",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "今晩、母に電話をかけるつもりです。",
+        "furigana": "今晩[こんばん]、 母[はは]に 電話[でんわ]を かけるつもりです。",
+        "romaji": "komban, hahanidenwao kakerutsumoridesu.",
+        "english": "I'm planning to call my mother tonight.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "ねえ、その曲かけてよ。好きなんだ。",
+        "furigana": "ねえ、その 曲[きょく] かけてよ。 好[す]きなんだ。",
+        "romaji": "nee, sonokyoku kaketeyo. sukinanda.",
+        "english": "Hey, put that song on. I really like it.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {
       "plain": "かける",
       "negative": "かけない",
@@ -963,7 +1014,7 @@
     "tags": [
       "104-week-8-writing-homework"
     ],
-    "usage_notes": "",
+    "usage_notes": "An ichidan verb, so かけます・かけない・かけた・かけて. The dictionary entry looks huge, but beginners really only need a handful of set collocations: 電話をかける (make a call), 音楽/CDをかける (play music), めがねをかける (wear glasses), かぎをかける (lock up), 時間/お金をかける (spend time/money), しょうゆをかける (pour soy sauce on). Note the intransitive partner かかる: you かける a call, but 電話がかかってくる (a call comes in), and 時間がかかる means \"it takes time\" while 時間をかける means \"to devote time to it.\" In casual speech the を is often dropped: 電話かけたよ.",
     "audio": "audio/janki-d0ce84460e69.wav",
     "image": "",
     "pitch_accent": [
@@ -1008,7 +1059,24 @@
     "part_of_speech": "verb",
     "verb_group": "godan",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "山に登るときは、いつも帽子をかぶります。",
+        "furigana": "山[やま]に 登[のぼ]るときは、いつも 帽子[ぼうし]をかぶります。",
+        "romaji": "yamaninoborutokiha, itsumoboushiokaburimasu.",
+        "english": "When I climb mountains, I always wear a hat.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "今日は寒いから、この帽子かぶるんだ。",
+        "furigana": "今日[きょう]は 寒[さむ]いから、この 帽子[ぼうし]かぶるんだ。",
+        "romaji": "kyouhasamuikara, konoboushikaburunda.",
+        "english": "It's cold today, so I'm wearing this hat.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {
       "plain": "かぶる",
       "negative": "かぶらない",
@@ -1021,7 +1089,7 @@
     "tags": [
       "104-week-8-writing-homework"
     ],
-    "usage_notes": "",
+    "usage_notes": "かぶる is the verb for putting something on your head — hats, caps, helmets, hoods. Other clothing takes different verbs (シャツを着る, 靴を履く, めがねをかける), so 帽子を着る is a common beginner mistake. For the state of having a hat on, use 帽子をかぶっている. In casual speech it also means \"to overlap/clash\" (予定がかぶる, \"our schedules clash\") or \"to be the same as someone else's\".",
     "audio": "audio/janki-a35b46e9dc65.wav",
     "image": "",
     "pitch_accent": [
@@ -1106,12 +1174,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "新しいくつを買うつもりです。",
+        "furigana": "新[あたら]しいくつを 買[か]うつもりです。",
+        "romaji": "atarashiikutsuokautsumoridesu.",
+        "english": "I'm planning to buy new shoes.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "そのくつ、新しいの？",
+        "furigana": "そのくつ、 新[あたら]しいの？",
+        "romaji": "sonokutsu, atarashiino?",
+        "english": "Are those shoes new?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "104-week-8-writing-homework"
     ],
-    "usage_notes": "",
+    "usage_notes": "Usually written 靴 in kanji. Shoes are put on with はく (くつをはく), not きる, and taken off with ぬぐ (くつをぬぐ) — remember to do so at the entrance (げんかん) of a Japanese home. Pairs are counted with 〜足(そく): いっそく, にそく.",
     "audio": "audio/janki-53390fb279cb.wav",
     "image": "",
     "pitch_accent": [
@@ -1734,7 +1819,24 @@
     "part_of_speech": "verb",
     "verb_group": "godan",
     "transitivity": "intransitive",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "私はいつも窓のそばにすわります。",
+        "furigana": "私[わたし]はいつも 窓[まど]のそばにすわります。",
+        "romaji": "watashihaitsumomadonosobanisuwarimasu.",
+        "english": "I always sit by the window.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "疲れたね。ちょっとベンチにすわろうよ。",
+        "furigana": "疲[つか]れたね。ちょっとベンチにすわろうよ。",
+        "romaji": "tsukaretane. chottobenchinisuwarouyo.",
+        "english": "You're tired, huh? Let's sit on that bench for a bit.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {
       "plain": "すわる",
       "negative": "すわらない",
@@ -1747,7 +1849,7 @@
     "tags": [
       "104-week-8-writing-homework"
     ],
-    "usage_notes": "",
+    "usage_notes": "Normally written 座る. The place you sit in or on is marked with に, not を: いすにすわる, ゆかにすわる. It is intransitive (there is no object), and the opposite of 立つ. すわっている describes the resulting state — being seated — rather than the act of sitting down.",
     "audio": "audio/janki-99e0583bf1de.wav",
     "image": "",
     "pitch_accent": [
@@ -1897,12 +1999,29 @@
     "part_of_speech": "pronoun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "日曜日のパーティーにだれが来ますか。",
+        "furigana": "日曜日[にちようび]のパーティーにだれが 来[き]ますか。",
+        "romaji": "nichiyoubinopaatiinidaregakimasuka.",
+        "english": "Who is coming to the party on Sunday?",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "明日はだれと会うの？",
+        "furigana": "明日[あした]はだれと 会[あ]うの？",
+        "romaji": "ashitahadaretoauno?",
+        "english": "Who are you meeting tomorrow?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "104-week-8-writing-homework"
     ],
-    "usage_notes": "",
+    "usage_notes": "Neutral, everyday word for \"who.\" In polite or business situations どなた is softer. As the subject it takes が, never は: だれが来ますか (not だれは). だれの means \"whose\" (だれのかばん = whose bag), and だれか = someone, だれも + negative = no one. Often written 誰 in real text, but the kana spelling is common too.",
     "audio": "audio/janki-9a07c5a0d21d.wav",
     "image": "",
     "pitch_accent": [
@@ -2585,12 +2704,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "新しいめがねを買うつもりです。",
+        "furigana": "新[あたら]しいめがねを 買[か]うつもりです。",
+        "romaji": "atarashiimeganeokautsumoridesu.",
+        "english": "I'm planning to buy new glasses.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "そのめがね、新しいの？",
+        "furigana": "そのめがね、 新[あたら]しいの？",
+        "romaji": "sonomegane, atarashiino?",
+        "english": "Are those glasses new?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "104-week-8-writing-homework"
     ],
-    "usage_notes": "",
+    "usage_notes": "Everyday word for glasses; usually written 眼鏡 in normal text, but the kana spelling めがね is common too. To wear glasses is めがねをかける, and 「めがねをかけている」 describes the state of having them on — not 着る or はく. To take them off is めがねをとる/はずす. The \"insight, judgement\" sense is rare and mostly appears in the set phrase お眼鏡にかなう (to meet with someone's approval).",
     "audio": "audio/janki-a3f8394104f8.wav",
     "image": "",
     "pitch_accent": [
@@ -2787,12 +2923,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "来週、音楽のイベントに行くつもりです。",
+        "furigana": "来週[らいしゅう]、 音楽[おんがく]の イベントに 行[い]くつもりです。",
+        "romaji": "raishuu, ongakuno ibentoniikutsumoridesu.",
+        "english": "I'm planning to go to a music event next week.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "明日のイベント、行くの？",
+        "furigana": "明日[あした]の イベント、 行[い]くの？",
+        "romaji": "ashitano ibento, ikuno?",
+        "english": "Are you going to tomorrow's event?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week-1-and-2"
     ],
-    "usage_notes": "",
+    "usage_notes": "Everyday katakana loanword for an organized happening — a concert, festival, company party, or a limited-time in-game event. Common collocations: イベントがある (there's an event), イベントに行く (go to an event), イベント会場 (event venue). Note that イベント does not mean \"event\" in the sense of something that merely happened; for that use 出来事.",
     "audio": "audio/janki-f66a4e7ed071.wav",
     "image": "",
     "pitch_accent": [
@@ -2827,12 +2980,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "エスカレーターで五階まで行きます。",
+        "furigana": "エスカレーターで 五階[ごかい]まで 行[い]きます。",
+        "romaji": "esukareetaadegokaimadeikimasu.",
+        "english": "I'll go up to the fifth floor by escalator.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "ここのエスカレーターはどこにあるの？",
+        "furigana": "ここのエスカレーターはどこにあるの？",
+        "romaji": "kokonoesukareetaahadokoniaruno?",
+        "english": "Where's the escalator in this place?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week-1-and-2"
     ],
-    "usage_notes": "",
+    "usage_notes": "Everyday loanword. To say you ride one, use エスカレーターに乗る; エスカレーターで means \"by escalator\" as the means of getting somewhere. Don't mix it up with エレベーター (elevator).",
     "audio": "audio/janki-179c450fd116.wav",
     "image": "",
     "pitch_accent": [
@@ -2926,12 +3096,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "来月、ペットを飼うつもりです。",
+        "furigana": "来月[らいげつ]、ペットを 飼[か]うつもりです。",
+        "romaji": "raigetsu, pettookautsumoridesu.",
+        "english": "I'm planning to get a pet next month.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "この鳥、ペットなの？",
+        "furigana": "この 鳥[とり]、ペットなの？",
+        "romaji": "konotori, pettonano?",
+        "english": "Is this bird a pet?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "104-week-8-writing-homework"
     ],
-    "usage_notes": "",
+    "usage_notes": "Everyday loanword for a pet animal; the verb used with it is 飼[か]う (to keep an animal), not 持つ. In music slang ペット is a clipping of トランペット. Note that ペットボトル (plastic bottle) comes from the plastic PET and has nothing to do with animals.",
     "audio": "audio/janki-f947e3fc107d.wav",
     "image": "",
     "pitch_accent": [
@@ -2969,12 +3156,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "すみません、もう一度言ってください。",
+        "furigana": "すみません、もう 一度[いちど] 言[い]ってください。",
+        "romaji": "sumimasen, mouichidoittekudasai.",
+        "english": "Excuse me, please say that one more time.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "来月、一度京都に行くつもりなんだ。",
+        "furigana": "来月[らいげつ]、 一度[いちど] 京都[きょうと]に 行[い]くつもりなんだ。",
+        "romaji": "raigetsu, ichidokyoutoniikutsumorinanda.",
+        "english": "I'm planning to go to Kyoto once next month.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "度 is the counter for occasions, so 一度 = 二度 (twice), 三度 (three times). もう一度 (\"one more time\") is the most common set phrase and is very useful in class. With a negative, 一度も means \"not even once\": 一度も行ったことがありません = \"I've never been there even once.\" For counting repetitions in casual speech 一回 is also common and slightly more colloquial.",
     "audio": "audio/janki-b68724cf38c3.wav",
     "image": "",
     "pitch_accent": [
@@ -3131,12 +3335,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "その映画は今、東京でも上映中です。",
+        "furigana": "その 映画[えいが]は 今[いま]、東京[とうきょう]でも 上映中[じょうえいちゅう]です。",
+        "romaji": "sonoeigahaimatoukyoudemojoueichuudesu.",
+        "english": "That movie is now showing in Tokyo too.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "あのアニメ、まだ上映中なの？",
+        "furigana": "あのアニメ、まだ 上映中[じょうえいちゅう]なの？",
+        "romaji": "anoanime, madajoueichuunano?",
+        "english": "Is that anime still showing?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "上映 refers to screening a film in a theater, so 上映中 is the word you see on cinema listings and posters for \"now showing.\" It has two uses: as a predicate (〜は上映中です = it is currently being shown), and as a time expression meaning \"during the screening\" — 上映中は携帯電話を切ってください。For TV programs, use 放送中 instead.",
     "audio": "audio/janki-98480561ff95.wav",
     "image": "",
     "pitch_accent": [],
@@ -3297,12 +3518,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "夏休みに二人で北海道へ行くつもりです。",
+        "furigana": "夏休[なつやす]みに 二人[ふたり]で 北海道[ほっかいどう]へ 行[い]くつもりです。",
+        "romaji": "natsuyasuminifutaridehokkaidouheikutsumoridesu.",
+        "english": "We're planning to go to Hokkaido, just the two of us, over summer vacation.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "明日、二人で映画を見に行くんだ。",
+        "furigana": "明日[あした]、 二人[ふたり]で 映画[えいが]を 見[み]に 行[い]くんだ。",
+        "romaji": "ashita, futarideeigaominiikunda.",
+        "english": "Tomorrow the two of us are going to see a movie, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week-1-and-2"
     ],
-    "usage_notes": "",
+    "usage_notes": "二人 is read ふたり, not にじん — the counter 〜人 is irregular for one and two people (一人 ひとり, 二人 ふたり) and only becomes 〜にん from three (三人 さんにん). 二人で is extremely common and means \"the two of us / just us two (together)\"; あの二人 is a natural way to say \"those two (people)\", often about a couple.",
     "audio": "audio/janki-4320cedbe19a.wav",
     "image": "",
     "pitch_accent": [
@@ -3396,12 +3634,29 @@
     "part_of_speech": "no-adjective",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "今、駅に着きました。",
+        "furigana": "今[いま]、 駅[えき]に 着[つ]きました。",
+        "romaji": "ima, ekinitsukimashita.",
+        "english": "I just arrived at the station.romaji",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "今、何してるの？",
+        "furigana": "今[いま]、 何[なに]してるの？",
+        "romaji": "ima, nanishiteruno?",
+        "english": "What are you doing right now?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "今 is a noun that is normally used adverbially with no particle at all (今行きます \"I'll go now\"); 今は adds contrast (\"right now, as opposed to before\"), and 今から means \"from now on / starting now\". With a past-tense verb it means \"just now\" (今来ました \"I just came\"). Note the reading changes to こん in compounds like 今週 (こんしゅう) and is irregular in 今日 (きょう) and 今朝 (けさ). The \"another, more\" sense is literary and not used in everyday speech.",
     "audio": "audio/janki-346ff4ffb5e5.wav",
     "image": "",
     "pitch_accent": [
@@ -3435,12 +3690,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "今年は日本へ行くつもりです。",
+        "furigana": "今年[ことし]は 日本[にほん]へ 行[い]くつもりです。",
+        "romaji": "kotoshihanihonheikutsumoridesu.",
+        "english": "I'm planning to go to Japan this year.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "今年の冬、北海道で山に登るんだ。",
+        "furigana": "今年[ことし]の 冬[ふゆ]、 北海道[ほっかいどう]で 山[やま]に 登[のぼ]るんだ。",
+        "romaji": "kotoshinofuyu, hokkaidoudeyamaninoborunda.",
+        "english": "This winter I'm going to climb mountains in Hokkaido, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week-1-and-2"
     ],
-    "usage_notes": "",
+    "usage_notes": "Read ことし, not こんねん — an irregular reading worth memorizing. Like 今日 and 今週, it works adverbially on its own, so don't add に: say 今年日本へ行きます or 今年は…, never 今年に. Pairs with 去年 (last year) and 来年 (next year).",
     "audio": "audio/janki-6ef8cbf28d09.wav",
     "image": "",
     "pitch_accent": [
@@ -3533,12 +3805,29 @@
     "part_of_speech": "noun",
     "verb_group": "suru",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "お正月に仕事をしないつもりです。",
+        "furigana": "お 正月[しょうがつ]に 仕事[しごと]をしないつもりです。",
+        "romaji": "oshougatsunishigotooshinaitsumoridesu.",
+        "english": "I'm not planning to work on New Year's.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "今日は仕事が忙しいんだ。",
+        "furigana": "今日[きょう]は 仕事[しごと]が 忙[いそが]しいんだ。",
+        "romaji": "kyouhashigotogaisogashiinda.",
+        "english": "Work is busy today, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "104-week-8-writing-homework"
     ],
-    "usage_notes": "",
+    "usage_notes": "General word for work or a job. 仕事をする / 仕事する means \"to work\"; 仕事に行く is \"to go to work.\" To ask someone's occupation politely, お仕事は何ですか。is standard. Note 仕事 is the work or job itself, not the building — for the physical workplace use 会社 or 職場.",
     "audio": "audio/janki-7d8564cfcdc8.wav",
     "image": "",
     "pitch_accent": [
@@ -3578,12 +3867,29 @@
     "part_of_speech": "no-adjective",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "毎日、一時間以上日本語を勉強します。",
+        "furigana": "毎日[まいにち]、 一時間[いちじかん] 以上[いじょう] 日本語[にほんご]を 勉強[べんきょう]します。",
+        "romaji": "mainichi, ichijikan'ijounihongoobenkyoushimasu.",
+        "english": "I study Japanese for more than an hour every day.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "昨日は三時間以上山を歩いたんだ。",
+        "furigana": "昨日[きのう]は 三時間[さんじかん] 以上[いじょう] 山[やま]を 歩[ある]いたんだ。",
+        "romaji": "kinouhasanjikan'ijouyamaoaruitanda.",
+        "english": "You see, I walked in the mountains for over three hours yesterday.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "Attaches directly after a number or amount: 三時間以上, 千円以上, 十八歳以上. Unlike English \"more than,\" 以上 includes the number itself (十八歳以上 = 18 and over). Its opposite is 以下 (\"and under\"); 未満 is used for strict \"less than.\" 以上です is also the set phrase for ending a report or presentation (\"That's all\").",
     "audio": "audio/janki-621f8f10bb41.wav",
     "image": "",
     "pitch_accent": [
@@ -3620,12 +3926,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "来週の休みに、京都へ行くつもりです。",
+        "furigana": "来週[らいしゅう]の 休[やす]みに、京都[きょうと]へ 行[い]くつもりです。",
+        "romaji": "raishuunoyasukyoutoheikutsumoridesu.",
+        "english": "On next week's day off, I'm planning to go to Kyoto.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "明日は休みなの？",
+        "furigana": "明日[あした]は 休[やす]みなの？",
+        "romaji": "ashitahayasuminano?",
+        "english": "Is tomorrow a day off?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "Noun form of the verb 休む, so it covers both \"a break\" and \"a day off\": 昼休み (lunch break), 夏休み (summer vacation), 休みの日 (day off). Because it is a noun, a question or explanation needs な before の / んだ: 休みなの？, 休みなんだ. It can also mean an absence — 休みます is \"I'll take the day off / I'll be absent.\"",
     "audio": "audio/janki-4ac9debbd58b.wav",
     "image": "",
     "pitch_accent": [
@@ -3660,7 +3983,24 @@
     "part_of_speech": "verb",
     "verb_group": "godan",
     "transitivity": "intransitive",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "お正月に家族に会うつもりです。",
+        "furigana": "お 正月[しょうがつ]に 家族[かぞく]に 会[あ]うつもりです。",
+        "romaji": "oshougatsunikazokuniautsumoridesu.",
+        "english": "I'm planning to see my family on New Year's.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "さっき駅で先生に会ったんだ。",
+        "furigana": "さっき 駅[えき]で 先生[せんせい]に 会[あ]ったんだ。",
+        "romaji": "sakkiekidesenseiniattanda.",
+        "english": "I ran into my teacher at the station just now, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {
       "plain": "会う",
       "negative": "会わない",
@@ -3673,7 +4013,7 @@
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "The person you meet is marked with に, not を: 友達に会います. 〜と会う is also possible and stresses that the meeting is mutual/arranged. 会う covers both planned meetings and bumping into someone by chance. The \"have a bad experience\" sense appears in set phrases like ひどい目に会う and is usually written 遭う.",
     "audio": "audio/janki-3465d15a39d7.wav",
     "image": "",
     "pitch_accent": [
@@ -3709,12 +4049,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "来年、新しい会社で働くつもりです。",
+        "furigana": "来年[らいねん]、 新[あたら]しい 会社[かいしゃ]で 働[はたら]くつもりです。",
+        "romaji": "rainen, atarashiikaishadehatarakutsumoridesu.",
+        "english": "I'm planning to work at a new company next year.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "その会社、有名なの？",
+        "furigana": "その 会社[かいしゃ]、 有名[ゆうめい]なの？",
+        "romaji": "sonokaisha, yuumeinano?",
+        "english": "Is that company famous?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "会社 is both the company as an organization and the place you go to work, so 会社に行く usually means \"go (in) to work\" rather than \"visit a company.\" Common collocations: 会社で働く (work at a company), 会社に勤めている (be employed at a company), 会社を休む (take a day off work), 会社員 (company employee).",
     "audio": "audio/janki-de9cbb6a2876.wav",
     "image": "",
     "pitch_accent": [
@@ -3748,12 +4105,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "毎朝、体温を測ります。",
+        "furigana": "毎朝[まいあさ]、 体温[たいおん]を 測[はか]ります。",
+        "romaji": "maiasa, taion'ohakarimasu.",
+        "english": "I take my temperature every morning.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "体温、測ったの？三十八度もあるんだ。",
+        "furigana": "体温[たいおん]、 測[はか]ったの？ 三十八度[さんじゅうはちど]もあるんだ。",
+        "romaji": "taion, hakattano?sanjuuhachidomoarunda.",
+        "english": "Did you take your temperature? It's actually 38 degrees.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "The standard collocation is 体温を測る (\"to take/measure one's temperature\"); the thermometer itself is 体温計. 体温 is the neutral measured body temperature — when talking about having a fever, Japanese normally uses 熱 (熱がある), not 体温. Air or water temperature is 気温 / 水温, so don't use 体温 for the weather.",
     "audio": "audio/janki-136ee0c56cb4.wav",
     "image": "",
     "pitch_accent": [
@@ -3789,12 +4163,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "明日の会議は何時ですか。",
+        "furigana": "明日[あした]の 会議[かいぎ]は 何時[なんじ]ですか。",
+        "romaji": "ashitanokaigihananjidesuka.",
+        "english": "What time is tomorrow's meeting?",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "今日は何時に帰るの？",
+        "furigana": "今日[きょう]は 何時[なんじ]に 帰[かえ]るの？",
+        "romaji": "kyouhananjinikaeruno?",
+        "english": "What time are you coming home today?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "104-week-8-writing-homework"
     ],
-    "usage_notes": "",
+    "usage_notes": "Asking at what time something happens needs the particle に: 何時に起きますか。 Don't confuse 何時 (なんじ, \"what time\" on the clock) with 何時間 (なんじかん, \"how many hours\" of duration). In print 何時 is occasionally read いつ (\"when\"), but in beginner material it is なんじ.",
     "audio": "audio/janki-a9f4e9f4857a.wav",
     "image": "",
     "pitch_accent": [
@@ -4012,12 +4403,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "本を元の場所に戻します。",
+        "furigana": "本[ほん]を 元[もと]の 場所[ばしょ]に 戻[もど]します。",
+        "romaji": "hon'omotonobashonimodoshimasu.",
+        "english": "I'll put the book back in its original place.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "このアプリ、昔のゲームを元に作ったんだ。",
+        "furigana": "このアプリ、 昔[むかし]のゲームを 元[もと]に 作[つく]ったんだ。",
+        "romaji": "konoapuri, mukashinogeemuomotonitsukuttanda.",
+        "english": "This app — I made it based on an old game, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "Rarely used alone; you will almost always meet it in set phrases: 〜を元に(して)「based on」, 元に戻す「put back the way it was / restore」, 元から「from the start」. Note also the prefix 元〜「former」(元先生 \"former teacher\"), which is the same word and reading. In 元気 the kanji is read げん, not もと.",
     "audio": "audio/janki-f207fd04bfab.wav",
     "image": "",
     "pitch_accent": [
@@ -4052,12 +4460,29 @@
     "part_of_speech": "no-adjective",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "元々このアプリは英語だけでした。",
+        "furigana": "元々[もともと]このアプリは 英語[えいご]だけでした。",
+        "romaji": "motomotokonoapurihaeigodakedeshita.",
+        "english": "Originally, this app was only in English.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "元々は登山が好きじゃなかったんだ。",
+        "furigana": "元々[もともと]は 登山[とざん]が 好[す]きじゃなかったんだ。",
+        "romaji": "motomotohatozangasukijanakattanda.",
+        "english": "I didn't actually like hiking at first, you know.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "Mostly used adverbially: 元々〜 tells you how things were from the beginning, usually with an implied or stated contrast to now (元々は〜でした、今は〜です). It can take は for that contrast, and with の it modifies a noun: 元々の計画 \"the original plan\". 々 is the repetition mark, so the word is read もともと; writing it out in kana (もともと) is also common.",
     "audio": "audio/janki-4f4e333b4e59.wav",
     "image": "",
     "pitch_accent": [
@@ -4091,12 +4516,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "元日に家族と神社へ行くつもりです。",
+        "furigana": "元日[がんじつ]に 家族[かぞく]と 神社[じんじゃ]へ 行[い]くつもりです。",
+        "romaji": "ganjitsunikazokutojinjaheikutsumoridesu.",
+        "english": "I'm planning to go to a shrine with my family on New Year's Day.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "元日は何をするの？",
+        "furigana": "元日[がんじつ]は 何[なに]をするの？",
+        "romaji": "ganjitsuhananiosuruno?",
+        "english": "What are you doing on New Year's Day?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "元日 is January 1st itself, the calendar day. 正月 (お正月) is the broader New Year holiday period, and 元旦 strictly means the morning of January 1st. As a point in time it takes に: 元日に帰ります.",
     "audio": "audio/janki-1237316dd7e9.wav",
     "image": "",
     "pitch_accent": [
@@ -4193,12 +4635,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "来年、日本語の先生になるつもりです。",
+        "furigana": "来年[らいねん]、 日本語[にほんご]の 先生[せんせい]になるつもりです。",
+        "romaji": "rainen, nihongonosenseininarutsumoridesu.",
+        "english": "I'm planning to become a Japanese teacher next year.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "あの人、田中先生なの？",
+        "furigana": "あの 人[ひと]、 田中[たなか] 先生[せんせい]なの？",
+        "romaji": "anohito, tanakasenseinano?",
+        "english": "Is that person Mr. Tanaka, the teacher?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "Used as a title after a name (田中先生), replacing さん — never 田中先生さん. It also works on its own as a form of address, like calling out \"Sensei!\" Beyond schoolteachers it covers doctors, lawyers, and other respected professionals. Because it is honorific, you don't attach it to your own name; to state your job you say 私は先生です or, more commonly, 教師です.",
     "audio": "audio/janki-fc88cdc8adb2.wav",
     "image": "",
     "pitch_accent": [
@@ -4233,12 +4692,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "先週、家族と山に登りました。",
+        "furigana": "先週[せんしゅう]、家族[かぞく]と 山[やま]に 登[のぼ]りました。",
+        "romaji": "senshuukazokutoyamaninoborimashita.",
+        "english": "Last week I climbed a mountain with my family.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "先週、京都に行ったんだ。",
+        "furigana": "先週[せんしゅう]、京都[きょうと]に 行[い]ったんだ。",
+        "romaji": "senshuukyoutoniittanda.",
+        "english": "I went to Kyoto last week, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "Like 今週 and 来週, 先週 works adverbially and takes no に: say 先週行きました, not 先週に行きました. To modify a noun, add の: 先週の会議 (last week's meeting).",
     "audio": "audio/janki-1850a14fa0da.wav",
     "image": "",
     "pitch_accent": [
@@ -4564,12 +5040,29 @@
     "part_of_speech": "no-adjective",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "駅の前で友達を待ちます。",
+        "furigana": "駅[えき]の 前[まえ]で 友達[ともだち]を 待[ま]ちます。",
+        "romaji": "ekinomaedetomodachiomachimasu.",
+        "english": "I'll wait for my friend in front of the station.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "その映画、前に見たんだ。",
+        "furigana": "その 映画[えいが]、 前[まえ]に 見[み]たんだ。",
+        "romaji": "sonoeiga, maenimitanda.",
+        "english": "That movie — I've seen it before.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "Two main uses: place (「〜の前」= in front of, e.g. 家の前) and time (「〜の前に」/「〜前に」= before, ago, e.g. 食事の前に, 三日前). With a verb, use the dictionary form plus 前に: 寝る前に (before sleeping). The place sense pairs with 後ろ (behind); the time sense pairs with 後 (あと, after).",
     "audio": "audio/janki-3637d3f8b797.wav",
     "image": "",
     "pitch_accent": [
@@ -4607,12 +5100,29 @@
     "part_of_speech": "noun",
     "verb_group": "suru",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "毎晩、日本語を勉強するつもりです。",
+        "furigana": "毎晩[まいばん]、 日本語[にほんご]を 勉強[べんきょう]するつもりです。",
+        "romaji": "maiban, nihongoobenkyousurutsumoridesu.",
+        "english": "I'm planning to study Japanese every night.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "今、テストの勉強してるんだ。",
+        "furigana": "今[いま]、テストの 勉強[べんきょう]してるんだ。",
+        "romaji": "ima, tesutonobenkyoushiterunda.",
+        "english": "I'm studying for a test right now, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "As a noun it means \"study\": 日本語の勉強 (the study of Japanese). With する it takes を for the subject studied: 数学を勉強します. In casual speech the を is often dropped (テストの勉強してる). Note the very common set phrase 勉強になりました, \"that was informative / I learned something,\" said after hearing something useful. 勉強 does not mean \"to learn/master\" a skill — that is 習う or 覚える. The \"discount\" sense belongs to shop-and-market speech (勉強しておきますよ) and is not something a beginner needs to produce.",
     "audio": "audio/janki-6417891f4c85.wav",
     "image": "",
     "pitch_accent": [
@@ -4701,12 +5211,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "夏休みに北海道へ行くつもりです。",
+        "furigana": "夏休[なつやす]みに 北海道[ほっかいどう]へ 行[い]くつもりです。",
+        "romaji": "natsuyasuminihokkaidouheikutsumoridesu.",
+        "english": "I'm planning to go to Hokkaido during summer vacation.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "出身、北海道なの？",
+        "furigana": "出身[しゅっしん]、 北海道[ほっかいどう]なの？",
+        "romaji": "shusshin, hokkaidounano?",
+        "english": "Are you from Hokkaido?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "北海道 is both the island and Japan's northernmost prefecture-level unit, but the 道 already serves as that suffix, so never say 北海道県 — and unlike 東京都 or 大阪府, the name is simply 北海道 in all contexts. As a destination it takes に or へ with 行く/来る.",
     "audio": "audio/janki-5f253cd979c6.wav",
     "image": "",
     "pitch_accent": [
@@ -4740,12 +5267,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "会議は午前十時に始まります。",
+        "furigana": "会議[かいぎ]は 午前[ごぜん] 十時[じゅうじ]に 始[はじ]まります。",
+        "romaji": "kaigihagozenjuujinihajimarimasu.",
+        "english": "The meeting starts at 10 a.m.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "土曜日は午前からハイキングに行くつもりなんだ。",
+        "furigana": "土曜日[どようび]は 午前[ごぜん]からハイキングに 行[い]くつもりなんだ。",
+        "romaji": "doyoubihagozenkarahaikinguniikutsumorinanda.",
+        "english": "On Saturday I'm planning to go hiking from the morning.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "午前 is the clock-time word for \"a.m.\" and pairs with 午後 (p.m.): 午前七時 = 7 a.m. It sounds slightly formal, so schedules, news and announcements use it, while everyday talk about the morning uses 朝. 午前中 means \"during the morning / before noon.\"",
     "audio": "audio/janki-11f52b93ba64.wav",
     "image": "",
     "pitch_accent": [
@@ -4779,12 +5323,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "今日の午後、図書館で勉強するつもりです。",
+        "furigana": "今日[きょう]の 午後[ごご]、 図書館[としょかん]で 勉強[べんきょう]するつもりです。",
+        "romaji": "kyounogogo, toshokandebenkyousurutsumoridesu.",
+        "english": "I'm planning to study at the library this afternoon.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "午後は暇なの？一緒に散歩しようよ。",
+        "furigana": "午後[ごご]は 暇[ひま]なの？ 一緒[いっしょ]に 散歩[さんぽ]しようよ。",
+        "romaji": "gogohahimanano?isshonisamposhiyouyo.",
+        "english": "Are you free this afternoon? Let's go for a walk together.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "Noun meaning \"afternoon\" or \"p.m.\" With a clock time it attaches directly: 午後三時 (3 p.m.), 午後六時半 (6:30 p.m.). But with a day it needs の: 今日の午後 (this afternoon), 明日の午後 (tomorrow afternoon). The opposite is 午前 (a.m., morning).",
     "audio": "audio/janki-8ef0cd9546c2.wav",
     "image": "",
     "pitch_accent": [
@@ -4821,12 +5382,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "会議は二時半に始まります。",
+        "furigana": "会議[かいぎ]は 二時半[にじはん]に 始[はじ]まります。",
+        "romaji": "kaigihanijihannihajimarimasu.",
+        "english": "The meeting starts at two thirty.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "え、もう九時半なの？じゃあ、そろそろ帰るね。",
+        "furigana": "え、もう 九時半[くじはん]なの？じゃあ、そろそろ 帰[かえ]るね。",
+        "romaji": "e, moukujihannano?jaa, sorosorokaerune.",
+        "english": "Huh, it's already nine thirty? Well then, I'm heading home soon.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week-1-and-2"
     ],
-    "usage_notes": "",
+    "usage_notes": "半 follows a counter rather than standing alone: 三時半 (3:30, \"half past three\"), 一時間半 (an hour and a half), 一年半 (a year and a half). For \"half of something\" as a standalone noun, use 半分（はんぶん）— 半分ください, not 半ください. As a prefix it means \"half-/semi-\": 半日, 半年.",
     "audio": "audio/janki-a29c33308d21.wav",
     "image": "",
     "pitch_accent": [
@@ -4929,12 +5507,29 @@
     "part_of_speech": "proper noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "来年から名古屋市に住むつもりです。",
+        "furigana": "来年[らいねん]から 名古屋市[なごやし]に 住[す]むつもりです。",
+        "romaji": "rainenkaranagoyashinisumutsumoridesu.",
+        "english": "I'm planning to live in Nagoya City from next year.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "お正月に名古屋市に行くんだ。",
+        "furigana": "お 正月[しょうがつ]に 名古屋市[なごやし]に 行[い]くんだ。",
+        "romaji": "oshougatsuninagoyashiniikunda.",
+        "english": "I'm going to Nagoya City for New Year's, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "市 (し) is the suffix for \"city,\" so 名古屋市 is literally \"the city of Nagoya.\" In ordinary conversation people just say 名古屋; the full 名古屋市 shows up in addresses, official forms, news, and when contrasting the city proper with 愛知県 (Aichi Prefecture) around it.",
     "audio": "audio/janki-4a568a718d6a.wav",
     "image": "",
     "pitch_accent": [
@@ -4969,7 +5564,24 @@
     "part_of_speech": "verb",
     "verb_group": "godan",
     "transitivity": "transitive",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "来週、古いギターを売るつもりです。",
+        "furigana": "来週[らいしゅう]、 古[ふる]いギターを 売[う]るつもりです。",
+        "romaji": "raishuu, furuigitaaourutsumoridesu.",
+        "english": "I'm planning to sell my old guitar next week.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "え、その自転車売るの？",
+        "furigana": "え、その 自転車[じてんしゃ] 売[う]るの？",
+        "romaji": "e, sonojitenshauruno?",
+        "english": "Huh, you're selling that bike?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {
       "plain": "売る",
       "negative": "売らない",
@@ -4982,7 +5594,7 @@
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "Transitive: 〜を売る. The intransitive partner is 売れる (to sell well, to be sold), so a shop 売る things but a popular product 売れる. 売っている is the usual way to say a store \"carries\" or \"sells\" an item: この店ではお菓子を売っています。The opposite is 買う (to buy).",
     "audio": "audio/janki-f83fe6e459da.wav",
     "image": "",
     "pitch_accent": [
@@ -5014,12 +5626,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "駅の売店でお茶を買います。",
+        "furigana": "駅[えき]の 売店[ばいてん]で お茶[ちゃ]を 買[か]います。",
+        "romaji": "ekinobaitendechaokaimasu.",
+        "english": "I buy tea at the kiosk in the station.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "売店でおにぎり買うつもりなんだ。",
+        "furigana": "売店[ばいてん]でおにぎり 買[か]うつもりなんだ。",
+        "romaji": "baitendeonigirikautsumorinanda.",
+        "english": "I'm planning to buy a rice ball at the stand, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "売店 is a small stand or kiosk located inside a larger facility — a station, hospital, theater, museum, stadium, or pool. A regular shop on the street is 店/お店, and a convenience store is コンビニ; using 売店 for those sounds wrong.",
     "audio": "audio/janki-d89457d828c5.wav",
     "image": "",
     "pitch_accent": [
@@ -5053,12 +5682,29 @@
     "part_of_speech": "noun",
     "verb_group": "suru",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "株の売買をするつもりです。",
+        "furigana": "株[かぶ]の 売買[ばいばい]をするつもりです。",
+        "romaji": "kabunobaibaiosurutsumoridesu.",
+        "english": "I'm planning to trade stocks.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "ネットで古いレコードを売買してるんだ。",
+        "furigana": "ネットで 古[ふる]いレコードを 売買[ばいばい]してるんだ。",
+        "romaji": "nettodefuruirekoodoobaibaishiterunda.",
+        "english": "I buy and sell old records online, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "売買（する）is a formal, business- or legal-sounding word for transactions — stocks, land, cars, real estate. For everyday shopping just use 買う and 売る. It also appears in dark compounds like 人身売買 (human trafficking) and 麻薬売買 (drug dealing), so the context decides whether it sounds neutral or criminal. Used as 〜を売買する or with を: 土地を売買する.",
     "audio": "audio/janki-451b0d1a6384.wav",
     "image": "",
     "pitch_accent": [
@@ -5149,12 +5795,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "今晩は家族と夕食を食べるつもりです。",
+        "furigana": "今晩[こんばん]は 家族[かぞく]と 夕食[ゆうしょく]を 食[た]べるつもりです。",
+        "romaji": "kombanhakazokutoyuushokuotaberutsumoridesu.",
+        "english": "I'm planning to have dinner with my family tonight.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "夕食、もう食べたの？",
+        "furigana": "夕食[ゆうしょく]、もう 食[た]べたの？",
+        "romaji": "yuushoku, moutabetano?",
+        "english": "Have you already had dinner?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week-1-and-2"
     ],
-    "usage_notes": "",
+    "usage_notes": "夕食 is the slightly formal or written word for the evening meal; in everyday conversation 晩ご飯 or 夕飯 is more common. It pairs with 食べる, or with とる in more formal contexts (夕食をとる). Note the reading ゆう, not せき.",
     "audio": "audio/janki-390cd1f3ac8d.wav",
     "image": "",
     "pitch_accent": [
@@ -5190,12 +5853,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "今日の夜、日本語を勉強するつもりです。",
+        "furigana": "今日[きょう]の 夜[よる]、日本語[にほんご]を 勉強[べんきょう]するつもりです。",
+        "romaji": "kyounoyorunihongoobenkyousurutsumoridesu.",
+        "english": "I'm planning to study Japanese tonight.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "夜はコーヒー飲まないんだ。",
+        "furigana": "夜[よる]はコーヒー 飲[の]まないんだ。",
+        "romaji": "yoruhakoohiinomanainda.",
+        "english": "I don't drink coffee at night, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week-1-and-2"
     ],
-    "usage_notes": "",
+    "usage_notes": "General word for the nighttime hours; 夜に or just 夜 as a time word ( 夜、映画を見ます). Note that the kanji is read differently in compounds: 今夜 (こんや, tonight) and 夜中 (よなか, middle of the night), so don't say 今夜(こんよる). 晩 is the near-synonym used in 今晩 and 毎晩. The 'dinner' sense appears in phrases like 夜ご飯 (よるごはん).",
     "audio": "audio/janki-623d7ab02844.wav",
     "image": "",
     "pitch_accent": [
@@ -5231,12 +5911,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "問題の大元はこのファイルです。",
+        "furigana": "問題[もんだい]の 大元[おおもと]はこのファイルです。",
+        "romaji": "mondainooomotohakonofairudesu.",
+        "english": "The root cause of the problem is this file.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "バグの大元が分かったんだ。",
+        "furigana": "バグの 大元[おおもと]が 分[わ]かったんだ。",
+        "romaji": "bagunooomotogawakattanda.",
+        "english": "I figured out the root cause of the bug.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "Most often seen as 〜の大元 (\"the root of ~\"), pointing at the underlying source of a problem or situation; also written 大本. In everyday speech about problems, 原因 (cause) is the more common word, while 大元 stresses that you are going back to the very origin.",
     "audio": "audio/janki-8dfe6d601936.wav",
     "image": "",
     "pitch_accent": [],
@@ -5268,12 +5965,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "来年、大学院に行くつもりです。",
+        "furigana": "来年[らいねん]、 大学院[だいがくいん]に 行[い]くつもりです。",
+        "romaji": "rainen, daigakuinniikutsumoridesu.",
+        "english": "I'm planning to go to graduate school next year.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "兄は大学院で日本語を勉強してるんだ。",
+        "furigana": "兄[あに]は 大学院[だいがくいん]で 日本語[にほんご]を 勉強[べんきょう]してるんだ。",
+        "romaji": "anihadaigakuindenihongoobenkyoushiterunda.",
+        "english": "My older brother is studying Japanese at graduate school, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "大学 is an undergraduate university; 大学院 is the graduate school attached to it. A graduate student is 大学院生 (often shortened to 院生 in speech). Common verbs: 大学院に行く / 入る (enter), 大学院で勉強する / 研究する.",
     "audio": "audio/janki-26cdbd8fb801.wav",
     "image": "",
     "pitch_accent": [
@@ -5309,12 +6023,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "今日はいい天気だから、公園を散歩するつもりです。",
+        "furigana": "今日[きょう]はいい 天気[てんき]だから、公園[こうえん]を 散歩[さんぽ]するつもりです。",
+        "romaji": "kyouhaiitenkikouen'osamposurutsumoridesu.",
+        "english": "The weather is nice today, so I'm planning to take a walk in the park.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "ねえ、明日の天気は雨なの？",
+        "furigana": "ねえ、明日[あした]の 天気[てんき]は 雨[あめ]なの？",
+        "romaji": "ashitanotenkihaamenano?",
+        "english": "Hey, is tomorrow's weather going to be rainy?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "Everyday word for the weather right now or on a given day. Very common collocations: いい天気 / 悪い天気 (nice / bad weather), 天気がいいですね, and 天気予報 (weather forecast). Note that as a predicate you can say either 天気がいいです or いい天気です. お天気 (with the polite お-) sounds softer and is common in conversation. For long-term climate, Japanese uses 気候 instead, and 天候 is a more formal word for weather conditions over a period.",
     "audio": "audio/janki-a4ff9d865c2c.wav",
     "image": "",
     "pitch_accent": [
@@ -5406,7 +6137,24 @@
     "part_of_speech": "i-adjective",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "この店のラーメンは安くておいしいです。",
+        "furigana": "この 店[みせ]のラーメンは 安[やす]くておいしいです。",
+        "romaji": "konomisenoraamenhayasukuteoishiidesu.",
+        "english": "The ramen at this restaurant is cheap and tasty.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "駅前のスーパー、安いんだよ。",
+        "furigana": "駅前[えきまえ]のスーパー、 安[やす]いんだよ。",
+        "romaji": "ekimaenosuupaa, yasuindayo.",
+        "english": "The supermarket in front of the station is cheap, you know.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {
       "plain": "安い",
       "negative": "安くない",
@@ -5417,7 +6165,7 @@
     "tags": [
       "kanji-review-104-week-1-and-2"
     ],
-    "usage_notes": "",
+    "usage_notes": "Everyday word for a low price. It describes the price, so with 値段 say 値段が安い (not 値段が低い). Conjugates as a normal い-adjective: 安くない, 安かった, 安くて. 安い can imply cheap-and-good; for \"cheap-looking, shoddy\" Japanese uses 安っぽい instead.",
     "audio": "audio/janki-7c8ed4ece0f8.wav",
     "image": "",
     "pitch_accent": [
@@ -5611,12 +6359,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "帰り道にコンビニに寄るつもりです。",
+        "furigana": "帰[かえ]り 道[みち]にコンビニに 寄[よ]るつもりです。",
+        "romaji": "kaerimichinikombininiyorutsumoridesu.",
+        "english": "I'm planning to stop by the convenience store on the way home.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "帰り道で友だちに会ったんだ。",
+        "furigana": "帰[かえ]り 道[みち]で 友[とも]だちに 会[あ]ったんだ。",
+        "romaji": "kaerimichidetomodachiniattanda.",
+        "english": "I ran into a friend on the way home, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "帰り道 is the route you take home (or back), so it works as a place with で (帰り道で〜を見た) and as a time frame with に (帰り道に寄る). The shorter 帰りに is more common in casual speech for \"on the way home\"; 帰り道 puts a bit more focus on the road/route itself.",
     "audio": "audio/janki-ddc5909f775c.wav",
     "image": "",
     "pitch_accent": [
@@ -5652,7 +6417,24 @@
     "part_of_speech": "verb",
     "verb_group": "godan",
     "transitivity": "intransitive",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "今日は早く帰るつもりです。",
+        "furigana": "今日[きょう]は 早[はや]く 帰[かえ]るつもりです。",
+        "romaji": "kyouhahayakukaerutsumoridesu.",
+        "english": "I'm planning to go home early today.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "え、もう帰るの？まだ早いよ。",
+        "furigana": "え、もう 帰[かえ]るの？まだ 早[はや]いよ。",
+        "romaji": "e, moukaeruno?madahayaiyo.",
+        "english": "Huh, you're leaving already? It's still early.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {
       "plain": "帰る",
       "negative": "帰らない",
@@ -5665,7 +6447,7 @@
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "帰る is used for returning to a place you belong — home, your hometown, your own country — so 家に帰る, 国に帰る, 実家に帰る. Use 戻る for coming back to a place you are only temporarily at (e.g. returning to the office). Although it ends in -eru, it is a godan verb: negative 帰らない, past 帰った, て-form 帰って; 帰れる is the potential ('can go home'). The destination takes に or へ.",
     "audio": "audio/janki-7bf0bb6e2269.wav",
     "image": "",
     "pitch_accent": [
@@ -5699,12 +6481,29 @@
     "part_of_speech": "noun",
     "verb_group": "suru",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "来月、帰国するつもりです。",
+        "furigana": "来月[らいげつ]、 帰国[きこく]するつもりです。",
+        "romaji": "raigetsu, kikokusurutsumoridesu.",
+        "english": "I'm planning to return to my country next month.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "お正月に帰国するの？",
+        "furigana": "お 正月[しょうがつ]に 帰国[きこく]するの？",
+        "romaji": "oshougatsunikikokusuruno?",
+        "english": "Are you going back to your country for New Year's?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "帰国 is specifically returning to the country you are from, so you use it about yourself going home or about a foreign friend going back to their homeland — not about a trip abroad. As a suru verb: 帰国する / 帰国しました. Compare 帰る (to go home, to any home) and 帰国子女 (a child who has grown up abroad and returned).",
     "audio": "audio/janki-0551b20859a9.wav",
     "image": "",
     "pitch_accent": [
@@ -6169,12 +6968,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "事故があったので、救急車を呼びました。",
+        "furigana": "事故[じこ]があったので、 救急車[きゅうきゅうしゃ]を 呼[よ]びました。",
+        "romaji": "jikogaattanode, kyuukyuushaoyobimashita.",
+        "english": "There was an accident, so I called an ambulance.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "救急車、まだ来ないの？",
+        "furigana": "救急車[きゅうきゅうしゃ]、まだ 来[こ]ないの？",
+        "romaji": "kyuukyuusha, madakonaino?",
+        "english": "The ambulance still isn't here?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "The standard collocation is 救急車を呼ぶ (\"to call an ambulance\"); in Japan you call 119 for both ambulance and fire service. Compare 消防車 (fire engine) and パトカー (police car).",
     "audio": "audio/janki-3c7ea24722f8.wav",
     "image": "",
     "pitch_accent": [
@@ -6258,12 +7074,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "あの方は私の日本語の先生です。",
+        "furigana": "あの 方[かた]は 私[わたし]の 日本語[にほんご]の 先生[せんせい]です。",
+        "romaji": "anokatahawatashinonihongonosenseidesu.",
+        "english": "That person is my Japanese teacher.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "あの方、山田さんのお母さんなの？",
+        "furigana": "あの 方[かた]、 山田[やまだ]さんのお 母[かあ]さんなの？",
+        "romaji": "anokata, yamadasannookaasannano?",
+        "english": "Is that person Yamada-san's mother?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "方(かた) is the polite word for 人(ひと); use it for customers, teachers, elders, or strangers you want to show respect to — never about yourself or your own family to outsiders. Common in あの方 / この方 / どちらの方, and 方々(かたがた) for the plural. Note the reading: the same kanji is ほう when it means \"direction\" or the \"〜のほうが\" comparison, so context decides かた vs ほう.",
     "audio": "audio/janki-817f49c9923a.wav",
     "image": "",
     "pitch_accent": [],
@@ -6343,12 +7176,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "明日は早朝に山に登るつもりです。",
+        "furigana": "明日[あした]は 早朝[そうちょう]に 山[やま]に 登[のぼ]るつもりです。",
+        "romaji": "ashitahasouchouniyamaninoborutsumoridesu.",
+        "english": "I'm planning to climb the mountain early tomorrow morning.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "明日、早朝から仕事なんだ。",
+        "furigana": "明日[あした]、 早朝[そうちょう]から 仕事[しごと]なんだ。",
+        "romaji": "ashita, souchoukarashigotonanda.",
+        "english": "I've got work from early in the morning tomorrow, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week-1-and-2"
     ],
-    "usage_notes": "",
+    "usage_notes": "早朝 is a slightly formal, written-feeling noun for the very early morning (roughly dawn to about 7 a.m.). It usually appears with に or から (早朝に出発する, 早朝から働く) and in compounds like 早朝会議 and 早朝練習. In relaxed conversation people more often say 朝早く for the same idea.",
     "audio": "audio/janki-1886c5bd64b1.wav",
     "image": "",
     "pitch_accent": [
@@ -6485,12 +7335,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "明日の昼にそばを食べるつもりです。",
+        "furigana": "明日[あした]の 昼[ひる]にそばを 食[た]べるつもりです。",
+        "romaji": "ashitanohirunisobaotaberutsumoridesu.",
+        "english": "I'm planning to eat soba tomorrow at noon.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "今日の昼、何食べるの？",
+        "furigana": "今日[きょう]の 昼[ひる]、 何[なに] 食[た]べるの？",
+        "romaji": "kyounohiru, nanitaberuno?",
+        "english": "What are you eating for lunch today?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week-1-and-2"
     ],
-    "usage_notes": "",
+    "usage_notes": "昼 covers both the noon hour and the daytime in general (opposite of 夜). With a time-point particle it becomes 昼に (\"at noon\"), while 昼は often sets up a contrast (\"during the day…\"). In conversation people usually say お昼, and \"lunch\" as a meal is 昼ごはん or お昼ごはん.",
     "audio": "audio/janki-7ce7c8246166.wav",
     "image": "",
     "pitch_accent": [
@@ -6527,12 +7394,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "毎日二時間日本語を勉強するつもりです。",
+        "furigana": "毎日[まいにち] 二時間[にじかん] 日本語[にほんご]を 勉強[べんきょう]するつもりです。",
+        "romaji": "mainichinijikannihongoobenkyousurutsumoridesu.",
+        "english": "I'm planning to study Japanese for two hours every day.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "ごめん、今日は時間ないんだ。",
+        "furigana": "ごめん、 今日[きょう]は 時間[じかん]ないんだ。",
+        "romaji": "gomen, kyouhajikannainda.",
+        "english": "Sorry, I don't have time today.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "時間 is both \"time\" in general and the counter for hours of duration: 二時間 = \"two hours,\" while 二時 (with 時 alone) = \"two o'clock.\" Very common with ある／ない: 時間がある (to have time), 時間がない (to not have time); in casual speech the が is usually dropped (時間ない). It also means a class period at school (一時間目 = first period).",
     "audio": "audio/janki-8fd7d60a10d5.wav",
     "image": "",
     "pitch_accent": [
@@ -6679,12 +7563,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "月曜日に友だちと山に行くつもりです。",
+        "furigana": "月曜日[げつようび]に 友[とも]だちと 山[やま]に 行[い]くつもりです。",
+        "romaji": "getsuyoubinitomodachitoyamaniikutsumoridesu.",
+        "english": "I'm planning to go to the mountains with a friend on Monday.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "あしたは月曜日なの？テストがあるんだ。",
+        "furigana": "あしたは 月曜日[げつようび]なの？テストがあるんだ。",
+        "romaji": "ashitahagetsuyoubinano?tesutogaarunda.",
+        "english": "Is tomorrow Monday? I've got a test, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "Days of the week take に when marked as a point in time (月曜日に会いましょう), but the に is often dropped in casual speech, and it is not used with は as the topic (月曜日はひまです). In speech and schedules the 日 is frequently dropped: 月曜 or 月 on a timetable.",
     "audio": "audio/janki-32dec0ad58f4.wav",
     "image": "",
     "pitch_accent": [
@@ -6719,12 +7620,29 @@
     "part_of_speech": "na-adjective",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "このラーメン屋は京都でとても有名です。",
+        "furigana": "この ラーメン屋[や]は 京都[きょうと]でとても 有名[ゆうめい]です。",
+        "romaji": "konoyahakyoutodetotemoyuumeidesu.",
+        "english": "This ramen shop is very famous in Kyoto.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "え、この店そんなに有名なの？",
+        "furigana": "え、この 店[みせ]そんなに 有名[ゆうめい]なの？",
+        "romaji": "e, konomisesonnaniyuumeinano?",
+        "english": "Huh, is this place that famous?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "な-adjective: 有名な人 (a famous person), 有名です / 有名じゃないです. Never 有名いです. Use で to mark where or in what field something is famous: 京都で有名, 音楽で有名. 有名になる = to become famous. In casual questions the な is required before の: 有名なの？",
     "audio": "audio/janki-b153b26481cf.wav",
     "image": "",
     "pitch_accent": [
@@ -6759,12 +7677,29 @@
     "part_of_speech": "no-adjective",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "この駐車場は有料です。",
+        "furigana": "この 駐車場[ちゅうしゃじょう]は 有料[ゆうりょう]です。",
+        "romaji": "konochuushajouhayuuryoudesu.",
+        "english": "This parking lot charges a fee.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "このアプリ、有料なの？",
+        "furigana": "このアプリ、 有料[ゆうりょう]なの？",
+        "romaji": "konoapuri, yuuryounano?",
+        "english": "Is this app a paid one?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "Noun used as a の-adjective: 有料です on its own, but 有料の駐車場 before a noun. Its opposite is 無料 (むりょう, \"free of charge\"). Very common in compounds like 有料道路 (toll road) and on signs indicating that something costs money.",
     "audio": "audio/janki-9f42b1b7db98.wav",
     "image": "",
     "pitch_accent": [
@@ -6798,12 +7733,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "ホテルの朝食は七時からです。",
+        "furigana": "ホテルの 朝食[ちょうしょく]は 七時[しちじ]からです。",
+        "romaji": "hoterunochoushokuhashichijikaradesu.",
+        "english": "The hotel breakfast starts at seven o'clock.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "明日の朝食、何時なの？",
+        "furigana": "明日[あした]の 朝食[ちょうしょく]、 何時[なんじ]なの？",
+        "romaji": "ashitanochoushoku, nanjinano?",
+        "english": "What time is breakfast tomorrow?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week-1-and-2"
     ],
-    "usage_notes": "",
+    "usage_notes": "朝食 is the formal or written word for breakfast — you see it on hotel signs, menus, and in health advice. In everyday conversation 朝ごはん is much more common. Common verbs: 朝食を食べる, 朝食を取る.",
     "audio": "audio/janki-e5d39f4e1e20.wav",
     "image": "",
     "pitch_accent": [
@@ -6905,12 +7857,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "来年、日本へ行くつもりです。",
+        "furigana": "来年[らいねん]、日本[にほん]へ 行[い]くつもりです。",
+        "romaji": "rainennihonheikutsumoridesu.",
+        "english": "I'm planning to go to Japan next year.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "来年、東京に住むんだ。",
+        "furigana": "来年[らいねん]、東京[とうきょう]に 住[す]むんだ。",
+        "romaji": "rainentoukyounisumunda.",
+        "english": "I'm going to be living in Tokyo next year.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "Relative time word (今年 this year, 去年 last year, 来年 next year). Like 明日 or 今年, it normally takes no に: say 来年、行きます, not 来年に行きます. It can take は or も for contrast (来年は忙しいです / 来年も行きます), and 来年の as a modifier: 来年の夏, 来年の三月.",
     "audio": "audio/janki-2f3c73ebb757.wav",
     "image": "",
     "pitch_accent": [
@@ -6945,12 +7914,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "来年、東京に行くつもりです。",
+        "furigana": "来年[らいねん]、 東京[とうきょう]に 行[い]くつもりです。",
+        "romaji": "rainen, toukyouniikutsumoridesu.",
+        "english": "I'm planning to go to Tokyo next year.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "夏休みに東京に行くんだ。",
+        "furigana": "夏休[なつやす]みに 東京[とうきょう]に 行[い]くんだ。",
+        "romaji": "natsuyasuminitoukyouniikunda.",
+        "english": "I'm going to Tokyo over summer vacation, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week-1-and-2"
     ],
-    "usage_notes": "",
+    "usage_notes": "Read とうきょう (東 here is とう, not ひがし). As a destination it takes に or へ: 東京に行く, 東京に住んでいる. The administrative unit is 東京都(とうきょうと), and the station is 東京駅(とうきょうえき); plain 東京 is what you use in everyday speech.",
     "audio": "audio/janki-dd8c3534c7ff.wav",
     "image": "",
     "pitch_accent": [
@@ -6985,12 +7971,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "妹は歌手になるつもりです。",
+        "furigana": "妹[いもうと]は 歌手[かしゅ]になるつもりです。",
+        "romaji": "imoutohakashuninarutsumoridesu.",
+        "english": "My little sister is planning to become a singer.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "あの人、有名な歌手なの？",
+        "furigana": "あの 人[ひと]、 有名[ゆうめい]な 歌手[かしゅ]なの？",
+        "romaji": "anohito, yuumeinakashunano?",
+        "english": "That person — is she a famous singer?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "歌手 is the everyday word for a professional singer; a hobbyist who just likes singing is 歌が好きな人, not 歌手. The 手 here is the しゅ of occupations (運転手 driver, 選手 athlete), so it means \"the person who does it\" rather than \"hand.\" Common collocations: 歌手になる (become a singer), 好きな歌手 (a singer one likes).",
     "audio": "audio/janki-dac3db177961.wav",
     "image": "",
     "pitch_accent": [
@@ -7026,7 +8029,24 @@
     "part_of_speech": "verb",
     "verb_group": "godan",
     "transitivity": "intransitive",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "この電車は次の駅に止まりますか。",
+        "furigana": "この 電車[でんしゃ]は 次[つぎ]の 駅[えき]に 止[と]まりますか。",
+        "romaji": "konodenshahatsuginoekinitomarimasuka.",
+        "english": "Does this train stop at the next station?",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "あ、小鳥が窓に止まってるよ。",
+        "furigana": "あ、 小鳥[ことり]が 窓[まど]に 止[と]まってるよ。",
+        "romaji": "a, kotorigamadonitomatteruyo.",
+        "english": "Oh, there's a little bird perched on the window.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {
       "plain": "止まる",
       "negative": "止まらない",
@@ -7039,7 +8059,7 @@
     "tags": [
       "kanji-review-104-week-1-and-2"
     ],
-    "usage_notes": "",
+    "usage_notes": "Intransitive: the thing itself stops (電車が止まる). To stop something yourself, use the transitive pair 止める(とめる): 車を止める. 止まっている / 止まってる describes the resulting state — \"is stopped, is at a standstill\" (時計が止まってる = the clock has stopped). Note the homophone 泊まる (to stay overnight), and that rain or noise ceasing normally takes 止む(やむ), not 止まる.",
     "audio": "audio/janki-db36ae465ff0.wav",
     "image": "",
     "pitch_accent": [
@@ -7074,7 +8094,24 @@
     "part_of_speech": "verb",
     "verb_group": "godan",
     "transitivity": "intransitive",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "雨が止みましたから、散歩に行きます。",
+        "furigana": "雨[あめ]が 止[や]みましたから、散歩[さんぽ]に 行[い]きます。",
+        "romaji": "amegayasamponiikimasu.",
+        "english": "The rain has stopped, so I'm going for a walk.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "雨、まだ止まないの？",
+        "furigana": "雨[あめ]、まだ 止[や]まないの？",
+        "romaji": "ame, madayamanaino?",
+        "english": "The rain still hasn't stopped?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {
       "plain": "止む",
       "negative": "止まない",
@@ -7087,7 +8124,7 @@
     "tags": [
       "kanji-review-104-week-1-and-2"
     ],
-    "usage_notes": "",
+    "usage_notes": "止む is used for things that stop of their own accord — mostly 雨, 雪, 風, and noise. It is intransitive, so the thing that stops takes が, and there is no object. Don't use it for a person or a vehicle stopping (止まる) or for quitting something you were doing (やめる). Very often written in kana as やむ.",
     "audio": "audio/janki-4a716f4b3cf3.wav",
     "image": "",
     "pitch_accent": [
@@ -7122,12 +8159,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "水曜日に日本語のクラスがあります。",
+        "furigana": "水曜日[すいようび]に 日本語[にほんご]の クラスがあります。",
+        "romaji": "suiyoubininihongono kurasugaarimasu.",
+        "english": "I have a Japanese class on Wednesday.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "水曜日は妹の誕生日なんだ。",
+        "furigana": "水曜日[すいようび]は 妹[いもうと]の 誕生日[たんじょうび]なんだ。",
+        "romaji": "suiyoubihaimoutonotanjoubinanda.",
+        "english": "Wednesday is my little sister's birthday, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "Days of the week take に when marking the time something happens (水曜日に行きます), and the に is often dropped in casual speech. When 水曜日 is the topic being talked about, use は instead: 水曜日は忙しいです.",
     "audio": "audio/janki-76358aaf18d4.wav",
     "image": "",
     "pitch_accent": [
@@ -7161,12 +8215,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "火曜日にコンサートに行くつもりです。",
+        "furigana": "火曜日[かようび]にコンサートに 行[い]くつもりです。",
+        "romaji": "kayoubinikonsaatoniikutsumoridesu.",
+        "english": "I'm planning to go to a concert on Tuesday.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "あさって、火曜日なの？",
+        "furigana": "あさって、 火曜日[かようび]なの？",
+        "romaji": "asatte, kayoubinano?",
+        "english": "Is the day after tomorrow Tuesday?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "Days of the week take に when marked as a point in time (火曜日に会います), and 火曜日は when the day is the topic. In casual speech the に is often dropped: 火曜日、忙しいんだ。On schedules and calendars 火曜日 is usually shortened to just 火.",
     "audio": "audio/janki-94032add4843.wav",
     "image": "",
     "pitch_accent": [
@@ -7200,12 +8271,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "明日、病院に行くつもりです。",
+        "furigana": "明日[あした]、 病院[びょういん]に 行[い]くつもりです。",
+        "romaji": "ashita, byouinniikutsumoridesu.",
+        "english": "I'm planning to go to the hospital tomorrow.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "妹が病院で働いているんだ。",
+        "furigana": "妹[いもうと]が 病院[びょういん]で 働[はたら]いているんだ。",
+        "romaji": "imoutogabyouindehataraiteirunda.",
+        "english": "My little sister works at a hospital, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "病院 covers both large hospitals and small doctor's offices, so 病院に行く is the normal way to say \"go to the doctor,\" not just \"go to the hospital.\" Watch the long vowel: びょういん (病院) vs びよういん (美容院, beauty salon). Related: 入院する = to be hospitalized, 退院する = to leave the hospital.",
     "audio": "audio/janki-11be211eac62.wav",
     "image": "",
     "pitch_accent": [
@@ -7241,7 +8329,24 @@
     "part_of_speech": "i-adjective",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "あの白いシャツを買うつもりです。",
+        "furigana": "あの 白[しろ]いシャツを 買[か]うつもりです。",
+        "romaji": "anoshiroishatsuokautsumoridesu.",
+        "english": "I'm planning to buy that white shirt.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "その白いかばん、新しいの？",
+        "furigana": "その 白[しろ]いかばん、 新[あたら]しいの？",
+        "romaji": "sonoshiroikaban, atarashiino?",
+        "english": "That white bag — is it new?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {
       "plain": "白い",
       "negative": "白くない",
@@ -7252,7 +8357,7 @@
     "tags": [
       "104-week-8-writing-homework"
     ],
-    "usage_notes": "",
+    "usage_notes": "白い is an i-adjective, so it conjugates: 白くない, 白かった, 白くて. The color itself as a noun is 白 (しろ), as in 白が好きです or 白のシャツ — use 白い only when describing something (白いシャツ).",
     "audio": "audio/janki-6e95a09bb72a.wav",
     "image": "",
     "pitch_accent": [
@@ -7423,12 +8528,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "来年から社会人になるつもりです。",
+        "furigana": "来年[らいねん]から 社会人[しゃかいじん]になるつもりです。",
+        "romaji": "rainenkarashakaijinninarutsumoridesu.",
+        "english": "I'm planning to become a working adult starting next year.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "お姉さんはもう社会人なの？",
+        "furigana": "お 姉[ねえ]さんはもう 社会人[しゃかいじん]なの？",
+        "romaji": "oneesanhamoushakaijinnano?",
+        "english": "Is your older sister already working full-time?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "社会人 is the standard word for someone who has finished school and joined the workforce; it is the natural opposite of 学生. 社会人になる means \"to graduate and start working\" rather than \"to grow up.\" It does not mean \"sociable person\" or \"socialite.\" Because it is a noun, casual questions and explanations take な: 社会人なの？ / 社会人なんだ.",
     "audio": "audio/janki-279edb06c101.wav",
     "image": "",
     "pitch_accent": [
@@ -7565,12 +8687,29 @@
     "part_of_speech": "na-adjective",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "このアプリは本当に神です。",
+        "furigana": "この アプリは 本当[ほんとう]に 神[かみ]です。",
+        "romaji": "kono apurihahontounikamidesu.",
+        "english": "This app is truly amazing.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "このヘッドホン、音が神なんだよ。",
+        "furigana": "この ヘッドホン、音[おと]が 神[かみ]なんだよ。",
+        "romaji": "konootogakaminandayo.",
+        "english": "These headphones — the sound is incredible, you know.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "Basic meaning is \"god, deity\" (神に祈る, 神様). The な-adjective use meaning \"amazing, awesome\" is recent casual slang, very common online and in speech about games, apps, songs and food; it also appears as a prefix in compounds like 神アプリ or 神曲. Keep the slang sense out of formal writing or polite business situations. Note that 紙 (paper) and 髪 (hair) are also かみ, so context does the work.",
     "audio": "audio/janki-98e171d610ee.wav",
     "image": "",
     "pitch_accent": [
@@ -7605,12 +8744,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "お正月に神様にお願いしました。",
+        "furigana": "お 正月[しょうがつ]に 神様[かみさま]に お 願[ねが]いしました。",
+        "romaji": "oshougatsunikamisamani onegaishimashita.",
+        "english": "I made a wish to the gods on New Year's.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "神様って本当にいるの？",
+        "furigana": "神様[かみさま]って 本当[ほんとう]にいるの？",
+        "romaji": "kamisamattehontouniiruno?",
+        "english": "Do gods really exist?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "神様 is the everyday, respectful way to say \"god\" — 神 plus the honorific 様. Plain 神 sounds more abstract or literary (神話, 神道), while 神様 is what you say when praying or talking about gods in conversation. It covers both Shinto deities and the Christian God. It is also used figuratively for someone who is supremely good at something: ギターの神様 (\"a god of the guitar\").",
     "audio": "audio/janki-5a75b21c3246.wav",
     "image": "",
     "pitch_accent": [
@@ -7644,12 +8800,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "お正月に神社へ行くつもりです。",
+        "furigana": "お 正月[しょうがつ]に 神社[じんじゃ]へ 行[い]くつもりです。",
+        "romaji": "oshougatsunijinjaheikutsumoridesu.",
+        "english": "I'm planning to go to a shrine on New Year's.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "この神社、有名なの？",
+        "furigana": "この 神社[じんじゃ]、 有名[ゆうめい]なの？",
+        "romaji": "konojinja, yuumeinano?",
+        "english": "Is this shrine famous?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "神社 is specifically a Shinto shrine; a Buddhist temple is お寺(てら). Shrine names usually end in 神社, 神宮(じんぐう), or 宮(ぐう), e.g. 明治神宮. Common phrases: 神社に行く (go to a shrine), 神社でお参りする (pray at a shrine).",
     "audio": "audio/janki-3d78c6d75895.wav",
     "image": "",
     "pitch_accent": [
@@ -7969,12 +9142,29 @@
     "part_of_speech": "na-adjective",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "私は泳ぐのが苦手です。",
+        "furigana": "私[わたし]は 泳[およ]ぐのが 苦手[にがて]です。",
+        "romaji": "watashihaoyogunoganigatedesu.",
+        "english": "I'm not very good at swimming.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "実は納豆が苦手なんだ。",
+        "furigana": "実[じつ]は 納豆[なっとう]が 苦手[にがて]なんだ。",
+        "romaji": "jitsuhanattouganigatenanda.",
+        "english": "Actually, I don't really like natto.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week-1-and-2"
     ],
-    "usage_notes": "",
+    "usage_notes": "な-adjective. The thing you are bad at or dislike is marked with が: 数学が苦手です. It covers both lack of skill and mild dislike, and is often chosen as a softer, more modest way to say 嫌い — including about people (あの人はちょっと苦手). Because it is a な-adjective, remember the な before の/んだ: 苦手なの？, 苦手なんだ.",
     "audio": "audio/janki-4184b29181d8.wav",
     "image": "",
     "pitch_accent": [
@@ -8010,12 +9200,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "京都で茶道を習うつもりです。",
+        "furigana": "京都[きょうと]で 茶道[さどう]を 習[なら]うつもりです。",
+        "romaji": "kyoutodesadouonarautsumoridesu.",
+        "english": "I'm planning to learn tea ceremony in Kyoto.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "母は茶道の先生なんだ。",
+        "furigana": "母[はは]は 茶道[さどう]の 先生[せんせい]なんだ。",
+        "romaji": "hahahasadounosenseinanda.",
+        "english": "My mom is a tea ceremony teacher, you know.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "Refers to the Japanese tea ceremony as a practice or discipline. Common collocations are 茶道を習う (learn tea ceremony), 茶道をする, and 茶道部 (tea ceremony club). The reading さどう is standard, though some schools say ちゃどう. In casual conversation people often just say お茶 (as in お茶を習う) for taking tea ceremony lessons.",
     "audio": "audio/janki-0995e1412ba4.wav",
     "image": "",
     "pitch_accent": [
@@ -8295,12 +9502,29 @@
     "part_of_speech": "noun",
     "verb_group": "suru",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "今日は三時に病院で診察を受けます。",
+        "furigana": "今日[きょう]は 三時[さんじ]に 病院[びょういん]で 診察[しんさつ]を 受[う]けます。",
+        "romaji": "kyouhasanjinibyouindeshinsatsuoukemasu.",
+        "english": "I'm having a medical examination at the hospital at three o'clock today.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "明日、病院で診察を受けるんだ。",
+        "furigana": "明日[あした]、 病院[びょういん]で 診察[しんさつ]を 受[う]けるんだ。",
+        "romaji": "ashita, byouindeshinsatsuoukerunda.",
+        "english": "I'm getting examined at the hospital tomorrow, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "As a patient you say 診察を受ける (\"to receive an examination\"); 診察する is what the doctor does. Common set phrases: 診察時間 (consultation hours) and 診察室 (examination room).",
     "audio": "audio/janki-6eb95f5a6925.wav",
     "image": "",
     "pitch_accent": [
@@ -8466,12 +9690,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "明日、海で貝を探すつもりです。",
+        "furigana": "明日[あした]、 海[うみ]で 貝[かい]を 探[さが]すつもりです。",
+        "romaji": "ashita, umidekaiosagasutsumoridesu.",
+        "english": "Tomorrow I'm planning to look for shells at the beach.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "その貝、どこで見つけたの？",
+        "furigana": "その 貝[かい]、どこで 見[み]つけたの？",
+        "romaji": "sonokai, dokodemitsuketano?",
+        "english": "Where did you find that shell?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "貝 covers both the living shellfish (as seafood: 貝を食べる) and the shell you pick up on the beach. If you specifically mean the empty shell, 貝殻(かいがら) is more precise.",
     "audio": "audio/janki-c5a2857c5417.wav",
     "image": "",
     "pitch_accent": [
@@ -8505,12 +9746,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "明日、海で貝がらを拾うつもりです。",
+        "furigana": "明日[あした]、 海[うみ]で 貝[かい]がらを 拾[ひろ]うつもりです。",
+        "romaji": "ashita, umidekaigaraohiroutsumoridesu.",
+        "english": "I'm planning to collect seashells at the beach tomorrow.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "その貝がら、どこで見つけたの？",
+        "furigana": "その 貝[かい]がら、どこで 見[み]つけたの？",
+        "romaji": "sonokaigara, dokodemitsuketano?",
+        "english": "Where did you find that seashell?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "Usually written 貝殻 in normal text; 貝がら is the same word with the second half in kana. 貝 by itself means the shellfish (clam, etc.), while 貝がら is specifically the empty shell. Common verbs: 貝がらを拾う (pick up), 貝がらを集める (collect).",
     "audio": "audio/janki-c68653d18d85.wav",
     "image": "",
     "pitch_accent": [
@@ -8591,12 +9849,29 @@
     "part_of_speech": "noun",
     "verb_group": "suru",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "明日は妻と買い物に行くつもりです。",
+        "furigana": "明日[あした]は 妻[つま]と 買[か]い 物[もの]に 行[い]くつもりです。",
+        "romaji": "ashitahatsumatokaimononiikutsumoridesu.",
+        "english": "I'm planning to go shopping with my wife tomorrow.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "これから買い物に行くんだ。",
+        "furigana": "これから 買[か]い 物[もの]に 行[い]くんだ。",
+        "romaji": "korekarakaimononiikunda.",
+        "english": "I'm heading out to go shopping now.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "買い物 is a noun, so it needs する (買い物をする / 買い物する) to mean \"to shop\"; 買い物に行く is the everyday way to say \"go shopping.\" It can also refer to the things you bought (買い物を袋に入れる, put the purchases in a bag).",
     "audio": "audio/janki-45dae1e17f1a.wav",
     "image": "",
     "pitch_accent": [
@@ -8697,7 +9972,24 @@
     "part_of_speech": "verb",
     "verb_group": "ichidan",
     "transitivity": "intransitive",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "毎朝六時に起きます。",
+        "furigana": "毎朝[まいあさ] 六時[ろくじ]に 起[お]きます。",
+        "romaji": "maiasarokujiniokimasu.",
+        "english": "I get up at six every morning.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "今日は何時に起きたの？",
+        "furigana": "今日[きょう]は 何時[なんじ]に 起[お]きたの？",
+        "romaji": "kyouhananjiniokitano?",
+        "english": "What time did you get up today?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {
       "plain": "起きる",
       "negative": "起きない",
@@ -8710,7 +10002,7 @@
     "tags": [
       "kanji-review-104-week-1-and-2"
     ],
-    "usage_notes": "",
+    "usage_notes": "起きる is an ichidan intransitive verb: 起きます、起きない、起きた、起きて. It covers both getting out of bed and being/staying awake (まだ起きています = \"I'm still up\"). The transitive partner is 起こす, \"to wake someone up\" (母が私を起こしました). Note also the third meaning, \"to happen,\" used mostly of bad events: 事故が起きました。",
     "audio": "audio/janki-0621127aa4f2.wav",
     "image": "",
     "pitch_accent": [
@@ -8801,12 +10093,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "明日、この道を通って山に行くつもりです。",
+        "furigana": "明日[あした]、この 道[みち]を 通[とお]って 山[やま]に 行[い]くつもりです。",
+        "romaji": "ashita, konomichiotootteyamaniikutsumoridesu.",
+        "english": "I'm planning to take this road to the mountain tomorrow.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "ごめん、駅までの道が分からないんだ。",
+        "furigana": "ごめん、 駅[えき]までの 道[みち]が 分[わ]からないんだ。",
+        "romaji": "gomen, ekimadenomichigawakaranainda.",
+        "english": "Sorry, the thing is I don't know the way to the station.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "みち covers both a physical road or street and the route/way to a place, so 道を聞く (ask for directions) and 道を教える (give directions) are very common. In compound words the same kanji is usually read どう: 柔道 (judo), 書道 (calligraphy), 北海道 (Hokkaido).",
     "audio": "audio/janki-ffa530a357c3.wav",
     "image": "",
     "pitch_accent": [
@@ -8840,7 +10149,24 @@
     "part_of_speech": "expression",
     "verb_group": "godan",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "はじめての町で道にまよいました。",
+        "furigana": "はじめての 町[まち]で 道[みち]にまよいました。",
+        "romaji": "hajimetenomachidemichinimayoimashita.",
+        "english": "I got lost in a town I was visiting for the first time.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "おそくなってごめん、道にまよったんだ。",
+        "furigana": "おそくなってごめん、 道[みち]にまよったんだ。",
+        "romaji": "osokunattegomen, michinimayottanda.",
+        "english": "Sorry I'm late — I got lost, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {
       "plain": "道にまよう",
       "negative": "道にまよわない",
@@ -8853,7 +10179,7 @@
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "Fixed combination: the particle is always に (道に), never を. まよう is a godan verb, so the plain past is まよった and the て-form is まよって. It is commonly written 道に迷う with kanji. On its own, まよう (迷う) more often means \"to hesitate / can't decide\" (どっちにするかまよう), so the 道に is what makes it specifically \"to lose one's way.\"",
     "audio": "audio/janki-22437e9b3ca1.wav",
     "image": "",
     "pitch_accent": [
@@ -8887,12 +10213,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "お正月に道路がとても混みます。",
+        "furigana": "お 正月[しょうがつ]に 道路[どうろ]がとても 混[こ]みます。",
+        "romaji": "oshougatsunidourogatotemokomimasu.",
+        "english": "The roads get very crowded at New Year's.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "今、この道路は工事中なんだ。",
+        "furigana": "今[いま]、この 道路[どうろ]は 工事中[こうじちゅう]なんだ。",
+        "romaji": "ima, konodourohakoujichuunanda.",
+        "english": "This road is under construction right now, you see.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "道路 is the road as infrastructure — the paved roadway itself (高速道路 \"expressway\", 道路工事 \"road construction\"). For a street you walk along, a route, or \"the way\" to somewhere, 道 is the more natural word: 道を渡る (cross the street), not 道路を渡る in most everyday speech.",
     "audio": "audio/janki-e2a5fbecaa35.wav",
     "image": "",
     "pitch_accent": [
@@ -8926,12 +10269,29 @@
     "part_of_speech": "no-adjective",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "東京は日本で一番大きい都市です。",
+        "furigana": "東京[とうきょう]は 日本[にほん]で 一番[いちばん] 大[おお]きい 都市[とし]です。",
+        "romaji": "toukyouhanihondeichiban'ookiitoshidesu.",
+        "english": "Tokyo is the largest city in Japan.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "ねえ、都市の生活は便利なの？",
+        "furigana": "ねえ、 都市[とし]の 生活[せいかつ]は 便利[べんり]なの？",
+        "romaji": "nee, toshinoseikatsuhabenrinano?",
+        "english": "Hey, is life in the city convenient?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "都市 is the somewhat formal, written-sounding word for a city as an urban area, common in compounds like 大都市 (big city) and 都市計画 (urban planning). In everyday conversation people usually say 町, 市, or just the city's name (東京, 大阪). It is often used before の as a modifier: 都市の生活 (city life), 都市の問題 (urban problems).",
     "audio": "audio/janki-8bfcc4eccb84.wav",
     "image": "",
     "pitch_accent": [
@@ -8968,7 +10328,24 @@
     "part_of_speech": "verb",
     "verb_group": "godan",
     "transitivity": "intransitive",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "北海道では冬に雪がたくさん降ります。",
+        "furigana": "北海道[ほっかいどう]では 冬[ふゆ]に 雪[ゆき]がたくさん 降[ふ]ります。",
+        "romaji": "hokkaidoudehafuyuniyukigatakusanfurimasu.",
+        "english": "In Hokkaido, a lot of snow falls in the winter.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "ねえ、外、雨降ってるの？",
+        "furigana": "ねえ、 外[そと]、 雨[あめ] 降[ふ]ってるの？",
+        "romaji": "nee, soto, amefutteruno?",
+        "english": "Hey, is it raining outside?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {
       "plain": "降る",
       "negative": "降らない",
@@ -8981,7 +10358,7 @@
     "tags": [
       "kanji-review-104-week-1-and-2"
     ],
-    "usage_notes": "",
+    "usage_notes": "Intransitive: the thing that falls (雨、雪、灰) is the subject and takes が — 雨が降る, never 雨を降る. To say \"it's raining (right now)\" Japanese uses the ている form: 雨が降っています／降ってる. Don't confuse it with 降りる (おりる, to get off a train or go down). Note also that 降る needs the subject stated; 降っています alone is unusual unless 雨 is already clear from context.",
     "audio": "audio/janki-acadce0d7f92.wav",
     "image": "",
     "pitch_accent": [
@@ -9086,12 +10463,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "明日は雨だから、山に登らないつもりです。",
+        "furigana": "明日[あした]は 雨[あめ]だから、 山[やま]に 登[のぼ]らないつもりです。",
+        "romaji": "ashitahaamedakara, yamaninoboranaitsumoridesu.",
+        "english": "It's going to rain tomorrow, so I'm not planning to climb the mountain.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "え、雨なの？傘持って行くね。",
+        "furigana": "え、 雨[あめ]なの？ 傘[かさ] 持[も]って 行[い]くね。",
+        "romaji": "e, amenano?kasamotteikune.",
+        "english": "Huh, it's raining? I'll take an umbrella then.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week-1-and-2"
     ],
-    "usage_notes": "",
+    "usage_notes": "The verb that goes with 雨 is 降る: 雨が降る \"it rains,\" 雨が降っている \"it's raining\" — not 雨がある. 雨だ / 雨です on its own is the normal way to say \"it's rainy.\" In compounds the reading often shifts to あま or う (雨天 うてん), and 大雨 is おおあめ. Note the homophone 飴 (candy), distinguished in speech by pitch: 雨 is high-low, 飴 low-high.",
     "audio": "audio/janki-a2c9a0264184.wav",
     "image": "",
     "pitch_accent": [
@@ -9126,12 +10520,29 @@
     "part_of_speech": "expression",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "明日の試合は雨天中止です。",
+        "furigana": "明日[あした]の 試合[しあい]は 雨天中止[うてんちゅうし]です。",
+        "romaji": "ashitanoshiaihautenchuushidesu.",
+        "english": "Tomorrow's game will be cancelled if it rains.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "え、今日のお祭り、雨天中止なの？",
+        "furigana": "え、 今日[きょう]のお 祭[まつ]り、 雨天中止[うてんちゅうし]なの？",
+        "romaji": "e, kyounoomatsuri, utenchuushinano?",
+        "english": "Huh, today's festival is cancelled because of the rain?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week-1-and-2"
     ],
-    "usage_notes": "",
+    "usage_notes": "A set phrase from event notices and posters, usually meaning \"cancelled in case of rain\" (i.e. it won't be held if it rains), not only \"was cancelled.\" It behaves as a noun, so it takes です / なの / なんだ. The opposite notice is 雨天決行 (held even in the rain).",
     "audio": "audio/janki-b938f8ec8265.wav",
     "image": "",
     "pitch_accent": [
@@ -9166,12 +10577,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "北海道の冬は雪がたくさん降ります。",
+        "furigana": "北海道[ほっかいどう]の 冬[ふゆ]は 雪[ゆき]がたくさん 降[ふ]ります。",
+        "romaji": "hokkaidounofuyuhayukigatakusanfurimasu.",
+        "english": "A lot of snow falls in winter in Hokkaido.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "そっちも雪降ってるの？",
+        "furigana": "そっちも 雪[ゆき] 降[ふ]ってるの？",
+        "romaji": "sotchimoyukifutteruno?",
+        "english": "Is it snowing where you are too?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week-1-and-2"
     ],
-    "usage_notes": "",
+    "usage_notes": "Snow \"falls\" in Japanese: the standard collocation is 雪が降る (ゆきがふる) for \"it snows\" — there is no verb form of 雪 itself. 雪が積もる means the snow piles up / sticks. In casual speech the が is often dropped (雪降ってる？). Heavy snow is 大雪 (おおゆき).",
     "audio": "audio/janki-3d5d61b95def.wav",
     "image": "",
     "pitch_accent": [
@@ -9207,12 +10635,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "寝る前に電気を消します。",
+        "furigana": "寝[ね]る 前[まえ]に 電気[でんき]を 消[け]します。",
+        "romaji": "nerumaenidenkiokeshimasu.",
+        "english": "I turn off the light before going to bed.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "電気、消したの？",
+        "furigana": "電気[でんき]、 消[け]したの？",
+        "romaji": "denki, keshitano?",
+        "english": "Did you turn the light off?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "電気 covers both \"electricity\" (電気代 = electricity bill) and \"electric light\" — in the house it usually means the light. The verbs are 電気をつける (turn on) and 電気を消す (turn off); 開ける/閉める are not used for lights.",
     "audio": "audio/janki-f2631eb53d06.wav",
     "image": "",
     "pitch_accent": [
@@ -9247,12 +10692,29 @@
     "part_of_speech": "no-adjective",
     "verb_group": "suru",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "今晩、母に電話するつもりです。",
+        "furigana": "今晩[こんばん]、 母[はは]に 電話[でんわ]するつもりです。",
+        "romaji": "komban, hahanidenwasurutsumoridesu.",
+        "english": "I'm planning to call my mother tonight.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "もうお母さんに電話したの？",
+        "furigana": "もう お母[かあ]さんに 電話[でんわ]したの？",
+        "romaji": "moukaasannidenwashitano?",
+        "english": "Did you already call Mom?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week11"
     ],
-    "usage_notes": "",
+    "usage_notes": "電話 covers both the device and the act of calling. The person you call is marked with に: 友だちに電話する. 電話する and 電話をかける both mean \"to make a call\"; 電話に出る is \"to answer the phone.\"",
     "audio": "audio/janki-e5da56c56030.wav",
     "image": "",
     "pitch_accent": [
@@ -9288,12 +10750,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "明日は電車で京都に行くつもりです。",
+        "furigana": "明日[あした]は 電車[でんしゃ]で 京都[きょうと]に 行[い]くつもりです。",
+        "romaji": "ashitahadenshadekyoutoniikutsumoridesu.",
+        "english": "Tomorrow I'm planning to go to Kyoto by train.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "ごめん、今、電車に乗ってるんだ。",
+        "furigana": "ごめん、 今[いま]、 電車[でんしゃ]に 乗[の]ってるんだ。",
+        "romaji": "gomen, ima, denshaninotterunda.",
+        "english": "Sorry, I'm on the train right now.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "電車 is the everyday word for an electric commuter or city train — what you ride in Tokyo. For long-distance or general trains 列車 is used, and the Shinkansen is usually just 新幹線. The means of transport takes で: 電車で行きます (\"go by train\"), while getting on/off uses に and を: 電車に乗る, 電車を降りる.",
     "audio": "audio/janki-daa26b49fea0.wav",
     "image": "",
     "pitch_accent": [
@@ -9328,12 +10807,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "夏休みに飛行機で北海道へ行くつもりです。",
+        "furigana": "夏休[なつやす]みに 飛行機[ひこうき]で 北海道[ほっかいどう]へ 行[い]くつもりです。",
+        "romaji": "natsuyasuminihikoukidehokkaidouheikutsumoridesu.",
+        "english": "I'm planning to go to Hokkaido by plane over summer vacation.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "明日の飛行機、何時なの？",
+        "furigana": "明日[あした]の 飛行機[ひこうき]、 何時[なんじ]なの？",
+        "romaji": "ashitanohikouki, nanjinano?",
+        "english": "What time is your flight tomorrow?",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-review-104-week-1-and-2"
     ],
-    "usage_notes": "",
+    "usage_notes": "Use 飛行機で for \"by plane\" (means of transport) and 飛行機に乗る for \"to board / get on a plane.\" In conversation 飛行機 also covers the specific flight you are taking, where English would say \"flight.\"",
     "audio": "audio/janki-d18299572d14.wav",
     "image": "",
     "pitch_accent": [
@@ -9498,7 +10994,24 @@
     "part_of_speech": "verb",
     "verb_group": "godan",
     "transitivity": "transitive",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "私は犬を二匹飼っています。",
+        "furigana": "私[わたし]は 犬[いぬ]を 二匹[にひき] 飼[か]っています。",
+        "romaji": "watashihainuonihikikatteimasu.",
+        "english": "I keep two dogs.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "猫飼ってるの？いいなあ。",
+        "furigana": "猫[ねこ] 飼[か]ってるの？いいなあ。",
+        "romaji": "nekokatteruno?iinaa.",
+        "english": "You have a cat? Lucky you.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {
       "plain": "飼う",
       "negative": "飼わない",
@@ -9511,7 +11024,7 @@
     "tags": [
       "104-week-8-writing-homework"
     ],
-    "usage_notes": "",
+    "usage_notes": "飼う is only for animals — pets, livestock, fish. For plants use 育てる, and for children/family use 育てる or ある/いる, never 飼う. The everyday way to say you own a pet is the ている form: 犬を飼っています / 飼ってる (an ongoing state), not the plain 飼います. Note the homophone 買う (to buy) — same かう, different kanji.",
     "audio": "audio/janki-a872bdc659a2.wav",
     "image": "",
     "pitch_accent": [
@@ -9547,12 +11060,29 @@
     "part_of_speech": "noun",
     "verb_group": "",
     "transitivity": "",
-    "examples": [],
+    "examples": [
+      {
+        "japanese": "明日、魚市場に行くつもりです。",
+        "furigana": "明日[あした]、 魚市場[うおいちば]に 行[い]くつもりです。",
+        "romaji": "ashita, uoichibaniikutsumoridesu.",
+        "english": "I'm planning to go to the fish market tomorrow.",
+        "audio": "",
+        "register": "polite"
+      },
+      {
+        "japanese": "この魚、魚市場で買ったんだ。",
+        "furigana": "この 魚[さかな]、 魚市場[うおいちば]で 買[か]ったんだ。",
+        "romaji": "konosakana, uoichibadekattanda.",
+        "english": "I bought this fish at the fish market, you know.",
+        "audio": "",
+        "register": "casual"
+      }
+    ],
     "conjugations": {},
     "tags": [
       "kanji-practice-sheet-no-112-123"
     ],
-    "usage_notes": "",
+    "usage_notes": "Note the reading: 魚 is うお (not さかな) inside this compound, and 市場 is いちば — a physical marketplace you can walk through. 市場 read しじょう means \"market\" in the economic sense (株式市場, the stock market), so don't mix the two. Big wholesale fish markets like Toyosu are typical referents; for a fish counter in a supermarket you'd just say 魚屋 or 魚のコーナー.",
     "audio": "audio/janki-aee52cbf4769.wav",
     "image": "",
     "pitch_accent": [
