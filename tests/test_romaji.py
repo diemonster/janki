@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from japanese_anki.romaji import kana_to_romaji
@@ -291,3 +293,41 @@ def test_a_converted_reading_is_always_plain_ascii(reading: str) -> None:
 
     assert result
     assert result.isascii()
+
+
+def test_the_apostrophe_in_n_is_optional_to_a_verifier() -> None:
+    """`accepting_pattern` takes `kin'en` and `kinen` alike.
+
+    janki *writes* the apostrophe — without it `kin'en` reads as `ki-ne-n`, a
+    different word — but a person or model romanizing きんえん may leave it
+    out, and that is a spelling of the same kana rather than a different
+    reading. The cost is real and bounded: `kinen` is also how きねん is
+    spelled, so this is one of the two ways a verified romaji can still be
+    wrong. It is documented in `accepting_pattern` rather than closed, because
+    closing it would reject a legitimate spelling to catch a rare one.
+    """
+    from japanese_anki.romaji import accepting_pattern
+
+    pattern = accepting_pattern("きんえん")
+
+    assert re.fullmatch(pattern, "kin'en")
+    assert re.fullmatch(pattern, "kinen"), "accepted, and known to be lossy"
+    assert not re.fullmatch(pattern, "kinnen"), "but not a different reading"
+
+
+def test_a_space_the_furigana_carried_is_neither_required_nor_forbidden() -> None:
+    """Ruby notation puts spaces in the *reading*, and they are not word
+    boundaries.
+
+    `まいにち にほんご` is one reading with a notation space in it. A romaji
+    that keeps the space and one that closes it say the same thing, so both
+    verify — the alternative would be requiring the writer to reproduce Anki's
+    delimiters in their romanization, which is notation leaking into content.
+    """
+    from japanese_anki.romaji import accepting_pattern
+
+    pattern = accepting_pattern("まいにち にほんご")
+
+    assert re.fullmatch(pattern, "mainichi nihongo")
+    assert re.fullmatch(pattern, "mainichinihongo")
+    assert not re.fullmatch(pattern, "mainichi nihongu")

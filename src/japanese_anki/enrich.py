@@ -2019,7 +2019,7 @@ def _romaji_needs_spacing(example: ExampleSentence) -> bool:
     Three conditions, and the third is the one that is easy to leave out.
 
     *Unsegmented* is decided by equality with the mechanical transliteration,
-    not by counting spaces: `komban, hahanidenwao kakerutsumoridesu.` holds two
+    not by counting spaces: `konban, hahanidenwao kakerutsumoridesu.` holds two
     spaces — one from 、 and one from ruby notation — and four merged words, so
     a space-counting test skipped the record this pass exists to fix.
 

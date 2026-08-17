@@ -1068,14 +1068,15 @@ def _enrich_staging(
 def command_enrich(args: argparse.Namespace) -> int:
     """Fill empty fields on existing records from a dictionary.
 
-    Three passes, one per run: ``--jpdb`` fills what a dictionary knows,
-    ``--ai`` writes what it does not, ``--polish-meanings`` rewrites English that
-    is already there. One is required, because "enrich" without saying how is
-    a command whose meaning depends on which pass is newest.
+    Four passes, one per run: ``--jpdb`` fills what a dictionary knows,
+    ``--ai`` writes what it does not, ``--polish-meanings`` rewrites English
+    that is already there, and ``--romaji`` puts word boundaries into example
+    romaji. One is required, because "enrich" without saying how is a command
+    whose meaning depends on which pass is newest.
 
-    Four of them now, and the exclusivity list below is the only place that
-    knows it — a pass added without a line there runs alongside another and
-    the second write wins.
+    The exclusivity list below is the only place that knows how many there
+    are — a pass added without a line there runs alongside another, and the
+    second write wins.
     """
     passes = [
         name

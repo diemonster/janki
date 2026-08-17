@@ -1335,7 +1335,7 @@ def test_the_preserve_warning_fires_even_for_accepted_stored_examples() -> None:
 def test_a_sentence_whose_punctuation_supplied_a_space_is_still_unsegmented() -> None:
     """Counting spaces is not the test; equality with the machine output is.
 
-    `komban, hahanidenwao kakerutsumoridesu.` holds two spaces — one from 、
+    `konban, hahanidenwao kakerutsumoridesu.` holds two spaces — one from 、
     and one from the furigana's ruby notation — and four merged words. A
     space-counting heuristic read it as already segmented and the romaji pass
     skipped the record it exists to fix.

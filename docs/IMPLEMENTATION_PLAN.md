@@ -696,9 +696,9 @@ Design: DESIGN_V2 "Division of labor" (romaji row).
 
 - `kana_to_romaji(kana) -> str`, Hepburn, macron-free (`ou`/`uu` long
   vowels — matches Shirabe conventions; document the choice): digraphs
-  (きょ→kyo), っ gemination (がっこう→gakkou), ん before b/p/m → m
-  ~~(しんぶん→shimbun)~~ *(2026-08-17: modern Hepburn now — しんぶん→shinbun,
-  こんばん→konban)*, ん before vowels/y → n' (きんえん→kin'en),
+  (きょ→kyo), っ gemination (がっこう→gakkou), ~~ん before b/p/m → m
+  (しんぶん→shimbun)~~ *(2026-08-17: modern Hepburn — ん is always n:
+  しんぶん→shinbun, こんばん→konban)*, ん before vowels/y → n' (きんえん→kin'en),
   katakana accepted (normalized to hiragana first), ー long-vowel marks.
 - Pure, table-driven, no deps. Golden tests per rule + a mixed sentence.
 

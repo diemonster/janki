@@ -61,10 +61,10 @@ __all__ = ["accepting_pattern", "kana_to_romaji"]
 _SOKUON = "っ"
 _SYLLABIC_N = "ん"
 _LONG_VOWEL_MARK = "ー"
-# Sets, not strings: the lookahead is "" at the end of a run, and "" is a
-# substring of every string, so `"" in "bpm"` would spell a word-final ん as m.
+# A set, not a string: the lookahead is "" at the end of a run, and "" is a
+# substring of every string, so `"" in "aeiou"` would put an apostrophe after
+# a word-final ん.
 _VOWELS = frozenset("aeiou")
-_LABIALS = frozenset("bpm")
 
 # Katakana maps onto hiragana by a fixed offset over ァ..ヶ (U+30A1..U+30F6).
 # The four code points just past that run — ヷヸヹヺ — must not be shifted:
