@@ -160,7 +160,26 @@ _TRANSPARENT_CATEGORIES = frozenset({"Pc", "Pd", "Ps", "Pe", "Pi", "Pf", "Po", "
 #: read differently from the syllable they are written with, and which one a
 #: given は is cannot be known without word segmentation — so a *verifier*
 #: accepts either, where the generator has to pick one and picks the kana.
+#:
+#: Accepted **only where the answer is shaped the way the prompt asked** — the
+#: spoken spelling as its own token. Keyed on the kana alone, every は in the
+#: language could be spelled `wa`, so 花がきれい verified as `wana ga kirei`:
+#: a wrong romaji reaching the one reader who cannot check it against the
+#: kana. What remains uncaught is a `wa` standing alone that should have been
+#: `ha`, which no check without a parse can see, and janki does not parse.
 _PARTICLE_ALTERNATIVES = {"は": ("ha", "wa"), "へ": ("he", "e")}
+
+#: `prompts/romaji.md` asks for particles as standalone tokens, so the spoken
+#: spelling is accepted only where the answer is in that shape: a separator,
+#: punctuation or the end after it.
+#:
+#: This is a check on the *format this project asked for*, not a claim about
+#: Japanese. janki does not know which は is a particle and must not pretend
+#: to — an earlier version of this also refused a sentence-initial `wa` on the
+#: grounds that "a particle attaches to what precedes it", which is grammar
+#: reasoned out in a Python file, exactly what DESIGN.md says does not belong
+#: here.
+_TOKEN_END = r"(?=[-\s,.?!;:'\"]|$)"
 
 #: What may sit between two pieces without changing what the letters say: a
 #: word space, or the hyphen romaji conventionally uses for a suffix.
@@ -182,14 +201,21 @@ def accepting_pattern(kana: str) -> str:
       prompt asking for a spelling the verifier refuses;
     * **letter case**, since a proper noun takes a capital (`Nagoya`) and the
       kana does not record one;
-    * **は as `wa` and へ as `e`** when they are particles, which needs the
-      segmentation to know;
+    * **は as `wa` and へ as `e`**, but only written as a whole token with a
+      separator before it — which is what a particle always is, and which
+      `wana` for はな is not. This is a *guard*, not a parse: janki still
+      cannot tell which は is a particle, so a particle written with no space
+      around it is refused and a non-particle は spelled `wa` between two
+      spaces would still slip through;
     * the **apostrophe** in ``n'``, which a writer may or may not type.
 
     Everything else — every consonant, every vowel, every geminate, every long
-    vowel — has to agree exactly. So a romaji that matches this says the same
-    thing the kana does, and one that does not is rejected rather than
-    silently kept. That is the guarantee `qc` cares about: a learner reading
+    vowel — has to agree exactly. A romaji that matches this therefore says
+    what the kana says *up to* the slack above: the apostrophe is optional, so
+    `kinen` passes for きんえん as well as きねん, and a `wa` standing alone
+    between separators is taken on trust. Those are the two ways a matching
+    romaji can still be wrong, and both are narrow. Everything outside them is
+    rejected rather than silently kept. That is the guarantee `qc` cares about: a learner reading
     romaji is reading it *because* they cannot yet read the kana, so they
     cannot catch it being wrong.
 
@@ -203,7 +229,8 @@ def accepting_pattern(kana: str) -> str:
     for source, piece in scanned:
         alternatives = _PARTICLE_ALTERNATIVES.get(source)
         if alternatives:
-            parts.append("(?:" + "|".join(alternatives) + ")")
+            written, spoken = alternatives
+            parts.append(f"(?:{written}|{spoken}{_TOKEN_END})")
         elif piece == "n'":
             parts.append("n'?")
         elif not piece.strip():

@@ -103,9 +103,10 @@ def settle_example_romaji(example: ExampleSentence) -> tuple[ExampleSentence, st
 
     So a supplied romaji is *verified* against the reading janki already has.
     :func:`romaji.accepting_pattern` allows word separators anywhere — a space
-    or the hyphen of `Tanaka-san` — は as `wa`, へ as `e`, an optional
-    apostrophe in `n'`, and any letter case, since a proper noun takes a
-    capital the kana does not record. Every other letter must agree.
+    or the hyphen of `Tanaka-san` — は as `wa` and へ as `e` *when written as
+    a whole token*, an optional apostrophe in `n'`, and any letter case, since
+    a proper noun takes a capital the kana does not record. Every other letter
+    must agree.
 
     A romaji that matches says what the kana says and is kept, spacing and
     all. One that does not is replaced by the mechanical transliteration and
@@ -128,8 +129,15 @@ def settle_example_romaji(example: ExampleSentence) -> tuple[ExampleSentence, st
     if not pattern:
         # Nothing to check against: the reading still holds kanji, so janki
         # does not know what it says either. Keeping the supplied value would
-        # be trusting it for precisely the reason it cannot be trusted.
-        return replace(example, romaji=mechanical), ""
+        # be trusting it for precisely the reason it cannot be trusted — but
+        # dropping it silently is how a sentence loses its romaji and nobody
+        # hears about it, so this branch names the loss like the other one.
+        return replace(example, romaji=mechanical), (
+            f"romaji {supplied!r} could not be checked: {example.japanese!r} "
+            "has no furigana, so janki does not know its reading. Add furigana "
+            "and the romaji can be verified; until then it is dropped rather "
+            "than trusted."
+        )
     if re.fullmatch(pattern, supplied, re.IGNORECASE):
         return replace(example, romaji=" ".join(supplied.split())), ""
     return replace(example, romaji=mechanical), (

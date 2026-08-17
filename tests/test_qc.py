@@ -258,3 +258,73 @@ def test_the_docstrings_romaji_examples_are_what_the_code_returns() -> None:
 # --- the separator space ------------------------------------------------------
 
 
+
+
+def test_a_romaji_that_cannot_be_checked_is_dropped_out_loud() -> None:
+    """The third branch, and the only one that used to say nothing.
+
+    A sentence with kanji and no furigana has no reading janki knows, so a
+    supplied romaji cannot be verified and is not kept — trusting it would be
+    trusting it for exactly the reason it cannot be trusted. But it *is* a
+    loss, and the silent version meant a record could come back from the
+    romaji pass with one sentence improved and another emptied, with no
+    warning between them.
+    """
+    dropped, reason = settle_example_romaji(
+        example(
+            japanese="日本語を勉強します。",
+            furigana="",
+            romaji="nihongo o benkyou shimasu.",
+        )
+    )
+
+    assert dropped.romaji == "", "not kept, because nothing can check it"
+    assert "could not be checked" in reason
+    assert "no furigana" in reason
+
+
+def test_the_spoken_particle_spelling_is_accepted_only_in_the_shape_asked_for() -> None:
+    """`は` may be `wa`, and `prompts/romaji.md` asks for particles as their own
+    token — so the verifier accepts that spelling only in that shape.
+
+    A check on the requested *format*, not on Japanese. Keyed on the kana
+    alone, every は in the language could be spelled `wa`, so 花がきれい
+    verified as `wana ga kirei` and reached the one reader who cannot check it
+    against the kana.
+
+    What it does not and cannot catch is pinned below: janki does not know
+    which は is a particle, so a `wa` standing alone where `ha` was meant
+    passes. Closing that needs a parse, and parsing is not janki's half of
+    this project.
+    """
+    accepted, rejected = settle_example_romaji(
+        example(japanese="きょうはおさけ。", furigana="", romaji="kyou wa osake.")
+    )
+    assert accepted.romaji == "kyou wa osake." and rejected == ""
+
+    replaced, named = settle_example_romaji(
+        example(japanese="はながきれい。", furigana="", romaji="wana ga kirei.")
+    )
+    assert replaced.romaji == "hanagakirei.", "wana is not はな"
+    assert "does not transliterate" in named
+
+
+def test_a_standalone_wa_that_should_be_ha_is_the_hole_that_stays_open() -> None:
+    """Pinned so it is a known limit rather than a surprise.
+
+    はは is a word, not two particles, and `wa wa` is the shape a particle
+    takes — so it verifies. Every way of closing this needs to know which は
+    is a particle, which is a parse. An earlier attempt refused a
+    sentence-initial `wa` instead, reasoning that a particle attaches to what
+    precedes it: true of Japanese, and grammar written into a Python file,
+    which is the thing `DESIGN.md` says janki does not do.
+
+    If this ever needs closing, close it in `prompts/romaji.md` — the side of
+    the line that is allowed to know.
+    """
+    kept, rejected = settle_example_romaji(
+        example(japanese="はは。", furigana="", romaji="wa wa.")
+    )
+
+    assert kept.romaji == "wa wa.", "accepted, and known to be"
+    assert rejected == ""
