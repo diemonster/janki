@@ -1332,237 +1332,90 @@ def test_the_preserve_warning_fires_even_for_accepted_stored_examples() -> None:
     assert any("stored examples were preserved" in w for w in result.warnings)
 
 
-def test_a_sentence_whose_punctuation_supplied_a_space_is_still_unsegmented() -> None:
-    """Counting spaces is not the test; equality with the machine output is.
+def test_the_ai_pass_reports_a_romaji_that_disagrees_with_its_own_sentence() -> None:
+    """`--ai` asks for romaji and `settle_example_romaji` checks it, so the
+    disagreement has to reach a human.
 
-    `konban, hahanidenwao kakerutsumoridesu.` holds two spaces — one from 、
-    and one from the furigana's ruby notation — and four merged words. A
-    space-counting heuristic read it as already segmented and the romaji pass
-    skipped the record it exists to fix.
+    The romaji the model sends is kept when every letter transliterates the
+    reading its own furigana gives, because word spacing is segmentation and
+    janki does not segment. When it does not agree, janki keeps the sentence
+    and falls back to the mechanical transliteration — the safe half — but a
+    sentence and a romaji that disagree mean the answer was not internally
+    consistent, and that is worth a look rather than a quiet repair.
     """
-    from japanese_anki.enrich import romaji_targets
-    from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
+    from types import SimpleNamespace
+
+    from japanese_anki.enrich import apply_ai_result
+    from japanese_anki.models import SourceReference, VocabularyRecord
 
     record = VocabularyRecord(
-        id="word:かける:かける",
-        expression="かける",
-        reading="かける",
-        meanings=["to make (a call)"],
-        source=SourceReference(type="extract", imported_from="lesson.pdf"),
+        id="word:話す:はなす",
+        expression="話す",
+        reading="はなす",
+        meanings=["to speak"],
+        source=SourceReference(type="shirabe", imported_from="x.csv"),
+    )
+    parsed = SimpleNamespace(
         examples=[
-            ExampleSentence(
-                japanese="今晩、母に電話をかけるつもりです。",
-                furigana="今晩[こんばん]、 母[はは]に 電話[でんわ]を かけるつもりです。",
-                romaji="konban, hahanidenwao kakerutsumoridesu.",
+            SimpleNamespace(
+                japanese="毎日話します。",
+                furigana="毎日[まいにち] 話[はな]します。",
+                romaji="totally wrong",
+                english="I speak every day.",
+                speech_level="polite",
             )
         ],
+        usage_notes="",
     )
 
-    assert romaji_targets([record]) == [record]
+    outcome = apply_ai_result(record, parsed)
 
-    segmented = record.examples[0].__class__(
-        japanese=record.examples[0].japanese,
-        furigana=record.examples[0].furigana,
-        romaji="konban, haha ni denwa o kakeru tsumori desu.",
-    )
-    from dataclasses import replace
-
-    assert romaji_targets([replace(record, examples=[segmented])]) == []
+    assert outcome.romaji_rejected, "the disagreement is carried, not swallowed"
+    assert "does not transliterate" in outcome.romaji_rejected[0]
+    [example] = outcome.record.examples
+    assert example.romaji == "mainichihanashimasu.", "and the safe half is kept"
 
 
-def test_a_short_romaji_response_is_refused_whole_rather_than_zipped() -> None:
-    """Lines are matched to sentences by position, so a missing one shifts
-    every line after it onto the wrong sentence.
+def test_the_models_romaji_reaches_the_record_when_it_verifies() -> None:
+    """The other half, and the bug that hid behind the schema's own wording.
 
-    That produces a perfectly well-formed romaji under Japanese it does not
-    transliterate — and `settle_example_romaji` would catch each individual
-    mismatch, but only after the damage of deciding which line belongs where.
-    Refusing the response whole is the honest answer to "I cannot tell which
-    sentence you left out".
+    `apply_ai_result` built its `ExampleSentence` without copying `romaji` from
+    the model's answer, so `settle_example_romaji` was always handed an empty
+    string and always fell back to the mechanical transliteration. The schema
+    field said "Ignored; janki regenerates this from the furigana" — which that
+    one missing line made true, long after the code around it had stopped
+    intending it.
+
+    Every example therefore arrived unsegmented, and the backfill pass built to
+    segment them was paying a model to undo this.
     """
     from types import SimpleNamespace
 
-    from japanese_anki.enrich import apply_romaji_result
-    from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
+    from japanese_anki.enrich import apply_ai_result
+    from japanese_anki.models import SourceReference, VocabularyRecord
 
     record = VocabularyRecord(
-        id="word:はし:はし",
-        expression="はし",
-        reading="はし",
-        meanings=["bridge"],
-        source=SourceReference(type="extract", imported_from="lesson.pdf"),
+        id="word:話す:はなす",
+        expression="話す",
+        reading="はなす",
+        meanings=["to speak"],
+        source=SourceReference(type="shirabe", imported_from="x.csv"),
+    )
+    parsed = SimpleNamespace(
         examples=[
-            ExampleSentence(japanese="はしをわたる。", furigana="", romaji="hashiowataru."),
-            ExampleSentence(japanese="はしはながい。", furigana="", romaji="hashihanagai."),
+            SimpleNamespace(
+                japanese="毎日話します。",
+                furigana="毎日[まいにち] 話[はな]します。",
+                romaji="mainichi hanashimasu.",
+                english="I speak every day.",
+                speech_level="polite",
+            )
         ],
+        usage_notes="",
     )
 
-    updated, warnings = apply_romaji_result(
-        record, SimpleNamespace(romaji=["hashi o wataru."])
-    )
+    outcome = apply_ai_result(record, parsed)
 
-    assert updated == record, "nothing was written"
-    assert len(warnings) == 1
-    assert "asked for 2 romaji line(s) and got 1" in warnings[0]
-
-
-def test_romaji_that_no_longer_matches_its_reading_is_targeted_again() -> None:
-    """The third condition, and the one that is easy to leave out.
-
-    A romaji can be segmented — so not equal to the mechanical output — and
-    still be stale, because the *reading* changed underneath it. The furigana
-    spacing repair does exactly that: it gives back a comma, and sometimes
-    whole clauses, that a ruby base had swallowed. Eleven sentences were left
-    describing Japanese the record no longer held, and neither the "empty" nor
-    the "unsegmented" test could see them.
-    """
-    from dataclasses import replace
-
-    from japanese_anki.enrich import romaji_targets
-    from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
-
-    # Segmented, and correct for this reading.
-    good = ExampleSentence(
-        japanese="先週、家族と山に登りました。",
-        furigana="先週[せんしゅう]、 家族[かぞく]と 山[やま]に 登[のぼ]りました。",
-        romaji="senshuu, kazoku to yama ni noborimashita.",
-    )
-    record = VocabularyRecord(
-        id="word:先週:せんしゅう",
-        expression="先週",
-        reading="せんしゅう",
-        meanings=["last week"],
-        source=SourceReference(type="extract", imported_from="lesson.pdf"),
-        examples=[good],
-    )
-    assert romaji_targets([record]) == [], "nothing to do while they agree"
-
-    # The same romaji against a reading that says something else.
-    moved = replace(
-        good, furigana="来年[らいねん]、 家族[かぞく]と 山[やま]に 登[のぼ]りました。"
-    )
-    stale = replace(record, examples=[moved])
-
-    assert romaji_targets([stale]) == [stale], "stale, and neither empty nor unsegmented"
-
-
-def _romaji_project(tmp_path: Path) -> Path:
-    """A project holding one record whose romaji is the machine output."""
-    import json
-
-    from conftest import seed_prompts
-
-    (tmp_path / "janki.toml").write_text(
-        '[paths]\nnormalized_file = "vocabulary.json"\nstaging_dir = "staging"\n'
-        'scan_inbox = "inbox"\npatterns_file = "patterns.json"\n',
-        encoding="utf-8",
-    )
-    (tmp_path / "vocabulary.json").write_text(
-        json.dumps(
-            [
-                {
-                    "id": "word:話す:はなす",
-                    "expression": "話す",
-                    "reading": "はなす",
-                    "meanings": ["to speak"],
-                    "source": {"type": "shirabe", "imported_from": "x.csv"},
-                    "examples": [
-                        {
-                            "japanese": "毎日話します。",
-                            "furigana": "毎日[まいにち] 話[はな]します。",
-                            "romaji": "mainichihanashimasu.",
-                        }
-                    ],
-                }
-            ],
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
-    seed_prompts(tmp_path)
-    return tmp_path
-
-
-def test_the_romaji_pass_refuses_an_unknown_id_rather_than_reporting_success(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """A typo'd id filters the target list to nothing, and "nothing to do" is
-    indistinguishable from "already done".
-
-    Every other pass raises on an unknown id. This one printed "Every example's
-    romaji is already segmented" and exited 0, which is the answer a user gets
-    for a job that never ran.
-    """
-    from japanese_anki import cli
-
-    root = _romaji_project(tmp_path)
-
-    code = cli.main(
-        ["--root", str(root), "enrich", "--romaji", "--yes", "word:nope:nope"]
-    )
-
-    assert code == 1
-    assert "No record with id" in capsys.readouterr().err
-
-
-def test_the_romaji_pass_refuses_flags_it_would_ignore(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """"A flag the running pass never reads is a typo, not a no-op" — the rule
-    `cli.py` states four lines above the gate that did not list `--romaji`.
-
-    `--staging` named a file this pass never opens, and the run went ahead:
-    one billed call per record, and the collection rewritten instead of the
-    file the user named.
-    """
-    from japanese_anki import cli
-
-    root = _romaji_project(tmp_path)
-    staged = root / "staging" / "held.yaml"
-    staged.parent.mkdir(parents=True, exist_ok=True)
-    staged.write_text("records: []\n", encoding="utf-8")
-
-    assert cli.main(
-        ["--root", str(root), "enrich", "--romaji", "--staging", str(staged), "--yes"]
-    ) == 1
-    assert "Run them separately" in capsys.readouterr().err
-
-    assert cli.main(
-        ["--root", str(root), "enrich", "--romaji", "--force-fields", "examples", "--yes"]
-    ) == 1
-    assert "nothing for --force-fields" in capsys.readouterr().err
-
-
-def test_the_romaji_pass_records_what_it_spent_in_the_ledger(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Every other model pass writes a ledger entry; this one wrote none.
-
-    A billed rewrite of every example in the collection that leaves no
-    operational trace is one `status --rebuild` cannot reconstruct and one
-    nobody can audit after the fact.
-    """
-    from types import SimpleNamespace
-
-    from japanese_anki import claude_client, cli, enrich, ledger
-
-    root = _romaji_project(tmp_path)
-
-    def call(_model, _blocks, _content, _schema, _client=None, **_options):
-        return claude_client.CallResult(
-            SimpleNamespace(romaji=["mainichi hanashimasu."]), "end_turn", None
-        )
-
-    for module in (claude_client, cli, enrich):
-        monkeypatch.setattr(
-            getattr(module, "claude_client", module), "parse_call", call, raising=False
-        )
-    monkeypatch.setattr(claude_client, "parse_call", call)
-
-    cli.main(["--root", str(root), "enrich", "--romaji", "--yes"])
-
-    book = ledger.load(root / "data" / "ledger.json")
-    entries = book.enrichment_for("word:話す:はなす") if hasattr(book, "enrichment_for") else None
-    raw = (root / "data" / "ledger.json").read_text(encoding="utf-8")
-    assert "romaji" in raw, "the pass names itself in the ledger"
-    del entries
+    [example] = outcome.record.examples
+    assert example.romaji == "mainichi hanashimasu.", "the spacing survives"
+    assert not outcome.romaji_rejected

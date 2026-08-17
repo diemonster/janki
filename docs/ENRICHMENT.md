@@ -143,8 +143,7 @@ it. Word spacing in romaji is word segmentation, which janki does not do, so a
 rebuild could only ever run the words together — `hahanidenwao` for 母に電話を.
 The model's romaji is kept when every letter transliterates the reading janki
 already holds, and replaced by the mechanical form, with a warning, when it
-does not. `janki enrich --romaji` buys that spacing for records written before
-the prompt asked for it.
+does not.
 
 At fifty records or more the proposals go to `data/staging/ai-enrichment.yaml`
 and through `janki promote` instead of a terminal diff, because nobody reads

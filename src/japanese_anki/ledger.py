@@ -87,13 +87,9 @@ _BATCH_RECOVERY_MARKER = "janki-polish-batch-recovery"
 # that rewrites a field rather than filling it, and "this record's glosses were
 # replaced by a model" is a different fact about a record than "its examples
 # were written by one".
-ENRICHMENT_KINDS: tuple[str, ...] = ("jpdb", "ai", "polish", "romaji", "human")
+ENRICHMENT_KINDS: tuple[str, ...] = ("jpdb", "ai", "polish", "human")
 
-# ``romaji`` is separate again: it rewrites one derived field on examples the
-# model does not otherwise touch, so "this record's romaji was segmented by a
-# model" must not read as "its examples were written by one".
-
-# ``human`` is the last because a dictionary can be wrong and a person has to
+# ``human`` is the fourth because a dictionary can be wrong and a person has to
 # be able to say so. jpdb's parse reads 日本語 as にっぽんご; the language is
 # にほんご, and without a way to record "a human overruled this" the only
 # options were to accept a reading nobody uses or to leave a correct sentence
