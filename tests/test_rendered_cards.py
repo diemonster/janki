@@ -302,7 +302,37 @@ def test_a_casual_sentence_draws_its_section() -> None:
 
     answer = casual[0]["answer"]
     assert "Casually" in answer
-    assert "毎日話すよ。" in answer
+    # As ruby, not as plain text: the template renders the furigana field, and
+    # Anki turns 話[はな] into <ruby>. The plain string no longer appears at all.
+    assert "<rt>はな</rt>" in answer
+    assert "すよ。" in answer
+
+
+def test_an_example_sentence_is_drawn_once_not_twice() -> None:
+    """The card used to say each sentence twice — once at 24px without
+    readings, then again smaller with them.
+
+    One line now, carrying the furigana, which is the line a learner wants: the
+    plain duplicate taught nothing the ruby line does not, and cost the space
+    the ruby needs above it. This asserts on the *rendered* card because the
+    template source cannot tell you how many times a sentence reaches the
+    screen.
+    """
+    rendered = render([
+        record(examples=[
+            ExampleSentence(
+                japanese="毎日話します。",
+                furigana="毎日[まいにち] 話[はな]します。",
+                register="polite",
+            ),
+        ])
+    ])
+
+    answer = rendered[0]["answer"]
+
+    # The base text of the first ruby group, which both lines used to contain.
+    assert answer.count("<rt>まいにち</rt>") == 1
+    assert answer.count("します。") == 1, "the sentence is drawn once"
 
 
 # --- the blocks that only exist once rendered ---------------------------------

@@ -80,9 +80,12 @@
 .example-japanese {
   font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif;
   font-size: 24px;
+  /* Room above the line for the ruby, which Anki draws outside the line box.
+     Without it the readings collide with whatever sits above — and this line
+     now always carries them, since the plain duplicate below it is gone. */
+  line-height: 2.1;
 }
 
-.example-reading,
 .example-english {
   margin-top: 8px;
 }
