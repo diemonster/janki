@@ -24,14 +24,26 @@ File shape (`data/ledger.json`)::
                       "verbs": {"at": "2026-08-12", "missing": ["audio"]}}
         }
       },
-      "pending_batches": {}
+      "pending_batches": {},
+      "pending_audio": {
+        "<exact-request-sha256>": {
+          "record_id": "word:話す:はなす", "of": "word",
+          "target": "janki-<fp>.wav",
+          "request": {"input": "ハナス'", "forced_accent": true},
+          "profile": {"provider": "voicevox", "voice": 53, "speed": 1.0,
+                      "settings": {}},
+          "content_fp": "<raw-sha256>",
+          "staged_file": ".pending/<exact-request-sha256>-<bytes-sha256>.stage",
+          "staged_sha256": "<raw-sha256>", "details": {}, "at": "..."
+        }
+      }
     }
 
 `enriched` is a **list** (it is a single object in the design document): the
 jpdb pass and the AI pass each append, so neither overwrites the other's record
 of what it wrote.
 
-Two values in that shape are conditional, and both stay absent when there is
+Three values in that shape are conditional, and all stay absent when there is
 nothing to say so no existing ledger moves:
 
 * **`exports[stem]`** is a plain date when the build shipped a complete record,
@@ -41,25 +53,33 @@ nothing to say so no existing ledger moves:
   10:00; what it went out without is a fact rather than an inference. Readers
   must handle both forms.
 * **`audio[].settings`** carries anything beyond voice and rate that decides how
-  a clip sounds — for OpenAI, the model and the prose `instructions` that are
-  its only pace control. Absent for engines with nothing to add.
+  a clip sounds — for OpenAI, the model and prose `instructions`, the pace
+  control janki exposes. Absent for engines with nothing to add.
+* **`pending_audio`** is the per-clip write-ahead record for paid bytes whose
+  guarded record/media/ledger transaction has not finished. Its self-verifying
+  stage name binds the exact request key and byte SHA, so an interruption
+  between the stage write and WAL merge is still recoverable without rebilling.
 
-Mutators only touch memory and report whether they changed anything; call
-:meth:`Ledger.save` once when a command is done. Every mutator is idempotent,
-and idempotent by *identity* rather than by date: re-running the same
-enrichment pass or re-recording byte-identical audio next month is still a
-no-op, and the stored date stays the first run's. Re-running an import or a
+Ordinary mutators only touch memory and report whether they changed anything;
+call :meth:`Ledger.save` once when an ordinary command is done. Every mutator
+is idempotent, and idempotent by *identity* rather than by date: re-running the
+same enrichment pass or re-recording byte-identical audio next month is still
+a no-op, and the stored date stays the first run's. Re-running an import or a
 build must not grow the file, ever, not just today.
 
-:meth:`Ledger.save` is a whole-file rewrite, so **load once per command and
-save once**. Two live :class:`Ledger` objects on one path would otherwise lose
-whichever saved first — silently, since the atomic writer guarantees the loser
-still finds a well-formed file. ``save`` refuses to overwrite a file that
-changed since it was read rather than clobber it.
+:meth:`Ledger.save` is a whole-file rewrite, so ordinary commands **load once
+and save once**. Two live :class:`Ledger` objects on one path would otherwise
+lose whichever saved first — silently, since the atomic writer guarantees the
+loser still finds a well-formed file. ``save`` refuses to overwrite a file that
+changed since it was read rather than clobber it. Paid audio is the deliberate
+exception: :meth:`Ledger.merge_pending_audio` locks and additively persists
+each completed clip before another provider call, then the command finalizes
+the canonical audio entries in a later guarded save.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Container, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -71,6 +91,7 @@ from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.io import DataError, atomic_write_text, exclusive_path_lock
 from japanese_anki.models import ExampleSentence, VocabularyRecord, example_accepted
+from japanese_anki.tts import RenderProfile, TtsError, clip_provider
 
 
 class LedgerError(JankiError):
@@ -288,11 +309,173 @@ def _voice_key(voice: Any) -> int | str:
     return name
 
 
+def _audio_profile_matches(
+    entry: Mapping[str, Any],
+    *,
+    provider: str | None = None,
+    voice: int | str | None = None,
+    speed: float | None = None,
+    settings: Mapping[str, str] | None = None,
+) -> bool:
+    """Whether an audio entry was rendered with the requested profile.
+
+    Content fingerprints deliberately say what was spoken, not which engine or
+    voice spoke it. This is the render-profile half of currency, shared by
+    ``janki audio`` and ``janki status`` so they cannot disagree about whether
+    a configured synthesis choice changed.
+    """
+    if provider is not None and entry.get("provider") != str(provider):
+        return False
+    if voice is not None and entry.get("voice") != _voice_key(voice):
+        return False
+    if speed is not None:
+        recorded = entry.get("speed")
+        if not isinstance(recorded, int | float) or isinstance(recorded, bool):
+            return False
+        if float(recorded) != float(speed):
+            return False
+    if settings is not None:
+        recorded_settings = entry.get("settings")
+        if recorded_settings is None:
+            recorded_settings = {}
+        elif not isinstance(recorded_settings, Mapping):
+            return False
+        if dict(recorded_settings) != dict(settings):
+            return False
+    return True
+
+
+def _audio_entry_is_current(
+    entry: Mapping[str, Any],
+    *,
+    content_fp: str,
+    profile: RenderProfile | None,
+) -> bool:
+    """Whether one referenced entry matches both content and render profile."""
+    if str(entry.get("content_fp") or "") != content_fp:
+        return False
+    if profile is None:
+        return True
+    return _audio_profile_matches(
+        entry,
+        provider=profile.name,
+        voice=profile.voice,
+        speed=profile.speed,
+        settings=profile.settings,
+    )
+
+
 def _record_key(record_id: str) -> str:
     key = str(record_id).strip()
     if not key:
         raise LedgerError("A ledger entry needs a record id")
     return key
+
+
+def _validate_pending_audio_entry(
+    key: str, entry: Mapping[str, Any], *, where: str = "Pending audio entry"
+) -> None:
+    """Validate a complete, exactly keyed WAL row before any consumer uses it."""
+    if (
+        len(key) != 64
+        or any(character not in "0123456789abcdef" for character in key)
+    ):
+        raise LedgerError(f"{where} key {key!r} must be a lowercase SHA-256")
+    target = str(entry.get("target") or "")
+    if not target or PurePosixPath(target).name != target:
+        raise LedgerError(f"{where} {key!r} needs one canonical target filename")
+    staged_name = str(entry.get("staged_file") or "")
+    staged_path = PurePosixPath(staged_name)
+    if staged_path.parent.as_posix() != ".pending" or staged_path.suffix != ".stage":
+        raise LedgerError(
+            f"{where} {key!r} staged_file must be a direct .pending stage; "
+            "canonical media can never double as removable WAL staging"
+        )
+    request = entry.get("request")
+    profile = entry.get("profile")
+    details = entry.get("details")
+    if (
+        not isinstance(request, Mapping)
+        or set(request) != {"input", "forced_accent"}
+        or not isinstance(request.get("input"), str)
+        or not isinstance(request.get("forced_accent"), bool)
+    ):
+        raise LedgerError(f"{where} {key!r} has a malformed exact request")
+    if not isinstance(profile, Mapping) or set(profile) != {
+        "provider",
+        "voice",
+        "speed",
+        "settings",
+    }:
+        raise LedgerError(f"{where} {key!r} has a malformed render profile")
+    settings = profile.get("settings")
+    if (
+        not isinstance(profile.get("provider"), str)
+        or not str(profile.get("provider") or "").strip()
+        or isinstance(profile.get("speed"), bool)
+        or not isinstance(profile.get("speed"), int | float)
+        or not isinstance(settings, Mapping)
+        or any(
+            not isinstance(name, str) or not isinstance(value, str)
+            for name, value in settings.items()
+        )
+    ):
+        raise LedgerError(f"{where} {key!r} has a malformed render profile")
+    # Raises the field-specific clean error for blank/invalid voice values.
+    _voice_key(profile.get("voice"))
+    content_fp = entry.get("content_fp")
+    staged_sha = entry.get("staged_sha256")
+    for label, value in (("content_fp", content_fp), ("staged_sha256", staged_sha)):
+        if (
+            not isinstance(value, str)
+            or len(value) != 64
+            or any(character not in "0123456789abcdef" for character in value)
+        ):
+            raise LedgerError(f"{where} {key!r} has malformed {label}")
+    expected = f".pending/{key}-{staged_sha}.stage"
+    if staged_name != expected:
+        raise LedgerError(
+            f"{where} {key!r} staged_file must be exactly {expected!r}; "
+            "canonical media can never double as a removable WAL stage"
+        )
+    if not isinstance(details, Mapping) or any(
+        not isinstance(name, str) for name in details
+    ):
+        raise LedgerError(f"{where} {key!r} has malformed details")
+    reserved_details = {
+        "record_id",
+        "file",
+        "of",
+        "provider",
+        "voice",
+        "speed",
+        "settings",
+        "content_fp",
+        "at",
+    }
+    if reserved_details.intersection(details):
+        raise LedgerError(f"{where} {key!r} uses a reserved detail key")
+    _checked_details("pending_audio", dict(details))
+    recorded_at = entry.get("at")
+    if not isinstance(recorded_at, str):
+        raise LedgerError(f"{where} {key!r} has a malformed at date")
+    _iso_date(recorded_at)
+    identity = Ledger._pending_audio_identity(
+        str(entry.get("record_id") or ""),
+        of=str(entry.get("of") or ""),
+        target=target,
+        request_input=request["input"],
+        forced_accent=request["forced_accent"],
+        content_fp=content_fp,
+        provider=profile["provider"],
+        voice=profile["voice"],
+        speed=profile["speed"],
+        settings=settings,
+    )
+    if Ledger._pending_audio_key(identity) != key:
+        raise LedgerError(
+            f"{where} {key!r} does not match its exact request/profile identity"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -350,38 +533,46 @@ def word_audio_content_fingerprint(record: VocabularyRecord) -> str:
     when it cannot, because those are the two different things the engine is
     sent and the clip has to go stale between them.
 
-    Fingerprinting the raw pattern instead was a trap. ``short_fingerprint``
-    normalizes NFKC and ``pitch.select_pattern`` does not, so a fullwidth
-    ``ＬＨＬ`` — what a Japanese IME produces while you are already typing kana
-    — and an ASCII ``LHL`` hash identically. `to_aquestalk` refuses the first
-    and accepts the second, so a curator who typed the pattern in full width,
-    got a guessed clip, then corrected it to ASCII would find the clip
-    unchanged: same fingerprint, so `_is_current` calls it up to date, no
-    warning fires because the pattern now parses, and the ledger goes on saying
-    `accent_unverified` forever. Over the utterance the two differ, which is
-    the whole point.
+    Unlike the frozen 48-bit filename address, this is a raw, framed SHA-256.
+    NFKC-equivalent provider inputs and forced/natural requests must not compare
+    equal: they can produce different bytes at the same stable filename.
     """
+    utterance, forced, _ = word_audio_request(record)
+    return _audio_content_fingerprint(
+        "word",
+        "forced" if forced else "natural",
+        utterance,
+    )
+
+
+def word_audio_request(record: VocabularyRecord) -> tuple[str, bool, str | None]:
+    """The exact provider input/flag for a word, plus a render warning."""
     pattern = _selected_pitch_pattern(record)
-    return short_fingerprint(record.reading + _spoken_form(record, pattern))
-
-
-def _spoken_form(record: VocabularyRecord, pattern: str) -> str:
-    """The AquesTalk string a forced clip would use, or ``""`` for a guess."""
     if not pattern:
-        return ""
+        return record.reading, False, None
     from japanese_anki import pitch
 
     try:
-        return pitch.to_aquestalk(record.reading, pattern)
-    except pitch.PitchError:
-        # Unusable: the clip is voiced with the engine's own accent, which is
-        # the same utterance a record with no pattern at all produces.
-        return ""
+        return pitch.to_aquestalk(record.reading, pattern), True, None
+    except pitch.PitchError as exc:
+        # Unusable: audio generation falls back to the raw reading and reports
+        # the error. Currency still follows the request actually sent.
+        return record.reading, False, str(exc)
 
 
 def example_audio_content_fingerprint(example: ExampleSentence) -> str:
-    """What example audio says: ``fp(example.japanese)``."""
-    return short_fingerprint(example.japanese)
+    """What example audio says, without filename-style normalization."""
+    return _audio_content_fingerprint("example", example.japanese)
+
+
+def _audio_content_fingerprint(*parts: str) -> str:
+    """A framed, raw SHA-256 over the exact synthesis request channels."""
+    digest = hashlib.sha256()
+    for part in parts:
+        encoded = str(part).encode("utf-8", errors="surrogatepass")
+        digest.update(len(encoded).to_bytes(8, "big"))
+        digest.update(encoded)
+    return digest.hexdigest()
 
 
 def _without(reference: dict[str, Any], key: str) -> dict[str, Any]:
@@ -421,6 +612,11 @@ class Ledger:
     path: Path
     records: dict[str, dict[str, Any]] = field(default_factory=dict)
     pending_batches: dict[str, Any] = field(default_factory=dict)
+    # Paid audio bytes that are intentionally not canonical yet. Unlike an
+    # ``audio`` entry this is a write-ahead record: it is additive, names a
+    # staged file, and survives a failed records-file compare-and-swap so the
+    # exact request can be adopted on the next run without another paid call.
+    pending_audio: dict[str, Any] = field(default_factory=dict)
     # Top-level keys this version does not know about. A later janki (or a
     # human) may add a whole section beside ``records``; dropping it because
     # ``save`` rebuilds the payload from three literals would delete data this
@@ -451,6 +647,34 @@ class Ledger:
                 f"Could not read ledger {self.path}: {exc.strerror or exc}"
             ) from exc
 
+    def _serialized(self) -> str:
+        payload = {
+            **self.extra,
+            "version": LEDGER_VERSION,
+            "records": self.records,
+            "pending_batches": self.pending_batches,
+            # Sparse so every healthy pre-M8.1 ledger remains byte-shaped the
+            # same after an unrelated command. The key exists only while there
+            # is actually a recovery transaction to describe.
+            **({"pending_audio": self.pending_audio} if self.pending_audio else {}),
+        }
+        return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+
+    def _save_locked(self) -> None:
+        """Save while the caller owns this ledger path's exclusive lock."""
+        text = self._serialized()
+        if self.guarded and self._text_on_disk() != self.baseline:
+            raise LedgerError(
+                f"Ledger {self.path} changed on disk since it was read; "
+                "saving now would discard those changes. Re-load the current "
+                "ledger and re-run."
+            )
+        try:
+            atomic_write_text(self.path, text)
+        except DataError as exc:
+            raise LedgerError(str(exc)) from exc
+        self.baseline = text
+
     def save(self) -> None:
         """Write the whole file atomically, in a stable order.
 
@@ -475,27 +699,66 @@ class Ledger:
         of those handlers; permission denied, a read-only mount and ENOSPC are
         the shapes a real save failure actually has.
         """
-        payload = {
-            **self.extra,
-            "version": LEDGER_VERSION,
-            "records": self.records,
-            "pending_batches": self.pending_batches,
-        }
-        text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
         try:
             with exclusive_path_lock(self.path):
-                if self.guarded and self._text_on_disk() != self.baseline:
-                    raise LedgerError(
-                        f"Ledger {self.path} changed on disk since it was read; "
-                        "saving now would discard those changes. Load the ledger "
-                        "once per command and save once, then re-run."
-                    )
-                atomic_write_text(self.path, text)
+                self._save_locked()
         except DataError as exc:
             raise LedgerError(str(exc)) from exc
-        # What we just wrote is now what we have read: saving twice in one
-        # command is fine, it is saving over *someone else* that is not.
-        self.baseline = text
+
+    def merge_pending_audio(
+        self, keys: Iterable[str], *, replace: bool = False
+    ) -> None:
+        """Durably merge additive WAL rows under one ledger lock.
+
+        Retrying a stale whole-ledger snapshot can starve under repeated
+        unrelated writes and, worse, leave a just-paid stage unregistered when
+        an arbitrary retry bound is exhausted. This operation takes the lock
+        once, reads the latest state inside it, adds only the named exact rows,
+        and writes that merged state without clobbering concurrent provenance.
+        """
+        rows: dict[str, dict[str, Any]] = {}
+        for raw_key in dict.fromkeys(str(item) for item in keys):
+            entry = self.pending_audio_entry(raw_key)
+            if entry is None:
+                raise LedgerError(f"Pending audio entry {raw_key!r} disappeared")
+            rows[raw_key] = entry
+        try:
+            with exclusive_path_lock(self.path):
+                latest = load(self.path)
+                for key, entry in rows.items():
+                    existing = latest.pending_audio.get(key)
+                    if existing is not None and existing != entry and not replace:
+                        raise LedgerError(
+                            f"Pending audio entry {key!r} changed concurrently; "
+                            "refusing to overwrite either paid render. Re-run "
+                            "after the other audio command finishes."
+                        )
+                    latest.pending_audio[key] = dict(entry)
+                latest._save_locked()
+        except DataError as exc:
+            raise LedgerError(str(exc)) from exc
+        self.records = latest.records
+        self.pending_batches = latest.pending_batches
+        self.pending_audio = latest.pending_audio
+        self.extra = latest.extra
+        self.baseline = latest.baseline
+        self.guarded = latest.guarded
+        self.repaired = latest.repaired
+
+    def assert_current(self) -> None:
+        """Refuse a destructive side effect based on a stale ledger snapshot."""
+        if not self.guarded:
+            return
+        try:
+            with exclusive_path_lock(self.path):
+                if self._text_on_disk() != self.baseline:
+                    raise LedgerError(
+                        f"Ledger {self.path} changed on disk since it was read; "
+                        "a destructive operation based on that stale snapshot "
+                        "was refused before touching media. Re-run it."
+                    )
+        except DataError as exc:
+            raise LedgerError(str(exc)) from exc
 
     # -- mutators ----------------------------------------------------------
 
@@ -677,7 +940,7 @@ class Ledger:
         """Record the audio file that currently holds ``content_fp``.
 
         Entries are keyed by file name: regenerating audio for the same
-        content-addressed file (a new voice, say) replaces its entry rather
+        identity-addressed file (a new voice, say) replaces its entry rather
         than adding a second, so ``stale_audio`` never has to guess which of
         two entries describes the file on disk. An entry that differs only in
         ``at`` describes the same file saying the same thing, so re-recording
@@ -909,6 +1172,7 @@ class Ledger:
         *,
         of: str,
         content_fp: str,
+        provider: str | None = None,
         voice: int | str | None = None,
         speed: float | None = None,
         settings: Mapping[str, str] | None = None,
@@ -922,33 +1186,349 @@ class Ledger:
         a record current whose reference was dropped — and then a prune,
         reading the records, deletes the clip nothing appears to want.
 
-        ``voice`` and ``speed`` narrow it to a clip that also *sounds* the way
-        this run would make it. A caller that passes them is asking "would
-        regenerating change anything?", which is the question ``janki audio``
-        actually has; content alone answers a different one and answers it yes
-        for a clip in last week's voice. An entry missing either key — anything
-        written before they were recorded — never matches, so it is
-        regenerated: a clip janki cannot describe is not one it should keep,
-        and re-synthesizing costs seconds.
+        ``provider``, ``voice``, ``speed`` and ``settings`` narrow it to a clip
+        that also *sounds* the way this run would make it. A caller that passes
+        them is asking "would regenerating change anything?", which is the
+        question ``janki audio`` actually has; content alone answers a different
+        one and answers it yes for a clip in last week's voice. An entry missing
+        requested metadata never matches, so it is regenerated: a clip janki
+        cannot describe is not one it should keep, and re-synthesizing costs
+        seconds.
         """
         for entry in self._audio_entries(record_id):
             if entry.get("of") != of or str(entry.get("content_fp") or "") != content_fp:
                 continue
-            if voice is not None and entry.get("voice") != _voice_key(voice):
-                continue
-            if speed is not None:
-                recorded = entry.get("speed")
-                if not isinstance(recorded, int | float) or isinstance(recorded, bool):
-                    continue
-                if float(recorded) != float(speed):
-                    continue
-            # `or {}` on both sides: an engine with nothing to say and an entry
-            # written before there was anywhere to say it are the same fact,
-            # and must not read as a difference.
-            if settings is not None and dict(entry.get("settings") or {}) != dict(settings):
+            if not _audio_profile_matches(
+                entry,
+                provider=provider,
+                voice=voice,
+                speed=speed,
+                settings=settings,
+            ):
                 continue
             return str(entry.get("file") or "") or None
         return None
+
+    @staticmethod
+    def _pending_audio_identity(
+        record_id: str,
+        *,
+        of: str,
+        target: str,
+        request_input: str,
+        forced_accent: bool,
+        content_fp: str,
+        provider: str,
+        voice: int | str,
+        speed: float,
+        settings: Mapping[str, str] | None,
+    ) -> dict[str, Any]:
+        """Build the exact, date-free identity of one pending render."""
+        if of not in AUDIO_KINDS:
+            raise LedgerError(
+                f"Unknown audio kind '{of}'; expected one of {', '.join(AUDIO_KINDS)}"
+            )
+        name = str(target).strip()
+        if not name or PurePosixPath(name).name != name:
+            raise LedgerError("A pending audio target must be one media filename")
+        if not isinstance(forced_accent, bool):
+            raise LedgerError("A pending audio request needs a boolean forced_accent")
+        fingerprint = str(content_fp)
+        if (
+            len(fingerprint) != 64
+            or any(character not in "0123456789abcdef" for character in fingerprint)
+        ):
+            raise LedgerError(
+                "A pending audio content fingerprint must be a lowercase SHA-256"
+            )
+        try:
+            rate = float(speed)
+        except (TypeError, ValueError) as exc:
+            raise LedgerError(f"Audio speed must be a number, got {speed!r}") from exc
+        return {
+            "record_id": _record_key(record_id),
+            "of": of,
+            "target": name,
+            "request": {
+                "input": str(request_input),
+                "forced_accent": forced_accent,
+            },
+            "profile": {
+                "provider": str(provider),
+                "voice": _voice_key(voice),
+                "speed": rate,
+                "settings": dict(settings or {}),
+            },
+            "content_fp": fingerprint,
+        }
+
+    @staticmethod
+    def _pending_audio_key(identity: Mapping[str, Any]) -> str:
+        encoded = json.dumps(
+            dict(identity),
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    def record_pending_audio(
+        self,
+        record_id: str,
+        *,
+        of: str,
+        target: str,
+        request_input: str,
+        forced_accent: bool,
+        content_fp: str,
+        provider: str,
+        voice: int | str,
+        speed: float,
+        settings: Mapping[str, str] | None,
+        staged_file: str,
+        staged_sha256: str,
+        at: str | None = None,
+        **details: Any,
+    ) -> str:
+        """Add one staged paid render to the write-ahead log.
+
+        No canonical ``records[*].audio`` entry is changed here. The caller
+        persists this additive block, compare-and-swap saves the record
+        reference, and only then publishes the bytes and commits the canonical
+        entry. Repeating the exact render replaces its own WAL value; a
+        different request/profile gets a different key and cannot be adopted.
+        """
+        identity = self._pending_audio_identity(
+            record_id,
+            of=of,
+            target=target,
+            request_input=request_input,
+            forced_accent=forced_accent,
+            content_fp=content_fp,
+            provider=provider,
+            voice=voice,
+            speed=speed,
+            settings=settings,
+        )
+        staged = str(staged_file).strip()
+        staged_path = PurePosixPath(staged)
+        if (
+            not staged
+            or staged_path.is_absolute()
+            or ".." in staged_path.parts
+            or staged_path.name in {"", ".", ".."}
+        ):
+            raise LedgerError("A pending audio staged_file must be a safe relative path")
+        staged_sha = str(staged_sha256)
+        if (
+            len(staged_sha) != 64
+            or any(character not in "0123456789abcdef" for character in staged_sha)
+        ):
+            raise LedgerError("A pending audio staged_sha256 must be a lowercase SHA-256")
+        _checked_details("record_pending_audio", details)
+        key = self._pending_audio_key(identity)
+        expected_stage = f".pending/{key}-{staged_sha}.stage"
+        if staged_path.as_posix() != expected_stage:
+            raise LedgerError(
+                f"A pending audio staged_file must be exactly {expected_stage!r}"
+            )
+        existing = self.pending_audio.get(key)
+        if isinstance(existing, Mapping) and any(
+            existing.get(name) != value for name, value in identity.items()
+        ):
+            raise LedgerError(
+                f"Pending audio identity collision at {key}; refusing to replace it"
+            )
+        candidate = {
+            **identity,
+            "staged_file": staged_path.as_posix(),
+            "staged_sha256": staged_sha,
+            "details": dict(details),
+            "at": _iso_date(at),
+        }
+        _validate_pending_audio_entry(key, candidate)
+        self.pending_audio[key] = candidate
+        return key
+
+    def pending_audio_key_for(
+        self,
+        record_id: str,
+        *,
+        of: str,
+        target: str,
+        request_input: str,
+        forced_accent: bool,
+        content_fp: str,
+        provider: str,
+        voice: int | str,
+        speed: float,
+        settings: Mapping[str, str] | None,
+    ) -> str:
+        """Stable key/path component for an exact pending render identity."""
+        return self._pending_audio_key(
+            self._pending_audio_identity(
+                record_id,
+                of=of,
+                target=target,
+                request_input=request_input,
+                forced_accent=forced_accent,
+                content_fp=content_fp,
+                provider=provider,
+                voice=voice,
+                speed=speed,
+                settings=settings,
+            )
+        )
+
+    def pending_audio_for(
+        self,
+        record_id: str,
+        *,
+        of: str,
+        target: str,
+        request_input: str,
+        forced_accent: bool,
+        content_fp: str,
+        provider: str,
+        voice: int | str,
+        speed: float,
+        settings: Mapping[str, str] | None,
+    ) -> tuple[str, dict[str, Any]] | None:
+        """Return only a WAL entry for this exact request and render profile."""
+        identity = self._pending_audio_identity(
+            record_id,
+            of=of,
+            target=target,
+            request_input=request_input,
+            forced_accent=forced_accent,
+            content_fp=content_fp,
+            provider=provider,
+            voice=voice,
+            speed=speed,
+            settings=settings,
+        )
+        key = self._pending_audio_key(identity)
+        entry = self.pending_audio.get(key)
+        if not isinstance(entry, dict):
+            return None
+        _validate_pending_audio_entry(key, entry)
+        if any(entry.get(name) != value for name, value in identity.items()):
+            return None
+        return key, dict(entry)
+
+    def pending_audio_entry(self, key: str) -> dict[str, Any] | None:
+        entry = self.pending_audio.get(str(key))
+        if not isinstance(entry, dict):
+            return None
+        _validate_pending_audio_entry(str(key), entry)
+        return dict(entry)
+
+    def commit_pending_audio(self, key: str) -> dict[str, Any]:
+        """Apply one published WAL entry to canonical audio state in memory."""
+        entry = self.pending_audio_entry(key)
+        if entry is None:
+            raise LedgerError(f"No pending audio entry {key!r}")
+        profile = entry.get("profile")
+        details = entry.get("details")
+        if not isinstance(profile, Mapping) or not isinstance(details, Mapping):
+            raise LedgerError(f"Pending audio entry {key!r} is malformed")
+        reserved = {
+            "record_id",
+            "file",
+            "of",
+            "provider",
+            "voice",
+            "speed",
+            "settings",
+            "content_fp",
+            "at",
+        }
+        collisions = sorted(str(name) for name in details if name in reserved)
+        if collisions:
+            raise LedgerError(
+                f"Pending audio entry {key!r} has reserved detail key(s): "
+                + ", ".join(collisions)
+            )
+        self.record_audio(
+            str(entry.get("record_id") or ""),
+            file=str(entry.get("target") or ""),
+            of=str(entry.get("of") or ""),
+            provider=str(profile.get("provider") or ""),
+            voice=profile.get("voice"),
+            speed=profile.get("speed"),
+            settings=(
+                profile.get("settings")
+                if isinstance(profile.get("settings"), Mapping)
+                else None
+            ),
+            content_fp=str(entry.get("content_fp") or ""),
+            at=str(entry.get("at") or "") or None,
+            **dict(details),
+        )
+        del self.pending_audio[str(key)]
+        return entry
+
+    def discard_pending_audio_for_targets(
+        self, targets: Iterable[str]
+    ) -> list[dict[str, Any]]:
+        """Drop superseded WAL entries after those targets have committed."""
+        names = {str(target).casefold() for target in targets}
+        removed: list[dict[str, Any]] = []
+        for key, raw in list(self.pending_audio.items()):
+            if not isinstance(raw, dict):
+                continue
+            if str(raw.get("target") or "").casefold() not in names:
+                continue
+            removed.append(dict(raw))
+            del self.pending_audio[key]
+        return removed
+
+    def discard_pending_audio_for_slots(
+        self,
+        slots: Iterable[tuple[str, str]],
+        *,
+        keep: Iterable[str] = (),
+    ) -> list[dict[str, Any]]:
+        """Retire WAL rows for selected record/kind slots no longer current."""
+        wanted = {(str(record_id), str(kind)) for record_id, kind in slots}
+        spared = {str(key) for key in keep}
+        removed: list[dict[str, Any]] = []
+        for key, raw in list(self.pending_audio.items()):
+            if key in spared or not isinstance(raw, dict):
+                continue
+            _validate_pending_audio_entry(str(key), raw)
+            slot = (str(raw.get("record_id") or ""), str(raw.get("of") or ""))
+            if slot not in wanted:
+                continue
+            removed.append(dict(raw))
+            del self.pending_audio[key]
+        return removed
+
+    def discard_pending_audio_for_missing_records(
+        self, record_ids: Iterable[str]
+    ) -> list[dict[str, Any]]:
+        """Retire WAL rows whose owning normalized record was deleted."""
+        present = {str(record_id) for record_id in record_ids}
+        removed: list[dict[str, Any]] = []
+        for key, raw in list(self.pending_audio.items()):
+            if not isinstance(raw, dict):
+                continue
+            _validate_pending_audio_entry(str(key), raw)
+            if str(raw.get("record_id") or "") in present:
+                continue
+            removed.append(dict(raw))
+            del self.pending_audio[key]
+        return removed
+
+    def pending_audio_files(self) -> set[str]:
+        """Canonical targets protected while a paid render is pending."""
+        files: set[str] = set()
+        for key, entry in self.pending_audio.items():
+            if not isinstance(entry, Mapping):
+                raise LedgerError(f"Pending audio entry {key!r} must be an object")
+            _validate_pending_audio_entry(str(key), entry)
+            files.add(str(entry["target"]))
+        return files
 
     def forget_audio_files(self, files: Iterable[str]) -> int:
         """Drop every audio entry naming one of ``files``. Returns how many.
@@ -1160,14 +1740,28 @@ class Ledger:
                 result.append(str(record_id))
         return result
 
-    def stale_audio(self, records: Iterable[VocabularyRecord]) -> list[str]:
-        """Records whose recorded audio no longer matches their content.
+    def stale_audio(
+        self,
+        records: Iterable[VocabularyRecord],
+        *,
+        word_provider: RenderProfile | None,
+        example_provider: RenderProfile | None,
+    ) -> list[str]:
+        """Records whose audio no longer matches content or render profile.
 
-        Word audio goes stale when the reading or the selected accent changes;
-        example audio goes stale when the sentence it was generated from is
-        edited away (its content fingerprint matches none of the record's
-        current examples). Entries of an unrecognized kind are left alone —
-        this reports what it can prove.
+        Currency belongs to the file the record currently names. This matters
+        when switching sentence engines changes the extension: the ledger can
+        retain the unreferenced old file beside its current replacement, and a
+        historical entry must not leave the record stale forever.
+
+        Word audio goes stale when its reference is dropped, its reading or
+        selected accent changes, or its configured render profile changes.
+        Referenced example audio goes stale when its sentence or an available
+        render profile changes. When a configured provider cannot be resolved,
+        status warns and this method still compares content and references. A
+        missing example reference is reported by
+        :meth:`unvoiced_examples`; entries of an unrecognized kind are left
+        alone.
         """
         result: list[str] = []
         for record in records:
@@ -1175,24 +1769,53 @@ class Ledger:
             if not entries:
                 continue
             word_fp = word_audio_content_fingerprint(record)
-            example_fps = {
-                example_audio_content_fingerprint(example)
-                for example in record.examples
-                if example.japanese
-            }
-            for entry in entries:
-                fingerprint = str(entry.get("content_fp") or "")
-                kind = entry.get("of")
-                if kind == "word":
-                    stale = fingerprint != word_fp
-                elif kind == "example":
-                    stale = fingerprint not in example_fps
-                else:
+            word_entries = [entry for entry in entries if entry.get("of") == "word"]
+            if word_entries:
+                word_file = PurePosixPath(record.audio).name if record.audio else ""
+                referenced = [entry for entry in word_entries if entry.get("file") == word_file]
+                if not referenced or not any(
+                    _audio_entry_is_current(
+                        entry,
+                        content_fp=word_fp,
+                        profile=word_provider,
+                    )
+                    for entry in referenced
+                ):
+                    result.append(record.id)
                     continue
-                if stale:
+
+            example_entries = [entry for entry in entries if entry.get("of") == "example"]
+            for example in record.examples:
+                if not example.japanese or not example.audio:
+                    continue
+                example_file = PurePosixPath(example.audio).name
+                referenced = [
+                    entry for entry in example_entries if entry.get("file") == example_file
+                ]
+                profile = example_provider
+                if profile is not None:
+                    try:
+                        profile = clip_provider(profile, example.instructions)
+                    except TtsError:
+                        # A configured engine that cannot honor an explicit
+                        # clip setting cannot describe this file as current.
+                        result.append(record.id)
+                        break
+                # No ledger entry is the unvoiced-example signal, not a second
+                # stale signal for the same hole.
+                if referenced and not any(
+                    _audio_entry_is_current(
+                        entry,
+                        content_fp=example_audio_content_fingerprint(example),
+                        profile=profile,
+                    )
+                    for entry in referenced
+                ):
                     result.append(record.id)
                     break
-        return result
+        # Multiple deck files may persist different versions of one record id.
+        # Any stale version matters, but the status surface counts record ids.
+        return list(dict.fromkeys(result))
 
     @staticmethod
     def missing_enrichment(records: Iterable[VocabularyRecord]) -> list[str]:
@@ -1298,14 +1921,32 @@ def load(path: Path, *, repair: bool = False) -> Ledger:
     if not isinstance(pending_batches, dict):
         raise LedgerError(f"Ledger {path}: 'pending_batches' must be an object")
 
+    pending_audio = data.get("pending_audio")
+    if pending_audio is None:
+        pending_audio = {}
+    if not isinstance(pending_audio, dict):
+        raise LedgerError(f"Ledger {path}: 'pending_audio' must be an object")
+    for pending_key, pending_entry in pending_audio.items():
+        if not isinstance(pending_key, str) or not isinstance(pending_entry, Mapping):
+            raise LedgerError(
+                f"Ledger {path}: each pending_audio entry must be keyed by text "
+                "and hold an object"
+            )
+        _validate_pending_audio_entry(
+            pending_key,
+            pending_entry,
+            where=f"Ledger {path}: pending audio entry",
+        )
+
     return Ledger(
         path=path,
         records=dict(records),
         pending_batches=dict(pending_batches),
+        pending_audio=dict(pending_audio),
         extra={
             key: value
             for key, value in data.items()
-            if key not in {"version", "records", "pending_batches"}
+            if key not in {"version", "records", "pending_batches", "pending_audio"}
         },
         baseline=text,
         guarded=True,

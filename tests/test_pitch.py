@@ -448,8 +448,8 @@ def test_the_aquestalk_spelling_never_becomes_the_records_own() -> None:
     caught two, both benign, and both had to justify themselves in `READERS`
     before the suite went green again.
 
-    The other shape — one of these three storing the answer instead — is
-    already caught: making `ledger._spoken_form` assign to `record.reading`
+        The other shape — one of these callers storing the answer instead — is
+        already caught: making `ledger.word_audio_request` assign to `record.reading`
     fails eight tests, seven in `test_audio_cmd.py` and one in
     `test_ledger.py`, because storing it changes what the fingerprints say.
     A behavioural test cannot add anything here: the function takes a string
@@ -463,11 +463,12 @@ def test_the_aquestalk_spelling_never_becomes_the_records_own() -> None:
 
     #: Why each caller is allowed to ask, and what it does with the answer.
     READERS = {
-        ("audio_cmd", "_word_audio"): "builds the request; the answer is sent, never stored",
         ("enrich", "_compatible_pitch_patterns"): "asks only whether a pattern converts at all",
         ("enrich", "_why_unusable"): "asks the refusal for its reason; keeps the reason",
         ("jpdb_import", "_speakable"): "asks only whether a pattern converts at all",
-        ("ledger", "_spoken_form"): "hashes what a clip says; the digest is stored, not the text",
+            ("ledger", "word_audio_request"): (
+                "builds the request and its currency input; the answer is sent/hashed, never stored"
+            ),
         ("promote", "_unspeakable_patterns"): "asks only whether a pattern converts at all",
     }
 

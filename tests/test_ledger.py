@@ -8,6 +8,7 @@ one module.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from dataclasses import replace
@@ -34,6 +35,71 @@ REQUEST_V1 = "a" * 64
 REQUEST_V2 = "b" * 64
 
 
+def _raw_audio_fingerprint(*parts: str) -> str:
+    """Independent specification of the framed, raw synthesis fingerprint."""
+    digest = hashlib.sha256()
+    for part in parts:
+        encoded = part.encode("utf-8", errors="surrogatepass")
+        digest.update(len(encoded).to_bytes(8, "big"))
+        digest.update(encoded)
+    return digest.hexdigest()
+
+
+class _AudioProfile:
+    """The render-profile half of a speech provider, all the ledger needs."""
+
+    def __init__(
+        self,
+        name: str,
+        voice: int | str,
+        *,
+        speed: float = 1.0,
+        settings: dict[str, str] | None = None,
+    ) -> None:
+        self.name = name
+        self.voice = voice
+        self.speed = speed
+        self.settings = settings or {}
+
+    def for_clip(self, instructions: str) -> _AudioProfile:
+        effective = "\n\n".join(
+            part.strip()
+            for part in (self.settings.get("instructions", ""), instructions)
+            if part.strip()
+        )
+        settings = dict(self.settings)
+        if effective:
+            settings["instructions"] = effective
+        else:
+            settings.pop("instructions", None)
+        return _AudioProfile(
+            self.name,
+            self.voice,
+            speed=self.speed,
+            settings=settings,
+        )
+
+
+class _ProfileWithoutClipInstructions:
+    name = "voicevox"
+    voice = 52
+    speed = 1.0
+    settings: dict[str, str] = {}
+
+
+WORD_PROFILE = _AudioProfile("voicevox", 46)
+EXAMPLE_PROFILE = _AudioProfile("openai", "onyx")
+
+
+def _stale_audio(
+    book: ledger_module.Ledger, records: list[VocabularyRecord]
+) -> list[str]:
+    return book.stale_audio(
+        records,
+        word_provider=WORD_PROFILE,
+        example_provider=EXAMPLE_PROFILE,
+    )
+
 
 def _record(
     expression: str = "話す",
@@ -41,6 +107,7 @@ def _record(
     *,
     examples: list[ExampleSentence] | None = None,
     usage_notes: str = "",
+    audio: str = "",
 ) -> VocabularyRecord:
     return VocabularyRecord(
         id=f"word:{expression}:{reading}",
@@ -49,6 +116,7 @@ def _record(
         meanings=["to speak"],
         examples=examples if examples is not None else [],
         usage_notes=usage_notes,
+        audio=audio,
     )
 
 
@@ -72,6 +140,7 @@ def test_a_missing_ledger_file_is_an_empty_ledger(tmp_path: Path) -> None:
 
     assert book.records == {}
     assert book.pending_batches == {}
+    assert book.pending_audio == {}
 
 
 def test_an_empty_ledger_file_is_an_empty_ledger(tmp_path: Path) -> None:
@@ -617,6 +686,174 @@ def test_re_recording_identical_audio_months_later_reports_no_change(tmp_path: P
     assert entries[0]["at"] == "2026-08-01"
 
 
+def test_pending_audio_is_additive_exact_and_separate_from_canonical_state(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "ledger.json"
+    book = ledger_module.load(path)
+    book.record_audio(
+        "word:話す:はなす",
+        file="janki-live.wav",
+        of="word",
+        provider="voicevox",
+        voice=7,
+        speed=1.0,
+        content_fp="c" * 64,
+    )
+    canonical = json.loads(json.dumps(book.records, ensure_ascii=False))
+
+    pending_arguments = {
+        "of": "word",
+        "target": "janki-live.wav",
+        "request_input": "ハナス'",
+        "forced_accent": True,
+        "content_fp": "a" * 64,
+        "provider": "voicevox",
+        "voice": 53,
+        "speed": 1.0,
+        "settings": {"mode": "exact"},
+    }
+    key = book.pending_audio_key_for("word:話す:はなす", **pending_arguments)
+    key = book.record_pending_audio(
+        "word:話す:はなす",
+        **pending_arguments,
+        staged_file=f".pending/{key}-{'b' * 64}.stage",
+        staged_sha256="b" * 64,
+        accent_unverified=False,
+    )
+
+    assert book.records == canonical, "WAL creation cannot replace the live row"
+    book.save()
+    reloaded = ledger_module.load(path)
+    assert reloaded.pending_audio_files() == {"janki-live.wav"}
+    found = reloaded.pending_audio_for(
+        "word:話す:はなす",
+        of="word",
+        target="janki-live.wav",
+        request_input="ハナス'",
+        forced_accent=True,
+        content_fp="a" * 64,
+        provider="voicevox",
+        voice=53,
+        speed=1.0,
+        settings={"mode": "exact"},
+    )
+    assert found is not None and found[0] == key
+    assert reloaded.pending_audio_for(
+        "word:話す:はなす",
+        of="word",
+        target="janki-live.wav",
+        request_input="ハナス'",
+        forced_accent=False,
+        content_fp="a" * 64,
+        provider="voicevox",
+        voice=53,
+        speed=1.0,
+        settings={"mode": "exact"},
+    ) is None, "one request-channel change cannot adopt paid bytes"
+
+    reloaded.commit_pending_audio(key)
+
+    [entry] = reloaded.records["word:話す:はなす"]["audio"]
+    assert entry["voice"] == 53 and entry["content_fp"] == "a" * 64
+    assert reloaded.pending_audio == {}
+
+
+def test_pending_audio_stage_must_be_its_exact_private_wal_path(tmp_path: Path) -> None:
+    book = ledger_module.load(tmp_path / "ledger.json")
+    arguments = {
+        "of": "word",
+        "target": "janki-live.wav",
+        "request_input": "ハナス'",
+        "forced_accent": True,
+        "content_fp": "a" * 64,
+        "provider": "voicevox",
+        "voice": 53,
+        "speed": 1.0,
+        "settings": {},
+        "staged_sha256": "b" * 64,
+    }
+
+    with pytest.raises(LedgerError, match=r"\.pending/.+\.stage"):
+        book.record_pending_audio(
+            "word:話す:はなす",
+            **arguments,
+            staged_file="janki-live.wav",
+        )
+
+    path = tmp_path / "malformed-ledger.json"
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "records": {},
+                "pending_batches": {},
+                "pending_audio": {
+                    "d" * 64: {
+                        "target": "janki-live.wav",
+                        "staged_file": "janki-live.wav",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(LedgerError, match="canonical media"):
+        ledger_module.load(path)
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    ["identity-key", "request", "profile", "content", "staged-sha", "details", "date"],
+)
+def test_tampered_pending_audio_is_refused_at_load(
+    tmp_path: Path, tamper: str
+) -> None:
+    path = tmp_path / "ledger.json"
+    book = ledger_module.load(path)
+    arguments = {
+        "of": "word",
+        "target": "janki-live.wav",
+        "request_input": "ハナス'",
+        "forced_accent": True,
+        "content_fp": "a" * 64,
+        "provider": "voicevox",
+        "voice": 53,
+        "speed": 1.0,
+        "settings": {},
+    }
+    key = book.pending_audio_key_for("word:話す:はなす", **arguments)
+    book.record_pending_audio(
+        "word:話す:はなす",
+        **arguments,
+        staged_file=f".pending/{key}-{'b' * 64}.stage",
+        staged_sha256="b" * 64,
+    )
+    book.save()
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    [entry] = payload["pending_audio"].values()
+    if tamper == "identity-key":
+        wrong = "c" * 64
+        payload["pending_audio"] = {wrong: entry}
+        entry["staged_file"] = f".pending/{wrong}-{'b' * 64}.stage"
+    elif tamper == "request":
+        entry["request"]["forced_accent"] = "yes"
+    elif tamper == "profile":
+        entry["profile"]["settings"] = {"model": 53}
+    elif tamper == "content":
+        entry["content_fp"] = "short"
+    elif tamper == "staged-sha":
+        entry["staged_sha256"] = "short"
+    elif tamper == "details":
+        entry["details"] = []
+    else:
+        entry["at"] = "2026-08-18T12:00:00"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(LedgerError):
+        ledger_module.load(path)
+
+
 def test_audio_arguments_are_checked(tmp_path: Path) -> None:
     book = ledger_module.load(tmp_path / "ledger.json")
     arguments = {
@@ -749,8 +986,31 @@ def test_content_fingerprints_cover_what_is_spoken() -> None:
     record = _record()
     example = ExampleSentence(japanese="毎日話す。")
 
-    assert word_audio_content_fingerprint(record) == short_fingerprint(record.reading)
-    assert example_audio_content_fingerprint(example) == short_fingerprint(example.japanese)
+    assert word_audio_content_fingerprint(record) == _raw_audio_fingerprint(
+        "word", "natural", record.reading
+    )
+    assert example_audio_content_fingerprint(example) == _raw_audio_fingerprint(
+        "example", example.japanese
+    )
+    assert len(word_audio_content_fingerprint(record)) == 64
+    # Domain and length framing are observable, not an implementation detail:
+    # neither a word request nor a differently partitioned byte stream aliases
+    # an example that happens to contain the same text.
+    assert _raw_audio_fingerprint("example", "ab", "c") != _raw_audio_fingerprint(
+        "example", "a", "bc"
+    )
+    assert example_audio_content_fingerprint(
+        ExampleSentence(japanese="Ａ。")
+    ) == _raw_audio_fingerprint("example", "Ａ。")
+    assert example_audio_content_fingerprint(
+        ExampleSentence(japanese="A。")
+    ) == _raw_audio_fingerprint("example", "A。")
+    assert _raw_audio_fingerprint("example", "Ａ。") != _raw_audio_fingerprint(
+        "example", "A。"
+    ), "raw provider inputs remain distinct even when NFKC-equivalent"
+    assert _raw_audio_fingerprint("word", "forced", "x") != _raw_audio_fingerprint(
+        "word", "natural", "x"
+    )
 
 
 def test_the_two_fingerprint_families_are_different_addresses() -> None:
@@ -774,6 +1034,22 @@ def test_example_audio_filenames_are_per_record_but_content_is_shared() -> None:
     )
 
 
+def test_clip_instructions_are_render_settings_not_audio_identity() -> None:
+    record = _record()
+    plain = ExampleSentence(japanese="毎日話す。")
+    helped = ExampleSentence(
+        japanese="毎日話す。",
+        instructions="Pronounce 毎日 as まいにち.",
+    )
+
+    assert example_audio_filename_fingerprint(record, plain) == (
+        example_audio_filename_fingerprint(record, helped)
+    )
+    assert example_audio_content_fingerprint(plain) == (
+        example_audio_content_fingerprint(helped)
+    )
+
+
 def test_word_content_fingerprint_follows_the_selected_accent() -> None:
     record = _record()
     plain = word_audio_content_fingerprint(record)
@@ -785,8 +1061,10 @@ def test_word_content_fingerprint_follows_the_selected_accent() -> None:
     # engine is actually sent. Fingerprinting the raw pattern let a fullwidth
     # ＬＨＬ and an ASCII LHL collide under NFKC, so correcting one to the other
     # left the guessed clip permanently current.
-    assert word_audio_content_fingerprint(_accented(record, "LHHH")) == short_fingerprint(
-        record.reading + to_aquestalk(record.reading, "LHHH")
+    assert word_audio_content_fingerprint(_accented(record, "LHHH")) == (
+        _raw_audio_fingerprint(
+            "word", "forced", to_aquestalk(record.reading, "LHHH")
+        )
     )
 
 
@@ -799,8 +1077,8 @@ def test_an_audio_accent_override_wins_over_the_jpdb_pattern() -> None:
     # no-pattern case.
     accented.audio_accent = "HLLL"
 
-    assert word_audio_content_fingerprint(accented) == short_fingerprint(
-        record.reading + to_aquestalk(record.reading, "HLLL")
+    assert word_audio_content_fingerprint(accented) == _raw_audio_fingerprint(
+        "word", "forced", to_aquestalk(record.reading, "HLLL")
     )
 
 
@@ -841,8 +1119,8 @@ def test_missing_audio_is_about_word_audio(tmp_path: Path) -> None:
         example_only.id,
         file="janki-example.wav",
         of="example",
-        provider="azure",
-        voice=0,
+        provider="openai",
+        voice="onyx",
         speed=1.0,
         content_fp=example_audio_content_fingerprint(example_only.examples[0]),
         at="2026-08-11",
@@ -853,7 +1131,10 @@ def test_missing_audio_is_about_word_audio(tmp_path: Path) -> None:
 
 def test_stale_audio_catches_an_edited_reading_and_an_edited_example(tmp_path: Path) -> None:
     book = ledger_module.load(tmp_path / "ledger.json")
-    record = _record(examples=[ExampleSentence(japanese="毎日話す。")])
+    record = _record(
+        examples=[ExampleSentence(japanese="毎日話す。", audio="audio/janki-example.wav")],
+        audio="audio/janki-word.wav",
+    )
     book.record_audio(
         record.id,
         file="janki-word.wav",
@@ -868,36 +1149,155 @@ def test_stale_audio_catches_an_edited_reading_and_an_edited_example(tmp_path: P
         record.id,
         file="janki-example.wav",
         of="example",
-        provider="azure",
-        voice=0,
+        provider="openai",
+        voice="onyx",
         speed=1.0,
         content_fp=example_audio_content_fingerprint(record.examples[0]),
         at="2026-08-11",
     )
 
-    assert book.stale_audio([record]) == []
+    assert _stale_audio(book, [record]) == []
 
     record.examples[0].japanese = "毎日日本語で話す。"
-    assert book.stale_audio([record]) == [record.id]
+    assert _stale_audio(book, [record]) == [record.id]
 
     record.examples[0].japanese = "毎日話す。"
     record.reading = "はなーす"
-    assert book.stale_audio([record]) == [record.id]
+    assert _stale_audio(book, [record]) == [record.id]
+
+
+def test_stale_audio_uses_each_examples_effective_instructions(tmp_path: Path) -> None:
+    base = _AudioProfile(
+        "openai",
+        "onyx",
+        settings={"model": "gpt-4o-mini-tts", "instructions": "Global."},
+    )
+    example = ExampleSentence(
+        japanese="毎日話す。",
+        audio="audio/janki-example.mp3",
+        instructions="Clip.",
+    )
+    record = _record(examples=[example])
+    book = ledger_module.load(tmp_path / "ledger.json")
+    prepared = base.for_clip(example.instructions)
+    book.record_audio(
+        record.id,
+        file="janki-example.mp3",
+        of="example",
+        provider=prepared.name,
+        voice=prepared.voice,
+        speed=prepared.speed,
+        settings=prepared.settings,
+        content_fp=example_audio_content_fingerprint(example),
+    )
+
+    assert book.stale_audio(
+        [record], word_provider=WORD_PROFILE, example_provider=base
+    ) == []
+
+    record.examples[0].instructions = "Changed."
+    assert book.stale_audio(
+        [record], word_provider=WORD_PROFILE, example_provider=base
+    ) == [record.id]
+
+
+def test_an_instructed_example_is_stale_under_an_engine_that_cannot_honor_it(
+    tmp_path: Path,
+) -> None:
+    example = ExampleSentence(
+        japanese="毎日話す。",
+        audio="audio/janki-example.wav",
+        instructions="Clip help.",
+    )
+    record = _record(examples=[example])
+    book = ledger_module.load(tmp_path / "ledger.json")
+    book.record_audio(
+        record.id,
+        file="janki-example.wav",
+        of="example",
+        provider="voicevox",
+        voice=52,
+        speed=1.0,
+        settings={},
+        content_fp=example_audio_content_fingerprint(example),
+    )
+
+    assert book.stale_audio(
+        [record],
+        word_provider=WORD_PROFILE,
+        example_provider=_ProfileWithoutClipInstructions(),
+    ) == [record.id]
+
+
+@pytest.mark.parametrize(
+    ("field", "old_value"),
+    [
+        ("provider", "other-engine"),
+        ("provider", None),
+        ("voice", 13),
+        ("voice", None),
+        ("speed", 0.7),
+        ("speed", None),
+        ("settings", {"style": "old"}),
+        ("settings", None),
+    ],
+)
+def test_stale_audio_compares_every_render_profile_field(
+    tmp_path: Path, field: str, old_value: object
+) -> None:
+    book = ledger_module.load(tmp_path / "ledger.json")
+    record = _record(audio="audio/janki-word.wav")
+    profile = _AudioProfile("voicevox", 53, speed=0.8, settings={"style": "clear"})
+    book.record_audio(
+        record.id,
+        file="janki-word.wav",
+        of="word",
+        provider=profile.name,
+        voice=profile.voice,
+        speed=profile.speed,
+        settings=profile.settings,
+        content_fp=word_audio_content_fingerprint(record),
+    )
+    book.records[record.id]["audio"][0][field] = old_value
+
+    assert book.stale_audio(
+        [record],
+        word_provider=profile,
+        example_provider=EXAMPLE_PROFILE,
+    ) == [record.id]
 
 
 def test_records_with_no_audio_are_missing_not_stale(tmp_path: Path) -> None:
     book = ledger_module.load(tmp_path / "ledger.json")
     record = _record()
 
-    assert book.stale_audio([record]) == []
+    assert _stale_audio(book, [record]) == []
     assert book.missing_audio([record]) == [record.id]
+
+
+def test_word_audio_with_a_dropped_record_reference_is_stale(tmp_path: Path) -> None:
+    """The ledger entry alone cannot make a clip playable or current."""
+    book = ledger_module.load(tmp_path / "ledger.json")
+    record = _record()
+    book.record_audio(
+        record.id,
+        file="janki-word.wav",
+        of="word",
+        provider="voicevox",
+        voice=46,
+        speed=1.0,
+        content_fp=word_audio_content_fingerprint(record),
+    )
+
+    assert book.missing_audio([record]) == [], "the ledger knows a clip was made"
+    assert _stale_audio(book, [record]) == [record.id], "but the record no longer names it"
 
 
 def test_word_audio_goes_stale_once_a_pitch_pattern_arrives(tmp_path: Path) -> None:
     # The transition an enrichment pass creates: audio synthesized before the
     # accent was known must be regenerated with it.
     book = ledger_module.load(tmp_path / "ledger.json")
-    record = _record()
+    record = _record(audio="audio/janki-word.wav")
     book.record_audio(
         record.id,
         file="janki-word.wav",
@@ -909,7 +1309,7 @@ def test_word_audio_goes_stale_once_a_pitch_pattern_arrives(tmp_path: Path) -> N
         at="2026-08-11",
     )
 
-    assert book.stale_audio([_accented(record, "LHHH")]) == [record.id]
+    assert _stale_audio(book, [_accented(record, "LHHH")]) == [record.id]
 
 
 def test_missing_enrichment_reads_records_not_the_ledger(tmp_path: Path) -> None:
@@ -995,8 +1395,8 @@ def test_the_word_audio_fingerprint_uses_pitch_select_pattern() -> None:
         pitch_accent=["", "LHL"],
     )
 
-    assert ledger_module.word_audio_content_fingerprint(record) == short_fingerprint(
-        "はし" + to_aquestalk("はし", "LHL")
+    assert ledger_module.word_audio_content_fingerprint(record) == _raw_audio_fingerprint(
+        "word", "forced", to_aquestalk("はし", "LHL")
     )
     assert pitch.select_pattern(record) == "LHL"
 

@@ -34,12 +34,13 @@ marked "supersedes design").
    malformed-ID re-mint at promote time, specified there). Never insert
    into `FIELD_NAMES` (append-only, and only in task M5.4). Schema
    fields (`pitch_accent`, `audio_accent`, `frequency_rank`,
-   `ExampleSentence.audio`) are added **only** in M2.2 — if an earlier
-   task needs them, use defensive access, don't add fields early.
+   `ExampleSentence.audio`) are added **only** in M2.2, while the sparse
+   human-owned `ExampleSentence.instructions` escape hatch is M8.1 — if an
+   earlier task needs one, use defensive access, don't add fields early.
 6. **No live network calls in tests.** Every client (jpdb, Claude,
-   VOICEVOX, Azure) takes an injectable transport; tests use fakes with
+   VOICEVOX, OpenAI speech) takes an injectable transport; tests use fakes with
    canned responses.
-7. Dependencies policy (`AGENTS.md`: prefer stdlib): jpdb/VOICEVOX/Azure
+7. Dependencies policy (`AGENTS.md`: prefer stdlib): jpdb/VOICEVOX/OpenAI speech
    clients use `urllib.request` (JSON-over-POST is trivial); the
    `anthropic` SDK is justified for AI tasks and lives in the optional
    extras group `ai` created by M3.1. HEIC conversion uses `sips` via
@@ -75,14 +76,15 @@ marked "supersedes design").
   (declaration-order) field keys, trailing newline, LF-only,
   `ensure_ascii=False`. The ledger may pass `sort_keys=True` at its own
   call site if it wants alphabetical keys.
-- **Fingerprints** (all via `identifiers.short_fingerprint`; formulas
-  live in `ledger.py` (M1.3) — never restate them elsewhere). Two
-  families, deliberately different:
+- **Fingerprints** (formulas live in `ledger.py` (M1.3) — never restate them
+  elsewhere). Two families, deliberately different:
   - *Filename* fp (stable addresses): word audio `fp(record.id)`;
-    example audio `fp(record.id + example.japanese)`.
-  - *Content* fp (staleness detection): word audio
-    `fp(reading + selected_pitch_pattern)`; example audio
-    `fp(example.japanese)`.
+    example audio `fp(record.id + example.japanese)`, both through the frozen
+    48-bit `identifiers.short_fingerprint` formula.
+  - *Content* fp (staleness detection): a raw, framed SHA-256 over the exact
+    provider request. Word audio binds its forced/natural mode and the one
+    string actually sent (forced AquesTalk or bare reading); example audio
+    binds the exact Japanese sentence. The formulas live only in `ledger.py`.
 - **Staging file shape** (M1.5): a YAML mapping with `records:` (list of
   record dicts — the shape `load_records` already accepts) plus metadata
   keys the loader ignores (`source_file`, `extracted_at`, `model`,
@@ -263,12 +265,12 @@ refinement below).
   `record_enriched`, `record_audio`, `record_export`, `remove`.
 - Query helpers for `status` / `build --only-new`:
   `unexported(deck_stem, ids)`, `missing_audio(records)`,
-  `stale_audio(records)` (compare stored `content_fp` against current
-  content fingerprints), `missing_enrichment(records)` — **defined
-  ledger entries as metadata only, so a jpdb-only pass never hides a
-  record from `enrich --ai`.
+  `stale_audio(records, word_provider=…, example_provider=…)` (compare stored
+  content and render profile — engine, voice, rate and provider settings —
+  against the current record and configuration), `missing_enrichment(records)` — **defined
   purely from record content** (empty meanings or examples; M7.6P made
-  `usage_notes` optional, so an empty note is complete), with
+  `usage_notes` optional, so an empty note is complete), with ledger entries as
+  metadata only, so a jpdb-only pass never hides a record from `enrich --ai`.
 - Both fingerprint families (see Conventions) are implemented here as
   helpers; `stale_audio` uses defensive access for `pitch_accent` /
   `audio_accent` (`getattr(record, "pitch_accent", [])`) — the schema
@@ -1777,9 +1779,11 @@ they are different recordings made different ways, and neither is the
 obvious default. (2) `--provider azure` is refused **by name** until
 M5.7 rather than falling back to VOICEVOX, which would record Azure in
 the ledger against VOICEVOX's audio. (3) The command checks
-`available()` before spending: a run that voices forty clips and dies on
-the forty-first leaves forty files and half a ledger, and "the engine is
-not running" is the ordinary cause. (4) "Is there already a clip for
+`available()` before spending, because "the engine is not running" is the
+ordinary failure and is knowable without doing work. *(Superseded 2026-08-18
+under M8.1: later failures no longer leave direct canonical writes and a
+half-ledger. Every completed clip is staged and write-ahead ledgered before the
+record CAS, then published/finalized only if that CAS wins.)* (4) "Is there already a clip for
 this?" needs **three** facts and the ledger holds one: an entry saying
 this was recorded, the record still naming that file, and the file
 existing. Asking the ledger alone (which is what shipped first, as
@@ -1818,8 +1822,9 @@ Design: DESIGN_V2 "Audio > Mechanics".
   record's unverified-furigana key (see Conventions) and no current
   audio: synthesize sentence (no accent forcing), filename/content fps
   per Conventions, set `example.audio`, ledger entry.
-- Staleness falls out of content-addressed naming: edited examples
-  simply lack audio; `--prune` deletes unreferenced `janki-*` files.
+- Staleness combines identity-addressed filenames with content fingerprints:
+  edited examples no longer match their recorded clip; `--prune` deletes
+  unreferenced `janki-*` files.
   `--force` regenerates in place (same filenames; Anki media sync
   picks up content changes).
 
@@ -3549,15 +3554,21 @@ approach is superseded, the old one is deleted in the same change — code,
 config keys, data shims, tests, docs. A milestone that replaces a mechanism is
 not done until the mechanism it replaced is gone.*
 
-### [ ] M8.1 OpenAI TTS for sentences; VOICEVOX keeps the words
+### [x] M8.1 OpenAI TTS for sentences; VOICEVOX keeps the words
+
+*Complete 2026-08-18 — the sentence-side escape hatch, provider cleanup,
+currency reporting, and identity-address safety landed; adversarial review was
+resolved through the final gate. `make gates` is green (2,247 tests plus the
+sample deck build). No paid call ran.*
 
 **Reversed 2026-08-15, after measuring.** This milestone previously moved word
 clips to OpenAI TTS too, on the owner's judgment that it speaks natural
 Japanese. Re-examined at the owner's request, the numbers argued the other way
 and the owner's decision is that **VOICEVOX stays for words**:
 
-- 89 of 97 records carry a pitch pattern, so forcing applies to 92% of the
-  deck, and 0 patterns mismatch their reading — the pilot-era gap is closed.
+- At the reversal measurement, 89 of 97 records carried a pitch pattern, so
+  forcing applied to 92% of that deck, and 0 patterns mismatched their reading
+  — the pilot-era gap was closed.
 - The split already in production is exactly the hybrid: every word clip is a
   VOICEVOX `.wav` (92 when this was measured, 97 after the accent fallback
   below voiced the rest), all 144 example clips OpenAI `.mp3`.
@@ -3573,38 +3584,87 @@ surprises: word audio needs a local server on `localhost:50021`, and since
 `refresh` runs `audio --words --examples` a full refresh needs it up unless
 `--no-audio` is passed (the availability check is per-job, so an
 examples-only run never asks for it);
-and one card carries two voices, 青山龍星 for the word and `onyx` for the
-sentence.
+and one card carries two voices, currently 麒ヶ島宗麟 (speaker 53) for the word
+and `onyx` for the sentence.
 
 *Done in this reversal: the accent safe-refusal is gone.* A record with no
 usable pattern used to get no word clip at all unless `--allow-default-accent`
 was passed — 5 records silent today. Now every word is voiced, the engine
 picking the accent when janki cannot force one, tagged `accent_unverified` in
 the ledger and reported by the run. Safe because it is temporary: the word
-audio fingerprint covers `reading + pattern`, so filling the accent with
-`enrich --jpdb` makes the guessed clip stale and the next `janki audio`
-replaces it — pinned end-to-end, with a control half, because the first draft
+audio fingerprint covers the exact bare-reading or forced-AquesTalk utterance,
+so filling the accent with `enrich --jpdb` makes the guessed clip stale and the
+next `janki audio` replaces it — pinned end-to-end, with a control half, because the first draft
 of that test passed with the pattern dropped from the fingerprint entirely.
 `--allow-default-accent` is deleted: it now opts into nothing. A pattern that
 does not fit its reading takes the same fallback rather than staying the last
 silent refusal, and still warns.
 
-What is left for this milestone, all sentence-side:
+The sentence-side completion adds sparse, human-owned
+`examples[].instructions`. Empty values stay absent from JSON. A clip's value
+supplements the configured OpenAI baseline with one blank line between them;
+the exact effective text is both the API request and the ledger render profile,
+so changing one hint makes only that clip stale. Engines that cannot honor a
+hint refuse the whole selected run before synthesis, and `status` explains the
+configuration instead of reporting an unexplained stale count. Models that do
+not apply instructions are refused, as are unsupported legacy voice/model
+pairs, a blank model, invalid UTF-8 request text, and over-limit OpenAI request
+fields.
 
-- The per-clip `instructions` escape hatch, so a sentence that reads wrong is
-  fixed in that clip rather than in machinery.
-- Delete `tts.azure_*` and the `azure` provider choice: `_speech_provider`
-  refuses it by name with an explanation, which is worth keeping as a message
-  but not as a config surface or a `--provider` choice.
-- Clips stay content-addressed by **record identity** (`fp(record.id)`,
-  `fp(record.id + example.japanese)`), not by text — two records sharing a
-  sentence keep two clips, and an edit orphans the old clip visibly.
+The advertised Azure surface is deleted: no module, config key, dependency,
+environment key, or `--provider` choice remains. `_speech_provider` retains the
+useful tailored refusal only for a stale hand-written `provider = "azure"`
+value.
 
-No migration and no billed regeneration: nothing about existing clips changes.
+Clips remain **identity-addressed** (`fp(record.id)` and
+`fp(record.id + example.japanese)`), not addressed by text alone — two records
+sharing a sentence keep two clips. An edit first makes the existing reference
+stale; regeneration writes/repoints to the new address, and only then is the old
+file orphaned and pruneable. The
+frozen concatenation/48-bit formula can collide, so preflight compares every
+selected destination against every other selected destination and every audio
+reference in the supplied record universe, using the exact prepared per-clip
+provider suffix. It refuses before writing rather than overwriting a clip that
+another card still plays. Duplicate sentences with identical instructions
+share one paid clip regardless of list order, and a reference-only repair is
+persisted even when no new bytes were written.
+
+No billed regeneration and no vocabulary/media migration: legacy
+empty-instruction ledger profiles keep their exact settings shape, and the
+repository's current 191 records / 343 examples round-trip with zero
+`instructions` keys, zero stale clips, and zero address collisions. The 534
+current ledger `content_fp` values were mechanically rebound in place from the
+old normalized 48-bit digest to a raw, framed SHA-256 over the exact provider
+request; filenames and audio bytes did not move.
+
+The adversarial audio review also replaced direct paid writes with a per-clip
+transaction. Each result is atomically staged under `audio/.pending`, merged
+additively into top-level `pending_audio` before the next provider call, then
+the record reference wins its compare-and-swap before canonical media is
+published. The canonical audio ledger and superseded-entry cleanup finalize
+last. An interrupted batch, concurrent record or ledger edit, or failed final
+ledger commit therefore leaves exact request/profile/SHA recovery instead of a
+second bill; an exact rerun adopts it, while a relevant edit cannot. Audio
+commands serialize media mutation so stale `--prune` snapshots cannot delete a
+concurrently committed clip. `status` reports pending recovery separately and
+`build` refuses it until the matching audio command finishes.
+
+The stage name frames both the exact request key and bytes SHA, closing the
+process-death gap between writing paid bytes and merging their WAL row. Stage
+and canonical promotion use no-follow, directory-bound atomic writes; matching
+recovery works with the provider offline, corrupt recovery refuses before a
+new call unless `--force` explicitly replaces it, and a failed forced re-voice
+is adopted by the ordinary rerun. Pending targets participate in the collision
+census. The audio-operation and owner-file locks span record CAS through media
+publication and ledger finalization, and `build` takes the same operation lock.
+Prune records canonical-ledger removal before unlinking bytes and revalidates
+all durable owners under those locks.
 
 Depends on: nothing.
-Files: `src/japanese_anki/tts/openai_tts.py`, `audio_cmd.py`, `cli.py`,
-`config.py`, `janki.toml`, `docs/AUDIO.md`.
+Files: `src/japanese_anki/models.py`, `tts/__init__.py`,
+`tts/openai_tts.py`, `audio_cmd.py`, `ledger.py`, `status.py`, `cli.py`,
+`config.py`, `janki.toml`, `docs/AUDIO.md`, `docs/DATA_MODEL.md`, and the
+audio/model/ledger/status tests.
 
 ### [x] M8.2 Delete the review subsystem
 

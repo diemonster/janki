@@ -7,6 +7,7 @@ import json
 import sys
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import ExitStack
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,7 @@ from japanese_anki.exporters import pattern_cards
 from japanese_anki.exporters.anki import (
     AnkiBuildError,
     build_deck,
+    deck_declared_record_versions,
     deck_kind,
     deck_notetype,
     resolve_deck_records,
@@ -57,6 +59,7 @@ from japanese_anki.io import (
     parse_prefer_incoming,
     records_revision,
     save_records_json,
+    save_records_json_locked,
 )
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.preview import build_preview
@@ -77,7 +80,13 @@ from japanese_anki.staging import (
     validate_coverage_facts,
     write_staging,
 )
-from japanese_anki.tts import openai_tts, voicevox
+from japanese_anki.tts import (
+    TtsError,
+    clip_provider,
+    openai_tts,
+    validate_utterance,
+    voicevox,
+)
 from japanese_anki.validation import (
     ValidationIssue,
     has_errors,
@@ -2090,11 +2099,11 @@ def _sentence_provider(config: ProjectConfig, chosen: str | None, words: Any) ->
             voice=config.openai_voice,
             model=config.openai_model,
             instructions=config.openai_instructions,
-            # Deliberately not `voicevox_speed`: this API has no rate
-            # parameter, so tying its staleness to a VOICEVOX knob would bill
-            # for a full re-render of every sentence whenever the *word* pace
-            # was tuned, and write a rate into the ledger the engine was never
-            # told. Pace here lives in `instructions`, which `settings` records.
+            # Deliberately not `voicevox_speed`: OpenAI has its own optional
+            # speed field, but janki leaves it at the API's 1.0 default. Tying
+            # sentence currency to a VOICEVOX word knob would re-bill every
+            # sentence whenever the word pace changed. Learner-specific pace
+            # lives in `instructions`, which `settings` records.
         )
     if name not in {"", "voicevox"}:
         raise AudioError(
@@ -2144,39 +2153,223 @@ def _speech_provider(config: ProjectConfig, chosen: str | None) -> Any:
     )
 
 
+def _persist_audio_wal(
+    book: ledger.Ledger, keys: Sequence[str], *, replace: bool = False
+) -> ledger.Ledger:
+    """Persist only additive pending rows across an unrelated ledger CAS.
+
+    Speech is slow enough for another command to update export or enrichment
+    provenance meanwhile. Retrying a whole stale ``Ledger`` would clobber that
+    work; the safe retry surface is exactly the new top-level WAL rows, because
+    staged generation has not mutated canonical audio or any record entry.
+    """
+    book.merge_pending_audio(keys, replace=replace)
+    return book
+
+
+def _cleanup_unclaimed_audio_stages(
+    config: ProjectConfig,
+    book: ledger.Ledger,
+    records: Sequence[VocabularyRecord],
+    *,
+    chosen: str | None,
+    word_provider: Any | None = None,
+) -> list[str]:
+    """Clean no-row stages only after protecting every current exact request."""
+    if not records:
+        current_keys: set[str] = set()
+    else:
+        try:
+            words = word_provider or _speech_provider(config, chosen)
+            sentences = _sentence_provider(config, chosen, words)
+            current_keys = audio_cmd.current_pending_audio_keys(
+                records,
+                book=book,
+                word_provider=words,
+                sentence_provider=sentences,
+            )
+        except JankiError as exc:
+            return [
+                "could not prove which unregistered pending stages remain "
+                f"current, so none were removed: {exc}"
+            ]
+    return audio_cmd.cleanup_unclaimed_pending_stages(
+        book,
+        config.media_dir.resolve() / audio_cmd.AUDIO_SUBDIR,
+        current_keys=current_keys,
+    )
+
+
 def command_audio(args: argparse.Namespace) -> int:
+    """Serialize the complete audio transaction before taking any snapshot."""
+    config = _load_config(args)
+    # A distinct lock identity from both durable files. Nested records and
+    # ledger saves take their own locks safely, while another audio/prune run
+    # cannot synthesize into the same deterministic stage or delete media from
+    # a pre-transaction snapshot.
+    with exclusive_path_lock(config.root / ".janki-audio-operation"):
+        return _command_audio_locked(args, config)
+
+
+def _command_audio_locked(args: argparse.Namespace, config: ProjectConfig) -> int:
+    """Lock every current record-owner path before taking its snapshot."""
+    deck_paths = status.deck_files(config)
+    source_paths = _audio_deck_source_paths(deck_paths)
+    owner_paths = sorted(
+        {
+            config.normalized_file.resolve(),
+            *(path.resolve() for path in deck_paths),
+            *source_paths,
+        },
+        key=lambda path: str(path),
+    )
+    with ExitStack() as locks:
+        for path in owner_paths:
+            locks.enter_context(exclusive_path_lock(path))
+        owner_revisions = {path: records_revision(path) for path in owner_paths}
+        _assert_audio_owners_current(
+            owner_revisions,
+            config=config,
+            deck_paths=deck_paths,
+            source_paths=source_paths,
+        )
+        return _command_audio_owner_locked(
+            args, config, deck_paths, source_paths, owner_revisions
+        )
+
+
+def _audio_deck_source_paths(deck_paths: Sequence[Path]) -> set[Path]:
+    """Record files that current deck definitions make durable audio owners."""
+    sources: set[Path] = set()
+    for deck_path in deck_paths:
+        raw = load_structured(deck_path)
+        if not isinstance(raw, Mapping):
+            raise DataError(f"Deck file must contain a mapping: {deck_path}")
+        deck_config = raw.get("deck") or {}
+        if not isinstance(deck_config, Mapping):
+            raise DataError(f"The deck section must be a mapping: {deck_path}")
+        source = deck_config.get("source")
+        if source:
+            sources.add((deck_path.parent / str(source)).resolve())
+    return sources
+
+
+def _assert_audio_owners_current(
+    revisions: Mapping[Path, RecordsRevision],
+    *,
+    config: ProjectConfig,
+    deck_paths: Sequence[Path],
+    source_paths: set[Path],
+) -> None:
+    current_decks = [path.resolve() for path in status.deck_files(config)]
+    expected_decks = [path.resolve() for path in deck_paths]
+    if current_decks != expected_decks:
+        raise DataError(
+            "The deck file set changed after the audio owner census; refusing "
+            "to publish or prune media until the command is re-run."
+        )
+    if _audio_deck_source_paths(current_decks) != source_paths:
+        raise DataError(
+            "A deck source dependency changed after the audio owner census; "
+            "refusing to publish or prune media until the command is re-run."
+        )
+    for path, expected in revisions.items():
+        if records_revision(path).text != expected.text:
+            raise DataError(
+                f"Audio owner file {path} changed after its locked snapshot; "
+                "refusing to publish or prune media from stale references. Re-run."
+            )
+
+
+def _command_audio_owner_locked(
+    args: argparse.Namespace,
+    config: ProjectConfig,
+    deck_paths: Sequence[Path],
+    source_paths: set[Path],
+    owner_revisions: dict[Path, RecordsRevision],
+) -> int:
     """Generate the audio a card plays.
 
-    Refuses before spending anything when the engine is not answering: a run
-    that synthesizes forty clips and then fails on the forty-first has written
-    forty files and half a ledger, and the common reason is simply that the
-    engine is not running.
+    Provider availability and every structural profile refusal are checked
+    before spending. Each completed render then enters the additive WAL before
+    another provider call, and canonical state moves only after record CAS.
     """
-    config = _load_config(args)
     output_path = config.normalized_file.resolve()
-    output_revision = records_revision(output_path)
+    output_revision = owner_revisions[output_path]
     records = load_records(output_path) if output_path.exists() else []
-    if not records:
+    if not records and not args.prune:
         print(f"No records to voice in {output_path}.")
         return 0
+
+    protected_records = [
+        record
+        for deck_path in deck_paths
+        for record in deck_declared_record_versions(deck_path)
+    ]
+    media_dir = config.media_dir.resolve()
+    book: ledger.Ledger | None = None
+    if args.prune:
+        # Missing-record WAL rows are machine-owned and can never match a
+        # future request. Retire them before resolving/contacting a provider so
+        # recovery and build liveness do not depend on an engine being online.
+        book = ledger.load(config.ledger_file)
+        book.save()
+        deleted_pending = book.discard_pending_audio_for_missing_records(
+            record.id for record in records
+        )
+        if deleted_pending:
+            book.save()
+            for warning in audio_cmd.cleanup_pending_stages(
+                deleted_pending,
+                media_dir / audio_cmd.AUDIO_SUBDIR,
+            ):
+                print(f"warning: {warning}", file=sys.stderr)
+        if not records:
+            try:
+                removed = audio_cmd.prune_unreferenced(
+                    protected_records,
+                    media_dir,
+                    book,
+                    persist=lambda current: current.save(),
+                    assert_current=lambda: _assert_audio_owners_current(
+                        owner_revisions,
+                        config=config,
+                        deck_paths=deck_paths,
+                        source_paths=source_paths,
+                    ),
+                )
+            except audio_cmd.PruneError as exc:
+                removed = exc.removed
+                print(f"error: {exc}", file=sys.stderr)
+                return 1
+            _assert_audio_owners_current(
+                owner_revisions,
+                config=config,
+                deck_paths=deck_paths,
+                source_paths=source_paths,
+            )
+            for warning in _cleanup_unclaimed_audio_stages(
+                config,
+                book,
+                protected_records,
+                chosen=args.provider,
+            ):
+                print(f"warning: {warning}", file=sys.stderr)
+            print(f"No records to voice in {output_path}.")
+            print(f"Pruned {len(removed)} unreferenced clip(s).")
+            return 0
 
     provider = _speech_provider(config, args.provider)
     # Only what this run will actually use. A `--words` run never reaches the
     # sentence provider, and refusing to start because *that* engine lacks a
     # key would abort a job it plays no part in.
     sentences = _sentence_provider(config, args.provider, provider) if args.examples else provider
-    # Keyed by identity so one engine doing both jobs is checked once.
-    engines: dict[int, Any] = {}
-    if args.words:
-        engines[id(provider)] = provider
-    if args.examples:
-        engines[id(sentences)] = sentences
-    for engine in engines.values():
-        if not engine.available():
-            raise AudioError(f"{engine.name}: {engine.launch_hint}")
-
-    book = ledger.load(config.ledger_file)
-    media_dir = config.media_dir.resolve()
+    if book is None:
+        book = ledger.load(config.ledger_file)
+        # A static permission/read-only failure is knowable before a paid
+        # speech call. Save once as a writeability/revision probe; a later race
+        # is merged additively by the per-clip WAL callback.
+        book.save()
     result = audio_cmd.generate_audio(
         records,
         provider=provider,
@@ -2190,6 +2383,28 @@ def command_audio(args: argparse.Namespace) -> int:
         examples=args.examples,
         ids=args.ids or None,
         force=args.force,
+        protected_records=protected_records,
+        # Paid bytes live under audio/.pending until the guarded records write
+        # succeeds. `generate_audio` therefore cannot overwrite a current clip
+        # or destructively replace its canonical ledger row during a slow call.
+        stage_only=True,
+        persist_pending=lambda current, key: _persist_audio_wal(
+            current, [key], replace=args.force
+        ),
+    )
+    selected_ids = set(args.ids or [record.id for record in records])
+    selected_slots = {
+        (record_id, kind)
+        for record_id in selected_ids
+        for kind, enabled in (("word", args.words), ("example", args.examples))
+        if enabled
+    }
+    stale_selected_pending = any(
+        isinstance(entry, Mapping)
+        and (str(entry.get("record_id") or ""), str(entry.get("of") or ""))
+        in selected_slots
+        and key not in result.pending_keys
+        for key, entry in book.pending_audio.items()
     )
 
     for warning in result.warnings:
@@ -2214,20 +2429,110 @@ def command_audio(args: argparse.Namespace) -> int:
             + (" ..." if len(result.no_reading) > 5 else ""),
             file=sys.stderr,
         )
-    if result.file_count:
-        save_records_json(output_path, result.records, expected=output_revision)
-    ledger_error = _save_ledger(book)
+    # Each newly completed clip persisted its additive WAL row inside
+    # `generate_audio`, before the next provider call. Now guard the
+    # human-owned references; an adopted row gets this CAS too even when its
+    # target string was already present and the serialized record is unchanged.
+    if (
+        result.pending_keys
+        or stale_selected_pending
+        or result.file_count
+        or result.records != records
+    ):
+        try:
+            save_records_json_locked(
+                output_path, result.records, expected=output_revision
+            )
+            owner_revisions[output_path] = records_revision(output_path)
+        except DataError as exc:
+            raise AudioError(
+                f"{exc} Paid audio from this run remains staged in pending_audio; "
+                "re-run the same command to adopt an exact request/profile "
+                "without another provider call. Canonical media and its audio "
+                "ledger entries were not changed."
+            ) from exc
+
+    ledger_error: ledger.LedgerError | None = None
+    committed_pending: list[dict[str, object]] = []
+    ledger_changed = False
+    if result.pending_keys:
+        try:
+            audio_cmd.promote_pending_audio(
+                book,
+                result.pending_keys,
+                media_dir / audio_cmd.AUDIO_SUBDIR,
+                assert_current=lambda: _assert_audio_owners_current(
+                    owner_revisions,
+                    config=config,
+                    deck_paths=deck_paths,
+                    source_paths=source_paths,
+                ),
+            )
+            committed_pending = audio_cmd.commit_promoted_audio(
+                book, result.pending_keys, result.records
+            )
+            ledger_changed = True
+        except JankiError as exc:
+            result.stopped_by = result.stopped_by or str(exc)
+    if not result.stopped_by:
+        retired = book.discard_pending_audio_for_slots(selected_slots)
+        if retired:
+            committed_pending.extend(retired)
+            ledger_changed = True
+    if ledger_changed:
+        ledger_error = _save_ledger(book)
+        if ledger_error is None:
+            for warning in audio_cmd.cleanup_pending_stages(
+                committed_pending,
+                media_dir / audio_cmd.AUDIO_SUBDIR,
+            ):
+                print(f"warning: {warning}", file=sys.stderr)
 
     print(
         f"Wrote {result.file_count} clip(s) for {len(result.written)} record(s) "
         f"into {config.media_dir.resolve() / audio_cmd.AUDIO_SUBDIR}."
         + (f" {result.up_to_date} already current." if result.up_to_date else "")
     )
-    if args.prune:
-        removed = audio_cmd.prune_unreferenced(result.records, media_dir, book)
-        print(f"Pruned {len(removed)} unreferenced clip(s).")
-        if removed:
-            ledger_error = _save_ledger(book) or ledger_error
+    prune_error = ""
+    if args.prune and ledger_error is None:
+        deleted_pending = book.discard_pending_audio_for_missing_records(
+            record.id for record in result.records
+        )
+        if deleted_pending:
+            ledger_error = _save_ledger(book)
+            if ledger_error is None:
+                for warning in audio_cmd.cleanup_pending_stages(
+                    deleted_pending,
+                    media_dir / audio_cmd.AUDIO_SUBDIR,
+                ):
+                    print(f"warning: {warning}", file=sys.stderr)
+        # The preflight census intentionally saw the pre-write repository, but
+        # pruning must see the records we just saved. In particular, a deck
+        # whose source is vocabulary.json must not keep an edited sentence's
+        # now-orphaned old reference alive until a second invocation.
+        prune_protected_records = [
+            record
+            for deck_path in deck_paths
+            for record in deck_declared_record_versions(deck_path)
+        ]
+        if ledger_error is None:
+            try:
+                removed = audio_cmd.prune_unreferenced(
+                    [*result.records, *prune_protected_records],
+                    media_dir,
+                    book,
+                    persist=lambda current: current.save(),
+                    assert_current=lambda: _assert_audio_owners_current(
+                        owner_revisions,
+                        config=config,
+                        deck_paths=deck_paths,
+                        source_paths=source_paths,
+                    ),
+                )
+            except audio_cmd.PruneError as exc:
+                removed = exc.removed
+                prune_error = str(exc)
+            print(f"Pruned {len(removed)} unreferenced clip(s).")
     # Both are reported, and the run's own failure first: a ledger warning on
     # its own reads as a successful partial run, and the records this never
     # reached would be invisible.
@@ -2238,9 +2543,39 @@ def command_audio(args: argparse.Namespace) -> int:
             "it stopped.",
             file=sys.stderr,
         )
+    if prune_error:
+        print(f"error: {prune_error}", file=sys.stderr)
+        print(
+            "The ledger forget committed before deletion; files that could not "
+            "be removed are harmless unreferenced orphans. Re-running --prune "
+            "resumes with what remains.",
+            file=sys.stderr,
+        )
     if ledger_error is not None:
-        _report_ledger_failure(ledger_error)
-    return 1 if (result.stopped_by or ledger_error is not None) else 0
+        print(f"warning: {ledger_error}", file=sys.stderr)
+        print(
+            "The record references and audio bytes landed, but their canonical "
+            "audio ledger commit did not. The pending_audio recovery entry is "
+            "still durable; re-run the same audio command once the ledger is "
+            "writable to finish without another paid call.",
+            file=sys.stderr,
+        )
+    if not result.stopped_by and not prune_error and ledger_error is None:
+        _assert_audio_owners_current(
+            owner_revisions,
+            config=config,
+            deck_paths=deck_paths,
+            source_paths=source_paths,
+        )
+        for warning in _cleanup_unclaimed_audio_stages(
+            config,
+            book,
+            [*result.records, *protected_records],
+            chosen=args.provider,
+            word_provider=provider,
+        ):
+            print(f"warning: {warning}", file=sys.stderr)
+    return 1 if (result.stopped_by or prune_error or ledger_error is not None) else 0
 
 
 def _print_repair_plan(plan: repairs.RepairPlan, output_format: str) -> None:
@@ -3199,9 +3534,25 @@ def _finish_build(book: ledger.Ledger, built: bool) -> int:
 
 def command_build(args: argparse.Namespace) -> int:
     config = _load_config(args)
+    # Audio holds the same operation lock from its WAL/record snapshots through
+    # publication and final ledger commit. A build therefore cannot pass the
+    # pending gate and package the half between record CAS and media promotion.
+    with exclusive_path_lock(config.root / ".janki-audio-operation"):
+        return _command_build_locked(args, config)
+
+
+def _command_build_locked(args: argparse.Namespace, config: ProjectConfig) -> int:
     # Loaded before anything is built, so a ledger janki cannot read refuses
     # the command rather than surfacing after a package is already on disk.
     book = ledger.load(config.ledger_file)
+    if book.pending_audio:
+        raise AnkiBuildError(
+            f"Refusing to build while {len(book.pending_audio)} pending audio "
+            "transaction(s) still separate saved record references/media from "
+            "their canonical ledger state. Re-run 'janki audio --words', "
+            "'janki audio --examples', or both as indicated by 'janki status'; "
+            "the exact paid clips will be adopted without another provider call."
+        )
     if args.all:
         if args.deck:
             raise AnkiBuildError("Do not provide a deck path together with --all")
@@ -3492,7 +3843,112 @@ def command_status(args: argparse.Namespace) -> int:
     # refuses, and refuses here — before anything is written.
     book = ledger.load(config.ledger_file, repair=args.rebuild)
     universe = status.collect_records(config)
+    # Audio reads and writes only the normalized file. The broader status
+    # universe intentionally lets inline deck notes shadow normalized records
+    # for collection counts, but using that view here both hid refusals in the
+    # actual audio target and warned about inline-only notes audio never sees.
+    audio_records = (
+        load_records(config.normalized_file) if config.normalized_file.exists() else []
+    )
     staged, staged_warnings = status.collect_staged(config)
+    # Resolve the same two render profiles `janki audio` would use, without
+    # contacting either engine. A broken TTS choice is advisory here: status is
+    # useful precisely while a project is incomplete, and content/reference
+    # staleness remains answerable even when the configured renderer is not.
+    profile_warnings: list[str] = []
+    if book.pending_audio:
+        pending_entries = [
+            entry
+            for entry in book.pending_audio.values()
+            if isinstance(entry, Mapping)
+        ]
+        present_ids = {record.id for record in audio_records}
+        missing_entries = [
+            entry
+            for entry in pending_entries
+            if str(entry.get("record_id") or "") not in present_ids
+        ]
+        recoverable_entries = [
+            entry for entry in pending_entries if entry not in missing_entries
+        ]
+
+        def pending_flags(entries: Sequence[Mapping[str, Any]]) -> str:
+            kinds = {str(entry.get("of") or "") for entry in entries}
+            if kinds == {"word"}:
+                return " --words"
+            if kinds == {"example"}:
+                return " --examples"
+            return " --words --examples"
+
+        if recoverable_entries:
+            pending_ids = list(
+                dict.fromkeys(
+                    str(entry.get("record_id") or "")
+                    for entry in recoverable_entries
+                )
+            )
+            profile_warnings.append(
+                f"{len(recoverable_entries)} pending paid audio transaction(s) "
+                "need recovery before a deck can be built. Re-run "
+                f"'janki audio{pending_flags(recoverable_entries)}' to adopt the "
+                "exact staged clip(s) without another provider call: "
+                + ", ".join(record_id for record_id in pending_ids[:5] if record_id)
+                + (" ..." if len(pending_ids) > 5 else "")
+            )
+        if missing_entries:
+            missing_ids = list(
+                dict.fromkeys(
+                    str(entry.get("record_id") or "") for entry in missing_entries
+                )
+            )
+            profile_warnings.append(
+                f"{len(missing_entries)} pending audio transaction(s) cannot be "
+                "adopted because its owner record was deleted. Run "
+                f"'janki audio{pending_flags(missing_entries)} --prune' to retire "
+                "the unreachable WAL safely: "
+                + ", ".join(record_id for record_id in missing_ids[:5] if record_id)
+                + (" ..." if len(missing_ids) > 5 else "")
+            )
+    try:
+        word_provider = _speech_provider(config, None)
+    except JankiError as exc:
+        word_provider = None
+        profile_warnings.append(
+            "could not compare the configured word-audio profile (or an "
+            f"example-audio profile that inherits it): {exc} Staleness still "
+            "includes content and references."
+        )
+    sentence_seed: Any = word_provider if word_provider is not None else object()
+    try:
+        candidate = _sentence_provider(config, None, sentence_seed)
+        example_provider = (
+            None if word_provider is None and candidate is sentence_seed else candidate
+        )
+    except JankiError as exc:
+        example_provider = None
+        profile_warnings.append(
+            f"could not compare the configured example-audio profile: {exc} "
+            "Staleness still includes example content and references."
+        )
+    if example_provider is not None:
+        incompatible: list[tuple[str, int, TtsError]] = []
+        for record in audio_records:
+            for position, example in enumerate(record.examples, start=1):
+                if not example.japanese:
+                    continue
+                try:
+                    profile = clip_provider(example_provider, example.instructions)
+                    validate_utterance(profile, example.japanese)
+                except TtsError as exc:
+                    incompatible.append((record.id, position, exc))
+        if incompatible:
+            record_id, position, first_error = incompatible[0]
+            profile_warnings.append(
+                "the configured sentence engine cannot honor "
+                f"{len(incompatible)} example-audio profile(s); first is "
+                f"{record_id} example {position}: {first_error} "
+                "'janki audio --examples' will refuse before synthesis."
+            )
 
     # With --format ids, stdout carries nothing but ids so the output can be
     # piped straight into another command; everything a human reads goes to
@@ -3500,7 +3956,7 @@ def command_status(args: argparse.Namespace) -> int:
     ids_only = args.format == "ids"
     prose = sys.stderr if ids_only else sys.stdout
 
-    for warning in [*universe.warnings, *staged_warnings]:
+    for warning in [*universe.warnings, *staged_warnings, *profile_warnings]:
         print(f"warning: {warning}", file=sys.stderr)
     # Above the ids-only branch with the others: ids mode *moves* human-readable
     # lines to stderr, it does not drop them, and a scripted run must still hear
@@ -3535,7 +3991,14 @@ def command_status(args: argparse.Namespace) -> int:
         for line in status.format_rebuild(summary, config.root):
             print(line, file=prose)
 
-    report = status.build_report(config, universe, book, staged)
+    report = status.build_report(
+        config,
+        universe,
+        book,
+        word_provider=word_provider,
+        example_provider=example_provider,
+        staged=staged,
+    )
     groups = status.find_duplicates(universe.records) if args.duplicates else []
 
     if ids_only:
@@ -3903,8 +4366,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     audio_parser.add_argument(
         "--provider",
-        choices=("voicevox", "azure"),
-        help="Override [tts] provider for this run.",
+        choices=("voicevox",),
+        help=(
+            "Override the [tts] word provider for this run. An explicit "
+            "sentence_provider still controls examples."
+        ),
     )
     audio_parser.add_argument(
         "--force", action="store_true", help="Regenerate clips that already exist."

@@ -48,10 +48,12 @@ export ANTHROPIC_API_KEY='...'   # extract, Anthropic enrich --ai,
 export JPDB_API_KEY='...'        # every jpdb lookup — import-jpdb, promote's
                                  # reading check, jpdb ping,
                                  # and enrich --jpdb/--staging
+export OPENAI_API_KEY='...'      # billed example-sentence audio when
+                                 # sentence_provider = "openai"
 ```
 
 They are read from the environment only — never from `janki.toml`, never from a
-`.env` file, and neither is ever written into the repository.
+`.env` file, and none is ever written into the repository.
 
 ## Getting material in
 
@@ -241,12 +243,17 @@ enrich_reasoning_effort = "ultra"   # codex only; Anthropic depth follows
                                     # the model (claude_client.effort_for)
 
 [tts]
-voicevox_speaker = 13         # words, with the pitch accent forced
+voicevox_speaker = 53         # words, with the pitch accent forced
 sentence_provider = "openai"  # or leave unset for VOICEVOX throughout
 
 [anki]
 profile = "User 1"            # only needed with several Anki profiles
 ```
+
+One sentence that needs pronunciation help can carry an optional
+`examples[].instructions` string in `vocabulary.json`. It supplements the
+configured OpenAI sentence prompt and re-voices only that clip; VOICEVOX
+refuses a clip instruction rather than ignoring it.
 
 ## Where things live
 
@@ -256,14 +263,17 @@ profile = "User 1"            # only needed with several Anki profiles
 | `data/decks/*.yaml` | One file per deck: what it contains, its Anki ids |
 | `data/staging/` | Waiting for you to review — extractions, held-back rows |
 | `data/inbox/` | The originals every record cites |
-| `data/ledger.json` | Machine-written: what arrived when, what shipped where |
 | `data/patterns.json` | Extracted lesson/chart patterns and their human-reviewed marks |
+| `data/ledger.json` | Machine-written: what arrived, shipped, was voiced, or is awaiting exact audio recovery |
+| `data/media/` | Generated media; paid audio may briefly live under `audio/.pending/` until its guarded write finalizes |
 | `data/review.json` | Frozen history: what a model said about these cards in August 2026. Nothing reads it |
 | `dist/` | Built `.apkg` files |
 | `templates/japanese-study/` | The card HTML and CSS |
 
 Everything under `data/` is committed. That is what makes a review in progress
-recoverable and a build reproducible.
+recoverable and a build reproducible. Do not remove a `.pending` audio stage by
+hand; [rerun the matching audio command](docs/AUDIO.md#interrupted-audio-and-recovery)
+and let janki verify and finalize it.
 
 ## Documentation
 

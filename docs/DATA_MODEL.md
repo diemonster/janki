@@ -30,6 +30,8 @@ examples:
     english: "I speak Japanese with my wife every day."
     register: "polite"          # a card has a slot for one of each
     audio: "audio/janki-b3d1.mp3"
+    instructions: "Pronounce 毎日 as まいにち."  # optional OpenAI steering for
+                                                # this clip only
   - japanese: "毎日、妻と日本語で話すよ。"
     furigana: "毎日[まいにち]、 妻[つま]と 日本語[にほんご]で 話[はな]すよ。"
     english: "I speak Japanese with my wife every day."
@@ -74,6 +76,12 @@ it out.
 Everything else is filled by an importer, by `janki enrich`, or by you, and an
 empty field means nobody knew — janki never guesses one, and `janki status`
 counts what is missing.
+
+`examples[].instructions` is the sparse exception to the usual explicit empty
+fields: it is omitted when unused, so adding the escape hatch did not rewrite
+every existing example. When present, it supplements the configured OpenAI
+sentence instructions and is preserved as human curation; AI enrichment does
+not generate it.
 
 `id` is minted from the expression and the reading, and the Anki note GUID is
 derived from the id, so changing either orphans the review history behind the

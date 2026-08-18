@@ -9,7 +9,10 @@ anything.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import threading
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +50,37 @@ class FakeVoice:
 
     def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
         self.said.append((text_or_kana, forced_accent))
+        return self.audio
+
+
+class FakeInstructionVoice(FakeVoice):
+    """A provider whose prepared clips share one observable transport."""
+
+    def __init__(
+        self,
+        *,
+        instructions: str = "Global.",
+        said_with_settings: list[tuple[str, bool, str]] | None = None,
+    ) -> None:
+        super().__init__()
+        self.instructions = instructions
+        self.said_with_settings = said_with_settings if said_with_settings is not None else []
+
+    @property
+    def settings(self) -> dict[str, str]:
+        return {"instructions": self.instructions} if self.instructions.strip() else {}
+
+    def for_clip(self, instructions: str) -> FakeInstructionVoice:
+        pieces = [part.strip() for part in (self.instructions, instructions) if part.strip()]
+        return FakeInstructionVoice(
+            instructions="\n\n".join(pieces),
+            said_with_settings=self.said_with_settings,
+        )
+
+    def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
+        self.said_with_settings.append(
+            (text_or_kana, forced_accent, self.instructions)
+        )
         return self.audio
 
 
@@ -163,10 +197,10 @@ def test_a_mismatched_pattern_warns_on_every_run(tmp_path: Path) -> None:
 
 def test_a_guessed_clip_is_replaced_once_the_pattern_arrives(tmp_path: Path) -> None:
     """What makes the fallback safe rather than a silent lock-in. Word audio is
-    fingerprinted over reading + pattern, so a clip voiced without an accent
-    reads as stale the day `enrich --jpdb` fills one — no --force needed. If
-    that ever stopped holding, the records voiced by guess today would keep
-    their guess forever.
+    fingerprinted over the exact bare-reading or forced-AquesTalk utterance, so
+    a clip voiced without an accent reads as stale the day `enrich --jpdb`
+    fills one — no --force needed. If that ever stopped holding, the records
+    voiced by guess today would keep their guess forever.
 
     The record has to carry its audio reference forward, and the control half
     is why: `_is_current` short-circuits on an empty `audio` field, so a
@@ -280,6 +314,82 @@ def test_a_new_voice_is_not_current_without_force(tmp_path: Path) -> None:
     assert second.up_to_date == 0
     entries = book.records[record().id]["audio"]
     assert [entry["voice"] for entry in entries] == [13], "and the ledger says so"
+
+
+def test_a_new_engine_is_not_current_even_when_its_profile_otherwise_matches(
+    tmp_path: Path,
+) -> None:
+    """Provider is durable metadata for the same reason voice and rate are.
+
+    Two engines can name a voice alike. If engine is omitted from the shared
+    render-profile comparison, status and audio can disagree about whether that
+    configured synthesis choice changed.
+    """
+
+    class OtherEngine(FakeVoice):
+        name = "other-engine"
+
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    first, _, _ = run([record()], tmp_path, words=True, book=book)
+
+    second, provider, _ = run(
+        first.records,
+        tmp_path,
+        words=True,
+        book=book,
+        provider=OtherEngine(),
+    )
+
+    assert provider.said == [("ハシ'", True)]
+    assert second.up_to_date == 0
+    assert book.records[record().id]["audio"][0]["provider"] == "other-engine"
+
+
+def test_an_old_engine_entry_does_not_leave_the_replacement_stale(
+    tmp_path: Path,
+) -> None:
+    """Switching sentence engines can change the stable file's extension.
+
+    The old entry can remain beside the replacement because both describe the
+    same sentence content. Currency belongs to the file the record now names;
+    otherwise status reports this record stale forever while the next audio run
+    correctly leaves the replacement alone.
+    """
+
+    class Mp3Engine(FakeVoice):
+        name = "mp3-engine"
+        suffix = ".mp3"
+
+    source = record(examples=[ExampleSentence(japanese="橋を渡ります。")])
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    first, _, _ = run([source], tmp_path, words=False, examples=True, book=book)
+    switched, provider, _ = run(
+        first.records,
+        tmp_path,
+        words=False,
+        examples=True,
+        book=book,
+        provider=Mp3Engine(),
+    )
+
+    entries = book.records[source.id]["audio"]
+    assert {Path(entry["file"]).suffix for entry in entries} == {".wav", ".mp3"}
+    assert book.stale_audio(
+        switched.records,
+        word_provider=provider,
+        example_provider=provider,
+    ) == []
+
+    again, provider, _ = run(
+        switched.records,
+        tmp_path,
+        words=False,
+        examples=True,
+        book=book,
+        provider=Mp3Engine(),
+    )
+    assert provider.said == []
+    assert again.up_to_date == 1
 
 
 def test_a_new_speed_is_not_current_either(tmp_path: Path) -> None:
@@ -448,6 +558,53 @@ def test_a_provider_that_returns_nothing_stops_the_run_rather_than_unwinding(
     assert result.file_count == 0
 
 
+def test_a_disk_failure_salvages_earlier_paid_clips(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    writes = 0
+
+    def fail_the_second_write(path: Path, data: bytes) -> None:
+        nonlocal writes
+        writes += 1
+        if writes == 2:
+            raise OSError("disk full")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+
+    monkeypatch.setattr(
+        audio_cmd,
+        "atomic_write_bytes",
+        fail_the_second_write,
+        raising=False,
+    )
+    provider = FakeVoice(voice=52)
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    item = record(
+        examples=[
+            ExampleSentence(japanese="一。"),
+            ExampleSentence(japanese="二。"),
+        ]
+    )
+
+    result = generate_audio(
+        [item],
+        provider=FakeVoice(),
+        sentence_provider=provider,
+        book=book,
+        media_dir=tmp_path / "media",
+        words=False,
+        examples=True,
+    )
+
+    assert provider.said == [("一。", False), ("二。", False)]
+    assert "disk full" in result.stopped_by
+    assert result.file_count == 1
+    assert result.records[0].examples[0].audio
+    assert result.records[0].examples[1].audio == ""
+    assert len(book.records[item.id]["audio"]) == 1
+
+
 # ---------------------------------------------------------------------------
 # The command
 # ---------------------------------------------------------------------------
@@ -470,9 +627,7 @@ def project(tmp_path: Path, records: list[VocabularyRecord]) -> Path:
 def test_the_command_refuses_before_spending_when_the_engine_is_down(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A run that voices forty clips and then fails on the forty-first has
-    written forty files and half a ledger — and "the engine is not running" is
-    the ordinary reason."""
+    """Static engine unavailability is knowable before the first paid call."""
     root = project(tmp_path, [record()])
     down = FakeVoice(reachable=False)
     monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: down)
@@ -500,16 +655,1230 @@ def test_the_command_writes_records_media_and_ledger(
     assert "Wrote 1 clip(s)" in capsys.readouterr().out
 
 
+def test_a_concurrent_record_edit_does_not_make_the_rerun_pay_again(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The revision guard wins without orphaning a paid clip.
+
+    Speech calls are slow enough that a human edit during synthesis is ordinary.
+    The first command must refuse to overwrite it, durably record what it paid
+    for, and let the next command attach that exact clip without another call.
+    """
+    root = project(tmp_path, [record()])
+
+    class EditsDuringSynthesis(FakeVoice):
+        def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
+            if not self.said:
+                payload = json.loads(
+                    (root / "vocabulary.json").read_text(encoding="utf-8")
+                )
+                payload[0]["usage_notes"] = "Concurrent human edit."
+                (root / "vocabulary.json").write_text(
+                    json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+                )
+            return super().synthesize(text_or_kana, forced_accent=forced_accent)
+
+    provider = EditsDuringSynthesis()
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 1
+    assert len(provider.said) == 1
+    assert "changed on disk" in capsys.readouterr().err
+
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 0
+
+    assert len(provider.said) == 1, "the durable first clip was adopted"
+    saved = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    assert saved[0]["usage_notes"] == "Concurrent human edit."
+    assert saved[0]["audio"].startswith("audio/janki-")
+
+
+def test_same_address_cas_failure_keeps_old_media_and_canonical_ledger(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A re-voice is prepared beside the live clip until its record CAS wins."""
+    root = project(tmp_path, [record()])
+    old = FakeVoice(audio=b"old voice", voice=7)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: old)
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 0
+
+    [before_record] = json.loads(
+        (root / "vocabulary.json").read_text(encoding="utf-8")
+    )
+    target = root / "media" / before_record["audio"]
+    before_ledger = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+
+    class EditsDuringRevoice(FakeVoice):
+        def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
+            payload = json.loads(
+                (root / "vocabulary.json").read_text(encoding="utf-8")
+            )
+            payload[0]["usage_notes"] = "Concurrent note-only edit."
+            (root / "vocabulary.json").write_text(
+                json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+            )
+            return super().synthesize(text_or_kana, forced_accent=forced_accent)
+
+    replacement = EditsDuringRevoice(audio=b"new voice", voice=13)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: replacement)
+
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 1
+
+    assert target.read_bytes() == b"old voice"
+    failed_ledger = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert failed_ledger["records"] == before_ledger["records"]
+    assert all(
+        "record_ref_pending" not in entry
+        for entry in failed_ledger["records"][record().id]["audio"]
+    )
+    [pending] = failed_ledger["pending_audio"].values()
+    assert pending["target"] == target.name
+    assert pending["request"] == {"forced_accent": True, "input": "ハシ'"}
+    assert pending["profile"]["voice"] == 13
+    staged = root / "media" / "audio" / pending["staged_file"]
+    assert staged.is_file() and staged.read_bytes() == b"new voice"
+
+    real_save_records = cli.save_records_json_locked
+    guarded_writes = 0
+
+    def count_guarded_write(*args: object, **kwargs: object) -> None:
+        nonlocal guarded_writes
+        guarded_writes += 1
+        real_save_records(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(cli, "save_records_json_locked", count_guarded_write)
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 0
+
+    assert len(replacement.said) == 1, "the exact pending request was adopted"
+    assert guarded_writes == 1, "adoption still CAS-checks an unchanged reference"
+    assert target.read_bytes() == b"new voice"
+    [saved] = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    assert saved["usage_notes"] == "Concurrent note-only edit."
+    final_ledger = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert final_ledger["records"][record().id]["audio"][0]["voice"] == 13
+    assert "pending_audio" not in final_ledger
+
+
+def test_new_address_cas_failure_does_not_publish_or_forget_the_old_clip(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = record(examples=[ExampleSentence(japanese="橋を渡る。")])
+    root = project(tmp_path, [original])
+    old = FakeVoice(audio=b"old sentence", voice=52)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: old)
+    monkeypatch.setattr(cli, "_sentence_provider", lambda config, chosen, words: old)
+    assert cli.main(["--root", str(root), "audio", "--examples"]) == 0
+
+    [payload] = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    old_name = Path(payload["examples"][0]["audio"]).name
+    old_path = root / "media" / "audio" / old_name
+    payload["examples"][0]["japanese"] = "毎日話す。"
+    (root / "vocabulary.json").write_text(
+        json.dumps([payload], ensure_ascii=False), encoding="utf-8"
+    )
+    before_ledger = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+
+    class EditsDuringSynthesis(FakeVoice):
+        def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
+            current = json.loads(
+                (root / "vocabulary.json").read_text(encoding="utf-8")
+            )
+            current[0]["usage_notes"] = "Keep this concurrent edit."
+            (root / "vocabulary.json").write_text(
+                json.dumps(current, ensure_ascii=False), encoding="utf-8"
+            )
+            return super().synthesize(text_or_kana, forced_accent=forced_accent)
+
+    replacement = EditsDuringSynthesis(audio=b"new sentence", voice=53)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: replacement)
+    monkeypatch.setattr(
+        cli, "_sentence_provider", lambda config, chosen, words: replacement
+    )
+
+    assert cli.main(["--root", str(root), "audio", "--examples"]) == 1
+
+    failed_ledger = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert failed_ledger["records"] == before_ledger["records"]
+    [pending] = failed_ledger["pending_audio"].values()
+    new_path = root / "media" / "audio" / pending["target"]
+    assert old_path.read_bytes() == b"old sentence"
+    assert not new_path.exists(), "the new address is not published before CAS"
+
+    assert cli.main(["--root", str(root), "audio", "--examples"]) == 0
+
+    assert len(replacement.said) == 1
+    assert new_path.read_bytes() == b"new sentence"
+    [saved] = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    assert saved["usage_notes"] == "Keep this concurrent edit."
+    assert Path(saved["examples"][0]["audio"]).name == new_path.name
+    final = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert [entry["file"] for entry in final["records"][record().id]["audio"]] == [
+        new_path.name
+    ]
+
+
+def test_failed_final_ledger_commit_recovers_promoted_audio_without_rebilling(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = project(tmp_path, [record()])
+    provider = FakeVoice(audio=b"paid once", voice=53)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    real_save = cli.ledger.Ledger.save
+    saves = 0
+
+    def fail_the_canonical_commit(book: ledger_mod.Ledger) -> None:
+        nonlocal saves
+        saves += 1
+        if saves == 2:
+            raise ledger_mod.LedgerError("interrupted final ledger commit")
+        real_save(book)
+
+    monkeypatch.setattr(cli.ledger.Ledger, "save", fail_the_canonical_commit)
+
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 1
+
+    [saved] = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    target = root / "media" / saved["audio"]
+    assert target.read_bytes() == b"paid once", "record CAS won before promotion"
+    interrupted = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert interrupted["pending_audio"]
+    assert not interrupted.get("records", {}).get(record().id, {}).get("audio")
+
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 0
+
+    assert len(provider.said) == 1
+    final = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert "pending_audio" not in final
+    assert final["records"][record().id]["audio"][0]["voice"] == 53
+
+
+def test_concurrent_ledger_change_merges_the_additive_wal_without_losing_paid_audio(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = project(tmp_path, [record()])
+
+    class EditsLedgerDuringSynthesis(FakeVoice):
+        def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
+            concurrent = ledger_mod.load(root / "ledger.json")
+            concurrent.record_export(record().id, "concurrent-deck")
+            concurrent.save()
+            return super().synthesize(text_or_kana, forced_accent=forced_accent)
+
+    provider = EditsLedgerDuringSynthesis(audio=b"one paid render", voice=53)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 0
+
+    assert len(provider.said) == 1
+    [saved] = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    assert (root / "media" / saved["audio"]).read_bytes() == b"one paid render"
+    final = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    entry = final["records"][record().id]
+    assert "concurrent-deck" in entry["exports"]
+    assert entry["audio"][0]["voice"] == 53
+    assert "pending_audio" not in final
+
+
+def test_each_completed_clip_is_durable_before_the_next_paid_call(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    item = record(
+        examples=[
+            ExampleSentence(japanese="一つ目。"),
+            ExampleSentence(japanese="二つ目。"),
+        ]
+    )
+    root = project(tmp_path, [item])
+
+    class InterruptsSecondClip(FakeVoice):
+        interrupt = True
+
+        def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
+            self.said.append((text_or_kana, forced_accent))
+            if self.interrupt and text_or_kana == "二つ目。":
+                raise KeyboardInterrupt
+            return self.audio
+
+    provider = InterruptsSecondClip(audio=b"paid sentence", voice=53)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(
+        cli, "_sentence_provider", lambda config, chosen, words: provider
+    )
+
+    with pytest.raises(KeyboardInterrupt):
+        cli.main(["--root", str(root), "audio", "--examples"])
+
+    interrupted = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    [pending] = interrupted["pending_audio"].values()
+    stage = root / "media" / "audio" / pending["staged_file"]
+    assert stage.read_bytes() == b"paid sentence"
+
+    provider.interrupt = False
+    assert cli.main(["--root", str(root), "audio", "--examples"]) == 0
+
+    utterances = [utterance for utterance, _ in provider.said]
+    assert utterances.count("一つ目。") == 1
+    assert utterances.count("二つ目。") == 2
+
+
+def test_audio_operation_lock_is_held_before_records_and_ledger_snapshots(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = project(tmp_path, [record()])
+    events: list[str] = []
+
+    class Guard:
+        def __enter__(self) -> None:
+            events.append("locked")
+
+        def __exit__(self, *exc: object) -> None:
+            events.append("unlocked")
+
+    monkeypatch.setattr(cli, "exclusive_path_lock", lambda path: Guard())
+
+    def inspect_snapshots(args: object, config: object) -> int:
+        assert events == ["locked"]
+        events.append("snapshots")
+        return 0
+
+    monkeypatch.setattr(cli, "_command_audio_locked", inspect_snapshots)
+
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 0
+    assert events == ["locked", "snapshots", "unlocked"]
+
+
+@pytest.mark.parametrize("kind", ["word", "example"])
+def test_force_rerun_adopts_its_exact_paid_stage_instead_of_rebilling(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    kind: str,
+) -> None:
+    item = record(
+        examples=[ExampleSentence(japanese="橋を渡る。")]
+        if kind == "example"
+        else []
+    )
+    root = project(tmp_path, [item])
+    flag = "--words" if kind == "word" else "--examples"
+    original = FakeVoice(audio=b"old current bytes", voice=53)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: original)
+    monkeypatch.setattr(
+        cli, "_sentence_provider", lambda config, chosen, words: original
+    )
+    assert cli.main(["--root", str(root), "audio", flag]) == 0
+
+    class EditsOnce(FakeVoice):
+        edit = True
+
+        def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
+            if self.edit:
+                payload = json.loads(
+                    (root / "vocabulary.json").read_text(encoding="utf-8")
+                )
+                payload[0]["usage_notes"] = "Concurrent note."
+                (root / "vocabulary.json").write_text(
+                    json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+                )
+            return super().synthesize(text_or_kana, forced_accent=forced_accent)
+
+    provider = EditsOnce(audio=b"forced paid bytes", voice=53)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(
+        cli, "_sentence_provider", lambda config, chosen, words: provider
+    )
+    assert cli.main(["--root", str(root), "audio", flag, "--force"]) == 1
+
+    provider.edit = False
+    # Status and build deliberately prescribe the ordinary matching command,
+    # not a repetition of the implementation detail that created the WAL.
+    assert cli.main(["--root", str(root), "audio", flag]) == 0
+
+    assert len(provider.said) == 1
+    [saved] = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    relative = saved["audio"] if kind == "word" else saved["examples"][0]["audio"]
+    assert (root / "media" / relative).read_bytes() == b"forced paid bytes"
+    final = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert "pending_audio" not in final
+
+
+def test_stage_is_self_describing_if_wal_persistence_is_interrupted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The provider result is recoverable at every boundary after staging."""
+    root = project(tmp_path, [record()])
+    provider = FakeVoice(audio=b"paid exactly once", voice=53)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    real_persist = cli._persist_audio_wal
+
+    def interrupt_after_stage(*args: object, **kwargs: object) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli, "_persist_audio_wal", interrupt_after_stage)
+    with pytest.raises(KeyboardInterrupt):
+        cli.main(["--root", str(root), "audio", "--words"])
+
+    interrupted = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert not interrupted.get("pending_audio")
+    stages = list((root / "media" / "audio" / ".pending").glob("*.stage"))
+    assert len(stages) == 1 and stages[0].read_bytes() == b"paid exactly once"
+
+    monkeypatch.setattr(cli, "_persist_audio_wal", real_persist)
+    provider.reachable = False
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 0
+
+    assert len(provider.said) == 1
+    assert not list((root / "media" / "audio" / ".pending").glob("*.stage"))
+
+
+@pytest.mark.parametrize("retirement", ["changed", "deleted"])
+def test_unregistered_stage_is_retired_when_its_request_can_no_longer_match(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    retirement: str,
+) -> None:
+    item = record()
+    root = project(tmp_path, [item])
+    provider = FakeVoice(audio=b"old completed render", voice=53)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    real_persist = cli._persist_audio_wal
+    monkeypatch.setattr(
+        cli,
+        "_persist_audio_wal",
+        lambda *args, **kwargs: (_ for _ in ()).throw(KeyboardInterrupt()),
+    )
+    with pytest.raises(KeyboardInterrupt):
+        cli.main(["--root", str(root), "audio", "--words"])
+    [old_stage] = list((root / "media" / "audio" / ".pending").glob("*.stage"))
+
+    payload = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    if retirement == "changed":
+        payload[0]["pitch_accent"] = ["HLL"]
+    else:
+        payload = []
+    (root / "vocabulary.json").write_text(
+        json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+    )
+    monkeypatch.setattr(cli, "_persist_audio_wal", real_persist)
+    command = ["--root", str(root), "audio", "--words"]
+    if retirement == "deleted":
+        command.append("--prune")
+
+    assert cli.main(command) == 0
+
+    assert not old_stage.exists()
+
+
+def test_targeted_run_preserves_another_current_requests_unregistered_stage(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = record()
+    second = record(id="word:箸:はし", expression="箸", pitch_accent=["HLL"])
+    root = project(tmp_path, [first, second])
+    provider = FakeVoice(audio=b"paid render", voice=53)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    real_persist = cli._persist_audio_wal
+    monkeypatch.setattr(
+        cli,
+        "_persist_audio_wal",
+        lambda *args, **kwargs: (_ for _ in ()).throw(KeyboardInterrupt()),
+    )
+    with pytest.raises(KeyboardInterrupt):
+        cli.main(["--root", str(root), "audio", first.id, "--words"])
+    [first_stage] = list(
+        (root / "media" / "audio" / ".pending").glob("*.stage")
+    )
+
+    monkeypatch.setattr(cli, "_persist_audio_wal", real_persist)
+    assert cli.main(["--root", str(root), "audio", second.id, "--words"]) == 0
+
+    assert first_stage.is_file()
+
+
+def test_corrupt_completed_wal_refuses_before_rebilling_exact_request(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    item = record()
+    root = project(tmp_path, [item])
+    provider = FakeVoice(audio=b"replacement would cost", voice=53)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    utterance, forced, _ = ledger_mod.word_audio_request(item)
+    arguments = {
+        "of": "word",
+        "target": f"janki-{ledger_mod.word_audio_filename_fingerprint(item)}.wav",
+        "request_input": utterance,
+        "forced_accent": forced,
+        "content_fp": ledger_mod.word_audio_content_fingerprint(item),
+        "provider": provider.name,
+        "voice": provider.voice,
+        "speed": provider.speed,
+        "settings": provider.settings,
+    }
+    book = ledger_mod.load(root / "ledger.json")
+    key = book.pending_audio_key_for(item.id, **arguments)
+    claimed_sha = "a" * 64
+    stage = (
+        root
+        / "media"
+        / "audio"
+        / ".pending"
+        / f"{key}-{claimed_sha}.stage"
+    )
+    stage.parent.mkdir(parents=True)
+    stage.write_bytes(b"corrupt bytes")
+    book.record_pending_audio(
+        item.id,
+        **arguments,
+        staged_file=f".pending/{key}-{claimed_sha}.stage",
+        staged_sha256=claimed_sha,
+    )
+    book.save()
+
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 1
+
+    assert provider.said == []
+    assert "refusing to bill" in capsys.readouterr().err
+    assert key in json.loads((root / "ledger.json").read_text(encoding="utf-8"))[
+        "pending_audio"
+    ]
+
+    assert cli.main(["--root", str(root), "audio", "--words", "--force"]) == 0
+    assert len(provider.said) == 1
+    [saved] = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    assert (root / "media" / saved["audio"]).read_bytes() == b"replacement would cost"
+    assert "pending_audio" not in json.loads(
+        (root / "ledger.json").read_text(encoding="utf-8")
+    )
+    assert not stage.exists()
+
+
+def test_record_lock_stays_held_from_cas_through_publish_and_ledger_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = project(tmp_path, [record()])
+    provider = FakeVoice(audio=b"new canonical bytes", voice=53)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    real_promote = audio_cmd.promote_pending_audio
+    writer_done = threading.Event()
+    writer_failures: list[BaseException] = []
+    writer: threading.Thread | None = None
+
+    def promote_while_another_writer_waits(*args: object, **kwargs: object):
+        nonlocal writer
+        revision = cli.records_revision(root / "vocabulary.json")
+        current = cli.load_records(root / "vocabulary.json")
+        edited = [replace(current[0], usage_notes="Concurrent human edit.")]
+
+        def write_edit() -> None:
+            try:
+                cli.save_records_json(
+                    root / "vocabulary.json", edited, expected=revision
+                )
+            except BaseException as exc:  # pragma: no cover - asserted below
+                writer_failures.append(exc)
+            finally:
+                writer_done.set()
+
+        writer = threading.Thread(target=write_edit)
+        writer.start()
+        assert not writer_done.wait(timeout=0.1), (
+            "a cooperating record writer entered between CAS and media promotion"
+        )
+        return real_promote(*args, **kwargs)
+
+    monkeypatch.setattr(audio_cmd, "promote_pending_audio", promote_while_another_writer_waits)
+
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 0
+    assert writer is not None
+    writer.join(timeout=2)
+    assert writer_done.is_set() and not writer_failures
+    [saved] = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    assert saved["usage_notes"] == "Concurrent human edit."
+    assert (root / "media" / saved["audio"]).read_bytes() == b"new canonical bytes"
+
+
+def test_deck_source_owner_revision_is_rechecked_before_media_promotion(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    selected = record()
+    root = project(tmp_path, [selected])
+    deck = root / "data" / "decks" / "custom.yaml"
+    source = root / "data" / "decks" / "custom.json"
+    deck.parent.mkdir(parents=True)
+    source.write_text("[]\n", encoding="utf-8")
+    deck.write_text(
+        json.dumps(
+            {
+                "deck": {"name": "Custom", "source": "custom.json"},
+                "notes": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    target = (
+        root
+        / "media"
+        / "audio"
+        / f"janki-{ledger_mod.word_audio_filename_fingerprint(selected)}.wav"
+    )
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"other owner old bytes")
+
+    class AddsSourceOwner(FakeVoice):
+        def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
+            other = record(
+                id="word:箸:はし",
+                expression="箸",
+                audio=f"audio/{target.name}",
+            )
+            source.write_text(
+                json.dumps([other.to_dict()], ensure_ascii=False), encoding="utf-8"
+            )
+            return super().synthesize(text_or_kana, forced_accent=forced_accent)
+
+    provider = AddsSourceOwner(audio=b"selected new bytes", voice=53)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 1
+
+    assert target.read_bytes() == b"other owner old bytes"
+    assert json.loads(source.read_text(encoding="utf-8"))[0]["audio"].endswith(
+        target.name
+    )
+
+
+def test_pending_audio_owner_participates_in_address_collision_preflight(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = record()
+    second = record(id="word:箸:はし", expression="箸", pitch_accent=["HL"])
+    root = project(tmp_path, [first, second])
+    provider = FakeVoice(audio=b"must not be called", voice=53)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    target = (
+        f"janki-{ledger_mod.word_audio_filename_fingerprint(second)}.wav"
+    )
+    utterance, forced, _ = ledger_mod.word_audio_request(first)
+    arguments = {
+        "of": "word",
+        "target": target,
+        "request_input": utterance,
+        "forced_accent": forced,
+        "content_fp": ledger_mod.word_audio_content_fingerprint(first),
+        "provider": provider.name,
+        "voice": provider.voice,
+        "speed": provider.speed,
+        "settings": provider.settings,
+    }
+    book = ledger_mod.load(root / "ledger.json")
+    key = book.pending_audio_key_for(first.id, **arguments)
+    paid = b"first owner's paid stage"
+    staged_sha = hashlib.sha256(paid).hexdigest()
+    stage = root / "media" / "audio" / ".pending" / f"{key}-{staged_sha}.stage"
+    stage.parent.mkdir(parents=True)
+    stage.write_bytes(paid)
+    book.record_pending_audio(
+        first.id,
+        **arguments,
+        staged_file=f".pending/{key}-{staged_sha}.stage",
+        staged_sha256=staged_sha,
+    )
+    book.save()
+
+    assert cli.main(["--root", str(root), "audio", second.id, "--words"]) == 1
+
+    assert provider.said == []
+    assert stage.read_bytes() == paid
+    after = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert key in after["pending_audio"]
+
+
+def test_prune_persists_ledger_forget_before_deleting_media(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = project(tmp_path, [])
+    orphan = root / "media" / "audio" / "janki-orphan.wav"
+    orphan.parent.mkdir(parents=True)
+    orphan.write_bytes(b"canonical until ledger forget commits")
+    book = ledger_mod.load(root / "ledger.json")
+    book.record_audio(
+        record().id,
+        file=orphan.name,
+        of="word",
+        provider="fakevox",
+        voice=7,
+        speed=1.0,
+        content_fp=ledger_mod.word_audio_content_fingerprint(record()),
+    )
+    book.save()
+    real_save = ledger_mod.Ledger.save
+    saves = 0
+
+    def fail_forget(current: ledger_mod.Ledger) -> None:
+        nonlocal saves
+        saves += 1
+        if saves == 2:
+            raise ledger_mod.LedgerError("interrupted prune ledger commit")
+        real_save(current)
+
+    monkeypatch.setattr(ledger_mod.Ledger, "save", fail_forget)
+
+    assert cli.main(["--root", str(root), "audio", "--words", "--prune"]) == 1
+
+    assert orphan.read_bytes() == b"canonical until ledger forget commits"
+    on_disk = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert on_disk["records"][record().id]["audio"][0]["file"] == orphan.name
+
+
+def test_changed_sentence_retires_nonmatching_pending_wal_and_unblocks_build(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    item = record(examples=[ExampleSentence(japanese="古い文。")])
+    root = project(tmp_path, [item])
+
+    class ChangesSentence(FakeVoice):
+        changed = False
+
+        def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
+            if not self.changed:
+                payload = json.loads(
+                    (root / "vocabulary.json").read_text(encoding="utf-8")
+                )
+                payload[0]["examples"][0]["japanese"] = "新しい文。"
+                (root / "vocabulary.json").write_text(
+                    json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+                )
+                self.changed = True
+            return super().synthesize(text_or_kana, forced_accent=forced_accent)
+
+    provider = ChangesSentence(audio=b"sentence", voice=53)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(
+        cli, "_sentence_provider", lambda config, chosen, words: provider
+    )
+    assert cli.main(["--root", str(root), "audio", "--examples"]) == 1
+    pending_before = json.loads(
+        (root / "ledger.json").read_text(encoding="utf-8")
+    )["pending_audio"]
+    [old_pending] = pending_before.values()
+    old_stage = root / "media" / "audio" / old_pending["staged_file"]
+    assert old_stage.is_file()
+
+    assert cli.main(["--root", str(root), "audio", "--examples"]) == 0
+
+    final = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert "pending_audio" not in final
+    assert not old_stage.exists()
+    monkeypatch.setattr(cli, "_build_one", lambda *args, **kwargs: False)
+    deck = root / "data" / "decks" / "vocabulary.yaml"
+    deck.parent.mkdir(parents=True, exist_ok=True)
+    deck.write_text("deck:\n  name: Vocabulary\nnotes: []\n", encoding="utf-8")
+    assert cli.main(["--root", str(root), "build", str(deck)]) == 0
+
+
+def test_changed_word_request_supersedes_same_slot_pending_wal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = project(tmp_path, [record(pitch_accent=["LHL"])])
+
+    class ChangesPitchOnce(FakeVoice):
+        changed = False
+
+        def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
+            if not self.changed:
+                payload = json.loads(
+                    (root / "vocabulary.json").read_text(encoding="utf-8")
+                )
+                payload[0]["pitch_accent"] = ["HLL"]
+                (root / "vocabulary.json").write_text(
+                    json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+                )
+                self.changed = True
+            self.audio = text_or_kana.encode("utf-8")
+            return super().synthesize(text_or_kana, forced_accent=forced_accent)
+
+    provider = ChangesPitchOnce(voice=53)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 1
+    interrupted = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    [old_pending] = interrupted["pending_audio"].values()
+    old_stage = root / "media" / "audio" / old_pending["staged_file"]
+    assert old_stage.is_file()
+
+    assert cli.main(["--root", str(root), "audio", "--words", "--force"]) == 0
+
+    assert len(provider.said) == 2
+    assert provider.said[0][0] != provider.said[1][0]
+    final = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert "pending_audio" not in final
+    assert not old_stage.exists()
+
+
+def test_force_retry_adopts_valid_sibling_of_corrupt_same_key_wal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    item = record()
+    root = project(tmp_path, [item])
+    provider = FakeVoice(audio=b"one valid replacement", voice=53)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    utterance, forced, _ = ledger_mod.word_audio_request(item)
+    arguments = {
+        "of": "word",
+        "target": f"janki-{ledger_mod.word_audio_filename_fingerprint(item)}.wav",
+        "request_input": utterance,
+        "forced_accent": forced,
+        "content_fp": ledger_mod.word_audio_content_fingerprint(item),
+        "provider": provider.name,
+        "voice": provider.voice,
+        "speed": provider.speed,
+        "settings": provider.settings,
+    }
+    book = ledger_mod.load(root / "ledger.json")
+    key = book.pending_audio_key_for(item.id, **arguments)
+    corrupt_sha = "a" * 64
+    corrupt_stage = (
+        root / "media" / "audio" / ".pending" / f"{key}-{corrupt_sha}.stage"
+    )
+    corrupt_stage.parent.mkdir(parents=True)
+    corrupt_stage.write_bytes(b"corrupt")
+    book.record_pending_audio(
+        item.id,
+        **arguments,
+        staged_file=f".pending/{key}-{corrupt_sha}.stage",
+        staged_sha256=corrupt_sha,
+    )
+    book.save()
+    real_persist = cli._persist_audio_wal
+    monkeypatch.setattr(
+        cli,
+        "_persist_audio_wal",
+        lambda *args, **kwargs: (_ for _ in ()).throw(KeyboardInterrupt()),
+    )
+
+    with pytest.raises(KeyboardInterrupt):
+        cli.main(["--root", str(root), "audio", "--words", "--force"])
+    assert len(provider.said) == 1
+    assert len(list(corrupt_stage.parent.glob(f"{key}-*.stage"))) == 2
+
+    monkeypatch.setattr(cli, "_persist_audio_wal", real_persist)
+    assert cli.main(["--root", str(root), "audio", "--words", "--force"]) == 0
+
+    assert len(provider.said) == 1
+    assert not list(corrupt_stage.parent.glob(f"{key}-*.stage"))
+    assert "pending_audio" not in json.loads(
+        (root / "ledger.json").read_text(encoding="utf-8")
+    )
+
+
+def test_prune_retires_pending_audio_for_a_deleted_record_and_unblocks_build(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = project(tmp_path, [record()])
+
+    class DeletesRecord(FakeVoice):
+        def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
+            (root / "vocabulary.json").write_text("[]\n", encoding="utf-8")
+            return super().synthesize(text_or_kana, forced_accent=forced_accent)
+
+    provider = DeletesRecord(audio=b"orphaned paid bytes")
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 1
+    pending = json.loads((root / "ledger.json").read_text(encoding="utf-8"))[
+        "pending_audio"
+    ]
+    [entry] = pending.values()
+    stage = root / "media" / "audio" / entry["staged_file"]
+    assert stage.is_file()
+
+    assert cli.main(["--root", str(root), "audio", "--words", "--prune"]) == 0
+
+    final = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert "pending_audio" not in final
+    assert not stage.exists()
+    monkeypatch.setattr(cli, "_build_one", lambda *args, **kwargs: False)
+    deck = root / "data" / "decks" / "vocabulary.yaml"
+    deck.parent.mkdir(parents=True, exist_ok=True)
+    deck.write_text("deck:\n  name: Vocabulary\nnotes: []\n", encoding="utf-8")
+    assert cli.main(["--root", str(root), "build", str(deck)]) == 0
+
+
+def test_build_holds_audio_operation_lock_through_output_and_ledger_finish(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = project(tmp_path, [record()])
+    deck = root / "deck.yaml"
+    deck.write_text("deck:\n  name: Vocabulary\nnotes: []\n", encoding="utf-8")
+    acquired = threading.Event()
+    worker: threading.Thread | None = None
+
+    def build_while_audio_waits(*args: object, **kwargs: object) -> bool:
+        nonlocal worker
+
+        def take_audio_lock() -> None:
+            with cli.exclusive_path_lock(root / ".janki-audio-operation"):
+                acquired.set()
+
+        worker = threading.Thread(target=take_audio_lock)
+        worker.start()
+        assert not acquired.wait(timeout=0.1), (
+            "an audio transaction entered after build's pending gate"
+        )
+        return True
+
+    monkeypatch.setattr(cli, "_build_one", build_while_audio_waits)
+
+    assert cli.main(["--root", str(root), "build", str(deck)]) == 0
+    assert worker is not None
+    worker.join(timeout=2)
+    assert acquired.is_set()
+
+
+def test_prune_keeps_a_paid_clip_with_a_pending_record_reference(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = record()
+    second = record(id="word:箸:はし", expression="箸", pitch_accent=["HL"])
+    root = project(tmp_path, [first, second])
+
+    class EditsTheFirstRun(FakeVoice):
+        def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
+            if not self.said:
+                payload = json.loads(
+                    (root / "vocabulary.json").read_text(encoding="utf-8")
+                )
+                payload[0]["usage_notes"] = "Concurrent human edit."
+                (root / "vocabulary.json").write_text(
+                    json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+                )
+            return super().synthesize(text_or_kana, forced_accent=forced_accent)
+
+    provider = EditsTheFirstRun()
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+
+    assert cli.main(["--root", str(root), "audio", first.id, "--words"]) == 1
+    pending = root / "media" / "audio" / (
+        f"janki-{ledger_mod.word_audio_filename_fingerprint(first)}.wav"
+    )
+    assert not pending.exists(), "a failed record CAS does not publish the target"
+    pending_book = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    [pending_entry] = pending_book["pending_audio"].values()
+    staged = root / "media" / "audio" / pending_entry["staged_file"]
+    assert staged.is_file()
+
+    assert (
+        cli.main(
+            ["--root", str(root), "audio", second.id, "--words", "--prune"]
+        )
+        == 0
+    )
+    assert staged.is_file(), "another target's prune must not erase paid recovery"
+
+    assert cli.main(["--root", str(root), "audio", first.id, "--words"]) == 0
+    assert len(provider.said) == 2, "first and second were each synthesized once"
+    saved = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    by_id = {item["id"]: item for item in saved}
+    assert by_id[first.id]["audio"].endswith(pending.name)
+    assert pending.is_file()
+
+
+def test_stale_prune_snapshot_refuses_before_deleting_a_newly_committed_clip(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = project(tmp_path, [record()])
+    stale_records = [record()]
+    stale_book = ledger_mod.load(root / "ledger.json")
+    provider = FakeVoice(audio=b"new canonical clip")
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 0
+    [saved] = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    target = root / "media" / saved["audio"]
+
+    with pytest.raises(ledger_mod.LedgerError, match="changed on disk"):
+        prune_unreferenced(stale_records, root / "media", stale_book)
+
+    assert target.read_bytes() == b"new canonical clip"
+    canonical = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert canonical["records"][record().id]["audio"][0]["file"] == target.name
+
+
+@pytest.mark.parametrize(
+    "owner", ["normalized", "inline-deck", "new-inline-deck", "deck-source"]
+)
+def test_prune_revalidates_every_record_owner_before_deleting(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    owner: str,
+) -> None:
+    root = project(tmp_path, [])
+    deck = root / "data" / "decks" / "inline.yaml"
+    source = root / "data" / "decks" / "custom.json"
+    if owner in {"inline-deck", "deck-source"}:
+        deck.parent.mkdir(parents=True)
+        if owner == "deck-source":
+            source.write_text("[]\n", encoding="utf-8")
+            deck_payload = {
+                "deck": {"name": "Inline", "source": "custom.json"},
+                "notes": [],
+            }
+        else:
+            deck_payload = {"deck": {"name": "Inline"}, "notes": []}
+        deck.write_text(json.dumps(deck_payload), encoding="utf-8")
+    orphan = root / "media" / "audio" / "janki-new.wav"
+    orphan.parent.mkdir(parents=True)
+    orphan.write_bytes(b"newly referenced bytes")
+    real_prune = audio_cmd.prune_unreferenced
+
+    def add_reference_then_prune(*args: object, **kwargs: object):
+        referring = record(audio="audio/janki-new.wav").to_dict()
+        if owner == "normalized":
+            (root / "vocabulary.json").write_text(
+                json.dumps([referring], ensure_ascii=False), encoding="utf-8"
+            )
+        elif owner in {"inline-deck", "new-inline-deck"}:
+            deck.parent.mkdir(parents=True, exist_ok=True)
+            deck.write_text(
+                json.dumps(
+                    {"deck": {"name": "Inline"}, "notes": [referring]},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+        else:
+            source.write_text(
+                json.dumps([referring], ensure_ascii=False), encoding="utf-8"
+            )
+        return real_prune(*args, **kwargs)
+
+    monkeypatch.setattr(audio_cmd, "prune_unreferenced", add_reference_then_prune)
+
+    assert cli.main(["--root", str(root), "audio", "--words", "--prune"]) == 1
+
+    assert orphan.read_bytes() == b"newly referenced bytes"
+
+
+def test_pending_cleanup_never_unlinks_a_canonical_target(tmp_path: Path) -> None:
+    audio_dir = tmp_path / "media" / "audio"
+    audio_dir.mkdir(parents=True)
+    target = audio_dir / "janki-live.wav"
+    target.write_bytes(b"keep canonical")
+
+    warnings = audio_cmd.cleanup_pending_stages(
+        [{"staged_file": target.name, "target": target.name}], audio_dir
+    )
+
+    assert target.read_bytes() == b"keep canonical"
+    assert warnings and "unsafe pending stage" in warnings[0]
+
+
+def test_pending_stage_symlink_cannot_overwrite_canonical_media_before_cas(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = project(tmp_path, [record()])
+    original = FakeVoice(audio=b"old canonical", voice=7)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: original)
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 0
+    [saved] = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    canonical = root / "media" / saved["audio"]
+
+    replacement = FakeVoice(audio=b"new paid bytes", voice=13)
+    utterance, forced, _ = ledger_mod.word_audio_request(record())
+    book = ledger_mod.load(root / "ledger.json")
+    arguments = {
+        "of": "word",
+        "target": canonical.name,
+        "request_input": utterance,
+        "forced_accent": forced,
+        "content_fp": ledger_mod.word_audio_content_fingerprint(record()),
+        "provider": replacement.name,
+        "voice": replacement.voice,
+        "speed": replacement.speed,
+        "settings": replacement.settings,
+    }
+    key = book.pending_audio_key_for(record().id, **arguments)
+    staged_sha = hashlib.sha256(replacement.audio).hexdigest()
+    staged = (
+        root / "media" / "audio" / ".pending" / f"{key}-{staged_sha}.stage"
+    )
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    staged.symlink_to(canonical)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: replacement)
+
+    assert cli.main(["--root", str(root), "audio", "--words", "--force"]) == 1
+
+    assert canonical.read_bytes() == b"old canonical"
+    final = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert final["records"][record().id]["audio"][0]["voice"] == 7
+
+
+def test_canonical_target_symlink_is_refused_during_promotion(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    item = record()
+    root = project(tmp_path, [item])
+    target = (
+        root
+        / "media"
+        / "audio"
+        / f"janki-{ledger_mod.word_audio_filename_fingerprint(item)}.wav"
+    )
+    target.parent.mkdir(parents=True)
+    outside = root / "outside.wav"
+    outside.write_bytes(b"do not overwrite")
+    target.symlink_to(outside)
+    provider = FakeVoice(audio=b"new paid bytes", voice=53)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 1
+
+    assert provider.said == []
+    assert outside.read_bytes() == b"do not overwrite"
+    assert target.is_symlink()
+    final = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert not final.get("pending_audio")
+    assert not final.get("records", {}).get(item.id, {}).get("audio")
+
+
+def test_matching_canonical_symlink_cannot_bypass_bound_promotion(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    item = record()
+    root = project(tmp_path, [item])
+    provider = FakeVoice(audio=b"same bytes", voice=53)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    target_name = f"janki-{ledger_mod.word_audio_filename_fingerprint(item)}.wav"
+    audio_dir = root / "media" / "audio"
+    audio_dir.mkdir(parents=True)
+    outside = root / "outside-same.wav"
+    outside.write_bytes(provider.audio)
+    target = audio_dir / target_name
+    target.symlink_to(outside)
+    utterance, forced, _ = ledger_mod.word_audio_request(item)
+    arguments = {
+        "of": "word",
+        "target": target_name,
+        "request_input": utterance,
+        "forced_accent": forced,
+        "content_fp": ledger_mod.word_audio_content_fingerprint(item),
+        "provider": provider.name,
+        "voice": provider.voice,
+        "speed": provider.speed,
+        "settings": provider.settings,
+    }
+    book = ledger_mod.load(root / "ledger.json")
+    key = book.pending_audio_key_for(item.id, **arguments)
+    staged_sha = hashlib.sha256(provider.audio).hexdigest()
+    staged_name = f".pending/{key}-{staged_sha}.stage"
+    stage = audio_dir / staged_name
+    stage.parent.mkdir(parents=True, exist_ok=True)
+    stage.write_bytes(provider.audio)
+    book.record_pending_audio(
+        item.id,
+        **arguments,
+        staged_file=staged_name,
+        staged_sha256=staged_sha,
+    )
+    book.save()
+
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 1
+
+    assert provider.said == []
+    assert target.is_symlink() and outside.read_bytes() == provider.audio
+    final = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert key in final["pending_audio"]
+
+
+@pytest.mark.parametrize("outside_bytes", [b"old canonical", b"arbitrary outside"])
+def test_current_currency_refuses_a_canonical_symlink_before_provider(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    outside_bytes: bytes,
+) -> None:
+    root = project(tmp_path, [record()])
+    provider = FakeVoice(audio=b"old canonical", voice=53)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 0
+    [saved] = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
+    target = root / "media" / saved["audio"]
+    target.unlink()
+    outside = root / "outside-current.wav"
+    outside.write_bytes(outside_bytes)
+    target.symlink_to(outside)
+    provider.said.clear()
+
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 1
+
+    assert provider.said == []
+    assert target.is_symlink() and outside.read_bytes() == outside_bytes
+
+
+def test_cleanup_refuses_a_cross_stage_symlink_without_unlinking_its_referent(
+    tmp_path: Path,
+) -> None:
+    audio_dir = tmp_path / "media" / "audio"
+    pending = audio_dir / ".pending"
+    pending.mkdir(parents=True)
+    key = "a" * 64
+    digest = "b" * 64
+    referent = pending / f"{'c' * 64}-{'d' * 64}.stage"
+    referent.write_bytes(b"keep other paid stage")
+    link = pending / f"{key}-{digest}.stage"
+    link.symlink_to(referent)
+
+    warnings = audio_cmd.cleanup_pending_stages(
+        [{"staged_file": f".pending/{link.name}"}], audio_dir
+    )
+
+    assert warnings and "could not remove" in warnings[0]
+    assert referent.read_bytes() == b"keep other paid stage"
+    assert link.is_symlink()
+
+
 def test_azure_is_refused_by_name_rather_than_falling_back(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Falling back to VOICEVOX would record Azure's name in the ledger against
     VOICEVOX's audio."""
     root = project(tmp_path, [record()])
+    (root / "janki.toml").write_text(
+        (root / "janki.toml").read_text(encoding="utf-8")
+        + '\n[tts]\nprovider = "azure"\n',
+        encoding="utf-8",
+    )
 
-    assert cli.main(["--root", str(root), "audio", "--words", "--provider", "azure"]) == 1
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 1
 
-    assert "M5.7" in capsys.readouterr().err
+    error = capsys.readouterr().err
+    assert "Azure" in error and "VOICEVOX" in error and "openai" in error
+
+
+def test_azure_is_not_an_audio_provider_choice() -> None:
+    with pytest.raises(SystemExit):
+        cli.build_parser().parse_args(["audio", "--words", "--provider", "azure"])
 
 
 # ---------------------------------------------------------------------------
@@ -570,11 +1939,15 @@ def test_an_edited_sentence_supersedes_its_old_entry(tmp_path: Path) -> None:
     )
     edited = [record(examples=[ExampleSentence(japanese="橋を渡りました。")])]
 
-    run(edited, tmp_path, words=False, examples=True, book=book)
+    _, provider, _ = run(edited, tmp_path, words=False, examples=True, book=book)
 
     entries = book.records["word:橋:はし"]["audio"]
     assert len(entries) == 1, "the superseded entry is gone"
-    assert book.stale_audio(edited) == [], "and nothing is reported stale"
+    assert book.stale_audio(
+        edited,
+        word_provider=provider,
+        example_provider=provider,
+    ) == [], "and nothing is reported stale"
 
 
 def test_a_record_with_no_reading_is_reported_rather_than_dropped(
@@ -705,19 +2078,13 @@ def test_the_command_prunes_the_saved_ledger_too(
     assert "janki-orphan.wav" not in files, "and its entry left the saved ledger"
 
 
-def test_a_stopped_run_is_reported_even_when_the_ledger_fails(
+def test_an_unwritable_ledger_refuses_before_a_paid_audio_call(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A ledger warning on its own reads as a successful partial run, and the
-    records the run never reached would be invisible."""
-    from japanese_anki.errors import JankiError
-
-    class Dies(FakeVoice):
-        def synthesize(self, text_or_kana: str, *, forced_accent: bool) -> bytes:
-            raise JankiError("engine went away")
-
+    """A static durability failure is knowable before synthesis, so ask first."""
     root = project(tmp_path, [record()])
-    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: Dies())
+    provider = FakeVoice()
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
     monkeypatch.setattr(
         cli.ledger.Ledger,
         "save",
@@ -727,8 +2094,9 @@ def test_a_stopped_run_is_reported_even_when_the_ledger_fails(
     assert cli.main(["--root", str(root), "audio", "--words"]) == 1
 
     err = capsys.readouterr().err
-    assert "engine went away" in err
     assert "read-only" in err
+    assert provider.said == []
+    assert not (root / "media").exists()
 
 
 def test_a_ledger_whose_audio_is_not_a_list_does_not_traceback(tmp_path: Path) -> None:
@@ -902,7 +2270,7 @@ class FakeStyledVoice(FakeVoice):
 
 
 def test_changed_engine_settings_make_a_clip_stale(tmp_path: Path) -> None:
-    """`instructions` is the only pace control the OpenAI API has, and it is in
+    """`instructions` is the pace control janki sends to OpenAI, and it is in
     neither the content fingerprint nor the voice. Unrecorded, rewriting it to
     ask for a slower delivery left every clip "already current" and nothing was
     re-voiced — the setting that exists to change the audio changed nothing."""
@@ -1052,10 +2420,10 @@ def test_the_provider_name_is_normalised_once(tmp_path: Path, written: str) -> N
 def test_a_provider_flag_overriding_the_file_still_selects_the_sentence_voice(
     tmp_path: Path,
 ) -> None:
-    """`--provider voicevox` over an `azure` file is a valid invocation, and
-    `_sentence_provider` read the file rather than the flag."""
+    """An explicit word-provider flag does not discard the configured
+    sentence speaker."""
     (tmp_path / "janki.toml").write_text(
-        '[tts]\nprovider = "azure"\nvoicevox_speaker = 13\n'
+        '[tts]\nprovider = "voicevox"\nvoicevox_speaker = 13\n'
         "voicevox_sentence_speaker = 52\n",
         encoding="utf-8",
     )
@@ -1066,12 +2434,1071 @@ def test_a_provider_flag_overriding_the_file_still_selects_the_sentence_voice(
     assert cli._sentence_provider(config, "voicevox", words).voice == 52
 
 
+def test_voicevox_refuses_clip_instructions_before_any_synthesis(tmp_path: Path) -> None:
+    words = FakeVoice(voice=13)
+    sentences = FakeVoice(voice=52)
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    item = record(
+        examples=[
+            ExampleSentence(
+                japanese="橋を渡る。",
+                instructions="Pronounce 橋 as はし with odaka accent.",
+            )
+        ]
+    )
+
+    with pytest.raises(AudioError, match="instructions.*OpenAI"):
+        generate_audio(
+            [item],
+            provider=words,
+            sentence_provider=sentences,
+            book=book,
+            media_dir=tmp_path / "media",
+            words=True,
+            examples=True,
+        )
+
+    assert words.said == [] and sentences.said == []
+    assert book.records == {}
+    assert not (tmp_path / "media").exists()
+
+
+def test_words_only_ignores_dormant_example_instructions(tmp_path: Path) -> None:
+    words = FakeVoice(voice=13)
+
+    result = generate_audio(
+        [
+            record(
+                examples=[
+                    ExampleSentence(japanese="橋を渡る。", instructions="Clip help.")
+                ]
+            )
+        ],
+        provider=words,
+        book=ledger_mod.Ledger(path=tmp_path / "ledger.json"),
+        media_dir=tmp_path / "media",
+        words=True,
+        examples=False,
+    )
+
+    assert result.file_count == 1
+    assert words.said == [("ハシ'", True)]
+
+
+def test_an_unselected_instructed_record_does_not_block_a_targeted_run(
+    tmp_path: Path,
+) -> None:
+    selected = record(id="word:橋:はし")
+    unrelated = record(
+        id="word:箸:はし",
+        expression="箸",
+        examples=[ExampleSentence(japanese="箸を使う。", instructions="Clip help.")],
+    )
+    words = FakeVoice(voice=13)
+
+    result = generate_audio(
+        [selected, unrelated],
+        provider=words,
+        sentence_provider=FakeVoice(voice=52),
+        book=ledger_mod.Ledger(path=tmp_path / "ledger.json"),
+        media_dir=tmp_path / "media",
+        words=True,
+        examples=True,
+        ids=[selected.id],
+    )
+
+    assert result.file_count == 1
+    assert words.said == [("ハシ'", True)]
+
+
+def test_conflicting_instructions_for_one_clip_refuse_before_any_synthesis(
+    tmp_path: Path,
+) -> None:
+    provider = FakeInstructionVoice()
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    item = record(
+        examples=[
+            ExampleSentence(japanese="橋を渡る。", instructions="First."),
+            ExampleSentence(japanese="橋を渡る。", instructions="Second."),
+        ]
+    )
+
+    with pytest.raises(AudioError, match="same audio file.*different instructions"):
+        generate_audio(
+            [item],
+            provider=FakeVoice(),
+            sentence_provider=provider,
+            book=book,
+            media_dir=tmp_path / "media",
+            words=True,
+            examples=True,
+        )
+
+    assert provider.said_with_settings == []
+    assert book.records == {}
+    assert not (tmp_path / "media").exists()
+
+
+def test_two_distinct_example_identities_cannot_resolve_to_one_filename(
+    tmp_path: Path,
+) -> None:
+    """The frozen formula concatenates id + Japanese without framing. These
+    two distinct pairs therefore have the same hash input; the safe pre-release
+    response is a refusal, not changing every existing filename."""
+    first = record(
+        id="word:何:な",
+        expression="何",
+        reading="な",
+        examples=[ExampleSentence(japanese="に行く。")],
+    )
+    second = record(
+        id="word:何:なに",
+        expression="何",
+        reading="なに",
+        examples=[ExampleSentence(japanese="行く。")],
+    )
+    sentences = FakeVoice(voice=52)
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+
+    with pytest.raises(AudioError, match="Different audio identities.*same filename"):
+        generate_audio(
+            [first, second],
+            provider=FakeVoice(),
+            sentence_provider=sentences,
+            book=book,
+            media_dir=tmp_path / "media",
+            words=False,
+            examples=True,
+        )
+
+    assert sentences.said == []
+    assert book.records == {}
+    assert not (tmp_path / "media").exists()
+
+
+def test_word_and_example_identities_cannot_overwrite_one_voicevox_file(
+    tmp_path: Path,
+) -> None:
+    example_owner = record(
+        id="word:何:な",
+        expression="何",
+        reading="な",
+        examples=[ExampleSentence(japanese="に行く。")],
+    )
+    word_owner = record(
+        id="word:何:なに行く。",
+        expression="行く",
+        reading="いく",
+    )
+    voice = FakeVoice(voice=52)
+
+    with pytest.raises(AudioError, match="Different audio identities.*same filename"):
+        generate_audio(
+            [example_owner, word_owner],
+            provider=voice,
+            sentence_provider=voice,
+            book=ledger_mod.Ledger(path=tmp_path / "ledger.json"),
+            media_dir=tmp_path / "media",
+            words=True,
+            examples=True,
+        )
+
+    assert voice.said == []
+
+
+def test_selected_example_cannot_overwrite_a_foreign_referenced_word_file(
+    tmp_path: Path,
+) -> None:
+    """A stale or hand-edited reference still owns the bytes it names.
+
+    Looking only at the filenames this run would compute misses that durable
+    reference, so an examples-only run could overwrite a word clip that a
+    different card still plays.
+    """
+    selected = record(
+        id="word:B:x",
+        expression="B",
+        reading="x",
+        examples=[ExampleSentence(japanese="二。")],
+    )
+    target = (
+        "audio/janki-"
+        f"{ledger_mod.example_audio_filename_fingerprint(selected, selected.examples[0])}"
+        ".wav"
+    )
+    protected = record(
+        id="word:A:x",
+        expression="A",
+        reading="x",
+        audio=target,
+    )
+    sentences = FakeVoice(voice=52)
+
+    with pytest.raises(AudioError, match="Different audio identities.*same filename"):
+        generate_audio(
+            [protected, selected],
+            provider=FakeVoice(voice=13),
+            sentence_provider=sentences,
+            book=ledger_mod.Ledger(path=tmp_path / "ledger.json"),
+            media_dir=tmp_path / "media",
+            words=False,
+            examples=True,
+            ids=[selected.id],
+        )
+
+    assert sentences.said == []
+    assert not (tmp_path / "media").exists()
+
+
+def test_collision_comparison_protects_case_insensitive_filesystems(
+    tmp_path: Path,
+) -> None:
+    selected = record(
+        id="word:B:x",
+        expression="B",
+        reading="x",
+        examples=[ExampleSentence(japanese="二。")],
+    )
+    target = (
+        "audio/janki-"
+        f"{ledger_mod.example_audio_filename_fingerprint(selected, selected.examples[0])}"
+        ".wav"
+    )
+    protected = record(id="word:A:x", expression="A", reading="x", audio=target.upper())
+    sentences = FakeVoice(voice=52)
+
+    with pytest.raises(AudioError, match="Different audio identities.*same filename"):
+        generate_audio(
+            [protected, selected],
+            provider=FakeVoice(voice=13),
+            sentence_provider=sentences,
+            book=ledger_mod.Ledger(path=tmp_path / "ledger.json"),
+            media_dir=tmp_path / "media",
+            words=False,
+            examples=True,
+            ids=[selected.id],
+        )
+
+    assert sentences.said == []
+
+
+def test_nfkc_distinct_sentences_that_share_an_address_refuse_before_synthesis(
+    tmp_path: Path,
+) -> None:
+    provider = FakeVoice(voice=52)
+    item = record(
+        examples=[
+            ExampleSentence(japanese="Ａ。"),
+            ExampleSentence(japanese="A。"),
+        ]
+    )
+
+    with pytest.raises(AudioError, match="Different audio identities.*same filename"):
+        generate_audio(
+            [item],
+            provider=FakeVoice(),
+            sentence_provider=provider,
+            book=ledger_mod.Ledger(path=tmp_path / "ledger.json"),
+            media_dir=tmp_path / "media",
+            words=False,
+            examples=True,
+        )
+
+    assert provider.said == []
+
+
+@pytest.mark.parametrize(
+    ("protected_reading", "protected_pattern", "selected_reading"),
+    [
+        ("あ", ["HL"], "あア'"),
+        ("カナ", [], "ｶﾅ"),
+    ],
+)
+def test_word_collision_identity_uses_the_exact_provider_request(
+    tmp_path: Path,
+    protected_reading: str,
+    protected_pattern: list[str],
+    selected_reading: str,
+) -> None:
+    """A truncated, normalized content digest is not an ownership identity."""
+    selected = record(
+        id="word:shared",
+        expression="x",
+        reading=selected_reading,
+        pitch_accent=[],
+    )
+    target = (
+        "audio/janki-"
+        f"{ledger_mod.word_audio_filename_fingerprint(selected)}.wav"
+    )
+    protected = record(
+        id=selected.id,
+        expression="x",
+        reading=protected_reading,
+        pitch_accent=protected_pattern,
+        audio=target,
+    )
+    provider = FakeVoice()
+
+    with pytest.raises(AudioError, match="Different audio identities.*same filename"):
+        generate_audio(
+            [selected],
+            protected_records=[protected],
+            provider=provider,
+            book=ledger_mod.Ledger(path=tmp_path / "ledger.json"),
+            media_dir=tmp_path / "media",
+            words=True,
+            examples=False,
+        )
+
+    assert provider.said == []
+
+
+def test_nfkc_word_edit_revoices_even_when_the_filename_is_unchanged(
+    tmp_path: Path,
+) -> None:
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    original = record(reading="カナ", pitch_accent=[])
+    first, _, _ = run([original], tmp_path, words=True, book=book)
+    edited = replace(first.records[0], reading="ｶﾅ")
+
+    second, provider, _ = run([edited], tmp_path, words=True, book=book)
+
+    assert provider.said == [("ｶﾅ", False)]
+    assert second.file_count == 1
+
+
+def test_nfkc_example_edit_revoices_even_when_the_filename_is_unchanged(
+    tmp_path: Path,
+) -> None:
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    original = record(examples=[ExampleSentence(japanese="Ａ。")])
+    first, _, _ = run(
+        [original], tmp_path, words=False, examples=True, book=book
+    )
+    edited = replace(
+        first.records[0],
+        examples=[
+            replace(first.records[0].examples[0], japanese="A。")
+        ],
+    )
+
+    second, provider, _ = run(
+        [edited], tmp_path, words=False, examples=True, book=book
+    )
+
+    assert provider.said == [("A。", False)]
+    assert second.file_count == 1
+
+
+def test_selected_word_cannot_overwrite_a_foreign_referenced_example_file(
+    tmp_path: Path,
+) -> None:
+    selected = record(id="word:B:x", expression="B", reading="x")
+    target = (
+        "audio/janki-"
+        f"{ledger_mod.word_audio_filename_fingerprint(selected)}.wav"
+    )
+    protected = record(
+        id="word:A:x",
+        expression="A",
+        reading="x",
+        examples=[ExampleSentence(japanese="一。", audio=target)],
+    )
+    words = FakeVoice(voice=13)
+
+    with pytest.raises(AudioError, match="Different audio identities.*same filename"):
+        generate_audio(
+            [protected, selected],
+            provider=words,
+            sentence_provider=FakeInstructionVoice(),
+            book=ledger_mod.Ledger(path=tmp_path / "ledger.json"),
+            media_dir=tmp_path / "media",
+            words=True,
+            examples=False,
+            ids=[selected.id],
+        )
+
+    assert words.said == []
+    assert not (tmp_path / "media").exists()
+
+
+def test_the_command_protects_audio_referenced_only_by_an_inline_deck_note(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    selected = record(
+        id="word:B:x",
+        expression="B",
+        reading="x",
+        examples=[ExampleSentence(japanese="二。")],
+    )
+    target_name = (
+        "janki-"
+        f"{ledger_mod.example_audio_filename_fingerprint(selected, selected.examples[0])}"
+        ".wav"
+    )
+    inline = record(
+        id="word:A:x",
+        expression="A",
+        reading="x",
+        examples=[
+            ExampleSentence(japanese="一。", audio=f"audio/{target_name}")
+        ],
+    )
+    root = project(tmp_path, [selected])
+    deck_dir = root / "data" / "decks"
+    deck_dir.mkdir(parents=True)
+    (deck_dir / "inline.yaml").write_text(
+        json.dumps(
+            {"deck": {"name": "Inline"}, "notes": [inline.to_dict()]},
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    target = root / "media" / "audio" / target_name
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"OLD-INLINE-CLIP")
+    provider = FakeVoice(voice=52, audio=b"NEW-NORMALIZED-CLIP")
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(
+        cli,
+        "_sentence_provider",
+        lambda config, chosen, words: provider,
+    )
+
+    assert cli.main(["--root", str(root), "audio", "--examples"]) == 1
+
+    assert provider.said == []
+    assert target.read_bytes() == b"OLD-INLINE-CLIP"
+    assert "Different audio identities resolve to the same filename" in capsys.readouterr().err
+
+
+def test_an_inline_override_with_different_instructions_cannot_share_a_clip(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    selected = record(
+        examples=[
+            ExampleSentence(japanese="橋を渡る。", instructions="Normalized.")
+        ]
+    )
+    target_name = (
+        "janki-"
+        f"{ledger_mod.example_audio_filename_fingerprint(selected, selected.examples[0])}"
+        ".wav"
+    )
+    inline = replace(
+        selected,
+        examples=[
+            ExampleSentence(
+                japanese="橋を渡る。",
+                audio=f"audio/{target_name}",
+                instructions="Inline.",
+            )
+        ],
+    )
+    root = project(tmp_path, [selected])
+    deck_dir = root / "data" / "decks"
+    deck_dir.mkdir(parents=True)
+    (deck_dir / "inline.yaml").write_text(
+        json.dumps(
+            {"deck": {"name": "Inline"}, "notes": [inline.to_dict()]},
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    provider = FakeInstructionVoice(instructions="Global.")
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: FakeVoice())
+    monkeypatch.setattr(
+        cli,
+        "_sentence_provider",
+        lambda config, chosen, words: provider,
+    )
+
+    assert cli.main(["--root", str(root), "audio", "--examples"]) == 1
+    assert provider.said_with_settings == []
+
+
+def test_an_inline_word_variant_cannot_share_the_normalized_word_clip(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    selected = record(pitch_accent=["LHL"])
+    target_name = (
+        f"janki-{ledger_mod.word_audio_filename_fingerprint(selected)}.wav"
+    )
+    inline = replace(
+        selected,
+        pitch_accent=["HLL"],
+        audio=f"audio/{target_name}",
+    )
+    root = project(tmp_path, [selected])
+    deck_dir = root / "data" / "decks"
+    deck_dir.mkdir(parents=True)
+    (deck_dir / "inline.yaml").write_text(
+        json.dumps(
+            {"deck": {"name": "Inline"}, "notes": [inline.to_dict()]},
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    provider = FakeVoice()
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+
+    assert cli.main(["--root", str(root), "audio", "--words"]) == 1
+    assert provider.said == []
+
+
+def test_prune_preserves_a_noncolliding_inline_only_audio_reference(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    selected = record()
+    inline = record(
+        id="word:一:いち",
+        expression="一",
+        reading="いち",
+        audio="audio/janki-inline-only.wav",
+    )
+    root = project(tmp_path, [selected])
+    deck_dir = root / "data" / "decks"
+    deck_dir.mkdir(parents=True)
+    (deck_dir / "inline.yaml").write_text(
+        json.dumps(
+            {"deck": {"name": "Inline"}, "notes": [inline.to_dict()]},
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    protected = root / "media" / "audio" / "janki-inline-only.wav"
+    protected.parent.mkdir(parents=True)
+    protected.write_bytes(b"INLINE")
+    provider = FakeVoice()
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+
+    assert cli.main(["--root", str(root), "audio", "--words", "--prune"]) == 0
+    assert protected.read_bytes() == b"INLINE"
+
+
+def test_prune_uses_the_saved_source_record_after_revoicing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The collision census must be pre-write, but the prune census must not.
+
+    A source-backed deck sees the old reference before generation. Keeping that
+    snapshot alive through prune makes an edited sentence's old clip survive
+    the first run even though the just-saved source no longer references it.
+    """
+    old_example = ExampleSentence(japanese="古い文。")
+    old_record = record(examples=[old_example])
+    old_name = (
+        "janki-"
+        f"{ledger_mod.example_audio_filename_fingerprint(old_record, old_example)}"
+        ".wav"
+    )
+    changed = replace(
+        old_record,
+        examples=[ExampleSentence(japanese="新しい文。", audio=f"audio/{old_name}")],
+    )
+    root = project(tmp_path, [changed])
+    deck_dir = root / "data" / "decks"
+    deck_dir.mkdir(parents=True)
+    (deck_dir / "source.yaml").write_text(
+        json.dumps(
+            {
+                "deck": {
+                    "name": "Source",
+                    "source": "../../vocabulary.json",
+                }
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    old_path = root / "media" / "audio" / old_name
+    old_path.parent.mkdir(parents=True)
+    old_path.write_bytes(b"OLD")
+    book = ledger_mod.Ledger(path=root / "ledger.json")
+    book.record_audio(
+        changed.id,
+        file=old_name,
+        of="example",
+        provider="fakevox",
+        voice=7,
+        speed=1.0,
+        content_fp=ledger_mod.example_audio_content_fingerprint(old_example),
+    )
+    book.save()
+    provider = FakeVoice(audio=b"NEW")
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(
+        cli,
+        "_sentence_provider",
+        lambda config, chosen, words: provider,
+    )
+
+    assert cli.main(["--root", str(root), "audio", "--examples", "--prune"]) == 0
+
+    assert not old_path.exists()
+    saved = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    files = [item["file"] for item in saved["records"][changed.id]["audio"]]
+    assert old_name not in files
+
+
+def test_a_partial_prune_saves_the_ledger_before_reporting_the_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = project(tmp_path, [record()])
+    audio_dir = root / "media" / "audio"
+    audio_dir.mkdir(parents=True)
+    first = audio_dir / "janki-000-first.wav"
+    second = audio_dir / "janki-001-second.wav"
+    first.write_bytes(b"FIRST")
+    second.write_bytes(b"SECOND")
+    book = ledger_mod.Ledger(path=root / "ledger.json")
+    for record_id, path, fingerprint in (
+        ("word:old:first", first, "a" * 12),
+        ("word:old:second", second, "b" * 12),
+    ):
+        book.record_audio(
+            record_id,
+            file=path.name,
+            of="word",
+            provider="fakevox",
+            voice=7,
+            speed=1.0,
+            content_fp=fingerprint,
+        )
+    book.save()
+    real_unlink = Path.unlink
+
+    def fail_second(path: Path, *args: object, **kwargs: object) -> None:
+        if path.name == second.name:
+            raise OSError("disk refuses unlink")
+        real_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", fail_second)
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: FakeVoice())
+
+    assert cli.main(["--root", str(root), "audio", "--words", "--prune"]) == 1
+
+    assert not first.exists()
+    assert second.exists()
+    saved = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert saved["records"]["word:old:first"].get("audio", []) == []
+    assert saved["records"]["word:old:second"].get("audio", []) == []
+    assert "disk refuses unlink" in capsys.readouterr().err
+
+
+def test_a_dormant_word_address_does_not_block_a_selected_example(
+    tmp_path: Path,
+) -> None:
+    """A word with no reading cannot write its computed address.
+
+    It is not an owner unless it already carries a reference; treating the
+    impossible future write as one makes an unrelated valid run refuse.
+    """
+    selected = record(
+        id="word:何:な",
+        expression="何",
+        reading="な",
+        pitch_accent=[],
+        examples=[ExampleSentence(japanese="に行く。")],
+    )
+    dormant = record(
+        id="word:何:なに行く。",
+        expression="行く",
+        reading="",
+    )
+    voice = FakeVoice(voice=52)
+
+    result = generate_audio(
+        [selected, dormant],
+        provider=voice,
+        sentence_provider=voice,
+        book=ledger_mod.Ledger(path=tmp_path / "ledger.json"),
+        media_dir=tmp_path / "media",
+        words=True,
+        examples=True,
+        ids=[selected.id],
+    )
+
+    assert result.file_count == 2
+    assert voice.said == [("な", False), ("に行く。", False)]
+
+
+def test_duplicate_selected_record_ids_refuse_before_any_synthesis(tmp_path: Path) -> None:
+    first = record(
+        examples=[
+            ExampleSentence(japanese="一。", instructions="First."),
+            ExampleSentence(japanese="二。", instructions="Second."),
+        ]
+    )
+    second = record(
+        examples=[ExampleSentence(japanese="三。", instructions="Third.")]
+    )
+    sentences = FakeInstructionVoice()
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+
+    with pytest.raises(AudioError, match="duplicate record id"):
+        generate_audio(
+            [first, second],
+            provider=FakeVoice(),
+            sentence_provider=sentences,
+            book=book,
+            media_dir=tmp_path / "media",
+            words=True,
+            examples=True,
+        )
+
+    assert sentences.said_with_settings == []
+    assert book.records == {}
+    assert not (tmp_path / "media").exists()
+
+
+def test_duplicate_examples_with_one_instruction_share_one_paid_clip(
+    tmp_path: Path,
+) -> None:
+    provider = FakeInstructionVoice()
+    item = record(
+        examples=[
+            ExampleSentence(japanese="橋を渡る。", instructions="Same."),
+            ExampleSentence(japanese="橋を渡る。", instructions="Same."),
+        ]
+    )
+
+    result = generate_audio(
+        [item],
+        provider=FakeVoice(),
+        sentence_provider=provider,
+        book=ledger_mod.Ledger(path=tmp_path / "ledger.json"),
+        media_dir=tmp_path / "media",
+        words=False,
+        examples=True,
+    )
+
+    assert provider.said_with_settings == [
+        ("橋を渡る。", False, "Global.\n\nSame.")
+    ]
+    assert result.file_count == 1
+    assert result.records[0].examples[0].audio == result.records[0].examples[1].audio
+
+
+@pytest.mark.parametrize("blank_position", [0, 1])
+def test_duplicate_examples_reuse_a_current_reference_regardless_of_order(
+    tmp_path: Path,
+    blank_position: int,
+) -> None:
+    provider = FakeInstructionVoice()
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    original = record(
+        examples=[
+            ExampleSentence(japanese="橋を渡る。", instructions="Same."),
+            ExampleSentence(japanese="橋を渡る。", instructions="Same."),
+        ]
+    )
+    first = generate_audio(
+        [original],
+        provider=FakeVoice(),
+        sentence_provider=provider,
+        book=book,
+        media_dir=tmp_path / "media",
+        words=False,
+        examples=True,
+    )
+    current = first.records[0].examples[0].audio
+    examples = list(first.records[0].examples)
+    examples[blank_position] = replace(examples[blank_position], audio="")
+    provider.said_with_settings.clear()
+
+    second = generate_audio(
+        [replace(first.records[0], examples=examples)],
+        provider=FakeVoice(),
+        sentence_provider=provider,
+        book=book,
+        media_dir=tmp_path / "media",
+        words=False,
+        examples=True,
+    )
+
+    assert provider.said_with_settings == []
+    assert second.file_count == 0
+    assert second.up_to_date == 1
+    assert [example.audio for example in second.records[0].examples] == [
+        current,
+        current,
+    ]
+
+
+def test_the_command_persists_a_duplicate_reference_repair_without_a_write(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = FakeVoice(voice=7)
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    original = record(
+        examples=[
+            ExampleSentence(japanese="橋を渡る。"),
+            ExampleSentence(japanese="橋を渡る。"),
+        ]
+    )
+    first = generate_audio(
+        [original],
+        provider=provider,
+        sentence_provider=provider,
+        book=book,
+        media_dir=tmp_path / "media",
+        words=False,
+        examples=True,
+    )
+    current = first.records[0].examples[0].audio
+    broken = replace(
+        first.records[0],
+        examples=[first.records[0].examples[0], replace(first.records[0].examples[1], audio="")],
+    )
+    project(tmp_path, [broken])
+    book.save()
+    provider.said.clear()
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: provider)
+    monkeypatch.setattr(
+        cli,
+        "_sentence_provider",
+        lambda config, chosen, words: provider,
+    )
+
+    assert cli.main(["--root", str(tmp_path), "audio", "--examples"]) == 0
+
+    [stored] = json.loads((tmp_path / "vocabulary.json").read_text(encoding="utf-8"))
+    assert [example.get("audio", "") for example in stored["examples"]] == [
+        current,
+        current,
+    ]
+    assert provider.said == []
+
+
+def test_a_later_invalid_selected_clip_blocks_every_earlier_synthesis(
+    tmp_path: Path,
+) -> None:
+    first = record(id="word:橋:はし")
+    second = record(
+        id="word:箸:はし",
+        expression="箸",
+        examples=[ExampleSentence(japanese="箸を使う。", instructions="Clip help.")],
+    )
+    words = FakeVoice(voice=13)
+    sentences = FakeVoice(voice=52)
+
+    with pytest.raises(AudioError, match="instructions.*OpenAI"):
+        generate_audio(
+            [first, second],
+            provider=words,
+            sentence_provider=sentences,
+            book=ledger_mod.Ledger(path=tmp_path / "ledger.json"),
+            media_dir=tmp_path / "media",
+            words=True,
+            examples=True,
+        )
+
+    assert words.said == [] and sentences.said == []
+    assert not (tmp_path / "media").exists()
+
+
+def test_an_openai_model_that_cannot_honor_instructions_refuses_in_preflight() -> None:
+    from japanese_anki.tts import TtsError
+    from japanese_anki.tts.openai_tts import OpenAiSpeechProvider
+
+    requests: list[object] = []
+
+    def transport(*args: object) -> tuple[int, bytes]:
+        requests.append(args)
+        return 200, b"ID3 fake"
+
+    words = FakeVoice(voice=13)
+    with pytest.raises(TtsError, match="does not support instructions"):
+        OpenAiSpeechProvider(
+            model="tts-1",
+            instructions="Read slowly.",
+            api_key="not-a-real-key",
+            transport=transport,
+        )
+
+    assert words.said == []
+    assert requests == []
+
+
+def test_an_over_limit_openai_sentence_refuses_the_whole_run_in_preflight(
+    tmp_path: Path,
+) -> None:
+    from japanese_anki.tts.openai_tts import OpenAiSpeechProvider
+
+    requests: list[object] = []
+
+    def transport(*args: object) -> tuple[int, bytes]:
+        requests.append(args)
+        return 200, b"ID3 fake"
+
+    words = FakeVoice(voice=13)
+    sentences = OpenAiSpeechProvider(
+        instructions="Read slowly.",
+        api_key="not-a-real-key",
+        transport=transport,
+    )
+    item = record(
+        examples=[
+            ExampleSentence(japanese="一。"),
+            ExampleSentence(japanese="x" * 4097),
+        ]
+    )
+
+    with pytest.raises(AudioError, match="4096-character limit"):
+        generate_audio(
+            [item],
+            provider=words,
+            sentence_provider=sentences,
+            book=ledger_mod.Ledger(path=tmp_path / "ledger.json"),
+            media_dir=tmp_path / "media",
+            words=True,
+            examples=True,
+        )
+
+    assert words.said == []
+    assert requests == []
+    assert not (tmp_path / "media").exists()
+
+
+def test_a_blank_openai_model_refuses_before_word_or_sentence_synthesis(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = project(
+        tmp_path,
+        [record(examples=[ExampleSentence(japanese="橋を渡る。")])],
+    )
+    (root / "janki.toml").write_text(
+        (root / "janki.toml").read_text(encoding="utf-8")
+        + '\n[tts]\nsentence_provider = "openai"\nopenai_model = "   "\n',
+        encoding="utf-8",
+    )
+    requests: list[object] = []
+    words = FakeVoice()
+    monkeypatch.setenv("OPENAI_API_KEY", "not-a-real-key")
+    monkeypatch.setattr(cli, "_speech_provider", lambda config, chosen: words)
+    monkeypatch.setattr(
+        cli.openai_tts,
+        "urllib_transport",
+        lambda *args, **kwargs: (requests.append((args, kwargs)) or (200, b"ID3")),
+    )
+
+    assert cli.main(["--root", str(root), "audio", "--words", "--examples"]) == 1
+
+    assert words.said == []
+    assert requests == []
+    assert not (root / "media").exists()
+
+
+def test_invalid_utf8_clip_instructions_refuse_the_whole_run_in_preflight(
+    tmp_path: Path,
+) -> None:
+    from japanese_anki.tts.openai_tts import OpenAiSpeechProvider
+
+    requests: list[object] = []
+
+    def encoding_transport(*args: object) -> tuple[int, bytes]:
+        json.dumps(args[2], ensure_ascii=False).encode("utf-8")
+        requests.append(args)
+        return 200, b"ID3"
+
+    words = FakeVoice()
+    sentences = OpenAiSpeechProvider(
+        instructions="Global.",
+        api_key="not-a-real-key",
+        transport=encoding_transport,
+    )
+    item = record(
+        examples=[
+            ExampleSentence(japanese="一。"),
+            ExampleSentence(japanese="二。", instructions="\ud800"),
+        ]
+    )
+
+    with pytest.raises(AudioError, match="instructions.*valid UTF-8"):
+        generate_audio(
+            [item],
+            provider=words,
+            sentence_provider=sentences,
+            book=ledger_mod.Ledger(path=tmp_path / "ledger.json"),
+            media_dir=tmp_path / "media",
+            words=True,
+            examples=True,
+        )
+
+    assert words.said == []
+    assert requests == []
+    assert not (tmp_path / "media").exists()
+
+
+def test_editing_one_clip_instruction_revoices_only_that_clip_in_place(
+    tmp_path: Path,
+) -> None:
+    provider = FakeInstructionVoice()
+    book = ledger_mod.Ledger(path=tmp_path / "ledger.json")
+    original = record(
+        examples=[
+            ExampleSentence(japanese="橋を渡る。", instructions="First."),
+            ExampleSentence(japanese="毎日話す。", instructions="Second."),
+        ]
+    )
+    first = generate_audio(
+        [original],
+        provider=FakeVoice(),
+        sentence_provider=provider,
+        book=book,
+        media_dir=tmp_path / "media",
+        words=False,
+        examples=True,
+    )
+    before = [example.audio for example in first.records[0].examples]
+    provider.said_with_settings.clear()
+    edited = record(
+        examples=[
+            replace(first.records[0].examples[0], instructions="Changed."),
+            first.records[0].examples[1],
+        ]
+    )
+
+    second = generate_audio(
+        [edited],
+        provider=FakeVoice(),
+        sentence_provider=provider,
+        book=book,
+        media_dir=tmp_path / "media",
+        words=False,
+        examples=True,
+    )
+
+    assert provider.said_with_settings == [
+        ("橋を渡る。", False, "Global.\n\nChanged.")
+    ]
+    assert second.up_to_date == 1
+    assert [example.audio for example in second.records[0].examples] == before
+    entries = {entry["file"]: entry for entry in book.records[original.id]["audio"]}
+    assert entries[Path(before[0]).name]["settings"]["instructions"] == (
+        "Global.\n\nChanged."
+    )
+
+
 def test_the_word_rate_does_not_reach_the_openai_sentence_provider(tmp_path: Path) -> None:
-    """`voicevox_speed` is a VOICEVOX knob and that API has no rate parameter, so
-    passing it through would tie every OpenAI clip's staleness to the *word*
-    pace: tuning that would re-synthesize and re-bill every sentence in the
-    collection, rewrite each mp3 in place under its content-addressed name, and
-    leave nothing visible but a changed number in the ledger."""
+    """`voicevox_speed` is a VOICEVOX knob, not an OpenAI sentence setting.
+
+    OpenAI supports a separate speed field, but janki deliberately leaves it at
+    the API's 1.0 default. Passing the word setting through would tie every
+    sentence's staleness to an unrelated knob and re-bill the collection.
+    """
     (tmp_path / "janki.toml").write_text(
         '[tts]\nsentence_provider = "openai"\nvoicevox_speed = 0.7\n', encoding="utf-8"
     )

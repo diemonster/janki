@@ -61,8 +61,8 @@ Shirabe CSV      jpdb API / exports    PDFs & photos (class material)
          (canonical card content)              (machine-written state)
                         |
                         v
-        janki audio   (VOICEVOX / Azure TTS -> data/media/audio/)
         janki enrich  (jpdb facts + complete bare-word AI call)
+        janki audio   (VOICEVOX words / OpenAI sentences)
                         |
                         v
           validation -> deck YAML -> deterministic builder
@@ -83,10 +83,10 @@ judgment is generated — never the other way around.
 | Work | Who does it | Why |
 | --- | --- | --- |
 | Readings, furigana, pitch accent, frequency, POS/verb group | **jpdb dictionary data** | Facts. Never generate what you can look up. |
-| Word/sentence audio | **TTS (VOICEVOX / Azure)** | With reading + accent forced from dictionary data. |
 | Canonical structural derivations and conjugation tables | **Plain code** | Deterministic artifact shaping, not interpretation of Japanese. |
 | Meanings, two examples, annotations, and usage notes | **Claude API or Codex** | One complete answer per bare vocabulary record. |
 | PDF/photo → complete candidate cards and source patterns | **Claude API (vision)** | One source-aware call preserves source context and avoids a second paid reading. |
+| Word/sentence audio | **VOICEVOX / OpenAI TTS** | VOICEVOX forces word accent; OpenAI reads examples naturally. |
 
 Romaji remains a separate stored field. Model-authored cards return it beside
 the Japanese and furigana; deterministic record-processing code may derive or
@@ -274,9 +274,24 @@ timestamps or provenance in records, no card content in the ledger.
       ],
       "audio": [
         {"file": "janki-9f8e7d6c5b4a.wav", "of": "word", "provider": "voicevox", "voice": 46,
-         "content_fp": "1a2b3c4d5e6f", "at": "2026-08-11"}
+         "content_fp": "1a2b3c4d5e6f77889900aabbccddeeff00112233445566778899aabbccddeeff", "at": "2026-08-11"}
       ],
       "exports": {"personal-vocabulary": "2026-08-12"}
+    }
+  },
+  "pending_batches": {},
+  "pending_audio": {
+    "<exact-request-sha256>": {
+      "record_id": "word:話す:はなす",
+      "of": "word",
+      "target": "janki-9f8e7d6c5b4a.wav",
+      "request": {"input": "ハナス'", "forced_accent": true},
+      "profile": {"provider": "voicevox", "voice": 53, "speed": 1.0, "settings": {}},
+      "content_fp": "<raw-sha256>",
+      "staged_file": ".pending/<exact-request-sha256>-<bytes-sha256>.stage",
+      "staged_sha256": "<raw-sha256>",
+      "details": {},
+      "at": "2026-08-18"
     }
   }
 }
@@ -298,11 +313,23 @@ Design points:
   fingerprint of *content* is the useful signal, not the artifact (genanki
   can build hermetically given a fixed timestamp, but that solves a problem
   we don't have).
-- **Audio entries carry a `content_fp`** — the fingerprint of what was
-  spoken (the reading+accent for word audio, the sentence text for example
-  audio). This is what makes stale audio *detectable*: edit an example
-  sentence and `status`/`audio` see the mismatch and flag regeneration.
-  File naming is covered in the Audio section.
+- **Audio entries carry a `content_fp`** — a raw, length-framed SHA-256 over
+  what was spoken (the exact forced AquesTalk request plus its forced flag, or
+  the bare reading and natural flag, for word audio; the exact sentence text
+  for example audio). This is deliberately stronger than the frozen filename
+  digest: NFKC-equivalent strings can sound different, and a currency check
+  must detect that even when both resolve to the same identity address. Edit an
+  example sentence and `status`/`audio` flag regeneration. File naming is
+  covered in the Audio section.
+- **`pending_audio` is a sparse, top-level write-ahead log.** It is absent when
+  empty and separate from canonical `records[*].audio`: each row binds one
+  staged file to the exact provider request, render profile, target filename,
+  content fingerprint, and byte SHA. The stage name itself binds the exact
+  request key and byte SHA, so a process interrupted between the stage write
+  and WAL merge can reconstruct that row. A row is persisted after each
+  completed clip, before the guarded records write, so an exact rerun can
+  adopt those bytes without another provider call. It is cleared only after
+  canonical media and the ordinary audio entry commit.
 - **Writers**: `import-*` and `promote` (added_at, sources), `enrich`
   (enriched), `audio` (audio), `build` (exports). All writes are
   whole-file, sorted by key, and go through the shared atomic helper
@@ -310,7 +337,10 @@ Design points:
   `save_records_json` and `vocabulary.json` now use.
 - **`janki status`** reads it: totals per source, words never exported,
   words missing audio/enrichment/pitch accent, stale audio, and duplicate
-  candidates (below). `--format ids` emits plain IDs for scripting.
+  candidates (below). Collection totals use the deck-resolved record per id;
+  audio currency separately checks every persisted source/inline version, so
+  one later same-id deck cannot hide an earlier card that requires a different
+  render profile. `--format ids` emits plain IDs for scripting.
   `janki status --rebuild` reconstructs what it can (sources from
   `record.source`, audio from files on disk); export state is *not*
   reconstructible — after ledger loss, the next `--only-new` build simply
@@ -455,7 +485,8 @@ no longer be applied.
 
 **`janki audio [--words] [--examples] [IDS...]`**
 
-Provider is pluggable behind a small interface; two ship initially.
+Word and sentence voices are selected independently behind provider
+interfaces.
 
 **VOICEVOX (default; word audio).** Free, local (engine at
 `localhost:50021`), community-standard for Anki audio, and — decisive for
@@ -500,29 +531,32 @@ hand-waved, because the naive rule is wrong for the largest accent class:
   in explicitly and tags the ledger entry `accent_unverified`.
   *(Reversed 2026-08-15: every word is voiced, the engine choosing the accent
   when janki cannot force one, and `--allow-default-accent` is deleted because
-  it opts into nothing. The clip is still tagged `accent_unverified`, and the
-  audio fingerprint covers the pattern, so it is replaced when one arrives.)*
+  it opts into nothing. The clip is still tagged `accent_unverified`, and its
+  bare-reading utterance fingerprint differs from the usable forced-AquesTalk
+  path, so it is replaced when a pattern arrives.)*
 - Community testing says even forced accents are occasionally rendered
   wrong (やり直す is a known case) — spot-check; the ledger makes
   regeneration targeted.
 
-**Azure Speech (optional; sentence audio).** ja-JP neural voices are the
-most natural cloud option and Microsoft explicitly models pitch accent;
-the 500K-chars/month free tier covers a personal pipeline forever. Used
-for example sentences, where a natural adult voice matters more than
-forced accent (sentence-level accent is much harder to pin anyway). SSML
-`<sub alias>` pins readings inside sentences when needed — fed from the
-example's *verified* furigana, never from unchecked model output.
+**OpenAI (sentence audio).** Example sentences use OpenAI speech, where a
+natural reading matters more than forcing one isolated word's accent drop.
+`openai_instructions` is the collection-wide baseline: standard Tokyo
+Japanese, a clear learner-friendly pace, natural pitch accent, and brief pauses
+at commas. A sparse, human-written `ExampleSentence.instructions` value is
+appended for one clip that needs pronunciation help. The exact effective text
+is sent and ledgered per clip. Words remain on VOICEVOX because that is the
+provider that accepts janki's explicit accent shape.
 
 **Mechanics:**
 
-- Files land in `data/media/audio/`, named `janki-<fp>.wav` where the
-  fingerprint is over **content, not position**: `fp(record_id)` for word
-  audio, `fp(record_id + example.japanese)` for sentence audio. Editing or
-  reordering examples therefore *orphans* the old file (a visible
-  missing-audio state the tools flag) rather than silently re-binding
-  existing cards to the wrong sentence's audio. `status`/`audio` compare
-  the ledger's `content_fp` against current record content to catch
+- Files land in `data/media/audio/`, named `janki-<fp><provider suffix>` where
+  the fingerprint is over **record identity and spoken text, not position**:
+  `fp(record_id)` for word audio, `fp(record_id + example.japanese)` for
+  sentence audio. Editing a sentence leaves its old reference visibly stale;
+  regeneration writes the new address and repoints the record, at which point
+  the old file is orphaned and pruneable. Reordering does not change an
+  address. `status`/`audio` compare the ledger's exact request
+  `content_fp` against current record content to catch
   staleness, and `audio --prune` removes orphaned files.
 - Fingerprint names also fix a real exporter hazard: media dedup is by
   path but packaging is by basename, so two files both named `audio.mp3`
@@ -538,6 +572,12 @@ example's *verified* furigana, never from unchecked model output.
 - Word-audio regeneration for unchanged content (`--force`, e.g. new
   voice) keeps the same filename, so Anki media sync picks up new content
   for the same `[sound:]` reference.
+- Paid bytes never overwrite that canonical filename during synthesis. They
+  first land under `audio/.pending/`; janki durably records the exact request,
+  profile, target, and byte hash, then compare-and-swap writes the record
+  reference. Only after that succeeds does it atomically publish the bytes and
+  finalize the canonical audio ledger. An interrupted exact rerun adopts the
+  verified stage for free; a relevant record or profile change cannot.
 - Templates: `{{Audio}}` already renders on recognition-back; production
   back gets it too, and example audio renders next to the example.
 
@@ -550,15 +590,20 @@ example's *verified* furigana, never from unchecked model output.
 - `audio_accent: str` — optional per-record override for audio generation.
 - `frequency_rank: int | None` — jpdb corpus rank.
 
-`ExampleSentence` gains `audio: str`.
+`ExampleSentence` gains `audio: str` and sparse `instructions: str`. The latter
+is omitted when empty, so current records and current audio need no migration;
+it is a human escape hatch and is not part of the model-generated example
+schema.
 
 `SourceReference.raw_fields` stays `dict[str, str]` — PDF provenance
 (page, confidence) is stringified into it rather than growing the model.
 
 Dataclass-change side effect, stated accurately: merge counts are *not*
 affected (loaded and merged records both get the new defaults, so equality
-holds), but the first `save_records_json` after upgrade rewrites every
-record with the new keys — a one-time whole-file JSON diff.
+holds). The earlier always-serialized schema additions above caused a one-time
+whole-file JSON diff when they landed. M8.1's sparse `instructions` field does
+not: `VocabularyRecord.to_dict()` removes it when empty, so the new escape hatch
+adds no keys to existing examples and requires no collection rewrite.
 
 **Pitch-accent display is decided now, not punted**: the builder renders
 the pattern to inline HTML (span-per-mora with border styling — the
@@ -602,13 +647,13 @@ janki build [DECK | --all] [--only-new]   # DECK = path, or bare name resolved i
 janki import-jpdb [--deck NAME | --all-decks | FILE.csv] [--prefer-incoming F,..]
 janki import-jpdb-reviews reviews.json
 janki jpdb ping
-janki audio [--words] [--examples] [--provider P] [--force] [--prune]
 janki extract FILE... [--mode table|prose] [--model ID] [--force] [--yes]
 janki promote data/staging/X.yaml [--accept-coverage] [--skip-reading-check]
 janki enrich [--jpdb] [--ai]
              [--batch-submit|--batch-fetch|--batch-forget]
              [--force-fields F,..] [--model ID] [--force] [--yes] [IDS...]
 janki patterns [--review DOCUMENT ...]
+janki audio [--words] [--examples] [--provider {voicevox}] [--force] [--prune]
             [IDS...]
 janki status [--unexported] [--missing-audio] [--duplicates] [--staged] [--rebuild] [--format ids]
 janki refresh [--deck DECK]   # the weekly loop, in order (below)
@@ -656,19 +701,17 @@ enrich_model = "claude-opus-5"
 enrich_reasoning_effort = "ultra"
 
 [tts]
-provider     = "voicevox"          # or "azure"
+provider     = "voicevox"          # word clips
 voicevox_url = "http://localhost:50021"
-voicevox_speaker = 46              # int, everywhere (ledger included)
-azure_voice  = "ja-JP-NanamiNeural"
-azure_region = "westus2"
+voicevox_speaker = 53              # int, everywhere (ledger included)
+sentence_provider = "openai"       # example clips; empty inherits provider
+openai_voice = "onyx"
+openai_model = "gpt-4o-mini-tts"
+openai_instructions = "Read this as a native speaker of standard Tokyo Japanese, for someone learning the language. Speak noticeably slower than conversational pace, clearly and calmly, with natural pitch accent, and pause briefly at each comma. Do not sound hurried."
 ```
 
 Secrets are environment-only: `ANTHROPIC_API_KEY`, `JPDB_API_KEY`,
-`AZURE_SPEECH_KEY`. Config loading starts *warning* on unknown keys and
-sections (today typos are silently ignored — with three new sections that
-becomes an actual foot-gun). *(Historical, both halves: `AZURE_SPEECH_KEY` is
-read by nothing — the live third key is `OPENAI_API_KEY` — and the unknown-key
-warning shipped, in `config.check_unknown_keys`.)*
+and `OPENAI_API_KEY`. Config loading warns on unknown keys and sections.
 
 ## Costs (order of magnitude, standard API prices, Aug 2026)
 
@@ -680,8 +723,9 @@ warning shipped, in `config.check_unknown_keys`.)*
   (tens of words a week) the synchronous cost is cents either way — model
   choice only matters for big backfills.
 - **jpdb API**: free with an account.
-- **Audio**: VOICEVOX free; Azure free tier (500K chars/month) covers
-  sentence audio for any personal volume.
+- **Audio**: VOICEVOX word audio is local and free; the shipped OpenAI sentence
+  model bills for text-input and audio-output tokens, and generated clips are
+  cached in the repository.
 
 The pattern: pay once per word, cache in the repo, rebuild forever for
 free.
@@ -692,9 +736,11 @@ free.
    overwriting curated fields; `test_merge.py` is rewritten to the new
    contract; `command_import_shirabe`'s count printing moves to the
    outcome map. `--prefer-incoming` restores old behavior per field.
-2. Dataclass additions: no merge-count churn; one-time whole-file JSON
-   diff on first save. External tooling parsing `vocabulary.json` must
-   tolerate new keys.
+2. The always-serialized M2.2 dataclass additions caused no merge-count churn
+   but did cause a one-time whole-file JSON diff on first save; external
+   tooling parsing `vocabulary.json` must tolerate those keys. M8.1's sparse
+   `ExampleSentence.instructions` addition is omitted when empty and causes no
+   rewrite or new key in existing records.
 3. Existing decks build identically until the new note fields ship: GUIDs,
    model IDs, deck IDs unchanged. The note-field append path is
    empirically verified against a live collection before it ships (see
@@ -729,7 +775,15 @@ free.
   since that command read it. An interprocess lock spans the final comparison
   and rename, so two writers cannot both validate the same old revision and
   then replace one another. Locks live in a private per-user temporary or cache
-  directory rather than creating artifacts beside tracked data.
+  directory rather than creating artifacts beside tracked data. Audio adds a
+  command-wide media-transaction lock: each completed paid clip is merged
+  additively into `pending_audio`, the records CAS runs before canonical
+  publication, and only the winning transaction finalizes the media/ledger
+  pair. The transaction locks and revalidates the complete durable owner
+  closure — normalized records, deck membership, every deck definition, and
+  every referenced deck source file — through publication and prune. This also
+  prevents a stale concurrent `--prune` from deleting a clip a different audio
+  command or newly added owner just committed.
 
 ## Milestones
 
@@ -750,8 +804,8 @@ free.
 5. **Audio**: pitch-conversion module with golden test set (merge gate);
    VOICEVOX provider (accent_phrases flow); media_dir resolution +
    passthrough warning; **notetype-upgrade verification against a live
-   collection**; template updates; `build --only-new` + `refresh`; Azure
-   sentence audio after.
+   collection**; template updates; `build --only-new` + `refresh`; OpenAI
+   sentence audio.
 
 Each milestone is shippable and useful on its own; the order front-loads
 the merge fix and ID rules because everything downstream depends on them.

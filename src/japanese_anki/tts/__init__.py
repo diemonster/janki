@@ -1,9 +1,9 @@
 """What janki needs from a speech engine, and nothing else.
 
 Two providers ship: VOICEVOX for single words, where forcing the pitch accent is
-the entire point, and Azure for example sentences, where a natural adult voice
-matters more. They have nothing in common internally, so the protocol is the
-narrow set of things ``janki audio`` actually asks of one.
+the entire point, and OpenAI for example sentences, where a natural adult voice
+matters more. They have nothing in common internally, so the protocols expose
+only the narrow sets of facts their callers actually need.
 
 ``name`` and ``voice`` are on the protocol rather than looked up per class
 because M5.3 writes them into the ledger for every clip it records, and a
@@ -16,11 +16,17 @@ without knowing which engine it is holding.
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Protocol, TypeVar, cast, runtime_checkable
 
 from japanese_anki.errors import JankiError
 
-__all__ = ["SpeechProvider", "TtsError"]
+__all__ = [
+    "RenderProfile",
+    "SpeechProvider",
+    "TtsError",
+    "clip_provider",
+    "validate_utterance",
+]
 
 
 class TtsError(JankiError):
@@ -28,8 +34,8 @@ class TtsError(JankiError):
 
 
 @runtime_checkable
-class SpeechProvider(Protocol):
-    """One speech engine, as ``janki audio`` sees it."""
+class RenderProfile(Protocol):
+    """The durable synthesis choices that decide how a clip sounds."""
 
     @property
     def name(self) -> str:
@@ -57,16 +63,6 @@ class SpeechProvider(Protocol):
         """
 
     @property
-    def suffix(self) -> str:
-        """The file extension this engine's audio needs, including the dot.
-
-        On the provider because the format is the engine's choice, not the
-        caller's: VOICEVOX returns WAV, and OpenAI is asked for mp3 because its
-        WAV carries placeholder chunk sizes. A hard-coded ``.wav`` downstream
-        would name an mp3 file ``.wav`` and hand Anki a lie about its contents.
-        """
-
-    @property
     def settings(self) -> dict[str, str]:
         """Anything else that decides how a clip sounds, for the ledger.
 
@@ -74,6 +70,21 @@ class SpeechProvider(Protocol):
         prose style prompt, or a choice of model, puts them here: they are
         audible, they are not in the content fingerprint, and a clip whose
         ledger entry cannot describe them is one nothing can tell is stale.
+        """
+
+
+@runtime_checkable
+class SpeechProvider(RenderProfile, Protocol):
+    """One speech engine, as ``janki audio`` sees it."""
+
+    @property
+    def suffix(self) -> str:
+        """The file extension this engine's audio needs, including the dot.
+
+        On the provider because the format is the engine's choice, not the
+        caller's: VOICEVOX returns WAV, and OpenAI is asked for mp3 because its
+        WAV carries placeholder chunk sizes. A hard-coded ``.wav`` downstream
+        would name an mp3 file ``.wav`` and hand Anki a lie about its contents.
         """
 
     @property
@@ -99,3 +110,39 @@ class SpeechProvider(Protocol):
         the flag, not by lacking the method.
         """
         ...
+
+
+_Profile = TypeVar("_Profile", bound=RenderProfile)
+
+
+def clip_provider(provider: _Profile, instructions: str) -> _Profile:
+    """Prepare one utterance's render profile.
+
+    Blank steering is backward-compatible with every provider. Nonblank
+    steering is optional provider capability: ignoring it would write a clip a
+    listener already said was wrong and then ledger it as current. Providers
+    that support it expose ``for_clip``; OpenAI uses that seam to append the
+    override to its collection-wide baseline.
+    """
+    value = str(instructions or "").strip()
+    prepare = getattr(provider, "for_clip", None)
+    if callable(prepare):
+        return cast(_Profile, prepare(value))
+    if not value:
+        return provider
+    raise TtsError(
+        f"{provider.name} cannot apply per-clip instructions. Set [tts] "
+        'sentence_provider = "openai" to use OpenAI for an example\'s instructions.'
+    )
+
+
+def validate_utterance(provider: RenderProfile, text: str) -> None:
+    """Run a provider's side-effect-free per-utterance request checks.
+
+    Most engines have no local text constraint. OpenAI does, and checking every
+    selected sentence before synthesis keeps a deterministic length refusal
+    from landing earlier paid clips in the same run.
+    """
+    validate = getattr(provider, "validate_utterance", None)
+    if callable(validate):
+        validate(text)

@@ -65,7 +65,7 @@ def test_new_sections_override_defaults_and_paths_resolve_against_the_root(
         enrich_reasoning_effort = "high"
 
         [tts]
-        provider = "azure"
+        provider = "voicevox"
         voicevox_url = "http://voice.local:1234"
         voicevox_speaker = 8
         """,
@@ -81,13 +81,27 @@ def test_new_sections_override_defaults_and_paths_resolve_against_the_root(
     assert config.enrich_provider == "anthropic"
     assert config.enrich_model == "claude-sonnet-5"
     assert config.enrich_reasoning_effort == "high"
-    assert config.tts_provider == "azure"
+    assert config.tts_provider == "voicevox"
     assert config.voicevox_url == "http://voice.local:1234"
     assert config.voicevox_speaker == 8
     # Falsifiable now that _int refuses to coerce: a float or bool would raise
     # above, and a future coercion regression would fail here.
     assert type(config.voicevox_speaker) is int
     assert capsys.readouterr().err == ""
+
+
+@pytest.mark.parametrize("retired", ["azure_voice", "azure_region"])
+def test_retired_azure_settings_are_unknown(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    retired: str,
+) -> None:
+    _write_config(tmp_path, f'[tts]\n{retired} = "retired"\n')
+
+    ProjectConfig.load(tmp_path)
+
+    assert retired in capsys.readouterr().err
+    assert retired not in KNOWN_KEYS["tts"]
 
 
 def test_unknown_key_warns_with_the_nearest_valid_key_and_still_loads(

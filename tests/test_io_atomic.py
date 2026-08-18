@@ -50,6 +50,25 @@ def test_atomic_write_failure_mid_write_keeps_previous_contents(tmp_path: Path) 
     assert _no_temp_files(tmp_path)
 
 
+def test_atomic_byte_write_failed_replace_keeps_previous_contents(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "clip.mp3"
+    target.write_bytes(b"OLD AUDIO")
+
+    def fail_replace(*args: object, **kwargs: object) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(io.os, "replace", fail_replace)
+
+    with pytest.raises(DataError, match="Could not write"):
+        io.atomic_write_bytes(target, b"NEW AUDIO")
+
+    assert target.read_bytes() == b"OLD AUDIO"
+    assert _no_temp_files(tmp_path)
+
+
 def test_atomic_write_failed_rename_is_a_clean_error_and_cleans_up(tmp_path: Path) -> None:
     # Renaming a file over a non-empty directory fails at the os.replace
     # step with a real kernel error — no monkeypatching of os.replace.

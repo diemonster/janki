@@ -4,9 +4,10 @@
 from AquesTalk kana with its pitch accent forced, because 橋 and 箸 are the pair
 a card exists to distinguish and an engine left to guess renders them alike —
 verified against a live engine: unforced, 橋/箸/端 all come out accent 1. This
-API has no accent control, no SSML, and no phoneme override, so it cannot do
-that job at all. It refuses ``forced_accent=True`` rather than quietly returning
-a guess, which is the failure mode this whole milestone was built around.
+API has no structured, guaranteed lexical pitch-accent control, no SSML, and no
+phoneme override, so it cannot do that job at all. It refuses
+``forced_accent=True`` rather than quietly returning a guess, which is the
+failure mode this whole milestone was built around.
 
 For a *sentence* nothing is forced anyway — janki has no accent data for a whole
 sentence and says so — so the objection does not apply, and the question becomes
@@ -55,24 +56,33 @@ DEFAULT_TIMEOUT = 120.0
 
 DEFAULT_MODEL = "gpt-4o-mini-tts"
 
+# The API accepts these models but explicitly does not apply ``instructions``
+# to them. Keep this a capability refusal, not an allowlist of model names: new
+# instruction-capable models remain usable without a janki release.
+_MODELS_WITHOUT_INSTRUCTIONS = frozenset({"tts-1", "tts-1-hd"})
+_LEGACY_MODEL_VOICES = frozenset(
+    {"alloy", "ash", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer"}
+)
+_MAX_INSTRUCTIONS_LENGTH = 4096
+_MAX_INPUT_LENGTH = 4096
+
 #: Deep and male, the nearest match to the VOICEVOX speaker chosen for words —
 #: a card that says the word in one register and the sentence in another for no
 #: reason is a distraction, and the point of a separate sentence voice is that
 #: it is a *different reader*, not a different species.
 DEFAULT_VOICE = "onyx"
 
-#: What the API accepts, recorded here so a typo fails at config load rather
-#: than mid-run on the first sentence. Taken verbatim from the API's own 400
-#: (checked 2026-08-09); ``cove`` and the other ChatGPT app voices are not here,
-#: because Advanced Voice Mode and this endpoint do not share a voice list.
+#: The built-in voices janki supports, recorded here so a typo fails at config
+#: load rather than mid-run on the first sentence. Custom voice objects are a
+#: separate API surface and intentionally are not configuration values here.
 VOICES: tuple[str, ...] = (
     "alloy", "ash", "ballad", "cedar", "coral", "echo", "fable",
     "marin", "nova", "onyx", "sage", "shimmer", "verse",
 )
 
-#: The only rate control this API has. There is no ``speed`` parameter on
-#: ``gpt-4o-mini-tts``, so pace is asked for in prose or not at all — which is
-#: why ``speed`` on this provider is a constant rather than a setting.
+#: The learner-specific pace control janki exposes. The endpoint also accepts
+#: numeric ``speed``; janki deliberately leaves it at the API's 1.0 default
+#: rather than coupling sentence delivery to the VOICEVOX word-speed setting.
 DEFAULT_INSTRUCTIONS = (
     "Read this as a native speaker of standard Tokyo Japanese, for someone "
     "learning the language. Speak noticeably slower than conversational pace, "
@@ -81,8 +91,7 @@ DEFAULT_INSTRUCTIONS = (
 )
 
 KEY_HINT = (
-    "no OPENAI_API_KEY. The engine is reachable; the key is missing. Set it "
-    "in your environment and try again — it is never read "
+    "no OPENAI_API_KEY. Set it in your environment and try again — it is never read "
     "from janki.toml. Put it in ~/.zshenv rather than ~/.zshrc so non-login "
     "shells (and this tool) can see it."
 )
@@ -147,7 +156,6 @@ class OpenAiSpeechProvider:
         instructions: str = DEFAULT_INSTRUCTIONS,
         api_key: str | None = None,
         transport: Transport | None = None,
-        speed: float = 1.0,
     ) -> None:
         chosen = str(voice).strip().lower()
         if chosen not in VOICES:
@@ -156,12 +164,23 @@ class OpenAiSpeechProvider:
                 "(The ChatGPT app's voices — Cove, Juniper, Breeze — are a "
                 "different set and are not offered by this API.)"
             )
+        chosen_model = str(model).strip()
+        if not chosen_model:
+            raise TtsError("OpenAI speech model cannot be blank.")
+        if (
+            chosen_model in _MODELS_WITHOUT_INSTRUCTIONS
+            and chosen not in _LEGACY_MODEL_VOICES
+        ):
+            raise TtsError(
+                f"OpenAI model {chosen_model!r} does not support voice {chosen!r}. "
+                f"Available for that model: {', '.join(sorted(_LEGACY_MODEL_VOICES))}."
+            )
         self._voice = chosen
-        self._model = str(model)
-        self._instructions = str(instructions)
-        self._speed = float(speed)
+        self._model = chosen_model
+        self._instructions = str(instructions).strip()
         self._api_key = api_key
         self._transport: Transport = transport or urllib_transport
+        self._validate_instructions(self._instructions)
 
     @property
     def name(self) -> str:
@@ -180,16 +199,14 @@ class OpenAiSpeechProvider:
 
     @property
     def speed(self) -> float:
-        """Recorded, never sent, and in practice always 1.0.
+        """The API default janki deliberately records and does not override.
 
-        This API has no rate parameter, so nothing configurable reaches it: the
-        CLI deliberately does not pass ``voicevox_speed`` here, because tying an
-        OpenAI clip's staleness to a VOICEVOX knob would re-bill every sentence
-        whenever the *word* pace was tuned. The property exists to satisfy the
-        protocol and to keep the ledger's comparison uniform; pace for this
-        engine lives in ``instructions``, which :attr:`settings` records.
+        OpenAI accepts a separate numeric speed, but janki exposes no sentence-
+        speed setting and omits the request field. Tying an OpenAI clip to the
+        VOICEVOX word-speed knob would re-bill every sentence when only the word
+        pace changed. Learner-specific pace lives in ``instructions``.
         """
-        return self._speed
+        return 1.0
 
     @property
     def suffix(self) -> str:
@@ -199,17 +216,64 @@ class OpenAiSpeechProvider:
     def settings(self) -> dict[str, str]:
         """What else decides how this clip sounds, for the ledger to compare.
 
-        ``instructions`` is the *only* pace control this API has and ``model``
-        changes the voice outright, yet neither is in the content fingerprint —
-        which covers what was said — nor in ``voice``. Without them recorded,
-        rewriting the instructions to ask for a slower delivery left every clip
-        reporting "already current" and nothing was re-voiced.
+        ``instructions`` is the pace control janki sends and ``model`` changes
+        the voice outright, yet neither is in the content fingerprint — which
+        covers what was said — nor in ``voice``. Without them recorded, changing
+        the instructions left every clip reporting current and nothing re-voiced.
         """
+        # Keep the empty key too. That was the pre-M8.1 ledger shape, so an
+        # explicitly blank global prompt remains current and does not trigger a
+        # collection-wide no-op regeneration merely because clip hints exist.
         return {"model": self._model, "instructions": self._instructions}
 
     @property
     def instructions(self) -> str:
         return self._instructions
+
+    def for_clip(self, instructions: str) -> OpenAiSpeechProvider:
+        """An independent provider carrying one clip's effective prompt."""
+        parts = [
+            part.strip()
+            for part in (self._instructions, str(instructions or ""))
+            if part.strip()
+        ]
+        effective = "\n\n".join(parts)
+        self._validate_instructions(effective)
+        if effective == self._instructions:
+            return self
+        return OpenAiSpeechProvider(
+            voice=self._voice,
+            model=self._model,
+            instructions=effective,
+            api_key=self._api_key,
+            transport=self._transport,
+        )
+
+    def _validate_instructions(self, instructions: str) -> None:
+        _require_utf8(instructions, field="instructions")
+        if instructions and self._model in _MODELS_WITHOUT_INSTRUCTIONS:
+            raise TtsError(
+                f"OpenAI model {self._model!r} does not support instructions. "
+                "Use gpt-4o-mini-tts (or another instruction-capable speech "
+                "model), or clear the instructions."
+            )
+        if len(instructions) > _MAX_INSTRUCTIONS_LENGTH:
+            raise TtsError(
+                "OpenAI speech instructions are longer than the API's "
+                f"{_MAX_INSTRUCTIONS_LENGTH}-character limit."
+            )
+
+    def validate_utterance(self, text: str) -> None:
+        """Refuse request text the endpoint cannot accept, without I/O."""
+        spoken = str(text).strip()
+        if not spoken:
+            raise TtsError("Nothing to speak: the sentence was empty.")
+        _require_utf8(spoken, field="input")
+        if len(spoken) > _MAX_INPUT_LENGTH:
+            raise TtsError(
+                "OpenAI speech input is longer than the API's "
+                f"{_MAX_INPUT_LENGTH}-character limit."
+            )
 
     @property
     def launch_hint(self) -> str:
@@ -249,9 +313,9 @@ class OpenAiSpeechProvider:
                 "it for example sentences (tts.sentence_provider) and leave "
                 "words to VOICEVOX."
             )
+        self.validate_utterance(text_or_kana)
         spoken = text_or_kana.strip()
-        if not spoken:
-            raise TtsError("Nothing to speak: the sentence was empty.")
+        self._validate_instructions(self._instructions)
 
         body: dict[str, Any] = {
             "model": self._model,
@@ -272,6 +336,14 @@ class OpenAiSpeechProvider:
         if not payload:
             raise TtsError("The OpenAI speech API returned no audio.")
         return payload
+
+
+def _require_utf8(value: str, *, field: str) -> None:
+    """Refuse JSON text Python can represent but the HTTP body cannot encode."""
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise TtsError(f"OpenAI speech {field} must be valid UTF-8 text.") from exc
 
 
 def _detail(payload: bytes) -> str:

@@ -118,6 +118,11 @@ class ExampleSentence:
     english: str = ""
     # Media-dir-relative filename of this sentence's generated audio (M5.3).
     audio: str = ""
+    #: Optional human-written steering appended to the configured OpenAI
+    #: sentence instructions for this clip only. It is deliberately absent
+    #: from model-generated example schemas: this is the escape hatch for a
+    #: person who listened, not another answer for the model to invent.
+    instructions: str = ""
     #: ``polite`` (〜ます/です) or ``casual`` (plain form), or empty for an
     #: example written before the distinction existed. A learner meets both and
     #: they are not interchangeable — a textbook teaches ます first and a friend
@@ -138,14 +143,35 @@ class ExampleSentence:
         )
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any] | None) -> ExampleSentence:
+    def from_dict(
+        cls,
+        data: dict[str, Any] | None,
+        *,
+        position: int | None = None,
+    ) -> ExampleSentence:
         data = _checked_mapping(data, "examples", "a list of example mappings")
+        instruction_value = data.get("instructions", "")
+        if instruction_value is None:
+            instructions = ""
+        elif not isinstance(instruction_value, str):
+            field_name = (
+                f"examples[{position}].instructions"
+                if position is not None
+                else "examples.instructions"
+            )
+            raise ModelError(
+                f"'{field_name}' must be text or empty, got "
+                f"{type(instruction_value).__name__} ({_excerpt(instruction_value)})"
+            )
+        else:
+            instructions = instruction_value.strip()
         return cls(
             japanese=str(data.get("japanese", "")).strip(),
             furigana=str(data.get("furigana", "")).strip(),
             romaji=str(data.get("romaji", "")).strip(),
             english=str(data.get("english", "")).strip(),
             audio=str(data.get("audio", "")).strip(),
+            instructions=instructions,
             register=str(data.get("register", "")).strip().lower(),
         )
 
@@ -244,7 +270,10 @@ class VocabularyRecord:
             part_of_speech=str(data.get("part_of_speech", "")).strip(),
             verb_group=str(data.get("verb_group", "")).strip(),
             transitivity=str(data.get("transitivity", "")).strip(),
-            examples=[ExampleSentence.from_dict(item) for item in examples_value],
+            examples=[
+                ExampleSentence.from_dict(item, position=position)
+                for position, item in enumerate(examples_value)
+            ],
             conjugations=conjugations,
             tags=_string_list(data.get("tags"), "tags"),
             usage_notes=str(data.get("usage_notes", "")).strip(),
@@ -257,7 +286,16 @@ class VocabularyRecord:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        payload = asdict(self)
+        # M8.1 is intentionally not a whole-file schema migration. ``audio``
+        # rewrites the complete collection after changing one record, so an
+        # ordinary dataclass serialization would add ``instructions: ""`` to
+        # every historical example. Empty means the exact legacy render
+        # profile and stays absent; only the human-authored override is stored.
+        for example in payload["examples"]:
+            if not str(example.get("instructions") or "").strip():
+                example.pop("instructions", None)
+        return payload
 
     @property
     def first_example(self) -> ExampleSentence:

@@ -42,6 +42,7 @@ from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import (
     deck_declared_ids,
+    deck_declared_record_versions,
     resolve_deck_records,
 )
 from japanese_anki.identifiers import normalize_identity_part
@@ -55,6 +56,7 @@ from japanese_anki.ledger import (
 )
 from japanese_anki.models import SourceReference, VocabularyRecord
 from japanese_anki.staging import read_staging
+from japanese_anki.tts import RenderProfile
 
 # Every media file janki generates is named ``janki-<filename fingerprint>``;
 # the prefix is what tells a rebuild (and M5.3's --prune) which files are ours.
@@ -98,6 +100,10 @@ class RecordUniverse:
     records: list[VocabularyRecord]
     decks: list[DeckView]
     normalized_count: int
+    # Every persisted version for audio currency. Unlike `records`, this does
+    # not collapse same-id inline overrides: two cards can durably demand two
+    # render profiles while sharing one identity-addressed filename.
+    audio_records: list[VocabularyRecord] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     # The normalized file's own source per id, kept even where a deck note
     # shadows the record: the deck-resolved copy is what a deck exports, but
@@ -151,16 +157,19 @@ def collect_records(config: ProjectConfig) -> RecordUniverse:
 
     normalized_ids: set[str] = set()
     normalized_sources: dict[str, SourceReference] = {}
+    audio_records: list[VocabularyRecord] = []
     if config.normalized_file.exists():
         for record in load_records(config.normalized_file):
             by_id[record.id] = record
             normalized_ids.add(record.id)
             normalized_sources[record.id] = record.source
+            audio_records.append(record)
 
     decks: list[DeckView] = []
     for deck_path in deck_files(config):
         try:
             _, records = resolve_deck_records(deck_path)
+            audio_records.extend(deck_declared_record_versions(deck_path))
         except JankiError as exc:
             warnings.append(f"skipping deck {deck_path}: {exc}")
             continue
@@ -177,6 +186,7 @@ def collect_records(config: ProjectConfig) -> RecordUniverse:
         records=records,
         decks=decks,
         normalized_count=sum(1 for record in records if record.id in normalized_ids),
+        audio_records=audio_records,
         warnings=warnings,
         normalized_sources=normalized_sources,
     )
@@ -291,6 +301,7 @@ class StatusReport:
     ledger_path: Path
     ledger_exists: bool
     ledger_entries: int
+    pending_audio_count: int
     record_ids: list[str]
     normalized_count: int
     inline_count: int
@@ -326,6 +337,9 @@ def build_report(
     config: ProjectConfig,
     universe: RecordUniverse,
     book: Ledger,
+    *,
+    word_provider: RenderProfile | None,
+    example_provider: RenderProfile | None,
     staged: Sequence[StagedFile] = (),
 ) -> StatusReport:
     records = universe.records
@@ -342,6 +356,7 @@ def build_report(
         ledger_path=book.path,
         ledger_exists=Path(book.path).exists(),
         ledger_entries=len(book.records),
+        pending_audio_count=len(book.pending_audio),
         record_ids=[record.id for record in records],
         normalized_count=universe.normalized_count,
         inline_count=universe.inline_count,
@@ -362,7 +377,11 @@ def build_report(
             1 for record in records for example in record.examples if example.japanese
         ),
         unvoiced_examples=book.unvoiced_examples(records),
-        stale_audio=book.stale_audio(records),
+        stale_audio=book.stale_audio(
+            universe.audio_records or records,
+            word_provider=word_provider,
+            example_provider=example_provider,
+        ),
         missing_enrichment=Ledger.missing_enrichment(records),
         missing_pitch_accent=missing_pitch,
         staging_dir=config.staging_dir,
@@ -512,6 +531,7 @@ def format_report(report: StatusReport) -> list[str]:
     if not report.ledger_exists:
         ledger_line += " (no ledger file yet; everything below reads as missing)"
     lines.append(ledger_line)
+    lines.append(f"Pending audio recovery: {report.pending_audio_count}")
 
     if report.decks:
         lines.append(

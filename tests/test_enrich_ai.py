@@ -542,6 +542,7 @@ def test_an_in_place_fill_keeps_the_clip_and_regenerates_the_romaji() -> None:
             ExampleSentence(
                 japanese="日本語を話します。",
                 audio="audio/janki-kept.mp3",
+                instructions="Pronounce 日本語 as にほんご.",
                 # Deliberately present and wrong. With this empty, "regenerated"
                 # and "populated because it was empty" are indistinguishable —
                 # and the merge policy every neighbouring field in the same
@@ -566,6 +567,7 @@ def test_an_in_place_fill_keeps_the_clip_and_regenerates_the_romaji() -> None:
 
     [filled] = outcome.record.examples
     assert filled.audio == "audio/janki-kept.mp3", "the paid clip survives the fill"
+    assert filled.instructions == "Pronounce 日本語 as にほんご."
     assert filled.furigana == "日本語[にほんご]を 話[はな]します。"
     # `o`, not `wo`: the particle を is romanized as it is said, which is also
     # proof the value came from the romaji module rather than a naive transliteration.

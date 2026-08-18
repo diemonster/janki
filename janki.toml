@@ -57,14 +57,17 @@ voicevox_speaker = 53               # 麒ヶ島宗麟 — chosen for accent audi
 # environment — never in this file.
 sentence_provider = "openai"
 openai_voice = "onyx"
-# gpt-4o-mini-tts has no rate parameter, so pace is asked for in prose.
+# janki leaves the API's optional speed at its 1.0 default; pace and
+# pronunciation steering are asked for in prose instead.
+# A sentence needing extra pronunciation help may add a sparse
+# examples[].instructions value in vocabulary.json; it supplements this text.
 openai_instructions = """\
 Read this as a native speaker of standard Tokyo Japanese, for someone learning \
 the language. Speak noticeably slower than conversational pace, clearly and \
 calmly, with natural pitch accent, and pause briefly at each comma. Do not \
 sound hurried."""
-voicevox_speed = 0.7                # 0.5–2.0; below 1 slows delivery without
-                                    # dropping the pitch
+voicevox_speed = 0.7                # below 1 slows delivery without dropping
+                                    # the pitch; janki accepts any finite >0
 
 # Secrets are never read from this file. Codex uses the CLI's existing login;
 # set ANTHROPIC_API_KEY, JPDB_API_KEY, and OPENAI_API_KEY in the environment.

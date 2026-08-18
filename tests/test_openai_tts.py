@@ -79,13 +79,21 @@ def test_an_empty_sentence_is_refused() -> None:
         provider(api).synthesize("   ", forced_accent=False)
 
 
+def test_a_blank_model_is_refused_before_any_request() -> None:
+    with pytest.raises(TtsError, match="model.*cannot be blank"):
+        provider(FakeApi(), model="   ")
+
+
 # --- the request shape ------------------------------------------------------
 
 
 def test_the_instructions_carry_the_pace() -> None:
-    """`gpt-4o-mini-tts` has no rate parameter, so prose is the only lever. If
-    the field stops being sent, the audio silently speeds back up to the model's
-    own pace and nothing reports it."""
+    """Instructions are the pace control janki exposes for sentence audio.
+
+    The API also supports a numeric speed field, but janki leaves that at its
+    default. If instructions stop being sent, the learner-specific delivery
+    silently disappears and nothing reports it.
+    """
     api = FakeApi()
 
     provider(api, instructions="Speak very slowly.").synthesize("テスト。", forced_accent=False)
@@ -101,6 +109,164 @@ def test_empty_instructions_are_left_out_entirely() -> None:
     provider(api, instructions="   ").synthesize("テスト。", forced_accent=False)
 
     assert "instructions" not in api.body
+
+
+@pytest.mark.parametrize(
+    ("global_instructions", "clip_instructions", "expected"),
+    [
+        ("Global.", "Clip.", "Global.\n\nClip."),
+        ("Global.", "   ", "Global."),
+        ("   ", "Clip.", "Clip."),
+        ("   ", "   ", None),
+    ],
+)
+def test_clip_instructions_append_to_the_global_instructions(
+    global_instructions: str,
+    clip_instructions: str,
+    expected: str | None,
+) -> None:
+    """A clip hint augments the collection-wide pace/style contract; it does
+    not replace it. The prepared profile is also the exact ledger profile."""
+    api = FakeApi()
+    base = provider(api, instructions=global_instructions)
+
+    prepared = base.for_clip(clip_instructions)
+    prepared.synthesize("テスト。", forced_accent=False)
+
+    if expected is None:
+        assert "instructions" not in api.body
+        assert prepared.settings == {
+            "model": openai_tts.DEFAULT_MODEL,
+            "instructions": "",
+        }
+    else:
+        assert api.body["instructions"] == expected
+        assert prepared.settings["instructions"] == expected
+    assert api.body["input"] == "テスト。", (
+        "steering belongs in instructions, never in the spoken sentence"
+    )
+    assert base.instructions == global_instructions.strip(), (
+        "preparing one clip cannot mutate another"
+    )
+
+
+@pytest.mark.parametrize("model", ["tts-1", "tts-1-hd"])
+def test_the_models_that_ignore_instructions_are_refused_before_a_request(
+    model: str,
+) -> None:
+    """The API documents that ``tts-1`` and ``tts-1-hd`` ignore this field.
+    Recording a hint as honored while the model ignored it would make a known-
+    wrong clip look current forever."""
+    api = FakeApi()
+
+    with pytest.raises(TtsError, match="does not support instructions"):
+        provider(api, model=model, instructions="Read slowly.").synthesize(
+            "テスト。", forced_accent=False
+        )
+
+    assert api.calls == []
+
+
+def test_instruction_length_is_checked_at_the_documented_boundary() -> None:
+    accepted = FakeApi()
+    provider(accepted, instructions="x" * 4096).synthesize(
+        "テスト。", forced_accent=False
+    )
+    assert len(accepted.body["instructions"]) == 4096
+
+    refused = FakeApi()
+    with pytest.raises(TtsError, match="4096-character limit"):
+        provider(refused, instructions="x" * 4097).synthesize(
+            "テスト。", forced_accent=False
+        )
+    assert refused.calls == []
+
+
+def test_sentence_length_is_checked_at_the_documented_boundary() -> None:
+    accepted = FakeApi()
+    provider(accepted).synthesize("x" * 4096, forced_accent=False)
+    assert len(accepted.body["input"]) == 4096
+
+    refused = FakeApi()
+    with pytest.raises(TtsError, match="4096-character limit"):
+        provider(refused).synthesize("x" * 4097, forced_accent=False)
+    assert refused.calls == []
+
+
+@pytest.mark.parametrize(
+    ("field", "build"),
+    [
+        ("input", lambda: provider(FakeApi()).validate_utterance("\ud800")),
+        ("instructions", lambda: provider(FakeApi()).for_clip("\ud800")),
+    ],
+)
+def test_request_text_must_be_utf8_before_transport(
+    field: str, build: Any
+) -> None:
+    with pytest.raises(TtsError, match=f"{field}.*valid UTF-8"):
+        build()
+
+
+def test_tts_1_remains_usable_when_no_instructions_are_claimed() -> None:
+    api = FakeApi()
+
+    provider(api, model="tts-1", instructions="").synthesize(
+        "テスト。", forced_accent=False
+    )
+
+    assert "instructions" not in api.body
+
+
+@pytest.mark.parametrize("model", ["tts-1", "tts-1-hd"])
+def test_legacy_models_refuse_voices_the_endpoint_does_not_offer(model: str) -> None:
+    with pytest.raises(TtsError, match="does not support voice 'ballad'"):
+        provider(FakeApi(), model=model, voice="ballad", instructions="")
+
+
+def test_a_supported_legacy_model_voice_remains_usable() -> None:
+    api = FakeApi()
+    provider(api, model="tts-1", voice="onyx", instructions="").synthesize(
+        "テスト。", forced_accent=False
+    )
+    assert api.body["voice"] == "onyx"
+
+
+def test_prepared_clip_profiles_are_independent() -> None:
+    api = FakeApi()
+    base = provider(api, instructions="Global.")
+    first = base.for_clip("First.")
+    second = base.for_clip("Second.")
+
+    first.synthesize("一。", forced_accent=False)
+    first_body = dict(api.body)
+    second.synthesize("二。", forced_accent=False)
+
+    assert first_body["instructions"] == "Global.\n\nFirst."
+    assert api.body["instructions"] == "Global.\n\nSecond."
+    assert base.settings["instructions"] == "Global."
+
+
+def test_a_prepared_clip_preserves_the_configured_voice_model_and_profile() -> None:
+    api = FakeApi()
+    base = provider(
+        api,
+        voice="ash",
+        model="gpt-4o-mini-tts-2025-12-15",
+        instructions="Global.",
+    )
+
+    prepared = base.for_clip("Clip.")
+    prepared.synthesize("一。", forced_accent=False)
+
+    assert api.body["voice"] == "ash"
+    assert api.body["model"] == "gpt-4o-mini-tts-2025-12-15"
+    assert api.body["instructions"] == "Global.\n\nClip."
+    assert "speed" not in api.body
+    assert prepared.speed == 1.0
+    assert prepared.settings == {
+        "model": "gpt-4o-mini-tts-2025-12-15",
+        "instructions": "Global.\n\nClip.",
+    }
 
 
 def test_mp3_is_requested_not_wav() -> None:
@@ -177,15 +343,18 @@ def test_an_unknown_voice_is_refused_at_construction() -> None:
     assert "onyx" in str(caught.value), "and says what is available"
 
 
-def test_speed_is_recorded_but_never_sent() -> None:
-    """There is no rate parameter on this API. The ledger still compares speed,
-    so reporting nothing would make a configuration change undetectable."""
+def test_janki_leaves_openai_speed_at_the_api_default() -> None:
+    """OpenAI supports speed, but janki has no sentence-speed setting.
+
+    It deliberately omits the request field and records the API's 1.0 default;
+    the VOICEVOX word-speed knob must not change sentence currency.
+    """
     api = FakeApi()
 
-    engine = provider(api, speed=0.7)
+    engine = provider(api)
     engine.synthesize("テスト。", forced_accent=False)
 
-    assert engine.speed == 0.7
+    assert engine.speed == 1.0
     assert "speed" not in api.body
 
 
@@ -258,7 +427,7 @@ def test_the_default_instructions_ask_for_a_slower_pace(tmp_path: Path) -> None:
 
 
 def test_an_unknown_sentence_provider_is_refused(tmp_path: Path) -> None:
-    config = _config(tmp_path, 'sentence_provider = "azure"')
+    config = _config(tmp_path, 'sentence_provider = "unknown-engine"')
 
     with pytest.raises(cli.AudioError, match="Unknown \\[tts\\] sentence_provider"):
         cli._sentence_provider(config, None, object())

@@ -201,9 +201,18 @@ below is what is left, and it is the loop every other project already uses.*
    hand-edited. `janki status --rebuild` reconstructs what records and media
    still prove, and is a no-op on a healthy repository: a source reference's
    `ref` is the record's own `source.imported_from`, so any divergence has
-   rebuild append a duplicate.
-9. `data/media/`: generated audio, content-addressed — **committed**, so a
-   rebuild is free (`docs/PROJECT_PLAN.md` design principle 6).
+   rebuild append a duplicate. Its sparse top-level `pending_audio` block is a
+   write-ahead record for paid clips whose guarded record/canonical-ledger
+   transaction has not finished. Rebuild cannot recreate that exact request,
+   profile, and byte hash, so never edit or remove it by hand.
+9. `data/media/`: generated audio, identity-addressed with content/profile
+    currency in the ledger — **committed**, so a rebuild is free
+    (`docs/PROJECT_PLAN.md` design principle 6). While `pending_audio` exists,
+    its paired paid bytes live under `data/media/audio/.pending/*.stage`; they
+    are committed recovery data, protected from prune, and finalized by
+    rerunning the exact matching `janki audio` command. Do not delete them.
+    Successful audio runs automatically remove a stage only after proving that
+    neither a WAL row nor any current exact request can still claim it.
 10. `data/review.json`: the retired review subsystem's store — **committed**
     as history and read by nothing since M8.2. Do not extend it or wire a
     reader to it; it is a record of what a model once said, not state.

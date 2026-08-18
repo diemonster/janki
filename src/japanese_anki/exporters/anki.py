@@ -187,7 +187,7 @@ def _resolve_media(
     Anki flattens media into one folder by basename, and genanki packages each
     file under `os.path.basename`, so two different files whose names collide
     become one on import — the second overwrites the first and a card plays
-    another word's audio. Content-addressed `janki-<fp>.wav` names make that
+    another word's audio. Identity-addressed `janki-<fp>.*` names make that
     unreachable for generated clips; a hand-written path can still do it, so a
     basename already claimed by a *different* file is refused here.
     """
@@ -542,6 +542,39 @@ def deck_declared_ids(deck_path: Path) -> set[str]:
             raise DataError(f"Could not read a note in {deck_path}: {exc}") from exc
         ids.add(record_id)
     return ids
+
+
+def deck_declared_record_versions(deck_path: Path) -> list[VocabularyRecord]:
+    """Every persisted record version a deck file can keep alive.
+
+    Unlike :func:`resolve_deck_records`, this deliberately does not collapse an
+    inline override onto its source record and does not apply deck filters. An
+    overridden or filtered-out note is still durable YAML and can still name a
+    media file. Audio preflight needs every such reference so a normalized clip
+    cannot overwrite bytes an inline card continues to play.
+
+    The ordinary resolver runs first as the single validator for deck shape.
+    Re-reading this small YAML file avoids growing a second, subtly different
+    validation path just for the preservation census.
+    """
+    resolve_deck_records(deck_path)
+    raw = load_structured(deck_path)
+    deck_config = raw.get("deck") or {}
+    by_id: dict[str, VocabularyRecord] = {}
+    versions: list[VocabularyRecord] = []
+    if source_value := deck_config.get("source"):
+        source_path = (deck_path.parent / str(source_value)).resolve()
+        for record in load_records(source_path):
+            by_id[record.id] = record
+            versions.append(record)
+
+    for item in raw.get("notes") or []:
+        record_id = str(item.get("id", "")).strip()
+        base = by_id.get(record_id) if record_id else None
+        merged = _merge_inline_record(base, item)
+        by_id[merged.id] = merged
+        versions.append(merged)
+    return versions
 
 
 def resolve_deck_records(deck_path: Path) -> tuple[dict[str, Any], list[VocabularyRecord]]:

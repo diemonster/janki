@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 
 from japanese_anki.errors import JankiError
-from japanese_anki.models import ModelError, VocabularyRecord
+from japanese_anki.models import ExampleSentence, ModelError, VocabularyRecord
 
 
 def _raw(**overrides: Any) -> dict[str, Any]:
@@ -162,6 +162,54 @@ def test_the_new_fields_round_trip_through_to_dict() -> None:
     assert stored["frequency_rank"] == 1234
     assert stored["examples"][0]["audio"] == "janki-abc.wav"
     assert VocabularyRecord.from_dict(stored).to_dict() == stored
+
+
+def test_example_audio_instructions_are_sparse_and_round_trip() -> None:
+    """The per-clip escape hatch is human-owned and optional.
+
+    Old records must not acquire an empty key on the next audio run: M8.1 is
+    explicitly a no-migration change, and ``audio`` saves the whole collection
+    after writing one clip.  A real instruction, on the other hand, is durable
+    review data and must survive the JSON round trip exactly after trimming the
+    hand-edited field's outer whitespace.
+    """
+    old = VocabularyRecord.from_dict(
+        _raw(examples=[{"japanese": "毎日食べる。"}])
+    )
+    null = VocabularyRecord.from_dict(
+        _raw(examples=[{"japanese": "毎日食べる。", "instructions": None}])
+    )
+    instructed = VocabularyRecord.from_dict(
+        _raw(
+            examples=[
+                {
+                    "japanese": "毎日食べる。",
+                    "instructions": "  Pronounce 毎日 as まいにち.  ",
+                }
+            ]
+        )
+    )
+
+    assert old.examples[0].instructions == ""
+    assert "instructions" not in old.to_dict()["examples"][0]
+    assert null.examples[0].instructions == ""
+    assert "instructions" not in null.to_dict()["examples"][0]
+    assert instructed.examples[0].instructions == "Pronounce 毎日 as まいにち."
+    stored = instructed.to_dict()
+    assert stored["examples"][0]["instructions"] == "Pronounce 毎日 as まいにち."
+    assert VocabularyRecord.from_dict(stored).to_dict() == stored
+
+    direct = VocabularyRecord.from_dict(_raw())
+    direct.examples = [ExampleSentence(japanese="毎日食べる。", instructions="   ")]
+    assert "instructions" not in direct.to_dict()["examples"][0]
+
+
+@pytest.mark.parametrize("value", [12, True, ["read slowly"], {"reading": "x"}])
+def test_example_audio_instructions_refuse_non_text(value: Any) -> None:
+    with pytest.raises(ModelError, match=r"examples\[0\]\.instructions.*text"):
+        VocabularyRecord.from_dict(
+            _raw(examples=[{"japanese": "毎日食べる。", "instructions": value}])
+        )
 
 
 @pytest.mark.parametrize(

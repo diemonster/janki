@@ -99,6 +99,152 @@ def test_status_runs_on_a_repo_that_has_never_imported_anything(
     assert not (root / "ledger.json").exists()
 
 
+def test_status_surfaces_pending_paid_audio_and_rebuild_preserves_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    item = _record("話す", "はなす")
+    root = _project(tmp_path, [item.to_dict()])
+    book = ledger.load(root / "ledger.json")
+    content_fp = word_audio_content_fingerprint(item)
+    arguments = {
+        "of": "word",
+        "target": "janki-pending.wav",
+        "request_input": item.reading,
+        "forced_accent": False,
+        "content_fp": content_fp,
+        "provider": "voicevox",
+        "voice": 53,
+        "speed": 1.0,
+        "settings": {},
+    }
+    key = book.pending_audio_key_for(item.id, **arguments)
+    stage = root / "media" / "audio" / ".pending" / f"{key}-{'f' * 64}.stage"
+    stage.parent.mkdir(parents=True)
+    stage.write_bytes(b"paid")
+    book.record_pending_audio(
+        item.id,
+        **arguments,
+        staged_file=f".pending/{key}-{'f' * 64}.stage",
+        staged_sha256="f" * 64,
+    )
+    book.save()
+    before = json.loads((root / "ledger.json").read_text(encoding="utf-8"))[
+        "pending_audio"
+    ]
+
+    assert _status(root) == 0
+
+    captured = capsys.readouterr()
+    assert "1 pending paid audio" in captured.err
+    assert "janki audio --words" in captured.err
+    assert "Pending audio recovery: 1" in captured.out
+
+    assert _status(root, "--rebuild") == 0
+    after = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    assert after["pending_audio"] == before
+
+
+def test_status_prescribes_prune_for_pending_audio_whose_record_was_deleted(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _project(tmp_path)
+    item = _record("話す", "はなす")
+    book = ledger.load(root / "ledger.json")
+    arguments = {
+        "of": "word",
+        "target": "janki-pending.wav",
+        "request_input": item.reading,
+        "forced_accent": False,
+        "content_fp": word_audio_content_fingerprint(item),
+        "provider": "voicevox",
+        "voice": 53,
+        "speed": 1.0,
+        "settings": {},
+    }
+    key = book.pending_audio_key_for(item.id, **arguments)
+    book.record_pending_audio(
+        item.id,
+        **arguments,
+        staged_file=f".pending/{key}-{'f' * 64}.stage",
+        staged_sha256="f" * 64,
+    )
+    book.save()
+
+    assert _status(root) == 0
+
+    warning = capsys.readouterr().err
+    assert "record was deleted" in warning
+    assert "janki audio --words --prune" in warning
+
+
+def test_build_refuses_while_paid_audio_transaction_is_pending(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")])
+    book = ledger.load(root / "ledger.json")
+    item = _record("話す", "はなす")
+    arguments = {
+        "of": "word",
+        "target": "janki-pending.wav",
+        "request_input": item.reading,
+        "forced_accent": False,
+        "content_fp": word_audio_content_fingerprint(item),
+        "provider": "voicevox",
+        "voice": 53,
+        "speed": 1.0,
+        "settings": {},
+    }
+    key = book.pending_audio_key_for(item.id, **arguments)
+    book.record_pending_audio(
+        item.id,
+        **arguments,
+        staged_file=f".pending/{key}-{'f' * 64}.stage",
+        staged_sha256="f" * 64,
+    )
+    book.save()
+    deck = root / "decks" / "vocabulary.yaml"
+    deck.write_text(
+        yaml.safe_dump(_sourced_deck(), allow_unicode=True), encoding="utf-8"
+    )
+
+    assert cli.main(["--root", str(root), "build", str(deck)]) == 1
+
+    err = capsys.readouterr().err
+    assert "pending audio" in err.lower()
+    assert "janki audio" in err
+    assert not any(root.glob("dist/*.apkg"))
+
+
+def test_an_unavailable_audio_profile_warns_without_taking_status_down(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    record = _record("話す", "はなす", audio="audio/janki-word.wav")
+    root = _project(tmp_path, [record.to_dict()])
+    (root / "janki.toml").write_text(
+        CONFIG + '\n[tts]\nprovider = "azure"\n',
+        encoding="utf-8",
+    )
+    book = ledger.load(root / "ledger.json")
+    book.record_audio(
+        record.id,
+        file="janki-word.wav",
+        of="word",
+        provider="voicevox",
+        voice=46,
+        speed=1.0,
+        content_fp="old-content",
+    )
+    book.save()
+
+    assert _status(root) == 0
+
+    captured = capsys.readouterr()
+    assert "Stale audio: 1" in captured.out, "content remains comparable"
+    assert "could not compare the configured word-audio profile" in captured.err
+    assert "Azure provider was evaluated and dropped" in captured.err
+
+
 def test_the_record_universe_is_the_normalized_file_plus_inline_deck_notes(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -119,6 +265,69 @@ def test_the_record_universe_is_the_normalized_file_plus_inline_deck_notes(
     out = capsys.readouterr().out
     assert "Records: 2 (1 in vocabulary.json, 1 inline in deck files)" in out
     assert "By source type: manual 1, shirabe 1" in out
+
+
+def test_stale_audio_sees_each_durable_inline_render_profile(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    record_id = "word:話す:はなす"
+    sentence = "毎日話す。"
+    base = _record("話す", "はなす")
+    filename = (
+        "janki-"
+        f"{example_audio_filename_fingerprint(base, ExampleSentence(japanese=sentence))}"
+        ".mp3"
+    )
+
+    def inline(instructions: str) -> dict[str, Any]:
+        return _raw(
+            "話す",
+            "はなす",
+            examples=[
+                {
+                    "japanese": sentence,
+                    "audio": f"audio/{filename}",
+                    "instructions": instructions,
+                }
+            ],
+        )
+
+    root = _project(
+        tmp_path,
+        [],
+        {
+            "a": {"deck": {"name": "A"}, "notes": [inline("A.")]},
+            "b": {"deck": {"name": "B"}, "notes": [inline("B.")]},
+        },
+    )
+    (root / "janki.toml").write_text(
+        CONFIG
+        + '\n[tts]\nsentence_provider = "openai"\n'
+        + 'openai_instructions = "Global."\n',
+        encoding="utf-8",
+    )
+    book = ledger.load(root / "ledger.json")
+    book.record_audio(
+        record_id,
+        file=filename,
+        of="example",
+        provider="openai",
+        voice="onyx",
+        speed=1.0,
+        settings={
+            "model": "gpt-4o-mini-tts",
+            "instructions": "Global.\n\nB.",
+        },
+        content_fp=example_audio_content_fingerprint(
+            ExampleSentence(japanese=sentence)
+        ),
+    )
+    book.save()
+
+    assert _status(root) == 0
+
+    assert "Stale audio: 1" in capsys.readouterr().out
 
 
 def test_summary_reports_exports_audio_enrichment_and_staleness(
@@ -159,6 +368,264 @@ def test_summary_reports_exports_audio_enrichment_and_staleness(
     assert "Stale audio: 1" in out
     # 話す has both an example and usage notes; 食べる has neither.
     assert "Missing enrichment: 1" in out
+
+
+def test_status_reports_word_audio_from_the_previous_configured_voice_as_stale(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Status includes the configured render profile in its currency answer.
+
+    The content fingerprint deliberately excludes the voice: changing a voice
+    rewrites the same stable file in place. The ledger is therefore the only
+    place that can prove this clip was spoken by speaker 13 while the project
+    now asks for 53.
+    """
+    old_voice = _record("話す", "はなす", audio="audio/janki-word.wav")
+    current_voice = _record("食べる", "たべる", audio="audio/janki-current.wav")
+    root = _project(tmp_path, [old_voice.to_dict(), current_voice.to_dict()])
+    (root / "janki.toml").write_text(
+        CONFIG + "\n[tts]\nvoicevox_speaker = 53\nvoicevox_speed = 0.7\n",
+        encoding="utf-8",
+    )
+    book = ledger.load(root / "ledger.json")
+    book.record_audio(
+        old_voice.id,
+        file="janki-word.wav",
+        of="word",
+        provider="voicevox",
+        voice=13,
+        speed=0.7,
+        content_fp=word_audio_content_fingerprint(old_voice),
+    )
+    book.record_audio(
+        current_voice.id,
+        file="janki-current.wav",
+        of="word",
+        provider="voicevox",
+        voice=53,
+        speed=0.7,
+        content_fp=word_audio_content_fingerprint(current_voice),
+    )
+    book.save()
+
+    assert _status(root) == 0
+
+    assert "Stale audio: 1" in capsys.readouterr().out
+
+
+def test_word_voice_does_not_decide_whether_openai_examples_are_stale(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    example = ExampleSentence(
+        japanese="毎日話す。",
+        audio="audio/janki-example.mp3",
+    )
+    record = _record(
+        "話す",
+        "はなす",
+        examples=[{"japanese": example.japanese, "audio": example.audio}],
+    )
+    root = _project(tmp_path, [record.to_dict()])
+    (root / "janki.toml").write_text(
+        CONFIG
+        + "\n[tts]\nvoicevox_speaker = 53\n"
+        + 'sentence_provider = "openai"\nopenai_voice = "onyx"\n',
+        encoding="utf-8",
+    )
+    config = ProjectConfig.load(root)
+    words = cli._speech_provider(config, None)
+    sentences = cli._sentence_provider(config, None, words)
+    book = ledger.load(root / "ledger.json")
+    book.record_audio(
+        record.id,
+        file="janki-example.mp3",
+        of="example",
+        provider=sentences.name,
+        voice=sentences.voice,
+        speed=sentences.speed,
+        settings=sentences.settings,
+        content_fp=example_audio_content_fingerprint(example),
+    )
+    book.save()
+
+    assert _status(root) == 0
+
+    assert "Stale audio: 0" in capsys.readouterr().out
+
+
+def test_status_compares_each_openai_examples_effective_instructions(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    example = ExampleSentence(
+        japanese="毎日話す。",
+        audio="audio/janki-example.mp3",
+        instructions="Pronounce 毎日 as まいにち.",
+    )
+    record = _record("話す", "はなす")
+    # ExampleSentence intentionally has no public serializer of its own; the
+    # vocabulary record owns sparse serialization.
+    record.examples = [example]
+    root = _project(tmp_path, [record.to_dict()])
+    (root / "janki.toml").write_text(
+        CONFIG
+        + '\n[tts]\nsentence_provider = "openai"\n'
+        + 'openai_instructions = "Global."\n',
+        encoding="utf-8",
+    )
+    config = ProjectConfig.load(root)
+    words = cli._speech_provider(config, None)
+    sentences = cli._sentence_provider(config, None, words)
+    prepared = sentences.for_clip(example.instructions)
+    book = ledger.load(root / "ledger.json")
+    book.record_audio(
+        record.id,
+        file="janki-example.mp3",
+        of="example",
+        provider=prepared.name,
+        voice=prepared.voice,
+        speed=prepared.speed,
+        settings=prepared.settings,
+        content_fp=example_audio_content_fingerprint(example),
+    )
+    book.save()
+
+    assert _status(root) == 0
+    assert "Stale audio: 0" in capsys.readouterr().out
+
+    record.examples[0].instructions = "Changed."
+    (root / "vocabulary.json").write_text(
+        json.dumps([record.to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+
+    assert _status(root) == 0
+    assert "Stale audio: 1" in capsys.readouterr().out
+
+
+def test_status_explains_when_the_sentence_engine_cannot_honor_clip_instructions(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    example = ExampleSentence(
+        japanese="毎日話す。",
+        audio="audio/janki-example.wav",
+        instructions="Pronounce 毎日 as まいにち.",
+    )
+    record = _record("話す", "はなす")
+    record.examples = [example]
+    root = _project(tmp_path, [record.to_dict()])
+    book = ledger.load(root / "ledger.json")
+    book.record_audio(
+        record.id,
+        file="janki-example.wav",
+        of="example",
+        provider="voicevox",
+        voice=46,
+        speed=1.0,
+        settings={},
+        content_fp=example_audio_content_fingerprint(example),
+    )
+    book.save()
+
+    assert _status(root) == 0
+
+    captured = capsys.readouterr()
+    assert "Stale audio: 1" in captured.out
+    assert "cannot honor 1 example-audio profile" in captured.err
+    assert record.id in captured.err
+    assert "OpenAI" in captured.err
+
+
+def test_status_checks_normalized_audio_even_when_an_inline_note_shadows_it(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    normalized = _raw(
+        "話す",
+        "はなす",
+        examples=[
+            {
+                "japanese": "毎日話す。",
+                "instructions": "Pronounce 毎日 as まいにち.",
+            }
+        ],
+    )
+    inline = _raw(
+        "話す",
+        "はなす",
+        examples=[{"japanese": "毎日話す。"}],
+    )
+    root = _project(
+        tmp_path,
+        [normalized],
+        {"inline": {"deck": {"name": "Inline"}, "notes": [inline]}},
+    )
+
+    assert _status(root) == 0
+
+    captured = capsys.readouterr()
+    assert "cannot honor 1 example-audio profile" in captured.err
+    assert normalized["id"] in captured.err
+    assert "'janki audio --examples' will refuse before synthesis" in captured.err
+
+
+def test_status_does_not_apply_audio_refusals_to_inline_only_notes(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    inline = _raw(
+        "話す",
+        "はなす",
+        examples=[
+            {
+                "japanese": "毎日話す。",
+                "instructions": "Pronounce 毎日 as まいにち.",
+            }
+        ],
+    )
+    root = _project(
+        tmp_path,
+        [],
+        {"inline": {"deck": {"name": "Inline"}, "notes": [inline]}},
+    )
+
+    assert _status(root) == 0
+
+    captured = capsys.readouterr()
+    assert "cannot honor" not in captured.err
+    assert "'janki audio --examples' will refuse" not in captured.err
+
+
+def test_status_warns_when_shadowed_normalized_openai_input_exceeds_the_api_limit(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    record = _raw(
+        "話す",
+        "はなす",
+        examples=[{"japanese": "長" * 4097}],
+    )
+    inline = _raw(
+        "話す",
+        "はなす",
+        examples=[{"japanese": "毎日話す。"}],
+    )
+    root = _project(
+        tmp_path,
+        [record],
+        {"inline": {"deck": {"name": "Inline"}, "notes": [inline]}},
+    )
+    (root / "janki.toml").write_text(
+        CONFIG + '\n[tts]\nsentence_provider = "openai"\n',
+        encoding="utf-8",
+    )
+
+    assert _status(root) == 0
+
+    captured = capsys.readouterr()
+    assert "cannot honor 1 example-audio profile" in captured.err
+    assert record["id"] in captured.err
+    assert "4096-character limit" in captured.err
+    assert "'janki audio --examples' will refuse before synthesis" in captured.err
 
 
 def test_pitch_accent_is_counted_now_that_the_schema_carries_it(
@@ -843,7 +1310,7 @@ def test_rebuild_recovers_sources_and_audio_and_admits_what_it_cannot(
     # record id (and so the reading), the example file's embeds the sentence.
     assert audio[1]["content_fp"] == word_audio_content_fingerprint(record)
     assert audio[0]["content_fp"] == example_audio_content_fingerprint(record.examples[0])
-    assert ledger.load(root / "ledger.json").stale_audio([record]) == []
+    assert "Stale audio: 1" in out, "unknown render metadata requires regeneration"
 
 
 def test_rebuild_is_idempotent(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -1093,23 +1560,32 @@ def test_an_inline_note_overrides_the_normalized_record_it_names(tmp_path: Path)
 def test_a_record_whose_example_was_edited_after_its_audio_reads_as_stale(
     tmp_path: Path,
 ) -> None:
-    record = _record("話す", "はなす", examples=[{"japanese": "毎日話す。"}])
+    record = _record(
+        "話す",
+        "はなす",
+        examples=[{"japanese": "毎日話す。", "audio": "audio/janki-example.wav"}],
+    )
     root = _project(tmp_path, [record.to_dict()])
     book = ledger.load(root / "ledger.json")
     book.record_audio(
         record.id,
         file="janki-example.wav",
         of="example",
-        provider="azure",
-        voice=0,
+        provider="voicevox",
+        voice=46,
         speed=1.0,
         content_fp=example_audio_content_fingerprint(ExampleSentence(japanese="毎日話した。")),
     )
     book.save()
     config = ProjectConfig.load(root)
 
+    words = cli._speech_provider(config, None)
     report = status_module.build_report(
-        config, status_module.collect_records(config), ledger.load(root / "ledger.json")
+        config,
+        status_module.collect_records(config),
+        ledger.load(root / "ledger.json"),
+        word_provider=words,
+        example_provider=cli._sentence_provider(config, None, words),
     )
 
     assert report.stale_audio == [record.id]

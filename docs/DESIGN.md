@@ -84,7 +84,10 @@ survives rebuilds; a human approving what enters the store (staging review);
 a reviewed reading checked against jpdb before it becomes an identity, where
 jpdb can resolve it — silence passes; a dictionary is a witness, not a gate;
 a billed call over a private source confirmed by the owner, never assumed;
-provenance from every record back to its source.
+provenance from every record back to its source. Paid TTS output is staged and
+ledgered by exact request before a guarded record write; only after that write
+wins does janki publish canonical media and finalize its ordinary audio ledger
+entry, so the exact same interrupted request can resume without another bill.
 
 ## What janki's own logic is for
 

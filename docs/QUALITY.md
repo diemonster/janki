@@ -58,12 +58,14 @@ and whether the Shirabe app answers its URL scheme are all still manual.
 ## The ledger and `janki status`
 
 `data/ledger.json` is machine-written, git-committed, and deliberately
-minimal. It tracks *operational* state per record: when the word arrived,
-every source it has been seen in, whether it has been enriched, whether audio
-exists for it, and which decks it has been exported to. Card content stays in
-`vocabulary.json` and never appears here; timestamps and provenance history
-stay here and never appear in the records. Imports and `migrate-inline` write
-it — you do not edit it by hand.
+minimal. Most of it tracks *operational* state per record: when the word
+arrived, every source it has been seen in, whether it has been enriched,
+whether audio exists for it, and which decks it has been exported to. Its
+sparse top-level `pending_audio` block is the exception: a per-clip write-ahead
+record for paid bytes whose guarded record/media/ledger transaction has not
+finished. Card content stays in `vocabulary.json` and never appears here;
+timestamps and provenance history stay here and never appear in the records.
+Imports and `migrate-inline` write it — you do not edit it by hand.
 
 `janki status` reads both and summarizes them:
 
@@ -75,6 +77,7 @@ Never exported: personal-vocabulary 0 of 0, verbs 3 of 3
 Missing word audio: 3 of 3
 Missing example audio: 4 of 4 sentence(s)
 Stale audio: 0
+Pending audio recovery: 0
 Missing enrichment: 2 (no meanings or example sentence)
 Missing pitch accent: 3
 Staged for review: none
@@ -104,14 +107,26 @@ a detail flag it emits that flag's IDs; on its own it emits every record.
 reason each was held. The summary always carries a `Staged for review:` line so
 a review queue cannot sit unnoticed.
 
+`Pending audio recovery` is neither missing nor stale audio. It means exact
+paid bytes are staged while their record reference or canonical audio-ledger
+commit is unfinished. `janki build` refuses in that state; rerun the same
+`janki audio` selection so janki can verify and finalize the bytes without
+another provider call. A different sentence, reading, instruction, voice, or
+model is not the same request and cannot adopt them. If the owner record was
+deleted, status instead names the matching `janki audio … --prune` command that
+retires the unreachable recovery row without requiring the speech provider.
+
 `--rebuild` reconstructs what is still provable after a lost or corrupted
 ledger: source references from each record's own `source` block, and audio
 entries from the files under `data/media`. Export state is not reconstructible
-— the ledger was the only place that held it. Nothing is lost when it goes,
-because GUIDs are deterministic and re-exporting a note updates it rather than
-duplicating it. It is also the command that teaches the ledger about records you
-moved into `vocabulary.json` by hand, and running it when nothing is missing is
-a no-op: every writer records a source reference in the same shape `--rebuild`
+— the ledger was the only place that held it. Exact pending-audio recovery is
+not reconstructible either: staged bytes alone do not prove the provider
+request, render profile, target, and hash that authorized adoption. Canonical
+record/media state remains recoverable enough to rebuild a deck, and GUIDs are
+deterministic so re-exporting a note updates it rather than duplicating it. It
+is also the command that teaches the ledger about records you moved into
+`vocabulary.json` by hand, and running it when nothing is missing is a no-op:
+every writer records a source reference in the same shape `--rebuild`
 reconstructs, so it never grows the file.
 
 `audio` is written by `janki audio`, one entry per clip, recording the engine,
@@ -208,8 +223,8 @@ you have accumulated real review history. See `CARD_DESIGN.md`.
   for. A record without a pattern is still voiced — a silent card teaches
   nothing — but the run reports it and the clip is tagged `accent_unverified`
   in the ledger. Fill the pattern with `janki enrich --jpdb` and the next
-  `janki audio` replaces the clip, because the audio fingerprint covers the
-  pattern.
+  `janki audio` replaces the clip, because the bare-reading utterance and the
+  usable forced-AquesTalk utterance have different content fingerprints.
 - `janki status` reads your Anki collection to report an import that silently
   failed to upgrade the notetype, but only after the fact — nothing can stop the
   bad import while it is happening. Tick **Merge Notetypes** — see

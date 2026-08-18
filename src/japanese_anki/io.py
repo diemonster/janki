@@ -200,6 +200,134 @@ def atomic_write_text(path: Path, text: str) -> None:
         raise DataError(f"Could not write {path}: {exc.strerror or exc}") from exc
 
 
+def atomic_write_bytes(path: Path, data: bytes) -> None:
+    """Write bytes atomically, preserving an existing file on failure.
+
+    Audio is rewritten in place under an identity-addressed name. A direct
+    write truncates the old, still-current clip before the new bytes are
+    durable; a full disk can therefore turn a re-voice into a silent card.
+    This uses the same temp/fsync/replace transaction as atomic text writes.
+    """
+    path = Path(os.path.realpath(path))
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, temp_name = tempfile.mkstemp(
+            dir=path.parent, prefix=f"{path.name}.", suffix=".tmp"
+        )
+        temp_path = Path(temp_name)
+        try:
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.chmod(temp_path, _target_mode(path))
+            os.replace(temp_path, path)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                temp_path.unlink(missing_ok=True)
+            raise
+        _fsync_directory(path.parent)
+    except OSError as exc:
+        raise DataError(f"Could not write {path}: {exc.strerror or exc}") from exc
+
+
+def atomic_write_bytes_bound(path: Path, data: bytes) -> None:
+    """Atomically replace one regular directory entry without following links.
+
+    Paid media staging and canonical promotion deliberately do *not* inherit
+    the ordinary writer's symlink-through behavior: a malicious or accidental
+    symlink would otherwise overwrite a different live clip. The directory
+    descriptor also binds the temp and replace operations to the same real
+    directory entry.
+    """
+    target = Path(path).absolute()
+    directory_fd = -1
+    temporary_name = ""
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        parent_details = os.lstat(target.parent)
+        if stat.S_ISLNK(parent_details.st_mode) or not stat.S_ISDIR(
+            parent_details.st_mode
+        ):
+            raise DataError(f"Refusing non-directory staging parent {target.parent}")
+        directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+        directory_flags |= getattr(os, "O_NOFOLLOW", 0)
+        directory_fd = os.open(target.parent, directory_flags)
+        try:
+            before = os.stat(target.name, dir_fd=directory_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            bound_state: tuple[int, int, int, int] | None = None
+            current_umask = os.umask(0)
+            os.umask(current_umask)
+            mode = 0o666 & ~current_umask
+        else:
+            if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+                raise DataError(f"Refusing to replace non-regular target {target}")
+            bound_state = (
+                before.st_dev,
+                before.st_ino,
+                before.st_size,
+                before.st_mtime_ns,
+            )
+            mode = stat.S_IMODE(before.st_mode)
+        descriptor = -1
+        for _attempt in range(20):
+            temporary_name = f".{target.name}.{secrets.token_hex(8)}.tmp"
+            try:
+                descriptor = os.open(
+                    temporary_name,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    mode,
+                    dir_fd=directory_fd,
+                )
+                break
+            except FileExistsError:
+                continue
+        if descriptor < 0:
+            raise DataError(f"Could not allocate a temporary file for {target}")
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            final = os.stat(target.name, dir_fd=directory_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            if bound_state is not None:
+                raise DataError(f"Bound target changed before replace: {target}") from None
+        else:
+            final_state = (
+                final.st_dev,
+                final.st_ino,
+                final.st_size,
+                final.st_mtime_ns,
+            )
+            if (
+                bound_state is None
+                or stat.S_ISLNK(final.st_mode)
+                or not stat.S_ISREG(final.st_mode)
+                or final_state != bound_state
+            ):
+                raise DataError(f"Bound target changed before replace: {target}")
+        os.replace(
+            temporary_name,
+            target.name,
+            src_dir_fd=directory_fd,
+            dst_dir_fd=directory_fd,
+        )
+        temporary_name = ""
+        os.fsync(directory_fd)
+    except DataError:
+        raise
+    except OSError as exc:
+        raise DataError(f"Could not write {target}: {exc.strerror or exc}") from exc
+    finally:
+        if directory_fd >= 0:
+            if temporary_name:
+                with contextlib.suppress(OSError):
+                    os.unlink(temporary_name, dir_fd=directory_fd)
+            os.close(directory_fd)
+
+
 def atomic_write_text_bound(
     path: Path,
     text: str,
@@ -390,22 +518,38 @@ def save_records_json(
     two first-time writers cannot silently replace one another either.
     """
     target = Path(os.path.realpath(path))
+    with exclusive_path_lock(target):
+        save_records_json_locked(target, records, expected=expected)
+
+
+def save_records_json_locked(
+    path: Path,
+    records: list[VocabularyRecord],
+    *,
+    expected: RecordsRevision | None = None,
+) -> None:
+    """Save records while the caller holds ``exclusive_path_lock(path)``.
+
+    This narrow seam lets a multi-file transaction keep the normalized-record
+    lock across its CAS, media publication, and ledger commit. Ordinary callers
+    must use :func:`save_records_json`, which acquires the lock itself.
+    """
+    target = Path(os.path.realpath(path))
     if expected is not None and target != expected.path:
         raise DataError(
             f"Records revision for {expected.path} cannot guard a write to {target}."
         )
     payload = [record.to_dict() for record in sorted(records, key=lambda item: item.id)]
     text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
-    with exclusive_path_lock(target):
-        if expected is not None:
-            current = records_revision(target).text
-            if current != expected.text:
-                raise DataError(
-                    f"Records file {target} changed on disk since it was read; saving "
-                    "now would discard those changes. Another janki command may still "
-                    "be writing it. Let that command finish, then re-run this one."
-                )
-        atomic_write_text(target, text)
+    if expected is not None:
+        current = records_revision(target).text
+        if current != expected.text:
+            raise DataError(
+                f"Records file {target} changed on disk since it was read; saving "
+                "now would discard those changes. Another janki command may still "
+                "be writing it. Let that command finish, then re-run this one."
+            )
+    atomic_write_text(target, text)
 
 
 MERGE_LABELS: tuple[str, ...] = ("added", "filled", "unchanged", "conflicting")
