@@ -1126,6 +1126,28 @@ class Ledger:
             if not any(entry.get("of") == "word" for entry in self._audio_entries(record.id))
         ]
 
+    def unvoiced_examples(
+        self, records: Iterable[VocabularyRecord]
+    ) -> list[tuple[str, int]]:
+        """``(record id, example index)`` for every example with no audio.
+
+        Separate from :meth:`missing_audio` rather than folded into it, for the
+        reason that method gives: a record with nine voiced examples and one
+        silent one is not "missing audio" the way a record with no word clip
+        is, and merging them buries the word-level signal.
+
+        Reported as its own count instead. 188 of 343 sentences shipped silent
+        because nothing asked this question — `status` counted words only and
+        the build skipped an empty field without a word, so every indicator
+        read green while half the cards said nothing.
+        """
+        return [
+            (record.id, index)
+            for record in records
+            for index, example in enumerate(record.examples)
+            if example.japanese and not example.audio
+        ]
+
     def shipped_incomplete(self, deck_stem: str, records: Iterable[VocabularyRecord]) -> list[str]:
         """Records this deck shipped with a hole that has since been filled.
 

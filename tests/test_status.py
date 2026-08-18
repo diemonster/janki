@@ -1158,3 +1158,34 @@ def test_rebuild_falls_back_to_extension_when_the_record_names_nothing(
     capsys.readouterr()
     entries = ledger.load(root / "ledger.json").records[record.id]["audio"]
     assert [e["file"] for e in entries] == [f"janki-{fingerprint}.wav"]
+
+
+def test_a_silent_example_sentence_is_counted_on_its_own_line(tmp_path: Path) -> None:
+    """188 of 343 sentences shipped mute and every indicator read green.
+
+    `missing_audio` counts word audio only, and defends that in its docstring:
+    a record with one silent example among nine is not deficient the way a
+    record with no word clip is. The conclusion was right and the consequence
+    was that nothing counted example audio at all. It gets its own line, which
+    keeps the word-level signal unburied and still answers the question.
+    """
+    from japanese_anki import ledger
+    from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
+
+    voiced = ExampleSentence(japanese="毎日話します。", audio="a.mp3")
+    silent = ExampleSentence(japanese="毎日話すよ。")
+    record = VocabularyRecord(
+        id="word:話す:はなす",
+        expression="話す",
+        reading="はなす",
+        meanings=["to speak"],
+        source=SourceReference(type="shirabe", imported_from="x.csv"),
+        examples=[voiced, silent],
+    )
+
+    book = ledger.load(tmp_path / "ledger.json")
+
+    assert book.unvoiced_examples([record]) == [("word:話す:はなす", 1)]
+    assert book.missing_audio([record]) == ["word:話す:はなす"], (
+        "and the word-level count is untouched by either example"
+    )

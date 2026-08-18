@@ -297,6 +297,13 @@ class StatusReport:
     by_source: list[tuple[str, int]]
     decks: list[DeckStatus]
     missing_audio: list[str]
+    #: How many example sentences exist at all, as the denominator for the
+    #: count below.
+    example_count: int
+    #: ``(record id, example index)`` per silent example sentence. Its own
+    #: field, not folded into `missing_audio`, so the word-level count keeps
+    #: meaning "this record cannot be heard at all".
+    unvoiced_examples: list[tuple[str, int]]
     stale_audio: list[str]
     missing_enrichment: list[str]
     # None means "the schema has no pitch accent yet", which is not the same
@@ -308,6 +315,15 @@ class StatusReport:
     @property
     def total(self) -> int:
         return len(self.record_ids)
+
+    @property
+    def total_examples(self) -> int:
+        """Sentences the collection holds, voiced or not.
+
+        The denominator for `unvoiced_examples`, which is meaningless without
+        one: "188 silent" reads very differently against 343 than against 190.
+        """
+        return self.example_count
 
     @property
     def staged_count(self) -> int:
@@ -350,6 +366,10 @@ def build_report(
             for deck in universe.decks
         ],
         missing_audio=book.missing_audio(records),
+        example_count=sum(
+            1 for record in records for example in record.examples if example.japanese
+        ),
+        unvoiced_examples=book.unvoiced_examples(records),
         stale_audio=book.stale_audio(records),
         missing_enrichment=Ledger.missing_enrichment(records),
         missing_pitch_accent=missing_pitch,
@@ -513,6 +533,10 @@ def format_report(report: StatusReport) -> list[str]:
         lines.append(f"Never exported: no deck files under {display_path(report.deck_dir, root)}")
 
     lines.append(f"Missing word audio: {len(report.missing_audio)} of {report.total}")
+    lines.append(
+        f"Missing example audio: {len(report.unvoiced_examples)} of "
+        f"{report.total_examples} sentence(s)"
+    )
     lines.append(f"Stale audio: {len(report.stale_audio)}")
     lines.append(
         f"Missing enrichment: {len(report.missing_enrichment)} "

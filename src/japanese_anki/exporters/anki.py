@@ -365,6 +365,21 @@ def _field_values(
 
     example_audio_field = ""
     casual_audio_field = ""
+    # A sentence with no clip is where the build was silent about being
+    # silent. `if example.audio:` skipped an empty field without a word, so
+    # 188 of 343 sentences shipped mute while `status` reported only word
+    # audio and read 0 of 191. This is the moment the quiet card is made, so
+    # it is the moment to say so.
+    #
+    # Reported, not refused: a sentence with no audio is still worth studying,
+    # and `janki audio --examples` fills it whenever the owner chooses.
+    for label, sentence in (("Example", example), ("Casual example", casual)):
+        if sentence.japanese and not sentence.audio:
+            warnings.append(
+                f"{record.id}: the {label.lower()} sentence "
+                f"{sentence.japanese!r} has no audio, so that line of the card "
+                "is silent. 'janki audio --examples' voices it."
+            )
     if example.audio:
         found = _resolve_media(
             example.audio, media_dir=media_dir, deck_dir=deck_dir,

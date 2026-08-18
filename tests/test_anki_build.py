@@ -1105,3 +1105,52 @@ def test_the_preview_shows_a_casual_only_record(tmp_path: Path) -> None:
     )
 
     assert "使う？" in page
+
+
+def test_the_build_says_when_a_sentence_ships_silent(tmp_path: Path) -> None:
+    """The moment the quiet card is made is the moment to say so.
+
+    `if example.audio:` skipped an empty field without a word, so eleven decks
+    built clean while 188 of 343 sentences had no clip. The word-audio path a
+    hundred lines above already warns when a hand-written `[sound:]` tag would
+    leave a card "silently mute"; this is the same hazard on the line below it,
+    and it had no voice.
+
+    Reported, not refused — a sentence with no audio is still worth studying,
+    and `janki audio --examples` fills it whenever the owner chooses.
+    """
+    _project(tmp_path)
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:話す:はなす", expression="話す", reading="はなす", meanings=["to speak"],
+        examples=[
+            ExampleSentence(japanese="毎日話します。", register="polite"),
+            ExampleSentence(japanese="毎日話すよ。", register="casual"),
+        ],
+    )])
+
+    result = build_deck(
+        tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg"
+    )
+
+    silent = [w for w in result.warnings if "has no audio" in w]
+    assert len(silent) == 2, result.warnings
+    assert any("毎日話します。" in w for w in silent), "the polite one"
+    assert any("毎日話すよ。" in w for w in silent), "and the casual one"
+    assert any("janki audio --examples" in w for w in silent), "and what fixes it"
+
+
+def test_a_voiced_sentence_draws_no_such_warning(tmp_path: Path) -> None:
+    """So the test above cannot pass by warning about every sentence."""
+    _project(tmp_path)
+    (tmp_path / "media").mkdir(exist_ok=True)
+    (tmp_path / "media" / "s.mp3").write_bytes(b"ID3")
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:話す:はなす", expression="話す", reading="はなす", meanings=["to speak"],
+        examples=[ExampleSentence(japanese="毎日話します。", audio="s.mp3", register="polite")],
+    )])
+
+    result = build_deck(
+        tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg"
+    )
+
+    assert not [w for w in result.warnings if "has no audio" in w]
