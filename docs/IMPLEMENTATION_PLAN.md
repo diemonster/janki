@@ -3128,7 +3128,15 @@ advisory review after a slice. Keep the review hooks disabled while the owner
 cost pause is in effect. Do not remove or change the disable marker as part of
 this task.
 
-### [~] M7.6V Authority realignment — the LLM parses, the dictionaries enrich
+### [x] M7.6V Authority realignment — the LLM parses, the dictionaries enrich
+
+*Complete 2026-08-15; status reconciled 2026-08-18. The surviving work is all
+present: Claude Opus 5 at model-scoped extra-high effort, streaming with the
+httpx failure boundary, live/batch request parity, and the measured 16,000-token
+writing budget. The 2026-08-14 live enrichment measurements below already
+satisfied slice 4; no new paid call is required. M8.2 and M8.3 later deleted
+the review and language-audit subjects of the remaining draft slices. This
+section is retained as design history, not as an open checklist.*
 
 > *Correction 2026-08-15: sentences below promise that the paid review is "the
 > one this task keeps" and that deleted checks are replaced by "a prompt clause
@@ -3426,11 +3434,11 @@ Use these slices, each a finding plus a reproducing case plus a fix, ordered so
 9. Run `make gates` and one local review cycle. *(2026-08-15: this slice
    originally said "update `docs/HARDENING.md`, full replay" — both were
    deleted by M8.4, and `make gates` no longer runs a replay step. Corrected
-   rather than stamped, because this milestone is still open and its slices
-   read as instructions. Which of slices 1–5 are done is not recorded here:
-   3 and 5 are implemented in the code, 2's subject died with M8.2, and the
-   rest are unmarked — so treat the slice list as a description, not a
-   checklist, until someone reconciles it.)*
+   rather than stamped at the time. Reconciled 2026-08-18: slices 3 and 5 are
+   implemented, slice 4's live measurement is recorded above, slices 1 and 2
+   lost their subjects under M8.3 and M8.2, slices 6–8 are explicitly complete,
+   and the final gates/review cycle landed. The slice list is now history, not
+   an instruction to restore deleted audit machinery.)*
 
 Do not run a paid semantic review as part of this task. The first review after
 it lands is the milestone measurement.
@@ -3901,8 +3909,83 @@ Files: `hardening.py`, `hardening_replay.py`, `cli.py`, `Makefile`,
 
 ### [~] M8.5 Real sources through the real pipeline
 
-*Started 2026-08-16. `transitivity` and `imported_from` are done (701000b).
-One source is through end to end; five remain.*
+*Started 2026-08-16; reconciled 2026-08-18. `transitivity` and `imported_from`
+are done (701000b). The old “one source through; five remain” count was stale
+in two directions: four of the six collected sources completed the historical
+schema-v2 pipeline, while none can prove M7.6P's newer one-call rich-v3
+contract. The honest counters are therefore **historical source runs: 4/6;
+required current rich-v3 representative runs: 0/2**.*
+
+The four historical runs are `Kanji Review 104 Week11.pdf` (28 new records,
+model coverage approval), `Kanji Practice Sheet No.112-123.pdf` (34, model
+coverage approval), `Kanji Review 104 Week 1 and 2.pdf` (21, selection
+coverage), and `104 Week 8 Writing Homework.pdf` (16, selection coverage).
+Together, their committed schema-v2 archives, normalized records, ledger,
+media, deck definitions, and history prove source preparation, coverage
+accounting, promotion, dictionary enrichment, audio, export, and build. The
+contemporaneous workflow records say the staging was reviewed, but those
+artifacts do not encode modern review authority. They also do **not** contain a
+rich-v3 `pattern_set`, `review_run_id`, response-schema fingerprint, or full
+request fingerprint. Keep that evidence and grandfather it; do not rebill four
+private sources only to mint newer provenance fields.
+
+Completion now requires two complementary rich-v3 runs:
+
+1. `data/inbox/scans/teform_song.pdf` exercises the pattern-document shape. The
+   old reason for skipping it — that it had already gone through a separate
+   pattern pass and was therefore the wrong source for card extraction — was
+   superseded by M7.6P. A rich source answer may correctly yield no vocabulary
+   candidates while still yielding the patterns the document teaches. Current
+   `promote` deliberately leaves a zero-record staging artifact live rather
+   than archiving it. Before a pattern-only run counts as complete, add a
+   failing test and the smallest local mechanism that archives the reviewed v3
+   evidence without pretending that a record was promoted; then mutation-prove
+   that transition.
+2. A new immutable pages-31–34-only subset of
+   `data/inbox/scans/m7-mixed-tsumori-pages-27-34.pdf` exercises the
+   prose/mixed-card shape without paying again for pages 27–30. No such source
+   currently exists and `extract` has no page-range flag. The owner must
+   provide or explicitly authorize that ordinary immutable subset; never edit
+   the inbox original. Paying for the overlapping eight-page superset instead
+   is also the owner's explicit choice, not an inferred fallback.
+
+A qualifying candidate-bearing run archives `response_schema_version: 3`, a
+`review_run_id`, response-schema and full-request fingerprints, and
+card/pattern provenance from the identical paid answer. A human then reviews
+the proposed records and patterns. Selection coverage proceeds without an
+approval; only a blocking/unmeasured coverage block requires written owner
+approval or a separately opted-in `promote --accept-coverage` call. The human
+then promotes, enriches/voices what is missing, builds, and studies the deck.
+For a zero-card pattern run, the corresponding reviewed v3 pattern-store entry
+and the explicitly archived v3 evidence are the completion artifacts. For
+`teform_song.pdf`, that means explicit force authority before extraction, v3
+replacement of the legacy store entry as unreviewed, and a later local
+`janki patterns --review teform_song.pdf` transition; the legacy reviewed entry
+cannot stand in for review of the new answer. A weak answer changes the
+template; a machinery defect gets a failing test and mutation proof. The study
+confirmation belongs to the owner and cannot be inferred from a successful
+build.
+
+Authority remains explicit throughout: each paid source call needs exact
+consent; creating the pages-31–34 subset or paying for the overlapping
+superset is an owner choice; `teform_song.pdf` already has a reviewed legacy
+pattern-store entry, so replacing it with the v3 answer as unreviewed needs
+explicit `extract --force` authority; and the final study confirmation also
+remains an owner decision. For blocking coverage, the owner chooses whether to
+supply an owner approval or opt into model coverage review; the model owns the
+latter verdict. One additional content decision is already waiting: the sole
+live M8.5 source-extraction survivor, `word:九分:きゅうふん`, is held because
+that reading is not in the dictionary; its source context is
+`フェリーターミナルからバスで九分`. Keeping, re-identifying, or removing it is
+an identity decision only the owner can make, and M8.5 remains open until it is
+settled. Its schema-v2 staging file is the only recovery artifact, so a forced
+rerun of that source must not overwrite it.
+
+The six extraction/card defects found in the historical four-source rollout
+were curated in f91787b: six records were removed, `売る` was added, and
+`道にまよう` was deliberately retained. The truncated 40-page
+`data/inbox/scans/104 Week 11 Slide.pdf` attempt is a separate split-source
+follow-up, not a hidden seventh M8.5 completion gate.
 
 **The first real page found two things, and neither was where I expected.**
 `Kanji Review 104 Week11.pdf` extracted cleanly — 30 candidates, 0 validation
