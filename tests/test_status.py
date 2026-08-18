@@ -1184,8 +1184,85 @@ def test_a_silent_example_sentence_is_counted_on_its_own_line(tmp_path: Path) ->
     )
 
     book = ledger.load(tmp_path / "ledger.json")
+    book.record_audio(
+        record.id, file="a.mp3", of="example", provider="openai", voice="onyx",
+        speed=1.0, content_fp=example_audio_content_fingerprint(voiced),
+    )
 
     assert book.unvoiced_examples([record]) == [("word:話す:はなす", 1)]
     assert book.missing_audio([record]) == ["word:話す:はなす"], (
         "and the word-level count is untouched by either example"
     )
+
+
+def test_status_prints_the_example_audio_count_on_its_own_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The line itself, from the command, not the method behind it.
+
+    The first version of this test asserted `Ledger.unvoiced_examples` and
+    stopped there. Deleting the whole `lines.append(...)` from `format_report`
+    left the suite green — the count was computed, carried on the report, and
+    printed nowhere, which is indistinguishable from the bug the commit was
+    written to fix.
+
+    Its own line, and not folded into the word-level count above it: a record
+    with one silent example among nine is not deficient the way a record with
+    no word clip is, which is what `missing_audio`'s docstring argues and why
+    that count must not move.
+    """
+    root = _project(tmp_path, [
+        _raw("話す", "はなす", examples=[
+            {"japanese": "毎日話します。", "audio": "audio/janki-voiced.mp3"},
+            {"japanese": "毎日話すよ。"},
+        ]),
+    ])
+    book = ledger.load(root / "ledger.json")
+    book.record_audio(
+        "word:話す:はなす", file="janki-voiced.mp3", of="example", provider="openai",
+        voice="onyx", speed=1.0,
+        content_fp=example_audio_content_fingerprint(
+            ExampleSentence(japanese="毎日話します。")
+        ),
+    )
+    book.save()
+
+    assert _status(root) == 0
+
+    out = capsys.readouterr().out
+    assert "Missing example audio: 1 of 2 sentence(s)" in out
+    assert "Missing word audio: 1 of 1" in out, "the word count is its own line"
+
+
+def test_a_sentence_naming_a_clip_the_ledger_never_wrote_is_not_voiced(
+    tmp_path: Path,
+) -> None:
+    """The count answers to the ledger, like the word-level one above it.
+
+    A first version read `example.audio`'s truthiness alone, so a record
+    pointing at a file nothing ever produced reported as voiced — green while
+    mute, which is the exact failure this count was added to end, one level
+    along. `missing_audio` has always consulted the ledger; this now does too.
+    """
+    from japanese_anki import ledger as ledger_module
+    from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
+
+    record = VocabularyRecord(
+        id="word:話す:はなす",
+        expression="話す",
+        reading="はなす",
+        meanings=["to speak"],
+        source=SourceReference(type="shirabe", imported_from="x.csv"),
+        examples=[ExampleSentence(japanese="毎日話します。", audio="audio/ghost.mp3")],
+    )
+    book = ledger_module.load(tmp_path / "ledger.json")
+
+    assert book.unvoiced_examples([record]) == [("word:話す:はなす", 0)]
+
+    book.record_audio(
+        record.id, file="ghost.mp3", of="example", provider="openai",
+        voice="onyx", speed=1.0,
+        content_fp=example_audio_content_fingerprint(record.examples[0]),
+    )
+
+    assert book.unvoiced_examples([record]) == [], "and voiced once the ledger says so"

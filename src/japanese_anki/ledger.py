@@ -64,7 +64,7 @@ import json
 from collections.abc import Container, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import date
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from japanese_anki.errors import JankiError
@@ -1140,12 +1140,32 @@ class Ledger:
         because nothing asked this question — `status` counted words only and
         the build skipped an empty field without a word, so every indicator
         read green while half the cards said nothing.
+
+        Asks the **ledger**, not just the field, which is what makes it the
+        same kind of answer as :meth:`missing_audio` one method up. A record
+        naming a clip the ledger never wrote is a record whose sentence is
+        silent for a different reason, and a version of this that read
+        `example.audio`'s truthiness alone reported it as voiced — the same
+        green-while-mute failure one level along.
         """
+        voiced = {
+            (record_id, entry.get("file"))
+            for record_id in {record.id for record in records}
+            for entry in self._audio_entries(record_id)
+            if entry.get("of") == "example"
+        }
         return [
             (record.id, index)
             for record in records
             for index, example in enumerate(record.examples)
-            if example.japanese and not example.audio
+            # Basename: the record stores `audio/janki-<fp>.mp3` and the
+            # ledger stores the file, which is how every other lookup here
+            # compares them.
+            if example.japanese
+            and (
+                not example.audio
+                or (record.id, PurePosixPath(example.audio).name) not in voiced
+            )
         ]
 
     def shipped_incomplete(self, deck_stem: str, records: Iterable[VocabularyRecord]) -> list[str]:

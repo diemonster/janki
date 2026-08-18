@@ -297,8 +297,9 @@ class StatusReport:
     by_source: list[tuple[str, int]]
     decks: list[DeckStatus]
     missing_audio: list[str]
-    #: How many example sentences exist at all, as the denominator for the
-    #: count below.
+    #: How many example sentences exist at all — the denominator for the count
+    #: below, which is meaningless without one: "188 silent" reads very
+    #: differently against 343 than against 190.
     example_count: int
     #: ``(record id, example index)`` per silent example sentence. Its own
     #: field, not folded into `missing_audio`, so the word-level count keeps
@@ -315,15 +316,6 @@ class StatusReport:
     @property
     def total(self) -> int:
         return len(self.record_ids)
-
-    @property
-    def total_examples(self) -> int:
-        """Sentences the collection holds, voiced or not.
-
-        The denominator for `unvoiced_examples`, which is meaningless without
-        one: "188 silent" reads very differently against 343 than against 190.
-        """
-        return self.example_count
 
     @property
     def staged_count(self) -> int:
@@ -535,7 +527,7 @@ def format_report(report: StatusReport) -> list[str]:
     lines.append(f"Missing word audio: {len(report.missing_audio)} of {report.total}")
     lines.append(
         f"Missing example audio: {len(report.unvoiced_examples)} of "
-        f"{report.total_examples} sentence(s)"
+        f"{report.example_count} sentence(s)"
     )
     lines.append(f"Stale audio: {len(report.stale_audio)}")
     lines.append(

@@ -1154,3 +1154,45 @@ def test_a_voiced_sentence_draws_no_such_warning(tmp_path: Path) -> None:
     )
 
     assert not [w for w in result.warnings if "has no audio" in w]
+
+
+def test_a_reading_only_deck_is_not_told_a_line_it_lacks_is_silent(
+    tmp_path: Path,
+) -> None:
+    """`reading-back.html` has no polite-example block.
+
+    The warning fired per record regardless of which templates the deck
+    builds, so a reading-only deck was told its polite sentence "line of the
+    card is silent" — describing a line that card does not have. Which fields
+    are drawn is now read off the enabled templates rather than assumed, so
+    the claim is checked against the card instead of asserted about it.
+
+    The casual sentence *is* on the reading card, so it is still reported —
+    which is what keeps this from passing by warning about nothing.
+    """
+    _project(tmp_path)
+    (tmp_path / "decks" / "d.yaml").write_text(
+        "name: D\n"
+        "deck:\n"
+        '  source: "../vocabulary.json"\n'
+        "  cards:\n"
+        "    recognition: false\n"
+        "    production: false\n"
+        "    reading: true\n",
+        encoding="utf-8",
+    )
+    _write_records(tmp_path, [VocabularyRecord(
+        id="word:話す:はなす", expression="話す", reading="はなす", meanings=["to speak"],
+        examples=[
+            ExampleSentence(japanese="毎日話します。", register="polite"),
+            ExampleSentence(japanese="毎日話すよ。", register="casual"),
+        ],
+    )])
+
+    result = build_deck(
+        tmp_path / "decks" / "d.yaml", ProjectConfig.load(tmp_path), tmp_path / "o.apkg"
+    )
+
+    silent = [w for w in result.warnings if "has no audio" in w]
+    assert not any("毎日話します。" in w for w in silent), "no polite line on this card"
+    assert any("毎日話すよ。" in w for w in silent), "but the casual one is drawn"

@@ -329,6 +329,7 @@ def _field_values(
     media_files: list[str],
     warnings: list[str],
     claimed: dict[str, tuple[str, str]],
+    drawn_fields: frozenset[str],
     max_meanings: int = 0,
     kanji_html: str = "",
 ) -> list[str]:
@@ -371,10 +372,17 @@ def _field_values(
     # audio and read 0 of 191. This is the moment the quiet card is made, so
     # it is the moment to say so.
     #
+    # Only for a sentence this deck's cards actually draw: `reading-back.html`
+    # has no polite-example block, so a reading-only deck was told a line was
+    # silent that the card does not have.
+    #
     # Reported, not refused: a sentence with no audio is still worth studying,
     # and `janki audio --examples` fills it whenever the owner chooses.
-    for label, sentence in (("Example", example), ("Casual example", casual)):
-        if sentence.japanese and not sentence.audio:
+    for label, sentence, field in (
+        ("Example", example, "ExampleJapanese"),
+        ("Casual example", casual, "CasualJapanese"),
+    ):
+        if sentence.japanese and not sentence.audio and field in drawn_fields:
             warnings.append(
                 f"{record.id}: the {label.lower()} sentence "
                 f"{sentence.japanese!r} has no audio, so that line of the card "
@@ -776,6 +784,17 @@ def build_deck(
             }
         )
 
+    # Every `{{Field}}` the enabled templates mention, so a warning about a
+    # card line can be checked against the card rather than asserted. Derived
+    # rather than listed here: a list of which card shows which sentence is a
+    # claim about the templates, and claims about templates drift.
+    drawn_fields = frozenset(
+        re.findall(
+            r"\{\{[#^/]?(?:furigana:)?([A-Za-z]+)\}\}",
+            "".join(t["qfmt"] + t["afmt"] for t in templates),
+        )
+    )
+
     model_id = int(
         deck_config.get(
             "model_id",
@@ -820,6 +839,7 @@ def build_deck(
         values = _field_values(
             record, media_dir, deck_path.parent, media_files, media_warnings,
             claimed,
+            drawn_fields,
             deck_max_meanings,
             render_kanji_html(kanji_store.for_text(record.expression)),
         )

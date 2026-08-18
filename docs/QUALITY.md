@@ -73,6 +73,7 @@ By source type: manual 3
 Ledger: data/ledger.json — 3 record entries
 Never exported: personal-vocabulary 0 of 0, verbs 3 of 3
 Missing word audio: 3 of 3
+Missing example audio: 4 of 4 sentence(s)
 Stale audio: 0
 Missing enrichment: 2 (no example sentence, or no usage notes)
 Missing pitch accent: 3

@@ -57,8 +57,18 @@ def _project(root: Path) -> None:
         root / "templates" / "japanese-study",
     )
     (root / "decks").mkdir()
+    # All three card types, so every back template is actually drawn. With the
+    # default two, `reading-back.html` was rendered by nothing and a revert of
+    # its example block passed the whole suite.
     (root / "decks" / "d.yaml").write_text(
-        'name: D\ndeck:\n  source: "../vocabulary.json"\n', encoding="utf-8"
+        "name: D\n"
+        "deck:\n"
+        '  source: "../vocabulary.json"\n'
+        "  cards:\n"
+        "    recognition: true\n"
+        "    production: true\n"
+        "    reading: true\n",
+        encoding="utf-8",
     )
 
 
@@ -302,10 +312,12 @@ def test_a_casual_sentence_draws_its_section() -> None:
 
     answer = casual[0]["answer"]
     assert "Casually" in answer
-    # As ruby, not as plain text: the template renders the furigana field, and
-    # Anki turns 話[はな] into <ruby>. The plain string no longer appears at all.
+    # As ruby, and *only* as ruby. All three of these held on the duplicated
+    # template too — the plain div was still there, so was the <rt>, and so was
+    # the tail. The assertion that distinguishes the two is the absence one,
+    # and the first version of this test wrote the comment without it.
     assert "<rt>はな</rt>" in answer
-    assert "すよ。" in answer
+    assert "毎日話すよ。" not in answer, "the plain duplicate is gone"
 
 
 def test_an_example_sentence_is_drawn_once_not_twice() -> None:
@@ -374,3 +386,64 @@ def test_a_failed_build_leaves_no_scratch_tree(monkeypatch: pytest.MonkeyPatch) 
 
     assert made, "the helper did make a scratch tree"
     assert not made[0].exists(), f"and left {made[0]} behind"
+
+
+def test_no_card_draws_a_sentence_twice(tmp_path: Path) -> None:
+    """Across every card type and both registers, not one block.
+
+    The duplication lived in five places — a polite and a casual block in
+    `recognition-back`, a casual block in `production-back` and in
+    `reading-back`, and `production-back`'s polite example, which showed the
+    plain line and no ruby at all. Fixing them one at a time left four
+    unguarded, because the test that caught the first was written against that
+    block's exact strings.
+
+    This asserts the property instead: whatever card Anki draws, a sentence
+    that has furigana is never also present as plain text. Reverting any of
+    the five fails it.
+    """
+    subject = record(
+        examples=[
+            ExampleSentence(
+                japanese="毎日話します。",
+                furigana="毎日[まいにち] 話[はな]します。",
+                register="polite",
+            ),
+            ExampleSentence(
+                japanese="毎日話すよ。",
+                furigana="毎日[まいにち] 話[はな]すよ。",
+                register="casual",
+            ),
+        ]
+    )
+
+    for card in render([subject]):
+        for side in ("question", "answer"):
+            drawn = card[side]
+            for sentence in ("毎日話します。", "毎日話すよ。"):
+                assert sentence not in drawn, (
+                    f"{card['expression']} {side}: {sentence} drawn as plain text "
+                    "beside its ruby line"
+                )
+
+
+def test_a_sentence_without_furigana_still_reaches_the_card(tmp_path: Path) -> None:
+    """The `{{^ExampleFurigana}}` half, which nothing exercised.
+
+    An all-kana sentence needs no furigana — `needs_ai_annotations` asks for it
+    only when there is kanji — so the fallback is a designed-for input, not a
+    defensive branch. Deleting every fallback from all three templates left the
+    suite green, because no example in the collection lacks furigana today.
+    """
+    subject = record(
+        examples=[
+            ExampleSentence(japanese="ねこはかわいい。", furigana="", register="polite"),
+        ]
+    )
+
+    answers = [card["answer"] for card in render([subject])]
+
+    assert any("ねこはかわいい。" in answer for answer in answers), (
+        "with no furigana to render, the plain sentence is what there is"
+    )
+    assert not any("{{" in answer for answer in answers), "and no template leaks"
