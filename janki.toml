@@ -41,7 +41,13 @@ polish_model = "claude-opus-5"
 [tts]
 provider = "voicevox"              # words only; the one engine that forces accent
 voicevox_url = "http://localhost:50021"
-voicevox_speaker = 13               # 青山龍星 — see the README for the full list
+voicevox_speaker = 53               # 麒ヶ島宗麟 — chosen for accent audibility,
+                                    # not timbre: at a 125 Hz base it keeps a lower
+                                    # voice while giving heiban a 70 Hz rise. The
+                                    # previous 青山龍星 (13) ranked 42nd of 43 at
+                                    # 5.7 Hz, so every word sounded flat whatever
+                                    # its pattern — the accent was forced correctly
+                                    # and rendered inaudibly.
 # voicevox_sentence_speaker = 52    # another VOICEVOX voice for sentences.
                                     # Absent means "the same voice as the
                                     # words" — 0 is a real style id, not a way
