@@ -532,7 +532,7 @@ def format_report(report: StatusReport) -> list[str]:
     lines.append(f"Stale audio: {len(report.stale_audio)}")
     lines.append(
         f"Missing enrichment: {len(report.missing_enrichment)} "
-        "(no example sentence, or no usage notes)"
+        "(no meanings or example sentence)"
     )
     if report.missing_pitch_accent is None:
         lines.append("Missing pitch accent: n/a until the pitch-accent schema lands (M2.2)")

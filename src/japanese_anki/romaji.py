@@ -169,9 +169,9 @@ _TRANSPARENT_CATEGORIES = frozenset({"Pc", "Pd", "Ps", "Pe", "Pi", "Pf", "Po", "
 #: `ha`, which no check without a parse can see, and janki does not parse.
 _PARTICLE_ALTERNATIVES = {"は": ("ha", "wa"), "へ": ("he", "e")}
 
-#: `prompts/romaji.md` asks for particles as standalone tokens, so the spoken
-#: spelling is accepted only where the answer is in that shape: a separator,
-#: punctuation or the end after it.
+#: The rich card templates ask for particles as standalone tokens, so the
+#: spoken spelling is accepted only where the answer is in that shape: a
+#: separator, punctuation or the end after it.
 #:
 #: This is a check on the *format this project asked for*, not a claim about
 #: Japanese. janki does not know which は is a particle and must not pretend

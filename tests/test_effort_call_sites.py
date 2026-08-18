@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from japanese_anki import claude_client, enrich, extract, patterns
+from japanese_anki import claude_client, enrich, extract
 from japanese_anki.inputs import PreparedInput
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
 
@@ -83,10 +83,12 @@ def test_a_batch_entry_resolves_effort_from_its_own_model(
     of a submitted batch at once, hours after anyone was watching."""
     # An unenriched record, so the pass has something to target.
     bare = replace(_record(), examples=[], usage_notes="")
-    requests, _ = enrich.batch_requests([bare], model=model, style_guide="g", instructions="I")
+    plan = enrich.batch_requests(
+        [bare], model=model, style_guide="g", instructions="I"
+    )
 
-    assert requests
-    assert requests[0]["params"]["output_config"].get("effort") == expected
+    assert plan.requests
+    assert plan.requests[0]["params"]["output_config"].get("effort") == expected
 
 
 class _BodyCapture:
@@ -151,23 +153,6 @@ def test_extraction_resolves_effort_from_the_model_it_reads_with(
     assert ("thinking" in client.bodies[0]) is (expected is not None)
 
 
-@pytest.mark.parametrize("model,expected", [(NEW, "xhigh"), (OLD, None)])
-def test_pattern_reading_resolves_effort_from_its_own_model(
-    model: str, expected: str | None, tmp_path: Path
-) -> None:
-    client = _BodyCapture('{"kind": "grammar", "title": "t", "patterns": []}')
-
-    patterns.extract_patterns(
-        _prepared(tmp_path), model=model, style_guide="g", client=client,
-        instructions="I")
-
-    assert client.bodies, "pattern reading never called the model"
-    assert client.bodies[0]["output_config"].get("effort") == expected
-    assert ("thinking" in client.bodies[0]) is (expected is not None)
-    # 4000 was sized for an answer alone; thinking now shares the budget.
-    assert client.bodies[0]["max_tokens"] == claude_client.DEFAULT_MAX_TOKENS
-
-
 def test_asking_for_effort_also_asks_for_thinking() -> None:
     """The models that accept effort disagree about whether thinking is on by
     default: Opus 5 and Sonnet 5 think when the key is absent, Opus 4.8 and 4.7
@@ -192,38 +177,6 @@ def test_asking_for_effort_also_asks_for_thinking() -> None:
     )
     assert pair["output_config"].get("effort") is None
     assert pair["thinking"] == {"type": "adaptive"}
-
-
-@pytest.mark.parametrize("model,expected", [(NEW, "xhigh"), (OLD, None)])
-def test_meaning_polish_resolves_effort_from_its_own_model(
-    model: str, expected: str | None
-) -> None:
-    client = _BodyCapture('{"meanings": ["to speak"], "why": "x"}')
-
-    list(
-        enrich.polish_meanings(
-            [_record()], model=model, style_guide="g", client=client,
-            ids=["word:話す:はなす"],
-        instructions="I")
-    )
-
-    assert client.bodies, "polish never called the model"
-    assert client.bodies[0]["output_config"].get("effort") == expected
-    assert ("thinking" in client.bodies[0]) is (expected is not None)
-
-
-@pytest.mark.parametrize("model,expected", [(NEW, "xhigh"), (OLD, None)])
-def test_a_polish_batch_entry_resolves_effort_from_its_own_model(
-    model: str, expected: str | None
-) -> None:
-    """The other batch builder. An unsupported value here fails every row of a
-    submitted batch at once, hours after anyone was watching."""
-    requests, _ids, _fps = enrich.polish_batch_requests(
-        [_record()], model=model, style_guide="g", ids=["word:話す:はなす"],
-        instructions="I")
-
-    assert requests
-    assert requests[0]["params"]["output_config"].get("effort") == expected
 
 
 def test_refresh_skips_the_jpdb_stages_when_there_is_no_key(

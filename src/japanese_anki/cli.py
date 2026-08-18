@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import hashlib
 import json
 import sys
 from collections import Counter
@@ -66,9 +67,12 @@ from japanese_anki.staging import (
     check_rewritable,
     coverage_acceptance_requirements,
     coverage_block_fingerprint,
+    field_replacement_block,
+    new_review_run_id,
     prune_staging,
     read_staging,
     record_coverage_approval,
+    review_run_id,
     rewrite_staging,
     validate_coverage_facts,
     write_staging,
@@ -355,151 +359,6 @@ def _save_ledger(book: ledger.Ledger) -> ledger.LedgerError | None:
     return None
 
 
-def _install_polish_batch(
-    book: ledger.Ledger, batch_id: str, entry: Mapping[str, Any]
-) -> None:
-    """Install one recovered batch without displacing concurrent batch state."""
-    others = [key for key in book.pending_batches if str(key) != str(batch_id)]
-    if others:
-        raise ledger.LedgerError(
-            f"Cannot recover polish batch {batch_id} while batch {others[0]} is "
-            "pending. Fetch or forget that batch first; the recovery journal "
-            "will stay intact."
-        )
-    existing = book.pending_batches.get(str(batch_id))
-    if existing is not None:
-        if not isinstance(existing, dict) or existing.get("kind") != "polish":
-            raise ledger.LedgerError(
-                f"Ledger entry {batch_id} conflicts with its polish recovery journal"
-            )
-        return
-    book.pending_batches[str(batch_id)] = dict(entry)
-
-
-def _save_ledger_change(
-    config: ProjectConfig,
-    change: Callable[[ledger.Ledger], None],
-    *,
-    attempts: int = 3,
-) -> tuple[ledger.Ledger | None, ledger.LedgerError | None]:
-    """Replay one idempotent mutation on the latest ledger after conflicts."""
-    failure: ledger.LedgerError | None = None
-    for _ in range(attempts):
-        try:
-            current = ledger.load(config.ledger_file)
-            change(current)
-            current.save()
-        except ledger.LedgerError as exc:
-            failure = exc
-            continue
-        return current, None
-    return None, failure
-
-
-def _unfinished_polish_recovery(config: ProjectConfig) -> ledger.BatchRecovery | None:
-    """Return recovery state that must win the one-batch slot."""
-    return ledger.load_batch_recovery(config.ledger_file)
-
-
-def _refuse_unfinished_polish_recovery(config: ProjectConfig) -> None:
-    recovery = _unfinished_polish_recovery(config)
-    if recovery is None:
-        return
-    raise JankiError(
-        f"Polish batch {recovery.batch_id} has unfinished recovery state in "
-        f"{recovery.path}. Finalize it first with: "
-        "janki enrich --polish-meanings --batch-fetch."
-    )
-
-
-def _recover_polish_batch(
-    config: ProjectConfig, records: Sequence[VocabularyRecord]
-) -> tuple[ledger.Ledger, bool]:
-    """Restore a submitted batch or finish provenance after records landed.
-
-    The boolean is true when an applied recovery completed the whole batch, so
-    the caller must not contact Anthropic or show the same proposals again.
-    """
-    recovery = _unfinished_polish_recovery(config)
-    if recovery is None:
-        return ledger.load(config.ledger_file), False
-
-    if recovery.phase == "submitted":
-        current = ledger.load(config.ledger_file)
-        pending = current.pending_batch()
-        if pending is not None and pending[0] == recovery.batch_id:
-            ledger.clear_batch_recovery(
-                config.ledger_file, recovery.batch_id, expected=recovery
-            )
-            print(
-                f"Recovered the durable descriptor for polish batch "
-                f"{recovery.batch_id}."
-            )
-            return current, False
-
-        saved, failure = _save_ledger_change(
-            config,
-            lambda book: _install_polish_batch(
-                book, recovery.batch_id, recovery.entry
-            ),
-        )
-        if failure is not None or saved is None:
-            raise JankiError(
-                f"Could not restore polish batch {recovery.batch_id} from "
-                f"{recovery.path}: {failure}. The journal is intact; retry "
-                "--batch-fetch once the ledger is writable."
-            )
-        ledger.clear_batch_recovery(
-            config.ledger_file, recovery.batch_id, expected=recovery
-        )
-        print(f"Restored polish batch {recovery.batch_id} to the ledger.")
-        return saved, False
-
-    by_id = {record.id: record for record in records}
-    landed = [
-        record_id
-        for record_id, meanings in recovery.accepted_meanings.items()
-        if record_id in by_id and list(by_id[record_id].meanings) == meanings
-    ]
-    not_landed = [
-        record_id
-        for record_id in recovery.accepted_meanings
-        if record_id not in landed
-    ]
-    retry_ids = list(dict.fromkeys([*recovery.retry_ids, *not_landed]))
-    model = str(recovery.entry.get("model") or config.polish_model)
-
-    def finish(book: ledger.Ledger) -> None:
-        _install_polish_batch(book, recovery.batch_id, recovery.entry)
-        for record_id in landed:
-            book.record_enriched(
-                record_id,
-                kind="polish",
-                model=model,
-                fields=enrich.POLISH_FIELDS,
-            )
-        if retry_ids:
-            book.record_batch_retry(recovery.batch_id, retry_ids)
-        else:
-            book.clear_batch(recovery.batch_id)
-
-    saved, failure = _save_ledger_change(config, finish)
-    if failure is not None or saved is None:
-        raise JankiError(
-            f"Could not finish polish batch {recovery.batch_id} from "
-            f"{recovery.path}: {failure}. Accepted meanings remain in the "
-            "records and the recovery journal is intact; retry --batch-fetch."
-        )
-    ledger.clear_batch_recovery(
-        config.ledger_file, recovery.batch_id, expected=recovery
-    )
-    print(
-        f"Recovered ledger provenance for {len(landed)} accepted polish "
-        f"proposal(s) from batch {recovery.batch_id}."
-    )
-    return saved, not retry_ids
-
-
 def _report_ledger_failure(exc: ledger.LedgerError) -> None:
     print(f"warning: {exc}", file=sys.stderr)
     print(
@@ -528,11 +387,11 @@ def _report_enrichment_ledger_failure(
     depends on the word: a record the dictionary described completely is
     skipped, and one it described partly is looked up again and proposes
     nothing new. (A noun is the second kind: its ``conjugations`` never fill, so
-    it stays fillable forever.) ``--ai`` does reach the ledger — a record with
-    examples and no usage note is a target again. ``--polish-meanings`` looks at
-    every record every time. Whichever it is, saying it accurately is the whole
-    point of this message: nobody should chase a repair on a wrong description
-    of it.
+    it stays fillable forever.) A default ``--ai`` re-run skips a record once
+    its meanings and examples are complete; an explicit re-run can pay for the
+    same answer but still has no field change to record. Saying that accurately
+    is the whole point of this message: nobody should chase a repair on a wrong
+    description of it.
     """
     print(f"warning: {exc}", file=sys.stderr)
     print(
@@ -1058,38 +917,26 @@ def _enrich_staging(
 
 
 def command_enrich(args: argparse.Namespace) -> int:
-    """Fill empty fields on existing records from a dictionary.
-
-    Three passes, one per run: ``--jpdb`` fills what a dictionary knows,
-    ``--ai`` writes what it does not, and ``--polish-meanings`` rewrites
-    English that is already there. One is required, because "enrich" without
-    saying how is a command whose meaning depends on which pass is newest.
-
-    The exclusivity list below is the only place that knows how many there
-    are — a pass added without a line there runs alongside another, and the
-    second write wins.
-    """
+    """Run either dictionary enrichment or the complete bare-word AI pass."""
     passes = [
         name
         for name, chosen in (
             ("--jpdb", args.jpdb),
             ("--ai", args.ai),
-            ("--polish-meanings", args.polish_meanings),
         )
         if chosen
     ]
     if len(passes) > 1:
         raise JankiError(
             "enrich takes one pass at a time: --jpdb fills what a dictionary "
-            "knows, --ai writes what it does not, --polish-meanings rewrites "
-            f"English that is already there. Got {', '.join(passes)}. Run them "
+            "knows and --ai proposes glosses, examples, and usage notes. "
+            f"Got {', '.join(passes)}. Run them "
             "separately so each shows you its own diff."
         )
     if not passes:
         raise JankiError(
             "enrich needs a pass: --jpdb fills fields from the jpdb dictionary, "
-            "--ai writes examples and usage notes, --polish-meanings proposes "
-            "better English glosses."
+            "while --ai proposes English glosses, examples, and usage notes."
         )
     batch_flags = [
         name
@@ -1123,16 +970,10 @@ def command_enrich(args: argparse.Namespace) -> int:
             "records, so it has no field list to widen and no staging file to "
             "overwrite."
         )
-    if batch_flags and not (args.ai or args.polish_meanings):
+    if batch_flags and not args.ai:
         raise JankiError(
-            f"enrich {batch_flags[0]} needs --ai or --polish-meanings: those are "
-            "the model-backed passes. The dictionary pass has nothing to batch."
-        )
-    if args.polish_meanings and args.force_fields:
-        raise JankiError(
-            "enrich --polish-meanings writes 'meanings' and nothing else, so "
-            "there is no field list to widen. It always overwrites — that is "
-            "what it is for, and why it confirms one record at a time."
+            f"enrich {batch_flags[0]} needs --ai; the dictionary pass has "
+            "nothing to batch."
         )
     force_fields = enrich.parse_force_fields(args.force_fields, ai=args.ai)
     if args.staging is not None and (force_fields or args.ids):
@@ -1140,7 +981,7 @@ def command_enrich(args: argparse.Namespace) -> int:
             "enrich --staging proposes readings for held rows and writes nothing "
             "else, so it takes neither --force-fields nor record ids."
         )
-    if args.staging is not None and (args.ai or args.polish_meanings):
+    if args.staging is not None and args.ai:
         raise JankiError(
             "enrich --staging annotates held rows with the reading jpdb proposes; "
             f"{passes[0]} writes into records that already exist. Run them "
@@ -1148,7 +989,7 @@ def command_enrich(args: argparse.Namespace) -> int:
         )
     # A flag the running pass never reads is a typo, not a no-op: silently
     # running a pass that ignores it answers a question the user did not ask.
-    if args.model and not (args.ai or args.polish_meanings):
+    if args.model and not args.ai:
         raise JankiError(
             "enrich --model applies to the passes that call a model. The --jpdb "
             "pass reads a dictionary, so it has no model to choose."
@@ -1161,26 +1002,12 @@ def command_enrich(args: argparse.Namespace) -> int:
 
     config = _load_config(args)
 
-    # --polish-meanings rewrites English and asks jpdb nothing, so it must not
-    # require a key to run. Only `--jpdb` and `--staging` do now: they enrich
-    # *from* the dictionary.
-    if args.polish_meanings and not batch_flags:
-        return _polish_meanings(config, args)
-
-    # Neither of these asks jpdb anything — one writes a ledger entry, the
-    # other builds requests — so neither may demand a key to run.
+    # This writes only the ledger and asks neither model nor dictionary.
     if args.batch_forget:
-        return _batch_forget(
-            config, expected_kind="polish" if args.polish_meanings else "ai"
-        )
+        return _batch_forget(config)
 
     if args.batch_submit:
-        if args.polish_meanings:
-            return _polish_batch_submit(config, args)
         return _batch_submit(config, args, force_fields)
-
-    if args.polish_meanings and args.batch_fetch:
-        return _polish_batch_fetch(config, args)
 
     # Before the client is built, because these ask jpdb nothing: since M7.6V
     # retired the sentence oracle, `--ai` writes its examples and no check runs
@@ -1278,7 +1105,7 @@ def command_enrich(args: argparse.Namespace) -> int:
 def _enrich_ai(
     config: ProjectConfig, args: argparse.Namespace, force_fields: Sequence[str]
 ) -> int:
-    """Write examples and usage notes, by diff for a few records or by staging file.
+    """Propose rich card fields, by diff for a few records or by staging file.
 
     Past a certain size a y/n diff stops being review — nobody reads five
     hundred proposed sentences in a terminal and means it — so a large run
@@ -1296,7 +1123,9 @@ def _enrich_ai(
     style_guide = claude_client.read_style_guide(config.root)
     targets = enrich.ai_targets(records, args.ids or None)
     if not targets:
-        print("Nothing to write: every record already has examples and usage notes.")
+        print(
+            "Nothing to write: every record already has meanings and examples."
+        )
         return 0
 
     staging = len(targets) >= enrich.STAGING_THRESHOLD
@@ -1318,8 +1147,9 @@ def _enrich_ai(
     )
     result = enrich.enrich_ai(
         records,
-        instructions=prompts.load(config.root, "enrich-examples"),
+        instructions=prompts.load(config.root, "enrich-bare-word"),
         model=model,
+        provider=config.enrich_provider,
         style_guide=style_guide,
         force_fields=force_fields,
         ids=args.ids or None,
@@ -1363,6 +1193,7 @@ def _enrich_ai(
         output_path=output_path,
         staging_target=staging_target if staging else None,
         model=model,
+        provider=config.enrich_provider,
         force=args.force,
         assume_yes=args.yes,
         expected=output_revision,
@@ -1383,6 +1214,7 @@ def _write_ai_result(
     output_path: Path,
     staging_target: Path | None,
     model: str,
+    provider: str,
     force: bool,
     assume_yes: bool,
     expected: RecordsRevision,
@@ -1408,6 +1240,28 @@ def _write_ai_result(
                 "source_file": str(output_path.name),
                 "extracted_at": date.today().isoformat(),
                 "model": model,
+                "provider": provider,
+                "review_run_id": new_review_run_id(),
+                "ai_enrichment": {
+                    "version": 1,
+                    "model": model,
+                    "provider": provider,
+                    "request_fingerprints": {
+                        record_id: result.provenance[record_id]
+                        for record_id in sorted(result.changes)
+                    },
+                    "input_fingerprints": {
+                        record_id: result.input_fingerprints[record_id]
+                        for record_id in sorted(result.changes)
+                    },
+                    "fields": {
+                        record_id: sorted(result.changes[record_id])
+                        for record_id in sorted(result.changes)
+                    },
+                },
+                "field_replacements": field_replacement_block(
+                    records, result.changes
+                ),
                 "review_notes": (
                     f"{len(result.changes)} record(s) enriched by {model}. These "
                     "records already exist; promoting merges the new fields into "
@@ -1431,7 +1285,14 @@ def _write_ai_result(
 
     save_records_json(output_path, result.records, expected=expected)
     for record_id, changed in result.changes.items():
-        book.record_enriched(record_id, kind="ai", model=model, fields=changed)
+        book.record_enriched(
+            record_id,
+            kind="ai",
+            model=model,
+            provider=provider,
+            fields=changed,
+            request_fingerprint=result.provenance[record_id],
+        )
     ledger_error = _save_ledger(book)
 
     print(f"Enriched {len(result.changes)} record(s) in {output_path}.")
@@ -1441,13 +1302,13 @@ def _write_ai_result(
         _report_enrichment_ledger_failure(
             ledger_error,
             rerun=(
-                "A re-run is not a free repair either: a record whose examples "
-                "landed without a usage note is still a target, so the next pass "
-                "would call the model for it again and record a pass only where "
-                "it writes something."
+                "A default re-run skips a record once its meanings and examples "
+                "are complete. Naming it explicitly may call the model again, "
+                "but an identical answer has no field change to record, so that "
+                "does not restore the attribution either."
             ),
             aftermath=(
-                "The examples and notes are correct; 'status' will simply not "
+                "The enriched card fields are correct; 'status' will simply not "
                 f"know {model} wrote them."
             ),
         )
@@ -1471,7 +1332,6 @@ def _batch_submit(
             "enrich_provider = \"anthropic\" and enrich_model to a Claude model, "
             "or omit --batch-submit to use configured Codex enrichment."
         )
-    _refuse_unfinished_polish_recovery(config)
     output_path = config.normalized_file.resolve()
     records = load_records(output_path) if output_path.exists() else []
     if not records:
@@ -1495,27 +1355,32 @@ def _batch_submit(
     taught = patterns.format_patterns(
         patterns.reviewed_patterns(patterns.load_store(config.patterns_file))
     )
-    requests, pending_ids = enrich.batch_requests(
+    plan = enrich.batch_requests(
         records,
-        instructions=prompts.load(config.root, "enrich-examples"),
+        instructions=prompts.load(config.root, "enrich-bare-word"),
         model=model,
         style_guide=style_guide,
         ids=args.ids or None,
         taught=taught,
     )
-    if not requests:
-        print("Nothing to submit: every record already has examples and usage notes.")
+    if not plan.requests:
+        print(
+            "Nothing to submit: every record already has meanings and examples."
+        )
         return 0
     if taught:
         print(f"Writing with {taught.count(chr(10) + '*')} reviewed pattern(s) in mind.")
 
-    batch_id = claude_client.submit_batch(requests)
+    batch_id = claude_client.submit_batch(plan.requests)
     book.record_batch(
         batch_id,
         kind="ai",
         model=model,
-        pending_ids=pending_ids,
+        provider="anthropic",
+        pending_ids=plan.record_ids,
         force_fields=force_fields,
+        request_fingerprints=plan.request_fingerprints,
+        input_fingerprints=plan.input_fingerprints,
     )
     ledger_error = _save_ledger(book)
     if ledger_error is not None:
@@ -1530,412 +1395,40 @@ def _batch_submit(
         )
         return 1
 
-    print(f"Submitted {len(requests)} record(s) as batch {batch_id}.")
+    print(f"Submitted {len(plan.requests)} record(s) as batch {batch_id}.")
     print("  Most batches finish within an hour; the limit is 24.")
     print("  Collect it with: janki enrich --ai --batch-fetch")
     return 0
 
 
-def _polish_batch_submit(config: ProjectConfig, args: argparse.Namespace) -> int:
-    """Submit every selected meaning-polish request as one Anthropic batch."""
-    _refuse_unfinished_polish_recovery(config)
-    output_path = config.normalized_file.resolve()
-    records = load_records(output_path) if output_path.exists() else []
-    if not records:
-        print(f"No records to enrich in {output_path}.")
-        return 0
-
-    book = ledger.load(config.ledger_file)
-    if (pending := book.pending_batch()) is not None:
-        batch_id, entry = pending
-        kind = str(entry.get("kind") or "ai")
-        flag = "--polish-meanings" if kind == "polish" else "--ai"
-        raise JankiError(
-            f"Batch {batch_id} is still out, covering "
-            f"{len(entry.get('pending_ids', []))} record(s). Fetch it first: "
-            f"janki enrich {flag} --batch-fetch. Only one batch may be pending."
-        )
-
-    model = args.model or config.polish_model
-    requests, pending_ids, prompt_fingerprints = enrich.polish_batch_requests(
-        records,
-        instructions=prompts.load(config.root, "polish-meanings"),
-        model=model,
-        style_guide=claude_client.read_style_guide(config.root),
-        ids=args.ids or None,
-    )
-    if not requests:
-        print("Nothing to submit for meaning polish.")
-        return 0
-
-    batch_id = claude_client.submit_batch(requests)
-    book.record_batch(
-        batch_id,
-        kind="polish",
-        model=model,
-        pending_ids=pending_ids,
-        prompt_fingerprints=prompt_fingerprints,
-    )
-    entry = dict(book.pending_batches[batch_id])
-    recovery_state: ledger.BatchRecovery | None = None
-    recovery_error: ledger.LedgerError | None = None
-    try:
-        recovery_state = ledger.write_batch_recovery(
-            config.ledger_file, batch_id, entry
-        )
-    except ledger.LedgerError as exc:
-        recovery_error = exc
-
-    saved, ledger_error = _save_ledger_change(
-        config,
-        lambda latest: _install_polish_batch(latest, batch_id, entry),
-    )
-    if ledger_error is not None or saved is None:
-        print(f"warning: {ledger_error}", file=sys.stderr)
-        if recovery_state is not None:
-            print(
-                f"Batch {batch_id} was submitted, and its complete descriptor "
-                f"is safe in {recovery_state.path}. Once the ledger is writable, run "
-                "'janki enrich --polish-meanings --batch-fetch'; janki will "
-                "restore the entry before fetching.",
-                file=sys.stderr,
-            )
-        else:
-            print(
-                f"Batch {batch_id} was submitted, but neither its ledger entry "
-                "nor its recovery journal could be written. The journal error "
-                f"was: {recovery_error}. The results remain reachable from the "
-                "Anthropic console under that batch id.",
-                file=sys.stderr,
-            )
-        return 1
-
-    if recovery_state is not None:
-        try:
-            ledger.clear_batch_recovery(
-                config.ledger_file, batch_id, expected=recovery_state
-            )
-        except ledger.LedgerError as exc:
-            print(f"warning: {exc}", file=sys.stderr)
-            print(
-                "The batch is safely in the ledger. Run --batch-fetch again; "
-                "janki will validate and clear the redundant recovery journal.",
-                file=sys.stderr,
-            )
-            return 1
-    elif recovery_error is not None:
-        print(
-            f"warning: Batch {batch_id} is in the ledger, but its temporary "
-            f"recovery journal could not be created: {recovery_error}",
-            file=sys.stderr,
-        )
-
-    print(f"Submitted {len(requests)} meaning-polish request(s) as batch {batch_id}.")
-    print("  Collect and review them with: janki enrich --polish-meanings --batch-fetch")
-    return 0
-
-
-def _polish_batch_fetch(config: ProjectConfig, args: argparse.Namespace) -> int:
-    """Collect a polish batch and review its already-paid proposals locally."""
-    output_path = config.normalized_file.resolve()
-    output_revision = records_revision(output_path)
-    records = load_records(output_path) if output_path.exists() else []
-    book, recovered_complete = _recover_polish_batch(config, records)
-    if recovered_complete:
-        return 0
-    pending = book.pending_batch()
-    if pending is None:
-        print(
-            "No batch is pending. Submit one with: "
-            "janki enrich --polish-meanings --batch-submit"
-        )
-        return 0
-    batch_id, entry = pending
-    actual_kind = str(entry.get("kind") or "ai")
-    if actual_kind != "polish":
-        raise JankiError(
-            f"Batch {batch_id} is an AI-enrichment batch. Fetch it with: "
-            "janki enrich --ai --batch-fetch."
-        )
-    if not records:
-        raise JankiError(
-            f"Batch {batch_id} is pending, but there are no records in "
-            f"{output_path} to apply it to. Restore the collection or use "
-            "'janki enrich --polish-meanings --batch-forget'."
-        )
-
-    pending_ids = [str(item) for item in entry.get("pending_ids", [])]
-    retry = [str(item) for item in entry.get("retry_ids", [])]
-    candidates = retry or pending_ids
-    model = str(entry.get("model") or config.polish_model)
-    status_now = claude_client.batch_status(batch_id)
-    if status_now != claude_client.BATCH_ENDED:
-        print(
-            f"Batch {batch_id} is {status_now or 'in an unreported state'} "
-            f"({len(pending_ids)} record(s)). Nothing to review yet."
-        )
-        return 0
-
-    raw_fingerprints = entry.get("prompt_fingerprints")
-    if not isinstance(raw_fingerprints, Mapping):
-        raise JankiError(
-            f"Batch {batch_id} predates polish input tracking, so janki cannot "
-            "prove its answers still describe the current records. It stays "
-            "pending; forget it explicitly and submit a new polish batch."
-        )
-    prompt_fingerprints = {
-        str(record_id): str(fingerprint)
-        for record_id, fingerprint in raw_fingerprints.items()
-    }
-    missing_fingerprints = [
-        record_id
-        for record_id in pending_ids
-        if not prompt_fingerprints.get(record_id)
-    ]
-    if missing_fingerprints:
-        raise JankiError(
-            f"Batch {batch_id} has no submitted-input fingerprint for "
-            f"{len(missing_fingerprints)} record(s), so applying their answers "
-            "could overwrite newer curation. It stays pending; forget it "
-            "explicitly and submit a new polish batch."
-        )
-
-    present = {record.id for record in records}
-    if pending_ids and not any(record_id in present for record_id in pending_ids):
-        raise JankiError(
-            f"Batch {batch_id} came back, but none of its {len(pending_ids)} "
-            f"record(s) remain in {output_path}. It stays pending; restore the "
-            "collection or forget it explicitly."
-        )
-
-    result = enrich.apply_polish_batch_results(
-        records,
-        claude_client.batch_results(batch_id, enrich.polish_schema(), model),
-        pending_ids,
-        model=model,
-        prompt_fingerprints=prompt_fingerprints,
-        only=retry,
-    )
-    for warning in result.warnings:
-        print(f"warning: {warning}", file=sys.stderr)
-    for record_id, reason in result.failed.items():
-        print(f"warning: {record_id}: {reason}; left untouched.", file=sys.stderr)
-    for record_id, reason in result.invalid.items():
-        print(
-            f"warning: {record_id}: the answer did not parse ({reason}); left "
-            "pending.",
-            file=sys.stderr,
-        )
-    if result.missing:
-        print(
-            f"warning: {len(result.missing)} batched record(s) are no longer in "
-            f"the collection: {', '.join(result.missing)}",
-            file=sys.stderr,
-        )
-    if result.stale:
-        print(
-            f"warning: {len(result.stale)} batched record(s) changed after "
-            "submission, so their older polish answers were ignored: "
-            f"{', '.join(result.stale)}",
-            file=sys.stderr,
-        )
-    if result.unchanged:
-        print(
-            f"{len(result.unchanged)} record(s) already had the glosses "
-            f"{model} would write."
-        )
-
-    positions = {record.id: index for index, record in enumerate(records)}
-    updated = list(records)
-    accepted: dict[str, enrich.PolishOutcome] = {}
-    declined = 0
-    stopped = False
-    remaining: list[str] = []
-    proposal_ids = [record_id for record_id in candidates if record_id in result.proposals]
-    for index, record_id in enumerate(proposal_ids):
-        outcome = result.proposals[record_id]
-        for line in enrich.format_field_diff({record_id: dict(outcome.changes)}):
-            print(line)
-        answer = _confirm_polish(args.yes)
-        if answer == "quit":
-            stopped = True
-            remaining = proposal_ids[index:]
-            break
-        if answer == "no":
-            declined += 1
-            continue
-        updated[positions[record_id]] = outcome.proposed
-        accepted[record_id] = outcome
-
-    retry_ids = list(dict.fromkeys([*remaining, *result.invalid]))
-    accepted_meanings = {
-        record_id: list(outcome.proposed.meanings)
-        for record_id, outcome in accepted.items()
-    }
-    try:
-        recovery_state = ledger.write_batch_recovery(
-            config.ledger_file,
-            batch_id,
-            entry,
-            accepted_meanings=accepted_meanings,
-            retry_ids=retry_ids,
-        )
-    except ledger.LedgerError as exc:
-        print(f"warning: {exc}", file=sys.stderr)
-        print(
-            "Nothing was written: janki could not durably record how to finish "
-            "the records/ledger handoff. Resolve the recovery-file problem and "
-            "fetch again; the paid batch answers are unchanged.",
-            file=sys.stderr,
-        )
-        return 1
-
-    if accepted:
-        save_records_json(output_path, updated, expected=output_revision)
-        print(f"Rewrote the meanings of {len(accepted)} record(s) in {output_path}.")
-    if declined:
-        print(f"{declined} proposal(s) declined.")
-    if stopped:
-        print(
-            f"Stopped with {len(remaining)} proposal(s) still to review; fetching "
-            "again resumes there without another model call."
-        )
-
-    def finish(latest: ledger.Ledger) -> None:
-        _install_polish_batch(latest, batch_id, entry)
-        for record_id in accepted:
-            latest.record_enriched(
-                record_id, kind="polish", model=model, fields=enrich.POLISH_FIELDS
-            )
-        if retry_ids:
-            latest.record_batch_retry(batch_id, retry_ids)
-        else:
-            latest.clear_batch(batch_id)
-
-    _saved, ledger_error = _save_ledger_change(config, finish)
-    if ledger_error is not None:
-        print(f"warning: {ledger_error}", file=sys.stderr)
-        print(
-            f"Batch {batch_id} could not be finalized in the ledger. Accepted "
-            f"meanings are already in the records, and their provenance plus "
-            f"the exact retry set are safe in {recovery_state.path}. Fetch again; "
-            "janki will finalize that journal before checking prompt fingerprints "
-            "or showing proposals.",
-            file=sys.stderr,
-        )
-        return 1
-    try:
-        ledger.clear_batch_recovery(
-            config.ledger_file, batch_id, expected=recovery_state
-        )
-    except ledger.LedgerError as exc:
-        print(f"warning: {exc}", file=sys.stderr)
-        print(
-            "The ledger is finalized, but its redundant recovery journal remains. "
-            "Run --batch-fetch again to validate and clear it.",
-            file=sys.stderr,
-        )
-        return 1
-    if accepted:
-        print(f"Ledger: recorded a polish pass over {len(accepted)} record(s).")
-    if result.invalid:
-        print(
-            f"Batch {batch_id} stays pending for {len(result.invalid)} answer(s) "
-            "that did not parse; fetching again costs nothing.",
-            file=sys.stderr,
-        )
-        return 1
-    return 0
-
-
-def _batch_forget(config: ProjectConfig, *, expected_kind: str) -> int:
-    """Drop the pending batch entry without collecting it.
-
-    The only supported way out of a batch that can never be applied — the
-    project it was submitted against is gone, or its records were re-minted
-    while it was out. Without this the remedy would be editing
-    ``data/ledger.json`` by hand, which AGENTS.md forbids and which is a bad
-    habit to teach for a file janki writes.
-
-    Nothing is destroyed: the results stay on Anthropic's side for weeks, and
-    the id is printed on the way out so a console lookup is still possible.
-    """
-    recovery = _unfinished_polish_recovery(config)
-    if recovery is not None and expected_kind != "polish":
-        raise JankiError(
-            f"Batch {recovery.batch_id} is a meaning-polish batch with recovery "
-            "state. Handle it with --polish-meanings --batch-fetch or "
-            "--polish-meanings --batch-forget."
-        )
+def _batch_forget(config: ProjectConfig) -> int:
+    """Drop the pending AI batch entry without collecting it."""
     book = ledger.load(config.ledger_file)
     pending = book.pending_batch()
-    if recovery is not None and recovery.phase == "applied" and (
-        pending is None or pending[0] == recovery.batch_id
-    ):
-        raise JankiError(
-            f"Batch {recovery.batch_id} has accepted meanings awaiting ledger "
-            "provenance. Run --batch-fetch once to finalize them; then forget "
-            "any remaining retry rows."
-        )
     if pending is None:
-        if recovery is not None:
-            ledger.clear_batch_recovery(
-                config.ledger_file, recovery.batch_id, expected=recovery
-            )
-            print(
-                f"Forgot recovered polish batch {recovery.batch_id}. Its results "
-                "remain reachable from the Anthropic console under that id."
-            )
-            return 0
         print("No batch is pending; nothing to forget.")
         return 0
     batch_id, entry = pending
-    actual_kind = str(entry.get("kind") or "ai")
-    if actual_kind != expected_kind:
-        flag = "--polish-meanings" if actual_kind == "polish" else "--ai"
+    if str(entry.get("kind") or "ai") != "ai":
         raise JankiError(
-            f"Batch {batch_id} is a {actual_kind} batch. Forget it with: "
-            f"janki enrich {flag} --batch-forget."
+            f"Batch {batch_id} is not a supported AI-enrichment batch. "
+            "Inspect the committed ledger history before changing it."
         )
     book.clear_batch(batch_id)
     if (ledger_error := _save_ledger(book)) is not None:
         print(f"warning: {ledger_error}", file=sys.stderr)
         print(
-            f"Batch {batch_id} is still recorded as pending on disk — only the "
-            "in-memory copy was cleared — so --batch-submit will keep refusing. "
-            "Run --batch-forget again once that file is writable; that is the "
-            "whole remedy, and it is why this command exists rather than an "
-            "edit to data/ledger.json.",
+            f"Batch {batch_id} is still recorded as pending on disk. Run "
+            "--batch-forget again once the ledger is writable.",
             file=sys.stderr,
         )
         return 1
-    if recovery is not None and recovery.batch_id == batch_id:
-        try:
-            ledger.clear_batch_recovery(
-                config.ledger_file, batch_id, expected=recovery
-            )
-        except ledger.LedgerError as exc:
-            print(f"warning: {exc}", file=sys.stderr)
-            print(
-                "The ledger batch was forgotten, but its recovery journal remains. "
-                "Run --batch-forget again to clear that validated journal.",
-                file=sys.stderr,
-            )
-            return 1
     print(
         f"Forgot batch {batch_id} ({len(entry.get('pending_ids', []))} record(s), "
         f"submitted {entry.get('submitted_at', 'on an unknown date')}). Its "
-        "results are still on Anthropic's side and reachable from the console "
-        "under that id; janki will not look for them again."
+        "results remain reachable from the Anthropic console under that id."
     )
-    if recovery is not None and recovery.batch_id != batch_id:
-        print(
-            f"  Recovery for concurrently submitted polish batch "
-            f"{recovery.batch_id} remains intact. Restore it with: janki enrich "
-            "--polish-meanings --batch-fetch"
-        )
     return 0
-
 
 def _batch_fetch(
     config: ProjectConfig, args: argparse.Namespace, force_fields: Sequence[str]
@@ -1946,7 +1439,6 @@ def _batch_fetch(
     here. A batch still running prints its status and exits 0, which is a
     successful answer to "is it ready" — the question this command asks.
     """
-    _refuse_unfinished_polish_recovery(config)
     output_path = config.normalized_file.resolve()
     output_revision = records_revision(output_path)
     records = load_records(output_path) if output_path.exists() else []
@@ -1959,9 +1451,22 @@ def _batch_fetch(
     actual_kind = str(entry.get("kind") or "ai")
     if actual_kind != "ai":
         raise JankiError(
-            f"Batch {batch_id} is a meaning-polish batch. Fetch it with: "
-            "janki enrich --polish-meanings --batch-fetch."
+            f"Batch {batch_id} has unsupported kind {actual_kind!r}. Inspect "
+            "the committed ledger history before changing it."
         )
+    provider = str(entry.get("provider") or "").strip()
+    if provider != "anthropic":
+        raise JankiError(
+            f"Batch {batch_id} has no valid Anthropic provider attribution. It "
+            "remains pending; forget it explicitly and submit a new batch."
+        )
+    try:
+        model = ledger.exact_ai_batch_model(entry.get("model"))
+    except ledger.LedgerError as exc:
+        raise JankiError(
+            f"Batch {batch_id} has invalid model attribution: {exc}. It remains "
+            "pending; forget it explicitly and submit a new batch."
+        ) from exc
     if not records:
         # An empty collection is a --root pointed at the wrong project or a
         # normalized file that went missing, not a batch that failed — so the
@@ -1985,14 +1490,43 @@ def _batch_fetch(
     # under those. Reading them off a config that has moved since, or off flags
     # this command refuses to take, would apply the answer to a different
     # question than the one that was asked.
-    model = str(entry.get("model") or config.enrich_model)
     submitted_fields = [str(item) for item in entry.get("force_fields", [])]
     # A held batch's second fetch has one job: the rows whose answers did not
     # parse. Everything else is settled, whatever route it took — records,
     # staging file, or nothing at all — which is why this is the list of
     # failures rather than of successes.
-    retry = [str(item) for item in entry.get("retry_ids", [])]
+    try:
+        retry = (
+            ledger.exact_retry_ids(entry["retry_ids"], pending_ids)
+            if "retry_ids" in entry
+            else []
+        )
+    except ledger.LedgerError as exc:
+        raise JankiError(
+            f"Batch {batch_id} has invalid retry_ids: {exc}. It remains pending; "
+            "forget it explicitly and submit a new batch."
+        ) from exc
     candidates = retry or pending_ids
+
+    # Provenance is validated before even polling the remote batch.  A corrupt
+    # request hash must not let content land first and fail only when the
+    # ledger tries to attribute it after the records have been saved.
+    try:
+        request_fingerprints = ledger.exact_fingerprint_map(
+            entry.get("request_fingerprints"),
+            pending_ids,
+            label="full-request",
+        )
+        input_fingerprints = ledger.exact_fingerprint_map(
+            entry.get("input_fingerprints"),
+            pending_ids,
+            label="input",
+        )
+    except ledger.LedgerError as exc:
+        raise JankiError(
+            f"Batch {batch_id} has invalid provenance: {exc}. It remains pending; "
+            "forget it explicitly and submit a new batch."
+        ) from exc
 
     status_now = claude_client.batch_status(batch_id)
     if status_now != claude_client.BATCH_ENDED:
@@ -2049,13 +1583,19 @@ def _batch_fetch(
 
     # The batch's own model, not the config's: a run submitted under one model
     # and fetched after the config changed was still answered by the first.
+    taught = patterns.format_patterns(
+        patterns.reviewed_patterns(patterns.load_store(config.patterns_file))
+    )
     outcome = enrich.apply_batch_results(
         records,
         claude_client.batch_results(batch_id, enrich.ai_schema(), model),
         pending_ids,
         model=model,
+        input_fingerprints=input_fingerprints,
+        request_fingerprints=request_fingerprints,
         force_fields=force_fields,
         only=retry,
+        taught=taught,
     )
     result = outcome.result
 
@@ -2082,6 +1622,13 @@ def _batch_fetch(
             f"warning: {len(outcome.missing)} record(s) the batch covered are no "
             "longer in the collection, so their answers were dropped: "
             f"{', '.join(outcome.missing)}",
+            file=sys.stderr,
+        )
+    if outcome.stale:
+        print(
+            f"warning: {len(outcome.stale)} batched record(s) changed after "
+            "submission, so their older answers were ignored: "
+            f"{', '.join(outcome.stale)}",
             file=sys.stderr,
         )
 
@@ -2114,6 +1661,7 @@ def _batch_fetch(
         output_path=output_path,
         staging_target=staging_target if staging else None,
         model=model,
+        provider=provider,
         force=args.force,
         assume_yes=args.yes,
         expected=output_revision,
@@ -2240,157 +1788,10 @@ def _report_batch_ledger_failure(
     )
 
 
-def _confirm_polish(assume_yes: bool) -> str:
-    """``"yes"``, ``"no"`` or ``"quit"`` for one proposed gloss list.
-
-    ``--yes`` and a non-tty both accept, the same rule every other confirm in
-    janki uses: fat-finger protection, not CI protection. Quitting is offered
-    because this pass calls the model per record as the loop runs, so walking
-    away stops the spending there — and what was accepted before that is still
-    written, since it was accepted. Note that the cost is one call per record
-    *reached*, which is not the same as per record shown: one whose glosses are
-    already right is paid for and passed over without a prompt.
-    """
-    if assume_yes or not sys.stdin.isatty():
-        return "yes"
-    try:
-        answer = input("Replace these meanings? [y/N/q] ").strip().lower()
-    except (EOFError, KeyboardInterrupt):
-        print()
-        return "quit"
-    if answer in {"q", "quit"}:
-        return "quit"
-    return "yes" if answer in {"y", "yes"} else "no"
-
-
-def _polish_meanings(config: ProjectConfig, args: argparse.Namespace) -> int:
-    """Propose better English glosses, one record at a time.
-
-    The only pass that rewrites a field instead of filling one, which is why it
-    is its own flag and why the confirmation is per record rather than one y/n
-    over a whole diff: the thing being replaced may have been typed by hand out
-    of a textbook, and "these thirty are all fine except the fourth" is not an
-    answer a single prompt can take.
-    """
-    output_path = config.normalized_file.resolve()
-    output_revision = records_revision(output_path)
-    records = load_records(output_path) if output_path.exists() else []
-    if not records:
-        print(f"No records to enrich in {output_path}.")
-        return 0
-
-    model = args.model or config.polish_model
-    style_guide = claude_client.read_style_guide(config.root)
-    targets = enrich.polish_targets(records, args.ids or None)
-    print(
-        f"Polishing {len(targets)} record(s) with {model}, one call each. "
-        "Nothing is written until you say so."
-    )
-
-    book = ledger.load(config.ledger_file)
-    positions = {record.id: index for index, record in enumerate(records)}
-    updated = list(records)
-    accepted: dict[str, dict[str, tuple[Any, Any]]] = {}
-    declined = 0
-    unchanged = 0
-    stopped = False
-
-    # The prompt is not the only place a run gets interrupted, and it is not the
-    # likely one: the call is the slow step, so a Ctrl-C most often lands there.
-    # Both have to end the same way, or "what you accepted is written" is true
-    # only when the timing is lucky.
-    try:
-        for outcome in enrich.polish_meanings(
-            records,
-            instructions=prompts.load(config.root, "polish-meanings"),
-            model=model,
-            style_guide=style_guide,
-            ids=args.ids or None,
-        ):
-            if outcome.warning:
-                print(f"warning: {outcome.warning}", file=sys.stderr)
-                continue
-            if outcome.proposed is None:
-                unchanged += 1
-                continue
-            for line in enrich.format_field_diff(
-                {outcome.record.id: dict(outcome.changes)}
-            ):
-                print(line)
-            answer = _confirm_polish(args.yes)
-            if answer == "quit":
-                stopped = True
-                break
-            if answer == "no":
-                declined += 1
-                continue
-            updated[positions[outcome.record.id]] = outcome.proposed
-            accepted[outcome.record.id] = dict(outcome.changes)
-    except KeyboardInterrupt:
-        print()
-        stopped = True
-
-    if stopped:
-        print("Stopped; the records after this one were not looked at.")
-    if unchanged:
-        print(f"{unchanged} record(s) already had the glosses {model} would write.")
-    if declined:
-        print(f"{declined} proposal(s) declined.")
-    if not accepted:
-        print("Nothing written.")
-        return 0
-
-    save_records_json(output_path, updated, expected=output_revision)
-    for record_id in accepted:
-        book.record_enriched(
-            record_id, kind="polish", model=model, fields=enrich.POLISH_FIELDS
-        )
-    ledger_error = _save_ledger(book)
-
-    print(f"Rewrote the meanings of {len(accepted)} record(s) in {output_path}.")
-    if ledger_error is not None:
-        _report_enrichment_ledger_failure(
-            ledger_error,
-            rerun=(
-                "A re-run is not a free repair either: this pass looks at every "
-                "record every time, so it would call the model once per record "
-                "again and record a pass only where you accept a further change."
-            ),
-            aftermath=(
-                "The new glosses are on file; 'status' will simply not know "
-                f"{model} wrote them in place of what was there."
-            ),
-        )
-        return 1
-    print(f"Ledger: recorded a polish pass over {len(accepted)} record(s).")
-    return 0
-
-
 def _confirm_live_model(
     prepared: Sequence[Any], model: str, assume_yes: bool
 ) -> bool:
-    """Ask before a private document leaves this machine for a billed API.
-
-    The one piece of governance worth keeping from the hardening corpus, moved
-    to where it applies. There it was a YAML block recording, after the fact,
-    that the owner had approved a live run — a declaration in a file, checked
-    by a schema, about something that had already happened. The decision it
-    described belongs in front of the request.
-
-    Named in full, both halves: *which* files and *which* model. "Send 3 files
-    to the API?" is not consent to send a photograph of a private notebook to
-    a vendor, because the person answering cannot see what they are agreeing
-    to. Extraction is also the one command whose inputs are pictures of
-    someone's own material rather than dictionary lookups.
-
-    A non-TTY without ``--yes`` refuses rather than proceeds. Every other
-    prompt in janki treats "nobody is watching" as permission to continue,
-    because the worst case is a deck built with a gap; here the worst case is
-    a document sent somewhere it cannot be recalled from, and AGENTS.md is
-    explicit that an agent must never answer an approval prompt as the user.
-    So the absence of a person means stop, and ``--yes`` is how a person says
-    so in advance.
-    """
+    """Ask before a private document leaves this machine for a billed API."""
     if assume_yes:
         return True
     names = [item.origin_path.name for item in prepared]
@@ -2465,6 +1866,7 @@ def command_extract(args: argparse.Namespace) -> int:
         item.source_sha256 or extract.source_fingerprint(item.origin_path)
         for item in prepared
     ]
+    pattern_store = patterns.load_store(config.patterns_file)
 
     if not _confirm_live_model(prepared, model, args.yes):
         # Says what was *kept*, not only what was not sent. `prepare_inputs`
@@ -2511,21 +1913,27 @@ def command_extract(args: argparse.Namespace) -> int:
             mode=args.mode,
         )
         target.parent.mkdir(parents=True, exist_ok=True)
+        provenance = extract.prompt_provenance(
+            item,
+            model=model,
+            style_guide=style_guide,
+            system=system,
+            mode=args.mode,
+            known=skip_list,
+            source_sha256=source_fingerprints[index],
+        )
         meta = {
             # The basename, like every other writer of this key. An absolute
             # path is stale on any other clone, and this file is committed.
             "source_file": item.origin_path.name,
             "extracted_at": date.today().isoformat(),
             "model": model,
-            "prompt_provenance": extract.prompt_provenance(
-                item,
-                model=model,
-                style_guide=style_guide,
-                system=system,
-                mode=args.mode,
-                known=skip_list,
-                source_sha256=source_fingerprints[index],
-            ),
+            "review_run_id": new_review_run_id(),
+            "prompt_provenance": provenance,
+            # The same paid answer also inferred the document patterns. Keep a
+            # complete copy beside the cards so a pattern-store write failure
+            # cannot make that half of the answer unrecoverable.
+            "pattern_set": result.pattern_set.to_dict(),
             "coverage": coverage,
         }
         # Held back into the file, not just onto the terminal: the staging file
@@ -2535,6 +1943,16 @@ def command_extract(args: argparse.Namespace) -> int:
         if held:
             meta["review_notes"] = extract.unusable_note(held)
         write_staging(target, records, meta, force=args.force)
+        previous_patterns = pattern_store.get(result.pattern_set.source)
+        if previous_patterns is not None and previous_patterns.reviewed and not args.force:
+            print(
+                f"note: kept the reviewed patterns already stored for "
+                f"{result.pattern_set.source}; pass extract --force to replace "
+                "them with this answer and review them again"
+            )
+        else:
+            pattern_store[result.pattern_set.source] = result.pattern_set
+            patterns.save_store(config.patterns_file, pattern_store)
         written += 1
         already = sum(
             1 for record in records if "already_known" in record.source.raw_fields
@@ -2572,6 +1990,77 @@ def _inside_archive(path: Path, archive_dir: Path) -> bool:
     except OSError:
         pass
     return path.is_relative_to(archive_dir)
+
+
+def _archive_run_provenance(meta: Mapping[str, Any]) -> dict[str, Any]:
+    """The model-run identity that decides whether an archive may be appended.
+
+    New model-review files carry a persisted ``review_run_id`` as well as their
+    request provenance. Partial promotion retries carry both byte-for-byte
+    through the live staging file. A later invocation may reuse the staging
+    basename and even the exact request, but its run id is different and its
+    rows must not be folded into the earlier archive. Schema-v2 extraction
+    staging is intentionally included: without a run id, its smaller
+    ``prompt_provenance`` block remains the identity that version knew to record.
+
+    Files older than model provenance retain their historical basename-based
+    retry behavior through the explicit ``legacy`` identity.
+    """
+    run_id = review_run_id(meta)
+    if "ai_enrichment" in meta:
+        identity = {
+            "kind": "ai",
+            "ai_enrichment": meta.get("ai_enrichment"),
+            "field_replacements": meta.get("field_replacements"),
+        }
+    elif "prompt_provenance" in meta:
+        identity = {
+            "kind": "extract",
+            "prompt_provenance": meta.get("prompt_provenance"),
+        }
+    else:
+        identity = {"kind": "legacy"}
+    if run_id is not None:
+        identity["review_run_id"] = run_id
+    return identity
+
+
+def _archive_for_run(
+    base: Path, meta: Mapping[str, Any]
+) -> tuple[Path, list[VocabularyRecord]]:
+    """Choose this run's deterministic archive and any partial rows already there."""
+    identity = _archive_run_provenance(meta)
+    if not base.exists():
+        return base, []
+
+    previous, previous_meta = read_staging(base)
+    if _archive_run_provenance(previous_meta) == identity:
+        return base, list(previous)
+
+    try:
+        encoded = json.dumps(
+            identity,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise PromoteError(
+            "This staging file has model-run provenance that cannot name a "
+            f"durable archive: {exc}. Nothing was promoted."
+        ) from exc
+    digest = hashlib.sha256(encoded).hexdigest()
+    candidate = base.with_name(f"{base.stem}.{digest}{base.suffix}")
+    if not candidate.exists():
+        return candidate, []
+
+    previous, previous_meta = read_staging(candidate)
+    if _archive_run_provenance(previous_meta) != identity:
+        raise PromoteError(
+            f"Archive provenance collision at {candidate}; nothing was promoted."
+        )
+    return candidate, list(previous)
 
 
 def _provider_name(config: ProjectConfig, chosen: str | None) -> str:
@@ -2949,14 +2438,137 @@ def _model_accepts_coverage(
     return True
 
 
+def _staged_ai_enrichment(
+    meta: Mapping[str, Any],
+    record_ids: Sequence[str],
+    *,
+    archived_ids: Sequence[str] = (),
+) -> tuple[str, str, dict[str, tuple[str, tuple[str, ...]]]] | None:
+    """Validate AI provenance before a staged review can write anything.
+
+    A partial promote keeps the original top-level metadata while moving some
+    rows to the corresponding ``done`` archive.  Provenance may therefore name
+    a row absent from the current staging file only when that exact id is
+    already in the archive.  An older, completed run under the same basename is
+    the opposite shape: archive-only ids need not appear in this run's maps.
+    """
+    raw = meta.get("ai_enrichment")
+    if raw is None:
+        if "field_replacements" in meta:
+            raise PromoteError(
+                "This staging file authorizes field replacements but has no "
+                "ai_enrichment provenance. Nothing was promoted."
+            )
+        return None
+    version = raw.get("version") if isinstance(raw, Mapping) else None
+    if (
+        not isinstance(raw, Mapping)
+        or isinstance(version, bool)
+        or not isinstance(version, int)
+        or version != 1
+    ):
+        raise PromoteError("ai_enrichment must be a version 1 metadata block")
+    raw_model = raw.get("model")
+    model = raw_model.strip() if isinstance(raw_model, str) else ""
+    raw_provider = raw.get("provider")
+    provider = raw_provider.strip() if isinstance(raw_provider, str) else ""
+    requests = raw.get("request_fingerprints")
+    inputs = raw.get("input_fingerprints")
+    fields = raw.get("fields")
+    if (
+        not model
+        or provider not in ledger.AI_PROVIDERS
+        or not all(isinstance(value, Mapping) for value in (requests, inputs, fields))
+    ):
+        raise PromoteError(
+            "ai_enrichment needs a provider, model, plus request, input, and field maps"
+        )
+    replacement_block = meta.get("field_replacements")
+    replacement_records = (
+        replacement_block.get("records")
+        if isinstance(replacement_block, Mapping)
+        else None
+    )
+    if not isinstance(replacement_records, Mapping):
+        raise PromoteError(
+            "ai_enrichment needs its field_replacements record map. Nothing "
+            "was promoted."
+        )
+
+    maps = {
+        "request_fingerprints": requests,
+        "input_fingerprints": inputs,
+        "fields": fields,
+        "field_replacements": replacement_records,
+    }
+    id_sets: dict[str, set[str]] = {}
+    for label, values in maps.items():
+        if any(not isinstance(record_id, str) or not record_id for record_id in values):
+            raise PromoteError(f"{label} record ids must be non-empty text")
+        id_sets[label] = set(values)
+    provenance_ids = id_sets["request_fingerprints"]
+    if any(ids != provenance_ids for ids in id_sets.values()):
+        raise PromoteError(
+            "ai_enrichment request, input, field, and replacement maps must "
+            "name identical record ids. Nothing was promoted."
+        )
+
+    current_ids = {str(record_id) for record_id in record_ids}
+    known_ids = current_ids | {str(record_id) for record_id in archived_ids}
+    missing = sorted(current_ids - provenance_ids)
+    unknown = sorted(provenance_ids - known_ids)
+    if missing or unknown:
+        details = []
+        if missing:
+            details.append("missing current " + ", ".join(missing))
+        if unknown:
+            details.append("unknown " + ", ".join(unknown))
+        raise PromoteError(
+            "ai_enrichment provenance does not match this staging file or its "
+            "done archive: " + "; ".join(details) + ". Nothing was promoted."
+        )
+
+    proven: dict[str, tuple[str, tuple[str, ...]]] = {}
+    for record_id in sorted(provenance_ids):
+        request_fp = requests.get(record_id)
+        input_fp = inputs.get(record_id)
+        raw_fields = fields.get(record_id)
+        replacement_fields = replacement_records.get(record_id)
+        if (
+            not isinstance(request_fp, str)
+            or len(request_fp) != 64
+            or any(character not in "0123456789abcdef" for character in request_fp)
+            or not isinstance(input_fp, str)
+            or len(input_fp) != 64
+            or any(character not in "0123456789abcdef" for character in input_fp)
+            or not isinstance(raw_fields, list)
+            or not raw_fields
+            or any(not isinstance(name, str) for name in raw_fields)
+            or any(name not in enrich.AI_FIELDS for name in raw_fields)
+            or len(set(raw_fields)) != len(raw_fields)
+            or not isinstance(replacement_fields, Mapping)
+            or any(not isinstance(name, str) for name in replacement_fields)
+            or set(raw_fields) != set(replacement_fields)
+        ):
+            raise PromoteError(
+                f"ai_enrichment has incomplete provenance for {record_id}"
+            )
+        proven[record_id] = (
+            request_fp,
+            tuple(dict.fromkeys(str(name) for name in raw_fields)),
+        )
+    return provider, model, proven
+
+
 def command_promote(args: argparse.Namespace) -> int:
     """Move a reviewed staging file's records into the normalized collection.
 
     Ordering is load-bearing in the same way ``run_import``'s is, for the same
     reason: everything that can refuse — an unreadable ledger, a staging file
-    that cannot be pruned — happens before ``vocabulary.json`` is rewritten, and
-    the records are written before the ledger, because the ledger is metadata
-    ``status --rebuild`` can reconstruct and the records are not.
+    that cannot be pruned — happens before ``vocabulary.json`` is rewritten.
+    Records are written before the ledger because they are not reconstructible.
+    Source sightings are; AI attribution is not, so a failed staged-AI ledger
+    handoff keeps the live review until a local retry records it.
 
     The staging file is only ever pruned of rows that actually landed, so a
     promote that fails part-way leaves the review intact and re-running it is
@@ -3006,10 +2618,15 @@ def command_promote(args: argparse.Namespace) -> int:
             f"is written under the same name, and that needs "
             f"{' or '.join(STAGING_SUFFIXES)}. Rename it and re-run."
         )
-    archived: list[VocabularyRecord] = []
-    if done.exists():
-        previous, _previous_meta = read_staging(done)
-        archived = list(previous)
+    done, archived = _archive_for_run(done, meta)
+
+    ai_provenance = _staged_ai_enrichment(
+        meta,
+        [record.id for record in records],
+        # `_archive_for_run` returns rows only from an exact provenance match,
+        # never from a completed older run that happened to share the basename.
+        archived_ids=[record.id for record in archived],
+    )
 
     client = None
     if not args.skip_reading_check:
@@ -3063,7 +2680,17 @@ def command_promote(args: argparse.Namespace) -> int:
     # Read the ledger before anything is written, and only once.
     book = ledger.load(config.ledger_file)
 
-    merged, outcomes = merge_records(existing, result.promoted, ())
+    merged, outcomes = promote.merge_staged_records(
+        existing,
+        result.promoted,
+        meta,
+        validate_incoming=records,
+    )
+    already_landed_fields = (
+        promote.already_landed_staged_fields(existing, result.promoted, meta)
+        if ai_provenance is not None
+        else {}
+    )
     save_records_json(output_path, merged, expected=output_revision)
 
     added = sum(
@@ -3077,7 +2704,51 @@ def command_promote(args: argparse.Namespace) -> int:
             result.promoted
         )
     )
+    if ai_provenance is not None:
+        ai_provider, ai_model, provenance = ai_provenance
+        for record_id, outcome in outcomes.items():
+            request_fp, proposed_fields = provenance[record_id]
+            written_fields = (
+                proposed_fields
+                if outcome.label == "added"
+                else tuple(
+                    name
+                    for name in proposed_fields
+                    if name in outcome.filled_fields
+                    or name in already_landed_fields.get(record_id, ())
+                )
+            )
+            if written_fields:
+                book.record_enriched(
+                    record_id,
+                    kind="ai",
+                    model=ai_model,
+                    provider=ai_provider,
+                    fields=written_fields,
+                    request_fingerprint=request_fp,
+                )
     ledger_error = _save_ledger(book)
+
+    if ledger_error is not None and ai_provenance is not None:
+        print(
+            f"Promoted {len(result.promoted)} record(s) from {path} into "
+            f"{output_path}; the live staging review was kept."
+        )
+        _print_merge_summary(outcomes, prefer_incoming_available=False)
+        print(_ledger_line(added, seen, written=False))
+        _report_enrichment_ledger_failure(
+            ledger_error,
+            rerun=(
+                "The staging file remains live: once the ledger is writable, "
+                "re-run this same janki promote command to record fields already "
+                "equal to its reviewed proposal."
+            ),
+            aftermath=(
+                "A field matching neither the bound old value nor that proposal "
+                "will still be refused as stale."
+            ),
+        )
+        return 1
 
     # The archive is appended to, not replaced: promoting a file in two passes
     # must not lose the first pass's rows.
@@ -3725,47 +3396,21 @@ def _collection_lines(config: ProjectConfig) -> list[str]:
 
 
 def command_patterns(args: argparse.Namespace) -> int:
-    """Read documents for what they teach.
-
-    Separate from `extract`, which asks a page which *words* are on it. That is
-    the wrong question for a te-form chart — almost no vocabulary, entirely
-    about a form — and for a week's slides, which are really about 〜んだ and
-    つもり and happen to contain sixty unglossed words.
-
-    Nothing extracted here is used until a human marks it reviewed. It is
-    inference from prose and slide ordering, not a dictionary lookup, and this
-    project does not let an inferred thing onto a card unread.
-    """
+    """List source patterns or mark an extracted source reviewed."""
     config = _load_config(args)
     store = patterns.load_store(config.patterns_file)
-
-    if args.review and args.files:
-        # `files` is nargs="*" and `--review` appends, so
-        # `janki patterns --review a.pdf b.pdf` binds b.pdf to `files` — a
-        # natural thing to type, and the review branch used to return before
-        # reading it, reporting only "Marked 1 document(s) reviewed".
-        raise JankiError(
-            "Read documents and mark them reviewed in separate runs: "
-            f"--review names {', '.join(args.review)} while "
-            f"{', '.join(str(path) for path in args.files)} would be read as "
-            "new document(s)."
-        )
 
     if args.review:
         unknown = [name for name in args.review if name not in store]
         if unknown:
             raise JankiError(
-                "No document has been read under "
+                "No extracted document named "
                 + ", ".join(sorted(unknown))
                 + f". Known: {', '.join(sorted(store)) or 'none'}"
             )
         for name in args.review:
             store[name] = dataclasses.replace(store[name], reviewed=True)
         patterns.save_store(config.patterns_file, store)
-        # Per document, and honest about which ones this actually puts to work.
-        # Only lesson documents steer example sentences, so "their patterns are
-        # now in use" was false for a te-form chart — eight human-reviewed
-        # patterns vanishing from the pipeline while the command said otherwise.
         for name in args.review:
             entry = store[name]
             print(f"Marked {name} reviewed.")
@@ -3773,170 +3418,22 @@ def command_patterns(args: argparse.Namespace) -> int:
                 print(
                     f"warning: {name} is a {entry.kind} document, and only "
                     f"{'/'.join(patterns.STEERING_KINDS)} documents steer example "
-                    f"sentences — nothing uses its patterns yet.",
+                    "sentences — nothing uses its patterns yet.",
                     file=sys.stderr,
                 )
         return 0
 
-
-    if not args.files:
-        for name, entry in sorted(store.items()):
-            mark = "reviewed" if entry.reviewed else "UNREVIEWED"
-            if entry.reviewed and entry.kind not in patterns.STEERING_KINDS:
-                mark = "reviewed, not used for sentences"
-            print(f"{name} — {entry.kind}, {len(entry.patterns)} pattern(s) [{mark}]")
-            for pattern in entry.patterns:
-                gloss = f" — {pattern.gloss}" if pattern.gloss else ""
-                print(f"    {pattern.template}{gloss}")
-        if not store:
-            print("No documents read yet. Pass a PDF or image to read one.")
-        return 0
-
-    prepared_inputs = prepare_inputs(
-        args.files,
-        config.scan_inbox,
-        inbox_root=_durable_inbox_root(config),
-    )
-    # The store is keyed by basename, so two inputs named chart.pdf in different
-    # directories claim one entry: the first is read, paid for, printed as read
-    # — and then overwritten by the second when the store is saved. Refused by
-    # name rather than silently keeping one of them.
-    # One file named twice is one document. `prepare_inputs` content-addresses
-    # the inbox, so naming the copy in ~/Downloads beside the original it was
-    # copied from — or one path caught by two overlapping globs — arrives here
-    # as two `PreparedInput`s with the same `origin_path`. Reading it twice
-    # bills twice for one document, and refusing the batch over it lost every
-    # other document in the run for a duplicate that costs nothing.
-    # Keyed by the real path, not the spelling: a file already under the inbox
-    # is returned verbatim, so `data/inbox/scans/../scans/chart.pdf` and a
-    # symlinked inbox are the same file under two strings — and two strings
-    # survive to the basename guard below, which aborts the batch and offers
-    # "rename one", i.e. edit a file under `data/inbox/`.
-    seen_paths: set[Path] = set()
-    deduped = []
-    for prepared in prepared_inputs:
-        real = prepared.origin_path.resolve()
-        if real in seen_paths:
-            # Said out loud. `prepare_inputs` keeps duplicates on purpose, so
-            # collapsing them here without a word would be the quiet discard
-            # this project refuses everywhere else — even when what is dropped
-            # costs nothing.
-            print(f"note: {prepared.origin_path} was named more than once; read once")
-            continue
-        seen_paths.add(real)
-        deduped.append(prepared)
-    prepared_inputs = deduped
-
-    by_name: dict[str, set[str]] = {}
-    for prepared in prepared_inputs:
-        by_name.setdefault(prepared.origin_path.name, set()).add(
-            str(prepared.origin_path)
-        )
-    clashing = {
-        name: sorted(paths) for name, paths in by_name.items() if len(paths) > 1
-    }
-    if clashing:
-        detail = "; ".join(
-            f"{name}: {', '.join(paths)}" for name, paths in sorted(clashing.items())
-        )
-        # No "read them in separate runs": that performs the loss this refuses.
-        # The second run finds the first's entry unreviewed and replaces it with
-        # nothing on stdout saying a document was displaced — or, if the first
-        # was reviewed, skips the second entirely as "already read and marked
-        # reviewed", reporting a document that has never been read, on exit 0.
-        raise JankiError(
-            f"Two inputs would be stored under one name, and the second would "
-            f"replace the first: {detail}. Rename one so the store keys differ."
-        )
-    failures: list[str] = []
-    skipped: list[str] = []
-    read: list[str] = []
-    fresh: list[patterns.PatternSet] = []
-    # Read once for the run, like extract does and for the same reason: every
-    # document in one invocation is read under the same instructions, and a
-    # per-file read would let an edit mid-run split one command across two
-    # prompts.
-    pattern_instructions = prompts.load(config.root, "patterns")
-    # The style guide is a prompt too — `read_style_guide` *is* the loader —
-    # so it gets the same treatment. Read inside the loop it let an edit
-    # mid-run split one command across two versions of the same document.
-    pattern_style_guide = claude_client.read_style_guide(config.root)
-    for prepared in prepared_inputs:
-        # Before the read, not after it. `reviewed` is the one piece of
-        # human-entered state in this file and `extract_patterns` always returns
-        # False, so replacing an entry outright silently un-reviewed a document
-        # on the command's most ordinary invocation — `janki patterns
-        # data/inbox/scans/*.pdf` after dropping in one new handout. Checking
-        # afterwards fixed that but billed a full document read against every
-        # already-reviewed file in the inbox and threw the answer away; the
-        # store key is `origin_path.name`, which is known here.
-        previous = store.get(prepared.origin_path.name)
-        if previous is not None and previous.reviewed and not args.force:
-            skipped.append(
-                f"{prepared.origin_path.name}: already read and marked reviewed, "
-                f"so it was not read again. --force re-reads it; its patterns "
-                f"then need reviewing again before enrich uses them."
-            )
-            continue
-        try:
-            found = patterns.extract_patterns(
-                prepared,
-                model=config.extract_model,
-                instructions=pattern_instructions,
-                style_guide=pattern_style_guide,
-            )
-        except JankiError as exc:
-            failures.append(f"{prepared.origin_path.name}: {exc}")
-            continue
-        store[found.source] = found
-        read.append(found.source)
-        # The object, not a second lookup by key. The key is a bare basename, so
-        # two inputs named chart.pdf in different directories resolved to one
-        # entry — the second checked twice and the first never.
-        fresh.append(found)
-        print(
-            f"{found.source}: {found.kind}, {len(found.patterns)} pattern(s) "
-            f"— {found.title or '(untitled)'}"
-        )
-        for pattern in found.patterns:
+    for name, entry in sorted(store.items()):
+        mark = "reviewed" if entry.reviewed else "UNREVIEWED"
+        if entry.reviewed and entry.kind not in patterns.STEERING_KINDS:
+            mark = "reviewed, not used for sentences"
+        print(f"{name} — {entry.kind}, {len(entry.patterns)} pattern(s) [{mark}]")
+        for pattern in entry.patterns:
             gloss = f" — {pattern.gloss}" if pattern.gloss else ""
             print(f"    {pattern.template}{gloss}")
-    # Saved before the reporting below, so a failure there cannot discard
-    # documents already read and paid for in this run.
-    patterns.save_store(config.patterns_file, store)
-
-    for entry in fresh:
-        print(f"{entry.source} — {entry.kind}")
-    # Deliberately skipping a document janki already has is not a problem, so it
-    # is a notice on stdout rather than a warning — and it must not reach the
-    # exit code, or the very idiom the non-zero exit protects
-    # (`janki patterns *.pdf && janki patterns --review new.pdf`) would break
-    # the moment one file in the inbox had been reviewed.
-    for notice in skipped:
-        print(f"note: {notice}")
-    for failure in failures:
-        print(f"warning: {failure}", file=sys.stderr)
-    # Per document that succeeded, not gated on the whole run succeeding: a run
-    # where one of three documents failed still read two, and printing nothing
-    # about them left it with no next step.
-    if read:
-        print(
-            "\nNothing uses these yet. Read them, then: janki patterns --review "
-            + " --review ".join(repr(name) for name in read)
-        )
-        for name in read:
-            if store[name].kind not in patterns.STEERING_KINDS:
-                print(
-                    f"    ({name} is a {store[name].kind} document — reviewing it "
-                    f"records that you checked it, but example sentences are "
-                    f"steered only by "
-                    f"{'/'.join(patterns.STEERING_KINDS)} documents.)"
-                )
-    # Any loss is a non-zero exit, for the reason spelled out in `command_kanji`
-    # below: `janki patterns *.pdf && janki patterns --review …` must not run on
-    # from a document that was never read.
-    return 1 if failures else 0
-
+    if not store:
+        print("No patterns extracted yet. Run janki extract on source material.")
+    return 0
 
 def command_kanji(args: argparse.Namespace) -> int:
     """Look up the characters this collection uses, once each.
@@ -4287,24 +3784,20 @@ def build_parser() -> argparse.ArgumentParser:
     enrich_parser.add_argument(
         "--ai",
         action="store_true",
-        help="Write examples and usage notes with the configured AI provider.",
+        help="Propose English glosses, examples, and usage notes in one AI answer.",
     )
     enrich_parser.add_argument(
         "--batch-submit",
         action="store_true",
         help=(
-            "Send --ai or --polish-meanings through Anthropic's Message "
-            "Batches API: half price, answered within a day. The --ai form "
-            "requires enrich_provider = \"anthropic\"."
+            "Send --ai through Anthropic's Message Batches API: half price, "
+            "answered within a day. Requires enrich_provider = \"anthropic\"."
         ),
     )
     enrich_parser.add_argument(
         "--batch-fetch",
         action="store_true",
-        help=(
-            "Collect the pending batch if it has finished. Meaning-polish "
-            "proposals are then reviewed locally and can be resumed with q."
-        ),
+        help="Collect and apply the pending AI batch if it has finished.",
     )
     enrich_parser.add_argument(
         "--batch-forget",
@@ -4312,14 +3805,6 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Drop the pending batch without collecting it, for one that can no "
             "longer be applied. Its results stay reachable from the console."
-        ),
-    )
-    enrich_parser.add_argument(
-        "--polish-meanings",
-        action="store_true",
-        help=(
-            "Propose better English glosses for records that already have some, "
-            "confirmed one record at a time."
         ),
     )
     enrich_parser.add_argument(
@@ -4343,10 +3828,7 @@ def build_parser() -> argparse.ArgumentParser:
     enrich_parser.add_argument(
         "--model",
         metavar="ID",
-        help=(
-            "Override the configured model for this run "
-            "(--ai and --polish-meanings)."
-        ),
+        help="Override the configured model for this --ai run.",
     )
     enrich_parser.add_argument(
         "--force",
@@ -4387,8 +3869,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--force",
         action="store_true",
         help=(
-            "Overwrite an existing staging file. Without it, a file already "
-            "under review is left alone."
+            "Overwrite an existing staging file and replace a reviewed pattern "
+            "set with this answer as unreviewed. Without it, both kinds of "
+            "human-reviewed state are left alone."
         ),
     )
     extract_parser.add_argument(
@@ -4540,9 +4023,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     patterns_parser = subparsers.add_parser(
         "patterns",
-        help="Read a handout or slide deck for the grammar it teaches.",
+        help="List or review grammar patterns emitted by janki extract.",
     )
-    patterns_parser.add_argument("files", type=_path, nargs="*")
     patterns_parser.add_argument(
         "--review",
         action="append",
@@ -4553,14 +4035,6 @@ def build_parser() -> argparse.ArgumentParser:
             "use them, if it is a lesson document — a conjugation chart is "
             "reviewed for its own sake and steers no sentences. Repeat for "
             "several."
-        ),
-    )
-    patterns_parser.add_argument(
-        "--force",
-        action="store_true",
-        help=(
-            "Re-read a document already marked reviewed. Its patterns drop back "
-            "to unreviewed and stop steering sentences until reviewed again."
         ),
     )
     patterns_parser.set_defaults(handler=command_patterns)

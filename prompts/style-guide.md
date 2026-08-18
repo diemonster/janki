@@ -24,7 +24,8 @@ Every vocabulary note should have:
 - Part of speech.
 - Verb group for verbs.
 - Transitivity when meaningful.
-- One natural example sentence and translation.
+- Two natural example sentences and translations: one everyday polite and one
+  everyday casual.
 - Common conjugations for verbs.
 - Usage or nuance notes only when they teach something useful.
 

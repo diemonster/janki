@@ -743,6 +743,176 @@ def test_re_promoting_a_half_done_file_is_safe(
     assert not path.exists()
 
 
+def _rich_prompt_provenance(request_fingerprint: str) -> dict[str, Any]:
+    return {
+        "source_sha256": "1" * 64,
+        "mode": "prose",
+        "provider": "anthropic",
+        "model": "claude-opus-5",
+        "response_schema_version": 3,
+        "system_prompt_fingerprint": "2" * 64,
+        "style_guide_fingerprint": "3" * 64,
+        "user_prompt_fingerprint": "4" * 64,
+        "response_schema_fingerprint": "5" * 64,
+        "request_fingerprint": request_fingerprint,
+    }
+
+
+REVIEW_RUN_A = "11111111-1111-4111-8111-111111111111"
+REVIEW_RUN_B = "22222222-2222-4222-8222-222222222222"
+
+
+def test_completed_rich_extractions_with_one_staging_name_keep_separate_archives(
+    tmp_path: Path,
+) -> None:
+    first = record()
+    second = record(
+        id="word:聞く:きく",
+        expression="聞く",
+        reading="きく",
+        meanings=["to hear"],
+    )
+    root = project(tmp_path, [])
+    path = root / "staging" / "lesson.yaml"
+    path.parent.mkdir(parents=True)
+
+    write_staging(
+        path,
+        [first],
+        {
+            "source_file": "lesson.pdf",
+            "prompt_provenance": _rich_prompt_provenance("a" * 64),
+        },
+    )
+    assert cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    ) == 0
+
+    write_staging(
+        path,
+        [second],
+        {
+            "source_file": "lesson.pdf",
+            "prompt_provenance": _rich_prompt_provenance("b" * 64),
+        },
+    )
+    assert cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    ) == 0
+
+    archives = sorted((root / "staging" / "done").glob("lesson*.yaml"))
+    assert len(archives) == 2
+    archived_runs = {}
+    for archive in archives:
+        rows, meta = read_staging(archive)
+        archived_runs[meta["prompt_provenance"]["request_fingerprint"]] = rows
+    assert [item.id for item in archived_runs["a" * 64]] == [first.id]
+    assert [item.id for item in archived_runs["b" * 64]] == [second.id]
+
+
+def test_completed_rich_extractions_with_the_same_request_are_distinct_runs(
+    tmp_path: Path,
+) -> None:
+    first = record()
+    second = record(
+        id="word:聞く:きく", expression="聞く", reading="きく", meanings=["to hear"]
+    )
+    root = project(tmp_path, [])
+    path = root / "staging" / "lesson.yaml"
+    path.parent.mkdir(parents=True)
+    provenance = _rich_prompt_provenance("a" * 64)
+
+    write_staging(
+        path,
+        [first],
+        {
+            "source_file": "lesson.pdf",
+            "review_run_id": REVIEW_RUN_A,
+            "prompt_provenance": provenance,
+        },
+    )
+    command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    assert cli.main(command) == 0
+    write_staging(
+        path,
+        [second],
+        {
+            "source_file": "lesson.pdf",
+            "review_run_id": REVIEW_RUN_B,
+            "prompt_provenance": provenance,
+        },
+    )
+    assert cli.main(command) == 0
+
+    archives = list((root / "staging" / "done").glob("lesson*.yaml"))
+    assert len(archives) == 2
+    runs = {}
+    for archive in archives:
+        rows, meta = read_staging(archive)
+        runs[meta["review_run_id"]] = rows
+    assert [item.id for item in runs[REVIEW_RUN_A]] == [first.id]
+    assert [item.id for item in runs[REVIEW_RUN_B]] == [second.id]
+
+
+def test_review_run_id_survives_a_partial_promotion_retry(tmp_path: Path) -> None:
+    first = record()
+    held = record(id="word:聞く:", expression="聞く", reading="", meanings=["to hear"])
+    root = project(tmp_path, [])
+    path = root / "staging" / "lesson.yaml"
+    path.parent.mkdir(parents=True)
+    write_staging(
+        path,
+        [first, held],
+        {
+            "source_file": "lesson.pdf",
+            "review_run_id": REVIEW_RUN_A,
+            "prompt_provenance": _rich_prompt_provenance("a" * 64),
+        },
+    )
+    command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+
+    assert cli.main(command) == 0
+    survivors, meta = read_staging(path)
+    assert meta["review_run_id"] == REVIEW_RUN_A
+    write_staging(path, [replace(survivors[0], reading="きく")], meta, force=True)
+    assert cli.main(command) == 0
+
+    archives = list((root / "staging" / "done").glob("lesson*.yaml"))
+    assert len(archives) == 1
+    archived, archived_meta = read_staging(archives[0])
+    assert archived_meta["review_run_id"] == REVIEW_RUN_A
+    assert {item.id for item in archived} == {first.id, "word:聞く:きく"}
+
+
+def test_schema_v2_extraction_retry_reuses_its_partial_archive(tmp_path: Path) -> None:
+    first = record()
+    held = record(id="word:聞く:", expression="聞く", reading="", meanings=["to hear"])
+    provenance = _rich_prompt_provenance("a" * 64)
+    provenance["response_schema_version"] = 2
+    del provenance["response_schema_fingerprint"]
+    del provenance["request_fingerprint"]
+    root = project(tmp_path, [])
+    path = root / "staging" / "lesson.yaml"
+    path.parent.mkdir(parents=True)
+    write_staging(
+        path,
+        [first, held],
+        {"source_file": "lesson.pdf", "prompt_provenance": provenance},
+    )
+
+    command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    assert cli.main(command) == 0
+    survivors, meta = read_staging(path)
+    write_staging(path, [replace(survivors[0], reading="きく")], meta, force=True)
+    assert cli.main(command) == 0
+
+    archives = list((root / "staging" / "done").glob("lesson*.yaml"))
+    assert len(archives) == 1
+    archived, archived_meta = read_staging(archives[0])
+    assert {item.id for item in archived} == {first.id, "word:聞く:きく"}
+    assert archived_meta["prompt_provenance"] == provenance
+
+
 def test_an_enrichment_shaped_file_merges_as_updates_not_adds(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -933,6 +1103,52 @@ def extraction_meta(coverage: dict[str, Any], *, mode: str = "table") -> dict[st
             "user_prompt_fingerprint": "d" * 64,
         },
     }
+
+
+def test_schema_v3_provenance_binds_the_schema_and_complete_request() -> None:
+    block = unmeasured_coverage()
+    approve_coverage(block)
+    meta = extraction_meta(block)
+    provenance = meta["prompt_provenance"]
+    provenance["response_schema_version"] = 3
+    provenance["response_schema_fingerprint"] = "e" * 64
+    provenance["request_fingerprint"] = "f" * 64
+    meta["pattern_set"] = {
+        "kind": "lesson",
+        "title": "Lesson",
+        "reviewed": False,
+        "patterns": [],
+        "prompt_provenance": dict(provenance),
+    }
+
+    promote.check_coverage(meta)
+
+    del provenance["request_fingerprint"]
+    with pytest.raises(promote.PromoteError, match="prompt-provenance-invalid"):
+        promote.check_coverage(meta)
+
+
+def test_schema_v3_pattern_answer_is_bound_to_the_same_request() -> None:
+    block = unmeasured_coverage()
+    approve_coverage(block)
+    meta = extraction_meta(block)
+    provenance = meta["prompt_provenance"]
+    provenance["response_schema_version"] = 3
+    provenance["response_schema_fingerprint"] = "e" * 64
+    provenance["request_fingerprint"] = "f" * 64
+    meta["pattern_set"] = {
+        "kind": "lesson",
+        "title": "Lesson",
+        "reviewed": False,
+        "patterns": [],
+        "prompt_provenance": {
+            **provenance,
+            "request_fingerprint": "0" * 64,
+        },
+    }
+
+    with pytest.raises(promote.PromoteError, match="prompt-provenance-stale"):
+        promote.check_coverage(meta)
 
 
 def test_unresolved_coverage_blocks_promotion_before_any_mutation(
@@ -1395,6 +1611,684 @@ def test_promote_does_not_advertise_a_flag_it_does_not_have(
     assert "usage_notes" in out, "the conflict is reported"
     assert "--prefer-incoming" not in out
     assert "resolve these by hand" in out
+
+
+# --- fingerprint-bound staged replacements ---------------------------------
+
+
+def ai_staging_meta(
+    originals: list[VocabularyRecord],
+    changes: dict[str, dict[str, tuple[Any, Any]]],
+) -> dict[str, Any]:
+    ids = sorted(changes)
+    return {
+        "source_file": "vocabulary.json",
+        "model": "claude-opus-5",
+        "provider": "anthropic",
+        "ai_enrichment": {
+            "version": 1,
+            "model": "claude-opus-5",
+            "provider": "anthropic",
+            "request_fingerprints": {record_id: "a" * 64 for record_id in ids},
+            "input_fingerprints": {record_id: "b" * 64 for record_id in ids},
+            "fields": {
+                record_id: sorted(changes[record_id]) for record_id in ids
+            },
+        },
+        "field_replacements": promote.field_replacement_block(originals, changes),
+    }
+
+
+def test_promote_lands_reviewed_ai_replacements_with_request_provenance(
+    tmp_path: Path,
+) -> None:
+    original = record(
+        meanings=["to speak"],
+        examples=[ExampleSentence(japanese="古い例です。", english="Old example.")],
+        usage_notes="old note",
+    )
+    proposal = replace(
+        original,
+        meanings=["to converse"],
+        examples=[
+            ExampleSentence(
+                japanese="先生と話します。",
+                furigana="先生[せんせい]と 話[はな]します。",
+                english="I speak with my teacher.",
+            )
+        ],
+        usage_notes="Often takes と for the person spoken with.",
+    )
+    changes = {
+        original.id: {
+            "meanings": (original.meanings, proposal.meanings),
+            "examples": (original.examples, proposal.examples),
+            "usage_notes": (original.usage_notes, proposal.usage_notes),
+        }
+    }
+    root = project(tmp_path, [original])
+    path = root / "staging" / "ai.yaml"
+    path.parent.mkdir(parents=True)
+    write_staging(path, [proposal], ai_staging_meta([original], changes))
+
+    code = cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    )
+
+    assert code == 0
+    written = stored(root)[original.id]
+    assert written["meanings"] == ["to converse"]
+    assert [item["japanese"] for item in written["examples"]] == [
+        "先生と話します。"
+    ]
+    assert written["usage_notes"] == "Often takes と for the person spoken with."
+    book = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    entries = book["records"][original.id]["enriched"]
+    assert [{key: value for key, value in entry.items() if key != "at"} for entry in entries] == [
+        {
+            "kind": "ai",
+            "model": "claude-opus-5",
+            "provider": "anthropic",
+            "fields": ["examples", "meanings", "usage_notes"],
+            "request_fingerprint": "a" * 64,
+        }
+    ]
+    assert "at" in entries[0]
+
+
+def test_promote_attributes_only_the_ai_fields_the_review_actually_wrote(
+    tmp_path: Path,
+) -> None:
+    original = record(meanings=["to speak"], usage_notes="human wording")
+    model_proposal = replace(
+        original, meanings=["to converse"], usage_notes="model wording"
+    )
+    reviewed = replace(model_proposal, usage_notes=original.usage_notes)
+    changes = {
+        original.id: {
+            "meanings": (original.meanings, model_proposal.meanings),
+            "usage_notes": (original.usage_notes, model_proposal.usage_notes),
+        }
+    }
+    root = project(tmp_path, [original])
+    path = root / "staging" / "ai.yaml"
+    path.parent.mkdir(parents=True)
+    write_staging(path, [reviewed], ai_staging_meta([original], changes))
+
+    assert cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    ) == 0
+
+    written = stored(root)[original.id]
+    assert written["meanings"] == ["to converse"]
+    assert written["usage_notes"] == "human wording"
+    book = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    [entry] = book["records"][original.id]["enriched"]
+    assert entry["fields"] == ["meanings"]
+    assert entry["request_fingerprint"] == "a" * 64
+
+
+def test_completed_ai_reviews_with_one_staging_name_keep_separate_archives(
+    tmp_path: Path,
+) -> None:
+    original = record(meanings=["to speak"])
+    first_proposal = replace(original, meanings=["to converse"])
+    root = project(tmp_path, [original])
+    path = root / "staging" / "ai.yaml"
+    path.parent.mkdir(parents=True)
+
+    first_meta = ai_staging_meta(
+        [original],
+        {original.id: {"meanings": (original.meanings, first_proposal.meanings)}},
+    )
+    write_staging(path, [first_proposal], first_meta)
+    assert cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    ) == 0
+
+    second_proposal = replace(first_proposal, meanings=["to chat"])
+    second_meta = ai_staging_meta(
+        [first_proposal],
+        {
+            original.id: {
+                "meanings": (first_proposal.meanings, second_proposal.meanings)
+            }
+        },
+    )
+    second_meta["ai_enrichment"]["request_fingerprints"][original.id] = "c" * 64
+    write_staging(path, [second_proposal], second_meta)
+    assert cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    ) == 0
+
+    archives = sorted((root / "staging" / "done").glob("ai*.yaml"))
+    assert len(archives) == 2
+    archived_runs = {}
+    for archive in archives:
+        rows, meta = read_staging(archive)
+        request = meta["ai_enrichment"]["request_fingerprints"][original.id]
+        archived_runs[request] = rows
+    assert archived_runs["a" * 64][0].meanings == ["to converse"]
+    assert archived_runs["c" * 64][0].meanings == ["to chat"]
+
+
+def test_completed_ai_reviews_with_the_same_request_are_distinct_runs(
+    tmp_path: Path,
+) -> None:
+    original = record(meanings=["to speak"])
+    proposal = replace(original, meanings=["to converse"])
+    changes = {
+        original.id: {"meanings": (original.meanings, proposal.meanings)}
+    }
+    root = project(tmp_path, [original])
+    path = root / "staging" / "ai.yaml"
+    path.parent.mkdir(parents=True)
+
+    first_meta = ai_staging_meta([original], changes)
+    first_meta["review_run_id"] = REVIEW_RUN_A
+    write_staging(path, [proposal], first_meta)
+    command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    assert cli.main(command) == 0
+
+    second_meta = ai_staging_meta([original], changes)
+    second_meta["review_run_id"] = REVIEW_RUN_B
+    write_staging(path, [proposal], second_meta)
+    assert cli.main(command) == 0
+
+    archives = list((root / "staging" / "done").glob("ai*.yaml"))
+    assert len(archives) == 2
+    runs = {}
+    for archive in archives:
+        rows, meta = read_staging(archive)
+        runs[meta["review_run_id"]] = rows
+    assert runs[REVIEW_RUN_A][0].meanings == ["to converse"]
+    assert runs[REVIEW_RUN_B][0].meanings == ["to converse"]
+
+
+def test_failed_staged_ai_ledger_save_keeps_the_live_review(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    original = record(meanings=["to speak"])
+    proposal = replace(original, meanings=["to converse"])
+    root = project(tmp_path, [original])
+    path = root / "staging" / "ai.yaml"
+    path.parent.mkdir(parents=True)
+    meta = ai_staging_meta(
+        [original],
+        {original.id: {"meanings": (original.meanings, proposal.meanings)}},
+    )
+    meta["review_run_id"] = REVIEW_RUN_A
+    write_staging(
+        path,
+        [proposal],
+        meta,
+    )
+    monkeypatch.setattr(
+        cli.ledger.Ledger,
+        "save",
+        lambda self: (_ for _ in ()).throw(cli.ledger.LedgerError("disk full")),
+    )
+
+    assert cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    ) == 1
+
+    assert stored(root)[original.id]["meanings"] == ["to converse"]
+    assert path.exists(), "the only recoverable AI attribution stays live"
+    _rows, live_meta = read_staging(path)
+    assert live_meta["review_run_id"] == REVIEW_RUN_A
+    assert not (root / "staging" / "done" / "ai.yaml").exists()
+    err = capsys.readouterr().err
+    assert "'status --rebuild' cannot bring it back" in err
+    assert "staging" in err and "re-run" in err
+
+
+def test_rerunning_a_failed_staged_ai_ledger_save_recovers_attribution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original = record(meanings=["to speak"])
+    proposal = replace(original, meanings=["to converse"])
+    root = project(tmp_path, [original])
+    path = root / "staging" / "ai.yaml"
+    path.parent.mkdir(parents=True)
+    meta = ai_staging_meta(
+        [original],
+        {original.id: {"meanings": (original.meanings, proposal.meanings)}},
+    )
+    meta["review_run_id"] = REVIEW_RUN_A
+    write_staging(
+        path,
+        [proposal],
+        meta,
+    )
+    real_save = cli.ledger.Ledger.save
+    calls = 0
+
+    def fail_once(book: cli.ledger.Ledger) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise cli.ledger.LedgerError("disk full")
+        real_save(book)
+
+    monkeypatch.setattr(cli.ledger.Ledger, "save", fail_once)
+
+    command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    assert cli.main(command) == 1
+    assert path.exists()
+    _rows, live_meta = read_staging(path)
+    assert live_meta["review_run_id"] == REVIEW_RUN_A
+    assert cli.main(command) == 0
+
+    [entry] = json.loads((root / "ledger.json").read_text(encoding="utf-8"))[
+        "records"
+    ][original.id]["enriched"]
+    assert entry["kind"] == "ai"
+    assert entry["fields"] == ["meanings"]
+    assert entry["request_fingerprint"] == "a" * 64
+    assert not path.exists()
+    _rows, archived_meta = read_staging(root / "staging" / "done" / "ai.yaml")
+    assert archived_meta["review_run_id"] == REVIEW_RUN_A
+
+
+def test_failed_staged_ai_retry_refuses_a_third_field_value(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    original = record(meanings=["to speak"])
+    proposal = replace(original, meanings=["to converse"])
+    root = project(tmp_path, [original])
+    path = root / "staging" / "ai.yaml"
+    path.parent.mkdir(parents=True)
+    write_staging(
+        path,
+        [proposal],
+        ai_staging_meta(
+            [original],
+            {original.id: {"meanings": (original.meanings, proposal.meanings)}},
+        ),
+    )
+    monkeypatch.setattr(
+        cli.ledger.Ledger,
+        "save",
+        lambda self: (_ for _ in ()).throw(cli.ledger.LedgerError("disk full")),
+    )
+    command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    assert cli.main(command) == 1
+    capsys.readouterr()
+
+    human_edit = replace(proposal, meanings=["human correction"])
+    (root / "vocabulary.json").write_text(
+        json.dumps([human_edit.to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+
+    assert cli.main(command) == 1
+    assert stored(root)[original.id]["meanings"] == ["human correction"]
+    assert path.exists()
+    assert not (root / "staging" / "done" / "ai.yaml").exists()
+    assert "field-replacements-stale" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        "missing-ai-block",
+        "float-version",
+        "malformed-request-fingerprint",
+        "numeric-request-fingerprint",
+        "map-id-skew",
+        "field-map-mismatch",
+        "unknown-id-everywhere",
+    ],
+)
+def test_ai_provenance_damage_refuses_before_records_change(
+    tmp_path: Path, damage: str
+) -> None:
+    original = record(meanings=["to speak"])
+    proposal = replace(original, meanings=["to converse"])
+    changes = {
+        original.id: {"meanings": (original.meanings, proposal.meanings)}
+    }
+    meta = ai_staging_meta([original], changes)
+    block = meta["ai_enrichment"]
+    if damage == "missing-ai-block":
+        del meta["ai_enrichment"]
+    elif damage == "float-version":
+        block["version"] = 1.0
+    elif damage == "malformed-request-fingerprint":
+        block["request_fingerprints"][original.id] = "tampered"
+    elif damage == "numeric-request-fingerprint":
+        block["request_fingerprints"][original.id] = int("1" * 64)
+    elif damage == "map-id-skew":
+        block["request_fingerprints"]["word:ghost:ghost"] = "c" * 64
+    elif damage == "field-map-mismatch":
+        block["fields"][original.id] = ["examples"]
+    else:
+        ghost = "word:ghost:ghost"
+        block["request_fingerprints"][ghost] = "c" * 64
+        block["input_fingerprints"][ghost] = "d" * 64
+        block["fields"][ghost] = ["meanings"]
+        meta["field_replacements"]["records"][ghost] = {
+            "meanings": meta["field_replacements"]["records"][original.id][
+                "meanings"
+            ]
+        }
+    root = project(tmp_path, [original])
+    path = root / "staging" / "ai.yaml"
+    path.parent.mkdir(parents=True)
+    write_staging(path, [proposal], meta)
+    before = (root / "vocabulary.json").read_text(encoding="utf-8")
+
+    code = cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    )
+
+    assert code == 1
+    assert (root / "vocabulary.json").read_text(encoding="utf-8") == before
+    assert path.exists(), "the reviewed proposal remains recoverable"
+    assert not (root / "ledger.json").exists()
+    assert not (root / "staging" / "done" / "ai.yaml").exists()
+
+
+def test_ai_provenance_keeps_partial_promotion_retries_valid(tmp_path: Path) -> None:
+    first = record(meanings=["to speak"])
+    second = record(
+        id="word:聞く:きく",
+        expression="聞く",
+        reading="きく",
+        meanings=["to hear"],
+    )
+    proposals = [
+        replace(first, meanings=["to converse"]),
+        replace(second, meanings=["to ask"]),
+    ]
+    changes = {
+        first.id: {"meanings": (first.meanings, proposals[0].meanings)},
+        second.id: {"meanings": (second.meanings, proposals[1].meanings)},
+    }
+    root = project(tmp_path, [first, second])
+    path = root / "staging" / "ai.yaml"
+    path.parent.mkdir(parents=True)
+    write_staging(
+        path,
+        [proposals[0], replace(proposals[1], reading="")],
+        ai_staging_meta([first, second], changes),
+    )
+
+    assert cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    ) == 0
+    after_first = stored(root)
+    assert after_first[first.id]["meanings"] == ["to converse"]
+    assert after_first[second.id]["meanings"] == ["to hear"]
+    held, meta = read_staging(path)
+    assert [item.id for item in held] == [second.id]
+    write_staging(path, [replace(held[0], reading="きく")], meta, force=True)
+
+    assert cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    ) == 0
+    assert stored(root)[second.id]["meanings"] == ["to ask"]
+
+
+def test_a_stale_held_ai_row_refuses_the_whole_staged_merge(tmp_path: Path) -> None:
+    """Held rows remain part of the old-value binding for this review.
+
+    A reading hold decides which rows can land today; it must not narrow the
+    concurrency check.  Otherwise editing a held row after staging lets an
+    unrelated row land under a review whose all-or-nothing binding is already
+    stale.
+    """
+    first = record(meanings=["to speak"])
+    second = record(
+        id="word:聞く:きく",
+        expression="聞く",
+        reading="きく",
+        meanings=["to hear"],
+    )
+    proposals = [
+        replace(first, meanings=["to converse"]),
+        replace(second, reading="", meanings=["to ask"]),
+    ]
+    changes = {
+        first.id: {"meanings": (first.meanings, proposals[0].meanings)},
+        second.id: {"meanings": (second.meanings, proposals[1].meanings)},
+    }
+    root = project(tmp_path, [first, second])
+    path = root / "staging" / "ai.yaml"
+    path.parent.mkdir(parents=True)
+    write_staging(path, proposals, ai_staging_meta([first, second], changes))
+
+    # Concurrent curation after the paid answer was staged.  The second row is
+    # still held by its blank reading, but its binding is no less part of the
+    # staged review than the first row's.
+    current = [first, replace(second, meanings=["to listen"])]
+    (root / "vocabulary.json").write_text(
+        json.dumps([item.to_dict() for item in current], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    before = (root / "vocabulary.json").read_text(encoding="utf-8")
+
+    code = cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    )
+
+    assert code == 1
+    assert (root / "vocabulary.json").read_text(encoding="utf-8") == before
+    assert path.exists()
+    assert not (root / "ledger.json").exists()
+    assert not (root / "staging" / "done" / "ai.yaml").exists()
+
+
+def test_an_unrelated_old_archive_cannot_explain_a_fresh_runs_unknown_id(
+    tmp_path: Path,
+) -> None:
+    current = record(meanings=["to speak"])
+    current_proposal = replace(current, meanings=["to converse"])
+    current_changes = {
+        current.id: {"meanings": (current.meanings, current_proposal.meanings)}
+    }
+    old = record(
+        id="word:古い:ふるい",
+        expression="古い",
+        reading="ふるい",
+        meanings=["old"],
+    )
+    old_proposal = replace(old, meanings=["aged"])
+    old_changes = {old.id: {"meanings": (old.meanings, old_proposal.meanings)}}
+    root = project(tmp_path, [current])
+    done = root / "staging" / "done" / "ai.yaml"
+    done.parent.mkdir(parents=True)
+    write_staging(done, [old_proposal], ai_staging_meta([old], old_changes))
+
+    fresh_meta = ai_staging_meta([current], current_changes)
+    fresh_ai = fresh_meta["ai_enrichment"]
+    fresh_ai["request_fingerprints"][old.id] = "c" * 64
+    fresh_ai["input_fingerprints"][old.id] = "d" * 64
+    fresh_ai["fields"][old.id] = ["meanings"]
+    fresh_meta["field_replacements"]["records"][old.id] = {
+        "meanings": fresh_meta["field_replacements"]["records"][current.id][
+            "meanings"
+        ]
+    }
+    path = root / "staging" / "ai.yaml"
+    write_staging(path, [current_proposal], fresh_meta)
+    before = (root / "vocabulary.json").read_text(encoding="utf-8")
+
+    code = cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    )
+
+    assert code == 1
+    assert (root / "vocabulary.json").read_text(encoding="utf-8") == before
+    assert path.exists()
+    assert not (root / "ledger.json").exists()
+
+
+def test_reviewed_replacements_land_only_on_the_record_and_fields_authorized() -> None:
+    """The block is per record as well as per field; it is not a global force."""
+    first = VocabularyRecord(
+        id="word:話す:はなす", expression="話す", reading="はなす",
+        meanings=["to speak"], usage_notes="human one",
+        source=SourceReference(type="shirabe", imported_from="words.csv"),
+    )
+    second = VocabularyRecord(
+        id="word:聞く:きく", expression="聞く", reading="きく",
+        meanings=["to hear"], usage_notes="human two",
+        source=SourceReference(type="shirabe", imported_from="words.csv"),
+    )
+    proposals = [
+        replace(first, meanings=["to converse"], usage_notes="model one"),
+        replace(second, meanings=["to ask"], usage_notes="model two"),
+    ]
+    block = promote.field_replacement_block(
+        [first, second],
+        {first.id: {"meanings": (first.meanings, proposals[0].meanings)}},
+    )
+
+    merged, outcomes = promote.merge_staged_records(
+        [first, second],
+        proposals,
+        {promote.FIELD_REPLACEMENTS_KEY: block},
+    )
+    by_id = {item.id: item for item in merged}
+
+    assert by_id[first.id].meanings == ["to converse"]
+    assert by_id[first.id].usage_notes == "human one"
+    assert by_id[second.id].meanings == ["to hear"]
+    assert by_id[second.id].usage_notes == "human two"
+    assert outcomes[first.id].filled_fields == ["meanings"]
+    assert {name for name, _old, _new in outcomes[first.id].conflicts} == {
+        "usage_notes"
+    }
+    assert {name for name, _old, _new in outcomes[second.id].conflicts} == {
+        "meanings",
+        "usage_notes",
+    }
+
+
+def test_a_reviewer_can_edit_the_new_value_because_the_binding_is_to_the_old() -> None:
+    original = record(meanings=["to speak"])
+    model_proposal = replace(original, meanings=["to converse"])
+    reviewer_wording = replace(model_proposal, meanings=["to talk with someone"])
+    block = promote.field_replacement_block(
+        [original],
+        {original.id: {"meanings": (original.meanings, model_proposal.meanings)}},
+    )
+
+    merged, _outcomes = promote.merge_staged_records(
+        [original],
+        [reviewer_wording],
+        {promote.FIELD_REPLACEMENTS_KEY: block},
+    )
+
+    assert merged[0].meanings == ["to talk with someone"]
+
+
+def test_one_stale_old_value_refuses_the_whole_staged_merge() -> None:
+    """Validate every compare before merging even the records that still match.
+
+    This is the mutation guard for the load-bearing comparison: comparing the
+    stored digest with the staged *new* value, or reversing equality, must fail
+    this test or its fresh-value sibling above.
+    """
+    first = record()
+    second = record(
+        id="word:聞く:きく", expression="聞く", reading="きく",
+        meanings=["to hear"],
+    )
+    proposals = [
+        replace(first, meanings=["to converse"]),
+        replace(second, meanings=["to ask"]),
+    ]
+    block = promote.field_replacement_block(
+        [first, second],
+        {
+            first.id: {"meanings": (first.meanings, proposals[0].meanings)},
+            second.id: {"meanings": (second.meanings, proposals[1].meanings)},
+        },
+    )
+    concurrently_edited = replace(second, meanings=["human correction"])
+
+    with pytest.raises(promote.PromoteError, match="field-replacements-stale") as raised:
+        promote.merge_staged_records(
+            [first, concurrently_edited],
+            proposals,
+            {promote.FIELD_REPLACEMENTS_KEY: block},
+        )
+
+    message = str(raised.value)
+    assert second.id in message and "meanings" in message
+    assert first.meanings == ["to speak"], "the matching record was not merged first"
+    assert concurrently_edited.meanings == ["human correction"]
+
+
+def test_a_deleted_replacement_target_is_stale_not_a_new_record() -> None:
+    original = record()
+    proposed = replace(original, meanings=["to converse"])
+    block = promote.field_replacement_block(
+        [original],
+        {original.id: {"meanings": (original.meanings, proposed.meanings)}},
+    )
+
+    with pytest.raises(promote.PromoteError, match="no current record"):
+        promote.merge_staged_records(
+            [], [proposed], {promote.FIELD_REPLACEMENTS_KEY: block}
+        )
+
+
+@pytest.mark.parametrize(
+    "block,detail",
+    [
+        (None, "contain exactly"),
+        ({"version": True, "records": {"word:話す:はなす": {"meanings": "a" * 64}}},
+         "version"),
+        ({"version": 1, "records": {"word:話す:はなす": {"meanings": "short"}}},
+         "SHA-256"),
+        ({"version": 1, "records": {"word:話す:はなす": {"reading": "a" * 64}}},
+         "reading"),
+    ],
+    ids=["null-block", "boolean-version", "bad-digest", "identity-field"],
+)
+def test_malformed_replacement_authority_is_refused_before_merge(
+    block: dict[str, Any] | None, detail: str
+) -> None:
+    existing = record()
+
+    with pytest.raises(promote.PromoteError, match=detail):
+        promote.merge_staged_records(
+            [existing],
+            [replace(existing, meanings=["new"])],
+            {promote.FIELD_REPLACEMENTS_KEY: block},
+        )
+
+
+def test_schema_v2_extraction_staging_keeps_existing_wins_compatibility() -> None:
+    """Old extraction archives have prompt provenance but no replacement block."""
+    existing = record(meanings=["human meaning"])
+    incoming = replace(existing, meanings=["model meaning"])
+    old_meta = {
+        "prompt_provenance": {
+            "source_sha256": "a" * 64,
+            "mode": "prose",
+            "provider": "anthropic",
+            "model": "claude-opus-5",
+            "response_schema_version": 2,
+            "system_prompt_fingerprint": "b" * 64,
+            "style_guide_fingerprint": "c" * 64,
+            "user_prompt_fingerprint": "d" * 64,
+        }
+    }
+
+    merged, outcomes = promote.merge_staged_records(
+        [existing], [incoming], old_meta
+    )
+
+    assert merged[0].meanings == ["human meaning"]
+    assert outcomes[existing.id].label == "conflicting"
 
 
 def test_an_identity_conflict_on_promote_still_says_it_is_one(

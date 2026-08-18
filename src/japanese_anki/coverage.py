@@ -62,21 +62,8 @@ def verdict_schema() -> Any:
     from pydantic import BaseModel, Field
 
     class Verdict(BaseModel):
-        approved: bool = Field(
-            description=(
-                "True when every vocabulary entry visible on the page appears "
-                "in the record under a defensible disposition. False when "
-                "something is missing or plainly misfiled."
-            )
-        )
-        reason: str = Field(
-            description=(
-                "Two or three sentences for a person reading this months "
-                "later: what the page showed, what the record claimed, and "
-                "where they met or did not. If refusing, name the specific "
-                "entry or location at fault first."
-            )
-        )
+        approved: bool = Field(description="Coverage approval.")
+        reason: str = Field(description="Verdict rationale.")
 
     return Verdict
 

@@ -323,7 +323,7 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
         # removes whitespace only, so the answer read "いて /".
         ("く → いて /", [("く", "いて")]),
         # The trigger list and the rule divider using the *same* character —
-        # which is the style `prompts/patterns.md` actually asks for. No per-separator
+        # which is a style the source-extraction templates allow. No per-separator
         # test can split this; counting arrows can.
         ("う/つ/る → って / く → いて", [("う/つ/る", "って"), ("く", "いて")]),
         # Two different separators dividing rules on one line, because the model
@@ -434,7 +434,7 @@ def test_the_guid_does_not_move_when_a_chart_is_corrected(tmp_path: Path) -> Non
 def test_a_separator_divides_rules_only_when_every_piece_has_an_arrow(
     template: str, expected: list[tuple[str, str]]
 ) -> None:
-    """The same character does both jobs. `prompts/patterns.md` asks the model
+    """The same character does both jobs. Source extraction can ask the model
     to write a rule's triggers as `う/つ/る → って`, and a chart also puts two
     whole rules on one line. Splitting unconditionally turned the first into
     three cards — one of them drilling `る → って`, which is the *ichidan*

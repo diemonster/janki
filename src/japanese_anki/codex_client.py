@@ -94,6 +94,23 @@ def _strict_schema(value: Any, *, schema_node: bool = True) -> Any:
     return result
 
 
+def wire_schema(schema: Any) -> Any:
+    """The strict response schema written for ``codex exec``."""
+    return _strict_schema(_type_adapter(schema).json_schema())
+
+
+def wire_prompt(
+    style_guide: str,
+    task_template: str,
+    user_turn: str,
+) -> str:
+    """The exact flattened prompt text sent through the Codex transport."""
+    return _prompt(
+        [{"type": "text", "text": style_guide}, {"type": "text", "text": task_template}],
+        user_turn,
+    )
+
+
 def _failure_detail(completed: subprocess.CompletedProcess[str]) -> str:
     text = (completed.stderr or completed.stdout or "").strip()
     if not text:
@@ -202,7 +219,7 @@ def parse_call(
         schema_path = workdir / "output-schema.json"
         answer_path = workdir / "answer.json"
         schema_path.write_text(
-            json.dumps(_strict_schema(adapter.json_schema()), ensure_ascii=False),
+            json.dumps(wire_schema(schema), ensure_ascii=False),
             encoding="utf-8",
         )
         command = [

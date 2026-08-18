@@ -242,7 +242,7 @@ def _masked(template: str) -> str:
 def _split_rules(template: str) -> list[tuple[str, str, str]]:
     """``A → B / C → D`` into two pairs, ``う/つ/る → って`` into one.
 
-    The same characters do both jobs: `prompts/patterns.md` asks for a rule's
+    The same characters do both jobs: source extraction can return a rule's
     triggers as ``う/つ/る → って``, and a chart also puts two whole rules on one
     line as ``くる → きて / する → して`` — sometimes with different separators
     for each job, since the model is told to write it the way the page does.

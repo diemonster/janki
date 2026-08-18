@@ -78,16 +78,12 @@ class LedgerError(JankiError):
 
 
 LEDGER_VERSION = 1
-BATCH_RECOVERY_VERSION = 1
-_BATCH_RECOVERY_MARKER = "janki-polish-batch-recovery"
 
 # Who did the enriching. The kind is what keeps a jpdb pass and an AI pass from
-# being mistaken for each other; the model is which one of them ran. ``polish``
-# is separate from ``ai`` although the same model does it: it is the one pass
-# that rewrites a field rather than filling it, and "this record's glosses were
-# replaced by a model" is a different fact about a record than "its examples
-# were written by one".
-ENRICHMENT_KINDS: tuple[str, ...] = ("jpdb", "ai", "polish", "human")
+# being mistaken for each other; the model is which one of them ran. Rich AI
+# enrichment owns meanings, examples, and usage notes in one answer.
+ENRICHMENT_KINDS: tuple[str, ...] = ("jpdb", "ai", "human")
+AI_PROVIDERS: tuple[str, ...] = ("anthropic", "codex")
 
 # ``human`` is the fourth because a dictionary can be wrong and a person has to
 # be able to say so. jpdb's parse reads 日本語 as にっぽんご; the language is
@@ -99,17 +95,82 @@ ENRICHMENT_KINDS: tuple[str, ...] = ("jpdb", "ai", "polish", "human")
 AUDIO_KINDS: tuple[str, ...] = ("word", "example")
 
 
-@dataclass(frozen=True)
-class BatchRecovery:
-    """Durable state for the gap between a polish batch and its ledger write."""
+def exact_ai_batch_model(value: Any) -> str:
+    """Return the exact submitted model, refusing absent attribution."""
+    if not isinstance(value, str) or not value.strip():
+        raise LedgerError("An AI message batch needs a non-empty model")
+    return value
 
-    path: Path
-    batch_id: str
-    entry: dict[str, Any]
-    phase: str
-    accepted_meanings: dict[str, list[str]]
-    retry_ids: list[str]
-    text: str = field(repr=False, compare=False)
+
+def exact_fingerprint_map(
+    values: Mapping[str, str] | None,
+    record_ids: Iterable[str],
+    *,
+    label: str,
+) -> dict[str, str]:
+    """Validate one exact per-record SHA-256 map used by AI provenance."""
+    ids = list(dict.fromkeys(str(item) for item in record_ids))
+    if values is None:
+        fingerprints: dict[str, str] = {}
+    elif not isinstance(values, Mapping):
+        raise LedgerError(f"Batch {label} fingerprints must be a mapping")
+    else:
+        if any(not isinstance(record_id, str) or not record_id for record_id in values):
+            raise LedgerError(
+                f"Batch {label} fingerprint record ids must be non-empty text"
+            )
+        fingerprints = dict(values)
+    missing = [record_id for record_id in ids if record_id not in fingerprints]
+    extra = [record_id for record_id in fingerprints if record_id not in ids]
+    if missing or extra:
+        details = []
+        if missing:
+            details.append(f"missing {', '.join(missing)}")
+        if extra:
+            details.append(f"unknown {', '.join(extra)}")
+        raise LedgerError(
+            f"Batch {label} fingerprints must exactly cover its pending ids: "
+            + "; ".join(details)
+        )
+    malformed = [
+        record_id
+        for record_id, fingerprint in fingerprints.items()
+        if not isinstance(fingerprint, str)
+        or len(fingerprint) != 64
+        or any(character not in "0123456789abcdef" for character in fingerprint)
+    ]
+    if malformed:
+        raise LedgerError(
+            f"Batch {label} fingerprints must be lowercase SHA-256 values: "
+            + ", ".join(malformed)
+        )
+    return fingerprints
+
+
+def exact_retry_ids(values: Any, pending_ids: Iterable[str]) -> list[str]:
+    """Validate a held batch's exact, non-empty retry subset.
+
+    Presence means a previous fetch deliberately narrowed the batch.  An empty
+    or malformed value must therefore never fall back to the full pending set:
+    doing so can reapply rows already settled, while an unknown id can skip the
+    one recoverable row and let the caller clear the batch.
+    """
+    if not isinstance(values, list):
+        raise LedgerError("Batch retry_ids must be a list")
+    if not values:
+        raise LedgerError("Batch retry_ids must name at least one pending record")
+    if any(not isinstance(record_id, str) or not record_id.strip() for record_id in values):
+        raise LedgerError("Batch retry_ids must contain non-empty text record ids")
+    if len(set(values)) != len(values):
+        raise LedgerError("Batch retry_ids must not contain duplicates")
+    pending = set(str(record_id) for record_id in pending_ids)
+    unknown = [record_id for record_id in values if record_id not in pending]
+    if unknown:
+        raise LedgerError(
+            "Batch retry_ids must be a subset of pending_ids; unknown "
+            + ", ".join(unknown)
+        )
+    return list(values)
 
 
 def _iso_date(value: str | None) -> str:
@@ -353,190 +414,6 @@ def _checked_details(caller: str, details: dict[str, Any]) -> dict[str, Any]:
     return details
 
 
-def batch_recovery_path(ledger_path: Path) -> Path:
-    """Return the one recovery journal associated with ``ledger_path``."""
-    path = Path(ledger_path)
-    suffix = path.suffix or ".json"
-    stem = path.stem if path.suffix else path.name
-    return path.with_name(f"{stem}.polish-batch-recovery{suffix}")
-
-
-def load_batch_recovery(ledger_path: Path) -> BatchRecovery | None:
-    """Load a janki-owned polish recovery journal, refusing unknown content."""
-    path = batch_recovery_path(ledger_path)
-    try:
-        text = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return None
-    except OSError as exc:
-        raise LedgerError(
-            f"Could not read batch recovery journal {path}: {exc.strerror or exc}"
-        ) from exc
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError as exc:
-        raise LedgerError(f"Could not parse batch recovery journal {path}: {exc}") from exc
-    if not isinstance(data, dict) or data.get("marker") != _BATCH_RECOVERY_MARKER:
-        raise LedgerError(
-            f"Refusing to treat {path} as janki batch recovery state because its "
-            "ownership marker is missing. Move the unrelated file aside and retry."
-        )
-    if data.get("version") != BATCH_RECOVERY_VERSION:
-        raise LedgerError(
-            f"Batch recovery journal {path} has unsupported version "
-            f"{data.get('version')!r}. Upgrade janki before changing it."
-        )
-    batch_id = data.get("batch_id")
-    entry = data.get("batch")
-    phase = data.get("phase")
-    accepted = data.get("accepted_meanings", {})
-    retry_ids = data.get("retry_ids", [])
-    if not isinstance(batch_id, str) or not batch_id.strip():
-        raise LedgerError(f"Batch recovery journal {path} has no batch id")
-    if not isinstance(entry, dict) or entry.get("kind") != "polish":
-        raise LedgerError(f"Batch recovery journal {path} has no polish batch descriptor")
-    if phase not in {"submitted", "applied"}:
-        raise LedgerError(f"Batch recovery journal {path} has unknown phase {phase!r}")
-    if not isinstance(accepted, dict) or any(
-        not isinstance(record_id, str)
-        or not isinstance(meanings, list)
-        or any(not isinstance(item, str) for item in meanings)
-        for record_id, meanings in accepted.items()
-    ):
-        raise LedgerError(
-            f"Batch recovery journal {path}: 'accepted_meanings' must map ids to strings"
-        )
-    if not isinstance(retry_ids, list) or any(
-        not isinstance(item, str) for item in retry_ids
-    ):
-        raise LedgerError(
-            f"Batch recovery journal {path}: 'retry_ids' must be a list of strings"
-        )
-    return BatchRecovery(
-        path=path,
-        batch_id=batch_id,
-        entry=dict(entry),
-        phase=phase,
-        accepted_meanings={
-            str(record_id): list(meanings) for record_id, meanings in accepted.items()
-        },
-        retry_ids=list(retry_ids),
-        text=text,
-    )
-
-
-def write_batch_recovery(
-    ledger_path: Path,
-    batch_id: str,
-    entry: Mapping[str, Any],
-    *,
-    accepted_meanings: Mapping[str, Iterable[str]] | None = None,
-    retry_ids: Iterable[str] | None = None,
-) -> BatchRecovery:
-    """Atomically preserve enough polish state for ``--batch-fetch`` to resume.
-
-    ``retry_ids is None`` is the just-submitted phase.  Supplying it, including
-    an empty iterable, marks the records/ledger handoff after local review.
-    Existing non-janki content is never overwritten.
-    """
-    key = str(batch_id).strip()
-    if not key:
-        raise LedgerError("A batch recovery journal needs a batch id")
-    descriptor = dict(entry)
-    if descriptor.get("kind") != "polish":
-        raise LedgerError("Only a meaning-polish batch can use polish recovery state")
-    phase = "submitted" if retry_ids is None else "applied"
-    payload = {
-        "marker": _BATCH_RECOVERY_MARKER,
-        "version": BATCH_RECOVERY_VERSION,
-        "batch_id": key,
-        "batch": descriptor,
-        "phase": phase,
-        "accepted_meanings": {
-            str(record_id): [str(item) for item in meanings]
-            for record_id, meanings in (accepted_meanings or {}).items()
-        },
-        "retry_ids": []
-        if retry_ids is None
-        else list(dict.fromkeys(str(item) for item in retry_ids)),
-    }
-    try:
-        text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-    except (TypeError, ValueError) as exc:
-        raise LedgerError(
-            f"Could not serialise batch recovery state for {key}: {exc}"
-        ) from exc
-    path = batch_recovery_path(ledger_path)
-    try:
-        with exclusive_path_lock(path):
-            existing = load_batch_recovery(ledger_path)
-            if existing is not None:
-                if existing.text == text:
-                    return existing
-                if existing.batch_id != key:
-                    raise LedgerError(
-                        f"Batch {existing.batch_id} still has recovery state in "
-                        f"{existing.path}; fetch or forget it before recording "
-                        "another batch."
-                    )
-                raise LedgerError(
-                    f"Recovery state for batch {key} changed while this command "
-                    "was reviewing it. Another fetch may still be writing; its "
-                    "journal was kept intact. Let that command finish, then fetch "
-                    "again."
-                )
-            atomic_write_text(path, text)
-            written = load_batch_recovery(ledger_path)
-            if written is None:  # pragma: no cover - atomic write just landed
-                raise LedgerError(
-                    f"Batch recovery journal {path} disappeared after writing"
-                )
-            return written
-    except DataError as exc:
-        raise LedgerError(str(exc)) from exc
-
-
-def clear_batch_recovery(
-    ledger_path: Path,
-    batch_id: str,
-    *,
-    expected: BatchRecovery | None = None,
-) -> bool:
-    """Remove only the validated journal for ``batch_id``.
-
-    Loading first is deliberate: this command must never delete a same-named
-    artifact that it did not create or a recovery belonging to another batch.
-    """
-    try:
-        with exclusive_path_lock(batch_recovery_path(ledger_path)):
-            recovery = load_batch_recovery(ledger_path)
-            if recovery is None:
-                return False
-            if recovery.batch_id != str(batch_id):
-                raise LedgerError(
-                    f"Refusing to remove recovery for batch {recovery.batch_id} while "
-                    f"finishing batch {batch_id}."
-                )
-            if expected is not None and recovery.text != expected.text:
-                raise LedgerError(
-                    f"Recovery state for batch {batch_id} changed after this command "
-                    "read it. The newer journal was kept intact; let the other "
-                    "fetch finish, then retry."
-                )
-            try:
-                recovery.path.unlink()
-            except FileNotFoundError:
-                return True
-            except OSError as exc:
-                raise LedgerError(
-                    f"Could not remove completed batch recovery journal "
-                    f"{recovery.path}: {exc.strerror or exc}"
-                ) from exc
-    except DataError as exc:
-        raise LedgerError(str(exc)) from exc
-    return True
-
-
 @dataclass
 class Ledger:
     """An in-memory ledger bound to the file it was loaded from."""
@@ -707,18 +584,20 @@ class Ledger:
         kind: str,
         fields: Iterable[str],
         model: str | None = None,
+        provider: str | None = None,
+        request_fingerprint: str | None = None,
         at: str | None = None,
     ) -> bool:
         """Note that an enrichment pass wrote ``fields``.
 
         Entries accumulate rather than replace: a jpdb pass and an AI pass
         describe different work, and neither may erase the other's record of
-        what it wrote. A pass is identified by ``(kind, model, fields)`` and
-        nothing else — re-running it changes nothing however long ago it last
+        what it wrote. A dictionary pass is identified by ``(kind, model,
+        fields)``; an AI pass also includes the complete request fingerprint,
+        so two templates that wrote the same fields remain distinct provenance.
+        Re-running an identical pass changes nothing however long ago it last
         ran, and the stored ``at`` stays the first run's, the same way
-        ``record_source_seen`` ignores ``seen_at``. Otherwise a monthly
-        ``janki enrich`` would leave ``status`` reporting one record enriched
-        five times by the same pass with the same fields.
+        ``record_source_seen`` ignores ``seen_at``.
         """
         if kind not in ENRICHMENT_KINDS:
             raise LedgerError(
@@ -743,11 +622,35 @@ class Ledger:
             model = "jpdb"
         elif model is None:
             raise LedgerError(f"record_enriched(kind='{kind}') needs the model that ran")
+        ai_provider = str(provider or "").strip()
+        if kind == "ai" and ai_provider not in AI_PROVIDERS:
+            raise LedgerError(
+                "record_enriched(kind='ai') needs provider "
+                f"{' or '.join(AI_PROVIDERS)}"
+            )
+        if kind != "ai" and provider is not None:
+            raise LedgerError("Only AI enrichment records a model provider")
+        prompt_fp = str(request_fingerprint or "").strip()
+        if kind == "ai" and not prompt_fp:
+            raise LedgerError(
+                "record_enriched(kind='ai') needs the full request fingerprint "
+                "that produced the answer"
+            )
+        if kind == "ai" and (
+            len(prompt_fp) != 64
+            or any(character not in "0123456789abcdef" for character in prompt_fp)
+        ):
+            raise LedgerError(
+                "record_enriched(kind='ai') request fingerprint must be a "
+                "lowercase SHA-256"
+            )
         reference = {
             "at": _iso_date(at),
             "kind": kind,
             "model": str(model),
             "fields": names,
+            **({"provider": ai_provider} if kind == "ai" else {}),
+            **({"request_fingerprint": prompt_fp} if prompt_fp else {}),
         }
         identity = _without(reference, "at")
         entries = self._entry(record_id, at).setdefault("enriched", [])
@@ -881,9 +784,11 @@ class Ledger:
         *,
         kind: str,
         model: str,
+        provider: str | None = None,
         pending_ids: Iterable[str],
         force_fields: Iterable[str] = (),
-        prompt_fingerprints: Mapping[str, str] | None = None,
+        request_fingerprints: Mapping[str, str] | None = None,
+        input_fingerprints: Mapping[str, str] | None = None,
         at: str | None = None,
     ) -> None:
         """Remember a submitted batch and the records it covers.
@@ -904,9 +809,16 @@ class Ledger:
                 "A pending batch with no record ids could never be applied to "
                 "anything; nothing was recorded."
             )
+        batch_provider = str(provider or "").strip()
+        if kind == "ai" and batch_provider != "anthropic":
+            raise LedgerError(
+                "An AI message batch needs provider 'anthropic'"
+            )
+        batch_model = exact_ai_batch_model(model) if kind == "ai" else str(model)
         entry: dict[str, Any] = {
             "kind": kind,
-            "model": model,
+            "model": batch_model,
+            **({"provider": batch_provider} if kind == "ai" else {}),
             "submitted_at": _iso_date(at),
             "pending_ids": ids,
             # Stored because the fetch has to apply what the submit asked for.
@@ -914,24 +826,15 @@ class Ledger:
             # would report "nothing to fill" and throw away a paid answer.
             "force_fields": list(dict.fromkeys(str(item) for item in force_fields)),
         }
-        if prompt_fingerprints is not None:
-            fingerprints = {
-                str(record_id): str(fingerprint)
-                for record_id, fingerprint in prompt_fingerprints.items()
-            }
-            missing = [record_id for record_id in ids if not fingerprints.get(record_id)]
-            extra = [record_id for record_id in fingerprints if record_id not in ids]
-            if missing or extra:
-                details = []
-                if missing:
-                    details.append(f"missing {', '.join(missing)}")
-                if extra:
-                    details.append(f"unknown {', '.join(extra)}")
-                raise LedgerError(
-                    "Batch prompt fingerprints must exactly cover its pending ids: "
-                    + "; ".join(details)
-                )
-            entry["prompt_fingerprints"] = fingerprints
+        if kind == "ai":
+            entry["request_fingerprints"] = exact_fingerprint_map(
+                request_fingerprints, ids, label="request"
+            )
+            entry["input_fingerprints"] = exact_fingerprint_map(
+                input_fingerprints, ids, label="input"
+            )
+        elif request_fingerprints is not None or input_fingerprints is not None:
+            raise LedgerError("Only an AI batch records model-request fingerprints")
         self.pending_batches[str(batch_id)] = entry
 
     def pending_batch(self) -> tuple[str, dict[str, Any]] | None:
@@ -965,7 +868,13 @@ class Ledger:
         entry = self.pending_batches.get(str(batch_id))
         if not isinstance(entry, dict):
             return
-        entry["retry_ids"] = list(dict.fromkeys(str(item) for item in retry_ids))
+        if isinstance(retry_ids, (str, bytes)):
+            candidates: Any = retry_ids
+        else:
+            candidates = list(retry_ids)
+        entry["retry_ids"] = exact_retry_ids(
+            candidates, entry.get("pending_ids", [])
+        )
 
     def clear_batch(self, batch_id: str) -> bool:
         """Forget a collected batch. Returns whether there was one to forget."""
@@ -1293,13 +1202,16 @@ class Ledger:
         ``enriched`` entries. Those say who ran and what they wrote; they do
         not say the record is finished. A jpdb pass fills readings and accents
         and would otherwise hide a record from ``enrich --ai``, which is what
-        actually writes examples and usage notes.
+        actually writes meanings and examples. Usage notes are optional: every
+        rich prompt explicitly permits an empty note when there is no useful,
+        certain nuance to add, so emptiness cannot mean a paid answer is
+        unfinished.
         """
         return [
             record.id
             for record in records
-            if not any(example.japanese.strip() for example in record.examples)
-            or not record.usage_notes.strip()
+            if not any(str(meaning).strip() for meaning in record.meanings)
+            or not any(example.japanese.strip() for example in record.examples)
             or (
                 record.source.type == "extract"
                 and any(

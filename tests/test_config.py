@@ -35,14 +35,11 @@ def test_defaults_apply_when_the_new_sections_are_absent(
     assert config.media_dir == root / "data/media"
     assert config.scan_inbox == root / "data/inbox/scans"
     assert config.extract_model == "claude-opus-5"
-    # One model at one depth across every pass. Codex stays selectable, but a
-    # project that does not name a provider gets the one every other pass uses
-    # — a default that silently routes example writing to a different vendor
-    # than meaning polish is a difference nobody chose.
+    # One model at one depth across the complete bare-word pass. Codex stays
+    # selectable, while Anthropic remains the production default.
     assert config.enrich_provider == "anthropic"
     assert config.enrich_model == "claude-opus-5"
     assert config.enrich_reasoning_effort == "ultra"  # codex-only, inert here
-    assert config.polish_model == "claude-opus-5"
     assert config.tts_provider == "voicevox"
     assert config.voicevox_url == "http://localhost:50021"
     assert config.voicevox_speaker == 46
@@ -66,7 +63,6 @@ def test_new_sections_override_defaults_and_paths_resolve_against_the_root(
         enrich_provider = "anthropic"
         enrich_model = "claude-sonnet-5"
         enrich_reasoning_effort = "high"
-        polish_model = "claude-sonnet-5"
 
         [tts]
         provider = "azure"
@@ -85,7 +81,6 @@ def test_new_sections_override_defaults_and_paths_resolve_against_the_root(
     assert config.enrich_provider == "anthropic"
     assert config.enrich_model == "claude-sonnet-5"
     assert config.enrich_reasoning_effort == "high"
-    assert config.polish_model == "claude-sonnet-5"
     assert config.tts_provider == "azure"
     assert config.voicevox_url == "http://voice.local:1234"
     assert config.voicevox_speaker == 8
@@ -117,6 +112,24 @@ def test_unknown_key_warns_with_the_nearest_valid_key_and_still_loads(
     # the mistyped key falls back to its default.
     assert config.deck_dir == root / "decks"
     assert config.staging_dir == root / "data/staging"
+
+
+def test_the_retired_polish_model_key_is_unknown(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _write_config(
+        tmp_path,
+        """
+        [ai]
+        polish_model = "claude-opus-5"
+        """,
+    )
+
+    ProjectConfig.load(tmp_path)
+
+    warning = capsys.readouterr().err
+    assert "polish_model" in warning
+    assert ("ai", "polish_model") not in KNOWN_KEYS
 
 
 def test_unknown_key_in_the_wrong_section_points_at_the_right_section(
@@ -171,39 +184,6 @@ def test_an_unknown_enrichment_provider_is_rejected(tmp_path: Path) -> None:
     assert "enrich_provider" in str(caught.value)
     assert "codex" in str(caught.value)
     assert "anthropic" in str(caught.value)
-
-
-def test_an_enrich_model_alone_no_longer_sets_the_polish_model(
-    tmp_path: Path,
-) -> None:
-    """`[ai] enrich_model` used to mean "and polish with this too".
-
-    That was an upgrade shim for configs written before providers and per-pass
-    models existed, and it is gone — janki is unreleased, so no such file is in
-    anyone's hands. The shape is still valid and still warning-free, so the
-    change is invisible unless it is pinned: a project naming only
-    `enrich_model` now polishes with the default, not with its enrichment
-    model, and would quietly start billing a different model than before.
-
-    It does not guard the commit that added it. The shim was deleted in
-    908c92e, which removed the old test correctly and shipped no replacement;
-    this arrived a commit later, so it passes against the code it is presented
-    as guarding. It is still a unique catcher — restoring the fallback fails
-    this and nothing else — and that is what it is for from here.
-    """
-    _write_config(
-        tmp_path,
-        """
-        [ai]
-        enrich_model = "claude-sonnet-5"
-        """,
-    )
-
-    config = ProjectConfig.load(tmp_path)
-
-    assert config.enrich_provider == "anthropic", "still the default provider"
-    assert config.enrich_model == "claude-sonnet-5"
-    assert config.polish_model == "claude-opus-5", "the default, not the enrich model"
 
 
 def test_an_explicit_anthropic_provider_gets_an_anthropic_model_default(

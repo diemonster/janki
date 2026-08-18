@@ -1,18 +1,17 @@
 """The files janki sends to a model, and the one function that reads them.
 
-Every instruction a model receives lives in `prompts/` as Markdown, one file
-per pass and input shape, and is sent **byte for byte**. There is no
-placeholder syntax, no comment convention, no conditional section: what is in
-the file is what the model sees. That is the whole point — a person can read
-`prompts/enrich-examples.md` and know exactly what was asked, without opening
-Python and mentally concatenating string constants.
+Every substantive task instruction lives in `prompts/` as Markdown, one file
+per pass and input shape, and Anthropic receives it **byte for byte**. There is
+no placeholder syntax, comment convention, or conditional section. The only
+Python-side instructions are transport structure: terse schema field labels
+and Codex's JSON-only/no-tools preamble. Neither carries Japanese policy.
 
 **This module is a file read, not a renderer.** A prompt that would need a
 branch in its *instruction prose* is two prompts, which is why extraction's
 three modes are three complete files rather than one file plus three rule
 blocks. Composing a record's own data into the user turn stays in Python: that
-is data, not instruction, and it is the one thing the model sees that is not
-in a file.
+is data, not instruction. The user turn, schema labels, and Codex transport
+preamble are the deliberately visible non-file inputs.
 
 **Nothing is cached.** A prompt is re-read from disk on every call, so editing
 a file changes the next run with no rebuild and no way for an edit to be
@@ -24,25 +23,21 @@ instructions would produce plausible output that ignores every rule this
 directory exists to state — the expensive kind of wrong, because it looks
 like success.
 
-**Extraction and the coverage check record which prompt they sent.**
-Extraction stores the system and style-guide digests in the `prompt_provenance`
-of every staging file *it* writes, and promote's archive carries that block
-forward unchanged — 9 of the 11 files under `data/staging/done/` have one, and
-the archive is the only copy left once the source is deleted. The writers that
-record none are the ones that send no prompt: `import-anki`, the needs-reading
-diversion the other importers hold rows back through, and `enrich --ai`'s
-staging route. A coverage approval stores the digest of the instructions
-the approving model was given; a card from either can be traced to its exact
-text through `git log prompts/`. The other three passes cannot: `--ai` records
-no fingerprint, `--polish-meanings` fingerprints the record's user turn rather
-than the template, and `patterns` records nothing. `prompts/README.md` says the
-same, and it is worth closing.
+**Every model answer records which prompt produced it.** Extraction carries
+the source template, style, user turn, and wire-schema fingerprints into
+staging, its archive, and the pattern store. Bare-word enrichment records the
+provider plus its normalized transport prompt and wire schema in the full
+request identity used by live ledger entries, batch descriptors, and large-run
+staging metadata. Coverage approval records its own instruction fingerprint.
+Together those artifacts can be traced to exact text through `git log prompts/`.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
+from typing import Any
 
 from japanese_anki.errors import JankiError
 
@@ -52,6 +47,8 @@ __all__ = [
     "fingerprint",
     "load",
     "path_for",
+    "request_fingerprint",
+    "schema_fingerprint",
 ]
 
 #: Where the templates live, relative to the project root. Top-level rather
@@ -95,7 +92,7 @@ class PromptError(JankiError):
 def path_for(root: Path, name: str) -> Path:
     """The file ``name`` names, under ``root``.
 
-    ``name`` is a bare stem — ``"enrich-examples"`` — because a caller that
+    ``name`` is a bare stem — ``"enrich-bare-word"`` — because a caller that
     could pass a path could pass one outside the directory, and the point of
     this module is that every instruction sent to a model is a file someone can
     find by name.
@@ -152,3 +149,54 @@ def fingerprint(text: str) -> str:
     from a template plus record data can fingerprint what it actually sent.
     """
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _schema_value(schema: Any) -> Any:
+    """Return the JSON-schema value a model request actually carries."""
+    if hasattr(schema, "model_json_schema"):
+        return schema.model_json_schema()
+    return schema
+
+
+def _canonical_json(value: Any) -> str:
+    """Serialize structural prompt data without depending on dict insertion order."""
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def schema_fingerprint(schema: Any) -> str:
+    """Identify the canonical response schema sent with a structured call."""
+    return fingerprint(_canonical_json(_schema_value(schema)))
+
+
+def request_fingerprint(
+    *,
+    provider: str,
+    style_guide: str,
+    task_template: str,
+    user_turn: str,
+    transport_prompt: Any,
+    schema: Any,
+) -> str:
+    """Identify every prompt channel and the response contract for one call.
+
+    Named channels prevent concatenation collisions (``"ab" + "c"`` versus
+    ``"a" + "bc"``). Prompt text remains exact — including line endings —
+    while only the schema's object-key order is canonicalized.
+    """
+    return fingerprint(
+        _canonical_json(
+            {
+                "provider": provider,
+                "schema": _schema_value(schema),
+                "style_guide": style_guide,
+                "task_template": task_template,
+                "transport_prompt": transport_prompt,
+                "user_turn": user_turn,
+            }
+        )
+    )

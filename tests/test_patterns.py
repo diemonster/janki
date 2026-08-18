@@ -1,141 +1,24 @@
-"""What a document teaches — `janki patterns`.
-
-Every test drives the client seam, so none reaches a model. The shapes are the
-real ones: `teform_song.pdf` really is a rule chart with no lyrics, and
-`104 Week 11 Slide.pdf` really teaches 〜の？, 〜んだ and つもり with no
-vocabulary slide anywhere in it.
-"""
+"""Durable storage and reviewed use of patterns found during extraction."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 import pytest
 
-# Imported as a module so tests can patch the `claude_client` object `patterns`
-# actually holds. `tests/test_claude_client.py` deletes that module from
-# `sys.modules` to test import behaviour, so a fresh `from japanese_anki import
-# claude_client` here would return a *different* object and patching it would
-# leave the real `parse_call` in place — which is a live API call from the test
-# suite, and how this was found.
-from japanese_anki import patterns as patterns_module
 from japanese_anki.patterns import (
     Pattern,
     PatternError,
     PatternSet,
-    extract_patterns,
     format_patterns,
     load_store,
     reviewed_patterns,
     save_store,
     verb_pairs_in,
+    with_prompt_provenance,
     worked_examples_in,
 )
-
-
-class FakeInput:
-    """Stands in for a prepared PDF."""
-
-    def __init__(self, name: str = "week11.pdf") -> None:
-        self.origin_path = Path(name)
-
-    def content_block(self) -> dict[str, Any]:
-        return {"type": "document", "source": {"type": "base64", "data": ""}}
-
-
-class Parsed:
-    def __init__(self, kind: str, title: str, patterns: list[Any]) -> None:
-        self.kind, self.title, self.patterns = kind, title, patterns
-
-
-class Item:
-    def __init__(self, template: str, gloss: str = "", examples: list[str] | None = None,
-                 where: str = "") -> None:
-        self.template, self.gloss = template, gloss
-        self.examples, self.where = examples or [], where
-
-
-def fake_call(parsed: Any, stop_reason: str = "end_turn", refusal: Any = None):
-    """Replaces `claude_client.parse_call`."""
-    from japanese_anki.claude_client import CallResult
-
-    def call(*_args: Any, **_kwargs: Any) -> CallResult:
-        return CallResult(parsed=parsed, stop_reason=stop_reason, refusal=refusal)
-
-    return call
-
-
-# --- reading a document -----------------------------------------------------
-
-
-def test_a_lesson_deck_yields_the_grammar_it_teaches(monkeypatch: pytest.MonkeyPatch) -> None:
-    parsed = Parsed("lesson", "Week 11", [
-        Item("〜の？", "casual explanatory question", ["どうしたの?"], "slides 5-14"),
-        Item("ない form + つもり", "an intention not to do something", [], "slides 15-31"),
-    ])
-    monkeypatch.setattr(patterns_module.claude_client, "parse_call", fake_call(parsed))
-
-    result = extract_patterns(FakeInput(), model="test-model", instructions="I")
-
-    assert result.kind == "lesson"
-    assert [p.template for p in result.patterns] == ["〜の？", "ない form + つもり"]
-    assert result.patterns[0].examples == ("どうしたの?",)
-    assert result.reviewed is False, "inferred, so nothing uses it yet"
-
-
-def test_a_pattern_document_is_labelled_as_one(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A te-form chart contains almost no vocabulary and is entirely about a
-    form. Reading it for its word list throws away what it was written for."""
-    parsed = Parsed("pattern", "Te-form Song", [Item("う・つ・る → って", "godan て-form")])
-    monkeypatch.setattr(patterns_module.claude_client, "parse_call", fake_call(parsed))
-
-    assert extract_patterns(FakeInput("teform.pdf"), model="m", instructions="I").kind == "pattern"
-
-
-def test_a_kind_the_model_invents_becomes_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        patterns_module.claude_client,
-        "parse_call",
-        fake_call(Parsed("worksheet", "", [Item("〜たい")])),
-    )
-
-    assert extract_patterns(FakeInput(), model="m", instructions="I").kind == "unknown"
-
-
-def test_a_pattern_with_no_template_is_dropped(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A gloss with nothing to recognise it by cannot steer a sentence, and
-    would sit in the store looking like content."""
-    parsed = Parsed("lesson", "", [Item("", "something"), Item("〜んだ", "explains")])
-    monkeypatch.setattr(patterns_module.claude_client, "parse_call", fake_call(parsed))
-
-    found = extract_patterns(FakeInput(), model="m", instructions="I")
-
-    assert [p.template for p in found.patterns] == ["〜んだ"]
-
-
-def test_a_truncated_answer_is_refused_not_salvaged(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A cut-off answer looks exactly like a complete one with fewer patterns,
-    and nothing downstream could tell the difference."""
-    monkeypatch.setattr(
-        patterns_module.claude_client, "parse_call", fake_call(None, "max_tokens")
-    )
-
-    with pytest.raises(PatternError, match="max_tokens"):
-        extract_patterns(FakeInput(), model="m", instructions="I")
-
-
-def test_a_refusal_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        patterns_module.claude_client,
-        "parse_call",
-        fake_call(None, "refusal", "declined"),
-    )
-
-    with pytest.raises(PatternError, match="declined"):
-        extract_patterns(FakeInput(), model="m", instructions="I")
-
 
 # --- nothing unreviewed steers a sentence -----------------------------------
 
@@ -204,13 +87,12 @@ def test_no_reviewed_patterns_is_an_empty_block() -> None:
     assert format_patterns([]) == ""
 
 
-def test_the_block_says_the_patterns_are_a_preference() -> None:
-    """A sentence forced into a pattern that does not suit the word is worse
-    than one in ordinary Japanese."""
+def test_the_block_is_labelled_pattern_data_not_hidden_instruction() -> None:
     block = format_patterns([Pattern("〜んだ", "explains background")])
 
+    assert block.startswith("Reviewed lesson patterns:")
     assert "〜んだ" in block and "explains background" in block
-    assert "never force" in block
+    assert "prefer" not in block.lower()
 
 
 # --- the store --------------------------------------------------------------
@@ -227,6 +109,26 @@ def test_the_store_round_trips(tmp_path: Path) -> None:
     again = load_store(path)
 
     assert again["week11.pdf"] == store["week11.pdf"]
+
+
+def test_prompt_provenance_is_optional_and_round_trips(tmp_path: Path) -> None:
+    entry = with_prompt_provenance(
+        PatternSet(
+            source="week11.pdf",
+            kind="lesson",
+            patterns=(Pattern("〜んだ", "explanation"),),
+        ),
+        {"model": "claude-opus-5", "response_schema_version": 3},
+    )
+    path = tmp_path / "patterns.json"
+
+    save_store(path, {entry.source: entry})
+
+    assert load_store(path)[entry.source] == entry
+    historical = PatternSet.from_dict(
+        "old.pdf", {"kind": "lesson", "patterns": []}
+    )
+    assert historical.prompt_provenance == {}
 
 
 def test_a_missing_store_is_empty_not_an_error(tmp_path: Path) -> None:

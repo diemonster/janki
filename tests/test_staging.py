@@ -94,6 +94,78 @@ def test_round_trip_preserves_records_and_metadata(tmp_path: Path) -> None:
     }
 
 
+def test_field_replacement_block_round_trips_the_old_values_it_authorizes(
+    tmp_path: Path,
+) -> None:
+    """A staged rewrite is authority to replace one exact old field value.
+
+    The proposal itself is deliberately not fingerprinted: a reviewer may edit
+    the proposed wording in staging.  What must stay fixed while that review is
+    open is the value it is about to replace in ``vocabulary.json``.
+    """
+    original = _record(usage_notes="old note")
+    proposed = _record(
+        meanings=["to converse"],
+        examples=[ExampleSentence(japanese="友達と話す。", english="I talk with a friend.")],
+        usage_notes="new note",
+    )
+    changes = {
+        original.id: {
+            "meanings": (original.meanings, proposed.meanings),
+            "examples": (original.examples, proposed.examples),
+            "usage_notes": (original.usage_notes, proposed.usage_notes),
+        }
+    }
+
+    block = staging_module.field_replacement_block([original], changes)
+    path = tmp_path / "ai.yaml"
+    write_staging(
+        path,
+        [proposed],
+        {staging_module.FIELD_REPLACEMENTS_KEY: block},
+    )
+
+    _records, meta = read_staging(path)
+    assert meta[staging_module.FIELD_REPLACEMENTS_KEY] == block
+    fields = block["records"][original.id]
+    assert fields == {
+        "meanings": staging_module.replacement_fingerprint(original, "meanings"),
+        "examples": staging_module.replacement_fingerprint(original, "examples"),
+        "usage_notes": staging_module.replacement_fingerprint(
+            original, "usage_notes"
+        ),
+    }
+
+
+def test_replacement_fingerprints_are_bound_to_the_record_and_field() -> None:
+    """A digest cannot be moved to another record or another same-valued field."""
+    first = _record(furigana="same", romaji="same")
+    second = _record(
+        id="word:聞く:きく", expression="聞く", reading="きく",
+        furigana="same", romaji="same",
+    )
+
+    fingerprints = {
+        staging_module.replacement_fingerprint(first, "furigana"),
+        staging_module.replacement_fingerprint(first, "romaji"),
+        staging_module.replacement_fingerprint(second, "furigana"),
+    }
+
+    assert len(fingerprints) == 3
+
+
+@pytest.mark.parametrize("field", ["id", "expression", "reading", "source", "tags"])
+def test_replacement_metadata_refuses_fields_that_merge_cannot_replace(
+    field: str,
+) -> None:
+    item = _record()
+
+    with pytest.raises(StagingError, match=field):
+        staging_module.field_replacement_block(
+            [item], {item.id: {field: ("old", "new")}}
+        )
+
+
 def test_the_file_is_a_records_mapping_load_records_already_understands(tmp_path: Path) -> None:
     path = tmp_path / "candidates.yaml"
 
@@ -136,6 +208,62 @@ def test_a_metadata_key_outside_the_contract_is_written_with_a_warning(
     assert "source_file" not in err.split("is not one of")[0]
     _, meta = read_staging(path)
     assert meta["reviewer"] == "me"
+
+
+def test_provider_is_recognized_staging_metadata(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "ai.yaml"
+
+    write_staging(path, [_record()], {"provider": "anthropic"})
+
+    assert capsys.readouterr().err == ""
+    _, meta = read_staging(path)
+    assert meta["provider"] == "anthropic"
+
+
+def test_a_generated_review_run_id_is_recognized_and_round_trips(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "ai.yaml"
+    run_id = staging_module.new_review_run_id()
+
+    write_staging(path, [_record()], {"review_run_id": run_id})
+
+    assert capsys.readouterr().err == ""
+    _, meta = read_staging(path)
+    assert staging_module.review_run_id(meta) == run_id
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        "",
+        "not-a-uuid",
+        "11111111-1111-1111-8111-111111111111",
+        "11111111-1111-4111-1111-111111111111",
+        "11111111-1111-4111-8111-11111111111A",
+        42,
+    ],
+)
+def test_write_staging_refuses_a_malformed_review_run_id(
+    tmp_path: Path, value: object
+) -> None:
+    path = tmp_path / "ai.yaml"
+
+    with pytest.raises(StagingError, match="review-run-id-invalid"):
+        write_staging(path, [_record()], {"review_run_id": value})
+
+
+def test_read_staging_refuses_a_hand_edited_malformed_review_run_id(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "ai.yaml"
+    path.write_text("review_run_id: not-a-uuid\nrecords: []\n", encoding="utf-8")
+
+    with pytest.raises(StagingError, match="review-run-id-invalid"):
+        read_staging(path)
 
 
 def test_force_overwrites(tmp_path: Path) -> None:

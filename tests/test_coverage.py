@@ -572,5 +572,10 @@ def test_the_promote_command_sends_the_coverage_template(
 
     assert sent, "the command reached the model"
     assert prompts.load(REPO_ROOT, "approve-coverage") in sent[0]
-    for other in ("patterns", "enrich-examples", "extract-table"):
+    for other in (
+        "extract-auto",
+        "extract-table",
+        "extract-prose",
+        "enrich-bare-word",
+    ):
         assert prompts.load(REPO_ROOT, other) not in sent[0], other

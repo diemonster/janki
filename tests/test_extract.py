@@ -15,7 +15,7 @@ import pytest
 import yaml
 
 from conftest import seed_prompts
-from japanese_anki import cli, extract, prompts
+from japanese_anki import cli, extract, patterns, prompts
 from japanese_anki.claude_client import CallResult, Refusal
 from japanese_anki.extract import ExtractError, build_records, known_ids, prompt_name
 from japanese_anki.inputs import PreparedInput
@@ -33,7 +33,8 @@ def candidate(**overrides: Any) -> Any:
         "reading": "はなす",
         "meanings": ["to speak"],
         "part_of_speech": "verb",
-        "example": "",
+        "examples": [],
+        "usage_notes": "",
         "page": 12,
         "context": "話す　はなす　to speak",
         "confidence": "high",
@@ -163,6 +164,28 @@ def test_an_unknown_mode_is_refused() -> None:
     assert "table" in str(excinfo.value)
 
 
+def test_the_response_schema_rejects_superseded_or_unknown_fields() -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="example"):
+        extract.candidate_schema().model_validate(
+            {"candidates": [{"expression": "話す", "example": "話します。"}]}
+        )
+    with pytest.raises(ValidationError, match="aside"):
+        extract.candidate_schema().model_validate(
+            {
+                "candidates": [
+                    {
+                        "expression": "話す",
+                        "examples": [
+                            {"japanese": "話します。", "aside": "not in contract"}
+                        ],
+                    }
+                ]
+            }
+        )
+
+
 def test_the_known_word_list_rides_in_the_user_turn_not_the_system_blocks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -200,6 +223,40 @@ def test_the_file_is_sent_as_its_content_block(
     extract.extract_candidates(item, model="claude-opus-5", style_guide="S", system="S")
 
     assert call.calls[0]["content"][0] == item.content_block()
+
+
+def test_source_patterns_share_the_extraction_calls_prompt_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parsed = extract.candidate_schema()(
+        document_kind="lesson",
+        document_title="Week 11",
+        patterns=[
+            {
+                "template": "〜んだ",
+                "gloss": "explanation",
+                "examples": ["大変だったんだ。"],
+                "where": "page 2",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        extract.claude_client,
+        "parse_call",
+        FakeCall(CallResult(parsed, "end_turn", None)),
+    )
+
+    result = extract.extract_candidates(
+        prepared(tmp_path),
+        model="claude-opus-5",
+        style_guide="STYLE",
+        system="SOURCE",
+    )
+
+    assert result.pattern_set.kind == "lesson"
+    assert [item.template for item in result.pattern_set.patterns] == ["〜んだ"]
+    assert result.pattern_set.prompt_provenance["model"] == "claude-opus-5"
+    assert result.pattern_set.prompt_provenance["response_schema_version"] == 3
 
 
 # --- stop-reason discipline --------------------------------------------------
@@ -479,27 +536,35 @@ def test_a_candidate_with_no_reading_keeps_its_malformed_id(tmp_path: Path) -> N
     assert record.reading == ""
 
 
-def test_a_source_excerpt_stays_evidence_and_never_becomes_an_example(
-    tmp_path: Path,
-) -> None:
-    # The camera pilot's trust failure: the excerpt is what the source *shows*,
-    # not a sentence anyone accepted as teaching content. It must survive as
-    # reviewable evidence — a reviewer promotes it by writing it into
-    # `examples` during staging review — but the canonical field stays empty.
+def test_rich_candidate_content_becomes_a_reviewable_record(tmp_path: Path) -> None:
     [record] = build_records(
-        [candidate(example="日本語を話します。")], prepared(tmp_path)
+        [
+            candidate(
+                examples=[
+                    {
+                        "japanese": "日本語を話します。",
+                        "speech_level": "polite",
+                        "furigana": "日本語[にほんご]を 話[はな]します。",
+                        "romaji": "nihongo o hanashimasu.",
+                        "english": "I speak Japanese.",
+                    }
+                ],
+                usage_notes="Often takes と for the person spoken with.",
+            )
+        ],
+        prepared(tmp_path),
     )
 
-    assert record.examples == []
-    assert record.source.raw_fields["example"] == "日本語を話します。"
+    assert [item.japanese for item in record.examples] == ["日本語を話します。"]
+    assert record.examples[0].register == "polite"
+    assert record.usage_notes == "Often takes と for the person spoken with."
+    assert "example_authority" not in record.source.raw_fields
 
 
-def test_a_candidate_without_an_excerpt_records_no_example_evidence(
+def test_a_candidate_without_examples_keeps_the_rich_fields_empty(
     tmp_path: Path,
 ) -> None:
-    # An absent key is what "the source showed no sentence" means; an empty
-    # string would read as evidence of an empty cell.
-    [record] = build_records([candidate(example="  ")], prepared(tmp_path))
+    [record] = build_records([candidate(examples=[])], prepared(tmp_path))
 
     assert record.examples == []
     assert "example" not in record.source.raw_fields
@@ -547,8 +612,10 @@ def test_already_known_candidates_are_marked_and_sorted_last(
     assert records[0].romaji == "taberu"
     assert "record-romaji-from-reading" in records[0].source.raw_fields["janki_repairs"]
     assert records[1].source.raw_fields["already_known"] == "true"
-    assert records[1].romaji == ""
-    assert "janki_repairs" not in records[1].source.raw_fields
+    assert records[1].romaji == "hanasu"
+    assert "record-romaji-from-reading" in records[1].source.raw_fields[
+        "janki_repairs"
+    ]
 
 
 def test_repeated_candidate_rows_do_not_create_duplicate_canonical_records(
@@ -770,7 +837,152 @@ def test_extract_writes_one_staging_file_per_input(
     assert code == 0
     assert (root / "staging" / "lesson.pdf.yaml").is_file()
     assert (root / "staging" / "lesson2.pdf.yaml").is_file()
+    _, first_meta = read_staging(root / "staging" / "lesson.pdf.yaml")
+    _, second_meta = read_staging(root / "staging" / "lesson2.pdf.yaml")
+    assert first_meta["review_run_id"] != second_meta["review_run_id"]
     assert "Wrote 2 staging file(s)" in capsys.readouterr().out
+
+
+def test_one_source_call_writes_cards_and_patterns_with_the_same_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = project(tmp_path)
+    parsed = extract.candidate_schema()(
+        candidates=[candidate()],
+        document_kind="lesson",
+        document_title="Week 11",
+        patterns=[
+            {
+                "template": "〜んだ",
+                "gloss": "explanation",
+                "examples": ["大変だったんだ。"],
+                "where": "page 1",
+            }
+        ],
+    )
+    call = FakeCall(CallResult(parsed, "end_turn", None))
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
+
+    code = cli.main(
+        ["--root", str(root), "extract", "--yes", str(source_pdf(tmp_path))]
+    )
+
+    assert code == 0
+    assert len(call.calls) == 1
+    _records, meta = read_staging(root / "staging" / "lesson.pdf.yaml")
+    stored = cli.patterns.load_store(root / "data" / "patterns.json")["lesson.pdf"]
+    assert [item.template for item in stored.patterns] == ["〜んだ"]
+    assert stored.prompt_provenance == meta["prompt_provenance"]
+    assert meta["pattern_set"]["patterns"][0]["template"] == "〜んだ"
+
+
+def test_extract_preserves_reviewed_patterns_but_stages_the_new_rich_answer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = project(tmp_path)
+    pattern_path = root / "data" / "patterns.json"
+    reviewed = patterns.PatternSet(
+        source="lesson.pdf",
+        kind="lesson",
+        title="Reviewed lesson",
+        patterns=(patterns.Pattern("〜たことがある", "past experience"),),
+        reviewed=True,
+        prompt_provenance={"request_fingerprint": "reviewed-request"},
+    )
+    patterns.save_store(pattern_path, {reviewed.source: reviewed})
+    parsed = extract.candidate_schema()(
+        candidates=[candidate(usage_notes="fresh card answer")],
+        document_kind="lesson",
+        document_title="Fresh model answer",
+        patterns=[
+            {
+                "template": "〜んだ",
+                "gloss": "explanation",
+                "examples": ["大変だったんだ。"],
+                "where": "page 1",
+            }
+        ],
+    )
+    call = FakeCall(CallResult(parsed, "end_turn", None))
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
+
+    code = cli.main(
+        ["--root", str(root), "extract", "--yes", str(source_pdf(tmp_path))]
+    )
+
+    assert code == 0
+    assert len(call.calls) == 1, "reviewed patterns do not skip the rich source call"
+    assert patterns.load_store(pattern_path)["lesson.pdf"] == reviewed
+    staged, meta = read_staging(root / "staging" / "lesson.pdf.yaml")
+    assert staged[0].usage_notes == "fresh card answer"
+    assert meta["pattern_set"]["reviewed"] is False
+    assert meta["pattern_set"]["patterns"][0]["template"] == "〜んだ"
+    assert "kept the reviewed patterns" in capsys.readouterr().out
+
+
+def test_extract_force_replaces_reviewed_patterns_as_unreviewed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = project(tmp_path)
+    pattern_path = root / "data" / "patterns.json"
+    reviewed = patterns.PatternSet(
+        source="lesson.pdf",
+        kind="lesson",
+        patterns=(patterns.Pattern("〜たことがある", "past experience"),),
+        reviewed=True,
+        prompt_provenance={"request_fingerprint": "reviewed-request"},
+    )
+    patterns.save_store(pattern_path, {reviewed.source: reviewed})
+    parsed = extract.candidate_schema()(
+        candidates=[candidate()],
+        document_kind="lesson",
+        document_title="Fresh model answer",
+        patterns=[
+            {
+                "template": "〜んだ",
+                "gloss": "explanation",
+                "examples": ["大変だったんだ。"],
+                "where": "page 1",
+            }
+        ],
+    )
+    call = FakeCall(CallResult(parsed, "end_turn", None))
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
+
+    code = cli.main(
+        [
+            "--root",
+            str(root),
+            "extract",
+            "--yes",
+            "--force",
+            str(source_pdf(tmp_path)),
+        ]
+    )
+
+    assert code == 0
+    assert len(call.calls) == 1
+    replacement = patterns.load_store(pattern_path)["lesson.pdf"]
+    assert replacement.reviewed is False
+    assert replacement.title == "Fresh model answer"
+    assert [item.template for item in replacement.patterns] == ["〜んだ"]
+    _records, meta = read_staging(root / "staging" / "lesson.pdf.yaml")
+    assert replacement.prompt_provenance == meta["prompt_provenance"]
+
+
+def test_extract_force_help_names_the_reviewed_pattern_reset(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The flag replaces human-reviewed state, not only disposable output."""
+    with pytest.raises(SystemExit) as excinfo:
+        cli.build_parser().parse_args(["extract", "--help"])
+
+    assert excinfo.value.code == 0
+    help_text = " ".join(capsys.readouterr().out.lower().split())
+    assert "replace a reviewed pattern set" in help_text
+    assert "unreviewed" in help_text
 
 
 def test_cli_reuses_a_source_in_the_default_parent_inbox(
@@ -928,7 +1140,17 @@ def test_the_staging_file_records_its_provenance_and_never_the_api_key(
     assert str(root) not in json.dumps(meta, ensure_ascii=False)
 
 
-def test_prompt_fingerprints_change_with_the_prompt_not_the_path(tmp_path: Path) -> None:
+def test_prompt_fingerprints_cover_the_anthropic_wire_schema_not_the_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    marker = {"value": "wire-v1"}
+
+    class FakeAnthropic:
+        @staticmethod
+        def transform_schema(schema: Any) -> dict[str, Any]:
+            return {"wire": marker["value"], "name": schema.__name__}
+
+    monkeypatch.setattr(extract.claude_client, "load_anthropic", lambda: FakeAnthropic)
     item = prepared(tmp_path)
     base = extract.prompt_provenance(
         item, model="m", style_guide="style", system="S", mode="prose", known=()
@@ -938,7 +1160,20 @@ def test_prompt_fingerprints_change_with_the_prompt_not_the_path(tmp_path: Path)
     )
     assert base["system_prompt_fingerprint"] == changed["system_prompt_fingerprint"]
     assert base["user_prompt_fingerprint"] != changed["user_prompt_fingerprint"]
+    assert base["response_schema_fingerprint"] == prompts.schema_fingerprint(
+        {"wire": "wire-v1", "name": "Extraction"}
+    )
+    assert base["request_fingerprint"] != changed["request_fingerprint"]
     assert str(tmp_path) not in json.dumps(base)
+
+    marker["value"] = "wire-v2"
+    transformed = extract.prompt_provenance(
+        item, model="m", style_guide="style", system="S", mode="prose", known=()
+    )
+    assert transformed["response_schema_fingerprint"] != base[
+        "response_schema_fingerprint"
+    ]
+    assert transformed["request_fingerprint"] != base["request_fingerprint"]
 
 
 def test_the_input_is_copied_into_the_inbox_and_cited(
@@ -1174,7 +1409,12 @@ def test_a_candidate_with_no_expression_is_counted_not_hidden(
                 candidate(),
                 candidate(
                     expression="  ",
-                    example="毎日日本語を話します。",
+                    examples=[
+                        {
+                            "japanese": "毎日日本語を話します。",
+                            "speech_level": "polite",
+                        }
+                    ],
                     confidence="low",
                     inclusion_reason="new in this chapter",
                 ),
@@ -1194,9 +1434,8 @@ def test_a_candidate_with_no_expression_is_counted_not_hidden(
     assert "page: 12" in note
     assert "はなす" in note
     assert "to speak" in note
-    # Every field the model filled in, not a hand-picked few: the example read
-    # verbatim off the page and the low-confidence flag both matter to whoever
-    # re-adds the word by hand.
+    # Every field the model filled in, not a hand-picked few: the proposed
+    # example and low-confidence flag both matter to whoever re-adds the word.
     assert "毎日日本語を話します。" in note
     assert "verb" in note
     assert "low" in note

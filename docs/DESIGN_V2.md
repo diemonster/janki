@@ -1,4 +1,8 @@
-> **Historical.** `docs/DESIGN.md` is the leading design document. Parts of this file describe subsystems that are already deleted (the jpdb sentence oracle, the model-audit checks, review gating and its `review_model` config, the hardening corpus and its coverage oracles, the repair-proposal flow, and the Azure TTS provider with its `azure_voice`/`azure_region` keys and `AZURE_SPEECH_KEY`) or scheduled for deletion by the remaining M8 milestones (VOICEVOX steering for sentences); it is kept only as a record of how the project got here. **Nothing in it is a working example.** The `janki.toml` block below is the config as it was designed rather than as it loads today: most of its keys still resolve, three warn as unknown, and the prose around it names environment variables and future work that are no longer either.
+> **Historical design record.** `docs/DESIGN.md` is the leading design
+> document. This file preserves the rationale and milestone framing accepted
+> in August 2026; where they disagree, `DESIGN.md` wins. Command, prompt,
+> provenance, and configuration examples below are kept current so historical
+> discussion does not advertise a deleted interface.
 
 # Design v2: Multi-Source, AI-First Pipeline
 
@@ -43,23 +47,22 @@ Two v1 limitations are retired, deliberately:
 ```text
 Shirabe CSV      jpdb API / exports    PDFs & photos (class material)
      |                  |                        |
-     |                  |                  janki extract  (Claude, vision)
-     |                  |                        |
-     |                  |               data/staging/*.yaml
-     |                  |                (human review)
-     |                  |                        |
-     v                  v                        v
-  import-shirabe    import-jpdb              promote
-     \                  |                       /
-      +---------- merge (curation-safe) ------+
+     |                  |              janki extract (one source call)
+     |                  |                   /               \
+     |                  |      rich cards in staging     unreviewed patterns
+     |                  |             |                 data/patterns.json
+     v                  v             v                         |
+  import-shirabe    import-jpdb     promote              patterns --review
+     \                  |             /                         |
+      +---------- merge (curation-safe) ------------------------+
                         |
                         v
         data/normalized/vocabulary.json          data/ledger.json
          (canonical card content)              (machine-written state)
                         |
                         v
-        janki enrich  (jpdb dictionary data + plain code + Claude API)
         janki audio   (VOICEVOX / Azure TTS -> data/media/audio/)
+        janki enrich  (jpdb facts + complete bare-word AI call)
                         |
                         v
           validation -> deck YAML -> deterministic builder
@@ -80,16 +83,15 @@ judgment is generated — never the other way around.
 | Work | Who does it | Why |
 | --- | --- | --- |
 | Readings, furigana, pitch accent, frequency, POS/verb group | **jpdb dictionary data** | Facts. Never generate what you can look up. |
-| Romaji (Hepburn, from kana), conjugation tables | **Plain code** | Rule-based. No tokens needed. Long vowels, っ gemination, ん assimilation, ゃゅょ digraphs are a table, not a judgment call. |
-| Example sentences, usage notes, meaning polish | **Claude API** | Judgment. This is what the model is for. |
-| PDF/photo → candidate records | **Claude API (vision)** | No mechanical parser exists for class handouts. |
 | Word/sentence audio | **TTS (VOICEVOX / Azure)** | With reading + accent forced from dictionary data. |
+| Canonical structural derivations and conjugation tables | **Plain code** | Deterministic artifact shaping, not interpretation of Japanese. |
+| Meanings, two examples, annotations, and usage notes | **Claude API or Codex** | One complete answer per bare vocabulary record. |
+| PDF/photo → complete candidate cards and source patterns | **Claude API (vision)** | One source-aware call preserves source context and avoids a second paid reading. |
 
-Romaji is called out explicitly because it is in the goal sentence: a
-kana→Hepburn converter runs during `enrich` (and on import) whenever
-`reading` is present and `romaji` is empty — for records and for example
-sentences alike. Example-sentence romaji comes from the same converter fed
-by the example's furigana.
+Romaji remains a separate stored field. Model-authored cards return it beside
+the Japanese and furigana; deterministic record-processing code may derive or
+normalise it where the input already supplies the necessary reading. It does
+not choose readings or second-guess the model's Japanese.
 
 ## Data sources
 
@@ -177,44 +179,49 @@ readings to mine, and scans — and two file kinds: PDFs and phone photos
 (HEIC/JPEG). All go through the same two-step flow because none can be
 parsed mechanically.
 
-**Step 1 — AI extraction** (`janki extract FILE... [--mode table|prose]`):
+**Step 1 — one rich source call**
+(`janki extract FILE... [--mode table|prose]`):
 
 - Accepts `.pdf`, `.jpg`, `.png`, `.heic` (HEIC converted to JPEG on the
-  fly via `sips` on macOS / pillow-heif elsewhere). PDFs go to the Claude
-  API as `document` content blocks; images as `image` blocks. Scans need no
-  OCR step — PDF support is vision-backed, each page is processed as an
-  image. Source files are copied into `data/inbox/scans/` for provenance if
-  not already under `data/inbox/`.
-- Uses **structured outputs** (`client.messages.parse()` with a Pydantic
-  schema mirroring the candidate-record shape), so the result is
-  schema-valid on normal completion. The command checks `stop_reason`
-  before trusting output: `refusal` → clear `ExtractError`; `max_tokens` →
-  re-run per-page or raise, never silently truncate.
-- The system prompt embeds `docs/JAPANESE_STYLE_GUIDE.md` with a
-  `cache_control` breakpoint, so repeated extractions reuse the cached
-  prefix.
-- `--mode table` transcribes vocab lists faithfully; `--mode prose` mines
-  card-worthy vocabulary from running text. Default: the model detects the
-  shape per page. In prose mode, the prompt includes the list of known
-  expressions so the model skips them.
-- Each candidate carries provenance in the schema itself: page number,
-  surrounding context line, and a confidence level. (Citations would be
-  nicer but are incompatible with structured outputs — self-reported page
-  numbers are fine for a human-reviewed step.)
-- Output goes to `data/staging/<source-name>.yaml`. `extract` refuses to
-  overwrite an existing staging file without `--force` — staging files hold
-  un-committed human edits, the one thing in the repo that git can't
-  recover.
-- After extraction, each candidate is annotated `already_known: true` when
-  its ID (or expression+reading) matches an existing record; known
-  candidates sort last so review effort goes to the new words.
+  fly via `sips` on macOS / pillow-heif elsewhere). PDFs go to Claude as
+  `document` content blocks and images as `image` blocks. Source files are
+  copied into `data/inbox/scans/` for provenance when they are not already
+  under `data/inbox/`.
+- Uses a strict structured-output schema. Every candidate is a complete card
+  proposal: meanings, two examples with Japanese/furigana/romaji/English,
+  usage notes, part of speech, and source location. An everyday polite or
+  casual source sentence can be preserved verbatim; formal or literary text
+  stays verbatim in source context while the examples keep the card's two
+  polite/casual slots. A table or list entry without a sentence receives
+  pedagogical examples in the same response.
+- The same answer identifies the document kind/title and emits its grammar or
+  usage patterns. There is no second paid pattern-reading call.
+- Three complete task templates live in `prompts/extract-auto.md`,
+  `prompts/extract-table.md`, and `prompts/extract-prose.md`; all use
+  `prompts/style-guide.md`. `--mode` selects the shape-specific template, and
+  omitting it lets the model choose the source shape.
+- Each candidate keeps page/context/confidence provenance. The staging
+  metadata additionally records the immutable source SHA-256, provider,
+  model, mode, response-schema version and fingerprint, component prompt
+  fingerprints, and a fingerprint of the full provider-normalized request
+  across style, task, labelled data turn, transport prompt, and wire schema.
+- Output goes to `data/staging/<source-name>.yaml`, and the answer's unreviewed
+  `PatternSet` goes to `data/patterns.json`. A copy of that set remains in the
+  staging metadata so the paid answer is recoverable even when the stored set
+  is already reviewed. Without `--force`, extraction never overwrites a
+  staging file or a reviewed stored pattern set; `--force` replaces both and
+  the new stored set is unreviewed.
+- Staging files are committed review artifacts. After extraction, known
+  candidates are annotated and sorted after new candidates so review effort
+  goes to the new words.
 
-**Staging file shape** (pinned, so `janki validate` works on it as-is):
-a mapping with a `records:` list — the shape `load_records` already
-accepts — plus metadata keys (`source_file`, `extracted_at`, `model`,
-`review_notes`) that the loader ignores. Validation errors on incomplete
-candidates (missing meanings, kanji without reading) are the *expected
-review signal*, not breakage.
+**Staging file shape**: a mapping with a `records:` list plus source,
+coverage, prompt-provenance, and `pattern_set` metadata. The source answer is
+a proposal, not implicit study-content approval. To accept its example text,
+the reviewer adds `example_authority: staging-review` under that record's
+`source.raw_fields`; promotion replaces the sentinel with fingerprints of the
+exact Japanese sentences reviewed. Merely promoting a row does not grant that
+authority.
 
 **Step 2 — human review, then promote** (`janki promote data/staging/X.yaml`):
 
@@ -227,10 +234,16 @@ review signal*, not breakage.
   is better evidence than corpus frequency. This catches the most damaging
   extraction error class (wrong reading → wrong ID → wrong audio) without
   punishing correct homograph readings.
-- Surviving records merge into `vocabulary.json`; promoted rows move to
-  `data/staging/done/<file>`; held-back rows are *rewritten in place* with
-  their hold reason inline, so a partially-promoted file always shows
-  exactly what still needs attention. The file is removed when empty.
+- Surviving records merge into `vocabulary.json`; promoted rows move to a
+  per-invocation archive under `data/staging/done/`. New rich extraction and
+  large AI-review files persist a `review_run_id`; that id plus the complete
+  request provenance identifies the archive. A partial promote reuses its
+  archive, while a later invocation with the same staging basename — even an
+  identical request — gets a deterministic suffixed path instead of being
+  folded into the completed run. Schema-v2/no-id staging falls back to its
+  recorded provenance. Held-back rows are *rewritten in place* with their hold
+  reason inline, so a partially-promoted file always shows exactly what still
+  needs attention. The file is removed when empty.
 
 Model choice: extraction defaults to `claude-opus-5` — scans and dense
 handouts are where errors are most expensive, since they propagate into
@@ -389,11 +402,11 @@ starts tracking records it could never update.
 
 Anthropic-backed AI runs inside `janki` via the Anthropic Python SDK.
 Immediate `enrich --ai` can instead launch the authenticated Codex CLI.
-`ANTHROPIC_API_KEY`
-from the environment (or an `ant auth login` profile — the SDK resolves
-it). The `prompts/` directory shrinks to what it is: documentation of
-review workflows for a human driving a coding agent, no longer the
-enrichment mechanism.
+`ANTHROPIC_API_KEY` comes from the environment (or an authenticated profile
+the SDK resolves). Prompts are executable templates: Anthropic receives
+`prompts/style-guide.md` and `prompts/enrich-bare-word.md` byte for byte on
+each run; the Codex provider uses the same blocks with its documented
+preamble.
 
 **`janki enrich [--jpdb] [--ai] [IDS...]`**
 
@@ -401,31 +414,28 @@ enrichment mechanism.
   fills — romaji from kana, conjugation tables from `verb_group`
   (godan/ichidan/suru/くる rule tables; anything irregular beyond those is
   left empty and flagged, never guessed). Cheap, fast, run freely.
-- `--ai`: for records still missing examples or usage notes (ledger-aware),
-  one structured-output request each: system prompt = style guide (cached;
-  1-hour TTL when batching), user content = the record + its jpdb facts +
-  a few recently generated examples (so contexts vary across the deck
-  instead of producing 「毎日〜します」 two hundred times). Pydantic schema
-  covers exactly the enrichable fields, including example romaji/furigana.
-- **Mechanical QC before anything is accepted** — AI examples get the same
-  distrust AI extraction gets:
-  - the example must contain the target expression or one of its
-    code-generated conjugated forms, or it is rejected;
-  - example furigana is verified against jpdb `/parse` of the sentence;
-    mismatches are flagged (model-guessed segmentation must not silently
-    drive sentence audio);
-  - results fill empty fields only, run through validation, and show a
-    diff before save.
-- For large runs, results route through the same staging/promote flow PDFs
-  use — a 500-record y/n diff is not review; a staging file is.
-- **Meaning polish is a separate, explicit operation** —
-  `enrich --ai --polish-meanings` — because meanings are never empty (the
-  importer always fills them), so fill-empty semantics can never touch
-  them. It always shows old→new per record and requires confirmation.
-- Immediate enrichment writes with Claude; provider, model, and (for Codex)
-  reasoning effort are independently configurable, and Codex remains a
-  supported provider. Meaning polish and review retain separate Claude model
-  settings, so changing the enrichment provider cannot change them by accident.
+- `--ai`: one complete structured answer per bare vocabulary record:
+  meanings, two annotated examples, and a usage note. The labelled data turn
+  includes the record, dictionary facts, accepted existing material, recent
+  examples for variety, and reviewed patterns from lesson documents.
+- The model response is the Japanese interpretation. janki owns structural
+  schema enforcement, fill/replace policy, fingerprints, and merging; it does
+  not run a second Japanese-reading rules engine over the answer.
+- By default the pass fills empty fields. `--force-fields` explicitly names
+  fields the answer may replace; existing examples are preserved unless
+  `examples` is named, while an accepted stored set may gain one sentence for
+  each unoccupied polite or casual slot.
+- Immediate runs show the proposed changes and use the configured Anthropic or
+  Codex provider. Provider, model, and Codex reasoning effort are independently
+  configurable.
+- Runs of 50 records or more write `data/staging/ai-enrichment.yaml` instead
+  of modifying the collection directly. The staging metadata records the
+  provider/model, a full request fingerprint and input fingerprint per record,
+  changed fields, and `field_replacements` bindings: a hash of each record ID,
+  field name, and exact old wire value. The proposal itself is intentionally
+  editable. Promotion re-reads every bound target first and rejects the whole
+  merge if any record was deleted or any old value changed, so a stale answer
+  cannot partially overwrite newer curation.
 
 **Batch mode** (`enrich --ai --batch-submit` / `--batch-fetch`): the
 Message Batches API halves token cost but jobs can take hours, so it is
@@ -435,12 +445,11 @@ refuses while a batch is pending. Worth it for backfilling a
 thousand-word jpdb mining deck; pointless for the weekly ten words (which
 run synchronously in seconds for cents).
 
-`--polish-meanings` accepts the same batch actions for large source decks.
-Fetch preserves its per-record diff and y/n/q review; quitting records only
-the proposals still unseen, so another fetch resumes locally without another
-model call. Each request is fingerprinted at submission; a record edited while
-the batch is running keeps its newer curation and the older answer is reported
-and ignored.
+Batch submission uses the same complete bare-word contract and fingerprints.
+Fetch either applies a small result through the normal fill/replace policy or
+routes a large result through the same bound staging file. A pending batch is
+recorded in the ledger, and `--batch-forget` explicitly abandons one that can
+no longer be applied.
 
 ## Audio
 
@@ -593,16 +602,22 @@ janki build [DECK | --all] [--only-new]   # DECK = path, or bare name resolved i
 janki import-jpdb [--deck NAME | --all-decks | FILE.csv] [--prefer-incoming F,..]
 janki import-jpdb-reviews reviews.json
 janki jpdb ping
-janki extract FILE... [--mode table|prose] [--model ID] [--force]
-janki promote data/staging/X.yaml [--skip-reading-check]
-janki enrich [--jpdb] [--ai] [--polish-meanings] [--batch-submit|--batch-fetch]
-             [--force-fields F,..] [--yes] [IDS...]
 janki audio [--words] [--examples] [--provider P] [--force] [--prune]
+janki extract FILE... [--mode table|prose] [--model ID] [--force] [--yes]
+janki promote data/staging/X.yaml [--accept-coverage] [--skip-reading-check]
+janki enrich [--jpdb] [--ai]
+             [--batch-submit|--batch-fetch|--batch-forget]
+             [--force-fields F,..] [--model ID] [--force] [--yes] [IDS...]
+janki patterns [--review DOCUMENT ...]
             [IDS...]
 janki status [--unexported] [--missing-audio] [--duplicates] [--staged] [--rebuild] [--format ids]
 janki refresh [--deck DECK]   # the weekly loop, in order (below)
 janki migrate-inline DECK.yaml   # one-time, Milestone 1
 ```
+
+`patterns` takes no source files and makes no model call. With no options it
+lists stored pattern sets; `--review` marks one or more documents reviewed.
+The paid source reading already happened in `extract`.
 
 **`janki refresh`** exists because the honest alternative is a six-command
 incantation with unstated ordering dependencies (audio needs pitch accent,
@@ -624,7 +639,7 @@ commands print progress; everything that writes shows what it wrote.
 
 ## Configuration
 
-`janki.toml` additions (all optional, defaults shown):
+Representative current `janki.toml` settings (all optional):
 
 ```toml
 [paths]
@@ -632,14 +647,13 @@ ledger_file = "data/ledger.json"
 staging_dir = "data/staging"
 media_dir   = "data/media"
 scan_inbox  = "data/inbox/scans"
+patterns_file = "data/patterns.json"
 
 [ai]
 extract_model = "claude-opus-5"
 enrich_provider = "anthropic"
 enrich_model = "claude-opus-5"
 enrich_reasoning_effort = "ultra"
-polish_model = "claude-opus-5"
-review_model = "claude-opus-5"
 
 [tts]
 provider     = "voicevox"          # or "azure"
@@ -688,6 +702,12 @@ free.
 4. `janki migrate-inline` moves the current inline `verbs.yaml` records
    into `vocabulary.json` (IDs preserved) so the new pipeline can reach
    them.
+5. The M7.6P consolidation has no compatibility CLI or config keys: source
+   pattern discovery is part of `extract`, and bare-word meaning improvement
+   is part of `enrich --ai`. Existing `data/patterns.json` review decisions
+   remain readable; new extraction entries add optional prompt provenance.
+   In-flight AI staging uses the current `field_replacements` contract rather
+   than a legacy merge pathway.
 
 ## Risks and open items
 
@@ -721,11 +741,12 @@ free.
 2. **jpdb**: API client, `import-jpdb` (API + CSV alias extension),
    `enrich --jpdb` (+ romaji converter + conjugation tables), reviews
    import + `exclude_tags` documentation, schema additions.
-3. **PDF/photos**: `extract` (PDF + image inputs, staging, known-word
-   annotation), `promote` with the reading-set cross-check and partial
-   promotion.
-4. **AI enrichment**: `enrich --ai` with mechanical QC + staging routing;
-   `--polish-meanings`; batch submit/fetch.
+3. **PDF/photos**: one rich `extract` call (PDF + image inputs, complete card
+   proposals, source patterns, staging, and known-word annotation), then
+   `promote`; `patterns` only lists and reviews what extraction emitted.
+4. **AI enrichment**: one complete bare-word `enrich --ai` contract for
+   meanings, examples, and usage notes; immediate and batch execution; full
+   request/input provenance and old-value-bound staging for large results.
 5. **Audio**: pitch-conversion module with golden test set (merge gate);
    VOICEVOX provider (accent_phrases flow); media_dir resolution +
    passthrough warning; **notetype-upgrade verification against a live

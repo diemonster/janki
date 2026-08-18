@@ -75,7 +75,7 @@ Never exported: personal-vocabulary 0 of 0, verbs 3 of 3
 Missing word audio: 3 of 3
 Missing example audio: 4 of 4 sentence(s)
 Stale audio: 0
-Missing enrichment: 2 (no example sentence, or no usage notes)
+Missing enrichment: 2 (no meanings or example sentence)
 Missing pitch accent: 3
 Staged for review: none
 ```
@@ -123,23 +123,17 @@ is what makes `build --only-new` correct. An export entry also records what the
 record was *missing* when it shipped, so a word that went out silent and has a
 clip now can be reported rather than silently left behind.
 
-`enriched` *is* written, by the passes that write records directly:
-`janki enrich --jpdb`, `--ai` and `--polish-meanings` each leave their own
-entry, and they accumulate rather than replace, because a dictionary pass and a
-writing pass describe different work.
+`enriched` *is* written by the passes that write records directly:
+`janki enrich --jpdb` and `--ai` each leave their own entry, and they
+accumulate rather than replace because a dictionary pass and a complete
+bare-word writing pass describe different work.
 
-With one gap worth knowing: a large `--ai` run — fifty records or more, or a
-`--batch-fetch` of that size — writes proposals to `data/staging/` instead, and
-`janki promote` then usually adds nothing to the ledger at all: every row merges
-into a record that already exists, so there is no addition to record, and the
-sighting it would write is the one that record's import already wrote, so the
-ledger drops it as a duplicate — `registered 0 new record(s) and 0 new source
-sighting(s)`. The exception is a record the ledger has never heard of, typed
-into `vocabulary.json` by hand without a `status --rebuild`; that one does gain
-an entry and a sighting here. So the model that wrote them survives in the staging file's
-`model:` metadata and not in the ledger. If you care which model wrote a batch
-of examples, keep the promoted staging file (`janki promote` archives it under
-`data/staging/done/`).
+Large `--ai` runs — fifty records or more, or a `--batch-fetch` of that size —
+write proposals to `data/staging/`. Promotion records an AI enrichment entry
+for exactly the fields the reviewed merge actually wrote, including provider,
+model, and the answer's complete request fingerprint. The archived staging
+file retains the per-record input fingerprints and old-value replacement
+bindings as the fuller review artifact.
 
 ## What `--only-new` promises
 

@@ -9,7 +9,7 @@ import os
 import secrets
 import stat
 import tempfile
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -684,6 +684,8 @@ def merge_records(
     existing: list[VocabularyRecord],
     incoming: list[VocabularyRecord],
     prefer_incoming: Iterable[str] = (),
+    *,
+    prefer_incoming_by_id: Mapping[str, Iterable[str]] | None = None,
 ) -> tuple[list[VocabularyRecord], dict[str, MergeOutcome]]:
     """Merge an import into stored records without destroying curation.
 
@@ -693,7 +695,11 @@ def merge_records(
     disagreement is reported as a conflict. ``tags`` is a sorted union;
     ``source`` is the existing record's, unconditionally — the first sighting
     sticks and later ones belong in the ledger. Fields named in
-    ``prefer_incoming`` fall back to incoming-wins for deliberate refreshes.
+    ``prefer_incoming`` falls back to incoming-wins for deliberate refreshes.
+    ``prefer_incoming_by_id`` is the narrower form used by reviewed staging:
+    only those fields on that one record replace a non-empty value.  It carries
+    no authority by itself; :func:`japanese_anki.staging.authorized_field_replacements`
+    verifies the old-value fingerprints before a caller passes the result here.
 
     Returns the merged records sorted by id, plus an outcome map covering
     **exactly the incoming record ids** — existing records the import never
@@ -702,6 +708,10 @@ def merge_records(
     the first row is lost.
     """
     prefer = frozenset(validate_prefer_incoming(prefer_incoming))
+    per_record = {
+        str(record_id): frozenset(validate_prefer_incoming(fields))
+        for record_id, fields in (prefer_incoming_by_id or {}).items()
+    }
     by_id: dict[str, VocabularyRecord] = {}
     for record in existing:
         if record.id in by_id:
@@ -724,7 +734,9 @@ def merge_records(
             by_id[new.id] = copy.deepcopy(new)
             outcomes[new.id] = MergeOutcome(label="added")
             continue
-        merged, outcome = _merge_one(old, new, prefer)
+        merged, outcome = _merge_one(
+            old, new, prefer | per_record.get(new.id, frozenset())
+        )
         by_id[new.id] = merged
         seen = outcomes.get(new.id)
         outcomes[new.id] = _combine_outcomes(seen, outcome) if seen else outcome

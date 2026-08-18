@@ -26,10 +26,18 @@ SHIPPED = (
     "extract-auto",
     "extract-table",
     "extract-prose",
-    "enrich-examples",
-    "polish-meanings",
-    "patterns",
+    "enrich-bare-word",
     "approve-coverage",
+)
+
+#: The complete card-writing contract has exactly these four input shapes.
+#: The style guide is shared context and approve-coverage counts source units;
+#: neither is a rich-card task template.
+RICH_TEMPLATES = (
+    "extract-auto",
+    "extract-table",
+    "extract-prose",
+    "enrich-bare-word",
 )
 
 
@@ -40,7 +48,7 @@ def test_a_prompt_is_sent_exactly_as_written(tmp_path: Path) -> None:
     """No stripping, no normalization, no trailing-newline tidying.
 
     The file and the request have to be the same bytes, or a person reading
-    `prompts/patterns.md` is reading something subtly unlike what the model
+    `prompts/extract-table.md` is reading something subtly unlike what the model
     got — and the difference would be invisible from either side.
     """
     body = "  Leading spaces.\n\n\nThree blank lines above.\n\n"
@@ -146,10 +154,10 @@ def test_a_missing_prompt_names_its_full_path(tmp_path: Path) -> None:
     """An error, never an empty string. A pass that ran with no instructions
     would return something that looks like an answer."""
     with pytest.raises(prompts.PromptError) as raised:
-        prompts.load(tmp_path, "enrich-examples")
+        prompts.load(tmp_path, "enrich-bare-word")
 
     message = str(raised.value)
-    assert str(tmp_path / "prompts" / "enrich-examples.md") in message
+    assert str(tmp_path / "prompts" / "enrich-bare-word.md") in message
     assert "will not run a pass without it" in message
 
 
@@ -191,6 +199,12 @@ def test_the_directory_holds_no_file_nothing_sends() -> None:
     on_disk = {path.stem for path in (REPO_ROOT / prompts.DIRECTORY).glob("*.md")}
 
     assert on_disk == {*SHIPPED, "README"}
+
+
+def test_card_writing_has_exactly_four_rich_task_templates() -> None:
+    """Three source shapes and one bare-record shape, with no extra pass."""
+    assert set(SHIPPED) - {"style-guide", "approve-coverage"} == set(RICH_TEMPLATES)
+    assert len(RICH_TEMPLATES) == 4
 
 
 def test_the_three_extraction_modes_are_three_complete_files() -> None:
@@ -269,9 +283,7 @@ def _recorder(result: object):
 
 
 def test_the_enrichment_pass_sends_the_file_it_was_given() -> None:
-    """Dropping `instructions` from the system blocks left the suite green, and
-    so did wiring this pass to `polish-meanings.md`. A pass sending the wrong
-    prompt asks the model for the wrong work and reports success."""
+    """Dropping `instructions` from the system blocks must be visible."""
     from japanese_anki import enrich
     from japanese_anki.claude_client import CallResult
     from japanese_anki.models import SourceReference, VocabularyRecord
@@ -285,31 +297,29 @@ def test_the_enrichment_pass_sends_the_file_it_was_given() -> None:
 
     enrich.enrich_ai(
         [record], model="m", style_guide="STYLE-GUIDE-MARKER",
-        instructions=prompts.load(REPO_ROOT, "enrich-examples"),
+        instructions=prompts.load(REPO_ROOT, "enrich-bare-word"),
         ids=["word:話す:はなす"], parse_call=call,
     )
 
     [sent] = call.sent
-    assert prompts.load(REPO_ROOT, "enrich-examples") in sent, "verbatim, not a paraphrase"
+    assert prompts.load(REPO_ROOT, "enrich-bare-word") in sent, (
+        "verbatim, not a paraphrase"
+    )
     # A distinctive marker: the prompt itself contains "Genki" and "Give", so a
     # single capital G was satisfied by the instructions alone.
     assert "STYLE-GUIDE-MARKER" in sent, "and the style guide rides along"
 
 
-def test_each_pass_would_notice_being_handed_another_passes_prompt() -> None:
-    """The two enrichment prompts are different documents and must stay so.
+def test_each_rich_input_shape_has_a_complete_distinct_template() -> None:
+    """Each file stands alone and asks for the same complete card contract."""
+    texts = {name: prompts.load(REPO_ROOT, name) for name in RICH_TEMPLATES}
 
-    Swapping `enrich-examples.md` and `polish-meanings.md` at their call sites
-    was undetectable. This does not pin the wiring by itself — the test above
-    does — but it pins the premise that makes that test meaningful: if the two
-    files ever became interchangeable, nothing downstream could tell.
-    """
-    examples = prompts.load(REPO_ROOT, "enrich-examples")
-    polish = prompts.load(REPO_ROOT, "polish-meanings")
-
-    assert examples != polish
-    assert "gloss" in polish.lower(), "polish is about the English glosses"
-    assert "example sentence" in examples.lower(), "examples is about sentences"
+    assert len(set(texts.values())) == 4
+    for name, text in texts.items():
+        lowered = text.lower()
+        assert "gloss" in lowered, name
+        assert "example" in lowered, name
+        assert "usage note" in lowered, name
 
 
 # --- the wiring: which file each command actually sends -------------------------
@@ -358,10 +368,9 @@ def _sent_system(
     # second module object while the production modules keep the first.
     # Patching only one of the two left the real client reachable and tripped
     # conftest's billed-client guard — in the full suite, not in isolation.
-    # `tests/test_patterns.py` documents the same hazard.
-    from japanese_anki import cli, coverage, enrich, extract, patterns
+    from japanese_anki import cli, coverage, enrich, extract
 
-    for module in (claude_client, cli, enrich, extract, patterns, coverage):
+    for module in (claude_client, cli, enrich, extract, coverage):
         target = getattr(module, "claude_client", module)
         monkeypatch.setattr(target, "parse_call", call, raising=False)
     monkeypatch.setattr(claude_client, "parse_call", call)
@@ -397,35 +406,22 @@ def _wiring_project(tmp_path: Path) -> Path:
     return tmp_path
 
 
-@pytest.mark.parametrize(
-    "argv,expected",
-    [
-        (["enrich", "--ai", "--yes"], "enrich-examples"),
-        (["enrich", "--polish-meanings", "--yes"], "polish-meanings"),
-    ],
-    ids=["ai", "polish"],
-)
-def test_each_enrichment_command_sends_its_own_template(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, argv: list[str], expected: str
+def test_enrichment_sends_the_bare_word_rich_template(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Repointing `cli.py`'s loader call at the other template was invisible.
-
-    The two prompts ask for different work — one writes example sentences, the
-    other rewrites English glosses — so a swap produces confidently wrong cards
-    and reports success.
-    """
+    """The only bare-record call asks for the whole card in one answer."""
     from japanese_anki import cli
 
     root = _wiring_project(tmp_path)
     seen = _sent_system(monkeypatch)
 
-    cli.main(["--root", str(root), *argv])
+    cli.main(["--root", str(root), "enrich", "--ai", "--yes"])
 
     assert seen, "the command reached the model"
+    expected = "enrich-bare-word"
     wanted = prompts.load(REPO_ROOT, expected)
     assert any(wanted in text for text in seen), f"{expected}.md was not sent"
-    others = {"enrich-examples", "polish-meanings"} - {expected}
-    for other in others:
+    for other in set(RICH_TEMPLATES) - {expected}:
         assert not any(prompts.load(REPO_ROOT, other) in t for t in seen), (
             f"{other}.md was sent instead"
         )
@@ -441,16 +437,8 @@ def test_each_enrichment_command_sends_its_own_template(
     )
 
 
-@pytest.mark.parametrize(
-    "argv,expected",
-    [
-        (["enrich", "--ai", "--batch-submit", "--yes"], "enrich-examples"),
-        (["enrich", "--polish-meanings", "--batch-submit", "--yes"], "polish-meanings"),
-    ],
-    ids=["ai-batch", "polish-batch"],
-)
-def test_each_batch_builder_sends_its_own_template(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, argv: list[str], expected: str
+def test_the_batch_builder_sends_the_same_bare_word_rich_template(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The batch path builds the same request bodies without calling the model,
     so `parse_call` never fires and the interactive tests above miss it
@@ -468,7 +456,9 @@ def test_each_batch_builder_sends_its_own_template(
                         lambda requests: submitted.append(requests) or "batch_test",
                         raising=False)
 
-    cli.main(["--root", str(root), *argv])
+    cli.main(
+        ["--root", str(root), "enrich", "--ai", "--batch-submit", "--yes"]
+    )
 
     assert submitted, "a batch was built"
     # Read the system blocks, not a JSON dump of them: `json.dumps` escapes the
@@ -479,9 +469,12 @@ def test_each_batch_builder_sends_its_own_template(
         for request in batch
         for block in request["params"]["system"]
     )
+    expected = "enrich-bare-word"
     assert prompts.load(REPO_ROOT, expected) in system, f"{expected}.md was not sent"
-    other = ({"enrich-examples", "polish-meanings"} - {expected}).pop()
-    assert prompts.load(REPO_ROOT, other) not in system, f"{other}.md was sent instead"
+    for other in set(RICH_TEMPLATES) - {expected}:
+        assert prompts.load(REPO_ROOT, other) not in system, (
+            f"{other}.md was sent instead"
+        )
     assert prompts.load(REPO_ROOT, "style-guide") in system, "the style guide too"
 
 
@@ -510,7 +503,7 @@ def test_every_extraction_mode_sends_its_own_file(
     assert seen
     wanted = extract.prompt_name(mode)
     assert any(prompts.load(REPO_ROOT, wanted) in t for t in seen), wanted
-    for other in {"extract-table", "extract-prose", "extract-auto"} - {wanted}:
+    for other in set(RICH_TEMPLATES) - {wanted}:
         assert not any(prompts.load(REPO_ROOT, other) in t for t in seen), other
     # The style guide too, and it matters more here than anywhere: the same
     # variable feeds `prompt_provenance`, which writes
@@ -559,35 +552,3 @@ def test_the_recorded_provenance_names_the_guide_that_was_sent(
     assert provenance["system_prompt_fingerprint"] == prompts.fingerprint(
         prompts.load(REPO_ROOT, "extract-prose")
     )
-
-
-def test_the_patterns_command_sends_the_patterns_template(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """`command_patterns` was rewirable at `approve-coverage.md` undetected —
-    a document read for the grammar it teaches, asked instead whether a page
-    was accounted for."""
-    from japanese_anki import cli
-
-    root = _wiring_project(tmp_path)
-    handout = root / "inbox" / "teform.pdf"
-    handout.parent.mkdir(parents=True, exist_ok=True)
-    handout.write_bytes(b"%PDF-1.4\n%x\n")
-    seen = _sent_system(monkeypatch)
-
-    cli.main(["--root", str(root), "patterns", str(handout)])
-
-    assert seen, "the command reached the model"
-    assert any(prompts.load(REPO_ROOT, "patterns") in t for t in seen)
-    assert not any(prompts.load(REPO_ROOT, "approve-coverage") in t for t in seen)
-    # The style guide too. `cli.py` hands it to six senders and to one
-    # recorder; replacing it with "" at each of the seven, one at a time, is
-    # caught at all seven now — six by assertions like this one and the
-    # seventh by the provenance test above, which was the last to be written.
-    # Dropping it leaves cards that are still cards, so nothing downstream
-    # notices: they are simply no longer written to this project's
-    # conventions.
-    assert any(prompts.load(REPO_ROOT, "style-guide") in text for text in seen), (
-        "the style guide was not sent"
-    )
-

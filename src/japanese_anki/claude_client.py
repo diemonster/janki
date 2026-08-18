@@ -1,7 +1,7 @@
 """The single owner of the Anthropic client.
 
-Every Anthropic-backed AI feature — ``extract`` (M3.3),
-``--polish-meanings`` (M4.3), review, and batch submit/fetch (M4.4) — calls
+Every Anthropic-backed AI feature — source extraction, bare-word enrichment,
+coverage approval, and batch submit/fetch — calls
 :func:`parse_call` rather than building its own client. One owner means one
 place where the model is chosen, the API key is resolved, the style guide is
 cached, and the **stop reason is handed back to the caller** — the last of
@@ -15,9 +15,9 @@ successful response rather than an exception. Returning a tuple makes that
 impossible to forget: a caller has to name the stop reason to reach the data,
 so "check ``stop_reason`` before trusting the output" is enforced by the
 signature instead of by everyone remembering. What to *do* about each reason
-is the caller's — M3.3 turns ``refusal`` into an ``ExtractError`` naming the
-category and refuses truncated output outright — because a truncated
-vocabulary table and a truncated meaning polish deserve different answers.
+is the caller's — extraction turns ``refusal`` into an ``ExtractError`` naming
+the category and refuses truncated output outright, while per-record
+enrichment reports the affected record and continues.
 
 Immediate ``enrich --ai`` calls may instead use :mod:`codex_client`; both
 providers return the same :class:`CallResult` shape.
@@ -57,7 +57,13 @@ __all__ = [
     "read_style_guide",
     "submit_batch",
     "system_blocks",
+    "wire_schema",
 ]
+
+
+def wire_schema(schema: Any) -> Any:
+    """The response schema after the Anthropic SDK's wire transformation."""
+    return load_anthropic().transform_schema(schema)
 
 #: Where the API key comes from. Environment only — janki never reads a secret
 #: from ``janki.toml`` (DESIGN_V2 "Secrets are environment-only").
@@ -78,11 +84,10 @@ DEFAULT_MAX_TOKENS = 16000
 #: Reasoning depth for every pass. Inside ``output_config`` beside the schema,
 #: not a top-level field.
 #:
-#: Every janki pass writes study content, so every one of them runs here:
-#: extraction reads a photo and mints identities, pattern reading decides what
-#: a handout teaches, enrichment writes the sentences a learner will study, and
-#: meaning polish rewrites the glosses on the front of a card. There is no pass
-#: whose answer is worth less than the others'.
+#: Every janki pass writes study content or authorizes its movement, so every
+#: one runs here: extraction reads a source and mints identities plus patterns,
+#: enrichment writes complete card content, and coverage approval guards a
+#: promotion. There is no pass whose answer is worth less than the others'.
 DEFAULT_EFFORT = "xhigh"
 
 #: Models that accept ``output_config.effort`` at :data:`DEFAULT_EFFORT`.
@@ -325,11 +330,10 @@ def _request_body(
     that quietly sent a different ``max_tokens`` or lost the output format would
     return answers the synchronous path would never have produced.
     """
-    anthropic = load_anthropic()
     output_config: dict[str, Any] = {
         "format": {
             "type": "json_schema",
-            "schema": anthropic.transform_schema(schema),
+            "schema": wire_schema(schema),
         }
     }
     # Omitted rather than sent as None: a model that does not support effort

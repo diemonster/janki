@@ -59,18 +59,31 @@ def test_it_names_the_fields_jpdb_actually_fills() -> None:
     assert "reading witness" in flat
 
 
-def test_it_does_not_promise_one_answer_when_there_are_four_passes() -> None:
-    """Consolidating the passes is the open half of M7.6P. The doc described
-    the destination as the present tense until a review caught it."""
+def test_it_describes_the_consolidated_rich_template_contract_in_the_present() -> None:
+    """Three source shapes and one bare-word shape now return complete cards."""
     from japanese_anki import prompts
 
-    sending = {
-        name
-        for name in ("extract-auto", "enrich-examples", "polish-meanings", "patterns")
-        if prompts.load(REPO_ROOT, name)
+    rich_templates = {
+        "extract-auto",
+        "extract-table",
+        "extract-prose",
+        "enrich-bare-word",
     }
-    assert len(sending) == 4, "four passes send templates"
-    assert "four passes" in DESIGN, "and the doc says so rather than 'one answer'"
+    assert all(prompts.load(REPO_ROOT, name) for name in rich_templates)
+    flat = " ".join(DESIGN.lower().split())
+    assert "one rich template per input shape" in flat
+    assert "four passes" not in flat
+    assert "--polish-meanings" not in flat
+    assert "`patterns`" not in flat
+
+
+def test_it_distinguishes_card_writing_from_opt_in_coverage_approval() -> None:
+    """Coverage is paid and model-backed, but it never authors card content."""
+    flat = " ".join(DESIGN.lower().split())
+
+    assert "two paid card-writing paths" in flat
+    assert "`promote --accept-coverage`" in flat
+    assert "two paid call paths" not in flat
 
 
 def test_it_attributes_stroke_order_to_the_source_that_licenses_it() -> None:

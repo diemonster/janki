@@ -30,15 +30,14 @@ you meant, and ``/parse`` picks for itself unless it is told. So the pass runs
 
 from __future__ import annotations
 
-import functools
-import hashlib
 import json
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, is_dataclass, replace
 from dataclasses import fields as dc_fields
 from typing import Any
 
-from japanese_anki import claude_client, jpdb, pitch, qc
+from japanese_anki import ai_schema as ai_schema_module
+from japanese_anki import claude_client, codex_client, jpdb, pitch, prompts, qc
 from japanese_anki.conjugation import conjugate
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import (
@@ -65,15 +64,18 @@ __all__ = [
     "EnrichResult",
     "SuggestionResult",
     "AI_FIELDS",
-    "POLISH_FIELDS",
     "STAGING_THRESHOLD",
+    "AiResult",
+    "BatchApplyResult",
+    "BatchPlan",
     "ai_prompt",
+    "ai_input_fingerprint",
+    "ai_request_fingerprint",
     "ai_schema",
     "ai_targets",
     "absorb_ai_call",
     "apply_ai_result",
     "apply_batch_results",
-    "apply_polish_batch_results",
     "batch_custom_id",
     "batch_key_map",
     "batch_requests",
@@ -84,13 +86,6 @@ __all__ = [
     "format_ai_no_changes",
     "needs_reading",
     "parse_force_fields",
-    "polish_meanings",
-    "polish_batch_requests",
-    "polish_call_outcome",
-    "polish_prompt",
-    "polish_prompt_fingerprint",
-    "polish_schema",
-    "polish_targets",
     "suggest_readings",
 ]
 
@@ -121,7 +116,7 @@ ENRICHABLE_FIELDS: tuple[str, ...] = (
 #: Fields the AI pass may write. Disjoint from :data:`ENRICHABLE_FIELDS` on
 #: purpose — a dictionary pass and a writing pass fill different holes, and a
 #: record needing one does not need the other.
-AI_FIELDS: tuple[str, ...] = ("examples", "usage_notes")
+AI_FIELDS: tuple[str, ...] = ("meanings", "examples", "usage_notes")
 
 # The order :func:`format_field_diff` prints known fields in: jpdb's pass, then
 # the AI pass. Anything outside it still prints, after these.
@@ -1007,8 +1002,9 @@ def format_field_diff(
 
 # --- the AI pass -------------------------------------------------------------
 #
-# jpdb fills what a dictionary knows. This fills what it does not: an example
-# sentence a beginner can read, and a note about how the word is actually used.
+# jpdb fills what a dictionary knows. This fills what it does not: meanings in
+# the record's context, example sentences a beginner can read, and a note about
+# how the word is actually used.
 # The prompt template states the whole contract and nothing audits the answer
 # (M8.3) — what follows is fill discipline and derivation.
 
@@ -1023,59 +1019,9 @@ VARIETY_EXAMPLES = 3
 STAGING_THRESHOLD = 50
 
 
-@functools.cache
 def ai_schema() -> Any:
-    """The Pydantic model an AI enrichment response must match.
-
-    Built on demand and cached, for the same reasons :func:`extract` builds its
-    own that way: ``pydantic`` arrives with the ``ai`` extra, and a fresh class
-    per call would present an identical schema to the API as new every request.
-    """
-    from pydantic import BaseModel, Field
-
-    class GeneratedExample(BaseModel):
-        japanese: str = Field(description="The sentence, in Japanese.")
-        # Not `register`: that name shadows an attribute on pydantic's BaseModel
-        # and the class emits a warning on every construction. The record field
-        # keeps the linguistic term.
-        speech_level: str = Field(
-            default="polite",
-            description=(
-                "'polite' for a 〜ます/です sentence, 'casual' for the plain form "
-                "a friend would use."
-            ),
-        )
-        furigana: str = Field(
-            default="",
-            description=(
-                "The same sentence in Anki furigana notation — 話[はな]す — with "
-                "a space before every bracketed group that follows kana."
-            ),
-        )
-        romaji: str = Field(
-            default="",
-            description=(
-                "The sentence in Hepburn romaji, with spaces at the word "
-                "boundaries and particles spelled as they are said — は is "
-                "wa, へ is e, を is o. Checked letter by letter against the "
-                "reading your furigana gives; kept when it agrees, and "
-                "replaced by a mechanical transliteration when it does not."
-            ),
-        )
-        english: str = Field(default="", description="A natural English translation.")
-
-    class Enrichment(BaseModel):
-        examples: list[GeneratedExample] = Field(default_factory=list)
-        usage_notes: str = Field(
-            default="",
-            description=(
-                "How the word is actually used: register, common collocations, "
-                "what a learner is likely to get wrong. Empty if there is "
-                "nothing worth saying."
-            ),
-        )
-
-    return Enrichment
+    """The rich-card response shared by source extraction and bare words."""
+    return ai_schema_module.rich_card_schema()
 
 
 def ai_targets(
@@ -1083,11 +1029,13 @@ def ai_targets(
 ) -> list[VocabularyRecord]:
     """The records an AI pass would work on.
 
-    Content-defined by default, via the ledger's own rule: a record with no
-    example sentence or no usage notes needs this pass, whatever any previous
-    pass recorded about it. Naming ids explicitly overrides that — re-running
-    over a record that already has an example is a legitimate thing to ask for,
-    and `--force-fields` is what decides whether the answer may replace it.
+    Content-defined by default: a record with no meaning or example sentence
+    needs this pass, whatever any previous pass recorded about it. A usage note
+    is deliberately not a completion signal: the rich prompt permits an empty
+    note when there is no useful, certain nuance to add.
+    Naming ids explicitly overrides that — re-running over a complete record is
+    a legitimate thing to ask for, and `--force-fields` decides whether the
+    answer may replace existing content.
     """
     if ids is not None:
         wanted = list(dict.fromkeys(ids))
@@ -1129,7 +1077,7 @@ def ai_prompt(
     recent: Sequence[str] = (),
     taught: str = "",
 ) -> str:
-    """The user turn for one record: what janki knows, and what it has seen.
+    """The data-only user turn for one record and its run context.
 
     The dictionary facts go in so the model writes about *this* word rather
     than a homograph — 一日 with its reading attached is a different request
@@ -1137,16 +1085,15 @@ def ai_prompt(
     an example of twenty verbs in a row, a model will write twenty variations
     of 毎日〜ます unless it can see that it already did.
 
-    ``taught`` is the grammar the learner is currently studying, from documents
-    they have read and reviewed. It is a preference, not an instruction: a
-    sentence forced into a pattern that does not suit the word is worse than one
-    in ordinary Japanese, and the block says so.
+    Instruction prose belongs to the task template under ``prompts/``. This
+    function only labels record data, reviewed lesson data, and recent output;
+    the template says what the model must do with each block.
     """
     lines = [f"Expression: {record.expression}"]
     if record.reading:
         lines.append(f"Reading: {record.reading}")
     if record.meanings:
-        lines.append("Meanings: " + "; ".join(record.meanings))
+        lines.append("Current meanings: " + "; ".join(record.meanings))
     for label, value in (
         ("Part of speech", record.part_of_speech),
         ("Verb group", record.verb_group),
@@ -1154,26 +1101,88 @@ def ai_prompt(
     ):
         if value:
             lines.append(f"{label}: {value}")
-    incomplete = pinned_examples(record)
-    if incomplete:
-        lines.append(
-            "\nExisting curated examples need annotations. Return each listed "
-            "Japanese string exactly; do not replace it or add a different "
-            "sentence. Fill only its empty English, furigana, and speech_level "
-            "values:\n"
-            + "\n".join(
-                f"- {json.dumps(example.japanese, ensure_ascii=False)}"
-                for example in incomplete
+    accepted = [
+        example for example in record.examples if example_accepted(record, example)
+    ]
+    if accepted:
+        lines.append("\nExisting curated examples:")
+        lines.extend(
+            "- "
+            + json.dumps(
+                {
+                    "japanese": example.japanese,
+                    "furigana": example.furigana,
+                    "romaji": example.romaji,
+                    "english": example.english,
+                    "speech_level": example.register,
+                },
+                ensure_ascii=False,
+                sort_keys=True,
             )
+            for example in accepted
         )
+    incomplete = pinned_examples(record)
+    lines.append("\nExisting curated examples requiring annotations:")
+    if incomplete:
+        lines.extend(
+            f"- {json.dumps(example.japanese, ensure_ascii=False)}"
+            for example in incomplete
+        )
+    else:
+        lines.append("(none)")
+    if record.usage_notes:
+        lines.append(f"\nCurrent usage notes: {record.usage_notes}")
     if taught:
         lines.append("\n" + taught)
+    lines.append("\nRecent examples from this run:")
     if recent:
-        lines.append(
-            "\nSentences already written in this run — write something "
-            "structurally different:\n" + "\n".join(f"- {item}" for item in recent)
-        )
+        lines.extend(f"- {item}" for item in recent)
+    else:
+        lines.append("(none)")
     return "\n".join(lines)
+
+
+def ai_input_fingerprint(
+    record: VocabularyRecord,
+    recent: Sequence[str] = (),
+    taught: str = "",
+) -> str:
+    """Identify the exact record-data turn used to request an answer."""
+    return prompts.fingerprint(ai_prompt(record, recent, taught))
+
+
+def ai_request_fingerprint(
+    record: VocabularyRecord,
+    *,
+    provider: str,
+    style_guide: str,
+    instructions: str,
+    recent: Sequence[str] = (),
+    taught: str = "",
+) -> str:
+    """Identify all prompt channels and the response schema for one call."""
+    user_turn = ai_prompt(record, recent, taught)
+    if provider == "anthropic":
+        wire_schema = claude_client.wire_schema(ai_schema())
+        transport_prompt: Any = {
+            "system": [style_guide, instructions],
+            "user": user_turn,
+        }
+    elif provider == "codex":
+        wire_schema = codex_client.wire_schema(ai_schema())
+        transport_prompt = codex_client.wire_prompt(
+            style_guide, instructions, user_turn
+        )
+    else:
+        raise EnrichError(f"Unknown AI enrichment provider {provider!r}")
+    return prompts.request_fingerprint(
+        provider=provider,
+        style_guide=style_guide,
+        task_template=instructions,
+        user_turn=user_turn,
+        transport_prompt=transport_prompt,
+        schema=wire_schema,
+    )
 
 
 @dataclass(slots=True)
@@ -1182,10 +1191,10 @@ class AiOutcome:
 
     record: VocabularyRecord
     changes: dict[str, tuple[Any, Any]] = field(default_factory=dict)
-    #: True when generated examples were discarded to preserve stored ones —
-    #: the preserve decision itself, carried first-class so the caller's
-    #: warning reports what this function did rather than re-deriving it from
-    #: proxies.
+    #: True when generated examples were discarded while stored ones were
+    #: preserved. A generated sentence may now fill an unoccupied labelled slot;
+    #: this records only the remainder that had nowhere safe to land, so the
+    #: caller's warning reports what this function actually did.
     preserved: bool = False
     #: Romaji the model supplied that does not transliterate its own sentence,
     #: one message per example. Carried rather than printed here because a
@@ -1231,6 +1240,52 @@ def _fill_existing_example_annotations(
     return merged
 
 
+def _complete_unoccupied_example_slots(
+    record: VocabularyRecord,
+    generated: Sequence[ExampleSentence],
+) -> tuple[list[ExampleSentence], bool]:
+    """Preserve stored sentences, then fill empty labelled card slots.
+
+    Slot occupancy is structural: it reads only the stored ``register`` labels
+    and the schema-constrained ``speech_level`` labels decoded onto incoming
+    examples. It never inspects a sentence to decide whether it is polite or
+    casual. A stored extract example without reviewer authority keeps the
+    preserve-only posture it had before this helper existed; only a collection
+    of accepted examples may be augmented without ``--force-fields examples``.
+
+    The boolean says whether any generated sentence was discarded. Carrying the
+    decision out of this function keeps the CLI warning aligned with partial
+    success, where one missing slot fills and an extra answer is still ignored.
+    """
+    merged = _fill_existing_example_annotations(record.examples, generated)
+    stored_texts = {example.japanese for example in record.examples}
+    unmatched = [
+        example for example in generated if example.japanese not in stored_texts
+    ]
+    if not all(example_accepted(record, example) for example in record.examples):
+        return merged, bool(unmatched)
+
+    occupied = {
+        example.register
+        for example in merged
+        if example.register in {"polite", "casual"}
+    }
+    used_texts = set(stored_texts)
+    discarded = False
+    for example in unmatched:
+        slot = example.register
+        if example.japanese in used_texts or slot not in {"polite", "casual"}:
+            discarded = True
+            continue
+        if slot in occupied:
+            discarded = True
+            continue
+        merged.append(example)
+        used_texts.add(example.japanese)
+        occupied.add(slot)
+    return merged, discarded
+
+
 def apply_ai_result(
     record: VocabularyRecord,
     parsed: Any,
@@ -1247,43 +1302,18 @@ def apply_ai_result(
 
     What remains is fill discipline and derivation: stored examples are
     preserved unless ``--force-fields examples`` asks otherwise, existing
-    annotations win over the model's, an unrecognized speech level reads as
-    polite, and romaji is checked against the reading rather than rebuilt from
-    it — see :func:`qc.settle_example_romaji` for why the rebuild had to go.
+    annotations win over the model's, the shared schema limits speech level to
+    the two card slots, and romaji is checked against the reading rather than
+    rebuilt from it — see :func:`qc.settle_example_romaji` for why the rebuild
+    had to go.
     """
     outcome = AiOutcome(record=record)
-    kept: list[ExampleSentence] = []
-    romaji_warnings: list[str] = []
-
-    for item in getattr(parsed, "examples", []) or []:
-        register = str(getattr(item, "speech_level", "") or "").strip().lower()
-        example = ExampleSentence(
-            japanese=str(getattr(item, "japanese", "") or "").strip(),
-            furigana=str(getattr(item, "furigana", "") or "").strip(),
-            # Carried, not dropped. This field was absent here for as long as
-            # the schema told the model its romaji was ignored — which made
-            # that instruction true, and made `settle_example_romaji` a check
-            # on an empty string. Every example arrived unsegmented, and the
-            # backfill pass built to fix that was fixing this.
-            romaji=str(getattr(item, "romaji", "") or "").strip(),
-            english=str(getattr(item, "english", "") or "").strip(),
-            # Anything the model does not label is polite: that is what the
-            # instructions ask for first and what every example written before
-            # the field existed actually is. Guessing "casual" would put a ます
-            # sentence in a slot labelled casual, which teaches the opposite of
-            # what the label says.
-            register=register if register in ("polite", "casual") else "polite",
-        )
-        if not example.japanese:
-            continue
-        settled, rejected = qc.settle_example_romaji(example)
-        if rejected:
-            romaji_warnings.append(rejected)
-        kept.append(settled)
-
+    content = ai_schema_module.adapt_rich_card(parsed)
+    kept = list(content.examples)
     proposals: dict[str, Any] = {
+        "meanings": list(content.meanings),
         "examples": kept,
-        "usage_notes": str(getattr(parsed, "usage_notes", "") or "").strip(),
+        "usage_notes": content.usage_notes,
     }
     # Stored examples are preserved unless the user asked for a replacement
     # (`--force-fields examples`) — including unaccepted machine-era sentences
@@ -1293,15 +1323,8 @@ def apply_ai_result(
     # pin an unaccepted sentence, so nothing here launders it into curated
     # content either.
     if record.examples and "examples" not in force_fields:
-        merged_examples = _fill_existing_example_annotations(
-            record.examples, kept
-        )
-        # This branch IS the preserve decision: a generated sentence that
-        # matched no stored text had nowhere to land. Recorded here, where the
-        # discard happens.
-        stored_texts = {example.japanese for example in record.examples}
-        outcome.preserved = any(
-            example.japanese not in stored_texts for example in kept
+        merged_examples, outcome.preserved = _complete_unoccupied_example_slots(
+            record, kept
         )
         updated = record
         changes: dict[str, tuple[Any, Any]] = {}
@@ -1328,7 +1351,7 @@ def apply_ai_result(
         updated, changes = _apply(record, proposals, writable)
     outcome.record = updated
     outcome.changes = changes
-    outcome.romaji_rejected = romaji_warnings
+    outcome.romaji_rejected = list(content.romaji_rejected)
     return outcome
 
 
@@ -1340,6 +1363,13 @@ class AiResult:
     changes: dict[str, dict[str, tuple[Any, Any]]] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     no_changes: list[str] = field(default_factory=list)
+    #: Exact full-call fingerprints, keyed by the record whose answer they
+    #: produced. The ledger can therefore say which style guide, task template,
+    #: record turn, and schema authored stored enrichment.
+    provenance: dict[str, str] = field(default_factory=dict)
+    #: Exact data-turn fingerprints. These are also the batch currency tokens:
+    #: an answer may land only while its input record still renders this turn.
+    input_fingerprints: dict[str, str] = field(default_factory=dict)
     looked_up: int = 0
 
     @property
@@ -1362,6 +1392,7 @@ def enrich_ai(
     records: Sequence[VocabularyRecord],
     *,
     model: str,
+    provider: str = "anthropic",
     style_guide: str,
     instructions: str,
     force_fields: Sequence[str] = (),
@@ -1371,7 +1402,7 @@ def enrich_ai(
     call_options: Mapping[str, Any] | None = None,
     taught: str = "",
 ) -> AiResult:
-    """Write examples and usage notes for the records that lack them.
+    """Write meanings, examples, and usage notes for incomplete records.
 
     One call per record keeps failures local to that record. Refusals and
     truncated answers are never salvaged, and nothing audits the answer —
@@ -1387,10 +1418,21 @@ def enrich_ai(
 
     for record in targets:
         result.looked_up += 1
+        recent_examples = recent[-VARIETY_EXAMPLES:]
+        user_turn = ai_prompt(record, recent_examples, taught)
+        result.input_fingerprints[record.id] = prompts.fingerprint(user_turn)
+        result.provenance[record.id] = ai_request_fingerprint(
+            record,
+            provider=provider,
+            style_guide=style_guide,
+            instructions=instructions,
+            recent=recent_examples,
+            taught=taught,
+        )
         call = caller(
             model,
             blocks,
-            ai_prompt(record, recent[-VARIETY_EXAMPLES:], taught),
+            user_turn,
             ai_schema(),
             client,
             **options,
@@ -1445,14 +1487,13 @@ def absorb_ai_call(
         force_fields=force_fields,
     )
     if outcome.preserved:
-        # Not an audit — a report of janki's own fill discipline: stored
-        # examples were preserved, so the freshly generated sentences had
-        # nowhere to land and were discarded. Without this line a user who
-        # asked for new sentences is silently told nothing happened.
+        # Not an audit — a report of janki's own fill discipline. One missing
+        # labelled slot may have filled; this flag names only generated answers
+        # left over after that structural merge.
         result.warnings.append(
-            f"{record.id}: stored examples were preserved, so the generated "
-            "sentences were discarded — pass --force-fields examples to "
-            "replace them."
+            f"{record.id}: stored examples were preserved; generated sentences "
+            "that did not fill an unoccupied polite/casual slot were discarded "
+            "— pass --force-fields examples to replace the stored set."
         )
     for rejected in outcome.romaji_rejected:
         # The sentence and its romaji disagree. janki kept the sentence and
@@ -1472,197 +1513,6 @@ def absorb_ai_call(
         )
     elif record.id not in result.changes and record.id not in result.no_changes:
         result.no_changes.append(record.id)
-
-
-# --- polishing meanings ------------------------------------------------------
-#
-# The one pass that rewrites a field that is already full. Every other pass in
-# this module fills holes, which is safe because a hole has no curation in it to
-# lose; this one proposes replacing English somebody may have typed, so it is a
-# separate flag, it never runs as a side effect of anything else, and the CLI
-# confirms it one record at a time.
-
-
-#: The only field this pass writes. A tuple so it reads like its siblings and
-#: so the ledger's ``fields`` list is built the same way.
-POLISH_FIELDS: tuple[str, ...] = ("meanings",)
-
-
-@functools.cache
-def polish_schema() -> Any:
-    """The Pydantic model a polish response must match. Cached, like the others."""
-    from pydantic import BaseModel, Field
-
-    class PolishedMeanings(BaseModel):
-        meanings: list[str] = Field(
-            default_factory=list,
-            description=(
-                "The English glosses for this word, best first. Empty if the "
-                "existing ones are already right."
-            ),
-        )
-
-    return PolishedMeanings
-
-
-def polish_targets(
-    records: Sequence[VocabularyRecord], ids: Sequence[str] | None = None
-) -> list[VocabularyRecord]:
-    """The records a polish pass would look at.
-
-    No content rule, unlike the other passes: ``meanings`` is never empty, so
-    there is no hole to test for and "which records need this" is a judgment
-    only the person running it can make. Without ``--ids`` that is every
-    record, and the caller says so out loud before spending anything.
-    """
-    if ids is None:
-        return list(records)
-    known = {record.id: record for record in records}
-    missing = [item for item in ids if item not in known]
-    if missing:
-        raise EnrichError(
-            f"No record with id {missing[0]!r}. Ids come from vocabulary.json; "
-            "'janki status' lists them."
-        )
-    return [known[item] for item in dict.fromkeys(ids)]
-
-
-def polish_prompt(record: VocabularyRecord) -> str:
-    """The user turn for one record: the word, its current glosses, its examples.
-
-    The examples are the point. 「先生に聞く」 and 「音楽を聞く」 are the same
-    verb with two glosses a learner needs kept apart, and the sentences the
-    record was collected with are the only evidence janki has for which one it
-    means.
-    """
-    lines = [f"Word: {record.expression}"]
-    if record.reading:
-        lines.append(f"Reading: {record.reading}")
-    lines.append("Current meanings: " + "; ".join(record.meanings or ["(none)"]))
-    for label, value in (
-        ("Part of speech", record.part_of_speech),
-        ("Verb group", record.verb_group),
-        ("Transitivity", record.transitivity),
-    ):
-        if value:
-            lines.append(f"{label}: {value}")
-    sentences = [item.japanese for item in record.examples if item.japanese]
-    if sentences:
-        lines.append(
-            "\nThe sentences this record was collected with — they say which "
-            "sense it means:\n" + "\n".join(f"- {item}" for item in sentences)
-        )
-    if record.usage_notes:
-        lines.append(f"\nUsage notes on file: {record.usage_notes}")
-    return "\n".join(lines)
-
-
-def polish_prompt_fingerprint(record: VocabularyRecord) -> str:
-    """Identify the exact record content a polish answer was requested for."""
-    return hashlib.sha256(polish_prompt(record).encode("utf-8")).hexdigest()
-
-
-@dataclass(frozen=True, slots=True)
-class PolishOutcome:
-    """One record's turn through the pass: what was proposed, or why nothing was."""
-
-    record: VocabularyRecord
-    proposed: VocabularyRecord | None = None
-    changes: Mapping[str, tuple[Any, Any]] = field(default_factory=dict)
-    warning: str = ""
-
-
-def apply_polish_result(record: VocabularyRecord, parsed: Any) -> PolishOutcome:
-    """Turn a model's gloss list into a proposal, or into nothing.
-
-    Nothing is the common case and is not an error: the instructions ask for an
-    empty list when the existing glosses are already right, and a list that
-    comes back identical to the one on file is the same answer spelled longer.
-
-    A pass that emptied ``meanings`` would leave a card with a Japanese side and
-    no English one, so an answer that reduces to nothing is refused rather than
-    written — the record keeps what it has and the caller is told.
-    """
-    proposed = [
-        text
-        for item in getattr(parsed, "meanings", []) or []
-        if (text := str(item or "").strip())
-    ]
-    proposed = list(dict.fromkeys(proposed))
-    if not proposed:
-        return PolishOutcome(record=record)
-    if proposed == list(record.meanings):
-        return PolishOutcome(record=record)
-    return PolishOutcome(
-        record=record,
-        proposed=replace(record, meanings=proposed),
-        changes={"meanings": (list(record.meanings), proposed)},
-    )
-
-
-def polish_call_outcome(
-    record: VocabularyRecord, call: claude_client.CallResult, *, model: str
-) -> PolishOutcome:
-    """Turn either a live or batched model call into one polish outcome."""
-    parsed, stop_reason, refusal = call
-    if stop_reason == "refusal":
-        detail = f" ({refusal.category})" if refusal is not None else ""
-        return PolishOutcome(
-            record=record,
-            warning=(
-                f"{record.id}: {model} declined to gloss "
-                f"{record.expression}{detail}; left alone."
-            ),
-        )
-    if parsed is None:
-        return PolishOutcome(
-            record=record,
-            warning=(
-                f"{record.id}: {model} returned nothing usable for "
-                f"{record.expression} (stop reason: {stop_reason}); left alone."
-            ),
-        )
-    return apply_polish_result(record, parsed)
-
-
-def polish_meanings(
-    records: Sequence[VocabularyRecord],
-    *,
-    model: str,
-    style_guide: str,
-    instructions: str,
-    ids: Sequence[str] | None = None,
-    client: Any | None = None,
-) -> Iterator[PolishOutcome]:
-    """Propose better glosses, one record at a time, lazily.
-
-    A generator rather than a result object, because this pass is confirmed per
-    record and the confirmation is what decides whether the next call is worth
-    making. Driving it from the CLI's loop means declining the first proposal
-    and walking away costs one call, not one per record in the collection.
-    """
-    blocks = claude_client.system_blocks(style_guide, instructions)
-    for record in polish_targets(records, ids):
-        try:
-            call = claude_client.parse_call(
-                model,
-                blocks,
-                polish_prompt(record),
-                polish_schema(),
-                client,
-                effort=claude_client.effort_for(model),
-            )
-        except claude_client.ClaudeRequestError as exc:
-            yield PolishOutcome(
-                record=record,
-                warning=f"{record.id}: {exc}; left alone.",
-            )
-            continue
-        yield polish_call_outcome(
-            record,
-            call,
-            model=model,
-        )
 
 
 # --- the AI pass, batched ----------------------------------------------------
@@ -1708,6 +1558,16 @@ def batch_key_map(record_ids: Sequence[str]) -> dict[str, str]:
     return keys
 
 
+@dataclass(slots=True)
+class BatchPlan:
+    """Serializable requests and the provenance needed to land them safely."""
+
+    requests: list[dict[str, Any]] = field(default_factory=list)
+    record_ids: list[str] = field(default_factory=list)
+    request_fingerprints: dict[str, str] = field(default_factory=dict)
+    input_fingerprints: dict[str, str] = field(default_factory=dict)
+
+
 def batch_requests(
     records: Sequence[VocabularyRecord],
     *,
@@ -1716,8 +1576,8 @@ def batch_requests(
     instructions: str,
     ids: Sequence[str] | None = None,
     taught: str = "",
-) -> tuple[list[dict[str, Any]], list[str]]:
-    """The batch entries for every record that needs enriching, and their ids.
+) -> BatchPlan:
+    """Build batch entries together with exact request and input provenance.
 
     A one-hour cache TTL rather than the default five minutes: the style guide
     leads every request, and a batch's requests are read over a span that a
@@ -1732,127 +1592,39 @@ def batch_requests(
     blocks = claude_client.system_blocks(style_guide, instructions, cache_ttl="1h")
     record_ids = [record.id for record in targets]
     batch_key_map(record_ids)
+    user_turns = {record.id: ai_prompt(record, taught=taught) for record in targets}
+    by_id = {record.id: record for record in targets}
     requests = [
         claude_client.batch_request(
             batch_custom_id(record.id),
             model,
             blocks,
-            ai_prompt(record, taught=taught),
+            user_turns[record.id],
             ai_schema(),
             effort=claude_client.effort_for(model),
         )
         for record in targets
     ]
-    return requests, record_ids
-
-
-def polish_batch_requests(
-    records: Sequence[VocabularyRecord],
-    *,
-    model: str,
-    style_guide: str,
-    instructions: str,
-    ids: Sequence[str] | None = None,
-) -> tuple[list[dict[str, Any]], list[str], dict[str, str]]:
-    """Anthropic batch entries for a meaning-polish pass."""
-    targets = polish_targets(records, ids)
-    blocks = claude_client.system_blocks(
-        style_guide, instructions, cache_ttl="1h"
-    )
-    record_ids = [record.id for record in targets]
-    prompt_fingerprints = {
-        record.id: polish_prompt_fingerprint(record) for record in targets
+    input_fingerprints = {
+        record_id: prompts.fingerprint(user_turn)
+        for record_id, user_turn in user_turns.items()
     }
-    batch_key_map(record_ids)
-    requests = [
-        claude_client.batch_request(
-            batch_custom_id(record.id),
-            model,
-            blocks,
-            polish_prompt(record),
-            polish_schema(),
-            effort=claude_client.effort_for(model),
+    request_fingerprints = {
+        record_id: ai_request_fingerprint(
+            by_id[record_id],
+            provider="anthropic",
+            style_guide=style_guide,
+            instructions=instructions,
+            taught=taught,
         )
-        for record in targets
-    ]
-    return requests, record_ids, prompt_fingerprints
-
-
-@dataclass(slots=True)
-class PolishBatchApplyResult:
-    """Reviewable polish proposals and every batch row not represented by one."""
-
-    proposals: dict[str, PolishOutcome] = field(default_factory=dict)
-    unchanged: list[str] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
-    failed: dict[str, str] = field(default_factory=dict)
-    invalid: dict[str, str] = field(default_factory=dict)
-    missing: list[str] = field(default_factory=list)
-    stale: list[str] = field(default_factory=list)
-    settled: list[str] = field(default_factory=list)
-    looked_up: int = 0
-
-
-def apply_polish_batch_results(
-    records: Sequence[VocabularyRecord],
-    entries: Iterable[claude_client.BatchEntry],
-    pending_ids: Sequence[str],
-    *,
-    model: str,
-    prompt_fingerprints: Mapping[str, str],
-    only: Sequence[str] = (),
-) -> PolishBatchApplyResult:
-    """Map a completed polish batch back to records without accepting proposals."""
-    result = PolishBatchApplyResult()
-    by_id = {record.id: record for record in records}
-    keys = batch_key_map(pending_ids)
-    candidates = {str(item) for item in only}
-    seen: set[str] = set()
-
-    for entry in entries:
-        record_id = keys.get(entry.custom_id)
-        if record_id is None:
-            result.warnings.append(
-                f"The batch returned a result keyed {entry.custom_id!r}, which "
-                "belongs to no record this batch was submitted for; it was "
-                "ignored rather than guessed at."
-            )
-            continue
-        seen.add(record_id)
-        if candidates and record_id not in candidates:
-            result.settled.append(record_id)
-            continue
-        record = by_id.get(record_id)
-        if record is None:
-            result.missing.append(record_id)
-            continue
-        if prompt_fingerprints.get(record_id) != polish_prompt_fingerprint(record):
-            result.stale.append(record_id)
-            continue
-        if entry.result is None:
-            if entry.outcome == "invalid":
-                result.invalid[record_id] = entry.detail or "schema validation failed"
-            else:
-                detail = f": {entry.detail}" if entry.detail else ""
-                result.failed[record_id] = f"the batch reported {entry.outcome}{detail}"
-            continue
-        result.looked_up += 1
-        outcome = polish_call_outcome(record, entry.result, model=model)
-        if outcome.warning:
-            result.warnings.append(outcome.warning)
-        elif outcome.proposed is None:
-            result.unchanged.append(record_id)
-        else:
-            result.proposals[record_id] = outcome
-
-    for record_id in pending_ids:
-        if record_id in seen or (candidates and record_id not in candidates):
-            continue
-        if record_id in by_id:
-            result.failed[record_id] = "the batch returned no result for it"
-        else:
-            result.missing.append(record_id)
-    return result
+        for record_id in user_turns
+    }
+    return BatchPlan(
+        requests=requests,
+        record_ids=record_ids,
+        request_fingerprints=request_fingerprints,
+        input_fingerprints=input_fingerprints,
+    )
 
 
 @dataclass(slots=True)
@@ -1867,6 +1639,10 @@ class BatchApplyResult:
     #: Rows an earlier fetch of this batch already settled, skipped this time.
     settled: list[str] = field(default_factory=list)
     missing: list[str] = field(default_factory=list)
+    #: Rows whose record-data turn no longer matches the submitted request.
+    #: Their paid answers are retained by the batch but never applied to newer
+    #: curation.
+    stale: list[str] = field(default_factory=list)
 
 
 def apply_batch_results(
@@ -1875,8 +1651,11 @@ def apply_batch_results(
     pending_ids: Sequence[str],
     *,
     model: str,
+    input_fingerprints: Mapping[str, str],
+    request_fingerprints: Mapping[str, str] | None = None,
     force_fields: Sequence[str] = (),
     only: Sequence[str] = (),
+    taught: str = "",
 ) -> BatchApplyResult:
     """Fold a finished batch into the records, through the live path's checks.
 
@@ -1884,7 +1663,7 @@ def apply_batch_results(
     the synchronous pass uses — the saving is in how the request was sent, not
     in what is done with the reply.
 
-    Four ways a record can come back with nothing, none of them silent, and one
+    Five ways a record can come back with nothing, none of them silent, and two
     of them different in kind from the rest:
 
     * the batch reported it **errored, expired or was canceled** — terminal, a
@@ -1892,6 +1671,8 @@ def apply_batch_results(
     * the batch **never mentioned it**, which will not change either;
     * its id **no longer names a record**, because the collection moved while
       the batch was out — deliberate curation, on this side;
+    * its input **changed after submission** — the old answer is stale and is
+      never applied to newer curation;
     * the row succeeded and its answer did **not validate** (``invalid``).
 
     ``only``, when given, narrows the rows this pass will consider — a held
@@ -1928,6 +1709,14 @@ def apply_batch_results(
         if candidates and record_id not in candidates:
             outcome.settled.append(record_id)
             continue
+        index = positions.get(record_id)
+        if index is not None:
+            current_fingerprint = ai_input_fingerprint(
+                outcome.result.records[index], taught=taught
+            )
+            if input_fingerprints.get(record_id) != current_fingerprint:
+                outcome.stale.append(record_id)
+                continue
         if entry.result is None:
             if entry.outcome != "invalid":
                 # Terminal, and the API's reason is the only signal that the API
@@ -1953,11 +1742,13 @@ def apply_batch_results(
                 # the batch id forever waiting on a word nobody wants.
                 outcome.missing.append(record_id)
             continue
-        index = positions.get(record_id)
         if index is None:
             outcome.missing.append(record_id)
             continue
         outcome.result.looked_up += 1
+        outcome.result.input_fingerprints[record_id] = input_fingerprints[record_id]
+        if request_fingerprints and (fingerprint := request_fingerprints.get(record_id)):
+            outcome.result.provenance[record_id] = fingerprint
         absorb_ai_call(
             outcome.result,
             outcome.result.records[index],

@@ -1,11 +1,11 @@
-"""Reading vocabulary off a PDF or a photo, into a file a human then reviews.
+"""Reading a PDF or photo into rich cards and source patterns for review.
 
 ``janki extract`` is the one command that *guesses*. Everything else in this
 project is a rule over data someone already wrote down; this reads a textbook
-page or a photograph of a whiteboard and proposes what the words might be. So
-nothing it produces goes near ``vocabulary.json``: every candidate lands in
-``data/staging/`` with its page number, the line it was found on, and the
-model's own confidence, and a person decides what is real.
+page or a photograph of a whiteboard and proposes complete cards and what the
+source teaches. Nothing it produces goes straight to ``vocabulary.json``:
+every candidate lands in ``data/staging/`` with its page number, source line,
+examples, and confidence, and every inferred pattern remains unreviewed.
 
 That is also why the stop reason is checked before anything is written. A
 refusal and a truncated answer both arrive as ordinary successful responses
@@ -26,15 +26,20 @@ import json
 import re
 import unicodedata
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from japanese_anki import claude_client, repairs
+from japanese_anki import ai_schema as shared_ai_schema
+from japanese_anki import claude_client, patterns, prompts, repairs
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import stable_record_id
 from japanese_anki.inputs import PreparedInput
-from japanese_anki.models import SourceReference, VocabularyRecord, mark_provisional
+from japanese_anki.models import (
+    SourceReference,
+    VocabularyRecord,
+    mark_provisional,
+)
 from japanese_anki.staging import annotate
 
 __all__ = [
@@ -80,7 +85,7 @@ SOURCE_UNIT_DISPOSITIONS: tuple[str, ...] = (
 # Increment this when the structured response contract changes. It is stored
 # with prompt provenance, so a later model drift report can separate a prompt
 # change from a parser or schema change.
-EXTRACTION_SCHEMA_VERSION = 2
+EXTRACTION_SCHEMA_VERSION = 3
 
 
 class ExtractError(JankiError):
@@ -134,6 +139,9 @@ class ExtractionResult:
     candidates: tuple[Any, ...]
     source_units: tuple[SourceUnit, ...]
     model_reported_unit_count: int
+    pattern_set: patterns.PatternSet = field(
+        default_factory=lambda: patterns.PatternSet(source="")
+    )
 
     @property
     def prose_candidates(self) -> tuple[Any, ...]:
@@ -162,31 +170,27 @@ def candidate_schema() -> Any:
     """
     from typing import Literal
 
-    from pydantic import BaseModel, Field
+    from pydantic import BaseModel, ConfigDict, Field
 
-    class CandidateRecord(BaseModel):
+    RichCard = shared_ai_schema.rich_card_schema()
+    SourcePattern = shared_ai_schema.source_pattern_schema()
+
+    class CandidateRecord(RichCard):
+        model_config = ConfigDict(extra="forbid")
+
         expression: str = Field(description="The word as written, in Japanese.")
         reading: str = Field(
             default="",
-            description=(
-                "The reading in kana. Leave empty if the source does not give "
-                "one and you are not certain — do not guess."
-            ),
-        )
-        meanings: list[str] = Field(
-            default_factory=list, description="English meanings, one per sense."
+            description="Kana reading.",
         )
         part_of_speech: str = Field(default="", description="Part of speech, if known.")
-        example: str = Field(
-            default="", description="An example sentence from the source, if there is one."
-        )
         page: int = Field(default=0, description="1-indexed page this was read from.")
         context: str = Field(
             default="", description="The line or cell this was read from, verbatim."
         )
         confidence: Literal["high", "medium", "low"] = Field(
             default="medium",
-            description="How sure you are that this reading and meaning are right.",
+            description="Confidence.",
         )
         inclusion_reason: str = Field(
             default="",
@@ -215,6 +219,8 @@ def candidate_schema() -> Any:
         )
 
     class SourceUnitRecord(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
         page: int = Field(ge=1, description="One-based page number.")
         section: str = Field(
             min_length=1,
@@ -231,22 +237,24 @@ def candidate_schema() -> Any:
         ]
         reason: str = Field(
             default="",
-            description=(
-                "Required when disposition is not candidate. Explain why the row "
-                "does not make a candidate."
-            ),
+            description="Disposition reason.",
         )
 
     class Extraction(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
         candidates: list[CandidateRecord] = Field(default_factory=list)
         source_units: list[SourceUnitRecord] = Field(default_factory=list)
         model_reported_unit_count: int = Field(
             default=0,
             ge=0,
-            description=(
-                "Diagnostic count only. Janki derives coverage from source units."
-            ),
+            description="Reported source-unit count.",
         )
+        document_kind: Literal["pattern", "lesson", "vocabulary", "unknown"] = Field(
+            default="unknown", description="Document kind."
+        )
+        document_title: str = Field(default="", description="Document title.")
+        patterns: list[SourcePattern] = Field(default_factory=list)
 
     return Extraction
 
@@ -287,12 +295,9 @@ def prompt_for(
     That was the pilot programme's question, and it was cancelled with it
     (M8.4). What is left is the ordinary ask.
     """
-    lines = [f"Extract vocabulary from {source_name}."]
+    lines = [f"Source file: {source_name}"]
     if known:
-        lines.append(
-            "\nWords janki already has — skip these unless the page says "
-            "something new about them:\n" + "、".join(known)
-        )
+        lines.append("\nKnown expressions:\n" + "、".join(known))
     return "\n".join(lines)
 
 
@@ -335,15 +340,26 @@ def prompt_provenance(
 ) -> dict[str, Any]:
     """The stable inputs needed to explain a later model-output change."""
     user = prompt_for(prepared.origin_path.name, known)
+    schema = candidate_schema()
+    wire_schema = claude_client.wire_schema(schema)
     return {
         "source_sha256": source_sha256 or source_fingerprint(prepared.origin_path),
         "mode": mode or "auto",
         "provider": "anthropic",
         "model": model,
         "response_schema_version": EXTRACTION_SCHEMA_VERSION,
+        "response_schema_fingerprint": prompts.schema_fingerprint(wire_schema),
         "system_prompt_fingerprint": _text_fingerprint(system),
         "style_guide_fingerprint": _text_fingerprint(style_guide),
         "user_prompt_fingerprint": _text_fingerprint(user),
+        "request_fingerprint": prompts.request_fingerprint(
+            provider="anthropic",
+            style_guide=style_guide,
+            task_template=system,
+            user_turn=user,
+            transport_prompt={"system": [style_guide, system], "user": user},
+            schema=wire_schema,
+        ),
     }
 
 
@@ -420,7 +436,24 @@ def extract_candidates(
             f"(stop reason: {stop_reason}). Nothing was written.",
             code="extract-response-missing",
         )
-    return normalize_response(parsed, mode, prepared.origin_path.name)
+    result = normalize_response(parsed, mode, prepared.origin_path.name)
+    provenance = prompt_provenance(
+        prepared,
+        model=model,
+        style_guide=style_guide,
+        system=system,
+        mode=mode,
+        known=known,
+        source_sha256=prepared.source_sha256 or None,
+    )
+    return ExtractionResult(
+        candidates=result.candidates,
+        source_units=result.source_units,
+        model_reported_unit_count=result.model_reported_unit_count,
+        pattern_set=patterns.with_prompt_provenance(
+            result.pattern_set, provenance
+        ),
+    )
 
 
 def _candidate_key(candidate: Any) -> tuple[int, str, int]:
@@ -517,10 +550,36 @@ def normalize_response(
             )
         expected.remove(fingerprint)
 
+    document_kind = str(
+        getattr(parsed, "document_kind", "unknown") or "unknown"
+    ).strip().lower()
+    if document_kind not in patterns.DOCUMENT_KINDS:
+        document_kind = "unknown"
+    pattern_set = patterns.PatternSet(
+        source=source_name,
+        kind=document_kind,
+        title=str(getattr(parsed, "document_title", "") or "").strip(),
+        patterns=tuple(
+            patterns.Pattern(
+                template=str(getattr(item, "template", "") or "").strip(),
+                gloss=str(getattr(item, "gloss", "") or "").strip(),
+                examples=tuple(
+                    text
+                    for example in (getattr(item, "examples", []) or [])
+                    if (text := str(example).strip())
+                ),
+                where=str(getattr(item, "where", "") or "").strip(),
+            )
+            for item in (getattr(parsed, "patterns", []) or [])
+            if str(getattr(item, "template", "") or "").strip()
+        ),
+    )
+
     return ExtractionResult(
         candidates=candidates,
         source_units=tuple(units),
         model_reported_unit_count=int(parsed.model_reported_unit_count),
+        pattern_set=pattern_set,
     )
 
 
@@ -621,11 +680,10 @@ def _raw_fields(candidate: Any, prepared: PreparedInput) -> dict[str, str]:
     page = getattr(candidate, "page", 0) or 0
     if page:
         fields["page"] = str(page)
-    # `example` rides here and not in `record.examples`: it is what the source
-    # *shows*, not a sentence anyone accepted as teaching content, and the two
-    # must not share a field or the second question is never asked. A reviewer
-    # can still promote it by writing it into `examples` during staging review.
-    for name in ("context", "inclusion_reason", "example"):
+    # Source evidence stays separate from the proposed teaching content in
+    # ``record.examples``. Promotion's explicit example-acceptance boundary
+    # decides whether those proposed sentences become curated content.
+    for name in ("context", "inclusion_reason"):
         value = str(getattr(candidate, name, "") or "").strip()
         if value:
             fields[name] = value
@@ -654,20 +712,24 @@ def build_records(
         if not expression:
             continue
         reading = str(getattr(candidate, "reading", "") or "").strip()
+        content = shared_ai_schema.adapt_rich_card(candidate)
+        raw_fields = _raw_fields(candidate, prepared)
+        if content.romaji_rejected:
+            raw_fields["ai_warnings"] = json.dumps(
+                list(content.romaji_rejected), ensure_ascii=False
+            )
         record = VocabularyRecord(
             id=stable_record_id(expression, reading),
             expression=expression,
             reading=reading,
-            meanings=[
-                text
-                for item in getattr(candidate, "meanings", []) or []
-                if (text := str(item).strip())
-            ],
+            meanings=list(content.meanings),
             part_of_speech=str(getattr(candidate, "part_of_speech", "") or "").strip(),
+            examples=list(content.examples),
+            usage_notes=content.usage_notes,
             source=SourceReference(
                 type="extract",
                 imported_from=prepared.origin_path.name,
-                raw_fields=_raw_fields(candidate, prepared),
+                raw_fields=raw_fields,
             ),
         )
         # Marked here, at the only moment the values are known to be model
@@ -675,6 +737,17 @@ def build_records(
         # beside human edits and the distinction is unrecoverable. Dictionary
         # reconciliation reads the mark to know what it may replace.
         record = mark_provisional(record)
+        # The rich response does not carry word-level romaji.  That value is a
+        # deterministic derivation from the candidate's kana reading, outside
+        # the shared model-answer adapter.  Run only that declaration here:
+        # applying the whole ingest registry used to rewrite example notation
+        # for fresh IDs while leaving the identical known-ID answer untouched.
+        derived, _changes = repairs.apply_declarations(
+            [record],
+            repairs.REGISTRY.select(("record-romaji-from-reading",)),
+            modes=frozenset({"ingest-safe"}),
+        )
+        record = derived[0]
         # Repeated source rows stay visible as separate source units. They do
         # not become duplicate canonical notes with the same deterministic ID.
         if record.id in produced:
@@ -683,8 +756,7 @@ def build_records(
         if record.id in known:
             seen.append(annotate(record, already_known=True))
         else:
-            repaired, _changes = repairs.apply_ingest_safe([record])
-            fresh.append(repaired[0])
+            fresh.append(record)
     return fresh + seen
 
 

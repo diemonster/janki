@@ -22,6 +22,11 @@ from japanese_anki.errors import JankiError
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
 from japanese_anki.staging import read_staging
 
+REQUEST_A = "a" * 64
+REQUEST_B = "b" * 64
+INPUT_A = "c" * 64
+INPUT_B = "d" * 64
+
 
 def record(**overrides: Any) -> VocabularyRecord:
     values: dict[str, Any] = {
@@ -43,6 +48,14 @@ def many(count: int) -> list[VocabularyRecord]:
     ]
 
 
+def input_fingerprints(
+    records: list[VocabularyRecord], *, taught: str = ""
+) -> dict[str, str]:
+    return {
+        item.id: enrich.ai_input_fingerprint(item, taught=taught) for item in records
+    }
+
+
 def ok(item: VocabularyRecord) -> Entry:
     """A succeeded result for one record, carrying an example of its own word."""
     tail = item.expression.removeprefix("話す")
@@ -60,7 +73,13 @@ def message(japanese: str, furigana: str = "") -> Any:
         text = json.dumps(
             {
                 "examples": [
-                    {"japanese": japanese, "furigana": furigana, "english": "", "romaji": ""}
+                    {
+                        "japanese": japanese,
+                        "furigana": furigana,
+                        "english": "",
+                        "romaji": "",
+                        "speech_level": "polite",
+                    }
                 ],
                 "usage_notes": "",
             },
@@ -292,12 +311,14 @@ def test_the_batch_prompt_has_no_variety_pressure(tmp_path: Path) -> None:
     # Every request is built before any answer exists, so there is nothing for
     # a later prompt to have seen. Said out loud because it is a real
     # difference in what the two paths produce.
-    requests, ids = enrich.batch_requests(many(3), model="m", style_guide="guide", instructions="I")
+    plan = enrich.batch_requests(
+        many(3), model="m", style_guide="guide", instructions="I"
+    )
 
-    contents = [item["params"]["messages"][0]["content"] for item in requests]
-    assert len(requests) == 3
-    assert ids == [item.id for item in many(3)]
-    assert not any("already written in this run" in text for text in contents)
+    contents = [item["params"]["messages"][0]["content"] for item in plan.requests]
+    assert len(plan.requests) == 3
+    assert plan.record_ids == [item.id for item in many(3)]
+    assert all("Recent examples from this run:\n(none)" in text for text in contents)
 
 
 def test_the_batch_carries_the_same_reviewed_patterns_as_the_immediate_path() -> None:
@@ -308,22 +329,42 @@ def test_the_batch_carries_the_same_reviewed_patterns_as_the_immediate_path() ->
     path used for bulk, so most of a collection got the unsteered version."""
     from japanese_anki.patterns import Pattern, format_patterns
 
-    requests, _ = enrich.batch_requests(
+    plan = enrich.batch_requests(
         many(2), model="m", style_guide="guide",
         taught=format_patterns([Pattern("〜んだ", "explains")]),
         instructions="I")
 
-    contents = [item["params"]["messages"][0]["content"] for item in requests]
+    contents = [item["params"]["messages"][0]["content"] for item in plan.requests]
     assert all("〜んだ" in text for text in contents)
 
 
 def test_the_batch_asks_for_the_long_cache_window() -> None:
     # A five-minute window does not survive the span a batch's requests are read
     # over; the style guide leads every one of them.
-    requests, _ = enrich.batch_requests(many(1), model="m", style_guide="guide", instructions="I")
+    plan = enrich.batch_requests(
+        many(1), model="m", style_guide="guide", instructions="I"
+    )
 
-    system = requests[0]["params"]["system"]
+    system = plan.requests[0]["params"]["system"]
     assert system[-1]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
+
+
+def test_the_batch_plan_carries_full_request_and_record_input_provenance() -> None:
+    [item] = many(1)
+
+    plan = enrich.batch_requests(
+        [item], model="m", style_guide="guide", instructions="task"
+    )
+
+    assert plan.input_fingerprints == {item.id: enrich.ai_input_fingerprint(item)}
+    assert plan.request_fingerprints == {
+        item.id: enrich.ai_request_fingerprint(
+            item,
+            provider="anthropic",
+            style_guide="guide",
+            instructions="task",
+        )
+    }
 
 
 # --- submit ------------------------------------------------------------------
@@ -363,10 +404,10 @@ def test_a_second_submit_is_refused_while_one_is_out(
     assert len(batches.submitted) == 1
 
 
-def test_nothing_to_submit_costs_nothing(
+def test_nothing_to_submit_names_the_fields_that_define_completion(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    complete = record(usage_notes="note", examples=[ExampleSentence(japanese="話す。")])
+    complete = record(usage_notes="", examples=[ExampleSentence(japanese="話す。")])
     root = project(tmp_path, [complete])
     batches = FakeBatches()
     patch_all(monkeypatch, batches)
@@ -374,7 +415,10 @@ def test_nothing_to_submit_costs_nothing(
     assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-submit"]) == 0
 
     assert batches.submitted == []
-    assert "Nothing to submit" in capsys.readouterr().out
+    assert (
+        capsys.readouterr().out
+        == "Nothing to submit: every record already has meanings and examples.\n"
+    )
 
 
 def test_a_batch_id_that_never_arrived_is_an_error_not_a_blank_entry(
@@ -414,28 +458,126 @@ def test_fetching_with_nothing_pending_says_so(
     assert "No batch is pending" in capsys.readouterr().out
 
 
-def test_ai_fetch_refuses_a_pending_polish_batch(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize(
+    ("map_name", "bad_value"),
+    [
+        ("request_fingerprints", "tampered"),
+        ("input_fingerprints", " " * 64),
+    ],
+)
+def test_a_corrupt_batch_fingerprint_refuses_before_poll_or_write(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    map_name: str,
+    bad_value: str,
 ) -> None:
-    root = project(tmp_path, many(1))
-    batches = FakeBatches()
-    patch_all(monkeypatch, batches)
-    book = ledger.load(root / "ledger.json")
-    item = many(1)[0]
-    book.record_batch(
-        "msgbatch_polish",
-        kind="polish",
-        model="claude-opus-5",
-        pending_ids=[item.id],
-        prompt_fingerprints={item.id: enrich.polish_prompt_fingerprint(item)},
+    item = record(examples=[], usage_notes="")
+    batches = FakeBatches(results=[ok(item)])
+    root = submitted(tmp_path, [item], monkeypatch, batches)
+    capsys.readouterr()
+    payload = book_of(root)
+    entry = payload["pending_batches"]["msgbatch_01"]
+    entry[map_name][item.id] = bad_value
+    (root / "ledger.json").write_text(
+        json.dumps(payload, ensure_ascii=False), encoding="utf-8"
     )
-    book.save()
+    before = (root / "vocabulary.json").read_text(encoding="utf-8")
+    batches.retrieved.clear()
 
-    assert cli.main(["--root", str(root), "enrich", "--ai", "--batch-fetch"]) == 1
+    code = cli.main(
+        ["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]
+    )
 
-    assert "meaning-polish batch" in capsys.readouterr().err
-    assert list(book_of(root)["pending_batches"]) == ["msgbatch_polish"]
+    assert code == 1
     assert batches.retrieved == []
+    assert (root / "vocabulary.json").read_text(encoding="utf-8") == before
+    assert list(book_of(root)["pending_batches"]) == ["msgbatch_01"]
+    assert "lowercase SHA-256" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("damaged_model", [None, "", "   "])
+def test_a_batch_with_no_exact_model_attribution_refuses_before_poll_or_write(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    damaged_model: str | None,
+) -> None:
+    item = record(examples=[], usage_notes="")
+    batches = FakeBatches(results=[ok(item)])
+    root = submitted(tmp_path, [item], monkeypatch, batches)
+    capsys.readouterr()
+    payload = book_of(root)
+    entry = payload["pending_batches"]["msgbatch_01"]
+    if damaged_model is None:
+        entry.pop("model")
+    else:
+        entry["model"] = damaged_model
+    (root / "ledger.json").write_text(
+        json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+    )
+    before = (root / "vocabulary.json").read_text(encoding="utf-8")
+    batches.retrieved.clear()
+
+    code = cli.main(
+        ["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]
+    )
+
+    assert code == 1
+    assert batches.retrieved == []
+    assert (root / "vocabulary.json").read_text(encoding="utf-8") == before
+    assert list(book_of(root)["pending_batches"]) == ["msgbatch_01"]
+    assert "model" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "damaged_retry_ids",
+    [
+        "word:話す:はなす",
+        [],
+        ["word:話す:はなす", "word:話す:はなす"],
+        [""],
+        ["   "],
+        [1],
+        ["word:ghost:ghost"],
+    ],
+    ids=[
+        "not-a-list",
+        "empty-list",
+        "duplicate",
+        "blank",
+        "whitespace",
+        "not-text",
+        "not-pending",
+    ],
+)
+def test_malformed_retry_ids_refuse_before_poll_or_losing_the_batch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    damaged_retry_ids: Any,
+) -> None:
+    item = record(examples=[], usage_notes="")
+    batches = FakeBatches(results=[ok(item)])
+    root = submitted(tmp_path, [item], monkeypatch, batches)
+    capsys.readouterr()
+    payload = book_of(root)
+    payload["pending_batches"]["msgbatch_01"]["retry_ids"] = damaged_retry_ids
+    (root / "ledger.json").write_text(
+        json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+    )
+    before = (root / "vocabulary.json").read_text(encoding="utf-8")
+    batches.retrieved.clear()
+
+    code = cli.main(
+        ["--root", str(root), "enrich", "--ai", "--batch-fetch", "--yes"]
+    )
+
+    assert code == 1
+    assert batches.retrieved == []
+    assert (root / "vocabulary.json").read_text(encoding="utf-8") == before
+    assert list(book_of(root)["pending_batches"]) == ["msgbatch_01"]
+    assert "retry_ids" in capsys.readouterr().err
 
 
 def test_a_batch_still_running_reports_and_exits_zero(
@@ -674,14 +816,107 @@ def test_a_pending_batch_needs_records_to_be_pending_on(tmp_path: Path) -> None:
         book.record_batch("b1", kind="ai", model="m", pending_ids=[])
 
 
+@pytest.mark.parametrize("model", ["", "   "])
+def test_an_ai_batch_needs_a_nonblank_model_before_it_is_recorded(
+    tmp_path: Path, model: str
+) -> None:
+    book = ledger.Ledger(path=tmp_path / "ledger.json")
+
+    with pytest.raises(ledger.LedgerError, match="model"):
+        book.record_batch(
+            "b1",
+            kind="ai",
+            model=model,
+            provider="anthropic",
+            pending_ids=["a"],
+            request_fingerprints={"a": REQUEST_A},
+            input_fingerprints={"a": INPUT_A},
+        )
+
+    assert book.pending_batches == {}
+
+
 def test_recording_a_batch_replaces_rather_than_accumulates(tmp_path: Path) -> None:
     # A batch is one thing that is either in flight or collected; two entries
     # for one id would be the ledger disagreeing with itself.
     book = ledger.Ledger(path=tmp_path / "ledger.json")
-    book.record_batch("b1", kind="ai", model="m", pending_ids=["a"])
-    book.record_batch("b1", kind="ai", model="m", pending_ids=["a", "b"])
+    book.record_batch(
+        "b1",
+        kind="ai",
+        model="m",
+        provider="anthropic",
+        pending_ids=["a"],
+        request_fingerprints={"a": REQUEST_A},
+        input_fingerprints={"a": INPUT_A},
+    )
+    book.record_batch(
+        "b1",
+        kind="ai",
+        model="m",
+        provider="anthropic",
+        pending_ids=["a", "b"],
+        request_fingerprints={"a": REQUEST_A, "b": REQUEST_B},
+        input_fingerprints={"a": INPUT_A, "b": INPUT_B},
+    )
 
     assert book.pending_batches["b1"]["pending_ids"] == ["a", "b"]
+
+
+@pytest.mark.parametrize(
+    ("request_fingerprints", "input_fingerprints", "detail"),
+    [
+        (None, {"a": INPUT_A}, "request fingerprints.*missing a"),
+        ({"a": REQUEST_A}, None, "input fingerprints.*missing a"),
+        (
+            {"a": REQUEST_A, "unknown": REQUEST_B},
+            {"a": INPUT_A},
+            "request fingerprints.*unknown unknown",
+        ),
+        (
+            {"a": REQUEST_A},
+            {"a": INPUT_A, "unknown": INPUT_B},
+            "input fingerprints.*unknown unknown",
+        ),
+        (
+            {"a": "tampered"},
+            {"a": INPUT_A},
+            "request fingerprints.*lowercase SHA-256",
+        ),
+        (
+            {"a": REQUEST_A},
+            {"a": " " * 64},
+            "input fingerprints.*lowercase SHA-256",
+        ),
+    ],
+    ids=[
+        "missing-request",
+        "missing-input",
+        "extra-request",
+        "extra-input",
+        "malformed-request",
+        "malformed-input",
+    ],
+)
+def test_an_ai_batch_requires_exact_request_and_input_fingerprint_coverage(
+    tmp_path: Path,
+    request_fingerprints: dict[str, str] | None,
+    input_fingerprints: dict[str, str] | None,
+    detail: str,
+) -> None:
+    book = ledger.Ledger(path=tmp_path / "ledger.json")
+
+    with pytest.raises(ledger.LedgerError, match=detail):
+        book.record_batch(
+            "b1",
+            kind="ai",
+            model="m",
+            provider="anthropic",
+            pending_ids=["a"],
+            request_fingerprints=request_fingerprints,
+            input_fingerprints=input_fingerprints,
+        )
+
+    assert book.pending_batches == {}
 
 
 def test_an_unknown_kind_is_refused(tmp_path: Path) -> None:
@@ -694,12 +929,26 @@ def test_an_unknown_kind_is_refused(tmp_path: Path) -> None:
 def test_a_pending_batch_round_trips_through_the_file(tmp_path: Path) -> None:
     path = tmp_path / "ledger.json"
     book = ledger.Ledger(path=path)
-    book.record_batch("b1", kind="ai", model="m", pending_ids=["a", "b"])
+    book.record_batch(
+        "b1",
+        kind="ai",
+        model="m",
+        provider="anthropic",
+        pending_ids=["a", "b"],
+        request_fingerprints={"a": REQUEST_A, "b": REQUEST_B},
+        input_fingerprints={"a": INPUT_A, "b": INPUT_B},
+    )
     book.save()
 
     reloaded = ledger.load(path)
 
     assert reloaded.pending_batch() == ("b1", book.pending_batches["b1"])
+    entry = reloaded.pending_batches["b1"]
+    assert entry["request_fingerprints"] == {
+        "a": REQUEST_A,
+        "b": REQUEST_B,
+    }
+    assert entry["input_fingerprints"] == {"a": INPUT_A, "b": INPUT_B}
     assert reloaded.clear_batch("b1") is True
     assert reloaded.pending_batch() is None
 
@@ -881,12 +1130,10 @@ def test_forgetting_nothing_says_so(
     assert "nothing to forget" in capsys.readouterr().out
 
 
-def test_force_fields_at_fetch_overrides_and_says_it_is_doing_so(
+def test_force_fields_at_fetch_never_overrides_changed_input(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A field can fill while the batch is out. Unlike the model and the ids,
-    this one decides how an answer already in hand is applied, so it overrides
-    rather than being refused — but never in silence."""
+    """Force widens writable fields; it does not make an old answer current."""
     plain = record()
     batches = FakeBatches(results=[ok(plain)])
     root = project(tmp_path, [plain])
@@ -907,10 +1154,12 @@ def test_force_fields_at_fetch_overrides_and_says_it_is_doing_so(
     )
 
     assert code == 0
-    out = capsys.readouterr().out
+    captured = capsys.readouterr()
+    out = captured.out
     assert "instead of the none this batch was submitted with" in out
     landed = stored(root)["word:話す:はなす"]["examples"]
-    assert [item["japanese"] for item in landed] == ["毎日話す。"]
+    assert [item["japanese"] for item in landed] == ["人と話す。"]
+    assert "changed after submission" in captured.err
 
 
 def test_a_batch_that_does_not_need_jpdb_does_not_need_a_jpdb_key(
@@ -1463,7 +1712,11 @@ def test_a_terminal_row_keeps_its_reason_even_when_its_record_is_gone() -> None:
     ]
 
     outcome = enrich.apply_batch_results(
-        [present], entries, ["word:話す:はなす", "word:見る:みる"], model="m"
+        [present],
+        entries,
+        ["word:話す:はなす", "word:見る:みる"],
+        model="m",
+        input_fingerprints={},
     )
 
     reason = outcome.failed["word:話す:はなす"]
@@ -1485,10 +1738,73 @@ def test_an_unreadable_answer_for_a_record_still_here_is_held_not_dropped() -> N
     here = record(id="word:見る:みる", expression="見る")
     entries = [claude_client.BatchEntry(key(here.id), "invalid", "bad json", None)]
 
-    outcome = enrich.apply_batch_results([here], entries, [here.id], model="m")
+    outcome = enrich.apply_batch_results(
+        [here],
+        entries,
+        [here.id],
+        model="m",
+        input_fingerprints=input_fingerprints([here]),
+    )
 
     assert outcome.invalid == {here.id: "bad json"}
     assert not outcome.missing
+
+
+def test_a_batch_answer_is_stale_when_the_record_data_changed_after_submission() -> None:
+    submitted_record = record()
+    edited_record = record(usage_notes="A human edited this while the batch ran.")
+    entry = claude_client.BatchEntry(
+        key(edited_record.id),
+        "succeeded",
+        "",
+        claude_client.CallResult(
+            enrich.ai_schema()(meanings=["to converse"], usage_notes="model note"),
+            "end_turn",
+            None,
+        ),
+    )
+
+    outcome = enrich.apply_batch_results(
+        [edited_record],
+        [entry],
+        [edited_record.id],
+        model="m",
+        input_fingerprints=input_fingerprints([submitted_record]),
+        force_fields=("meanings", "usage_notes"),
+    )
+
+    assert outcome.stale == [edited_record.id]
+    assert outcome.result.records == [edited_record]
+    assert outcome.result.changes == {}
+    assert outcome.result.looked_up == 0
+
+
+def test_a_current_batch_answer_carries_its_submitted_request_provenance() -> None:
+    item = record()
+    plan = enrich.batch_requests(
+        [item], model="m", style_guide="guide", instructions="task"
+    )
+    entry = claude_client.BatchEntry(
+        key(item.id),
+        "succeeded",
+        "",
+        claude_client.CallResult(
+            enrich.ai_schema()(usage_notes="model note"), "end_turn", None
+        ),
+    )
+
+    outcome = enrich.apply_batch_results(
+        [item],
+        [entry],
+        [item.id],
+        model="m",
+        input_fingerprints=plan.input_fingerprints,
+        request_fingerprints=plan.request_fingerprints,
+    )
+
+    assert outcome.stale == []
+    assert outcome.result.provenance == plan.request_fingerprints
+    assert outcome.result.input_fingerprints == plan.input_fingerprints
 
 
 def test_a_sub_threshold_retry_does_not_refuse_over_a_staging_file(
@@ -1524,7 +1840,13 @@ def test_a_terminal_row_for_a_record_still_present_says_left_untouched() -> None
     here = record(id="word:話す:はなす")
     entries = [claude_client.BatchEntry(key(here.id), "errored", "Overloaded", None)]
 
-    outcome = enrich.apply_batch_results([here], entries, [here.id], model="m")
+    outcome = enrich.apply_batch_results(
+        [here],
+        entries,
+        [here.id],
+        model="m",
+        input_fingerprints=input_fingerprints([here]),
+    )
 
     reason = outcome.failed[here.id]
     assert reason.endswith("left untouched")

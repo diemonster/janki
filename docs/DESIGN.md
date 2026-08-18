@@ -17,19 +17,24 @@ the plan names the gap. The sentence states the design, not the present.
 **1. Intake.** Sources arrive and are preserved immutably under `data/inbox/`,
 with provenance. Nothing ever edits a source.
 
-**2. The AI passes (Claude Opus 5).** A template prompt per input shape and
-pass asks for what the cards need: the Japanese, the English translation,
-furigana giving each kanji's *contextual* reading as used in that sentence,
-usage patterns worth teaching, register. Together the answers fill the data
-model. *Today that is four passes — `extract` reads a source for candidates,
-`enrich --ai` writes the sentences and notes, `--polish-meanings` rewrites the
-glosses, `patterns` reads a handout for the grammar it teaches. Consolidating
-them into one rich template per input shape is the open half of M7.6P, not
-something already true.* Prompts are template files, readable without
-opening Python, and they are the quality mechanism: **when the output is wrong
-or thin, expand the template.** A bare word list (the CSV path) has no source
-sentences, so it gets its own template that writes them; everything else about
-the contract is the same.
+**2. The AI passes (Claude Opus 5 by default; Codex is optional for immediate
+bare-record enrichment).** One rich template per input shape asks
+for the complete card: Japanese, natural English glosses, examples, furigana
+giving each kanji's *contextual* reading in that sentence, romaji, usage, and
+register. There are two paid card-writing paths. `extract` reads a preserved source
+once and returns candidates, coverage facts, complete card proposals, and the
+grammar patterns that source teaches in the same answer; its auto, table, and
+prose modes remain three complete source templates. `enrich --ai` reads a bare
+record once and returns glosses, examples, and usage together. Pattern listing
+and human review remain local operations over extraction output. Prompts are
+template files, readable without opening Python, and they are the quality
+mechanism: **when the output is wrong or thin, expand the template.** A bare
+word list has no source sentences, so its template writes them; everything
+else about the card contract is shared.
+
+The opt-in `promote --accept-coverage` gate is another paid model operation. It
+re-reads a preserved source only to check janki's coverage bookkeeping; it does
+not write or judge card content.
 
 janki never writes code that reads Japanese — no rule that decides a reading,
 a word boundary, a register, or whether notation matches a sentence. Japanese

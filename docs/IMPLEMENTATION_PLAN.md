@@ -58,7 +58,7 @@ marked "supersedes design").
    of it. *(Through 2026-08-15 this rule also described a "final semantic
    review" over a release candidate; `janki review` was deleted in M8.2 and
    there is no such pass. The paid calls that remain are `extract`, `enrich
-   --ai`, `--polish-meanings`, `patterns`, and `promote --accept-coverage`.)*
+   --ai`, and `promote --accept-coverage`.)*
    Do not run a paid pass after each small commit or on a media-only diff. Any
    additional broad live review needs explicit repository-owner approval.
    Tests and `make gates` never make a live request.
@@ -265,9 +265,10 @@ refinement below).
   `unexported(deck_stem, ids)`, `missing_audio(records)`,
   `stale_audio(records)` (compare stored `content_fp` against current
   content fingerprints), `missing_enrichment(records)` — **defined
-  purely from record content** (empty examples/usage_notes), with
   ledger entries as metadata only, so a jpdb-only pass never hides a
   record from `enrich --ai`.
+  purely from record content** (empty meanings or examples; M7.6P made
+  `usage_notes` optional, so an empty note is complete), with
 - Both fingerprint families (see Conventions) are implemented here as
   helpers; `stale_audio` uses defensive access for `pitch_accent` /
   `audio_accent` (`getattr(record, "pitch_accent", [])`) — the schema
@@ -1372,8 +1373,10 @@ Files: `src/japanese_anki/enrich.py`, `src/japanese_anki/cli.py`,
 `tests/test_enrich_ai.py` (new).
 Design: DESIGN_V2 "AI integration".
 
-- Targets: records with empty examples or usage_notes (content-defined,
-  per M1.3; explicit `IDS...` overrides). Per record, one structured
+- Targets when M4.2 landed: records with empty examples or `usage_notes`
+  (content-defined, per M1.3; explicit `IDS...` overrides). M7.6P supersedes
+  that target rule: current default targeting is empty meanings or examples,
+  while an empty optional usage note is complete. Per record, one structured
   call via M3.1 (`enrich_model`; stop_reason discipline): system =
   style guide (cached), user = record + jpdb facts + up to 3 recently
   generated examples from other records (variety pressure). Schema:
@@ -3427,36 +3430,41 @@ Use these slices, each a finding plus a reproducing case plus a fix, ordered so
 Do not run a paid semantic review as part of this task. The first review after
 it lands is the milestone measurement.
 
-### [~] M7.6P Prompts are templates, and the prompt does the work
+### [x] M7.6P Prompts are templates, and the prompt does the work
 
-*Half done 2026-08-16 — the lift landed, the consolidation did not.*
+*Complete 2026-08-18 — all five implementation items landed; independent
+architecture, provenance, and CLI/documentation review findings were resolved;
+the final `make gates` passed 2,131 tests and built the sample deck.*
 
-**Done: items 1–4.** `prompts/` exists with seven files a person edits and a
-README that maps them; `src/japanese_anki/prompts.py` is the loader — a file
-read, re-read every call, no cache, a missing file naming its own full path.
-`docs/JAPANESE_STYLE_GUIDE.md` moved to `prompts/style-guide.md` and loads the
-same way, because it is a prompt. `extract`'s three modes are three complete
-files rather than one plus three rule blocks, which duplicates a closing
-paragraph and is the intended trade: reading one file requires reading no
-others. The instruction text is threaded from the CLI exactly as `style_guide`
-already was, so no module below the CLI touches the filesystem.
-`tests/test_prompts.py` pins the loader's promises and the shipped files —
-including that `prompts/` holds exactly the files a pass sends plus the README,
-so a leftover draft cannot masquerade as live.
+`prompts/` contains four rich task templates: three complete source shapes
+(`extract-auto`, `extract-table`, and `extract-prose`) and one bare-word shape
+(`enrich-bare-word`). `src/japanese_anki/prompts.py` re-reads each file on
+every call. The source templates return coverage, complete card candidates,
+and document patterns in one answer; the bare-word template proposes meanings,
+examples, and an optional usage note in one answer. An empty note is current
+when the template finds no useful, certain nuance; default targeting therefore
+uses missing meanings or examples, while explicit ids request a revisit. The
+former standalone paid `--polish-meanings` and document-reading `patterns`
+passes are deleted.
+`janki patterns` remains the local list/review surface for patterns emitted by
+source extraction.
 
-**Not done: item 5, the consolidation.** One rich template for a source that
-carries sentences and one for a bare word list — absorbing `extract`'s prompt
-into `enrich --ai` — is a change to *what is asked*, not where it lives. It
-belongs after someone has read the templates as they now stand. The pydantic
-`Field(description=…)` strings still ship instructions inside the JSON schema
-and are still in Python (item 1 names them); `--ai` batch submissions still
-record no template fingerprint, though `extract`'s staging provenance does —
-its `system_prompt_fingerprint` is now the sha-256 of the prompt file's own
-bytes, pinned by a test.
+Substantive instructions now live in the Markdown templates. Python user turns
+carry labelled input data, schema descriptions are terse structural labels,
+and the Codex-only JSON/no-tools wrapper remains provider transport rather than
+Japanese policy. A canonical full-request fingerprint over the provider,
+exact style, task template, user turn, normalized transport prompt, and actual
+wire response schema binds every live and batch answer. Large bare-word runs
+additionally bind proposed field replacements to
+the values the reviewer saw, so promotion refuses stale proposals instead of
+overwriting later edits. Every new model-review artifact also carries a unique
+`review_run_id`, so partial retries share an archive while two completed
+invocations never conflate provenance even when their requests are identical.
 
-Files: `prompts/`, `src/japanese_anki/prompts.py`, `extract.py`, `enrich.py`,
-`patterns.py`, `claude_client.py`, `cli.py`, `tests/test_prompts.py`,
-`tests/conftest.py`, `README.md`, `AGENTS.md`, `docs/ENRICHMENT.md`.
+Files: `prompts/`, `src/japanese_anki/ai_schema.py`, `prompts.py`, `extract.py`,
+`enrich.py`, `patterns.py`, `claude_client.py`, `codex_client.py`, `cli.py`,
+`ledger.py`, `promote.py`, `staging.py`, the prompt/enrichment/extraction/
+promotion tests, `README.md`, `AGENTS.md`, and the enrichment/pattern docs.
 
 *The standing rule, recorded here because this project keeps drifting from it.*
 janki asks a model to read Japanese. When the answer is wrong or thin, the fix
@@ -3469,18 +3477,12 @@ proposed for furigana notation and reverted. The rule this project owns is
 enrichment and filtering; the logic it owns is about the *artifact* —
 identifiers, fingerprints, field counts, provenance — never about the language.
 
-1. Lift every model instruction out of Python into a template file readable
-   without opening the code: `enrich.AI_INSTRUCTIONS` and
-   `enrich.POLISH_INSTRUCTIONS`, `patterns.INSTRUCTIONS`, `review.INSTRUCTIONS`,
-   and the extraction prompt. One directory, one loader, the same
-   fingerprinting the style guide already gets so a prompt change is visible in
-   review rather than buried in a diff of string literals. The inventory is
-   wider than the five constants: every string that reaches a model is a
-   template concern — the user-turn builders, `patterns.format_patterns`'s
-   injected directive, `codex_client._prompt`, and the pydantic
-   `Field(description=…)` strings that ship inside the JSON schema and carry
-   real instructions. Fingerprint them all, and record them on `--ai` batch
-   submissions the way the polish batch already does.
+1. Lift every substantive model instruction out of Python into a template file
+   readable without opening the code. User-turn builders carry labelled data,
+   schema descriptions carry only terse structural labels, and the Codex
+   wrapper carries provider transport. Fingerprint the provider, style, task
+   template, user turn, normalized transport prompt, and actual wire response
+   schema on every paid answer, including `--ai` batches.
 2. The loader is the only new logic, and it is a file read — not a renderer with
    conditionals. A prompt that needs a branch in its *instruction prose* is two
    prompts — extract's three modes are three files. Interpolating a record's
@@ -3496,12 +3498,11 @@ identifiers, fingerprints, field counts, provenance — never about the language
    `src/` that judges the model's Japanese is a deletion, full stop — M8.3
    names the known ones, this audit catches stragglers. Artifact structure
    (identifiers, counts, file shape, packaging) stays.
-5. Consolidate the AI passes into the templates (DESIGN.md stage 2): one rich
-   template for a source that carries sentences — Japanese, English, furigana
-   with each kanji's contextual reading, usage patterns, register — and one for
-   a bare word list, absorbing `extract`'s prompt and `enrich --ai`;
-   `--polish-meanings` becomes a template too. If the cards need more, the
-   template asks for more.
+5. Consolidate the paid AI passes into two entry points (DESIGN.md stage 2):
+   rich source templates return coverage, cards, and source patterns together;
+   the rich bare-word template returns proposed meanings, examples, and usage
+   notes. Delete the superseded standalone polish and pattern-reading calls. If
+   the cards need more, the applicable template asks for more.
    The archived camera pilot pins a `system_prompt_fingerprint` in its staging
    archive; any prompt change invalidates that recorded provenance — accepted,
    pre-release: the archive is history, not a contract.
@@ -3515,9 +3516,7 @@ named by pass and input shape:
       README.md           the map: which pass sends which file, and the rules
       style-guide.md      moved from docs/JAPANESE_STYLE_GUIDE.md — it is a prompt
       extract-<mode>.md   one per extraction mode (three today, three files)
-      enrich-examples.md  the bare-word-list shape (absorbs AI_INSTRUCTIONS)
-      polish-meanings.md
-      patterns.md
+      enrich-bare-word.md the bare-word-list shape
 
 Markdown because the model reads it natively and the file is sent
 byte-for-byte: no placeholders, no comments, no template syntax — if it is in
@@ -3532,9 +3531,8 @@ in code — they are welded to the schema — and the audit keeps them terse,
 with any real instruction moved up into the files. `review.INSTRUCTIONS`
 needs no file — it died with the review subsystem in M8.2.
 
-Depends on: M7.6V. Files: a prompt template directory, its loader, the five
-call sites, `docs/ENRICHMENT.md`, and the prompt-contract tests in
-`tests/test_enrich_ai.py`.
+Depends on: M7.6V. Files: a prompt template directory, its loader, the two paid
+entry points, `docs/ENRICHMENT.md`, and the prompt-contract tests.
 
 ## M8 The design leads
 

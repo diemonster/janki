@@ -26,15 +26,20 @@ or second-guesses what came back.
   the project's, because they are about the artifact rather than the language.
 - **Prompts are templates and belong in files.** Every *system* prompt on the
   Anthropic path is Markdown under `prompts/`, sent byte for byte and re-read
-  on every run. Three things are still instructions and still in Python, and
-  knowing which matters when you go looking for what a pass asked: the user
-  turn Python composes from the record's data, the pydantic
-  `Field(description=…)` strings that ship inside the JSON schema (several are
-  full sentences, not labels), and the Codex provider path, which strips and
-  rejoins the blocks and prepends its own preamble. Change what a pass asks for by editing the file, never
-  by adding code that fixes up the answer. A prompt needing a branch in its
-  instruction prose is two prompts — that is why extraction's three modes are
-  three complete files rather than one file plus three rule blocks.
+  on every run. Three pieces still live in Python: the labelled data turn built
+  from the record or source, the terse `Field(description=…)` labels shipped in
+  the JSON schema, and the Codex provider's JSON-only/no-tools preamble. Change
+  what a pass asks for by editing the file, never by adding code that fixes up
+  the answer. A prompt needing a branch in its instruction prose is two prompts
+  — that is why extraction's three modes are three complete files rather than
+  one file plus three rule blocks.
+- **There are two card-writing model calls.** `extract` reads a source once and
+  returns complete proposed cards plus the patterns the source teaches;
+  `enrich --ai` receives a bare vocabulary record and returns the same meanings,
+  examples, and usage-note shape. Pattern discovery and meaning improvement are
+  parts of those rich answers, never follow-up paid passes. `janki patterns`
+  only lists and records human review of pattern sets already written by
+  `extract`.
 - **janki's logic enriches the card; it never audits the model.** Review
   gates and hardening rules aimed at proving the model wrong are the same
   anti-pattern as reading Japanese in code: writing a rules engine for
@@ -162,19 +167,36 @@ below is what is left, and it is the loop every other project already uses.*
 2. `data/normalized/`: mechanical conversion into the canonical schema.
 3. `data/decks/`: curated deck definitions and human edits.
 4. `data/staging/`: rows an import held back for a human — **committed**, so a
-   reading typed in by hand is recoverable. `janki promote` archives the file
-   to `data/staging/done/` and deletes the original itself once every row has
-   landed; do not delete one by hand, which skips the archive. A file that
-   survives a promote is one with rows still held back, and it says so.
-5. `data/staging/done/`: promoted staging files, kept verbatim — **committed**,
-   the record of what each source yielded and what a reviewer accepted.
+   reading typed in by hand is recoverable. `janki promote` normally archives
+   the file to `data/staging/done/` and deletes the original itself once every
+   row has landed; do not delete one by hand, which skips the archive. Normally,
+   a file that survives a promote has rows still held back, and it says so. The
+   exception is a staged `enrich --ai` review whose record changes landed but
+   whose ledger save failed: the live staging file is kept because it is the
+   only recoverable model attribution. Once the ledger is writable, rerun the
+   same promote command so it records that attribution, archives, and deletes
+   the file; never delete this recovery artifact by hand. Source
+   extraction metadata fingerprints the source, style guide, task template,
+   labelled data turn, response schema, and complete request; the pattern copy
+   carries the same provenance. Large `enrich --ai` staging records complete
+   request and input fingerprints per record. Its `field_replacements` hashes
+   bind each authorized field to the record id, field name, and exact old wire
+   value — not the proposed value, which a reviewer may improve. If any bound
+   old value changes before promote, the whole staged replacement is stale and
+   nothing lands.
+5. `data/staging/done/`: canonical promoted rows as they actually landed, with
+   the staging metadata preserved and archival count/review text added —
+   **committed**, the record of what each source yielded and what a reviewer
+   accepted.
 6. `data/kanji.json`: machine-written kanji reference data — **committed** and
    replaced by `janki kanji --refresh`; do not add fields by hand because the
    source schema does not preserve unknown keys.
-7. `data/patterns.json`: machine-written by `janki patterns` — **committed**.
-   Its `reviewed:` marks are human judgements, and re-reading a document clears
-   them, which is why `patterns` *skips* a reviewed file unless `--force` —
-   it names what it skipped and reads the rest, rather than refusing the run.
+7. `data/patterns.json`: machine-written from `janki extract`'s rich source
+   answer — **committed**. `janki patterns` only lists entries and marks them
+   reviewed. A reviewed mark is a human judgement: extracting that source again
+   preserves its reviewed store entry unless `extract --force` explicitly
+   replaces it with the new unreviewed answer. The staging file still keeps the
+   new answer, so neither half of the already-paid source response is lost.
 8. `data/ledger.json`: machine-written operational state — **committed**, never
    hand-edited. `janki status --rebuild` reconstructs what records and media
    still prove, and is a no-op on a healthy repository: a source reference's

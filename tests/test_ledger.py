@@ -30,6 +30,9 @@ from japanese_anki.models import ExampleSentence, VocabularyRecord
 from japanese_anki.pitch import to_aquestalk
 
 TODAY = date.today().isoformat()
+REQUEST_V1 = "a" * 64
+REQUEST_V2 = "b" * 64
+
 
 
 def _record(
@@ -359,7 +362,9 @@ def test_jpdb_and_ai_enrichment_do_not_overwrite_each_other(tmp_path: Path) -> N
         "word:話す:はなす",
         kind="ai",
         model="claude-opus-5",
+        provider="anthropic",
         fields=["examples", "usage_notes"],
+        request_fingerprint=REQUEST_V1,
         at="2026-08-11",
     )
 
@@ -374,7 +379,9 @@ def test_jpdb_and_ai_enrichment_do_not_overwrite_each_other(tmp_path: Path) -> N
             "at": "2026-08-11",
             "kind": "ai",
             "model": "claude-opus-5",
+            "provider": "anthropic",
             "fields": ["examples", "usage_notes"],
+            "request_fingerprint": REQUEST_V1,
         },
     ]
 
@@ -412,15 +419,17 @@ def test_re_running_the_same_pass_months_later_still_records_nothing(tmp_path: P
     assert entries[0]["at"] == "2026-08-01"  # the first run, as with sources
 
 
-def test_enrichment_identity_ignores_field_order_and_repeats(tmp_path: Path) -> None:
-    # The identity is (kind, model, fields) as a *set* of names: a caller that
-    # builds the list in dict order must not re-record the same pass forever.
+def test_ai_enrichment_identity_ignores_field_order_and_repeats(tmp_path: Path) -> None:
+    # Fields are a set within one exact AI request. A caller that builds the
+    # list in dict order must not re-record the same answer forever.
     book = ledger_module.load(tmp_path / "ledger.json")
     book.record_enriched(
         "word:話す:はなす",
         kind="ai",
         model="claude-opus-5",
+        provider="anthropic",
         fields=["usage_notes", "examples"],
+        request_fingerprint=REQUEST_V1,
         at="2026-08-01",
     )
 
@@ -429,7 +438,9 @@ def test_enrichment_identity_ignores_field_order_and_repeats(tmp_path: Path) -> 
             "word:話す:はなす",
             kind="ai",
             model="claude-opus-5",
+            provider="anthropic",
             fields=["examples", "usage_notes", "examples"],
+            request_fingerprint=REQUEST_V1,
             at="2026-09-01",
         )
         is False
@@ -438,7 +449,34 @@ def test_enrichment_identity_ignores_field_order_and_repeats(tmp_path: Path) -> 
     entries = book.records["word:話す:はなす"]["enriched"]
     assert len(entries) == 1
     assert entries[0]["fields"] == ["examples", "usage_notes"]
+    assert entries[0]["request_fingerprint"] == REQUEST_V1
     assert entries[0]["at"] == "2026-08-01"
+
+
+def test_different_ai_request_fingerprints_are_distinct_provenance(
+    tmp_path: Path,
+) -> None:
+    """A template or data-turn change must not collapse into the older pass."""
+    book = ledger_module.load(tmp_path / "ledger.json")
+    common = {
+        "kind": "ai",
+        "model": "claude-opus-5",
+        "provider": "anthropic",
+        "fields": ["examples", "usage_notes"],
+    }
+
+    assert book.record_enriched(
+        "word:話す:はなす", **common, request_fingerprint=REQUEST_V1
+    )
+    assert book.record_enriched(
+        "word:話す:はなす", **common, request_fingerprint=REQUEST_V2
+    )
+
+    entries = book.records["word:話す:はなす"]["enriched"]
+    assert [item["request_fingerprint"] for item in entries] == [
+        REQUEST_V1,
+        REQUEST_V2,
+    ]
 
 
 def test_a_pass_that_wrote_different_fields_is_a_different_pass(tmp_path: Path) -> None:
@@ -464,6 +502,31 @@ def test_enrichment_arguments_are_checked(tmp_path: Path) -> None:
         book.record_enriched("word:話す:はなす", kind="human", fields=["examples"])
     with pytest.raises(LedgerError):
         book.record_enriched("word:話す:はなす", kind="ai", fields=["examples"])
+    with pytest.raises(LedgerError, match="request fingerprint"):
+        book.record_enriched(
+            "word:話す:はなす",
+            kind="ai",
+            model="claude-opus-5",
+            provider="anthropic",
+            fields=["examples"],
+        )
+    with pytest.raises(LedgerError, match="provider"):
+        book.record_enriched(
+            "word:話す:はなす",
+            kind="ai",
+            model="claude-opus-5",
+            fields=["examples"],
+            request_fingerprint=REQUEST_V1,
+        )
+    with pytest.raises(LedgerError, match="lowercase SHA-256"):
+        book.record_enriched(
+            "word:話す:はなす",
+            kind="ai",
+            model="claude-opus-5",
+            provider="anthropic",
+            fields=["examples"],
+            request_fingerprint="tampered",
+        )
     with pytest.raises(LedgerError):
         book.record_enriched("word:話す:はなす", kind="jpdb", fields=[])
     assert book.records == {}
@@ -854,16 +917,25 @@ def test_missing_enrichment_reads_records_not_the_ledger(tmp_path: Path) -> None
     bare = _record()
     examples_only = _record("会う", "あう", examples=[ExampleSentence(japanese="友達に会う。")])
     notes_only = _record("食べる", "たべる", usage_notes="Ichidan verb.")
+    no_meanings = _record(
+        "聞く",
+        "きく",
+        examples=[ExampleSentence(japanese="音楽を聞く。")],
+        usage_notes="Everyday verb.",
+    )
+    no_meanings.meanings = []
     done = _enriched(_record("読む", "よむ"))
 
     # A jpdb pass wrote pitch accent for the bare record and none of the
     # content enrichment actually produces — it must stay a target.
     book.record_enriched(bare.id, kind="jpdb", fields=["pitch_accent"], at="2026-08-10")
 
-    assert book.missing_enrichment([bare, examples_only, notes_only, done]) == [
+    assert book.missing_enrichment(
+        [bare, examples_only, notes_only, no_meanings, done]
+    ) == [
         bare.id,
-        examples_only.id,
         notes_only.id,
+        no_meanings.id,
     ]
 
 
@@ -945,93 +1017,6 @@ def test_a_case_only_edit_does_not_make_word_audio_look_stale() -> None:
     ) == ledger_module.word_audio_content_fingerprint(
         replace(upper, pitch_accent=["lhll"])
     )
-
-
-def test_batch_recovery_never_deletes_an_unknown_same_named_artifact(
-    tmp_path: Path,
-) -> None:
-    ledger_path = tmp_path / "ledger.json"
-    recovery_path = ledger_module.batch_recovery_path(ledger_path)
-    recovery_path.write_text("important unrelated content\n", encoding="utf-8")
-
-    with pytest.raises(LedgerError, match="recovery journal"):
-        ledger_module.clear_batch_recovery(ledger_path, "msgbatch_polish")
-
-    assert recovery_path.read_text(encoding="utf-8") == "important unrelated content\n"
-
-
-def test_a_second_fetch_cannot_replace_different_recovery_for_the_same_batch(
-    tmp_path: Path,
-) -> None:
-    ledger_path = tmp_path / "ledger.json"
-    entry = {
-        "kind": "polish",
-        "model": "claude-opus-5",
-        "submitted_at": "2026-08-11",
-        "pending_ids": ["one", "two"],
-        "force_fields": [],
-        "prompt_fingerprints": {"one": "fp-one", "two": "fp-two"},
-    }
-    first = ledger_module.write_batch_recovery(
-        ledger_path,
-        "msgbatch_polish",
-        entry,
-        accepted_meanings={"one": ["first review"]},
-        retry_ids=["two"],
-    )
-
-    with pytest.raises(LedgerError, match="Another fetch"):
-        ledger_module.write_batch_recovery(
-            ledger_path,
-            "msgbatch_polish",
-            entry,
-            accepted_meanings={"two": ["second review"]},
-            retry_ids=["one"],
-        )
-
-    current = ledger_module.load_batch_recovery(ledger_path)
-    assert current is not None
-    assert current.text == first.text
-    assert current.accepted_meanings == {"one": ["first review"]}
-
-
-def test_a_stale_fetch_cannot_clear_a_newer_same_batch_journal(tmp_path: Path) -> None:
-    ledger_path = tmp_path / "ledger.json"
-    entry = {
-        "kind": "polish",
-        "model": "claude-opus-5",
-        "submitted_at": "2026-08-11",
-        "pending_ids": ["one"],
-        "force_fields": [],
-        "prompt_fingerprints": {"one": "fp-one"},
-    }
-    stale = ledger_module.write_batch_recovery(
-        ledger_path,
-        "msgbatch_polish",
-        entry,
-        accepted_meanings={"one": ["older review"]},
-        retry_ids=[],
-    )
-    assert ledger_module.clear_batch_recovery(
-        ledger_path, "msgbatch_polish", expected=stale
-    )
-    newer = ledger_module.write_batch_recovery(
-        ledger_path,
-        "msgbatch_polish",
-        entry,
-        accepted_meanings={"one": ["newer review"]},
-        retry_ids=[],
-    )
-
-    with pytest.raises(LedgerError, match="newer journal was kept intact"):
-        ledger_module.clear_batch_recovery(
-            ledger_path, "msgbatch_polish", expected=stale
-        )
-
-    current = ledger_module.load_batch_recovery(ledger_path)
-    assert current is not None
-    assert current.text == newer.text
-    assert current.accepted_meanings == {"one": ["newer review"]}
 
 
 def test_the_tracked_ledger_agrees_with_the_records_it_describes() -> None:

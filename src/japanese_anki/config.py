@@ -47,7 +47,6 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "enrich_provider",
         "enrich_model",
         "enrich_reasoning_effort",
-        "polish_model",
     ),
     "tts": (
         "provider",
@@ -307,7 +306,6 @@ class ProjectConfig:
     enrich_provider: str
     enrich_model: str
     enrich_reasoning_effort: str
-    polish_model: str
     tts_provider: str
     voicevox_url: str
     voicevox_speaker: int
@@ -409,7 +407,6 @@ class ProjectConfig:
             enrich_reasoning_effort=_str(
                 data, "ai", "enrich_reasoning_effort", "ultra"
             ),
-            polish_model=_str(data, "ai", "polish_model", "claude-opus-5"),
             tts_provider=_str(data, "tts", "provider", "voicevox"),
             voicevox_url=_str(data, "tts", "voicevox_url", "http://localhost:50021"),
             voicevox_speaker=_int(data, "tts", "voicevox_speaker", 46),

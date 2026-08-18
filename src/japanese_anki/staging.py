@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import functools
 import hashlib
+import hmac
 import io
 import json
 import re
@@ -30,6 +31,7 @@ from collections.abc import Callable, Iterable, Mapping, MutableMapping, Sequenc
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
+from uuid import UUID, uuid4
 
 import yaml
 from ruamel.yaml import YAML, YAMLError
@@ -40,6 +42,7 @@ from japanese_anki.io import (
     atomic_write_text,
     exclusive_path_lock,
     load_structured,
+    validate_prefer_incoming,
 )
 from japanese_anki.models import VocabularyRecord
 
@@ -99,13 +102,25 @@ META_KEYS: tuple[str, ...] = (
     "source_file",
     "extracted_at",
     "model",
+    "provider",
+    "review_run_id",
     "review_notes",
     "coverage",
     "prompt_provenance",
+    "pattern_set",
+    "ai_enrichment",
+    "field_replacements",
 )
 
 _RECORDS_KEY = "records"
 _COVERAGE_KEY = "coverage"
+
+#: Metadata written beside a large AI-enrichment review.  Ordinary extraction
+#: staging has no such block: those rows fill holes and keep existing curation.
+#: A rich AI answer may also propose replacing a non-empty meaning, so the file
+#: has to carry proof of the exact old value the proposal was made against.
+FIELD_REPLACEMENTS_KEY = "field_replacements"
+FIELD_REPLACEMENTS_VERSION = 1
 
 # ``read_staging`` parses by suffix (via ``load_structured``), so a staging file
 # written under any other suffix would be write-only: the write succeeds and
@@ -149,7 +164,7 @@ _UNIT_DISPOSITIONS = {"candidate", "duplicate", "non-vocabulary", "unreadable"}
 #: model's word should say so forever.
 COVERAGE_AUTHORITIES = frozenset({"repository-owner", "model"})
 _SECTION = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
-_PROMPT_PROVENANCE_FIELDS = {
+_PROMPT_PROVENANCE_V2_FIELDS = {
     "source_sha256",
     "mode",
     "provider",
@@ -159,6 +174,302 @@ _PROMPT_PROVENANCE_FIELDS = {
     "style_guide_fingerprint",
     "user_prompt_fingerprint",
 }
+_PROMPT_PROVENANCE_FIELDS = {
+    *_PROMPT_PROVENANCE_V2_FIELDS,
+    "response_schema_fingerprint",
+    "request_fingerprint",
+}
+
+
+def new_review_run_id() -> str:
+    """Mint the persisted identity of one newly written model-review artifact."""
+    return str(uuid4())
+
+
+def review_run_id(meta: Mapping[str, Any]) -> str | None:
+    """Return a canonical UUIDv4 review-run id, allowing legacy absence."""
+    if "review_run_id" not in meta:
+        return None
+    value = meta.get("review_run_id")
+    if not isinstance(value, str):
+        raise StagingError(
+            "[review-run-id-invalid] review_run_id must be canonical lowercase "
+            "UUIDv4 text"
+        )
+    try:
+        parsed = UUID(value)
+    except ValueError as exc:
+        raise StagingError(
+            "[review-run-id-invalid] review_run_id must be canonical lowercase "
+            "UUIDv4 text"
+        ) from exc
+    if parsed.version != 4 or str(parsed) != value:
+        raise StagingError(
+            "[review-run-id-invalid] review_run_id must be canonical lowercase "
+            "UUIDv4 text"
+        )
+    return value
+
+
+def replacement_fingerprint(record: VocabularyRecord, field: str) -> str:
+    """Bind one replaceable field's old wire value to its record and name.
+
+    Including all three parts prevents a digest being moved between two words,
+    or between two same-valued fields on one word.  The wire value comes from
+    :meth:`VocabularyRecord.to_dict`, not directly from the dataclass, so nested
+    examples are ordinary JSON mappings and the digest describes what is
+    actually durable in ``vocabulary.json``.
+    """
+    try:
+        (name,) = validate_prefer_incoming((str(field),))
+    except JankiError as exc:
+        raise StagingError(
+            f"Cannot authorize staged replacement of {field!r}: {exc}"
+        ) from exc
+    value = record.to_dict()[name]
+    encoded = json.dumps(
+        {"record_id": record.id, "field": name, "old_value": value},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def field_replacement_block(
+    records: Iterable[VocabularyRecord],
+    changes: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Build the metadata authorizing a reviewed staged replacement.
+
+    ``changes`` is the enrichment result's existing shape: record id to field
+    name to ``(old, proposed)``.  The proposed half is deliberately not part of
+    the digest because the point of staging is that a reviewer may improve it.
+    The old half must equal the supplied record, though: accepting a change map
+    computed from a different collection revision would create authority for a
+    value the model never saw.
+    """
+    by_id: dict[str, VocabularyRecord] = {}
+    for record in records:
+        if record.id in by_id:
+            raise StagingError(
+                f"Cannot fingerprint replacements: {record.id} appears more than "
+                "once in the records."
+            )
+        by_id[record.id] = record
+
+    bound: dict[str, dict[str, str]] = {}
+    for record_id, field_changes in changes.items():
+        key = str(record_id)
+        record = by_id.get(key)
+        if record is None:
+            raise StagingError(
+                f"Cannot fingerprint replacements for {key}: there is no old record "
+                "with that id."
+            )
+        if not isinstance(field_changes, Mapping) or not field_changes:
+            raise StagingError(
+                f"Cannot fingerprint replacements for {key}: its changes must be "
+                "a non-empty field mapping."
+            )
+        if any(not isinstance(name, str) for name in field_changes):
+            raise StagingError(
+                f"Cannot fingerprint replacements for {key}: field names must be text."
+            )
+        try:
+            names = validate_prefer_incoming(str(name) for name in field_changes)
+        except JankiError as exc:
+            raise StagingError(
+                f"Cannot fingerprint replacements for {key}: {exc}"
+            ) from exc
+        fingerprints: dict[str, str] = {}
+        for name in names:
+            change = field_changes[name]
+            if not isinstance(change, (tuple, list)) or len(change) != 2:
+                raise StagingError(
+                    f"Cannot fingerprint replacement {key}.{name}: its change must "
+                    "be an (old, proposed) pair."
+                )
+            old_value = getattr(record, name)
+            if change[0] != old_value:
+                raise StagingError(
+                    f"Cannot fingerprint replacement {key}.{name}: the change says "
+                    "its old value is different from the record supplied."
+                )
+            fingerprints[name] = replacement_fingerprint(record, name)
+        bound[key] = fingerprints
+
+    if not bound:
+        raise StagingError(
+            "A field-replacement block needs at least one record and field."
+        )
+    return {
+        "version": FIELD_REPLACEMENTS_VERSION,
+        "records": {record_id: bound[record_id] for record_id in sorted(bound)},
+    }
+
+
+def _replacement_records(meta: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    """Parse the exact field-replacement metadata shape, or return absent."""
+    if FIELD_REPLACEMENTS_KEY not in meta:
+        return None
+    raw = meta[FIELD_REPLACEMENTS_KEY]
+    if not isinstance(raw, Mapping) or set(raw) != {"version", "records"}:
+        raise StagingError(
+            "[field-replacements-invalid] field_replacements must contain exactly "
+            "version and records"
+        )
+    version = raw.get("version")
+    if (
+        isinstance(version, bool)
+        or not isinstance(version, int)
+        or version != FIELD_REPLACEMENTS_VERSION
+    ):
+        raise StagingError(
+            "[field-replacements-invalid] field_replacements version must be 1"
+        )
+    records = raw.get("records")
+    if not isinstance(records, Mapping) or not records:
+        raise StagingError(
+            "[field-replacements-invalid] field_replacements.records must be a "
+            "non-empty mapping"
+        )
+    for raw_id, raw_fields in records.items():
+        if not isinstance(raw_id, str) or not raw_id.strip():
+            raise StagingError(
+                "[field-replacements-invalid] every replacement record id must be "
+                "non-empty text"
+            )
+        if not isinstance(raw_fields, Mapping) or not raw_fields:
+            raise StagingError(
+                f"[field-replacements-invalid] {raw_id} must name at least one field"
+            )
+        try:
+            names = validate_prefer_incoming(str(name) for name in raw_fields)
+        except JankiError as exc:
+            raise StagingError(
+                f"[field-replacements-invalid] {raw_id}: {exc}"
+            ) from exc
+        if set(names) != set(raw_fields):
+            # A non-string mapping key can stringify to a valid field name.
+            # Accepting it here would make the block mean something other than
+            # what the YAML visibly says.
+            raise StagingError(
+                f"[field-replacements-invalid] {raw_id} field names must be text"
+            )
+        for name in names:
+            digest = raw_fields[name]
+            if not isinstance(digest, str) or not _SHA256.fullmatch(digest):
+                raise StagingError(
+                    f"[field-replacements-invalid] {raw_id}.{name} must be a SHA-256"
+                )
+    return records
+
+
+def authorized_field_replacements(
+    meta: Mapping[str, Any],
+    current: Sequence[VocabularyRecord],
+    incoming: Sequence[VocabularyRecord],
+) -> dict[str, tuple[str, ...]]:
+    """Fields a staged row may replace after old-value or retry proof matches.
+
+    Validation is deliberately a complete first pass.  A stale second row must
+    refuse before a matching first row is merged, otherwise one reviewed file
+    can land half of its replacements against a collection revision it did not
+    describe.  Entries for rows absent from ``incoming`` are allowed: partial
+    promotion leaves held rows in the same file and its top-level metadata is
+    not pruned row by row.
+
+    A field already equal to the exact staged wire value is the one retry case:
+    it proves the records write completed before a ledger failure. A value that
+    matches neither the bound old value nor the reviewed proposal stays stale.
+
+    No block means no replacements.  That is the permanent compatibility rule
+    for extraction schema-v2 staging and importer hold-backs, both of which
+    predate this metadata and retain ordinary existing-wins merge behavior.
+    """
+    authorized, _already_landed = _replacement_authorization(
+        meta, current, incoming
+    )
+    return authorized
+
+
+def already_landed_field_replacements(
+    meta: Mapping[str, Any],
+    current: Sequence[VocabularyRecord],
+    incoming: Sequence[VocabularyRecord],
+) -> dict[str, tuple[str, ...]]:
+    """Reviewed fields already equal to the proposal after a failed handoff.
+
+    The old-value digest no longer matches after ``vocabulary.json`` lands but
+    the ledger save fails.  Exact equality with the reviewed staging wire value
+    proves that this proposal is already present and makes a local retry safe.
+    The classifier still refuses a third value, so this recovery cannot turn a
+    later human edit into replacement authority.
+    """
+    _authorized, already_landed = _replacement_authorization(
+        meta, current, incoming
+    )
+    return already_landed
+
+
+def _replacement_authorization(
+    meta: Mapping[str, Any],
+    current: Sequence[VocabularyRecord],
+    incoming: Sequence[VocabularyRecord],
+) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[str, ...]]]:
+    """Classify fresh and demonstrably already-landed replacement fields."""
+    records = _replacement_records(meta)
+    if records is None:
+        return {}, {}
+
+    by_id: dict[str, VocabularyRecord] = {}
+    for record in current:
+        if record.id in by_id:
+            raise StagingError(
+                f"[field-replacements-invalid] current records contain duplicate "
+                f"id {record.id}"
+            )
+        by_id[record.id] = record
+
+    incoming_by_id = {record.id: record for record in incoming}
+    incoming_ids = set(incoming_by_id)
+    authorized: dict[str, tuple[str, ...]] = {}
+    already_landed: dict[str, tuple[str, ...]] = {}
+    stale: list[str] = []
+    for record_id in incoming_ids:
+        raw_fields = records.get(record_id)
+        if raw_fields is None:
+            continue
+        old = by_id.get(record_id)
+        if old is None:
+            stale.append(f"{record_id} (no current record)")
+            continue
+        names = tuple(str(name) for name in raw_fields)
+        authorized[record_id] = names
+        landed: list[str] = []
+        for name in names:
+            expected = str(raw_fields[name])
+            actual = replacement_fingerprint(old, name)
+            if hmac.compare_digest(expected, actual):
+                continue
+            proposed = incoming_by_id[record_id]
+            if old.to_dict()[name] == proposed.to_dict()[name]:
+                landed.append(name)
+                continue
+            stale.append(f"{record_id}.{name}")
+        if landed:
+            already_landed[record_id] = tuple(landed)
+    if stale:
+        raise StagingError(
+            "[field-replacements-stale] the collection changed after this review "
+            "was staged: "
+            + ", ".join(sorted(stale))
+            + ". Nothing was promoted; regenerate the proposal against the current "
+            "records."
+        )
+    return authorized, already_landed
 
 
 def coverage_block_fingerprint(block: Mapping[str, Any]) -> str:
@@ -328,9 +639,22 @@ def _validate_prompt_provenance(
     meta: Mapping[str, Any], block: Mapping[str, Any]
 ) -> None:
     provenance = meta.get("prompt_provenance")
-    if not isinstance(provenance, Mapping) or set(provenance) != (
+    if not isinstance(provenance, Mapping):
+        raise StagingError(
+            "[prompt-provenance-invalid] an M7.4 coverage block needs the exact "
+            "prompt provenance schema"
+        )
+    version = provenance.get("response_schema_version")
+    if isinstance(version, bool) or not isinstance(version, int) or version < 1:
+        raise StagingError(
+            "[prompt-provenance-invalid] response schema version must be a positive integer"
+        )
+    expected = (
         _PROMPT_PROVENANCE_FIELDS
-    ):
+        if version >= 3
+        else _PROMPT_PROVENANCE_V2_FIELDS
+    )
+    if set(provenance) != expected:
         raise StagingError(
             "[prompt-provenance-invalid] an M7.4 coverage block needs the exact "
             "prompt provenance schema"
@@ -349,20 +673,38 @@ def _validate_prompt_provenance(
             raise StagingError(
                 f"[prompt-provenance-invalid] {name} must be non-empty text"
             )
-    version = provenance.get("response_schema_version")
-    if isinstance(version, bool) or not isinstance(version, int) or version < 1:
-        raise StagingError(
-            "[prompt-provenance-invalid] response schema version must be a positive integer"
-        )
-    for name in (
+    fingerprint_fields = [
         "system_prompt_fingerprint",
         "style_guide_fingerprint",
         "user_prompt_fingerprint",
-    ):
+    ]
+    if version >= 3:
+        fingerprint_fields.extend(
+            ["response_schema_fingerprint", "request_fingerprint"]
+        )
+    for name in fingerprint_fields:
         value = provenance.get(name)
         if not isinstance(value, str) or not _SHA256.fullmatch(value):
             raise StagingError(
                 f"[prompt-provenance-invalid] {name} must be SHA-256"
+            )
+    if version >= 3:
+        pattern_set = meta.get("pattern_set")
+        if not isinstance(pattern_set, Mapping):
+            raise StagingError(
+                "[prompt-provenance-invalid] a rich extraction needs its pattern "
+                "answer beside the staged cards"
+            )
+        pattern_provenance = pattern_set.get("prompt_provenance")
+        if not isinstance(pattern_provenance, Mapping):
+            raise StagingError(
+                "[prompt-provenance-invalid] the rich pattern answer needs exact "
+                "prompt provenance"
+            )
+        if dict(pattern_provenance) != dict(provenance):
+            raise StagingError(
+                "[prompt-provenance-stale] the staged cards and pattern answer "
+                "name different model requests"
             )
 
 
@@ -569,6 +911,7 @@ def write_staging(
     is readable but nothing downstream looks at it.
     """
     path = Path(path)
+    review_run_id(meta or {})
     if path.suffix.lower() not in STAGING_SUFFIXES:
         raise StagingError(
             f"Staging files are YAML: {path} would be written as YAML under a "
@@ -870,4 +1213,5 @@ def read_staging(path: Path) -> tuple[list[VocabularyRecord], dict[str, Any]]:
         records.append(VocabularyRecord.from_dict(dict(item)))
 
     meta = {str(key): value for key, value in data.items() if key != _RECORDS_KEY}
+    review_run_id(meta)
     return records, meta

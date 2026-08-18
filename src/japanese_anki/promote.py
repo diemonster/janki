@@ -38,6 +38,7 @@ from japanese_anki import enrich, extract, jpdb
 from japanese_anki import pitch as pitch_module
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import contains_kanji, stable_record_id
+from japanese_anki.io import MergeOutcome, merge_records
 from japanese_anki.models import (
     EXAMPLE_AUTHORITY_KEY,
     EXAMPLE_AUTHORITY_STAGING,
@@ -45,11 +46,15 @@ from japanese_anki.models import (
     set_example_flags,
 )
 from japanese_anki.staging import (
+    FIELD_REPLACEMENTS_KEY,
     HOLD_MISSING_READING,
     HOLD_READING_KANJI,
     HOLD_UNKNOWN_READING,
     HOLD_UNVERIFIABLE_ID,
+    already_landed_field_replacements,
     annotate,
+    authorized_field_replacements,
+    field_replacement_block,
     require_resolved_coverage,
 )
 
@@ -58,10 +63,14 @@ __all__ = [
     "HOLD_READING_KANJI",
     "HOLD_UNKNOWN_READING",
     "HOLD_UNVERIFIABLE_ID",
+    "FIELD_REPLACEMENTS_KEY",
     "PromoteError",
     "PromoteResult",
     "check_readings",
     "check_coverage",
+    "field_replacement_block",
+    "already_landed_staged_fields",
+    "merge_staged_records",
     "remint",
 ]
 
@@ -74,6 +83,58 @@ __all__ = [
 
 class PromoteError(JankiError):
     pass
+
+
+def already_landed_staged_fields(
+    existing: Sequence[VocabularyRecord],
+    incoming: Sequence[VocabularyRecord],
+    meta: dict[str, Any],
+) -> dict[str, tuple[str, ...]]:
+    """Fields whose staged value proves an earlier records write completed."""
+    try:
+        return already_landed_field_replacements(meta, existing, incoming)
+    except JankiError as exc:
+        raise PromoteError(str(exc)) from exc
+
+
+def merge_staged_records(
+    existing: list[VocabularyRecord],
+    incoming: list[VocabularyRecord],
+    meta: dict[str, Any],
+    *,
+    validate_incoming: Sequence[VocabularyRecord] | None = None,
+) -> tuple[list[VocabularyRecord], dict[str, MergeOutcome]]:
+    """Merge reviewed staging, replacing only fingerprint-authorized fields.
+
+    The complete old-value check runs before :func:`merge_records` sees one
+    incoming row.  That ordering is the atomicity guarantee for a stale review:
+    a concurrent edit to any replacement target refuses the whole merge rather
+    than landing the earlier records and discovering the stale one later.
+
+    Metadata with no ``field_replacements`` block takes the ordinary
+    existing-wins route.  In particular, schema-v2 extraction staging remains
+    promotable unchanged; it was written before rich AI answers could propose
+    replacing curated values.
+    """
+    try:
+        # A reading hold narrows what may land, not what review the old-value
+        # binding covers.  Validate every row still in the live staging file
+        # before merging the promotable subset.  Rows already archived are no
+        # longer passed here: their replacements landed under this binding on
+        # the earlier partial promotion.
+        authorized = authorized_field_replacements(
+            meta,
+            existing,
+            list(validate_incoming) if validate_incoming is not None else incoming,
+        )
+    except JankiError as exc:
+        raise PromoteError(str(exc)) from exc
+    return merge_records(
+        existing,
+        incoming,
+        (),
+        prefer_incoming_by_id=authorized,
+    )
 
 
 def check_coverage(meta: dict[str, Any]) -> None:

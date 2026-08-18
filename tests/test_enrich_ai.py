@@ -18,7 +18,8 @@ import pytest
 import yaml
 
 from conftest import seed_prompts
-from japanese_anki import cli, enrich, prompts
+from japanese_anki import ai_schema as ai_schema_module
+from japanese_anki import claude_client, cli, codex_client, enrich, prompts, staging
 from japanese_anki.claude_client import CallResult, Refusal
 from japanese_anki.enrich import (
     ai_prompt,
@@ -29,6 +30,7 @@ from japanese_anki.enrich import (
 )
 from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.jpdb import JpdbClient
+from japanese_anki.ledger import Ledger
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
 from japanese_anki.staging import read_staging
 
@@ -40,27 +42,87 @@ def generated(
     furigana: str = "",
     english: str = "",
     romaji: str = "",
+    speech_level: str = "polite",
     **extra: Any,
 ) -> Any:
-    """One generated example. ``extra`` reaches the schema item verbatim, which
-    is how a test states a `speech_level` other than the default.
+    """One generated example with an explicit card-slot label.
 
-    Names checked against the schema first: the model config does not forbid
-    extras, so pydantic *ignores* an unknown key. A misspelled `speech_level`
-    would silently leave the default in place and turn a test asserting the
-    register precedence into one comparing the default with itself."""
+    Names checked against the schema first so a misspelled field in a fixture
+    fails at the point where the fixture is built."""
     schema = ai_schema()
     item = schema.model_fields["examples"].annotation.__args__[0]
     unknown = sorted(set(extra) - set(item.model_fields))
     if unknown:
         raise TypeError(f"not a field of the generated-example schema: {unknown}")
     return item(
-        japanese=japanese, furigana=furigana, english=english, romaji=romaji, **extra
+        japanese=japanese,
+        furigana=furigana,
+        english=english,
+        romaji=romaji,
+        speech_level=speech_level,
+        **extra,
     )
 
 
-def answer(*examples: Any, usage_notes: str = "") -> Any:
-    return ai_schema()(examples=list(examples), usage_notes=usage_notes)
+def test_request_provenance_tracks_provider_wire_prompt_and_schema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    item = record(examples=[], usage_notes="")
+    marker = {"value": "wire-v1"}
+
+    class FakeAnthropic:
+        @staticmethod
+        def transform_schema(schema: Any) -> dict[str, Any]:
+            return {"wire": marker["value"], "name": schema.__name__}
+
+    monkeypatch.setattr(claude_client, "load_anthropic", lambda: FakeAnthropic)
+    anthropic_v1 = enrich.ai_request_fingerprint(
+        item,
+        provider="anthropic",
+        style_guide="style\n",
+        instructions="task\n",
+    )
+    marker["value"] = "wire-v2"
+    anthropic_v2 = enrich.ai_request_fingerprint(
+        item,
+        provider="anthropic",
+        style_guide="style\n",
+        instructions="task\n",
+    )
+
+    assert anthropic_v1 != anthropic_v2
+
+    codex_v1 = enrich.ai_request_fingerprint(
+        item,
+        provider="codex",
+        style_guide="style\n",
+        instructions="task\n",
+    )
+    original_prompt = codex_client._prompt
+    monkeypatch.setattr(
+        codex_client,
+        "_prompt",
+        lambda blocks, user: original_prompt(blocks, user) + "\ntransport-v2",
+    )
+    codex_v2 = enrich.ai_request_fingerprint(
+        item,
+        provider="codex",
+        style_guide="style\n",
+        instructions="task\n",
+    )
+
+    assert codex_v1 != codex_v2
+    assert anthropic_v2 != codex_v1
+
+
+def answer(
+    *examples: Any,
+    meanings: tuple[str, ...] | list[str] = (),
+    usage_notes: str = "",
+) -> Any:
+    return ai_schema()(
+        meanings=list(meanings), examples=list(examples), usage_notes=usage_notes
+    )
 
 
 def ok(japanese: str, furigana: str = "", **kw: Any) -> CallResult:
@@ -128,14 +190,34 @@ HANASHIMASU = [[0, [["話", "はな"], "します"]]]
 # --- which records are targets ------------------------------------------------
 
 
-def test_a_record_with_no_example_or_no_note_is_a_target() -> None:
+def test_a_record_with_no_meaning_or_example_is_a_target() -> None:
+    no_meaning = record(
+        id="z",
+        meanings=[],
+        usage_notes="something",
+        examples=[ExampleSentence(japanese="話す。")],
+    )
     no_example = record(id="a", usage_notes="something")
     no_note = record(id="b", examples=[ExampleSentence(japanese="話す。")])
     complete = record(
         id="c", usage_notes="something", examples=[ExampleSentence(japanese="話す。")]
     )
 
-    assert [r.id for r in ai_targets([no_example, no_note, complete])] == ["a", "b"]
+    assert [r.id for r in ai_targets([no_meaning, no_example, no_note, complete])] == [
+        "z",
+        "a",
+    ]
+
+
+def test_an_empty_usage_note_is_a_complete_answer_when_nothing_useful_applies() -> None:
+    complete = record(
+        meanings=["to speak"],
+        examples=[ExampleSentence(japanese="話す。")],
+        usage_notes="",
+    )
+
+    assert ai_targets([complete]) == []
+    assert Ledger.missing_enrichment([complete]) == []
 
 
 def test_naming_ids_overrides_the_content_rule() -> None:
@@ -159,7 +241,8 @@ def test_an_unknown_id_is_an_error() -> None:
 
 
 def test_the_ai_pass_has_its_own_writable_fields() -> None:
-    assert parse_force_fields("examples,usage_notes", ai=True) == (
+    assert parse_force_fields("meanings,examples,usage_notes", ai=True) == (
+        "meanings",
         "examples",
         "usage_notes",
     )
@@ -191,18 +274,23 @@ def test_the_prompt_carries_what_janki_knows_about_the_word() -> None:
     assert "Expression: 話す" in text
 
 
+def test_the_bare_word_and_source_paths_share_one_rich_card_schema() -> None:
+    assert ai_schema() is ai_schema_module.rich_card_schema()
+    assert set(ai_schema().model_fields) == {"meanings", "examples", "usage_notes"}
+
+
 def test_the_instructions_preserve_the_exact_headword_spelling() -> None:
-    """Read from `prompts/enrich-examples.md`, the file that is actually sent.
+    """Read from `prompts/enrich-bare-word.md`, the file that is actually sent.
 
     Asserting against a Python constant was the bug M7.6P was supposed to end
     and did not: the constant survived the commit, byte-identical to the file,
     so these assertions guarded a copy nothing sends. Deleting the clause from
     the shipped file left the suite green.
     """
-    shipped = prompts.load(REPO_ROOT, "enrich-examples")
+    shipped = prompts.load(REPO_ROOT, "enrich-bare-word")
 
-    assert "Use the exact spelling shown in Expression" in shipped
-    assert "do not\nreplace a kana-only expression with kanji" in shipped
+    assert "Use the exact\nspelling supplied in Expression" in shipped
+    assert "a kana expression stays kana" in shipped
 
 
 def test_the_instructions_state_the_furigana_notation_contract() -> None:
@@ -225,10 +313,10 @@ def test_the_instructions_state_the_furigana_notation_contract() -> None:
     once read is gone — it survived M7.6P's first commit and made these
     assertions guard a copy nothing sends.
     """
-    text = prompts.load(REPO_ROOT, "enrich-examples") + "\n" + ai_prompt(record())
+    text = prompts.load(REPO_ROOT, "enrich-bare-word") + "\n" + ai_prompt(record())
 
-    assert "The base is exactly the characters that reading" in text
-    assert "an ASCII space separates each group" in text
+    assert "The base contains exactly the\ncharacters that reading spells" in text
+    assert "an ASCII space separates each ruby group" in text
 
 
 def test_recent_sentences_ride_along_as_variety_pressure() -> None:
@@ -237,7 +325,7 @@ def test_recent_sentences_ride_along_as_variety_pressure() -> None:
     text = ai_prompt(record(), ["毎日話します。", "毎日食べます。"])
 
     assert "毎日話します。" in text
-    assert "structurally different" in text
+    assert "Recent examples from this run:" in text
 
 
 def test_the_patterns_the_learner_is_studying_ride_along_too() -> None:
@@ -264,9 +352,9 @@ def test_the_prompt_binds_an_incomplete_curated_example_exactly() -> None:
 
     text = ai_prompt(source_example)
 
-    assert "Existing curated examples need annotations" in text
+    assert "Existing curated examples requiring annotations:" in text
     assert '"日本語を話します。"' in text
-    assert "do not replace it" in text
+    assert "return" not in text.lower()
 
 
 def test_the_prompt_does_not_pin_an_uncurated_extracted_example() -> None:
@@ -281,7 +369,7 @@ def test_the_prompt_does_not_pin_an_uncurated_extracted_example() -> None:
 
     text = ai_prompt(excerpt)
 
-    assert "need annotations" not in text
+    assert "Existing curated examples requiring annotations:\n(none)" in text
     assert "やくそくのとおりに" not in text
 
 
@@ -297,7 +385,7 @@ def test_the_prompt_pins_an_extracted_example_the_reviewer_accepted() -> None:
 
     text = ai_prompt(accepted)
 
-    assert "Existing curated examples need annotations" in text
+    assert "Existing curated examples requiring annotations:" in text
     assert '"日本語を話します。"' in text
 
 
@@ -412,12 +500,18 @@ def test_an_accepted_extracted_example_is_annotated_in_place_not_replaced() -> N
             generated(
                 "昨日友達と話した。",
                 furigana="昨日[きのう] 友達[ともだち]と 話[はな]した。",
+                speech_level="casual",
             ),
         ),
     )
 
-    assert [ex.japanese for ex in outcome.record.examples] == ["日本語を話します。"]
+    assert [ex.japanese for ex in outcome.record.examples] == [
+        "日本語を話します。",
+        "昨日友達と話した。",
+    ]
+    assert [ex.register for ex in outcome.record.examples] == ["polite", "casual"]
     assert outcome.record.examples[0].english == "I speak Japanese."
+    assert outcome.preserved is False
 
 
 def test_an_in_place_fill_keeps_the_clip_and_regenerates_the_romaji() -> None:
@@ -521,32 +615,6 @@ def test_each_stored_annotation_wins_over_the_models_own() -> None:
     assert kept.register == "polite"
 
 
-@pytest.mark.parametrize("answered", ["formal", "neutral", ""])
-def test_a_speech_level_janki_does_not_use_is_read_as_polite(answered: str) -> None:
-    """`speech_level` is a plain string with a default, not a `Literal`, and the
-    schema declares no validator — so the model can answer anything and pydantic
-    passes it through. Only two labels select a slot on the card, and an
-    unrecognised one would select neither, leaving the sentence in no half of
-    the card at all.
-
-    Polite rather than casual, because that is what the instructions ask for
-    first and what every example written before the field existed actually is;
-    guessing casual would put a ます sentence under a label saying it is not."""
-    outcome = apply_ai_result(
-        record(),
-        answer(
-            generated(
-                "毎日話します。",
-                furigana="毎日[まいにち] 話[はな]します。",
-                english="I speak every day.",
-                speech_level=answered,
-            )
-        ),
-    )
-
-    assert outcome.record.examples[0].register == "polite"
-
-
 @pytest.mark.parametrize("stored_register", ["", "formal"])
 def test_an_unreviewed_register_label_is_a_hole_the_model_may_fill(
     stored_register: str,
@@ -591,7 +659,11 @@ def test_an_unreviewed_register_label_is_a_hole_the_model_may_fill(
 
 def test_fields_that_already_have_content_are_left_alone() -> None:
     curated = record(
-        examples=[ExampleSentence(japanese="curated")], usage_notes="curated note"
+        examples=[
+            ExampleSentence(japanese="curated polite", register="polite"),
+            ExampleSentence(japanese="curated casual", register="casual"),
+        ],
+        usage_notes="curated note",
     )
 
     outcome = apply_ai_result(
@@ -602,9 +674,63 @@ def test_fields_that_already_have_content_are_left_alone() -> None:
     assert outcome.record.usage_notes == "curated note"
 
 
+def test_a_rich_answer_fills_empty_meanings_with_examples_and_usage() -> None:
+    bare = record(meanings=[])
+
+    outcome = apply_ai_result(
+        bare,
+        answer(
+            generated("話します。"),
+            meanings=["to speak", "to talk"],
+            usage_notes="Common in conversation.",
+        ),
+    )
+
+    assert outcome.record.meanings == ["to speak", "to talk"]
+    assert [example.japanese for example in outcome.record.examples] == ["話します。"]
+    assert outcome.record.usage_notes == "Common in conversation."
+    assert set(outcome.changes) == {"meanings", "examples", "usage_notes"}
+
+
+def test_existing_meanings_are_curated_until_explicitly_forced() -> None:
+    curated = record(meanings=["to speak"])
+    parsed = answer(meanings=["to converse", "to address"])
+
+    preserved = apply_ai_result(curated, parsed)
+    replaced = apply_ai_result(curated, parsed, force_fields=("meanings",))
+
+    assert preserved.record.meanings == ["to speak"]
+    assert "meanings" not in preserved.changes
+    assert replaced.record.meanings == ["to converse", "to address"]
+    assert replaced.changes["meanings"] == (
+        ["to speak"],
+        ["to converse", "to address"],
+    )
+
+
+def test_empty_or_duplicate_meanings_never_blank_a_card() -> None:
+    curated = record(meanings=["to speak"])
+
+    empty = apply_ai_result(
+        curated,
+        answer(meanings=["", "   "]),
+        force_fields=("meanings",),
+    )
+    deduplicated = apply_ai_result(
+        curated,
+        answer(meanings=[" to talk ", "to talk", "to address"]),
+        force_fields=("meanings",),
+    )
+
+    assert empty.record.meanings == ["to speak"]
+    assert "meanings" not in empty.changes
+    assert deduplicated.record.meanings == ["to talk", "to address"]
+
+
 def test_force_fields_lets_the_answer_replace_them() -> None:
     curated = record(
-        examples=[ExampleSentence(japanese="curated")], usage_notes="curated note"
+        examples=[ExampleSentence(japanese="curated", register="polite")],
+        usage_notes="curated note",
     )
 
     outcome = apply_ai_result(
@@ -650,6 +776,34 @@ def test_a_truncated_answer_is_never_accepted(monkeypatch: pytest.MonkeyPatch) -
 
     assert result.changes == {}
     assert "max_tokens" in result.warnings[0]
+
+
+def test_a_live_result_records_the_exact_request_and_input_fingerprints(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    item = record()
+    monkeypatch.setattr(
+        enrich.claude_client,
+        "parse_call",
+        FakeCall(ok("話します。", "話[はな]します。")),
+    )
+
+    result = enrich.enrich_ai(
+        [item], model="m", style_guide="STYLE", instructions="TASK"
+    )
+    user_turn = ai_prompt(item)
+
+    assert result.input_fingerprints == {
+        item.id: prompts.fingerprint(user_turn),
+    }
+    assert result.provenance == {
+        item.id: enrich.ai_request_fingerprint(
+            item,
+            provider="anthropic",
+            style_guide="STYLE",
+            instructions="TASK",
+        )
+    }
 
 
 def test_variety_pressure_grows_as_the_run_goes(
@@ -729,6 +883,7 @@ def test_enrich_ai_writes_records_the_diff_and_the_ledger(
     book = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
     passes = book["records"]["word:話す:はなす"]["enriched"]
     assert [item["kind"] for item in passes] == ["ai"]
+    assert passes[0]["provider"] == "anthropic"
     assert "Enriched 1 record(s)" in capsys.readouterr().out
 
 
@@ -777,9 +932,81 @@ def test_a_large_run_goes_to_a_staging_file_instead_of_a_diff(
     assert target.is_file()
     staged, meta = read_staging(target)
     assert len(staged) == enrich.STAGING_THRESHOLD
+    expected_inputs = {
+        item.id: prompts.fingerprint(call.calls[index]["content"])
+        for index, item in enumerate(many)
+    }
+    style_guide = prompts.load(root, "style-guide")
+    task_template = prompts.load(root, "enrich-bare-word")
+    expected_requests = {
+        item.id: prompts.request_fingerprint(
+            provider="anthropic",
+            style_guide=style_guide,
+            task_template=task_template,
+            user_turn=call.calls[index]["content"],
+            transport_prompt={
+                "system": [style_guide, task_template],
+                "user": call.calls[index]["content"],
+            },
+            schema=claude_client.wire_schema(ai_schema()),
+        )
+        for index, item in enumerate(many)
+    }
+    assert meta["ai_enrichment"] == {
+        "version": 1,
+        "model": "claude-opus-5",
+        "provider": "anthropic",
+        "request_fingerprints": expected_requests,
+        "input_fingerprints": expected_inputs,
+        "fields": {item.id: ["examples"] for item in many},
+    }
+    assert meta["provider"] == "anthropic"
+    assert staging.review_run_id(meta) == meta["review_run_id"]
+    assert meta["field_replacements"] == {
+        "version": 1,
+        "records": {
+            item.id: {
+                "examples": staging.replacement_fingerprint(item, "examples")
+            }
+            for item in sorted(many, key=lambda record: record.id)
+        },
+    }
     # Nothing reached the records; promote is what lands them.
     assert stored(root)["word:話す0:はなす"]["examples"] == []
     assert "janki promote" in capsys.readouterr().out
+
+
+def test_two_large_ai_review_invocations_get_distinct_run_ids(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    many = [
+        record(id=f"word:話す{index}:はなす", expression=f"話す{index}")
+        for index in range(enrich.STAGING_THRESHOLD)
+    ]
+    root = project(tmp_path, many)
+    call = FakeCall(
+        *[
+            CallResult(
+                answer(generated(f"話す{index}。", furigana=f"話[はな]す{index}。")),
+                "end_turn",
+                None,
+            )
+            for _run in range(2)
+            for index in range(enrich.STAGING_THRESHOLD)
+        ]
+    )
+    patch_all(monkeypatch, call, FakeJpdb())
+    command = ["--root", str(root), "enrich", "--ai", "--yes"]
+
+    assert cli.main(command) == 0
+    target = root / "staging" / "ai-enrichment.yaml"
+    first = target.with_name("first-ai-enrichment.yaml")
+    target.rename(first)
+    assert cli.main(command) == 0
+
+    _first_rows, first_meta = read_staging(first)
+    _second_rows, second_meta = read_staging(target)
+    assert first_meta["review_run_id"] != second_meta["review_run_id"]
 
 
 def test_the_staging_route_records_already_exist_so_promote_updates_them(
@@ -825,7 +1052,7 @@ def test_nothing_to_do_is_said_before_any_call(
     assert cli.main(["--root", str(root), "enrich", "--ai", "--yes"]) == 0
 
     assert call.calls == []
-    assert "already has examples" in capsys.readouterr().out
+    assert "already has meanings and examples" in capsys.readouterr().out
 
 
 def test_a_visited_record_that_produces_no_change_is_named(
@@ -1125,12 +1352,15 @@ def test_a_pass_flag_is_not_silently_ignored_by_the_other_pass(
     assert "--force" in capsys.readouterr().err
 
 
-def test_a_failed_ledger_write_does_not_call_a_re_run_pointless(
+def test_a_failed_ledger_write_explains_that_a_re_run_cannot_restore_attribution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A note is written only when the model has one worth writing, so a record
-    can land with examples and no note — and it is a target again next time.
-    Telling the user a re-run skips it is both wrong and expensive to believe."""
+    """A valid empty note leaves the record complete after its examples land.
+
+    A default re-run therefore skips it. An explicit re-run can buy the same
+    answer, but no changed field means there is still no ledger event to write.
+    Neither route reconstructs attribution for the first accepted answer.
+    """
     root = project(tmp_path, [record()])
     patch_all(monkeypatch, FakeCall(ok("話します。", furigana="話[はな]します。")), FakeJpdb())
     monkeypatch.setattr(
@@ -1143,8 +1373,8 @@ def test_a_failed_ledger_write_does_not_call_a_re_run_pointless(
 
     err = capsys.readouterr().err
     assert "'status --rebuild' cannot bring it back" in err
-    assert "not a free repair" in err
-    assert "either skips these records" not in err
+    assert "default re-run skips" in err
+    assert "identical answer has no field change" in err
     assert stored(root)["word:話す:はなす"]["examples"]
 
 
@@ -1226,6 +1456,9 @@ def test_the_codex_path_still_sends_its_own_reasoning_effort(
 
     assert call.calls[0]["reasoning_effort"] == "ultra"
     assert "effort" not in call.calls[0]
+    book = json.loads((root / "ledger.json").read_text(encoding="utf-8"))
+    [entry] = book["records"]["word:話す:はなす"]["enriched"]
+    assert entry["provider"] == "codex"
 
 
 def test_the_ai_pass_enriches_a_record_with_no_jpdb_key(
@@ -1266,13 +1499,13 @@ def test_the_ai_pass_enriches_a_record_with_no_jpdb_key(
 
 def test_the_preserve_branch_still_fills_the_records_other_empty_fields() -> None:
     """A record that already has examples takes the merge branch, and that
-    branch must still write the *other* empty AI fields — usage_notes above
-    all, since `ai_targets` selects on "no example or no note" and
-    有-examples/無-note is the largest real target class. M8.3's rewrite of
-    `apply_ai_result` kept this behaviour but lost every test that pinned it:
-    narrowing the writable list to force-fields-only left the whole suite
-    green while silently never writing a note again."""
+    branch must still write the *other* empty AI fields. A missing meaning makes
+    this a default target; an explicitly named record can reach the same branch.
+    M8.3's rewrite of `apply_ai_result` kept this behaviour but lost every test
+    that pinned it: narrowing the writable list to force-fields-only left the
+    whole suite green while silently never writing a note again."""
     stored = record(
+        meanings=[],
         examples=[ExampleSentence(japanese="人と話す。", english="x", register="casual")]
     )
 
@@ -1280,14 +1513,21 @@ def test_the_preserve_branch_still_fills_the_records_other_empty_fields() -> Non
         stored,
         answer(
             generated("毎日話します。", furigana="毎日[まいにち] 話[はな]します。"),
+            meanings=["to speak"],
             usage_notes="Casual speech often drops the particle.",
         ),
     )
 
+    assert "meanings" in outcome.changes
+    assert outcome.record.meanings == ["to speak"]
     assert "usage_notes" in outcome.changes
     assert outcome.record.usage_notes == "Casual speech often drops the particle."
-    # And the stored example was preserved, which is what routed us here.
-    assert [ex.japanese for ex in outcome.record.examples] == ["人と話す。"]
+    # The stored casual sentence survives and the empty polite slot fills.
+    assert [ex.japanese for ex in outcome.record.examples] == [
+        "人と話す。",
+        "毎日話します。",
+    ]
+    assert [ex.register for ex in outcome.record.examples] == ["casual", "polite"]
 
 
 def test_the_preserve_warning_fires_even_for_accepted_stored_examples() -> None:
@@ -1320,7 +1560,13 @@ def test_the_preserve_warning_fires_even_for_accepted_stored_examples() -> None:
         result,
         accepted,
         CallResult(
-            answer(generated("毎日話します。", furigana="毎日[まいにち] 話[はな]します。")),
+            answer(
+                generated(
+                    "毎日話す。",
+                    furigana="毎日[まいにち] 話[はな]す。",
+                    speech_level="casual",
+                )
+            ),
             "end_turn",
             None,
         ),
@@ -1329,7 +1575,10 @@ def test_the_preserve_warning_fires_even_for_accepted_stored_examples() -> None:
         recent=[],
     )
 
-    assert any("stored examples were preserved" in w for w in result.warnings)
+    assert any(
+        "did not fill an unoccupied polite/casual slot" in warning
+        for warning in result.warnings
+    )
 
 
 def test_the_ai_pass_reports_a_romaji_that_disagrees_with_its_own_sentence() -> None:

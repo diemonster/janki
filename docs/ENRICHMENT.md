@@ -1,7 +1,8 @@
 # Filling in what a record is missing
 
-jpdb is the dictionary; a model writes what a dictionary cannot. Both show you
-a diff before anything is written.
+jpdb is the dictionary; a model writes what a dictionary cannot. Both are
+fill-empty by default, show what they propose, and preserve curation unless you
+explicitly authorize named replacements.
 
 ## Enriching records from the dictionary
 
@@ -9,7 +10,7 @@ For records that came from Shirabe, a textbook or a photograph, jpdb can fill
 what they are missing:
 
 ```bash
-# Every record with an empty field
+# Every record with an empty dictionary field
 janki enrich --jpdb
 
 # Just these records
@@ -20,23 +21,22 @@ janki enrich --jpdb --force-fields pitch_accent,frequency_rank
 ```
 
 It fills `furigana`, `romaji`, `part_of_speech`, `verb_group`, `conjugations`,
-`pitch_accent` and `frequency_rank`. It shows you every proposed change as a
-diff and asks before writing; `--yes` skips the question.
+`pitch_accent` and `frequency_rank`. It shows every proposed change as a diff
+and asks before writing; `--yes` skips the question.
 
 A record whose enrichable fields are all filled is skipped without an API call.
-A record with a field jpdb had no answer for is *not*, and is looked up again on
-every run — a noun has no verb group and no conjugation table, so those stay
-empty however many times you ask. Re-running is cheap on a collection of verbs
-and roughly one call per word on a collection of nouns, which is worth knowing
-before pointing it at a few thousand records.
+A record with a field jpdb had no answer for is looked up again on every run —
+a noun has no verb group and no conjugation table, so those stay empty however
+many times you ask. Re-running is cheap on a collection of verbs and roughly
+one call per word on a collection of nouns, which is worth knowing before
+pointing it at a few thousand records.
 
 Two things it will not do. It **never writes `reading`** — that is half of the
-record ID, so a dictionary changing it would orphan the Anki review history
-behind the record. And where your reading and jpdb's disagree, it warns and
-writes nothing rather than picking: both may be right, since 一日 is both
-いちにち and ついたち. When your reading *is* one jpdb lists, it asks jpdb again
-with that reading pinned, so a homograph is filled from the right entry rather
-than whichever one jpdb reached for first.
+record ID, so a dictionary changing it would orphan the Anki review history.
+Where your reading and jpdb's disagree, it warns and writes nothing rather than
+picking: both may be right, since 一日 is both いちにち and ついたち. When your
+reading *is* one jpdb lists, janki asks again with that reading pinned so a
+homograph is filled from the right entry.
 
 `meanings` is deliberately left alone. A record that came from a textbook
 carries the meaning that textbook taught, and a dictionary is not better placed
@@ -51,7 +51,7 @@ janki kanji --refresh  # re-fetch, rather than only what is new
 
 Each card back gains a collapsed block per kanji in the word: stroke order
 drawn one stroke at a time on graph paper, the 音/訓 readings, and a common word
-for each — 音 ゼン → 前線 ぜんせん "front line", 訓 まえ → 名前 なまえ "name".
+for each — 音 ゼン → 前線 ぜんせん “front line”, 訓 まえ → 名前 なまえ “name”.
 Collapsed because it is a reminder, not the thing being tested.
 
 The data is looked up per *character* and shared: 前 is the same 前 in 名前 and
@@ -59,10 +59,9 @@ The data is looked up per *character* and shared: 前 is the same 前 in 名前 
 contains it. Re-running costs one request per new character. A build never
 needs the network — a character not looked up simply has no block.
 
-Example words are ranked by JMdict's frequency tags, which matters more than it
-sounds: the raw list for 前 is 740 entries opening on 前官礼遇 and 前駆体.
-Untagged entries are dropped rather than ranked last, so a rare character shows
-its readings with no example rather than an obscure one that looks endorsed.
+Example words are ranked by JMdict's frequency tags. Untagged entries are
+dropped rather than ranked last, so a rare character shows its readings with
+no example rather than an obscure one that looks endorsed.
 
 Sources are **KANJIDIC2** (CC BY-SA 4.0, EDRDG) via kanjiapi.dev and
 **KanjiVG** (CC BY-SA 3.0, Ulrich Apel). A personal deck is fine; a deck you
@@ -70,259 +69,177 @@ share must credit both — the same footing as the VOICEVOX voice terms.
 
 ## Nothing checks the sentences
 
-`enrich --ai` writes a sentence and nothing audits it (M8.3). The prompt states
-the whole contract — the notation, the register, the exact headword spelling,
-which reading each kanji takes in *this* sentence — and the model's answer is
-the answer. janki's logic enriches the card; it never judges the Japanese.
+The model writes Japanese and nothing in janki audits it. The prompt states the
+whole contract — notation, register, exact headword spelling, and each kanji's
+contextual reading — and the model's answer is the answer. janki's logic
+enriches the card; it never judges the Japanese.
 
-That is a decision with history, not an oversight. Every checker this project
-built for sentences was wrong more often than the sentences were: the jpdb
-sentence oracle flagged 38 of 155 examples with zero true positives (it read
-とする in 今、だれとすんでるの？, a word not in the sentence), and the local
-rules that replaced it held natural casual ellipsis while missing the faults
-they were written for. A wrong or thin sentence is fixed by editing the record
-or strengthening the prompt template — never by another rule.
+That is a decision with history, not an oversight. The retired jpdb sentence
+oracle flagged 38 of 155 examples with zero true positives, and local rules
+that replaced it held natural casual ellipsis while missing the faults they
+were written for. A wrong or thin sentence is fixed by editing the record or
+strengthening its prompt template, never by another Japanese-reading rule.
 
-The dictionaries still enrich **words**: `enrich --jpdb` fills readings, pitch
-and frequency, and KANJIDIC supplies the kanji blocks. That is the division
-M7.6V draws — the model parses and writes, the dictionaries confirm facts about
-words.
+The dictionaries still enrich **words**: `enrich --jpdb` fills dictionary
+facts, and KANJIDIC supplies the kanji blocks. That is the division: the model
+parses and writes; dictionaries report facts about words.
 
-## Writing what a dictionary cannot
+## The complete bare-word AI call
 
-`janki enrich --jpdb` fills what jpdb knows. Two more passes write what it does
-not — an example sentence a beginner can read, a note on how the word is
-actually used, better English glosses. Both need the AI extra. Immediate
-example writing, meaning polish, extraction, and batch submission all use an
-Anthropic key by default. Codex remains a supported provider for the `--ai`
-pass; `codex login` is only needed when `enrich_provider = "codex"`:
+There are two card-writing model shapes in janki. `extract` reads a source once
+and returns complete proposed cards plus what that source teaches. A CSV or
+dictionary import supplies only a bare vocabulary record, so `enrich --ai`
+uses `prompts/enrich-bare-word.md` and returns the same card content in one
+answer:
+
+- a compact, natural English gloss list;
+- two beginner-friendly examples with Japanese, natural English,
+  `speech_level`, contextual Anki furigana, and spaced Hepburn romaji;
+- a concise usage note when there is something useful and certain to say.
+
+Reviewed lesson patterns from `data/patterns.json` ride in the labelled data
+turn. The task template asks the model to use one naturally when it fits and to
+write ordinary natural Japanese when none does. Recent examples from the same
+run ride along as variety data.
+
+Install the AI extra first. Anthropic is the default provider; Codex is
+available for immediate `--ai` runs:
 
 ```bash
 python -m pip install -e '.[ai]'
-export ANTHROPIC_API_KEY='...'
+export ANTHROPIC_API_KEY='...'  # Anthropic calls and batches
+# codex login                  # only for enrich_provider = "codex"
 ```
 
-`--ai` needs no `JPDB_API_KEY`: since M7.6V it checks its sentences offline, so
-the live pass, `--batch-submit` and `--batch-fetch` all run without one. Only
-`--jpdb` and `--staging` ask the dictionary anything. `--polish-meanings` writes
-English and asks jpdb nothing either.
-
-One pass per run. `--jpdb`, `--ai` and `--polish-meanings` each show you their
-own diff, and merging two unrelated sets of proposals into one y/n is not
-review.
-
-### Examples and usage notes
+The AI pass needs no `JPDB_API_KEY`.
 
 ```bash
-# Every record with no example or no usage note
+# Records missing meanings or an example
 janki enrich --ai
 
-# Just these records
+# Just this record
 janki enrich --ai word:話す:はなす
 
-# Rewrite the examples on records you name
-janki enrich --ai --force-fields examples word:話す:はなす
+# Explicitly authorize replacements on a named record
+janki enrich --ai --force-fields meanings,examples,usage_notes \
+  word:話す:はなす
 ```
 
-For this pass `--force-fields` widens what may be *written*, not which records
-are visited: without ids it still only looks at records missing an example or a
-usage note, so `--force-fields examples` on its own finds nothing to do on a
-collection where every record has both. Name the records you want rewritten.
+Without ids, `--force-fields` widens what may be written but does not make
+otherwise-complete records targets again. Name records whose existing content
+you intend to replace. Existing examples are preserved unless `examples` is
+forced; preserving them still allows one generated sentence to fill an
+unoccupied polite or casual slot when every stored example is accepted. An
+empty usage note is a complete answer when there is no useful, certain nuance
+to teach; use an explicit id when you want the model to revisit an
+otherwise-complete record. An accepted extract-source example that only lacks
+annotations is sent back with its exact Japanese pinned so the model can fill
+its English, furigana, romaji, and speech level without replacing the sentence.
 
-`--jpdb` is the other way round, which is worth knowing before running it over
-a whole collection: there a forced field makes every record a candidate again,
-including ones that were being skipped for having nothing left to fill. So
-`janki enrich --jpdb --force-fields pitch_accent` with no ids is one dictionary
-call per record and overwrites every curated value it names. Name ids there too.
+The remaining code owns fill discipline and deterministic derivation, not
+Japanese quality. Existing annotations win over incoming ones. Supplied romaji
+is compared with the reading expressed by the furigana; an incompatible value
+is replaced by the mechanical transliteration with a warning. This comparison
+is over readings, not a judgment about word boundaries or sentence quality.
 
-Nothing it writes is audited (see above). What janki still does with the
-answer is fill discipline and derivation: stored examples are preserved unless
-`--force-fields examples` asks otherwise, existing annotations win over the
-model's, and romaji is *checked* against the reading rather than rebuilt from
-it. Word spacing in romaji is word segmentation, which janki does not do, so a
-rebuild could only ever run the words together — `hahanidenwao` for 母に電話を.
-The model's romaji is kept when every letter transliterates the reading janki
-already holds, and replaced by the mechanical form, with a warning, when it
-does not.
-
-At fifty records or more the proposals go to `data/staging/ai-enrichment.yaml`
-and through `janki promote` instead of a terminal diff, because nobody reads
-five hundred proposed sentences in a terminal and means it. Those records
-already exist, so promoting fills their empty fields.
-
-One thing to know before combining that with `--force-fields`: promote is
-existing-wins and has no flag to change it, so a forced replacement of a field
-that is already full is reported as a conflict and *not* written. Below fifty
-records the same command writes it directly. If you are replacing content
-rather than filling holes, do it in batches small enough to take the diff
-route.
-
-### Better English glosses
+For fewer than fifty targets, janki prints one field diff and asks once before
+writing; `--yes` accepts it. At fifty or more, proposals go to
+`data/staging/ai-enrichment.yaml` for an actual review:
 
 ```bash
-janki enrich --polish-meanings              # every record
-janki enrich --polish-meanings word:聞く:きく # just this one
-janki enrich --polish-meanings --batch-submit # price a large pass as one batch
-janki enrich --polish-meanings --batch-fetch  # collect and review its proposals
+janki validate data/staging/ai-enrichment.yaml
+janki promote data/staging/ai-enrichment.yaml
 ```
 
-This is the one pass that rewrites a field that is already full, so it is a
-separate flag, it never runs as a side effect of anything else, and it asks you
-about **one record at a time** — `y`, `n`, or `q` to stop. "These thirty are
-fine except the fourth" is not an answer a single y/n can take. What you accept
-before quitting is still written.
+The staged route supports real replacements without granting a floating
+permission to overwrite whatever happens to be current. Its
+`field_replacements` block hashes each target's record id, field name, and
+exact **old wire value**. The proposed value is deliberately outside that
+binding, so you may improve it during review. Before merging anything,
+`promote` recomputes every old-value hash against the current collection. One
+changed or deleted target makes the whole staged replacement stale and nothing
+lands; regenerate the proposal against the current records.
 
-It calls the model as the loop runs, so `q` stops the spending the moment you
-answer it: you pay for the records it *reached*, not for every record in your
-collection. Two things make "reached" more than "shown to you", though.
-Declining with `n` moves on to the next record, which is another call. And a
-record whose glosses are already right produces no proposal at all, so it is
-paid for and passed over without a prompt — nine of those before the first
-question means ten calls, not one. An answer
-that comes back empty means the glosses on file are already right, which is a
-common and legitimate result. An answer that reduces to nothing is refused
-rather than written: a card with a Japanese side and no English one is worse
-than a clumsy gloss.
+## Prompt and answer provenance
 
-The prompt carries the record's own examples, because 先生に聞く and 音楽を聞く
-are the same verb with two meanings a learner needs kept apart, and the
-sentences the record was collected with are the only evidence of which one it
-means.
+The live task is readable in `prompts/enrich-bare-word.md`; the shared style
+guide is `prompts/style-guide.md`. They are sent byte for byte and re-read on
+every run. The Python user turn contains labelled record data, reviewed lesson
+patterns, and recent examples — no hidden task instructions. The structured
+response schema is the other input to the model.
 
-For a large pass, `--batch-submit` sends the same per-record requests through
-Anthropic's Message Batches API. `--batch-fetch` waits until the answers exist,
-then presents their meaning diffs locally. Answering `q` records exactly the
-unreviewed proposal IDs; the next fetch resumes there without another model
-call or another charge. Accepted proposals are written as they are reviewed,
-and declined or unchanged rows are settled rather than shown again.
+Every answer gets one canonical request fingerprint over named logical and
+transport channels:
 
-Submission also records a fingerprint of every record-specific prompt. If a
-record's meanings, examples, or other prompt inputs change while the batch is
-running, fetch names that record and ignores its now-stale answer instead of
-overwriting the newer curation. A polish batch submitted by an older janki that
-did not record those fingerprints must be explicitly forgotten and resubmitted;
-janki cannot safely infer whether its answers are still current.
+1. the exact style-guide text;
+2. the exact task-template text;
+3. the labelled user/data turn;
+4. the provider;
+5. the provider-normalized prompt actually sent (including Codex's preamble);
+6. the provider's actual wire response schema.
 
-### Large runs: batch mode
+Named channels avoid concatenation ambiguity. Including provider transport and
+wire schema means a Codex wrapper or SDK schema-transform change cannot
+masquerade as the same asking. Immediate accepted changes record provider and
+fingerprint in `data/ledger.json`. Large staged runs carry provider, request
+fingerprint, data-turn fingerprint, and fields proposed for every record.
+Batch submissions store provider and both fingerprints too: fetch compares the
+data-turn fingerprint with the record as it exists then, and ignores an answer
+whose input changed while the batch was out. The complete request fingerprint
+remains attribution for the answer that actually ran.
 
-The Message Batches API is the same request at half price, answered within a day
-rather than within seconds. Worth it for backfilling a thousand-word mining
-deck; pointless for the weekly ten, which run in seconds for cents.
+Source extraction records more because the source itself is an input: source
+SHA-256, mode, provider, model, schema version, separate fingerprints for the
+style guide, task template, data turn, and wire response schema, plus the full
+provider-normalized request fingerprint. Its unreviewed `PatternSet` carries
+the same block.
+
+## Large runs: Anthropic batch mode
+
+The Message Batches API sends the same complete bare-word request at a lower
+price and answers later. It is useful for a large backfill and unnecessary for
+the weekly few words.
 
 ```bash
 janki enrich --ai --batch-submit    # send, then walk away
-janki enrich --ai --batch-fetch     # collect it, or hear how far along it is
-janki enrich --ai --batch-forget    # give up on one that can no longer land
+janki enrich --ai --batch-fetch     # collect it, or report its status
+janki enrich --ai --batch-forget    # abandon one that can no longer land
 ```
 
-Meaning polish uses the same submit/fetch/forget flags with
-`--polish-meanings`; unlike AI enrichment, its fetch remains a per-record
-review because it replaces curated content rather than filling empty fields.
+One batch may be pending at a time. Its id, model, selected fields, target ids,
+and per-record fingerprints live in the committed ledger, so a submitted job
+cannot become paid work nobody can collect. `--batch-fetch` polls once and
+exits; a running batch simply reports its status. Invalid or failed rows stay
+pending or are reported by id rather than disappearing. `--batch-forget`
+removes only janki's pending entry; the provider's result remains reachable by
+its batch id.
 
-One batch at a time: two in flight would leave two answers for the same word and
-no way to say which is current. The batch id and the records it covers live in
-the ledger, because a submitted batch nobody kept the id of is work that was paid
-for and cannot be collected. `--batch-fetch` polls once and exits — the point of
-batching is that nobody is sitting there — so a batch still running just reports
-its status.
+Batch mode is an Anthropic feature. Set `enrich_provider = "anthropic"` before
+submitting. A later config change does not change the provider or model that
+already answered.
 
-Meaning-polish also protects the two moments when the external batch, records,
-and ledger cannot be written as one transaction. Janki atomically writes a
-recovery journal beside the configured ledger
-(`data/ledger.polish-batch-recovery.json` by default) before registering a
-newly submitted batch and before landing accepted meanings. If a concurrent or
-failed ledger write interrupts either handoff, the next
-`janki enrich --polish-meanings --batch-fetch` restores the full descriptor or
-records the accepted proposals' provenance before it checks prompt fingerprints.
-The file is machine-owned operational state: do not edit or delete it. Janki
-validates its ownership marker and batch id before removing it after recovery.
+## Cost and model choice
 
-Answers go through exactly the same checks as the live pass. A row the batch
-reports as errored, expired or canceled is reported by name and leaves its record
-alone. A row whose answer janki could not parse **keeps the batch pending**: that
-answer is complete and paid for and sits on Anthropic's side for weeks, and
-janki's own schema is the only thing rejecting it, so a later fetch retries
-exactly those rows. `--batch-forget` is there for when they are not worth
-chasing.
-
-### What Anthropic batch enrichment costs
-
-The rates are per million tokens, and the batch API halves both:
-
-| Model            | Input  | Output |
-| ---------------- | ------ | ------ |
-| `claude-opus-5`  | $5.00  | $25.00 |
-| `claude-sonnet-5`| $3.00  | $15.00 |
-| `claude-haiku-4-5`| $1.00 | $5.00  |
-
-`claude-sonnet-5` has introductory pricing of $2.00 / $10.00 through
-2026-08-31. Check the Anthropic pricing page before planning a large run —
-this table is a snapshot, not a source of truth.
-
-What janki actually sends is small, fixed, and **readable**:
-`prompts/style-guide.md` plus one more file as the system prompt — together
-under a thousand tokens — and then one line per record naming the word, its
-reading and what janki already knows. One call per record, every time.
-
-Which file depends on the pass — `prompts/enrich-examples.md` for `--ai`,
-`prompts/polish-meanings.md` for `--polish-meanings`. They are sent byte for
-byte, so what you read there is what the model reads, and editing one changes
-the next run with no rebuild. See [prompts/README.md](../prompts/README.md).
-
-That makes the output the variable, and the part worth measuring rather than
-predicting: the models janki uses think before they answer, and thinking is billed as
-output. **Run one Anthropic-backed record first and look at the usage in the
-Anthropic console**
-before pointing a pass at a few thousand. A rough floor for planning is a cent or
-two per record on `claude-opus-5`, half that batched — but treat a number you
-measured on your own collection as the real one.
-
-Prompt caching is asked for on the system prefix, and with the prompts as
-shipped that prefix is probably below the per-model minimum for caching to
-happen at all. Editing a prompt to be substantially longer would change that
-— in both directions: a longer prefix may start caching, and it certainly
-costs more per uncached call. The API does not say when it misses the minimum, so budget as if
-every call re-sends it.
-
-`janki enrich --jpdb` costs nothing in tokens — jpdb is a dictionary API, not a
-model.
-
-### Choosing the model
+Model pricing changes. Check Anthropic's current pricing before a large source
+or batch run, and measure one record from your own collection before estimating
+thousands: reasoning tokens make output the variable. Batches trade latency for
+lower cost. `janki enrich --jpdb` uses a dictionary API and costs no model
+tokens.
 
 ```toml
 [ai]
 extract_model = "claude-opus-5"
-enrich_provider = "anthropic"
+enrich_provider = "anthropic"      # or "codex" for immediate --ai
 enrich_model = "claude-opus-5"
-enrich_reasoning_effort = "ultra"
-polish_model = "claude-opus-5"
+enrich_reasoning_effort = "ultra" # Codex only
 ```
 
-The immediate `--ai` pass uses `enrich_provider`, `enrich_model`, and (for
-Codex) `enrich_reasoning_effort` — that key has no Anthropic equivalent, whose
-reasoning depth comes from `claude_client.effort_for`, which sends it only for
-models that accept it. `--model` overrides
-the model for one run.
-Meaning polish stays Anthropic-backed with its own model setting, so changing
-the enrichment provider cannot change it by accident.
+`--model` overrides `enrich_model` for one run. Anthropic reasoning depth comes
+from the model-specific runtime mapping rather than a config key. Codex runs in
+an empty temporary workspace with user configuration ignored, read-only sandbox
+and execution-policy rules enabled, and all tools disabled, so source text in a
+record cannot turn into local file access.
 
-Codex receives imported deck text as untrusted prompt content. Janki runs the
-CLI from an empty temporary workspace with user configuration ignored, keeps
-the read-only sandbox and execution-policy rules enabled, and disables shell,
-unified exec, multi-agent, app/plugin, browser/computer, local-image, and web
-tools for that call. The model therefore has no local file-reading tool through
-which a prompt embedded in a source gloss could retrieve host data.
-
-`enrich_provider` defaults to `anthropic`, so an `[ai]` table naming only
-`enrich_model` still selects Anthropic and still enriches with that model. It
-no longer *polishes* with it: `polish_model` has its own default and takes no
-hint from `enrich_model`. Set both if you want both to be the same. (Until
-2026-08-16 `enrich_model` alone set the polish model too, as an upgrade shim
-for configs written before providers existed. janki is unreleased and the shim
-is gone.)
-
-Message Batches are an Anthropic API feature. For an `--ai` batch, set
-`enrich_provider = "anthropic"` and choose a Claude `enrich_model`; polish
-batches use `polish_model`. An already pending batch remains fetchable if the
-config later changes. A batch is fetched with the model it was **submitted**
-under because that is what answered it.
+Prompt caching is requested for Anthropic's system prefix, but whether the
+prefix is long enough to qualify depends on the provider's current rules.
+Budget as if each request sends it in full.

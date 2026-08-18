@@ -1,4 +1,4 @@
-"""What a document is *teaching*, as opposed to which words it contains.
+"""What a source document teaches, alongside the words extracted from it.
 
 `janki extract` asks a page "which vocabulary is here". That is the wrong
 question for half of what a learner is handed. A te-form chart contains almost
@@ -6,10 +6,10 @@ no vocabulary and is entirely about a *form*; a week's lecture slides contain
 sixty words nobody glossed and are really about 〜んだ and つもり. Reading either
 for its word list throws away the thing it was written to convey.
 
-So this asks a different question — **what does this teach, and what is the
-shape of it?** — and the answer is a set of patterns: a template a learner can
-recognise (``〜てもいいですか``), what it does, and a sentence from the document
-showing it.
+The rich source response asks both questions once.  This module owns the
+durable pattern data, its human review state, and the structural helpers that
+turn reviewed patterns into cards or labeled context for bare-word enrichment.
+It does not make a second paid model call.
 
 **A model is the only thing that can read this.** There is no vocabulary slide
 to parse, no heading convention, no consistent furigana; the intent is in prose,
@@ -33,7 +33,6 @@ Two uses, and they are different:
 
 from __future__ import annotations
 
-import functools
 import json
 import re
 from collections.abc import Iterable, Sequence
@@ -41,10 +40,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from japanese_anki import claude_client
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import han_character_class, normalize_identity_part
-from japanese_anki.inputs import PreparedInput
 from japanese_anki.io import atomic_write_text
 
 __all__ = [
@@ -54,16 +51,18 @@ __all__ = [
     "Pattern",
     "PatternError",
     "PatternSet",
-    "extract_patterns",
+    "format_patterns",
     "load_store",
+    "reviewed_patterns",
     "save_store",
     "verb_pairs_in",
+    "with_prompt_provenance",
     "worked_examples_in",
 ]
 
 
 class PatternError(JankiError):
-    """A document could not be read for what it teaches."""
+    """Durable source-pattern data could not be read or written."""
 
 
 #: What a document turns out to be. The model chooses; the caller does
@@ -120,14 +119,20 @@ class PatternSet:
     patterns: tuple[Pattern, ...] = ()
     #: Inferred, not looked up. Until a human has read them, nothing uses them.
     reviewed: bool = False
+    #: Exact prompt inputs that produced this inference. Historical entries
+    #: predate prompt provenance and therefore carry an empty mapping.
+    prompt_provenance: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        value: dict[str, Any] = {
             "kind": self.kind,
             "title": self.title,
             "reviewed": self.reviewed,
             "patterns": [pattern.to_dict() for pattern in self.patterns],
         }
+        if self.prompt_provenance:
+            value["prompt_provenance"] = dict(self.prompt_provenance)
+        return value
 
     @classmethod
     def from_dict(cls, source: str, raw: dict[str, Any]) -> PatternSet:
@@ -148,102 +153,33 @@ class PatternSet:
             built = tuple(Pattern.from_dict(item) for item in listed)
         except PatternError as exc:
             raise PatternError(f"{source}: {exc}") from exc
+        provenance = raw.get("prompt_provenance") or {}
+        if not isinstance(provenance, dict):
+            raise PatternError(
+                f"{source}: prompt_provenance must be an object, got "
+                f"{type(provenance).__name__}"
+            )
         return cls(
             source=source,
             kind=str(raw.get("kind") or "unknown"),
             title=str(raw.get("title") or ""),
             patterns=built,
             reviewed=bool(raw.get("reviewed", False)),
+            prompt_provenance={str(key): value for key, value in provenance.items()},
         )
 
 
-@functools.cache
-def pattern_schema() -> Any:
-    """The shape a pattern extraction must take."""
-    from pydantic import BaseModel, Field
-
-    class ExtractedPattern(BaseModel):
-        template: str = Field(description="The shape, with 〜 where a word goes.")
-        gloss: str = Field(default="", description="What it does, in one clause.")
-        examples: list[str] = Field(
-            default_factory=list,
-            description="Sentences from the document, verbatim.",
-        )
-        where: str = Field(default="", description="Slide or page number.")
-
-    class Extraction(BaseModel):
-        kind: str = Field(description="pattern, lesson, vocabulary, or unknown.")
-        title: str = Field(default="", description="What the document calls itself.")
-        patterns: list[ExtractedPattern] = Field(default_factory=list)
-
-    return Extraction
-
-
-def extract_patterns(
-    prepared: PreparedInput,
-    *,
-    model: str,
-    instructions: str,
-    style_guide: str = "",
-    client: Any | None = None,
+def with_prompt_provenance(
+    pattern_set: PatternSet, provenance: dict[str, Any]
 ) -> PatternSet:
-    """Read one document for what it teaches.
-
-    Both incomplete outcomes are refused rather than salvaged, on the same
-    reasoning `extract` uses: a truncated answer looks like a complete one with
-    fewer patterns, and nothing downstream could tell the difference.
-    """
-    blocks = (
-        claude_client.system_blocks(style_guide, instructions)
-        if style_guide
-        else claude_client.system_blocks(instructions)
-    )
-    call = claude_client.parse_call(
-        model,
-        blocks,
-        [
-            prepared.content_block(),
-            {"type": "text", "text": (
-                f"This is {prepared.origin_path.name}. What does it teach?"
-            )},
-        ],
-        pattern_schema(),
-        client,
-        # Reading a page at the same depth as everything else, with room to
-        # think first: 4000 was sized for an answer alone.
-        max_tokens=claude_client.DEFAULT_MAX_TOKENS,
-        effort=claude_client.effort_for(model),
-    )
-    if call.stop_reason == "refusal":
-        raise PatternError(
-            f"The model declined to read {prepared.origin_path.name}"
-            + (f": {call.refusal}" if call.refusal else "")
-        )
-    if call.parsed is None:
-        raise PatternError(
-            f"No usable answer for {prepared.origin_path.name} "
-            f"(stopped: {call.stop_reason})"
-        )
-
-    kind = str(getattr(call.parsed, "kind", "") or "unknown").strip().lower()
-    if kind not in DOCUMENT_KINDS:
-        kind = "unknown"
-    patterns = tuple(
-        Pattern(
-            template=str(getattr(item, "template", "") or "").strip(),
-            gloss=str(getattr(item, "gloss", "") or "").strip(),
-            examples=tuple(
-                str(e).strip() for e in (getattr(item, "examples", []) or []) if str(e).strip()
-            ),
-            where=str(getattr(item, "where", "") or "").strip(),
-        )
-        for item in (getattr(call.parsed, "patterns", []) or [])
-    )
+    """Bind a source inference to the exact request that produced it."""
     return PatternSet(
-        source=prepared.origin_path.name,
-        kind=kind,
-        title=str(getattr(call.parsed, "title", "") or "").strip(),
-        patterns=tuple(p for p in patterns if p.template),
+        source=pattern_set.source,
+        kind=pattern_set.kind,
+        title=pattern_set.title,
+        patterns=pattern_set.patterns,
+        reviewed=pattern_set.reviewed,
+        prompt_provenance=dict(provenance),
     )
 
 
@@ -423,22 +359,11 @@ def reviewed_patterns(
 
 
 def format_patterns(patterns: Sequence[Pattern]) -> str:
-    """The block `enrich --ai` puts in a prompt, or ``""``."""
+    """Reviewed lesson-pattern data for a bare-word user turn, or ``""``."""
     if not patterns:
         return ""
-    lines = [
-        "The learner is currently studying these patterns. Prefer them when a "
-        "sentence can use one naturally; never force one that does not fit:",
-    ]
+    lines = ["Reviewed lesson patterns:"]
     for pattern in patterns:
         gloss = f" — {pattern.gloss}" if pattern.gloss else ""
         lines.append(f"* {pattern.template}{gloss}")
     return "\n".join(lines)
-
-
-@dataclass(slots=True)
-class ExtractionSummary:
-    """What one `janki patterns` run did, for the caller to report."""
-
-    read: list[str] = field(default_factory=list)
-    failures: list[str] = field(default_factory=list)
