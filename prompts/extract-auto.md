@@ -9,6 +9,14 @@ key and context. Keep repeated rows as separate units. For running text, select
 the words worth a card. Set source_kind to table or prose on every candidate.
 One document may contain both. Prose selection is not exhaustive.
 
+When a structured exercise, dialogue, or sentence grid contains complete
+Japanese sentences and is not an explicit vocabulary list or vocabulary table,
+treat those sentences as prose even if they are laid out in rows or columns.
+Apply prose candidate selection to those sentences and set those candidates'
+source_kind to prose. Keep source_units and model_reported_unit_count for
+explicit vocabulary lists and tables, using the exhaustive accounting above.
+A document can teach a grammar pattern and also yield vocabulary candidates.
+
 Return a complete study card for every candidate. Give the expression and
 reading. The English gloss list is the few senses this candidate actually
 carries in this source, ordered with the most common relevant sense first, in

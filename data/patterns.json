@@ -96,86 +96,178 @@
       }
     ]
   },
-  "teform_song.pdf": {
+  "m7-mixed-tsumori-pages-27-34.pdf": {
     "kind": "pattern",
-    "title": "Te-form Song / How to Conjugate Verbs into Te-form",
-    "reviewed": true,
+    "title": "Pair Work: ~つもりです。/ Occasion に",
+    "reviewed": false,
     "patterns": [
       {
-        "template": "う・つ・る → って",
-        "gloss": "godan verbs ending in う, つ, or る take the て-form ending って",
+        "template": "Verb (dictionary form) + つもりです",
+        "gloss": "I plan / intend to do ~",
         "examples": [
-          "かう ⇨ かって (う ending changes to って) (to buy)"
+          "月曜日はせんたくするつもりです。",
+          "ほんをよむつもりです。",
+          "たくさんしゃしんをとるつもりです。",
+          "しんかんせんで行くつもりです。",
+          "はい、うんどうするつもりです。"
         ],
-        "where": "p.1 (Te-form Song), p.2 (U-Verb section)"
+        "where": "pp.1, 3, 5"
       },
       {
-        "template": "む・ぶ・ぬ → んで",
-        "gloss": "godan verbs ending in む, ぶ, or ぬ take the て-form ending んで",
+        "template": "Verb (ない form) + つもりです",
+        "gloss": "I plan / intend not to do ~",
         "examples": [
-          "す む",
-          "あ そ ぶ",
-          "し ぬ",
-          "ん で"
+          "しごとにいかないつもりです",
+          "あそびにいかないつもりです。",
+          "何も食べないつもりです。",
+          "あさはやくおきないつもりです。",
+          "いいえ、今週はしないつもりです。"
         ],
-        "where": "p.1 (Te-form Song)"
+        "where": "pp.1, 5"
       },
       {
-        "template": "く → いて",
-        "gloss": "godan verbs ending in く take the て-form ending いて",
+        "template": "Verb (dictionary form) + つもりだ(よ)",
+        "gloss": "casual form of ~つもりです: I'm planning to ~",
         "examples": [
-          "か く",
-          "い て"
+          "日本語の勉強するつもりだよ!"
         ],
-        "where": "p.1 (Te-form Song)"
+        "where": "p.6"
       },
       {
-        "template": "ぐ → いで",
-        "gloss": "godan verbs ending in ぐ take the て-form ending いで",
+        "template": "Occasion + に + (event/action)",
+        "gloss": "on / at a holiday or special day, marking it as a point in time",
         "examples": [
-          "お よ ぐ",
-          "い で"
+          "今年のクリスマスに何をしますか？",
+          "クリスマスにプレゼントをもらいました。",
+          "バレンタインデーに チョコレートをあげます。",
+          "お正月にハワイでごろごろしたいんです。",
+          "❌ はなびたいかいにアイスクリームを食べました。"
         ],
-        "where": "p.1 (Te-form Song)"
+        "where": "pp.7-8"
       },
       {
-        "template": "す → して",
-        "gloss": "godan verbs ending in す take the て-form ending して",
+        "template": "[Transportation]で行く／いく",
+        "gloss": "to go by (means of transport)",
         "examples": [
-          "は な す",
-          "し て"
+          "しんかんせんで行くつもりです。",
+          "バスでいくつもりです。",
+          "ひこうきでいくつもりです。"
         ],
-        "where": "p.1 (Te-form Song)"
+        "where": "pp.3-4"
       },
       {
-        "template": "いく → いって",
-        "gloss": "いく is an exception to the く rule and becomes いって",
+        "template": "どうやって + place + に行きますか",
+        "gloss": "How will you get to (place)?",
         "examples": [
-          "いく ends with く but does not follow the rule.",
-          "いく is an exception and the te-form becomes いって"
+          "どうやってきょうとに行きますか？"
         ],
-        "where": "p.1, p.2 (Exception box)"
+        "where": "p.3"
+      }
+    ],
+    "prompt_provenance": {
+      "source_sha256": "80286e6fed848d160fe270e74ffa33cc23a67477cd308c9aa673309b739ca785",
+      "mode": "auto",
+      "provider": "anthropic",
+      "model": "claude-opus-5",
+      "response_schema_version": 3,
+      "response_schema_fingerprint": "5391cfce42271e02fabafd4f76d28fac1de0064687181ba24d53a8922bb75de8",
+      "system_prompt_fingerprint": "ac6ae60bfa1b61964da8c19d0e929c042b67f0664e633566a6f3e45ba8636664",
+      "style_guide_fingerprint": "8db32a1f2b8297926f29238292e9e364697004d51a83ad0a34338e0a55935e57",
+      "user_prompt_fingerprint": "f9b79d78d311d083bfdfe62b3e8e86efa39f4a2de7449e08d638d1394a6feb66",
+      "request_fingerprint": "af7248d76039a8de6b80df014c6a73137f15c461ef64334e5820ebc715095dc9"
+    },
+    "review_run_id": "e707377f-d96d-4163-8ccf-5e512a670a2f"
+  },
+  "teform_song.pdf": {
+    "kind": "pattern",
+    "title": "Te-form Song / How to Conjugate Verbs into Te-form (NIHONGODEKITA)",
+    "reviewed": false,
+    "patterns": [
+      {
+        "template": "う・つ・る ⇨ って",
+        "gloss": "Godan (Group I) verbs ending in う, つ, or る take the て-form ending って",
+        "examples": [
+          "かう ⇨ って",
+          "まつ ⇨ って",
+          "とる ⇨ って",
+          "ex. かう ⇨ かって (う ending changes to って) (to buy)"
+        ],
+        "where": "p.1 Te-form Song; p.2 U-Verb (Godan/ Group I)"
       },
       {
-        "template": "る-verb: 〜る → 〜て",
-        "gloss": "ichidan (Group II) verbs simply drop る and add て",
+        "template": "む・ぶ・ぬ ⇨ んで",
+        "gloss": "Godan verbs ending in む, ぶ, or ぬ take the て-form ending んで",
         "examples": [
-          "Simply change the verb ending る to て",
+          "すむ ⇨ んで",
+          "あそぶ ⇨ んで",
+          "しぬ ⇨ んで"
+        ],
+        "where": "p.1 Te-form Song"
+      },
+      {
+        "template": "く ⇨ いて",
+        "gloss": "Godan verbs ending in く take the て-form ending いて",
+        "examples": [
+          "かく ⇨ いて"
+        ],
+        "where": "p.1 Te-form Song"
+      },
+      {
+        "template": "ぐ ⇨ いで",
+        "gloss": "Godan verbs ending in ぐ take the て-form ending いで",
+        "examples": [
+          "およぐ ⇨ いで"
+        ],
+        "where": "p.1 Te-form Song"
+      },
+      {
+        "template": "す ⇨ して",
+        "gloss": "Godan verbs ending in す take the て-form ending して",
+        "examples": [
+          "はなす ⇨ して"
+        ],
+        "where": "p.1 Te-form Song"
+      },
+      {
+        "template": "〜る ⇨ 〜て (Ichidan)",
+        "gloss": "For ru-verbs (Ichidan/Group II), simply change the final る to て",
+        "examples": [
           "ex. たべる ⇨ たべて (to eat)",
           "おきる ⇨ おきて (to wake up)"
         ],
-        "where": "p.2 (Ru-Verb section)"
+        "where": "p.2 Ru-Verb (Ichidan/ Group II)"
       },
       {
-        "template": "くる → きて / する → して",
-        "gloss": "the two irregular (Group III) verbs and compounds ending in them",
+        "template": "いく ⇨ いって",
+        "gloss": "いく is an exception: although it ends in く, its て-form is いって, not いいて",
         "examples": [
-          "There are only 2 irregular verbs: くる and する, and other verbs that end with them.",
+          "いく ⇨ いって",
+          "いく is an exception and the te-form becomes いって"
+        ],
+        "where": "p.1 Te-form Song; p.2 Exception"
+      },
+      {
+        "template": "くる ⇨ きて / する ⇨ して",
+        "gloss": "The two irregular verbs (Group III), and compounds ending in them, form きて and して",
+        "examples": [
           "くる ⇨ きて (to come)",
           "する ⇨ して (to do)"
         ],
-        "where": "p.1, p.2 (Irregular Verbs section)"
+        "where": "p.1 Te-form Song; p.2 Irregular Verbs (Group III)"
       }
-    ]
+    ],
+    "prompt_provenance": {
+      "source_sha256": "f496a13284660c0fceaad3c48c382d1c0093f4bb86d3f8c11c59f35b818ba94e",
+      "mode": "auto",
+      "provider": "anthropic",
+      "model": "claude-opus-5",
+      "response_schema_version": 3,
+      "response_schema_fingerprint": "5391cfce42271e02fabafd4f76d28fac1de0064687181ba24d53a8922bb75de8",
+      "system_prompt_fingerprint": "ac6ae60bfa1b61964da8c19d0e929c042b67f0664e633566a6f3e45ba8636664",
+      "style_guide_fingerprint": "8db32a1f2b8297926f29238292e9e364697004d51a83ad0a34338e0a55935e57",
+      "user_prompt_fingerprint": "05767e0ebba578b85e9b237054fc974f3c80bf225fd1f92c89029ecdb45dc3c0",
+      "request_fingerprint": "ee021a46a7943bf71980da9c077af4a3380952bf9759f223e8d700d2e41dd927"
+    },
+    "review_run_id": "9aec32e5-eba0-4918-af0e-069caa2e0b52"
   }
 }

@@ -3914,7 +3914,23 @@ are done (701000b). The old “one source through; five remain” count was stal
 in two directions: four of the six collected sources completed the historical
 schema-v2 pipeline, while none can prove M7.6P's newer one-call rich-v3
 contract. The honest counters are therefore **historical source runs: 4/6;
-required current rich-v3 representative runs: 0/2**.*
+required current rich-v3 representative runs complete: 0/2**. Two authorized
+v3 answers were paid for and staged on 2026-08-18, but neither has crossed its
+human review/build/study gates and only one filled its intended representative
+role.*
+
+*2026-08-18 paid-run checkpoint.* `teform_song.pdf` returned zero candidates,
+eight patterns, and nonblocking selection coverage: the intended pattern-only
+shape, preserved in schema-v3 staging and the pattern store as unreviewed.
+`m7-mixed-tsumori-pages-27-34.pdf` returned zero candidates, six patterns, and
+selection coverage as well. Its provenance is sound, but a second pattern-only
+answer does not exercise the complementary candidate-bearing path. That real
+run exposed a template gap: `extract-auto.md` named vocabulary lists/tables and
+running prose, but not sentence grids, dialogues, or structured exercises. A
+red prompt-contract test now pins that shape and the template asks it to use
+prose candidate selection while still reporting taught patterns. The paid
+answer remains evidence for the old asking; rerunning against the corrected
+template requires fresh explicit paid consent.
 
 The four historical runs are `Kanji Review 104 Week11.pdf` (28 new records,
 model coverage approval), `Kanji Practice Sheet No.112-123.pdf` (34, model
@@ -3935,19 +3951,23 @@ Completion now requires two complementary rich-v3 runs:
    old reason for skipping it — that it had already gone through a separate
    pattern pass and was therefore the wrong source for card extraction — was
    superseded by M7.6P. A rich source answer may correctly yield no vocabulary
-   candidates while still yielding the patterns the document teaches. Current
-   `promote` deliberately leaves a zero-record staging artifact live rather
-   than archiving it. Before a pattern-only run counts as complete, add a
-   failing test and the smallest local mechanism that archives the reviewed v3
-   evidence without pretending that a record was promoted; then mutation-prove
-   that transition.
-2. A new immutable pages-31–34-only subset of
-   `data/inbox/scans/m7-mixed-tsumori-pages-27-34.pdf` exercises the
-   prose/mixed-card shape without paying again for pages 27–30. No such source
-   currently exists and `extract` has no page-range flag. The owner must
-   provide or explicitly authorize that ordinary immutable subset; never edit
-   the inbox original. Paying for the overlapping eight-page superset instead
-   is also the owner's explicit choice, not an inferred fallback.
+   candidates while still yielding the patterns the document teaches. This run
+   exposed and now has the missing zero-record completion path: one run ID binds
+   staging, the raw nested answer, and the editable pattern-store entry; once
+   that exact run is human-reviewed, `promote` archives both the untouched paid
+   proposal and the corrected reviewed snapshot, says explicitly that no
+   records were promoted, and removes the live artifact only after the archive
+   is durable. The machinery landed red-first with stale-run, failed-write,
+   divergent-retry, and concurrent-replacement regressions. The actual te-form
+   answer remains unreviewed, so this transition has not been invoked on it.
+2. The owner chose and paid for the complete overlapping
+   `data/inbox/scans/m7-mixed-tsumori-pages-27-34.pdf` rather than creating a
+   pages-31–34 subset; the inbox file stayed immutable. It was intended to
+   exercise the prose/mixed-card shape, but the old auto template returned a
+   second pattern-only answer. The staged answer remains valid evidence for
+   that request, not a completed substitute for the candidate-bearing role.
+   Completing that role now requires fresh consent to rerun this source against
+   the corrected prompt or an owner-approved alternative source.
 
 A qualifying candidate-bearing run archives `response_schema_version: 3`, a
 `review_run_id`, response-schema and full-request fingerprints, and
@@ -3966,20 +3986,22 @@ template; a machinery defect gets a failing test and mutation proof. The study
 confirmation belongs to the owner and cannot be inferred from a successful
 build.
 
-Authority remains explicit throughout: each paid source call needs exact
-consent; creating the pages-31–34 subset or paying for the overlapping
-superset is an owner choice; `teform_song.pdf` already has a reviewed legacy
-pattern-store entry, so replacing it with the v3 answer as unreviewed needs
-explicit `extract --force` authority; and the final study confirmation also
-remains an owner decision. For blocking coverage, the owner chooses whether to
-supply an owner approval or opt into model coverage review; the model owns the
-latter verdict. One additional content decision is already waiting: the sole
-live M8.5 source-extraction survivor, `word:九分:きゅうふん`, is held because
-that reading is not in the dictionary; its source context is
-`フェリーターミナルからバスで九分`. Keeping, re-identifying, or removing it is
-an identity decision only the owner can make, and M8.5 remains open until it is
-settled. Its schema-v2 staging file is the only recovery artifact, so a forced
-rerun of that source must not overwrite it.
+Authority remains explicit throughout. The owner authorized the two
+2026-08-18 paid calls, chose the overlapping 27–34 source, and authorized the
+forced replacement of `teform_song.pdf`'s reviewed legacy entry with the v3
+answer as unreviewed. That authority does not mark either returned pattern set
+reviewed and does not authorize another paid rerun. The final study
+confirmation also remains an owner decision. For blocking coverage, the owner
+chooses whether to supply an owner approval or opt into model coverage review;
+the model owns the latter verdict. Both new runs are selection coverage and
+need neither route. One additional content decision is partly settled: the
+owner chose to re-identify the sole unresolved historical schema-v2 M8.5
+record, `word:九分:きゅうふん`, held because that reading is not in the
+dictionary and found in `フェリーターミナルからバスで九分`. The exact
+replacement expression and reading are still required; an agent cannot infer
+them. Its schema-v2
+staging file is the only recovery artifact, so a forced rerun of that source
+must not overwrite it.
 
 The six extraction/card defects found in the historical four-source rollout
 were curated in f91787b: six records were removed, `売る` was added, and

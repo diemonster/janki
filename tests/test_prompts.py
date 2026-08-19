@@ -226,6 +226,36 @@ def test_the_three_extraction_modes_are_three_complete_files() -> None:
     assert len(set(texts.values())) == 3, "the modes ask for different work"
 
 
+def test_auto_extraction_routes_sentence_grids_through_card_selection() -> None:
+    """A grammar exercise can teach a pattern and still contain card material.
+
+    The first rich-v3 run over the pair-work source fell between the old two
+    nouns: it was neither a vocabulary table nor running prose, so the answer
+    returned patterns and zero candidates.  The auto template owns that input
+    shape; Python must not inspect the Japanese to repair the answer later.
+    """
+    text = " ".join(prompts.load(REPO_ROOT, "extract-auto").split())
+
+    assert (
+        "When a structured exercise, dialogue, or sentence grid contains "
+        "complete Japanese sentences and is not an explicit vocabulary list or "
+        "vocabulary table, treat those sentences as prose even if they are laid "
+        "out in rows or columns."
+    ) in text
+    assert "Apply prose candidate selection to those sentences" in text
+    assert "set those candidates' source_kind to prose" in text
+    assert (
+        "Keep source_units and model_reported_unit_count for explicit vocabulary "
+        "lists and tables, using the exhaustive accounting above."
+    ) in text
+    assert "account for every row in source_units" in text
+    assert "Link each candidate unit to exactly one candidate" in text
+    assert (
+        "A document can teach a grammar pattern and also yield vocabulary "
+        "candidates."
+    ) in text
+
+
 def test_a_staging_files_provenance_is_the_prompt_files_own_sha(tmp_path: Path) -> None:
     """What ties a card back to the asking that produced it.
 
