@@ -77,8 +77,10 @@ from japanese_anki.staging import (
     record_coverage_approval,
     review_run_id,
     rewrite_staging,
+    rich_extraction_review_run_id,
     validate_coverage_facts,
     write_staging,
+    write_staging_under_lock,
 )
 from japanese_anki.tts import (
     TtsError,
@@ -1922,14 +1924,11 @@ def command_extract(args: argparse.Namespace) -> int:
             mode=args.mode,
         )
         target.parent.mkdir(parents=True, exist_ok=True)
-        provenance = extract.prompt_provenance(
-            item,
-            model=model,
-            style_guide=style_guide,
-            system=system,
-            mode=args.mode,
-            known=skip_list,
-            source_sha256=source_fingerprints[index],
+        provenance = dict(result.pattern_set.prompt_provenance)
+        run_id = new_review_run_id()
+        run_patterns = dataclasses.replace(
+            result.pattern_set,
+            review_run_id=run_id,
         )
         meta = {
             # The basename, like every other writer of this key. An absolute
@@ -1937,12 +1936,12 @@ def command_extract(args: argparse.Namespace) -> int:
             "source_file": item.origin_path.name,
             "extracted_at": date.today().isoformat(),
             "model": model,
-            "review_run_id": new_review_run_id(),
+            "review_run_id": run_id,
             "prompt_provenance": provenance,
             # The same paid answer also inferred the document patterns. Keep a
             # complete copy beside the cards so a pattern-store write failure
             # cannot make that half of the answer unrecoverable.
-            "pattern_set": result.pattern_set.to_dict(),
+            "pattern_set": run_patterns.to_dict(),
             "coverage": coverage,
         }
         # Held back into the file, not just onto the terminal: the staging file
@@ -1952,15 +1951,15 @@ def command_extract(args: argparse.Namespace) -> int:
         if held:
             meta["review_notes"] = extract.unusable_note(held)
         write_staging(target, records, meta, force=args.force)
-        previous_patterns = pattern_store.get(result.pattern_set.source)
+        previous_patterns = pattern_store.get(run_patterns.source)
         if previous_patterns is not None and previous_patterns.reviewed and not args.force:
             print(
                 f"note: kept the reviewed patterns already stored for "
-                f"{result.pattern_set.source}; pass extract --force to replace "
+                f"{run_patterns.source}; pass extract --force to replace "
                 "them with this answer and review them again"
             )
         else:
-            pattern_store[result.pattern_set.source] = result.pattern_set
+            pattern_store[run_patterns.source] = run_patterns
             patterns.save_store(config.patterns_file, pattern_store)
         written += 1
         already = sum(
@@ -2895,6 +2894,141 @@ def _staged_ai_enrichment(
     return provider, model, proven
 
 
+def _staging_wire(path: Path) -> bytes:
+    """Read the exact live-review bytes used by pattern-only promotion's CAS."""
+    try:
+        return path.read_bytes()
+    except OSError as exc:
+        raise PromoteError(
+            f"[staging-review-stale] could not snapshot {path}: "
+            f"{exc.strerror or exc}. Nothing was archived."
+        ) from exc
+
+
+def _pattern_only_archive_meta(
+    meta: Mapping[str, Any], reviewed: patterns.PatternSet
+) -> dict[str, Any]:
+    """Keep the paid answer raw and add the corrected human-reviewed snapshot."""
+    archived = dict(meta)
+    archived["reviewed_pattern_set"] = reviewed.to_dict()
+    note = "Reviewed pattern-only extraction; no records were promoted."
+    existing = str(archived.get("review_notes") or "").strip()
+    archived["review_notes"] = f"{existing}\n\n{note}" if existing else note
+    return archived
+
+
+def _complete_pattern_only_review(
+    config: ProjectConfig,
+    path: Path,
+    done: Path,
+    expected_meta: Mapping[str, Any],
+    expected_wire: bytes,
+    run_id: str,
+) -> int:
+    """Archive one reviewed zero-record v3 run as a locked CAS transaction."""
+    with exclusive_path_lock(path):
+        current_wire = _staging_wire(path)
+        records, meta = read_staging(path)
+        if current_wire != expected_wire or records or dict(meta) != dict(expected_meta):
+            raise PromoteError(
+                "[staging-review-stale] the live staging file changed while its "
+                "pattern review was being completed. The replacement was kept; "
+                "nothing was archived."
+            )
+
+        # Re-check inside the lock. The first check happened before the CAS so
+        # coverage acceptance could run without holding a file lock across a
+        # paid call; this one binds the archive to the bytes about to be removed.
+        promote.check_coverage(meta)
+        if rich_extraction_review_run_id(meta) != run_id:
+            raise PromoteError(
+                "[staging-review-stale] the rich extraction run changed. "
+                "Nothing was archived."
+            )
+
+        source = meta.get("source_file")
+        raw_pattern_set = meta.get("pattern_set")
+        if not isinstance(source, str) or not source.strip() or not isinstance(
+            raw_pattern_set, Mapping
+        ):
+            raise PromoteError(
+                "[pattern-review-invalid] a rich pattern-only extraction needs "
+                "its source_file and pattern_set. Nothing was archived."
+            )
+        # Structural parsing only. Human corrections belong in the store and
+        # deliberately need not equal this immutable paid proposal.
+        patterns.PatternSet.from_dict(source, dict(raw_pattern_set))
+        stored_patterns = patterns.load_store(config.patterns_file).get(source)
+        if stored_patterns is None or not stored_patterns.reviewed:
+            raise PromoteError(
+                f"[patterns-unreviewed] {source} has not been reviewed. Run "
+                f"'janki patterns --review {source}' first; nothing was archived."
+            )
+        provenance = meta.get("prompt_provenance")
+        if (
+            stored_patterns.review_run_id != run_id
+            or not isinstance(provenance, Mapping)
+            or stored_patterns.prompt_provenance != dict(provenance)
+        ):
+            raise PromoteError(
+                f"[patterns-review-stale] the reviewed {source} pattern-store "
+                "entry belongs to a different extraction run. Nothing was archived."
+            )
+
+        check_rewritable(path)
+        if path.suffix.lower() not in STAGING_SUFFIXES:
+            raise PromoteError(
+                f"{path} is not a staging file janki can rewrite: the promoted "
+                f"archive is written under the same name, and that needs "
+                f"{' or '.join(STAGING_SUFFIXES)}. Rename it and re-run."
+            )
+        archived_meta = _pattern_only_archive_meta(meta, stored_patterns)
+        archive_base = done
+        while True:
+            selected, _archived = _archive_for_run(archive_base, meta)
+            with exclusive_path_lock(selected):
+                # Selection itself reads existing archives. Confirm after the
+                # selected path is locked: another completion may have created
+                # the base or candidate between those two operations.
+                confirmed, _archived = _archive_for_run(archive_base, meta)
+                if confirmed != selected:
+                    continue
+                done = selected
+                retried = done.exists()
+                if retried:
+                    archive_records, existing_meta = read_staging(done)
+                    if archive_records or existing_meta != archived_meta:
+                        raise PromoteError(
+                            f"[pattern-archive-divergent] {done} already names this "
+                            "review run but is not the exact completed archive. "
+                            "Both files were kept; nothing was overwritten."
+                        )
+                else:
+                    done.parent.mkdir(parents=True, exist_ok=True)
+                    # `selected` is already locked. The ordinary writer would
+                    # acquire this non-reentrant lock again and deadlock.
+                    write_staging_under_lock(done, [], archived_meta)
+                    archive_records, written_meta = read_staging(done)
+                    if archive_records or written_meta != archived_meta:
+                        raise PromoteError(
+                            f"[pattern-archive-divergent] {done} did not read "
+                            "back as the exact completed archive. The live "
+                            "review was kept."
+                        )
+
+                # Last, while both the live staging path and selected done path
+                # remain locked. Neither a failed archive write, a concurrent
+                # forced extraction, nor a force-write to the verified archive
+                # can remove the only recoverable review artifact in between.
+                path.unlink()
+                break
+
+    print(f"Completed reviewed pattern-only extraction from {path}.")
+    print("  No records were promoted.")
+    print(f"  Archived to {done}" + (" (exact retry)." if retried else ""))
+    return 0
+
+
 def command_promote(args: argparse.Namespace) -> int:
     """Move a reviewed staging file's records into the normalized collection.
 
@@ -2932,8 +3066,14 @@ def command_promote(args: argparse.Namespace) -> int:
     # A file written before M7.4 has no block and remains valid.
     promote.check_coverage(meta)
     if not records:
-        print(f"{path} holds no records; nothing to promote.")
-        return 0
+        run_id = rich_extraction_review_run_id(meta)
+        if run_id is None:
+            print(f"{path} holds no records; nothing to promote.")
+            return 0
+        expected_wire = _staging_wire(path)
+        return _complete_pattern_only_review(
+            config, path, done, meta, expected_wire, run_id
+        )
 
     # Everything that can refuse, before anything is written. read_staging goes
     # through PyYAML, which accepts a duplicate key silently; the rewrite goes

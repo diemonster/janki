@@ -874,6 +874,8 @@ def test_one_source_call_writes_cards_and_patterns_with_the_same_provenance(
     assert [item.template for item in stored.patterns] == ["〜んだ"]
     assert stored.prompt_provenance == meta["prompt_provenance"]
     assert meta["pattern_set"]["patterns"][0]["template"] == "〜んだ"
+    assert stored.review_run_id == meta["review_run_id"]
+    assert meta["pattern_set"]["review_run_id"] == meta["review_run_id"]
 
 
 def test_extract_preserves_reviewed_patterns_but_stages_the_new_rich_answer(
@@ -970,6 +972,8 @@ def test_extract_force_replaces_reviewed_patterns_as_unreviewed(
     assert [item.template for item in replacement.patterns] == ["〜んだ"]
     _records, meta = read_staging(root / "staging" / "lesson.pdf.yaml")
     assert replacement.prompt_provenance == meta["prompt_provenance"]
+    assert replacement.review_run_id == meta["review_run_id"]
+    assert meta["pattern_set"]["review_run_id"] == meta["review_run_id"]
 
 
 def test_extract_force_help_names_the_reviewed_pattern_reset(

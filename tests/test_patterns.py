@@ -20,6 +20,8 @@ from japanese_anki.patterns import (
     worked_examples_in,
 )
 
+REVIEW_RUN_A = "11111111-1111-4111-8111-111111111111"
+
 # --- nothing unreviewed steers a sentence -----------------------------------
 
 
@@ -117,6 +119,7 @@ def test_prompt_provenance_is_optional_and_round_trips(tmp_path: Path) -> None:
             source="week11.pdf",
             kind="lesson",
             patterns=(Pattern("〜んだ", "explanation"),),
+            review_run_id=REVIEW_RUN_A,
         ),
         {"model": "claude-opus-5", "response_schema_version": 3},
     )
@@ -125,10 +128,43 @@ def test_prompt_provenance_is_optional_and_round_trips(tmp_path: Path) -> None:
     save_store(path, {entry.source: entry})
 
     assert load_store(path)[entry.source] == entry
+    assert load_store(path)[entry.source].review_run_id == REVIEW_RUN_A
     historical = PatternSet.from_dict(
         "old.pdf", {"kind": "lesson", "patterns": []}
     )
     assert historical.prompt_provenance == {}
+    assert historical.review_run_id is None
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "not-a-uuid",
+        "11111111-1111-1111-8111-111111111111",
+        "11111111-1111-4111-1111-111111111111",
+        "11111111-1111-4111-8111-11111111111A",
+        42,
+    ],
+)
+def test_a_pattern_store_refuses_a_malformed_review_run_id(
+    tmp_path: Path, value: object
+) -> None:
+    path = tmp_path / "patterns.json"
+    path.write_text(
+        json.dumps(
+            {
+                "week11.pdf": {
+                    "kind": "lesson",
+                    "review_run_id": value,
+                    "patterns": [],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(PatternError, match="review-run-id-invalid"):
+        load_store(path)
 
 
 def test_a_missing_store_is_empty_not_an_error(tmp_path: Path) -> None:

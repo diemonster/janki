@@ -39,6 +39,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import han_character_class, normalize_identity_part
@@ -68,6 +69,31 @@ class PatternError(JankiError):
 #: What a document turns out to be. The model chooses; the caller does
 #: different things with each, so a wrong guess is visible rather than silent.
 DOCUMENT_KINDS: tuple[str, ...] = ("pattern", "lesson", "vocabulary", "unknown")
+
+
+def _review_run_id(source: str, raw: dict[str, Any]) -> str | None:
+    """Read one optional canonical UUIDv4 lineage marker from a pattern set."""
+    if "review_run_id" not in raw:
+        return None
+    value = raw.get("review_run_id")
+    if not isinstance(value, str):
+        raise PatternError(
+            f"{source}: [review-run-id-invalid] review_run_id must be canonical "
+            "lowercase UUIDv4 text"
+        )
+    try:
+        parsed = UUID(value)
+    except ValueError as exc:
+        raise PatternError(
+            f"{source}: [review-run-id-invalid] review_run_id must be canonical "
+            "lowercase UUIDv4 text"
+        ) from exc
+    if parsed.version != 4 or str(parsed) != value:
+        raise PatternError(
+            f"{source}: [review-run-id-invalid] review_run_id must be canonical "
+            "lowercase UUIDv4 text"
+        )
+    return value
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,6 +148,8 @@ class PatternSet:
     #: Exact prompt inputs that produced this inference. Historical entries
     #: predate prompt provenance and therefore carry an empty mapping.
     prompt_provenance: dict[str, Any] = field(default_factory=dict)
+    #: One paid answer's durable identity. Historical entries predate it.
+    review_run_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         value: dict[str, Any] = {
@@ -132,6 +160,8 @@ class PatternSet:
         }
         if self.prompt_provenance:
             value["prompt_provenance"] = dict(self.prompt_provenance)
+        if self.review_run_id is not None:
+            value["review_run_id"] = self.review_run_id
         return value
 
     @classmethod
@@ -166,6 +196,7 @@ class PatternSet:
             patterns=built,
             reviewed=bool(raw.get("reviewed", False)),
             prompt_provenance={str(key): value for key, value in provenance.items()},
+            review_run_id=_review_run_id(source, raw),
         )
 
 
@@ -180,6 +211,7 @@ def with_prompt_provenance(
         patterns=pattern_set.patterns,
         reviewed=pattern_set.reviewed,
         prompt_provenance=dict(provenance),
+        review_run_id=pattern_set.review_run_id,
     )
 
 

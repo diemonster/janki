@@ -108,6 +108,7 @@ META_KEYS: tuple[str, ...] = (
     "coverage",
     "prompt_provenance",
     "pattern_set",
+    "reviewed_pattern_set",
     "ai_enrichment",
     "field_replacements",
 )
@@ -689,6 +690,12 @@ def _validate_prompt_provenance(
                 f"[prompt-provenance-invalid] {name} must be SHA-256"
             )
     if version >= 3:
+        run_id = review_run_id(meta)
+        if run_id is None:
+            raise StagingError(
+                "[review-run-id-invalid] a rich extraction needs its "
+                "review_run_id"
+            )
         pattern_set = meta.get("pattern_set")
         if not isinstance(pattern_set, Mapping):
             raise StagingError(
@@ -706,6 +713,55 @@ def _validate_prompt_provenance(
                 "[prompt-provenance-stale] the staged cards and pattern answer "
                 "name different model requests"
             )
+        try:
+            pattern_run_id = review_run_id(pattern_set)
+        except StagingError as exc:
+            raise StagingError(
+                "[review-run-id-invalid] pattern_set.review_run_id must be "
+                "canonical lowercase UUIDv4 text"
+            ) from exc
+        if pattern_run_id is None:
+            raise StagingError(
+                "[review-run-id-invalid] a rich pattern answer needs its "
+                "review_run_id"
+            )
+        if pattern_run_id != run_id:
+            raise StagingError(
+                "[review-run-id-invalid] the staged cards and pattern answer "
+                "name different review runs"
+            )
+
+        reviewed_pattern_set = meta.get("reviewed_pattern_set")
+        if reviewed_pattern_set is not None:
+            if not isinstance(reviewed_pattern_set, Mapping):
+                raise StagingError(
+                    "[pattern-review-invalid] reviewed_pattern_set must be a mapping"
+                )
+            if reviewed_pattern_set.get("reviewed") is not True:
+                raise StagingError(
+                    "[pattern-review-invalid] reviewed_pattern_set must record "
+                    "reviewed: true"
+                )
+            reviewed_provenance = reviewed_pattern_set.get("prompt_provenance")
+            if not isinstance(reviewed_provenance, Mapping) or dict(
+                reviewed_provenance
+            ) != dict(provenance):
+                raise StagingError(
+                    "[prompt-provenance-stale] the reviewed pattern snapshot and "
+                    "staged answer name different model requests"
+                )
+            try:
+                reviewed_run_id = review_run_id(reviewed_pattern_set)
+            except StagingError as exc:
+                raise StagingError(
+                    "[review-run-id-invalid] reviewed_pattern_set.review_run_id "
+                    "must be canonical lowercase UUIDv4 text"
+                ) from exc
+            if reviewed_run_id != run_id:
+                raise StagingError(
+                    "[review-run-id-invalid] the reviewed pattern snapshot and "
+                    "staged answer name different review runs"
+                )
 
 
 def validate_coverage_facts(
@@ -725,6 +781,20 @@ def validate_coverage_facts(
     without hand-deleting the approval it had just written.
     """
     if "coverage" not in meta:
+        provenance = meta.get("prompt_provenance")
+        version = (
+            provenance.get("response_schema_version")
+            if isinstance(provenance, Mapping)
+            else None
+        )
+        if (
+            isinstance(version, int)
+            and not isinstance(version, bool)
+            and version >= 3
+        ):
+            raise StagingError(
+                "[coverage-block-invalid] a rich extraction needs its coverage block"
+            )
         return None
     block = meta["coverage"]
     if not isinstance(block, Mapping):
@@ -769,6 +839,28 @@ def validate_coverage_facts(
     # validated here. Returned rather than recomputed so the two halves cannot
     # disagree about which block they are talking about.
     return block, source_fingerprint, fingerprint, status
+
+
+def rich_extraction_review_run_id(meta: Mapping[str, Any]) -> str | None:
+    """Return a validated rich extraction's run id, or ``None`` for v2/legacy."""
+    provenance = meta.get("prompt_provenance")
+    if not isinstance(provenance, Mapping):
+        return None
+    version = provenance.get("response_schema_version")
+    if (
+        isinstance(version, bool)
+        or not isinstance(version, int)
+        or version < 3
+    ):
+        return None
+    # Callers first pass through validate_coverage_facts, which requires this
+    # for rich staging and binds the nested pattern answer to it.
+    value = review_run_id(meta)
+    if value is None:
+        raise StagingError(
+            "[review-run-id-invalid] a rich extraction needs its review_run_id"
+        )
+    return value
 
 
 def require_resolved_coverage(meta: Mapping[str, Any]) -> None:
@@ -894,22 +986,13 @@ def annotations(record: VocabularyRecord) -> dict[str, str]:
     return {key: raw_fields[key] for key in ANNOTATION_KEYS if key in raw_fields}
 
 
-@_path_locked
-def write_staging(
+def _write_staging_unlocked(
     path: Path,
     records: Iterable[VocabularyRecord],
     meta: Mapping[str, Any] | None = None,
     force: bool = False,
 ) -> Path:
-    """Write ``records`` and ``meta`` to a staging file at ``path``.
-
-    Refuses to overwrite an existing file unless ``force`` is true: the file on
-    disk may hold hand-edited readings not yet committed. Also refuses a suffix
-    :func:`read_staging` could not parse — the content is YAML whatever the name
-    says, so any other suffix produces a file only this function can make sense
-    of. A metadata key outside :data:`META_KEYS` is written, with a warning: it
-    is readable but nothing downstream looks at it.
-    """
+    """Implementation shared by the ordinary and already-locked writers."""
     path = Path(path)
     review_run_id(meta or {})
     if path.suffix.lower() not in STAGING_SUFFIXES:
@@ -948,6 +1031,41 @@ def write_staging(
     )
     atomic_write_text(path, text)
     return path
+
+
+@_path_locked
+def write_staging(
+    path: Path,
+    records: Iterable[VocabularyRecord],
+    meta: Mapping[str, Any] | None = None,
+    force: bool = False,
+) -> Path:
+    """Write ``records`` and ``meta`` to a staging file at ``path``.
+
+    Refuses to overwrite an existing file unless ``force`` is true: the file on
+    disk may hold hand-edited readings not yet committed. Also refuses a suffix
+    :func:`read_staging` could not parse — the content is YAML whatever the name
+    says, so any other suffix produces a file only this function can make sense
+    of. A metadata key outside :data:`META_KEYS` is written, with a warning: it
+    is readable but nothing downstream looks at it.
+    """
+    return _write_staging_unlocked(path, records, meta, force)
+
+
+def write_staging_under_lock(
+    path: Path,
+    records: Iterable[VocabularyRecord],
+    meta: Mapping[str, Any] | None = None,
+    force: bool = False,
+) -> Path:
+    """Write staging when the caller already holds this exact path's lock.
+
+    This narrow seam exists for a transaction spanning a live staging path and
+    its done archive. Calling :func:`write_staging` while holding the done lock
+    would try to acquire that non-reentrant lock again and deadlock; calling an
+    unlocked writer without the outer lock would reopen the data-loss race.
+    """
+    return _write_staging_unlocked(path, records, meta, force)
 
 
 def _parser() -> YAML:

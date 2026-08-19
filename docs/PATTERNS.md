@@ -31,6 +31,12 @@ verbatim source examples, and the page or slide where it appears. The resulting
 `reviewed: false`. A complete copy also rides in the source's staging file, so
 a pattern-store write problem cannot lose half of a paid answer.
 
+Each extraction mints one `review_run_id`. The staging metadata, its nested
+proposed `pattern_set`, and the corresponding pattern-store entry all carry
+that same UUID. Prompt fingerprints can repeat when the same source is asked
+the same question twice; the run ID is what prevents a review of the older
+answer from authorizing the newer one.
+
 Pattern provenance is the source call's provenance: source SHA-256, mode,
 provider, model, response-schema version, fingerprints for the style guide,
 source task, labelled data turn and schema, and a fingerprint of the complete
@@ -48,7 +54,8 @@ set; the replacement is unreviewed and must pass through review again.
 Nothing consumes an unreviewed pattern set. That is a model's reading of a
 source nobody has checked, and letting it steer every card would spread one bad
 inference across the collection. Review the templates, glosses, source examples
-and locations directly in `data/patterns.json`, then:
+and locations directly in `data/patterns.json`, while leaving its
+`prompt_provenance` and `review_run_id` unchanged, then:
 
 ```bash
 janki patterns --review '104 Week 11 Slide.pdf'
@@ -59,6 +66,15 @@ complete bare-word `enrich --ai` call. Its prompt may use one naturally when it
 fits the word; a pattern is never forced into a sentence merely because it is
 listed. A reviewed **pattern** document steers no vocabulary examples. It is
 reviewed for its own rule cards.
+
+If a rich extraction proposes patterns but no vocabulary records, `promote`
+still has finished evidence to preserve. Once the current run's pattern-store
+entry is reviewed, it archives the untouched proposed `pattern_set` together
+with a `reviewed_pattern_set` snapshot containing the human's corrected text;
+the archive says explicitly that no records were promoted. A different run ID
+or prompt provenance refuses the transition. Archive creation and live-staging
+deletion are one locked compare-and-swap operation, so a concurrent forced
+extraction or failed archive write leaves the live review recoverable.
 
 ## A chart becomes its own deck
 

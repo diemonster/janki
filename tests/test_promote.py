@@ -8,14 +8,17 @@ than stubbed at the decision.
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
+from threading import Event, Thread, current_thread
 from typing import Any
 
 import pytest
 import yaml
 
-from japanese_anki import cli, enrich, extract, promote
+from japanese_anki import cli, enrich, extract, patterns, promote
+from japanese_anki import staging as staging_module
 from japanese_anki.jpdb import JpdbClient
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
 from japanese_anki.promote import (
@@ -758,8 +761,460 @@ def _rich_prompt_provenance(request_fingerprint: str) -> dict[str, Any]:
     }
 
 
+def _pattern_only_meta(
+    pattern_set: patterns.PatternSet,
+    *,
+    run_id: str = "11111111-1111-4111-8111-111111111111",
+    request_fingerprint: str = "a" * 64,
+) -> dict[str, Any]:
+    provenance = _rich_prompt_provenance(request_fingerprint)
+    coverage = extract.coverage_block(
+        extract.ExtractionResult(
+            candidates=(), source_units=(), model_reported_unit_count=0
+        ),
+        source_sha256=provenance["source_sha256"],
+        mode="prose",
+    )
+    bound = replace(
+        patterns.with_prompt_provenance(pattern_set, provenance),
+        review_run_id=run_id,
+    )
+    return {
+        "source_file": pattern_set.source,
+        "review_run_id": run_id,
+        "prompt_provenance": provenance,
+        "pattern_set": bound.to_dict(),
+        "coverage": coverage,
+    }
+
+
 REVIEW_RUN_A = "11111111-1111-4111-8111-111111111111"
 REVIEW_RUN_B = "22222222-2222-4222-8222-222222222222"
+
+
+def test_a_corrected_current_run_pattern_review_is_archived_beside_the_raw_answer(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = project(tmp_path, [])
+    path = root / "staging" / "teform_song.pdf.yaml"
+    path.parent.mkdir(parents=True)
+    proposed = patterns.PatternSet(
+        source="teform_song.pdf",
+        kind="pattern",
+        title="Te-form song",
+        patterns=(patterns.Pattern("う・つ・る → って", "te-form rule"),),
+    )
+    meta = _pattern_only_meta(proposed)
+    write_staging(path, [], meta)
+    staged = patterns.PatternSet.from_dict(proposed.source, meta["pattern_set"])
+    reviewed = replace(
+        staged,
+        title="Human-corrected Te-form song",
+        patterns=(patterns.Pattern("う・つ・る → って", "reviewed rule"),),
+        reviewed=True,
+    )
+    patterns.save_store(
+        root / "data" / "patterns.json",
+        {reviewed.source: reviewed},
+    )
+
+    code = cli.main(["--root", str(root), "promote", str(path)])
+
+    assert code == 0
+    assert not path.exists()
+    archived, archived_meta = read_staging(
+        root / "staging" / "done" / "teform_song.pdf.yaml"
+    )
+    assert archived == []
+    assert archived_meta["pattern_set"] == meta["pattern_set"]
+    assert archived_meta["reviewed_pattern_set"] == reviewed.to_dict()
+    assert archived_meta["pattern_set"]["title"] == "Te-form song"
+    assert archived_meta["reviewed_pattern_set"]["title"] == (
+        "Human-corrected Te-form song"
+    )
+    assert "Reviewed pattern-only extraction; no records were promoted." in (
+        archived_meta["review_notes"]
+    )
+    assert json.loads((root / "vocabulary.json").read_text(encoding="utf-8")) == []
+    assert not (root / "ledger.json").exists()
+    output = capsys.readouterr().out
+    assert "Completed reviewed pattern-only extraction" in output
+    assert "Promoted 0 record" not in output
+
+
+def test_a_pattern_only_extraction_waits_for_review_without_mutation(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = project(tmp_path, [])
+    path = root / "staging" / "teform_song.pdf.yaml"
+    path.parent.mkdir(parents=True)
+    proposed = patterns.PatternSet(
+        source="teform_song.pdf",
+        kind="pattern",
+        patterns=(patterns.Pattern("う・つ・る → って", "te-form rule"),),
+    )
+    meta = _pattern_only_meta(proposed)
+    write_staging(path, [], meta)
+    staged = patterns.PatternSet.from_dict(proposed.source, meta["pattern_set"])
+    patterns.save_store(
+        root / "data" / "patterns.json",
+        {proposed.source: staged},
+    )
+    before = path.read_bytes()
+
+    code = cli.main(["--root", str(root), "promote", str(path)])
+
+    assert code == 1
+    assert path.read_bytes() == before
+    assert not (root / "staging" / "done").exists()
+    assert "patterns-unreviewed" in capsys.readouterr().err
+
+
+def test_an_identical_older_reviewed_run_cannot_complete_a_fresh_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = project(tmp_path, [])
+    path = root / "staging" / "teform_song.pdf.yaml"
+    path.parent.mkdir(parents=True)
+    proposed = patterns.PatternSet(
+        source="teform_song.pdf",
+        kind="pattern",
+        title="Fresh answer",
+        patterns=(patterns.Pattern("う・つ・る → って", "te-form rule"),),
+    )
+    meta = _pattern_only_meta(proposed)
+    write_staging(path, [], meta)
+    staged = patterns.PatternSet.from_dict(proposed.source, meta["pattern_set"])
+    old = replace(
+        staged,
+        reviewed=True,
+        review_run_id=REVIEW_RUN_B,
+    )
+    patterns.save_store(root / "data" / "patterns.json", {old.source: old})
+    before = path.read_bytes()
+
+    code = cli.main(["--root", str(root), "promote", str(path)])
+
+    assert code == 1
+    assert path.read_bytes() == before
+    assert not (root / "staging" / "done").exists()
+    assert "patterns-review-stale" in capsys.readouterr().err
+
+
+def test_an_empty_schema_v2_extraction_keeps_the_legacy_noop_boundary(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = project(tmp_path, [])
+    path = root / "staging" / "legacy.yaml"
+    path.parent.mkdir(parents=True)
+    provenance = _rich_prompt_provenance("a" * 64)
+    provenance["response_schema_version"] = 2
+    del provenance["response_schema_fingerprint"]
+    del provenance["request_fingerprint"]
+    write_staging(
+        path,
+        [],
+        {"source_file": "legacy.pdf", "prompt_provenance": provenance},
+    )
+
+    assert cli.main(["--root", str(root), "promote", str(path)]) == 0
+
+    assert path.exists()
+    assert not (root / "staging" / "done").exists()
+    assert "holds no records" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "defect",
+    [
+        "missing-coverage",
+        "missing-run",
+        "missing-pattern-run",
+        "mismatched-pattern-run",
+        "missing-request-fingerprint",
+    ],
+)
+def test_incomplete_schema_v3_pattern_only_staging_is_never_archived(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    defect: str,
+) -> None:
+    root = project(tmp_path, [])
+    path = root / "staging" / "teform_song.pdf.yaml"
+    path.parent.mkdir(parents=True)
+    proposed = patterns.PatternSet(source="teform_song.pdf", kind="pattern")
+    meta = _pattern_only_meta(proposed)
+    if defect == "missing-coverage":
+        del meta["coverage"]
+    elif defect == "missing-run":
+        del meta["review_run_id"]
+    elif defect == "missing-pattern-run":
+        del meta["pattern_set"]["review_run_id"]
+    elif defect == "mismatched-pattern-run":
+        meta["pattern_set"]["review_run_id"] = REVIEW_RUN_B
+    elif defect == "missing-request-fingerprint":
+        del meta["prompt_provenance"]["request_fingerprint"]
+        del meta["pattern_set"]["prompt_provenance"]["request_fingerprint"]
+    write_staging(path, [], meta)
+    before = path.read_bytes()
+
+    assert cli.main(["--root", str(root), "promote", str(path)]) == 1
+
+    assert path.read_bytes() == before
+    assert not (root / "staging" / "done").exists()
+    assert "invalid" in capsys.readouterr().err
+
+
+def test_a_malformed_v3_run_id_is_refused_before_archiving(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = project(tmp_path, [])
+    path = root / "staging" / "teform_song.pdf.yaml"
+    path.parent.mkdir(parents=True)
+    meta = _pattern_only_meta(
+        patterns.PatternSet(source="teform_song.pdf", kind="pattern")
+    )
+    meta["review_run_id"] = "not-a-uuid"
+    path.write_text(
+        yaml.safe_dump({**meta, "records": []}, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    before = path.read_bytes()
+
+    assert cli.main(["--root", str(root), "promote", str(path)]) == 1
+
+    assert path.read_bytes() == before
+    assert not (root / "staging" / "done").exists()
+    assert "review-run-id-invalid" in capsys.readouterr().err
+
+
+def _stage_reviewed_pattern_run(
+    root: Path,
+    *,
+    run_id: str,
+    request_fingerprint: str = "a" * 64,
+    title: str = "Te-form song",
+) -> tuple[Path, dict[str, Any], patterns.PatternSet]:
+    path = root / "staging" / "teform_song.pdf.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    proposed = patterns.PatternSet(
+        source="teform_song.pdf",
+        kind="pattern",
+        title=title,
+        patterns=(patterns.Pattern("う・つ・る → って", "te-form rule"),),
+    )
+    meta = _pattern_only_meta(
+        proposed,
+        run_id=run_id,
+        request_fingerprint=request_fingerprint,
+    )
+    write_staging(path, [], meta)
+    reviewed = replace(
+        patterns.PatternSet.from_dict(proposed.source, meta["pattern_set"]),
+        reviewed=True,
+    )
+    patterns.save_store(
+        root / "data" / "patterns.json", {reviewed.source: reviewed}
+    )
+    return path, meta, reviewed
+
+
+def test_two_zero_record_runs_with_one_basename_get_separate_archives(
+    tmp_path: Path,
+) -> None:
+    root = project(tmp_path, [])
+    path, _first_meta, _first_review = _stage_reviewed_pattern_run(
+        root, run_id=REVIEW_RUN_A
+    )
+    command = ["--root", str(root), "promote", str(path)]
+    assert cli.main(command) == 0
+
+    path, _second_meta, _second_review = _stage_reviewed_pattern_run(
+        root,
+        run_id=REVIEW_RUN_B,
+        # Same request on purpose: the run id, not model inputs, separates reviews.
+        request_fingerprint="a" * 64,
+    )
+    assert cli.main(command) == 0
+
+    archives = list((root / "staging" / "done").glob("teform_song.pdf*.yaml"))
+    assert len(archives) == 2
+    runs = {read_staging(archive)[1]["review_run_id"] for archive in archives}
+    assert runs == {REVIEW_RUN_A, REVIEW_RUN_B}
+
+
+def test_an_exact_pattern_archive_retry_does_not_overwrite_the_archive(
+    tmp_path: Path,
+) -> None:
+    root = project(tmp_path, [])
+    path, meta, _reviewed = _stage_reviewed_pattern_run(
+        root, run_id=REVIEW_RUN_A
+    )
+    command = ["--root", str(root), "promote", str(path)]
+    assert cli.main(command) == 0
+    archive = root / "staging" / "done" / path.name
+    before = archive.read_bytes()
+
+    # The archive landed but the process died before deleting the live review.
+    write_staging(path, [], meta)
+    assert cli.main(command) == 0
+
+    assert not path.exists()
+    assert archive.read_bytes() == before
+
+
+def test_a_divergent_same_run_pattern_archive_is_refused_without_overwrite(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = project(tmp_path, [])
+    path, meta, _reviewed = _stage_reviewed_pattern_run(
+        root, run_id=REVIEW_RUN_A
+    )
+    command = ["--root", str(root), "promote", str(path)]
+    assert cli.main(command) == 0
+    archive = root / "staging" / "done" / path.name
+    rows, archived_meta = read_staging(archive)
+    archived_meta["review_notes"] += "\nA note added after completion."
+    write_staging(archive, rows, archived_meta, force=True)
+    archive_before = archive.read_bytes()
+    write_staging(path, [], meta)
+    live_before = path.read_bytes()
+
+    assert cli.main(command) == 1
+
+    assert path.read_bytes() == live_before
+    assert archive.read_bytes() == archive_before
+    assert "pattern-archive-divergent" in capsys.readouterr().err
+
+
+def test_a_pattern_archive_write_failure_keeps_the_live_review(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = project(tmp_path, [])
+    path, _meta, _reviewed = _stage_reviewed_pattern_run(
+        root, run_id=REVIEW_RUN_A
+    )
+    before = path.read_bytes()
+    def fail_archive(*args: Any, **kwargs: Any) -> Path:
+        target = Path(args[0])
+        if target.parent.name == "done":
+            raise cli.StagingError("archive write failed")
+        raise AssertionError(f"unexpected unlocked archive target: {target}")
+
+    monkeypatch.setattr(cli, "write_staging_under_lock", fail_archive)
+
+    assert cli.main(["--root", str(root), "promote", str(path)]) == 1
+
+    assert path.read_bytes() == before
+    assert not (root / "staging" / "done" / path.name).exists()
+    assert "archive write failed" in capsys.readouterr().err
+
+
+def test_a_concurrent_forced_replacement_is_not_deleted_as_the_review_finishes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = project(tmp_path, [])
+    path, _meta, _reviewed = _stage_reviewed_pattern_run(
+        root, run_id=REVIEW_RUN_A
+    )
+    replacement = _pattern_only_meta(
+        patterns.PatternSet(source="teform_song.pdf", kind="pattern"),
+        run_id=REVIEW_RUN_B,
+        request_fingerprint="b" * 64,
+    )
+    replaced = False
+
+    @contextmanager
+    def replace_before_lock(_path: Path) -> Any:
+        nonlocal replaced
+        if not replaced:
+            replaced = True
+            write_staging(path, [], replacement, force=True)
+        yield
+
+    monkeypatch.setattr(cli, "exclusive_path_lock", replace_before_lock)
+
+    assert cli.main(["--root", str(root), "promote", str(path)]) == 1
+
+    _rows, surviving_meta = read_staging(path)
+    assert surviving_meta["review_run_id"] == REVIEW_RUN_B
+    assert not (root / "staging" / "done").exists()
+    assert "staging-review-stale" in capsys.readouterr().err
+
+
+def test_the_done_archive_lock_is_held_through_live_staging_deletion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A real force writer must wait until the recoverable live file is gone.
+
+    The first transaction locked only the live path. Its archive writer released
+    the done-path lock after readback, so a second real ``write_staging`` could
+    replace the verified archive before the live unlink. Both operations then
+    reported success while neither copy of the reviewed archive survived.
+    """
+    root = project(tmp_path, [])
+    path, _meta, _reviewed = _stage_reviewed_pattern_run(
+        root, run_id=REVIEW_RUN_A
+    )
+    archive = root / "staging" / "done" / path.name
+    start_writer = Event()
+    writer_attempting = Event()
+    writer_acquired = Event()
+    writer_finished = Event()
+    writer_errors: list[BaseException] = []
+    acquired_before_unlink: list[bool] = []
+    writer_thread: Thread
+    real_staging_lock = staging_module.exclusive_path_lock
+
+    @contextmanager
+    def observed_staging_lock(target: Path) -> Any:
+        if current_thread() is writer_thread and Path(target) == archive:
+            writer_attempting.set()
+        with real_staging_lock(target):
+            if current_thread() is writer_thread and Path(target) == archive:
+                writer_acquired.set()
+            yield
+
+    monkeypatch.setattr(staging_module, "exclusive_path_lock", observed_staging_lock)
+
+    def replace_archive() -> None:
+        try:
+            assert start_writer.wait(5)
+            rows, meta = read_staging(archive)
+            meta["review_notes"] += "\nConcurrent forced replacement."
+            # The public writer and its real path lock, not a test double.
+            staging_module.write_staging(archive, rows, meta, force=True)
+        except BaseException as exc:  # pragma: no cover - asserted in parent thread
+            writer_errors.append(exc)
+        finally:
+            writer_finished.set()
+
+    writer_thread = Thread(target=replace_archive)
+    writer_thread.start()
+    real_unlink = Path.unlink
+
+    def observe_live_unlink(target: Path, *args: Any, **kwargs: Any) -> None:
+        if target == path:
+            start_writer.set()
+            assert writer_attempting.wait(5)
+            # Once the writer has reached the real lock, it must remain blocked
+            # until this unlink completes and the outer done lock is released.
+            acquired_before_unlink.append(writer_acquired.wait(0.5))
+        real_unlink(target, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", observe_live_unlink)
+
+    assert cli.main(["--root", str(root), "promote", str(path)]) == 0
+    assert writer_finished.wait(5)
+    writer_thread.join(timeout=5)
+
+    assert writer_errors == []
+    assert acquired_before_unlink == [False]
+    assert writer_acquired.is_set(), "the real writer proceeds after both locks release"
 
 
 def test_completed_rich_extractions_with_one_staging_name_keep_separate_archives(
@@ -775,14 +1230,14 @@ def test_completed_rich_extractions_with_one_staging_name_keep_separate_archives
     root = project(tmp_path, [])
     path = root / "staging" / "lesson.yaml"
     path.parent.mkdir(parents=True)
+    pattern_set = patterns.PatternSet(source="lesson.pdf", kind="lesson")
 
     write_staging(
         path,
         [first],
-        {
-            "source_file": "lesson.pdf",
-            "prompt_provenance": _rich_prompt_provenance("a" * 64),
-        },
+        _pattern_only_meta(
+            pattern_set, run_id=REVIEW_RUN_A, request_fingerprint="a" * 64
+        ),
     )
     assert cli.main(
         ["--root", str(root), "promote", str(path), "--skip-reading-check"]
@@ -791,10 +1246,9 @@ def test_completed_rich_extractions_with_one_staging_name_keep_separate_archives
     write_staging(
         path,
         [second],
-        {
-            "source_file": "lesson.pdf",
-            "prompt_provenance": _rich_prompt_provenance("b" * 64),
-        },
+        _pattern_only_meta(
+            pattern_set, run_id=REVIEW_RUN_B, request_fingerprint="b" * 64
+        ),
     )
     assert cli.main(
         ["--root", str(root), "promote", str(path), "--skip-reading-check"]
@@ -820,27 +1274,23 @@ def test_completed_rich_extractions_with_the_same_request_are_distinct_runs(
     root = project(tmp_path, [])
     path = root / "staging" / "lesson.yaml"
     path.parent.mkdir(parents=True)
-    provenance = _rich_prompt_provenance("a" * 64)
+    pattern_set = patterns.PatternSet(source="lesson.pdf", kind="lesson")
 
     write_staging(
         path,
         [first],
-        {
-            "source_file": "lesson.pdf",
-            "review_run_id": REVIEW_RUN_A,
-            "prompt_provenance": provenance,
-        },
+        _pattern_only_meta(
+            pattern_set, run_id=REVIEW_RUN_A, request_fingerprint="a" * 64
+        ),
     )
     command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
     assert cli.main(command) == 0
     write_staging(
         path,
         [second],
-        {
-            "source_file": "lesson.pdf",
-            "review_run_id": REVIEW_RUN_B,
-            "prompt_provenance": provenance,
-        },
+        _pattern_only_meta(
+            pattern_set, run_id=REVIEW_RUN_B, request_fingerprint="a" * 64
+        ),
     )
     assert cli.main(command) == 0
 
@@ -860,14 +1310,15 @@ def test_review_run_id_survives_a_partial_promotion_retry(tmp_path: Path) -> Non
     root = project(tmp_path, [])
     path = root / "staging" / "lesson.yaml"
     path.parent.mkdir(parents=True)
+    meta = _pattern_only_meta(
+        patterns.PatternSet(source="lesson.pdf", kind="lesson"),
+        run_id=REVIEW_RUN_A,
+        request_fingerprint="a" * 64,
+    )
     write_staging(
         path,
         [first, held],
-        {
-            "source_file": "lesson.pdf",
-            "review_run_id": REVIEW_RUN_A,
-            "prompt_provenance": _rich_prompt_provenance("a" * 64),
-        },
+        meta,
     )
     command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
 
@@ -1113,12 +1564,14 @@ def test_schema_v3_provenance_binds_the_schema_and_complete_request() -> None:
     provenance["response_schema_version"] = 3
     provenance["response_schema_fingerprint"] = "e" * 64
     provenance["request_fingerprint"] = "f" * 64
+    meta["review_run_id"] = REVIEW_RUN_A
     meta["pattern_set"] = {
         "kind": "lesson",
         "title": "Lesson",
         "reviewed": False,
         "patterns": [],
         "prompt_provenance": dict(provenance),
+        "review_run_id": REVIEW_RUN_A,
     }
 
     promote.check_coverage(meta)
@@ -1136,6 +1589,7 @@ def test_schema_v3_pattern_answer_is_bound_to_the_same_request() -> None:
     provenance["response_schema_version"] = 3
     provenance["response_schema_fingerprint"] = "e" * 64
     provenance["request_fingerprint"] = "f" * 64
+    meta["review_run_id"] = REVIEW_RUN_A
     meta["pattern_set"] = {
         "kind": "lesson",
         "title": "Lesson",
@@ -1145,6 +1599,7 @@ def test_schema_v3_pattern_answer_is_bound_to_the_same_request() -> None:
             **provenance,
             "request_fingerprint": "0" * 64,
         },
+        "review_run_id": REVIEW_RUN_A,
     }
 
     with pytest.raises(promote.PromoteError, match="prompt-provenance-stale"):

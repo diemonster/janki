@@ -15,6 +15,8 @@ from japanese_anki import cli
 from japanese_anki import patterns as patterns_module
 from japanese_anki.patterns import Pattern, PatternSet
 
+REVIEW_RUN_A = "11111111-1111-4111-8111-111111111111"
+
 
 def pattern_set(
     source: str,
@@ -23,6 +25,7 @@ def pattern_set(
     reviewed: bool = False,
     template: str = "〜んだ",
     gloss: str = "explains background",
+    review_run_id: str | None = None,
 ) -> PatternSet:
     return PatternSet(
         source=source,
@@ -31,6 +34,7 @@ def pattern_set(
         patterns=(Pattern(template, gloss),),
         reviewed=reviewed,
         prompt_provenance={"request_fingerprint": f"request-for-{source}"},
+        review_run_id=review_run_id,
     )
 
 
@@ -94,7 +98,7 @@ def test_listing_shows_patterns_and_each_review_state(
 def test_review_marks_every_named_source_without_losing_store_provenance(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    first = pattern_set("week11.pdf")
+    first = pattern_set("week11.pdf", review_run_id=REVIEW_RUN_A)
     second = pattern_set("week12.pdf", template="〜ながら")
     root = project(tmp_path, {first.source: first, second.source: second})
 
@@ -118,6 +122,7 @@ def test_review_marks_every_named_source_without_losing_store_provenance(
     assert after[second.source].reviewed is True
     assert after[first.source].patterns == first.patterns
     assert after[first.source].prompt_provenance == first.prompt_provenance
+    assert after[first.source].review_run_id == REVIEW_RUN_A
     out = capsys.readouterr().out
     assert "Marked week11.pdf reviewed." in out
     assert "Marked week12.pdf reviewed." in out
