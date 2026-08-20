@@ -3914,10 +3914,13 @@ are done (701000b). The old “one source through; five remain” count was stal
 in two directions: four of the six collected sources completed the historical
 schema-v2 pipeline, while none can prove M7.6P's newer one-call rich-v3
 contract. The honest counters are therefore **historical source runs: 4/6;
-required current rich-v3 representative runs complete: 0/2**. Two authorized
-v3 answers were paid for and staged on 2026-08-18, but neither has crossed its
-human review/build/study gates and only one filled its intended representative
-role.*
+required current rich-v3 representative runs complete: 0/2**. Three rich-v3
+answers have completed and been staged across the two representative sources;
+the older forced 27–34 answer remains in Git history while its latest paid run
+occupies the live staging path. Neither live run has crossed its human
+review/build/study gates, and only the te-form answer filled its intended
+representative role. A separate 2026-08-19 API attempt truncated before any
+artifact write.*
 
 *2026-08-18 paid-run checkpoint.* `teform_song.pdf` returned zero candidates,
 eight patterns, and nonblocking selection coverage: the intended pattern-only
@@ -3967,11 +3970,17 @@ Completion now requires two complementary rich-v3 runs:
    second pattern-only answer. The staged answer remains valid evidence for
    that request, not a completed substitute for the candidate-bearing role.
    The owner later authorized a forced Claude Opus 5 rerun against the corrected
-   prompt; the 2026-08-19 attempt ended with `extract-response-truncated` and
-   wrote no staging or pattern artifact. Any retry is paused until the owner
-   resumes it after token renewal; make no paid call in the meantime. An
-   owner-approved alternative source remains another valid way to fill the
-   candidate-bearing role.
+   prompt; the first 2026-08-19 attempt ended with
+   `extract-response-truncated` and wrote no staging or pattern artifact. After
+   adding API credit, the owner explicitly authorized one retry. That call
+   completed as review run `03ecbfe0-880a-4ba1-9719-0283a10bc8be`, but again
+   returned zero candidates (five patterns, nonblocking selection coverage).
+   Staging and the pattern store retain that exact paid answer as unreviewed;
+   it still does not fill the candidate-bearing role. The Japanese review also
+   found the explicit `あげる = to give` callout missing, so this is a thin
+   answer rather than evidence that the source teaches no vocabulary. Another
+   paid rerun requires fresh consent. An owner-approved alternative source
+   remains another valid way to fill the candidate-bearing role.
 
 A qualifying candidate-bearing run archives `response_schema_version: 3`, a
 `review_run_id`, response-schema and full-request fingerprints, and
@@ -3994,9 +4003,10 @@ Authority remains explicit throughout. The owner authorized the two
 2026-08-18 paid calls, chose the overlapping 27–34 source, and authorized the
 forced replacement of `teform_song.pdf`'s reviewed legacy entry with the v3
 answer as unreviewed. That authority does not mark either returned pattern set
-reviewed. The later 27–34 rerun authority was consumed by the truncated
-2026-08-19 attempt; a retry is currently paused. The final study confirmation
-also remains an owner decision. For blocking coverage, the owner
+reviewed. The two later 27–34 authorities were consumed by the truncated attempt
+and the successful zero-candidate retry respectively; neither authorizes
+another paid call. The final study confirmation also remains an owner decision.
+For blocking coverage, the owner
 chooses whether to supply an owner approval or opt into model coverage review;
 the model owns the latter verdict. Both new runs are selection coverage and
 need neither route. One additional content decision is now settled: the
