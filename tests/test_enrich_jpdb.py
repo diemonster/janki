@@ -364,6 +364,7 @@ def test_a_different_reading_holds_provisional_fields() -> None:
     # confirmed as this word: nothing is written and the claims stay marked.
     api = FakeApi(
         unforced={"話す": parse_response((HANASU_FURIGANA, HANASU))},
+        forced={("話す", "はなし"): parse_response((HANASU_FURIGANA, HANASU))},
         senses={(1562350, 4280520068): {"reading": "はなす", "alt_sids": []}},
     )
     held = provisional_record(id="word:話す:はなし", reading="はなし")
@@ -668,6 +669,88 @@ def test_a_homograph_is_re_parsed_with_the_stored_reading_forced() -> None:
     assert "expected 5 characters" in result.warnings[0]
 
 
+def test_same_spelling_homograph_uses_the_entry_selected_by_stored_reading() -> None:
+    """The pinned parse may resolve to a different vid, not an alternate sense.
+
+    分 is a same-spelling homograph whose ぶん and ふん entries have disjoint
+    jpdb identities and reading sets.  The unforced entry therefore cannot
+    advertise the stored reading through ``alt_sids``; only a parse pinned to
+    that reading can find the dictionary facts for this record.
+    """
+    bun = vocab(100, 1, "分", "ぶん", ["LH"], 100, ["n"])
+    fun = vocab(200, 2, "分", "ふん", ["HLL"], 1000, ["n"])
+    api = FakeApi(
+        unforced={"分": parse_response(([["分", "ぶん"]], bun))},
+        forced={("分", "ふん"): parse_response(([["分", "ふん"]], fun))},
+        senses={
+            (100, 1): {"reading": "ぶん", "alt_sids": []},
+            (200, 2): {"reading": "ふん", "alt_sids": []},
+        },
+    )
+    item = record(id="word:分:ふん", expression="分", reading="ふん")
+
+    result = enrich_records(client_for(api), [item])
+
+    parses = api.calls("parse")
+    assert len(parses) == 2
+    assert "furigana" not in parses[0]
+    assert parses[1]["furigana"] == [[[0, 1, "ふん"]]]
+    enriched = result.records[0]
+    assert enriched.pitch_accent == ["HLL"]
+    assert enriched.frequency_rank == 1000
+    assert result.warnings == []
+
+
+def test_pinned_entrys_alternate_reading_can_confirm_the_stored_reading() -> None:
+    """The pinned entry may declare the requested reading on another sense."""
+    unforced = vocab(300, 1, "分", "わけ", ["LHL"], 300, ["n"])
+    pinned = vocab(400, 10, "分", "ぶん", ["HLL"], 1000, ["n"])
+    api = FakeApi(
+        unforced={"分": parse_response(([["分", "わけ"]], unforced))},
+        forced={("分", "ふん"): parse_response(([["分", "ふん"]], pinned))},
+        senses={
+            (300, 1): {"reading": "わけ", "alt_sids": []},
+            (400, 10): {"reading": "ぶん", "alt_sids": [11]},
+            (400, 11): {"reading": "ふん", "alt_sids": []},
+        },
+    )
+    item = record(id="word:分:ふん", expression="分", reading="ふん")
+
+    result = enrich_records(client_for(api), [item])
+
+    enriched = result.records[0]
+    assert enriched.furigana == "分[ふん]"
+    assert enriched.pitch_accent == ["HLL"]
+    assert enriched.frequency_rank == 1000
+    assert result.warnings == []
+    parses = api.calls("parse")
+    assert len(parses) == 2
+    assert parses[1]["furigana"] == [[[0, 1, "ふん"]]]
+
+
+def test_failed_pinned_parse_does_not_fall_back_to_the_unforced_entry() -> None:
+    """A known alternate reading cannot make an unresolved pinned parse usable."""
+    api = FakeApi(
+        unforced={"一日": parse_response((ICHINICHI_FURIGANA, ICHINICHI))},
+        forced={("一日", "ついたち"): parse_response()},
+        senses={
+            (1579110, 111): {"reading": "いちにち", "alt_sids": [222]},
+            (1579110, 222): {"reading": "ついたち", "alt_sids": [111]},
+        },
+    )
+    item = record(id="word:一日:ついたち", expression="一日", reading="ついたち")
+
+    result = enrich_records(client_for(api), [item])
+
+    assert result.records[0] == item
+    assert result.changes == {}
+    assert len(result.warnings) == 1
+    assert "when given the reading ついたち" in result.warnings[0]
+    parses = api.calls("parse")
+    assert len(parses) == 2
+    assert parses[1]["furigana"] == [[[0, 2, "ついたち"]]]
+
+
 def test_a_right_length_pattern_that_cannot_be_spoken_says_why() -> None:
     """Fitting the reading is not the whole test — rendering it is.
 
@@ -822,6 +905,9 @@ def test_the_reading_set_is_gathered_across_the_entrys_other_senses() -> None:
 def test_a_reading_jpdb_does_not_list_is_warned_and_nothing_is_written() -> None:
     api = FakeApi(
         unforced={"話す": parse_response((HANASU_FURIGANA, HANASU))},
+        # A forced request is only a request hint. The response must still
+        # declare the stored reading before any of its facts are trusted.
+        forced={("話す", "はなし"): parse_response((HANASU_FURIGANA, HANASU))},
         senses={(1562350, 4280520068): {"reading": "はなす", "alt_sids": []}},
     )
     typo = record(id="word:話す:はなし", reading="はなし")
@@ -834,9 +920,9 @@ def test_a_reading_jpdb_does_not_list_is_warned_and_nothing_is_written() -> None
     warning = result.warnings[0]
     assert "はなし" in warning and "はなす" in warning
     assert "never auto-fixed" in warning
-    # Warned, not forced: asking jpdb to parse with a reading it does not have
-    # would return something shaped like agreement.
-    assert len(api.calls("parse")) == 1
+    parses = api.calls("parse")
+    assert len(parses) == 2
+    assert parses[1]["furigana"] == [[[0, 2, "はなし"]]]
 
 
 def test_a_record_with_no_reading_at_all_is_enriched_from_the_first_parse() -> None:
@@ -1215,6 +1301,7 @@ def test_enrich_reports_a_reading_mismatch_on_stderr_and_still_succeeds(
 ) -> None:
     api = FakeApi(
         unforced={"話す": parse_response((HANASU_FURIGANA, HANASU))},
+        forced={("話す", "はなし"): parse_response((HANASU_FURIGANA, HANASU))},
         senses={(1562350, 4280520068): {"reading": "はなす", "alt_sids": []}},
     )
     root = project(tmp_path, [record(id="word:話す:はなし", reading="はなし")])

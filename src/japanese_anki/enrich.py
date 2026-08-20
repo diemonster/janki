@@ -22,10 +22,10 @@ you meant, and ``/parse`` picks for itself unless it is told. So the pass runs
 1. Unforced, to learn what jpdb thinks the expression reads as. Nothing is
    written from this pass when the readings disagree — its job is to give the
    comparison something to compare.
-2. Forced with janki's own reading (``jpdb.forced_furigana_span``), but only
-   after that reading has been confirmed to be one jpdb actually lists for the
-   word. Forcing a reading jpdb has never heard of would get an answer shaped
-   like agreement.
+2. Forced with janki's own reading (``jpdb.forced_furigana_span``) whenever the
+   first answer disagrees. The returned entry is trusted only when its declared
+   primary or alternate readings confirm the stored reading (or the existing
+   exact ``Xする`` allowance does). The request hint alone is not evidence.
 """
 
 from __future__ import annotations
@@ -676,52 +676,75 @@ def enrich_records(
                 "written; fill in the reading first."
             )
             continue
-        if (
-            record.reading
-            and record.reading != jpdb_reading
-            and entry_spelling != record.expression
-        ):
-            # An all-kana expression can tokenize as a different, more common
-            # word. Do not use that unrelated entry to reject the reviewed
-            # identity. Retry with the stored reading before any dictionary
-            # field is trusted. The ordinary exact-spelling homograph path
-            # below still checks the entry's declared reading set first.
-            pinned = _parse(client, record.expression, record.reading)
-            if pinned is not None:
-                pinned_token, pinned_entry = pinned
-                pinned_reading = str(pinned_entry.get("reading") or "").strip()
-                if _supports_suru_suffix(
-                    record.expression, record.reading, pinned_entry
-                ) or (
-                    pinned_reading == record.reading
-                    or record.reading in _readings_for(client, pinned_entry)
-                ):
-                    token, entry = pinned_token, pinned_entry
-                    jpdb_reading = pinned_reading
         if record.reading and record.reading != jpdb_reading:
-            known = _readings_for(client, entry)
-            supports_suru_suffix = _supports_suru_suffix(
-                record.expression, record.reading, entry
+            # A reading can select a separate jpdb vocabulary identity even
+            # when both entries have exactly the same spelling. 分/ぶん and
+            # 分/ふん, for example, need not be connected through alt_sids.
+            # Always make one pinned parse; then inspect its answer rather than
+            # treating the forced request itself as confirmation.
+            primary_known = (
+                _readings_for(client, entry)
+                if entry_spelling == record.expression
+                else None
             )
-            if record.reading not in known and not supports_suru_suffix:
-                listed = ", ".join(sorted(known)) or jpdb_reading or "none"
-                result.warnings.append(
-                    f"{record_id}: janki reads {record.expression} as "
-                    f"{record.reading}, jpdb lists {listed}. Nothing was written — "
-                    "the reading is part of the record ID and is never auto-fixed."
+            pinned = _parse(client, record.expression, record.reading)
+            if pinned is None:
+                supports_suru_suffix = _supports_suru_suffix(
+                    record.expression, record.reading, entry
                 )
-                continue
-            if not supports_suru_suffix:
-                # janki's reading is one jpdb knows, so the first parse simply
-                # picked the other homograph. Ask again, pinned to this one.
-                found = _parse(client, record.expression, record.reading)
-                if found is None:
+                known = (
+                    primary_known
+                    if primary_known is not None
+                    else _readings_for(client, entry)
+                )
+                if not supports_suru_suffix and record.reading in known:
                     result.warnings.append(
-                        f"{record_id}: jpdb did not parse {record.expression} as one word "
-                        f"when given the reading {record.reading}; nothing was written"
+                        f"{record_id}: jpdb did not parse {record.expression} as one "
+                        f"word when given the reading {record.reading}; nothing was "
+                        "written"
                     )
                     continue
-                token, entry = found
+                if not supports_suru_suffix:
+                    listed = ", ".join(sorted(known)) or jpdb_reading or "none"
+                    result.warnings.append(
+                        f"{record_id}: janki reads {record.expression} as "
+                        f"{record.reading}, jpdb lists {listed}. Nothing was written — "
+                        "the reading is part of the record ID and is never auto-fixed."
+                    )
+                    continue
+            else:
+                pinned_token, pinned_entry = pinned
+                pinned_reading = str(pinned_entry.get("reading") or "").strip()
+                supports_suru_suffix = _supports_suru_suffix(
+                    record.expression, record.reading, pinned_entry
+                )
+                pinned_confirmed = (
+                    pinned_reading == record.reading or supports_suru_suffix
+                )
+                pinned_known: set[str] = set()
+                if not pinned_confirmed:
+                    same_entry = (
+                        pinned_entry.get("vid"),
+                        pinned_entry.get("sid"),
+                    ) == (entry.get("vid"), entry.get("sid"))
+                    pinned_known = (
+                        primary_known
+                        if same_entry and primary_known is not None
+                        else _readings_for(client, pinned_entry)
+                    )
+                    pinned_confirmed = record.reading in pinned_known
+                if not pinned_confirmed:
+                    listed = (
+                        ", ".join(sorted(pinned_known)) or pinned_reading or "none"
+                    )
+                    result.warnings.append(
+                        f"{record_id}: janki reads {record.expression} as "
+                        f"{record.reading}, jpdb lists {listed}. Nothing was written — "
+                        "the reading is part of the record ID and is never auto-fixed."
+                    )
+                    continue
+                token, entry = pinned_token, pinned_entry
+                jpdb_reading = pinned_reading
 
         # Reconciliation demands the exact identity, and the reading checks
         # above cannot supply it alone: a kana-written word tokenizes to
