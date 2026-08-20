@@ -1,76 +1,74 @@
 source_file: m7-mixed-tsumori-pages-27-34.pdf
 extracted_at: '2026-08-20'
 model: claude-opus-5
-review_run_id: 127dac03-296f-4304-bfa6-a531efc16e4e
+review_run_id: 23e4bfd9-6319-4795-84f1-a9a28feade89
 prompt_provenance:
   source_sha256: 80286e6fed848d160fe270e74ffa33cc23a67477cd308c9aa673309b739ca785
   mode: prose
   provider: anthropic
   model: claude-opus-5
-  response_schema_version: 3
-  response_schema_fingerprint: 5391cfce42271e02fabafd4f76d28fac1de0064687181ba24d53a8922bb75de8
-  system_prompt_fingerprint: 7f436717c0cd7a4bcca72cce0a6e445d8e14a105fdc2a1ba18e5a56f5017991d
-  style_guide_fingerprint: 8db32a1f2b8297926f29238292e9e364697004d51a83ad0a34338e0a55935e57
+  response_schema_version: 5
+  response_schema_fingerprint: 3b9963cc313ede5b40a96328ecf57a5a87e6237200510c020225f70d15394382
+  system_prompt_fingerprint: 2666cb14f2d6fa5a800471166a67c148bc519d32d88a345ecf29b224ae44ef23
+  style_guide_fingerprint: 220c73a9cdf9487bf74daf734d6b448b3029056855d3b8d72ab40faf27276f12
   user_prompt_fingerprint: c36f62ca29b17c42cd46bab9459b66dc3a76716998503233591281bd68d4935b
-  request_fingerprint: e5b304b40e6297fa3c20a2293601fb036d0e0ba8b3f90e5cb33b9682fee79cf8
+  request_fingerprint: 63739c1b993b6cf724ab71ef77238dc1ed2a4ceecb40e27b19f2f89099b0073e
 pattern_set:
   kind: pattern
   title: 'Pair Work: ~つもりです。/ Occasion に'
   reviewed: false
   patterns:
-  - template: Verb (dictionary form) + つもりです
-    gloss: I plan / intend to do ~
+  - template: '[verb dictionary form] + つもりです'
+    gloss: I plan/intend to do ~ (stating a plan politely)
     examples:
     - 月曜日はせんたくするつもりです。
+    - ほんをよむつもりです。
     - 友達と晩ご飯を食べるつもりです。
-    - トヨタの車を買うつもりです。
+    - たくさんしゃしんをとるつもりです。
     - しんかんせんで行くつもりです。
-    where: pages 1, 3, 4
-  - template: Verb (plain negative ない form) + つもりです
-    gloss: I plan / intend not to do ~
+    - はい、うんどうするつもりです。
+    where: pages 1, 3, 4, 5
+  - template: '[verb ない-form] + つもりです'
+    gloss: I plan/intend not to do ~ (negative intention)
     examples:
     - しごとにいかないつもりです
     - あそびにいかないつもりです。
     - 何も食べないつもりです。
+    - あさはやくおきないつもりです。
     - いいえ、今週はしないつもりです。
     where: pages 1, 5
-  - template: Verb + つもりだ(よ)
-    gloss: 'casual, plain-form version of 〜つもりです: I''m planning to ~'
+  - template: '[verb dictionary form] + つもりだ(よ)'
+    gloss: Casual, plain-form version of 〜つもりです, used with friends
     examples:
     - 日本語の勉強するつもりだよ!
     where: page 6
-  - template: どうやって〜に行きますか？ — [means of transport]で行くつもりです。
-    gloss: How will you get to ~? — I plan to go by (transport); で marks the means of transport
+  - template: '[holiday / special day] に + [action]'
+    gloss: に marks a holiday or special day as a point in time ('on Christmas', 'on Valentine's Day')
     examples:
-    - どうやってきょうとに行きますか？
-    - しんかんせんで行くつもりです。
-    - バスでいくつもりです。
-    - ひこうきでいくつもりです。
-    where: pages 3, 4
-  - template: '[holiday / special day] に + Verb'
-    gloss: に marks a holiday or special day as a point in time ("on Christmas", "on Valentine's Day")
-    examples:
+    - 今年のクリスマスに何をしますか？
     - クリスマスにプレゼントをもらいました。
     - バレンタインデーに チョコレートをあげます。
-    - 今年のクリスマスに何をしますか？
     - お正月にハワイでごろごろしたいんです。
-    - 'Counterexample, marked ❌ on the slide: はなびたいかいにアイスクリームを食べました。 — the slide explains that はなびたいかい
-      is considered an event/place where something happens, so it is not marked with occasion に.'
     where: pages 7, 8
+  - template: '[event treated as a place, e.g. はなびたいかい] で + [action]'
+    gloss: Use で, not the occasion に, when the noun is an event/place where something happens; the slide
+      states that はなびたいかい counts as such an event/place, unlike a holiday used as a point in time
+    examples: []
+    where: page 8
   prompt_provenance:
     source_sha256: 80286e6fed848d160fe270e74ffa33cc23a67477cd308c9aa673309b739ca785
     mode: prose
     provider: anthropic
     model: claude-opus-5
-    response_schema_version: 3
-    response_schema_fingerprint: 5391cfce42271e02fabafd4f76d28fac1de0064687181ba24d53a8922bb75de8
-    system_prompt_fingerprint: 7f436717c0cd7a4bcca72cce0a6e445d8e14a105fdc2a1ba18e5a56f5017991d
-    style_guide_fingerprint: 8db32a1f2b8297926f29238292e9e364697004d51a83ad0a34338e0a55935e57
+    response_schema_version: 5
+    response_schema_fingerprint: 3b9963cc313ede5b40a96328ecf57a5a87e6237200510c020225f70d15394382
+    system_prompt_fingerprint: 2666cb14f2d6fa5a800471166a67c148bc519d32d88a345ecf29b224ae44ef23
+    style_guide_fingerprint: 220c73a9cdf9487bf74daf734d6b448b3029056855d3b8d72ab40faf27276f12
     user_prompt_fingerprint: c36f62ca29b17c42cd46bab9459b66dc3a76716998503233591281bd68d4935b
-    request_fingerprint: e5b304b40e6297fa3c20a2293601fb036d0e0ba8b3f90e5cb33b9682fee79cf8
-  review_run_id: 127dac03-296f-4304-bfa6-a531efc16e4e
+    request_fingerprint: 63739c1b993b6cf724ab71ef77238dc1ed2a4ceecb40e27b19f2f89099b0073e
+  review_run_id: 23e4bfd9-6319-4795-84f1-a9a28feade89
 coverage:
-  version: 1
+  version: 2
   status: selection
   blocking: false
   source_fingerprint: 80286e6fed848d160fe270e74ffa33cc23a67477cd308c9aa673309b739ca785
@@ -84,21 +82,50 @@ coverage:
   duplicate_units: []
   non_vocabulary_units: []
   unreadable_units: []
-  coverage_block_fingerprint: b056f0239976eb61d74500df1a753d36d4d81f8de513a96acadebca8ff54bd55
+  parsed_candidate_count: 6
+  canonical_record_count: 6
+  unusable_candidate_count: 0
+  duplicate_candidate_count: 0
+  collision_group_count: 0
+  candidate_accounting_fingerprint: 793ed3370df0e0cc8aff16d754cea839cba828a68b074fe97abd6e7c23b7ba58
+  coverage_block_fingerprint: 4154048534932b82394c6384e1f9daaf13db4bca34ce9f9424998df62ac5a4f0
+candidate_accounting:
+  version: 1
+  parsed_candidate_count: 6
+  canonical_record_count: 6
+  unusable_candidate_count: 0
+  duplicate_candidate_count: 0
+  collision_group_count: 0
+  collision_groups: []
+  candidate_accounting_fingerprint: 793ed3370df0e0cc8aff16d754cea839cba828a68b074fe97abd6e7c23b7ba58
 records:
 - id: word:あげる:あげる
   expression: あげる
   reading: あげる
   furigana: ''
   romaji: ageru
-  meanings: []
-  part_of_speech: verb (ichidan/ru-verb, transitive)
+  meanings:
+  - to give
+  part_of_speech: verb (ichidan, transitive)
   verb_group: ''
   transitivity: ''
-  examples: []
+  examples:
+  - japanese: ハワイ旅行のチケットをあげるつもりです。
+    furigana: ハワイ 旅行[りょこう]のチケットをあげるつもりです。
+    romaji: Hawai ryokou no chiketto o ageru tsumori desu.
+    english: I'm planning to give her tickets for a trip to Hawaii.
+    audio: ''
+    register: polite
+  - japanese: 明日、友だちにプレゼントをあげるよ。
+    furigana: 明日[あした]、 友[とも]だちにプレゼントをあげるよ。
+    romaji: Ashita, tomodachi ni purezento o ageru yo.
+    english: I'm giving my friend a present tomorrow.
+    audio: ''
+    register: casual
   conjugations: {}
   tags: []
-  usage_notes: ''
+  usage_notes: 'Used when the speaker (or someone on the speaker''s side) gives something to another person:
+    〜に〜をあげる. It cannot be used for what you receive; the dialogue''s もらう covers that direction.'
   audio: ''
   image: ''
   pitch_accent: []
@@ -111,41 +138,12 @@ records:
     raw_fields:
       extracted_from: m7-mixed-tsumori-pages-27-34.pdf
       confidence: high
-      context: K
-      provisional_fields: part_of_speech:3fb391d6ef42
-      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
-        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
-- id: word:もらう:もらう
-  expression: もらう
-  reading: もらう
-  furigana: ''
-  romaji: morau
-  meanings: []
-  part_of_speech: verb (godan/u-verb, transitive)
-  verb_group: ''
-  transitivity: ''
-  examples: []
-  conjugations: {}
-  tags: []
-  usage_notes: ''
-  audio: ''
-  image: ''
-  pitch_accent: []
-  audio_accent: ''
-  frequency_rank: null
-  source:
-    type: extract
-    imported_from: m7-mixed-tsumori-pages-27-34.pdf
-    row: null
-    raw_fields:
-      extracted_from: m7-mixed-tsumori-pages-27-34.pdf
-      confidence: high
-      page: '8'
-      context: クリスマスにプレゼントをもらいました。
-      inclusion_reason: Page 8 prints the English translation "I got a present on Christmas." directly
-        under this Japanese sentence, aligning もらう with "to get / to receive"; it is the counterpart of
-        the あげる taught on page 7.
-      provisional_fields: part_of_speech:d6b8b4521551
+      page: '7'
+      context: ハワイ旅行のチケットをあげるつもりです。
+      inclusion_reason: Page 7 carries the explicit gloss callout '*あげる = to give' next to the dialogue,
+        and あげる appears twice in the dialogue lines, so the source directly teaches this word and its
+        meaning.
+      provisional_fields: meanings:f646f571662b,part_of_speech:9d0afde8e086
       janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
         Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
 - id: word:せんたくする:せんたくする
@@ -153,14 +151,27 @@ records:
   reading: せんたくする
   furigana: ''
   romaji: sentakusuru
-  meanings: []
-  part_of_speech: verb (suru-verb, irregular)
+  meanings:
+  - to do the laundry
+  part_of_speech: verb (suru-verb)
   verb_group: ''
   transitivity: ''
-  examples: []
+  examples:
+  - japanese: 月曜日はせんたくするつもりです。
+    furigana: 月曜日[げつようび]はせんたくするつもりです。
+    romaji: Getsuyoubi wa sentaku suru tsumori desu.
+    english: I'm going to do the laundry on Monday.
+    audio: ''
+    register: polite
+  - japanese: あとでせんたくするね。
+    furigana: あとでせんたくするね。
+    romaji: Ato de sentaku suru ne.
+    english: I'll do the laundry later.
+    audio: ''
+    register: casual
   conjugations: {}
   tags: []
-  usage_notes: ''
+  usage_notes: せんたく (洗濯) is the noun 'laundry/washing'; せんたくをする is also common with the particle を.
   audio: ''
   image: ''
   pitch_accent: []
@@ -175,10 +186,10 @@ records:
       confidence: high
       page: '1'
       context: 月曜日はせんたくするつもりです。
-      inclusion_reason: 'The worked example on page 1 pairs the cue "EX: 月曜日 | to do the laundry" with
-        the model answer copied into context, explicitly aligning せんたくする with "to do the laundry"; the
-        same cue appears on the parallel English slide, page 2.'
-      provisional_fields: part_of_speech:f074f2fb8fd8
+      inclusion_reason: 'The model example on page 1 pairs the cue ''EX: 月曜日 | to do the laundry'' with
+        the answer ''月曜日はせんたくするつもりです。''; the same cue-and-answer pair is repeated on the English version
+        of the slide (page 2), making せんたくする = ''to do the laundry'' unambiguous.'
+      provisional_fields: meanings:5da2c670e562,part_of_speech:4cee4289f0ba
       janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
         Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
 - id: word:とまる:とまる
@@ -186,14 +197,29 @@ records:
   reading: とまる
   furigana: ''
   romaji: tomaru
-  meanings: []
-  part_of_speech: verb (godan/u-verb, intransitive)
+  meanings:
+  - to stay overnight
+  - to stay (at a hotel, friend's house)
+  part_of_speech: verb (godan, intransitive)
   verb_group: ''
   transitivity: ''
-  examples: []
+  examples:
+  - japanese: ともだちのいえにとまるつもりです。
+    furigana: ともだちのいえにとまるつもりです。
+    romaji: Tomodachi no ie ni tomaru tsumori desu.
+    english: I'm going to stay over at a friend's house.
+    audio: ''
+    register: polite
+  - japanese: 今日はホテルにとまるよ。
+    furigana: 今日[きょう]はホテルにとまるよ。
+    romaji: Kyou wa hoteru ni tomaru yo.
+    english: I'm staying at a hotel tonight.
+    audio: ''
+    register: casual
   conjugations: {}
   tags: []
-  usage_notes: ''
+  usage_notes: The place stayed at is marked with に. Written 泊まる, it is a different word from 止まる (to
+    stop, to come to a halt), which sounds the same.
   audio: ''
   image: ''
   pitch_accent: []
@@ -208,10 +234,59 @@ records:
       confidence: medium
       page: '1'
       context: ともだちのいえにとまるつもりです。
-      inclusion_reason: The Saturday / Person A cell on page 1 corresponds cell-for-cell to the same cell
-        of the parallel English version of the table on page 2, which reads "to stay at a friend's house",
-        so the two pages together teach とまる = to stay overnight.
-      provisional_fields: part_of_speech:6a518b436685
+      inclusion_reason: The 土曜日 / Person A cell on page 1 reads 'ともだちのいえにとまるつもりです。', and the parallel
+        English version of the very same table on page 2 glosses that cell as 'to stay at a friend's house',
+        so the cross-page alignment explicitly teaches とまる = to stay overnight (distinct from the known
+        word 止まる).
+      provisional_fields: meanings:1cf2e2ba1542,part_of_speech:1db9001e5c28
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:もらう:もらう
+  expression: もらう
+  reading: もらう
+  furigana: ''
+  romaji: morau
+  meanings:
+  - to receive
+  - to get
+  part_of_speech: verb (godan, transitive)
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: クリスマスにプレゼントをもらいました。
+    furigana: クリスマスにプレゼントをもらいました。
+    romaji: Kurisumasu ni purezento o moraimashita.
+    english: I got a present on Christmas.
+    audio: ''
+    register: polite
+  - japanese: 友だちにチョコレートをもらった。
+    furigana: 友[とも]だちにチョコレートをもらった。
+    romaji: Tomodachi ni chokoreeto o moratta.
+    english: I got chocolate from a friend.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: 'The giver is marked with に (or から): 〜に〜をもらう. It is the receiving counterpart of あげる, which
+    the same lesson glosses as ''to give''.'
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-34.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-34.pdf
+      confidence: high
+      page: '8'
+      context: クリスマスにプレゼントをもらいました。
+      inclusion_reason: Page 8 sets the Japanese sentence directly above its English translation 'I got
+        a present on Christmas.', and もらいました is the only element carrying 'got', so the slide explicitly
+        teaches もらう = to receive; it also pairs with the あげる gloss on page 7.
+      provisional_fields: meanings:173627602d57,part_of_speech:0a8731a8d8e3
       janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
         Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
 - id: word:はなびたいかい:はなびたいかい
@@ -219,14 +294,30 @@ records:
   reading: はなびたいかい
   furigana: ''
   romaji: hanabitaikai
-  meanings: []
+  meanings:
+  - fireworks festival
+  - fireworks display
   part_of_speech: noun
   verb_group: ''
   transitivity: ''
-  examples: []
+  examples:
+  - japanese: はなびたいかいでアイスクリームを食べました。
+    furigana: はなびたいかいでアイスクリームを 食[た]べました。
+    romaji: Hanabi taikai de aisukuriimu o tabemashita.
+    english: I ate ice cream at the fireworks festival.
+    audio: ''
+    register: polite
+  - japanese: 今年のはなびたいかいにいっしょに行かない？
+    furigana: 今年[ことし]のはなびたいかいにいっしょに 行[い]かない？
+    romaji: Kotoshi no hanabi taikai ni issho ni ikanai?
+    english: Want to go to the fireworks festival together this year?
+    audio: ''
+    register: casual
   conjugations: {}
   tags: []
-  usage_notes: ''
+  usage_notes: The slide treats はなびたいかい as an event/place where something happens, so an action done there
+    takes で, not the 'occasion に' used with holidays like クリスマス. に is still fine as the destination of
+    行く.
   audio: ''
   image: ''
   pitch_accent: []
@@ -241,9 +332,57 @@ records:
       confidence: high
       page: '8'
       context: はなびたいかいにアイスクリームを食べました。
-      inclusion_reason: Page 8 supplies the English "I ate ice cream at the fireworks festival." for this
-        sentence and the note "But はなびたいかい is considered an event/place where something happens", so the
-        slide explicitly glosses はなびたいかい as "fireworks festival" while teaching its particle behaviour.
-      provisional_fields: part_of_speech:ee6cded62768
+      inclusion_reason: Page 8 places the English 'I ate ice cream at the fireworks festival.' under this
+        sentence and adds the note that はなびたいかい is an event/place, so the noun's meaning is explicitly
+        taught (the sentence is marked wrong only for its particle, not for the word).
+      provisional_fields: meanings:58b53d084e8f,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:お正月:おしょうがつ
+  expression: お正月
+  reading: おしょうがつ
+  furigana: ''
+  romaji: oshougatsu
+  meanings:
+  - New Year's
+  - the New Year holidays
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: お正月にハワイでごろごろしたいんです。
+    furigana: お 正月[しょうがつ]にハワイでごろごろしたいんです。
+    romaji: Oshougatsu ni Hawai de gorogoro shitai n desu.
+    english: I want to laze around in Hawaii over New Year's.
+    audio: ''
+    register: polite
+  - japanese: お正月は家でごろごろするつもりだよ。
+    furigana: お 正月[しょうがつ]は 家[いえ]でごろごろするつもりだよ。
+    romaji: Oshougatsu wa ie de gorogoro suru tsumori da yo.
+    english: I'm planning to laze around at home over New Year's.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: A holiday treated as a point in time, so it takes に (お正月に) like クリスマスに and バレンタインデーに in
+    this lesson. The お is part of the everyday word and is normally kept.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-34.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-34.pdf
+      confidence: high
+      page: '7'
+      context: お正月にハワイでごろごろしたいんです。
+      inclusion_reason: Not a known expression, and the slide uses it as a core illustration of the 'Occasion
+        に' point being taught here (holidays as a point in time), alongside クリスマス and バレンタインデー on page
+        8; it is a high-frequency cultural noun worth a card.
+      provisional_fields: meanings:c43e0aab4452,part_of_speech:ee6cded62768
       janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
         Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'

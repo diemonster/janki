@@ -102,57 +102,54 @@
     "reviewed": false,
     "patterns": [
       {
-        "template": "Verb (dictionary form) + つもりです",
-        "gloss": "I plan / intend to do ~",
+        "template": "[verb dictionary form] + つもりです",
+        "gloss": "I plan/intend to do ~ (stating a plan politely)",
         "examples": [
           "月曜日はせんたくするつもりです。",
+          "ほんをよむつもりです。",
           "友達と晩ご飯を食べるつもりです。",
-          "トヨタの車を買うつもりです。",
-          "しんかんせんで行くつもりです。"
+          "たくさんしゃしんをとるつもりです。",
+          "しんかんせんで行くつもりです。",
+          "はい、うんどうするつもりです。"
         ],
-        "where": "pages 1, 3, 4"
+        "where": "pages 1, 3, 4, 5"
       },
       {
-        "template": "Verb (plain negative ない form) + つもりです",
-        "gloss": "I plan / intend not to do ~",
+        "template": "[verb ない-form] + つもりです",
+        "gloss": "I plan/intend not to do ~ (negative intention)",
         "examples": [
           "しごとにいかないつもりです",
           "あそびにいかないつもりです。",
           "何も食べないつもりです。",
+          "あさはやくおきないつもりです。",
           "いいえ、今週はしないつもりです。"
         ],
         "where": "pages 1, 5"
       },
       {
-        "template": "Verb + つもりだ(よ)",
-        "gloss": "casual, plain-form version of 〜つもりです: I'm planning to ~",
+        "template": "[verb dictionary form] + つもりだ(よ)",
+        "gloss": "Casual, plain-form version of 〜つもりです, used with friends",
         "examples": [
           "日本語の勉強するつもりだよ!"
         ],
         "where": "page 6"
       },
       {
-        "template": "どうやって〜に行きますか？ — [means of transport]で行くつもりです。",
-        "gloss": "How will you get to ~? — I plan to go by (transport); で marks the means of transport",
+        "template": "[holiday / special day] に + [action]",
+        "gloss": "に marks a holiday or special day as a point in time ('on Christmas', 'on Valentine's Day')",
         "examples": [
-          "どうやってきょうとに行きますか？",
-          "しんかんせんで行くつもりです。",
-          "バスでいくつもりです。",
-          "ひこうきでいくつもりです。"
-        ],
-        "where": "pages 3, 4"
-      },
-      {
-        "template": "[holiday / special day] に + Verb",
-        "gloss": "に marks a holiday or special day as a point in time (\"on Christmas\", \"on Valentine's Day\")",
-        "examples": [
+          "今年のクリスマスに何をしますか？",
           "クリスマスにプレゼントをもらいました。",
           "バレンタインデーに チョコレートをあげます。",
-          "今年のクリスマスに何をしますか？",
-          "お正月にハワイでごろごろしたいんです。",
-          "Counterexample, marked ❌ on the slide: はなびたいかいにアイスクリームを食べました。 — the slide explains that はなびたいかい is considered an event/place where something happens, so it is not marked with occasion に."
+          "お正月にハワイでごろごろしたいんです。"
         ],
         "where": "pages 7, 8"
+      },
+      {
+        "template": "[event treated as a place, e.g. はなびたいかい] で + [action]",
+        "gloss": "Use で, not the occasion に, when the noun is an event/place where something happens; the slide states that はなびたいかい counts as such an event/place, unlike a holiday used as a point in time",
+        "examples": [],
+        "where": "page 8"
       }
     ],
     "prompt_provenance": {
@@ -160,14 +157,14 @@
       "mode": "prose",
       "provider": "anthropic",
       "model": "claude-opus-5",
-      "response_schema_version": 3,
-      "response_schema_fingerprint": "5391cfce42271e02fabafd4f76d28fac1de0064687181ba24d53a8922bb75de8",
-      "system_prompt_fingerprint": "7f436717c0cd7a4bcca72cce0a6e445d8e14a105fdc2a1ba18e5a56f5017991d",
-      "style_guide_fingerprint": "8db32a1f2b8297926f29238292e9e364697004d51a83ad0a34338e0a55935e57",
+      "response_schema_version": 5,
+      "response_schema_fingerprint": "3b9963cc313ede5b40a96328ecf57a5a87e6237200510c020225f70d15394382",
+      "system_prompt_fingerprint": "2666cb14f2d6fa5a800471166a67c148bc519d32d88a345ecf29b224ae44ef23",
+      "style_guide_fingerprint": "220c73a9cdf9487bf74daf734d6b448b3029056855d3b8d72ab40faf27276f12",
       "user_prompt_fingerprint": "c36f62ca29b17c42cd46bab9459b66dc3a76716998503233591281bd68d4935b",
-      "request_fingerprint": "e5b304b40e6297fa3c20a2293601fb036d0e0ba8b3f90e5cb33b9682fee79cf8"
+      "request_fingerprint": "63739c1b993b6cf724ab71ef77238dc1ed2a4ceecb40e27b19f2f89099b0073e"
     },
-    "review_run_id": "127dac03-296f-4304-bfa6-a531efc16e4e"
+    "review_run_id": "23e4bfd9-6319-4795-84f1-a9a28feade89"
   },
   "teform_song.pdf": {
     "kind": "pattern",
