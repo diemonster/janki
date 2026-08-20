@@ -5991,7 +5991,17 @@
     },
     "word:分:ふん": {
       "added_at": "2026-08-20",
-      "audio": [],
+      "audio": [
+        {
+          "at": "2026-08-20",
+          "content_fp": "633147d27ba4b2b60c1c2a905e0a1df0ad95686953c43a9426d6d6df1b0aff49",
+          "file": "janki-d89a4ec5571e.wav",
+          "of": "word",
+          "provider": "voicevox",
+          "speed": 0.7,
+          "voice": 53
+        }
+      ],
       "enriched": [
         {
           "at": "2026-08-20",
