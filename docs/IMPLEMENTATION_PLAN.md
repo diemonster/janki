@@ -3914,7 +3914,7 @@ are done (701000b). The old “one source through; five remain” count was stal
 in two directions: four of the six collected sources completed the historical
 schema-v2 pipeline, while none can prove M7.6P's newer one-call rich-v3
 contract. The honest counters are therefore **historical source runs: 4/6;
-required current rich-v3 representative runs complete: 0/2**. Three rich-v3
+required current rich-v3 representative runs complete: 0/2**. Four rich-v3
 answers have completed and been staged across the two representative sources;
 the older forced 27–34 answer remains in Git history while its latest paid run
 occupies the live staging path. Neither live run has crossed its human
@@ -3987,9 +3987,20 @@ Completion now requires two complementary rich-v3 runs:
    same contract preserves exhaustive list/table handling, keeps page-local
    source classification, and forbids turning a sentence, grammar frame,
    generic prompt, or whole answer into a word card. Its load-bearing clauses
-   are mutation-proved; no paid answer has run under this latest prompt.
-   Another paid rerun requires fresh consent. An owner-approved alternative
-   source remains another valid way to fill the candidate-bearing role.
+   are mutation-proved. The owner explicitly authorized one call under that
+   prompt. Review run `cb4125df-1870-4fbd-9699-c273eb94280a` again returned
+   zero candidates (six patterns, selection coverage), despite the literal
+   `あげる = to give` callout meeting the prompt's defined boundary. It also
+   omitted the taught transportation `で行く` frame and represented the
+   occasion/event `に` versus `で` contrast as a malformed negative pattern.
+   This third auto-mode answer is preserved unreviewed, but it confirms that
+   another auto retry is not a responsible use of API credit. The next
+   no-billing step is to harden the existing `extract-prose.md` template for
+   explicit callouts and aligned exercises, then mutation-prove and review it.
+   A future run would use explicit `--mode prose`, which also supplies the
+   known-expression list and avoids paying to rewrite the overlapping cards;
+   it still requires fresh paid consent. An owner-approved alternative source
+   remains another valid way to fill the candidate-bearing role.
 
 A qualifying candidate-bearing run archives `response_schema_version: 3`, a
 `review_run_id`, response-schema and full-request fingerprints, and
@@ -4012,9 +4023,9 @@ Authority remains explicit throughout. The owner authorized the two
 2026-08-18 paid calls, chose the overlapping 27–34 source, and authorized the
 forced replacement of `teform_song.pdf`'s reviewed legacy entry with the v3
 answer as unreviewed. That authority does not mark either returned pattern set
-reviewed. The two later 27–34 authorities were consumed by the truncated attempt
-and the successful zero-candidate retry respectively; neither authorizes
-another paid call. The final study confirmation also remains an owner decision.
+reviewed. The three later 27–34 authorities were consumed by the truncated
+attempt and the two successful zero-candidate retries respectively; none
+authorizes another paid call. The final study confirmation also remains an owner decision.
 For blocking coverage, the owner
 chooses whether to supply an owner approval or opt into model coverage review;
 the model owns the latter verdict. Both new runs are selection coverage and

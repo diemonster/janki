@@ -102,57 +102,62 @@
     "reviewed": false,
     "patterns": [
       {
-        "template": "Verb (dictionary form) + つもりです",
-        "gloss": "I plan to / I intend to (do something)",
+        "template": "Verb (plain dictionary form) + つもりです",
+        "gloss": "I plan to / I intend to do something",
         "examples": [
           "A: 月曜日はせんたくするつもりです。",
+          "ほんをよむつもりです。",
           "友達と晩ご飯を食べるつもりです。",
-          "トヨタの車を買うつもりです。",
-          "B: しんかんせんで行くつもりです。",
-          "はい、うんどうするつもりです。"
+          "たくさんしゃしんをとるつもりです。",
+          "しんかんせんで行くつもりです。"
         ],
-        "where": "pages 1, 3, 5"
+        "where": "pages 1, 3, 4"
       },
       {
-        "template": "Verb (ない form) + つもりです",
-        "gloss": "I plan not to / I intend not to (do something)",
+        "template": "Verb (plain negative 〜ない) + つもりです",
+        "gloss": "I plan not to / I don't intend to do something",
         "examples": [
           "しごとにいかないつもりです",
           "あそびにいかないつもりです。",
           "何も食べないつもりです。",
-          "あさはやくおきないつもりです。",
           "いいえ、今週はしないつもりです。"
         ],
         "where": "pages 1, 5"
       },
       {
-        "template": "Verb (plain form) + つもりだ（よ）",
-        "gloss": "casual form of 〜つもりです: I'm planning to ~",
+        "template": "Verb (plain form) + つもりだ(よ)",
+        "gloss": "casual form of 〜つもりです: I'm planning to ...",
         "examples": [
           "B: 日本語の勉強するつもりだよ!"
         ],
         "where": "page 6"
       },
       {
-        "template": "どうやって + place に行きますか",
-        "gloss": "How (by what means) do you get to ~?",
+        "template": "Occasion/holiday + に + (event)",
+        "gloss": "に marks a holiday or special day as a point in time: on/at that occasion",
         "examples": [
-          "A: どうやってきょうとに行きますか？",
-          "B: しんかんせんで行くつもりです。"
-        ],
-        "where": "page 3"
-      },
-      {
-        "template": "Occasion（holiday / special day）+ に + clause",
-        "gloss": "に marks a holiday or special day as a point in time: on Christmas, on New Year's, etc.",
-        "examples": [
-          "今年のクリスマスに何をしますか？",
           "クリスマスにプレゼントをもらいました。",
           "バレンタインデーに チョコレートをあげます。",
-          "お正月にハワイでごろごろしたいんです。",
-          "(marked incorrect on the slide) はなびたいかいにアイスクリームを食べました。"
+          "今年のクリスマスに何をしますか？",
+          "お正月にハワイでごろごろしたいんです。"
         ],
-        "where": "pages 7-8"
+        "where": "pages 7, 8"
+      },
+      {
+        "template": "✗ Event (はなびたいかい) + に + (action) → use で instead",
+        "gloss": "An occasion understood as an event/place where something happens takes で, not に",
+        "examples": [
+          "✗ はなびたいかいにアイスクリームを食べました。(I ate ice cream at the fireworks festival.)"
+        ],
+        "where": "page 8"
+      },
+      {
+        "template": "どうやって + place + に行きますか？",
+        "gloss": "How (by what means) will you get to ~?",
+        "examples": [
+          "A: どうやってきょうとに行きますか？"
+        ],
+        "where": "page 3"
       }
     ],
     "prompt_provenance": {
@@ -162,12 +167,12 @@
       "model": "claude-opus-5",
       "response_schema_version": 3,
       "response_schema_fingerprint": "5391cfce42271e02fabafd4f76d28fac1de0064687181ba24d53a8922bb75de8",
-      "system_prompt_fingerprint": "487f59cd1fb7df99ed0c4d79a62d9021de8aca779b9cfd79a06fbeb1661a92f6",
+      "system_prompt_fingerprint": "592325c124bf602220b88595036ff42e780431859766fbfc69f9c4c0212e9a37",
       "style_guide_fingerprint": "8db32a1f2b8297926f29238292e9e364697004d51a83ad0a34338e0a55935e57",
       "user_prompt_fingerprint": "f9b79d78d311d083bfdfe62b3e8e86efa39f4a2de7449e08d638d1394a6feb66",
-      "request_fingerprint": "e30db455efb31f52a60fb061cbac4a1991758a53fc4555c03dc264a6a5e74664"
+      "request_fingerprint": "22e06300e78e938d6e076c12460844b859983f6c151262a21c5c54dc100876f0"
     },
-    "review_run_id": "03ecbfe0-880a-4ba1-9719-0283a10bc8be"
+    "review_run_id": "cb4125df-1870-4fbd-9699-c273eb94280a"
   },
   "teform_song.pdf": {
     "kind": "pattern",
