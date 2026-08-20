@@ -4138,9 +4138,18 @@ replacement was owner-approved on 2026-08-19 as `expression=分; reading=ふん`
    jpdb-backed promotion passed without `--skip-reading-check`, minted
    `word:分:ふん`, cleared the old hold, appended the exact landed row as the
    archive's twenty-fourth record, deleted the live staging file, and registered
-   its record/source ledger entry. The new row is still unexported and lacks a
-   word clip and example sentence; those downstream items remain ordinary
-   follow-up rather than an unresolved identity or recovery artifact.
+   its record/source ledger entry. The first targeted dictionary pass exposed a
+   structural inconsistency: promotion pinned the reviewed reading and found
+   jpdb's distinct `分[ふん]` entry, while enrichment started from the default
+   same-spelling `分[ぶん]` entry and refused before trying that pinned lookup.
+   The red-first fix now retries any primary-reading mismatch with the stored
+   reading and trusts the result only when the returned entry explicitly
+   confirms it; no word-specific Japanese rule was added. A rerun filled the
+   `ふん` identity's `HLL` pitch and frequency rank, and local VOICEVOX generated
+   its forced-accent word clip. The Week 1–2 deck was rebuilt with all 22 notes;
+   its ledger entry records that this card shipped without an example sentence.
+   That content gap and owner study confirmation remain ordinary follow-up rather
+   than an unresolved identity or recovery artifact.
 
 The six extraction/card defects found in the historical four-source rollout
 were curated in f91787b: six records were removed, `売る` was added, and
