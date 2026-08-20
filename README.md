@@ -87,6 +87,14 @@ polite/casual slots. A table row with no sentence gets beginner-friendly
 examples from the same answer. The patterns also go to `data/patterns.json` as
 unreviewed proposals, with a recoverable copy beside the staged cards.
 
+Current schema-v4 runs also write fingerprinted `candidate_accounting` beside
+the editable rows. It binds the parsed, canonical, unusable, and duplicate
+candidate counts into coverage v2. If several parsed proposals mint one stable
+ID, janki keeps one canonical row and preserves every proposal in that
+collision group, with its original response index, for comparison during
+review. Do not edit or backfill this machine-owned block; deleting or correcting
+the ordinary `records` rows is still the human review workflow.
+
 Two different durable files cannot use one basename because staging and pattern
 review use that basename as their key. Letter case does not make the name
 unique. Janki refuses the collision before it calls a model; give each source a
@@ -116,6 +124,10 @@ metadata. When a large staged AI run may
 replace an existing field, the staging file also binds that permission to the
 record id, field name, and exact old value. A concurrent edit makes the whole
 staged replacement stale instead of letting an older proposal overwrite it.
+Promotion carries extraction accounting into the done archive unchanged. If a
+process wrote the archive but did not prune the live review, the exact retry is
+idempotent; a concurrent replacement or divergent same-run row is kept and
+refused instead of being deleted or appended twice.
 
 ### A grammar handout
 

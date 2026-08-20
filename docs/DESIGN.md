@@ -32,6 +32,12 @@ mechanism: **when the output is wrong or thin, expand the template.** A bare
 word list has no source sentences, so its template writes them; everything
 else about the card contract is shared.
 
+Extraction's structural accounting is separate from judging the Japanese. One
+deterministic staging row represents each stable word ID; if the parsed answer
+proposes that ID more than once, the fingerprinted staging metadata preserves
+every member of the collision group in response order. The editable `records`
+list remains the human keep/correct/re-identify list.
+
 The opt-in `promote --accept-coverage` gate is another paid model operation. It
 re-reads a preserved source only to check janki's coverage bookkeeping; it does
 not write or judge card content.
@@ -88,6 +94,9 @@ provenance from every record back to its source. Paid TTS output is staged and
 ledgered by exact request before a guarded record write; only after that write
 wins does janki publish canonical media and finalize its ordinary audio ledger
 entry, so the exact same interrupted request can resume without another bill.
+Staging completion similarly holds the live review and selected archive locks
+through one byte-checked archive/prune transaction, so an exact interrupted
+retry cannot duplicate rows or delete a concurrently replaced review.
 
 ## What janki's own logic is for
 

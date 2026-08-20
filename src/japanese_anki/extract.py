@@ -25,7 +25,7 @@ import hashlib
 import json
 import re
 import unicodedata
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -49,8 +49,10 @@ __all__ = [
     "SOURCE_UNIT_DISPOSITIONS",
     "ExtractError",
     "ExtractionResult",
+    "RecordBuild",
     "SourceUnit",
     "build_records",
+    "candidate_accounting_fingerprint",
     "candidate_schema",
     "context_fingerprint",
     "coverage_block",
@@ -63,8 +65,8 @@ __all__ = [
     "staging_path",
     "staging_targets",
     "prompt_name",
-    "unusable",
     "unusable_note",
+    "validate_candidate_accounting_block",
 ]
 
 #: ``--mode`` values. Omitting the flag lets the model judge each page for
@@ -85,7 +87,7 @@ SOURCE_UNIT_DISPOSITIONS: tuple[str, ...] = (
 # Increment this when the structured response contract changes. It is stored
 # with prompt provenance, so a later model drift report can separate a prompt
 # change from a parser or schema change.
-EXTRACTION_SCHEMA_VERSION = 3
+EXTRACTION_SCHEMA_VERSION = 4
 
 
 class ExtractError(JankiError):
@@ -152,6 +154,29 @@ class ExtractionResult:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class RecordBuild:
+    """Canonical records plus a complete account of the parsed proposals.
+
+    A deterministic record ID permits only one canonical staging row.  It does
+    not make a later proposal disposable: the proposal may carry different
+    source evidence or teaching content.  Callers therefore receive both
+    products together so they cannot write the records and unknowingly lose
+    the other paid output.
+    """
+
+    records: tuple[VocabularyRecord, ...]
+    unusable_candidates: tuple[Any, ...]
+    candidate_accounting: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class _CandidatePlan:
+    canonical_candidates: tuple[Any, ...]
+    unusable_candidates: tuple[Any, ...]
+    accounting: dict[str, Any]
+
+
 @functools.cache
 def candidate_schema() -> Any:
     """The Pydantic model the response must match.
@@ -184,7 +209,11 @@ def candidate_schema() -> Any:
             description="Kana reading.",
         )
         part_of_speech: str = Field(default="", description="Part of speech, if known.")
-        page: int = Field(default=0, description="1-indexed page this was read from.")
+        page: int = Field(
+            default=0,
+            ge=0,
+            description="1-indexed page this was read from; 0 when unknown.",
+        )
         context: str = Field(
             default="", description="The line or cell this was read from, verbatim."
         )
@@ -598,9 +627,318 @@ def _key_value(key: tuple[int, str, int]) -> dict[str, Any]:
 
 def _canonical_fingerprint(value: Any) -> str:
     encoded = json.dumps(
-        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+_CANDIDATE_ACCOUNTING_FIELDS = {
+    "version",
+    "parsed_candidate_count",
+    "canonical_record_count",
+    "unusable_candidate_count",
+    "duplicate_candidate_count",
+    "collision_group_count",
+    "collision_groups",
+    "candidate_accounting_fingerprint",
+}
+_CANDIDATE_ACCOUNTING_COUNT_FIELDS = (
+    "parsed_candidate_count",
+    "canonical_record_count",
+    "unusable_candidate_count",
+    "duplicate_candidate_count",
+    "collision_group_count",
+)
+_PARSED_CANDIDATE_FIELDS = {
+    "meanings",
+    "examples",
+    "usage_notes",
+    "expression",
+    "reading",
+    "part_of_speech",
+    "page",
+    "context",
+    "confidence",
+    "inclusion_reason",
+    "source_kind",
+    "section",
+    "ordinal",
+}
+_PARSED_EXAMPLE_FIELDS = {
+    "japanese",
+    "speech_level",
+    "furigana",
+    "romaji",
+    "english",
+}
+
+
+def _is_integer(value: Any, *, minimum: int | None = None) -> bool:
+    return (
+        not isinstance(value, bool)
+        and isinstance(value, int)
+        and (minimum is None or value >= minimum)
+    )
+
+
+def _is_parsed_schema_proposal(value: Any) -> bool:
+    """Validate the JSON shape without loading optional AI dependencies."""
+    if not isinstance(value, Mapping) or set(value) != _PARSED_CANDIDATE_FIELDS:
+        return False
+    text_fields = {
+        "usage_notes",
+        "expression",
+        "reading",
+        "part_of_speech",
+        "context",
+        "inclusion_reason",
+        "section",
+    }
+    if any(not isinstance(value.get(name), str) for name in text_fields):
+        return False
+    meanings = value.get("meanings")
+    examples = value.get("examples")
+    if (
+        not isinstance(meanings, list)
+        or any(not isinstance(item, str) for item in meanings)
+        or not isinstance(examples, list)
+        or not _is_integer(value.get("page"), minimum=0)
+        or not _is_integer(value.get("ordinal"), minimum=0)
+        or value.get("confidence") not in CONFIDENCE_LEVELS
+        or value.get("source_kind") not in {"table", "prose"}
+    ):
+        return False
+    for example in examples:
+        if (
+            not isinstance(example, Mapping)
+            or set(example) != _PARSED_EXAMPLE_FIELDS
+            or any(
+                not isinstance(example.get(name), str)
+                for name in _PARSED_EXAMPLE_FIELDS
+            )
+            or example.get("speech_level") not in {"polite", "casual"}
+        ):
+            return False
+    return True
+
+
+def candidate_accounting_fingerprint(block: Mapping[str, Any]) -> str:
+    """Fingerprint candidate accounting without its own digest field."""
+    return _canonical_fingerprint(
+        {
+            key: value
+            for key, value in block.items()
+            if key != "candidate_accounting_fingerprint"
+        }
+    )
+
+
+def _candidate_plan(candidates: Iterable[Any]) -> _CandidatePlan:
+    """Partition parsed schema proposals without interpreting their Japanese."""
+    parsed = tuple(candidates)
+    canonical: list[Any] = []
+    unusable_candidates: list[Any] = []
+    first_by_id: dict[str, tuple[int, dict[str, Any]]] = {}
+    groups_by_id: dict[str, dict[str, Any]] = {}
+
+    for candidate_index, candidate in enumerate(parsed, start=1):
+        expression = str(getattr(candidate, "expression", "") or "").strip()
+        if not expression:
+            unusable_candidates.append(candidate)
+            continue
+        reading = str(getattr(candidate, "reading", "") or "").strip()
+        record_id = stable_record_id(expression, reading)
+        parsed_value = candidate.model_dump(mode="json")
+        proposal = {
+            "candidate_index": candidate_index,
+            "parsed_schema_proposal": parsed_value,
+        }
+        first = first_by_id.get(record_id)
+        if first is None:
+            first_by_id[record_id] = (candidate_index, parsed_value)
+            canonical.append(candidate)
+            continue
+        group = groups_by_id.get(record_id)
+        if group is None:
+            first_index, first_value = first
+            group = {
+                "stable_record_id": record_id,
+                "canonical_candidate_index": first_index,
+                "proposals": [
+                    {
+                        "candidate_index": first_index,
+                        "parsed_schema_proposal": first_value,
+                    }
+                ],
+            }
+            groups_by_id[record_id] = group
+        group["proposals"].append(proposal)
+
+    groups = sorted(
+        groups_by_id.values(), key=lambda group: group["canonical_candidate_index"]
+    )
+    duplicate_count = sum(len(group["proposals"]) - 1 for group in groups)
+    block: dict[str, Any] = {
+        "version": 1,
+        "parsed_candidate_count": len(parsed),
+        "canonical_record_count": len(canonical),
+        "unusable_candidate_count": len(unusable_candidates),
+        "duplicate_candidate_count": duplicate_count,
+        "collision_group_count": len(groups),
+        "collision_groups": groups,
+    }
+    block["candidate_accounting_fingerprint"] = (
+        candidate_accounting_fingerprint(block)
+    )
+    return _CandidatePlan(
+        canonical_candidates=tuple(canonical),
+        unusable_candidates=tuple(unusable_candidates),
+        accounting=block,
+    )
+
+
+def _accounting_error(message: str, *, stale: bool = False) -> ExtractError:
+    return ExtractError(
+        message,
+        code=("candidate-accounting-stale" if stale else "candidate-accounting-invalid"),
+    )
+
+
+def validate_candidate_accounting_block(block: Mapping[str, Any]) -> None:
+    """Validate an immutable account of parsed schema proposals.
+
+    This checks structure and internal identity only. Reviewed staging records
+    remain editable; coverage v2 separately binds the original proposal counts.
+    """
+    if set(block) != _CANDIDATE_ACCOUNTING_FIELDS:
+        raise _accounting_error(
+            "candidate_accounting fields do not match schema version 1"
+        )
+    version = block.get("version")
+    if isinstance(version, bool) or not isinstance(version, int) or version != 1:
+        raise _accounting_error("candidate_accounting version must be integer 1")
+    counts: dict[str, int] = {}
+    for name in _CANDIDATE_ACCOUNTING_COUNT_FIELDS:
+        value = block.get(name)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise _accounting_error(
+                f"candidate_accounting {name} must be a non-negative integer"
+            )
+        counts[name] = value
+    fingerprint = block.get("candidate_accounting_fingerprint")
+    try:
+        expected_fingerprint = candidate_accounting_fingerprint(block)
+    except (TypeError, ValueError) as exc:
+        raise _accounting_error(
+            "candidate_accounting is not canonical JSON"
+        ) from exc
+    if not isinstance(fingerprint, str) or not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
+        raise _accounting_error(
+            "candidate_accounting needs a canonical SHA-256 fingerprint"
+        )
+    if fingerprint != expected_fingerprint:
+        raise _accounting_error(
+            "candidate_accounting changed; its fingerprint must be "
+            f"{expected_fingerprint}",
+            stale=True,
+        )
+    groups = block.get("collision_groups")
+    if not isinstance(groups, list):
+        raise _accounting_error("candidate_accounting collision_groups must be a list")
+    if len(groups) != counts["collision_group_count"]:
+        raise _accounting_error(
+            "candidate_accounting collision_group_count does not match its groups"
+        )
+    if counts["collision_group_count"] > counts["canonical_record_count"]:
+        raise _accounting_error(
+            "candidate_accounting collision_group_count cannot exceed "
+            "canonical_record_count"
+        )
+
+    group_ids: set[str] = set()
+    proposal_indices: set[int] = set()
+    duplicate_count = 0
+    previous_group_index = 0
+    for group_number, group in enumerate(groups, start=1):
+        where = f"candidate_accounting.collision_groups[{group_number}]"
+        if not isinstance(group, Mapping) or set(group) != {
+            "stable_record_id",
+            "canonical_candidate_index",
+            "proposals",
+        }:
+            raise _accounting_error(f"{where} has invalid fields")
+        record_id = group.get("stable_record_id")
+        if not isinstance(record_id, str) or not record_id or record_id in group_ids:
+            raise _accounting_error(f"{where} needs one unique stable_record_id")
+        group_ids.add(record_id)
+        canonical_index = group.get("canonical_candidate_index")
+        if (
+            isinstance(canonical_index, bool)
+            or not isinstance(canonical_index, int)
+            or canonical_index <= previous_group_index
+        ):
+            raise _accounting_error(
+                f"{where}.canonical_candidate_index must preserve candidate order"
+            )
+        previous_group_index = canonical_index
+        proposals = group.get("proposals")
+        if not isinstance(proposals, list) or len(proposals) < 2:
+            raise _accounting_error(f"{where}.proposals needs every collision member")
+        duplicate_count += len(proposals) - 1
+        previous_proposal_index = 0
+        for proposal_number, proposal_entry in enumerate(proposals, start=1):
+            proposal_where = f"{where}.proposals[{proposal_number}]"
+            if not isinstance(proposal_entry, Mapping) or set(proposal_entry) != {
+                "candidate_index",
+                "parsed_schema_proposal",
+            }:
+                raise _accounting_error(f"{proposal_where} has invalid fields")
+            candidate_index = proposal_entry.get("candidate_index")
+            if (
+                isinstance(candidate_index, bool)
+                or not isinstance(candidate_index, int)
+                or candidate_index <= previous_proposal_index
+                or candidate_index > counts["parsed_candidate_count"]
+                or candidate_index in proposal_indices
+            ):
+                raise _accounting_error(
+                    f"{proposal_where}.candidate_index is invalid or out of order"
+                )
+            previous_proposal_index = candidate_index
+            proposal_indices.add(candidate_index)
+            proposal = proposal_entry.get("parsed_schema_proposal")
+            if not _is_parsed_schema_proposal(proposal):
+                raise _accounting_error(
+                    f"{proposal_where}.parsed_schema_proposal has invalid fields"
+                )
+            expression = str(proposal["expression"]).strip()
+            reading = str(proposal["reading"]).strip()
+            if not expression or stable_record_id(expression, reading) != record_id:
+                raise _accounting_error(
+                    f"{proposal_where} does not mint {record_id}"
+                )
+        if proposals[0]["candidate_index"] != canonical_index:
+            raise _accounting_error(
+                f"{where}.canonical_candidate_index must name its first proposal"
+            )
+
+    if duplicate_count != counts["duplicate_candidate_count"]:
+        raise _accounting_error(
+            "candidate_accounting duplicate_candidate_count does not match its groups"
+        )
+    if (
+        counts["canonical_record_count"]
+        + counts["unusable_candidate_count"]
+        + counts["duplicate_candidate_count"]
+        != counts["parsed_candidate_count"]
+    ):
+        raise _accounting_error(
+            "candidate_accounting counts do not partition the parsed candidate list"
+        )
 
 
 def coverage_block(
@@ -608,6 +946,7 @@ def coverage_block(
     *,
     source_sha256: str,
     mode: str | None,
+    candidate_accounting: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Durable staging metadata: what the model said the source contained.
 
@@ -623,6 +962,10 @@ def coverage_block(
     one and not the other. What it no longer claims is that anything was
     *measured*: `status` is "unmeasured" whenever there are table units at all,
     because nobody is asserting what the page held.
+
+    The extract writer always supplies ``candidate_accounting`` and emits v2.
+    Omitting it reproduces v1 only to validate paid artifacts written before
+    collision preservation existed; no missing parsed proposal is invented.
     """
     actual = list(result.source_units)
     by_key: dict[tuple[int, str, int], SourceUnit] = {}
@@ -646,7 +989,7 @@ def coverage_block(
         for name in SOURCE_UNIT_DISPOSITIONS
     }
     block: dict[str, Any] = {
-        "version": 1,
+        "version": 2 if candidate_accounting is not None else 1,
         "status": status,
         "blocking": has_table,
         "source_fingerprint": source_sha256,
@@ -662,6 +1005,22 @@ def coverage_block(
         "duplicate_keys": sorted(duplicate_keys, key=_unit_sort),
         **dispositions,
     }
+    if candidate_accounting is not None:
+        validate_candidate_accounting_block(candidate_accounting)
+        expected_parsed = len(result.prose_candidates) + len(
+            dispositions["candidate_units"]
+        )
+        if candidate_accounting.get("parsed_candidate_count") != expected_parsed:
+            raise _accounting_error(
+                "candidate_accounting parsed_candidate_count does not match prose "
+                "candidates plus table candidate source units",
+                stale=True,
+            )
+        for name in _CANDIDATE_ACCOUNTING_COUNT_FIELDS:
+            block[name] = candidate_accounting.get(name)
+        block["candidate_accounting_fingerprint"] = candidate_accounting.get(
+            "candidate_accounting_fingerprint"
+        )
     block["coverage_block_fingerprint"] = _canonical_fingerprint(block)
     return block
 
@@ -694,24 +1053,29 @@ def build_records(
     candidates: Iterable[Any],
     prepared: PreparedInput,
     known_ids: Iterable[str] = (),
-) -> list[VocabularyRecord]:
-    """Candidates as records, already-known ones marked and sorted last.
+) -> RecordBuild:
+    """Build canonical records and account for every parsed schema proposal.
 
     A candidate janki already holds is kept rather than dropped — a silent
     discard is a silent discard even when the word is a duplicate, and the
     reviewer may still want the example sentence off this page. Marking and
     sinking it puts the new words where the review effort should go.
+
+    Two candidates in one answer can also mint the same deterministic ID.
+    Only the first can be a canonical record, but no Japanese-aware merge can
+    decide which parts of the answers are better. Every member of a collision
+    group, including the first, is therefore returned in original response
+    order for a reviewer to compare.
     """
+    plan = _candidate_plan(candidates)
     known = set(known_ids)
     fresh: list[VocabularyRecord] = []
     seen: list[VocabularyRecord] = []
-    produced: set[str] = set()
 
-    for candidate in candidates:
+    for candidate in plan.canonical_candidates:
         expression = str(getattr(candidate, "expression", "") or "").strip()
-        if not expression:
-            continue
         reading = str(getattr(candidate, "reading", "") or "").strip()
+        candidate_id = stable_record_id(expression, reading)
         content = shared_ai_schema.adapt_rich_card(candidate)
         raw_fields = _raw_fields(candidate, prepared)
         if content.romaji_rejected:
@@ -719,7 +1083,7 @@ def build_records(
                 list(content.romaji_rejected), ensure_ascii=False
             )
         record = VocabularyRecord(
-            id=stable_record_id(expression, reading),
+            id=candidate_id,
             expression=expression,
             reading=reading,
             meanings=list(content.meanings),
@@ -748,31 +1112,15 @@ def build_records(
             modes=frozenset({"ingest-safe"}),
         )
         record = derived[0]
-        # Repeated source rows stay visible as separate source units. They do
-        # not become duplicate canonical notes with the same deterministic ID.
-        if record.id in produced:
-            continue
-        produced.add(record.id)
         if record.id in known:
             seen.append(annotate(record, already_known=True))
         else:
             fresh.append(record)
-    return fresh + seen
-
-
-def unusable(candidates: Iterable[Any]) -> list[Any]:
-    """Candidates that cannot become records: nothing to mint an id from.
-
-    A record's id is minted from its expression, so a candidate without one has
-    no identity and cannot be stored — even when the model read a reading, a
-    gloss, and a page number off the row. That happens for real: a table row
-    whose kanji cell is smudged still yields its kana column and its English.
-    """
-    return [
-        candidate
-        for candidate in candidates
-        if not str(getattr(candidate, "expression", "") or "").strip()
-    ]
+    return RecordBuild(
+        records=tuple(fresh + seen),
+        unusable_candidates=plan.unusable_candidates,
+        candidate_accounting=plan.accounting,
+    )
 
 
 def unusable_note(candidates: Sequence[Any]) -> str:

@@ -222,6 +222,28 @@ def test_provider_is_recognized_staging_metadata(
     assert meta["provider"] == "anthropic"
 
 
+def test_candidate_accounting_is_recognized_staging_metadata(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "extract.yaml"
+    accounting = {
+        "version": 1,
+        "parsed_candidate_count": 0,
+        "canonical_record_count": 0,
+        "unusable_candidate_count": 0,
+        "duplicate_candidate_count": 0,
+        "collision_group_count": 0,
+        "collision_groups": [],
+        "candidate_accounting_fingerprint": "a" * 64,
+    }
+
+    write_staging(path, [_record()], {"candidate_accounting": accounting})
+
+    assert capsys.readouterr().err == ""
+    _, meta = read_staging(path)
+    assert meta["candidate_accounting"] == accounting
+
+
 def test_a_generated_review_run_id_is_recognized_and_round_trips(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

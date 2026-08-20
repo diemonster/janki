@@ -107,7 +107,7 @@ def test_one_source_answer_builds_a_complete_reviewable_card(tmp_path: Path) -> 
         {"origin_path": tmp_path / "lesson.pdf"},
     )()
 
-    [record] = extract.build_records(result.candidates, prepared)
+    [record] = extract.build_records(result.candidates, prepared).records
 
     assert record.meanings == ["to speak", "to talk"]
     assert record.usage_notes == "Often takes と for the person spoken with."
@@ -137,10 +137,10 @@ def test_the_shared_rich_answer_has_one_application_semantics(tmp_path: Path) ->
     candidate = parsed.candidates[0]
     prepared = type("Prepared", (), {"origin_path": tmp_path / "lesson.pdf"})()
 
-    [fresh] = extract.build_records([candidate], prepared)
+    [fresh] = extract.build_records([candidate], prepared).records
     [known] = extract.build_records(
         [candidate], prepared, known_ids=["word:話す:はなす"]
-    )
+    ).records
     bare_input = VocabularyRecord(
         id="word:話す:はなす",
         expression="話す",
@@ -219,7 +219,7 @@ def test_response_schema_descriptions_are_only_the_terse_structural_labels() -> 
         "$defs.CandidateRecord.expression": "The word as written, in Japanese.",
         "$defs.CandidateRecord.reading": "Kana reading.",
         "$defs.CandidateRecord.part_of_speech": "Part of speech, if known.",
-        "$defs.CandidateRecord.page": "1-indexed page this was read from.",
+        "$defs.CandidateRecord.page": "1-indexed page this was read from; 0 when unknown.",
         "$defs.CandidateRecord.context": "The line or cell this was read from, verbatim.",
         "$defs.CandidateRecord.confidence": "Confidence.",
         "$defs.CandidateRecord.inclusion_reason": (

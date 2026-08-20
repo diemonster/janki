@@ -108,6 +108,30 @@ def record(**overrides: Any) -> VocabularyRecord:
     return VocabularyRecord(**values)
 
 
+def parsed_candidate(**overrides: Any) -> Any:
+    """One complete value as returned by extraction's Pydantic schema."""
+    values: dict[str, Any] = {
+        "expression": "話す",
+        "reading": "はなす",
+        "meanings": ["to speak"],
+        "part_of_speech": "verb",
+        "examples": [],
+        "usage_notes": "",
+        "page": 1,
+        "context": "話す　はなす　to speak",
+        "confidence": "high",
+        "inclusion_reason": "introduced here",
+        "source_kind": "prose",
+        "section": "",
+        "ordinal": 0,
+    }
+    values.update(overrides)
+    candidate_type = extract.candidate_schema().model_fields[
+        "candidates"
+    ].annotation.__args__[0]
+    return candidate_type(**values)
+
+
 def held_reason(item: VocabularyRecord) -> str:
     return item.source.raw_fields["hold_reason"]
 
@@ -752,7 +776,7 @@ def _rich_prompt_provenance(request_fingerprint: str) -> dict[str, Any]:
         "mode": "prose",
         "provider": "anthropic",
         "model": "claude-opus-5",
-        "response_schema_version": 3,
+        "response_schema_version": extract.EXTRACTION_SCHEMA_VERSION,
         "system_prompt_fingerprint": "2" * 64,
         "style_guide_fingerprint": "3" * 64,
         "user_prompt_fingerprint": "4" * 64,
@@ -766,26 +790,58 @@ def _pattern_only_meta(
     *,
     run_id: str = "11111111-1111-4111-8111-111111111111",
     request_fingerprint: str = "a" * 64,
+    candidates: tuple[Any, ...] = (),
+    candidate_accounting: dict[str, Any] | None = None,
+    response_schema_version: int = extract.EXTRACTION_SCHEMA_VERSION,
 ) -> dict[str, Any]:
     provenance = _rich_prompt_provenance(request_fingerprint)
+    provenance["response_schema_version"] = response_schema_version
+    if candidate_accounting is None and response_schema_version >= 4:
+        prepared = type("Prepared", (), {"origin_path": Path(pattern_set.source)})()
+        candidate_accounting = extract.build_records(
+            candidates, prepared
+        ).candidate_accounting
+    result = extract.ExtractionResult(
+        candidates=candidates, source_units=(), model_reported_unit_count=0
+    )
+    coverage_kwargs = (
+        {"candidate_accounting": candidate_accounting}
+        if candidate_accounting is not None
+        else {}
+    )
     coverage = extract.coverage_block(
-        extract.ExtractionResult(
-            candidates=(), source_units=(), model_reported_unit_count=0
-        ),
+        result,
         source_sha256=provenance["source_sha256"],
         mode="prose",
+        **coverage_kwargs,
     )
     bound = replace(
         patterns.with_prompt_provenance(pattern_set, provenance),
         review_run_id=run_id,
     )
-    return {
+    meta = {
         "source_file": pattern_set.source,
         "review_run_id": run_id,
         "prompt_provenance": provenance,
         "pattern_set": bound.to_dict(),
         "coverage": coverage,
     }
+    if candidate_accounting is not None:
+        meta["candidate_accounting"] = candidate_accounting
+    return meta
+
+
+def accounted_extract(
+    tmp_path: Path, *candidates: Any
+) -> tuple[list[VocabularyRecord], dict[str, Any]]:
+    prepared = type("Prepared", (), {"origin_path": tmp_path / "lesson.pdf"})()
+    built = extract.build_records(candidates, prepared)
+    meta = _pattern_only_meta(
+        patterns.PatternSet(source="lesson.pdf", kind="lesson"),
+        candidates=tuple(candidates),
+        candidate_accounting=built.candidate_accounting,
+    )
+    return list(built.records), meta
 
 
 REVIEW_RUN_A = "11111111-1111-4111-8111-111111111111"
@@ -1126,17 +1182,15 @@ def test_a_concurrent_forced_replacement_is_not_deleted_as_the_review_finishes(
         run_id=REVIEW_RUN_B,
         request_fingerprint="b" * 64,
     )
-    replaced = False
+    real_complete = cli._complete_pattern_only_review
 
-    @contextmanager
-    def replace_before_lock(_path: Path) -> Any:
-        nonlocal replaced
-        if not replaced:
-            replaced = True
-            write_staging(path, [], replacement, force=True)
-        yield
+    def replace_before_completion(*args: Any, **kwargs: Any) -> int:
+        write_staging(path, [], replacement, force=True)
+        return real_complete(*args, **kwargs)
 
-    monkeypatch.setattr(cli, "exclusive_path_lock", replace_before_lock)
+    monkeypatch.setattr(
+        cli, "_complete_pattern_only_review", replace_before_completion
+    )
 
     assert cli.main(["--root", str(root), "promote", str(path)]) == 1
 
@@ -1333,6 +1387,392 @@ def test_review_run_id_survives_a_partial_promotion_retry(tmp_path: Path) -> Non
     archived, archived_meta = read_staging(archives[0])
     assert archived_meta["review_run_id"] == REVIEW_RUN_A
     assert {item.id for item in archived} == {first.id, "word:聞く:きく"}
+
+
+def test_candidate_accounting_survives_partial_promotion_and_human_review(
+    tmp_path: Path,
+) -> None:
+    root = project(tmp_path, [])
+    records, meta = accounted_extract(
+        tmp_path,
+        parsed_candidate(),
+        parsed_candidate(
+            expression="聞く",
+            reading="",
+            meanings=["to hear"],
+            page=2,
+            context="聞く　to hear",
+        ),
+    )
+    path = root / "staging" / "lesson.yaml"
+    write_staging(path, records, meta)
+    command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+
+    assert cli.main(command) == 0
+    survivors, live_meta = read_staging(path)
+    assert len(survivors) == 1
+    assert live_meta["candidate_accounting"] == meta["candidate_accounting"]
+    write_staging(
+        path,
+        [replace(survivors[0], reading="きく")],
+        live_meta,
+        force=True,
+    )
+
+    assert cli.main(command) == 0
+    assert not path.exists()
+    archived, archived_meta = read_staging(
+        root / "staging" / "done" / "lesson.yaml"
+    )
+    assert {item.id for item in archived} == {
+        "word:話す:はなす",
+        "word:聞く:きく",
+    }
+    assert archived_meta["candidate_accounting"] == meta["candidate_accounting"]
+
+
+def test_exact_archive_retry_prunes_live_row_without_appending_it_twice(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = project(tmp_path, [])
+    records, meta = accounted_extract(tmp_path, parsed_candidate())
+    path = root / "staging" / "lesson.yaml"
+    write_staging(path, records, meta)
+    command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    real_prune = cli.prune_staging_under_lock
+
+    def fail_after_archive(*_args: Any, **_kwargs: Any) -> int:
+        raise staging_module.StagingError("simulated prune failure")
+
+    monkeypatch.setattr(cli, "prune_staging_under_lock", fail_after_archive)
+    assert cli.main(command) == 1
+    archive = root / "staging" / "done" / "lesson.yaml"
+    assert path.exists() and archive.exists()
+    first_archive = archive.read_bytes()
+
+    monkeypatch.setattr(cli, "prune_staging_under_lock", real_prune)
+    assert cli.main(command) == 0
+
+    assert not path.exists()
+    archived, archived_meta = read_staging(archive)
+    assert [item.id for item in archived] == ["word:話す:はなす"]
+    assert archived_meta["candidate_accounting"] == meta["candidate_accounting"]
+    assert archive.read_bytes() == first_archive, "an exact retry need not rewrite evidence"
+
+
+def test_schema_v3_exact_archive_retry_does_not_append_the_row_twice(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Archive recovery predates candidate accounting and is not a v2 feature."""
+    root = project(tmp_path, [])
+    row = record()
+    meta = _pattern_only_meta(
+        patterns.PatternSet(source="lesson.pdf", kind="lesson"),
+        candidates=(parsed_candidate(),),
+        response_schema_version=3,
+    )
+    path = root / "staging" / "lesson.yaml"
+    write_staging(path, [row], meta)
+    command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    real_prune = cli.prune_staging_under_lock
+
+    monkeypatch.setattr(
+        cli,
+        "prune_staging_under_lock",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            staging_module.StagingError("simulated prune failure")
+        ),
+    )
+    assert cli.main(command) == 1
+    monkeypatch.setattr(cli, "prune_staging_under_lock", real_prune)
+
+    assert cli.main(command) == 0
+
+    archived, _archived_meta = read_staging(
+        root / "staging" / "done" / "lesson.yaml"
+    )
+    assert [item.id for item in archived] == [row.id]
+
+
+def test_exact_archive_retry_matches_the_post_remint_record(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = project(tmp_path, [])
+    records, meta = accounted_extract(
+        tmp_path,
+        parsed_candidate(expression="聞く", reading=""),
+    )
+    reviewed = replace(records[0], reading="きく")
+    path = root / "staging" / "lesson.yaml"
+    write_staging(path, [reviewed], meta)
+    command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    real_prune = cli.prune_staging_under_lock
+
+    monkeypatch.setattr(
+        cli,
+        "prune_staging_under_lock",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            staging_module.StagingError("simulated prune failure")
+        ),
+    )
+    assert cli.main(command) == 1
+    monkeypatch.setattr(cli, "prune_staging_under_lock", real_prune)
+
+    assert cli.main(command) == 0
+
+    archived, _archived_meta = read_staging(
+        root / "staging" / "done" / "lesson.yaml"
+    )
+    assert [item.id for item in archived] == ["word:聞く:きく"]
+
+
+def test_exact_remint_retry_is_independent_of_later_collection_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = project(tmp_path, [])
+    records, meta = accounted_extract(
+        tmp_path,
+        parsed_candidate(expression="聞く", reading=""),
+    )
+    reviewed = replace(records[0], reading="きく")
+    path = root / "staging" / "lesson.yaml"
+    write_staging(path, [reviewed], meta)
+    command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    real_prune = cli.prune_staging_under_lock
+
+    monkeypatch.setattr(
+        cli,
+        "prune_staging_under_lock",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            staging_module.StagingError("simulated prune failure")
+        ),
+    )
+    assert cli.main(command) == 1
+    monkeypatch.setattr(cli, "prune_staging_under_lock", real_prune)
+
+    # Mutable collection state must not change what the already-archived
+    # transaction means. This stale id appearing later makes ordinary remint()
+    # preserve it, but the retry still names the stable-reminted archive row.
+    normalized = root / "vocabulary.json"
+    current = json.loads(normalized.read_text(encoding="utf-8"))
+    normalized.write_text(
+        json.dumps([*current, reviewed.to_dict()], ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    assert cli.main(command) == 0
+
+    archived, _archived_meta = read_staging(
+        root / "staging" / "done" / "lesson.yaml"
+    )
+    assert [item.id for item in archived] == ["word:聞く:きく"]
+
+
+def test_exact_retry_does_not_delete_a_concurrent_forced_replacement(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = project(tmp_path, [])
+    records, meta = accounted_extract(tmp_path, parsed_candidate())
+    path = root / "staging" / "lesson.yaml"
+    write_staging(path, records, meta)
+    command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    real_prune = cli.prune_staging_under_lock
+
+    monkeypatch.setattr(
+        cli,
+        "prune_staging_under_lock",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            staging_module.StagingError("simulated prune failure")
+        ),
+    )
+    assert cli.main(command) == 1
+    monkeypatch.setattr(cli, "prune_staging_under_lock", real_prune)
+
+    replacement_records, replacement_meta = accounted_extract(
+        tmp_path,
+        parsed_candidate(expression="食べる", reading="たべる"),
+    )
+    real_finish = cli._finish_record_review
+
+    def replace_before_finish(*args: Any, **kwargs: Any) -> tuple[Path, int]:
+        write_staging(path, replacement_records, replacement_meta, force=True)
+        return real_finish(*args, **kwargs)
+
+    monkeypatch.setattr(cli, "_finish_record_review", replace_before_finish)
+
+    assert cli.main(command) == 1
+
+    surviving, _surviving_meta = read_staging(path)
+    assert [item.id for item in surviving] == ["word:食べる:たべる"]
+    assert "staging-review-stale" in capsys.readouterr().err
+
+
+def test_normal_promotion_does_not_delete_a_concurrent_forced_replacement(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = project(tmp_path, [])
+    records, meta = accounted_extract(tmp_path, parsed_candidate())
+    path = root / "staging" / "lesson.yaml"
+    write_staging(path, records, meta)
+    replacement_records, replacement_meta = accounted_extract(
+        tmp_path,
+        parsed_candidate(expression="食べる", reading="たべる"),
+    )
+    real_finish = cli._finish_record_review
+
+    def replace_before_finish(*args: Any, **kwargs: Any) -> tuple[Path, int]:
+        write_staging(path, replacement_records, replacement_meta, force=True)
+        return real_finish(*args, **kwargs)
+
+    monkeypatch.setattr(cli, "_finish_record_review", replace_before_finish)
+
+    assert cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    ) == 1
+
+    surviving, _surviving_meta = read_staging(path)
+    assert [item.id for item in surviving] == ["word:食べる:たべる"]
+    assert not (root / "staging" / "done").exists()
+    assert "staging-review-stale" in capsys.readouterr().err
+
+
+def test_record_archive_selection_is_rechecked_under_its_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = project(tmp_path, [])
+    records, meta = accounted_extract(tmp_path, parsed_candidate())
+    path = root / "staging" / "lesson.yaml"
+    write_staging(path, records, meta)
+    archive_base = root / "staging" / "done" / "lesson.yaml"
+    other_records, other_meta = accounted_extract(
+        tmp_path,
+        parsed_candidate(expression="食べる", reading="たべる"),
+    )
+    other_meta["review_run_id"] = REVIEW_RUN_B
+    other_meta["pattern_set"]["review_run_id"] = REVIEW_RUN_B
+    real_finish = cli._finish_record_review
+
+    def occupy_base_before_finish(*args: Any, **kwargs: Any) -> tuple[Path, int]:
+        write_staging(
+            archive_base,
+            other_records,
+            promote.archive_meta(other_meta, len(other_records)),
+        )
+        return real_finish(*args, **kwargs)
+
+    monkeypatch.setattr(cli, "_finish_record_review", occupy_base_before_finish)
+
+    assert cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    ) == 0
+
+    archives = list((root / "staging" / "done").glob("lesson*.yaml"))
+    assert len(archives) == 2
+    by_run = {}
+    for archive in archives:
+        rows, archived_meta = read_staging(archive)
+        by_run[archived_meta["review_run_id"]] = rows
+    assert [item.id for item in by_run[REVIEW_RUN_A]] == ["word:話す:はなす"]
+    assert [item.id for item in by_run[REVIEW_RUN_B]] == ["word:食べる:たべる"]
+
+
+def test_exact_retry_keeps_live_when_the_done_metadata_is_damaged(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = project(tmp_path, [])
+    records, meta = accounted_extract(tmp_path, parsed_candidate())
+    path = root / "staging" / "lesson.yaml"
+    write_staging(path, records, meta)
+    command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    real_prune = cli.prune_staging_under_lock
+
+    monkeypatch.setattr(
+        cli,
+        "prune_staging_under_lock",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            staging_module.StagingError("simulated prune failure")
+        ),
+    )
+    assert cli.main(command) == 1
+    archive = root / "staging" / "done" / "lesson.yaml"
+    archived, archived_meta = read_staging(archive)
+    del archived_meta["coverage"]
+    write_staging(archive, archived, archived_meta, force=True)
+    live_before = path.read_bytes()
+    monkeypatch.setattr(cli, "prune_staging_under_lock", real_prune)
+
+    assert cli.main(command) == 1
+
+    assert path.read_bytes() == live_before
+    assert "coverage-block-invalid" in capsys.readouterr().err
+
+
+def test_retry_removes_empty_live_file_left_after_archive_and_prune(
+    tmp_path: Path,
+) -> None:
+    root = project(tmp_path, [])
+    records, meta = accounted_extract(tmp_path, parsed_candidate())
+    path = root / "staging" / "lesson.yaml"
+    write_staging(path, records, meta)
+    command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    assert cli.main(command) == 0
+    archive = root / "staging" / "done" / "lesson.yaml"
+    archive_before = archive.read_bytes()
+    # Crash boundary: pruning committed its empty document, unlink did not.
+    write_staging(path, [], meta)
+
+    assert cli.main(command) == 0
+
+    assert not path.exists()
+    assert archive.read_bytes() == archive_before
+
+
+def test_divergent_live_copy_of_an_archived_candidate_refuses_retry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = project(tmp_path, [])
+    records, meta = accounted_extract(tmp_path, parsed_candidate())
+    path = root / "staging" / "lesson.yaml"
+    write_staging(path, records, meta)
+    command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    real_prune = cli.prune_staging_under_lock
+
+    monkeypatch.setattr(
+        cli,
+        "prune_staging_under_lock",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            staging_module.StagingError("simulated prune failure")
+        ),
+    )
+    assert cli.main(command) == 1
+    archive = root / "staging" / "done" / "lesson.yaml"
+    archive_before = archive.read_bytes()
+    live, live_meta = read_staging(path)
+    write_staging(
+        path,
+        [replace(live[0], meanings=["human changed after archive"])],
+        live_meta,
+        force=True,
+    )
+    live_before = path.read_bytes()
+
+    monkeypatch.setattr(cli, "prune_staging_under_lock", real_prune)
+    assert cli.main(command) == 1
+
+    assert path.read_bytes() == live_before
+    assert archive.read_bytes() == archive_before
 
 
 def test_schema_v2_extraction_retry_reuses_its_partial_archive(tmp_path: Path) -> None:
@@ -1979,6 +2419,240 @@ def test_the_archive_keeps_a_hand_written_review_note(
     )
     assert "chapter 3, checked with the teacher" in archived["review_notes"]
     assert "Promoted 1 record(s)" in archived["review_notes"]
+
+
+def test_the_archive_keeps_authenticated_collision_accounting(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Promotion consumes the canonical row, not the parsed proposals beside it."""
+    root = project(tmp_path, [])
+    records, meta = accounted_extract(
+        tmp_path,
+        parsed_candidate(meanings=["canonical proposal"]),
+        parsed_candidate(meanings=["other proposal"], page=2),
+    )
+    path = root / "staging" / "lesson.pdf.yaml"
+    write_staging(path, records, meta)
+    patch_jpdb(monkeypatch, hanasu_jpdb())
+
+    code = cli.main(["--root", str(root), "promote", str(path)])
+
+    assert code == 0
+    _, archived_meta = read_staging(
+        root / "staging" / "done" / "lesson.pdf.yaml"
+    )
+    assert archived_meta["candidate_accounting"] == meta["candidate_accounting"]
+    assert "candidate_accounting" not in capsys.readouterr().err
+
+
+def test_candidate_accounting_promotion_does_not_load_the_optional_ai_schema(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = project(tmp_path, [])
+    records, meta = accounted_extract(
+        tmp_path,
+        parsed_candidate(),
+        parsed_candidate(page=2),
+    )
+    path = root / "staging" / "lesson.pdf.yaml"
+    write_staging(path, records, meta)
+
+    monkeypatch.setattr(
+        extract,
+        "candidate_schema",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("promote loaded optional AI schema dependencies")
+        ),
+    )
+
+    assert cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    ) == 0
+
+
+def _refresh_candidate_accounting_bindings(meta: dict[str, Any]) -> None:
+    accounting = meta["candidate_accounting"]
+    accounting["candidate_accounting_fingerprint"] = (
+        extract.candidate_accounting_fingerprint(accounting)
+    )
+    coverage = meta["coverage"]
+    coverage["candidate_accounting_fingerprint"] = accounting[
+        "candidate_accounting_fingerprint"
+    ]
+    coverage["coverage_block_fingerprint"] = coverage_block_fingerprint(coverage)
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        "missing-block",
+        "downgraded-to-v1",
+        "float-accounting-version",
+        "float-coverage-version",
+        "extra-block-key",
+        "stale-fingerprint",
+        "noncanonical-json",
+        "stable-id-disagrees",
+        "proposal-shape",
+        "missing-collision-group",
+        "coverage-count",
+        "source-candidate-count",
+    ],
+)
+def test_candidate_accounting_damage_refuses_before_promotion_or_archive(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    damage: str,
+) -> None:
+    root = project(tmp_path, [])
+    records, meta = accounted_extract(
+        tmp_path,
+        parsed_candidate(meanings=["canonical"]),
+        parsed_candidate(meanings=["collision"], page=2),
+        parsed_candidate(expression="食べる", reading="たべる", page=3),
+    )
+    accounting = meta["candidate_accounting"]
+    coverage = meta["coverage"]
+    if damage == "missing-block":
+        del meta["candidate_accounting"]
+    elif damage == "downgraded-to-v1":
+        del meta["candidate_accounting"]
+        meta["coverage"] = extract.coverage_block(
+            extract.ExtractionResult(
+                candidates=(
+                    parsed_candidate(meanings=["canonical"]),
+                    parsed_candidate(meanings=["collision"], page=2),
+                    parsed_candidate(
+                        expression="食べる", reading="たべる", page=3
+                    ),
+                ),
+                source_units=(),
+                model_reported_unit_count=0,
+            ),
+            source_sha256="1" * 64,
+            mode="prose",
+        )
+    elif damage == "float-accounting-version":
+        accounting["version"] = 1.0
+        _refresh_candidate_accounting_bindings(meta)
+    elif damage == "float-coverage-version":
+        coverage["version"] = 2.0
+        coverage["coverage_block_fingerprint"] = coverage_block_fingerprint(coverage)
+    elif damage == "extra-block-key":
+        accounting["invented"] = True
+        _refresh_candidate_accounting_bindings(meta)
+    elif damage == "stale-fingerprint":
+        accounting["canonical_record_count"] = 99
+    elif damage == "noncanonical-json":
+        accounting["collision_groups"][0]["proposals"][0][
+            "parsed_schema_proposal"
+        ]["page"] = float("nan")
+    elif damage == "stable-id-disagrees":
+        accounting["collision_groups"][0]["stable_record_id"] = "word:聞く:きく"
+        _refresh_candidate_accounting_bindings(meta)
+    elif damage == "proposal-shape":
+        accounting["collision_groups"][0]["proposals"][0][
+            "parsed_schema_proposal"
+        ]["invented"] = True
+        _refresh_candidate_accounting_bindings(meta)
+    elif damage == "missing-collision-group":
+        accounting["collision_groups"] = []
+        _refresh_candidate_accounting_bindings(meta)
+    elif damage == "coverage-count":
+        coverage["parsed_candidate_count"] += 1
+        coverage["coverage_block_fingerprint"] = coverage_block_fingerprint(coverage)
+    elif damage == "source-candidate-count":
+        accounting["parsed_candidate_count"] += 1
+        accounting["unusable_candidate_count"] += 1
+        _refresh_candidate_accounting_bindings(meta)
+        coverage["parsed_candidate_count"] = accounting["parsed_candidate_count"]
+        coverage["unusable_candidate_count"] = accounting[
+            "unusable_candidate_count"
+        ]
+        coverage["coverage_block_fingerprint"] = coverage_block_fingerprint(coverage)
+    else:
+        raise AssertionError(damage)
+
+    path = root / "staging" / "lesson.pdf.yaml"
+    write_staging(path, records, meta)
+    before = path.read_bytes()
+
+    code = cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    )
+
+    assert code == 1
+    assert path.read_bytes() == before
+    assert json.loads((root / "vocabulary.json").read_text(encoding="utf-8")) == []
+    assert not (root / "ledger.json").exists()
+    assert not (root / "staging" / "done").exists()
+    error = capsys.readouterr().err
+    if damage == "float-coverage-version":
+        assert "coverage-block-invalid" in error
+    else:
+        assert "candidate-accounting" in error
+
+
+def test_two_human_reidentified_rows_cannot_converge_on_one_canonical_id(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = project(tmp_path, [])
+    records, meta = accounted_extract(
+        tmp_path,
+        parsed_candidate(),
+        parsed_candidate(expression="食べる", reading="たべる"),
+    )
+    converged = replace(
+        records[1],
+        expression=records[0].expression,
+        reading=records[0].reading,
+    )
+    path = root / "staging" / "lesson.pdf.yaml"
+    write_staging(path, [records[0], converged], meta)
+    before = path.read_bytes()
+
+    assert cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    ) == 1
+
+    assert path.read_bytes() == before
+    assert json.loads((root / "vocabulary.json").read_text(encoding="utf-8")) == []
+    assert not (root / "staging" / "done").exists()
+    assert "canonical record id" in capsys.readouterr().err
+
+
+def test_human_can_delete_a_bad_canonical_proposal_without_rewriting_accounting(
+    tmp_path: Path,
+) -> None:
+    """Accounting records what the model proposed; it is not a keep-list."""
+    root = project(tmp_path, [])
+    records, meta = accounted_extract(
+        tmp_path,
+        parsed_candidate(),
+        parsed_candidate(
+            expression="食べる",
+            reading="たべる",
+            meanings=["not worth a card"],
+            page=2,
+        ),
+    )
+    path = root / "staging" / "lesson.pdf.yaml"
+    write_staging(path, records[:1], meta)
+
+    code = cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    )
+
+    assert code == 0
+    archived, archived_meta = read_staging(
+        root / "staging" / "done" / "lesson.pdf.yaml"
+    )
+    assert [item.id for item in archived] == ["word:話す:はなす"]
+    assert archived_meta["candidate_accounting"]["canonical_record_count"] == 2
 
 
 def test_the_archive_guard_is_not_fooled_by_case(

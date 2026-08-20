@@ -228,6 +228,14 @@ Each input produces one staging file named for it, `data/staging/lesson-3.pdf.ya
 holding one candidate per word with the page it was read from, the line it was
 read from, and the model's own confidence.
 
+For current schema-v4 runs, the file also carries machine-owned
+`candidate_accounting`. Coverage v2 binds its parsed/canonical/unusable/
+duplicate counts and fingerprint. When two parsed proposals mint the same
+stable ID, the editable `records` list keeps one canonical row while the
+accounting block preserves the entire collision group, including original
+candidate indices. Do not edit or backfill this block onto an older paid
+schema-v3 file.
+
 `--mode table` transcribes a vocabulary list row by row; `--mode prose` uses
 non-exhaustive candidate selection for running text, dialogues, sentence grids,
 and structured exercises that are not vocabulary lists or tables. Prose mode
@@ -271,6 +279,11 @@ reading it invents becomes a permanent record ID. Words janki already has are
 kept, marked `already_known`, and sorted to the bottom so your attention goes to
 the new ones. Candidates it could not turn into records at all are listed in
 `review_notes` with everything it did read about them.
+
+Human review still owns the ordinary rows: candidate accounting records what
+the model proposed but does not require you to keep it. You may delete a row or
+remove its stale `id` and re-identify it deliberately; leave the accounting
+metadata unchanged.
 
 `janki validate data/staging/lesson-3.pdf.yaml` lists every row still missing
 something.

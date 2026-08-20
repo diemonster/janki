@@ -47,6 +47,19 @@ def candidate(**overrides: Any) -> Any:
     return schema.model_fields["candidates"].annotation.__args__[0](**fields)
 
 
+def test_persisted_parsed_proposal_shape_tracks_the_live_ai_schema() -> None:
+    """The stdlib promote validator must move whenever the paid schema moves."""
+    candidate_type = extract.candidate_schema().model_fields[
+        "candidates"
+    ].annotation.__args__[0]
+    example_type = candidate_type.model_fields["examples"].annotation.__args__[0]
+
+    assert set(candidate_type.model_fields) == extract._PARSED_CANDIDATE_FIELDS
+    assert set(example_type.model_fields) == extract._PARSED_EXAMPLE_FIELDS
+    with pytest.raises(ValueError):
+        candidate(page=-1)
+
+
 def extraction(*candidates: Any) -> Any:
     return extract.candidate_schema()(candidates=list(candidates))
 
@@ -261,7 +274,7 @@ def test_source_patterns_share_the_extraction_calls_prompt_provenance(
     assert result.pattern_set.kind == "lesson"
     assert [item.template for item in result.pattern_set.patterns] == ["〜んだ"]
     assert result.pattern_set.prompt_provenance["model"] == "claude-opus-5"
-    assert result.pattern_set.prompt_provenance["response_schema_version"] == 3
+    assert result.pattern_set.prompt_provenance["response_schema_version"] == 4
 
 
 # --- stop-reason discipline --------------------------------------------------
@@ -495,13 +508,48 @@ def test_prose_coverage_is_unmeasured_even_when_no_candidate_is_selected() -> No
     assert block["blocking"] is False
 
 
+def test_coverage_v2_binds_the_complete_candidate_accounting_block(
+    tmp_path: Path,
+) -> None:
+    candidates = (
+        candidate(),
+        candidate(page=13),
+        candidate(expression="", reading="", page=14),
+    )
+    result = table_result(candidates=candidates)
+    built = build_records(candidates, prepared(tmp_path))
+
+    block = extract.coverage_block(
+        result,
+        source_sha256="a" * 64,
+        mode="prose",
+        candidate_accounting=built.candidate_accounting,
+    )
+
+    assert block["version"] == 2
+    for name in (
+        "parsed_candidate_count",
+        "canonical_record_count",
+        "unusable_candidate_count",
+        "duplicate_candidate_count",
+        "collision_group_count",
+    ):
+        assert block[name] == built.candidate_accounting[name]
+    assert block["candidate_accounting_fingerprint"] == built.candidate_accounting[
+        "candidate_accounting_fingerprint"
+    ]
+    assert block["prose_candidate_count"] == 3, (
+        "source-kind accounting remains separate from record/collision counts"
+    )
+
+
 # --- candidates to records ---------------------------------------------------
 
 
 def test_provenance_is_stringified_into_raw_fields(tmp_path: Path) -> None:
     item = prepared(tmp_path)
 
-    [record] = build_records([candidate()], item)
+    [record] = build_records([candidate()], item).records
 
     fields = record.source.raw_fields
     assert record.source.type == "extract"
@@ -524,7 +572,7 @@ def test_the_models_reason_for_proposing_a_word_is_kept(tmp_path: Path) -> None:
     item = prepared(tmp_path)
     reasoned = candidate(inclusion_reason="Introduced in the dialogue on page 12.")
 
-    [record] = build_records([reasoned], item)
+    [record] = build_records([reasoned], item).records
 
     assert (
         record.source.raw_fields["inclusion_reason"]
@@ -535,7 +583,7 @@ def test_the_models_reason_for_proposing_a_word_is_kept(tmp_path: Path) -> None:
 def test_a_candidate_with_no_reading_keeps_its_malformed_id(tmp_path: Path) -> None:
     # The expected state of an extraction: validate reports it, and the review
     # supplies the reading. Inventing one would mint a permanent wrong ID.
-    [record] = build_records([candidate(reading="")], prepared(tmp_path))
+    [record] = build_records([candidate(reading="")], prepared(tmp_path)).records
 
     assert record.id == "word:話す:"
     assert record.reading == ""
@@ -558,7 +606,7 @@ def test_rich_candidate_content_becomes_a_reviewable_record(tmp_path: Path) -> N
             )
         ],
         prepared(tmp_path),
-    )
+    ).records
 
     assert [item.japanese for item in record.examples] == ["日本語を話します。"]
     assert record.examples[0].register == "polite"
@@ -569,7 +617,9 @@ def test_rich_candidate_content_becomes_a_reviewable_record(tmp_path: Path) -> N
 def test_a_candidate_without_examples_keeps_the_rich_fields_empty(
     tmp_path: Path,
 ) -> None:
-    [record] = build_records([candidate(examples=[])], prepared(tmp_path))
+    [record] = build_records(
+        [candidate(examples=[])], prepared(tmp_path)
+    ).records
 
     assert record.examples == []
     assert "example" not in record.source.raw_fields
@@ -579,7 +629,7 @@ def test_extracted_semantic_fields_are_marked_provisional(tmp_path: Path) -> Non
     # Marked at the only moment the values are known to be model output and
     # nothing else. The mark is value-bound, so `provisional_fields` reading
     # it back is also the proof the binding matches what the record holds.
-    [record] = build_records([candidate()], prepared(tmp_path))
+    [record] = build_records([candidate()], prepared(tmp_path)).records
 
     assert provisional_fields(record) == ["meanings", "part_of_speech"]
 
@@ -589,7 +639,7 @@ def test_a_candidate_with_no_semantic_claims_is_not_marked(tmp_path: Path) -> No
     # under dictionary authority it never needed.
     [record] = build_records(
         [candidate(meanings=[], part_of_speech="")], prepared(tmp_path)
-    )
+    ).records
 
     assert PROVISIONAL_FIELDS_KEY not in record.source.raw_fields
 
@@ -597,7 +647,9 @@ def test_a_candidate_with_no_semantic_claims_is_not_marked(tmp_path: Path) -> No
 def test_a_candidate_with_no_expression_cannot_become_a_record(
     tmp_path: Path,
 ) -> None:
-    assert build_records([candidate(expression="  ")], prepared(tmp_path)) == []
+    assert build_records(
+        [candidate(expression="  ")], prepared(tmp_path)
+    ).records == ()
 
 
 def test_already_known_candidates_are_marked_and_sorted_last(
@@ -610,7 +662,7 @@ def test_already_known_candidates_are_marked_and_sorted_last(
         [candidate(), candidate(expression="食べる", reading="たべる")],
         item,
         known_ids([VocabularyRecord(id="word:話す:はなす", expression="話す", reading="はなす")]),
-    )
+    ).records
 
     assert [record.expression for record in records] == ["食べる", "話す"]
     assert "already_known" not in records[0].source.raw_fields
@@ -623,12 +675,154 @@ def test_already_known_candidates_are_marked_and_sorted_last(
     ]
 
 
-def test_repeated_candidate_rows_do_not_create_duplicate_canonical_records(
+def test_collision_accounting_preserves_every_parsed_schema_proposal_in_order(
     tmp_path: Path,
 ) -> None:
-    records = build_records([candidate(), candidate()], prepared(tmp_path))
+    first = candidate(meanings=["first"])
+    second = candidate(meanings=["second"], page=13)
+    third = candidate(meanings=["third"], page=14)
 
-    assert [record.id for record in records] == ["word:話す:はなす"]
+    result = build_records([first, second, third], prepared(tmp_path))
+
+    assert [record.id for record in result.records] == ["word:話す:はなす"]
+    block = result.candidate_accounting
+    assert block["version"] == 1
+    assert block["parsed_candidate_count"] == 3
+    assert block["canonical_record_count"] == 1
+    assert block["unusable_candidate_count"] == 0
+    assert block["duplicate_candidate_count"] == 2
+    assert block["collision_group_count"] == 1
+    assert block["collision_groups"] == [
+        {
+            "stable_record_id": "word:話す:はなす",
+            "canonical_candidate_index": 1,
+            "proposals": [
+                {
+                    "candidate_index": 1,
+                    "parsed_schema_proposal": first.model_dump(mode="json"),
+                },
+                {
+                    "candidate_index": 2,
+                    "parsed_schema_proposal": second.model_dump(mode="json"),
+                },
+                {
+                    "candidate_index": 3,
+                    "parsed_schema_proposal": third.model_dump(mode="json"),
+                },
+            ],
+        }
+    ]
+    assert block["candidate_accounting_fingerprint"] == (
+        extract.candidate_accounting_fingerprint(block)
+    )
+
+
+def test_collision_indices_survive_known_record_sorting(tmp_path: Path) -> None:
+    known_first = candidate(context="known canonical")
+    fresh = candidate(expression="食べる", reading="たべる", context="fresh")
+    known_duplicate = candidate(context="known duplicate", page=14)
+
+    result = build_records(
+        [known_first, fresh, known_duplicate],
+        prepared(tmp_path),
+        known_ids=["word:話す:はなす"],
+    )
+
+    assert [record.id for record in result.records] == [
+        "word:食べる:たべる",
+        "word:話す:はなす",
+    ]
+    [group] = result.candidate_accounting["collision_groups"]
+    assert group["canonical_candidate_index"] == 1
+    assert [item["candidate_index"] for item in group["proposals"]] == [1, 3]
+
+
+def test_collision_accounting_needs_one_canonical_record_per_group(
+    tmp_path: Path,
+) -> None:
+    result = build_records(
+        [candidate(), candidate(page=2), candidate(page=3)],
+        prepared(tmp_path),
+    )
+    block = result.candidate_accounting
+    block["canonical_record_count"] = 0
+    block["unusable_candidate_count"] = 1
+    block["candidate_accounting_fingerprint"] = (
+        extract.candidate_accounting_fingerprint(block)
+    )
+
+    with pytest.raises(
+        extract.ExtractError,
+        match="collision_group_count cannot exceed canonical_record_count",
+    ):
+        extract.validate_candidate_accounting_block(block)
+
+
+def test_duplicate_stable_id_proposals_are_preserved_and_reported(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A repeated model proposal is evidence, even though it cannot be a note.
+
+    The first proposal remains the one canonical staging record. Every member
+    of that identity's collision group stays as its complete parsed schema
+    value in metadata, without janki choosing between their Japanese content.
+    """
+    root = project(tmp_path)
+    first = candidate(meanings=["first proposal"], context="first source line")
+    duplicate = candidate(
+        meanings=["second proposal"],
+        part_of_speech="second part of speech",
+        examples=[
+            {
+                "japanese": "二つ目の例です。",
+                "speech_level": "polite",
+                "furigana": "二[ふた]つ 目[め]の 例[れい]です。",
+                "romaji": "futatsume no rei desu.",
+                "english": "This is the second example.",
+            }
+        ],
+        usage_notes="second usage note",
+        page=13,
+        context="second source line",
+        confidence="low",
+        inclusion_reason="second reason",
+    )
+    third = candidate(
+        meanings=["third proposal"],
+        part_of_speech="third part of speech",
+        usage_notes="third usage note",
+        page=14,
+        context="third source line",
+        confidence="medium",
+        inclusion_reason="third reason",
+    )
+    monkeypatch.setattr(
+        cli.extract.claude_client,
+        "parse_call",
+        FakeCall(ok(first, duplicate, third)),
+    )
+
+    code = cli.main(["--root", str(root), "extract", "--yes", str(source_pdf(tmp_path))])
+
+    assert code == 0
+    records, meta = read_staging(root / "staging" / "lesson.pdf.yaml")
+    assert [record.meanings for record in records] == [["first proposal"]]
+    accounting = meta["candidate_accounting"]
+    [group] = accounting["collision_groups"]
+    assert [item["parsed_schema_proposal"] for item in group["proposals"]] == [
+        first.model_dump(mode="json"),
+        duplicate.model_dump(mode="json"),
+        third.model_dump(mode="json"),
+    ]
+    assert meta["coverage"]["version"] == 2
+    assert meta["coverage"]["candidate_accounting_fingerprint"] == accounting[
+        "candidate_accounting_fingerprint"
+    ]
+    captured = capsys.readouterr()
+    assert "2 duplicate proposals preserved" in captured.out
+    assert "candidate_accounting" not in captured.err
 
 
 def test_a_record_whose_stored_id_drifted_still_counts_as_known() -> None:

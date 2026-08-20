@@ -3,7 +3,8 @@
 A staging file is ordinary YAML — a mapping with a ``records:`` list (exactly
 the shape :func:`japanese_anki.io.load_records` already accepts, so
 ``janki validate`` works on it unchanged) plus metadata keys the record loader
-ignores (``source_file``, ``extracted_at``, ``model``, ``review_notes``).
+ignores (``source_file``, ``extracted_at``, ``model``, ``review_notes``, and
+the other keys in :data:`META_KEYS`).
 
 Per-record review annotations (``hold_reason``, ``already_known``,
 ``suggested_reading``) live in that record's ``source.raw_fields`` as strings,
@@ -98,6 +99,8 @@ NON_READING_HOLDS: frozenset[str] = frozenset({HOLD_UNVERIFIABLE_ID})
 # hands back every non-``records`` key it finds, so a note a reviewer added by
 # hand has to survive a round trip. What the warning catches is a *writer*
 # inventing a key nothing downstream reads.
+CANDIDATE_ACCOUNTING_KEY = "candidate_accounting"
+
 META_KEYS: tuple[str, ...] = (
     "source_file",
     "extracted_at",
@@ -111,6 +114,7 @@ META_KEYS: tuple[str, ...] = (
     "reviewed_pattern_set",
     "ai_enrichment",
     "field_replacements",
+    CANDIDATE_ACCOUNTING_KEY,
 )
 
 _RECORDS_KEY = "records"
@@ -141,7 +145,7 @@ _COVERAGE_DISPOSITIONS = (
 #: and went with the oracle apparatus in M8.4. A repeated key needs nothing
 #: outside the response to be wrong.
 _COVERAGE_MISMATCHES = ("duplicate_keys",)
-_COVERAGE_REQUIRED = {
+_COVERAGE_V1_REQUIRED = {
     "version",
     "status",
     "blocking",
@@ -153,6 +157,14 @@ _COVERAGE_REQUIRED = {
     "source_units",
     *_COVERAGE_DISPOSITIONS,
     *_COVERAGE_MISMATCHES,
+}
+_COVERAGE_V2_CANDIDATE_FIELDS = {
+    "parsed_candidate_count",
+    "canonical_record_count",
+    "unusable_candidate_count",
+    "duplicate_candidate_count",
+    "collision_group_count",
+    "candidate_accounting_fingerprint",
 }
 _UNIT_DISPOSITIONS = {"candidate", "duplicate", "non-vocabulary", "unreadable"}
 #: Who may accept an unmeasured coverage block.
@@ -543,23 +555,49 @@ def _coverage_fact(
 
 
 def _validate_coverage_block(block: Mapping[str, Any]) -> None:
+    version = block.get("version")
+    if (
+        isinstance(version, bool)
+        or not isinstance(version, int)
+        or version not in {1, 2}
+    ):
+        raise StagingError(
+            "[coverage-block-invalid] coverage version must be integer 1 or 2"
+        )
+    schema_fields = (
+        _COVERAGE_V1_REQUIRED | _COVERAGE_V2_CANDIDATE_FIELDS
+        if version == 2
+        else _COVERAGE_V1_REQUIRED
+    )
     fields = set(block)
-    allowed = _COVERAGE_REQUIRED | {"coverage_block_fingerprint", "approval"}
-    required = _COVERAGE_REQUIRED | {"coverage_block_fingerprint"}
+    allowed = schema_fields | {"coverage_block_fingerprint", "approval"}
+    required = schema_fields | {"coverage_block_fingerprint"}
     if fields - allowed or required - fields:
         raise StagingError(
-            "[coverage-block-invalid] coverage fields do not match schema version 1"
+            f"[coverage-block-invalid] coverage fields do not match schema version {version}"
         )
-    version = block.get("version")
-    if isinstance(version, bool) or version != 1:
-        raise StagingError("[coverage-block-invalid] coverage version must be integer 1")
     if not isinstance(block.get("blocking"), bool):
         raise StagingError("[coverage-block-invalid] coverage blocking must be boolean")
-    for name in (
+    count_fields = [
         "model_reported_unit_count",
         "observed_unit_count",
         "prose_candidate_count",
-    ):
+    ]
+    if version == 2:
+        count_fields.extend(
+            sorted(
+                _COVERAGE_V2_CANDIDATE_FIELDS
+                - {"candidate_accounting_fingerprint"}
+            )
+        )
+        accounting_fingerprint = block.get("candidate_accounting_fingerprint")
+        if not isinstance(accounting_fingerprint, str) or not _SHA256.fullmatch(
+            accounting_fingerprint
+        ):
+            raise StagingError(
+                "[coverage-block-invalid] candidate_accounting_fingerprint must be SHA-256"
+            )
+    for name in count_fields:
         value = block.get(name)
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
             raise StagingError(
@@ -570,6 +608,13 @@ def _validate_coverage_block(block: Mapping[str, Any]) -> None:
             raise StagingError(
                 f"[coverage-block-invalid] coverage {name} must be a list"
             )
+    if block.get("version") == 2 and block.get("parsed_candidate_count") != (
+        block.get("prose_candidate_count") + len(block["candidate_units"])
+    ):
+        raise StagingError(
+            "[candidate-accounting-stale] parsed_candidate_count must equal "
+            "prose_candidate_count plus table candidate source units"
+        )
     if block.get("observed_unit_count") != len(block["source_units"]):
         raise StagingError(
             "[coverage-block-invalid] observed_unit_count must match source_units"
@@ -780,17 +825,17 @@ def validate_coverage_facts(
     approval, and only then refused, leaving a file nobody could promote
     without hand-deleting the approval it had just written.
     """
+    provenance = meta.get("prompt_provenance")
+    schema_version = (
+        provenance.get("response_schema_version")
+        if isinstance(provenance, Mapping)
+        else None
+    )
     if "coverage" not in meta:
-        provenance = meta.get("prompt_provenance")
-        version = (
-            provenance.get("response_schema_version")
-            if isinstance(provenance, Mapping)
-            else None
-        )
         if (
-            isinstance(version, int)
-            and not isinstance(version, bool)
-            and version >= 3
+            isinstance(schema_version, int)
+            and not isinstance(schema_version, bool)
+            and schema_version >= 3
         ):
             raise StagingError(
                 "[coverage-block-invalid] a rich extraction needs its coverage block"
@@ -800,6 +845,47 @@ def validate_coverage_facts(
     if not isinstance(block, Mapping):
         raise StagingError("[coverage-block-invalid] coverage must be a mapping")
     _validate_coverage_block(block)
+    coverage_version = block.get("version")
+    if (
+        isinstance(schema_version, int)
+        and not isinstance(schema_version, bool)
+        and schema_version >= 4
+        and coverage_version != 2
+    ):
+        raise StagingError(
+            "[candidate-accounting-invalid] response schema version 4 or newer "
+            "needs coverage v2 and candidate_accounting"
+        )
+    if coverage_version == 2 and (
+        isinstance(schema_version, bool)
+        or not isinstance(schema_version, int)
+        or schema_version < 4
+    ):
+        raise StagingError(
+            "[candidate-accounting-invalid] coverage v2 belongs to response "
+            "schema version 4 or newer"
+        )
+    if coverage_version == 2:
+        accounting = meta.get(CANDIDATE_ACCOUNTING_KEY)
+        if not isinstance(accounting, Mapping):
+            raise StagingError(
+                "[candidate-accounting-invalid] coverage v2 needs candidate_accounting"
+            )
+        if accounting.get("candidate_accounting_fingerprint") != block.get(
+            "candidate_accounting_fingerprint"
+        ):
+            raise StagingError(
+                "[candidate-accounting-stale] coverage and candidate_accounting "
+                "fingerprints differ"
+            )
+        for name in _COVERAGE_V2_CANDIDATE_FIELDS - {
+            "candidate_accounting_fingerprint"
+        }:
+            if accounting.get(name) != block.get(name):
+                raise StagingError(
+                    "[candidate-accounting-stale] coverage and "
+                    f"candidate_accounting disagree on {name}"
+                )
     _validate_prompt_provenance(meta, block)
     fingerprint = block.get("coverage_block_fingerprint")
     expected_fingerprint = coverage_block_fingerprint(block)
@@ -1140,8 +1226,9 @@ def _apply_changes(
         target[key] = new_value
 
 
-@_path_locked
-def rewrite_staging(path: Path, records: Sequence[VocabularyRecord]) -> Path:
+def _rewrite_staging_unlocked(
+    path: Path, records: Sequence[VocabularyRecord]
+) -> Path:
     """Update an existing staging file in place, preserving what janki does not own.
 
     :func:`write_staging` renders a file from records, which is right when it is
@@ -1197,6 +1284,19 @@ def rewrite_staging(path: Path, records: Sequence[VocabularyRecord]) -> Path:
     _parser().dump(document, buffer)
     atomic_write_text(path, buffer.getvalue())
     return path
+
+
+@_path_locked
+def rewrite_staging(path: Path, records: Sequence[VocabularyRecord]) -> Path:
+    """Update rows while preserving review-only YAML under the path lock."""
+    return _rewrite_staging_unlocked(path, records)
+
+
+def rewrite_staging_under_lock(
+    path: Path, records: Sequence[VocabularyRecord]
+) -> Path:
+    """Update rows when the caller already holds this exact path's lock."""
+    return _rewrite_staging_unlocked(path, records)
 
 
 @_path_locked
@@ -1257,8 +1357,7 @@ def _plain(value: Any) -> Any:
     return value
 
 
-@_path_locked
-def prune_staging(path: Path, keep: Sequence[bool]) -> int:
+def _prune_staging_unlocked(path: Path, keep: Sequence[bool]) -> int:
     """Drop rows from a staging file, keeping the surviving ones verbatim.
 
     ``keep`` is one flag per row, in file order. Rows flagged ``False`` are
@@ -1300,6 +1399,17 @@ def prune_staging(path: Path, keep: Sequence[bool]) -> int:
     _parser().dump(document, buffer)
     atomic_write_text(path, buffer.getvalue())
     return removed
+
+
+@_path_locked
+def prune_staging(path: Path, keep: Sequence[bool]) -> int:
+    """Drop selected rows under the path lock, preserving review-only YAML."""
+    return _prune_staging_unlocked(path, keep)
+
+
+def prune_staging_under_lock(path: Path, keep: Sequence[bool]) -> int:
+    """Drop selected rows when the caller already holds this path's lock."""
+    return _prune_staging_unlocked(path, keep)
 
 
 def read_staging(path: Path) -> tuple[list[VocabularyRecord], dict[str, Any]]:

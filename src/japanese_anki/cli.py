@@ -65,6 +65,7 @@ from japanese_anki.models import VocabularyRecord
 from japanese_anki.preview import build_preview
 from japanese_anki.promote import PromoteError
 from japanese_anki.staging import (
+    CANDIDATE_ACCOUNTING_KEY,
     STAGING_SUFFIXES,
     StagingError,
     check_rewritable,
@@ -72,11 +73,12 @@ from japanese_anki.staging import (
     coverage_block_fingerprint,
     field_replacement_block,
     new_review_run_id,
-    prune_staging,
+    prune_staging_under_lock,
     read_staging,
     record_coverage_approval,
     review_run_id,
     rewrite_staging,
+    rewrite_staging_under_lock,
     rich_extraction_review_run_id,
     validate_coverage_facts,
     write_staging,
@@ -1917,11 +1919,13 @@ def command_extract(args: argparse.Namespace) -> int:
             known=skip_list,
         )
         candidates = result.candidates
-        records = extract.build_records(candidates, item, known)
+        built = extract.build_records(candidates, item, known)
+        records = built.records
         coverage = extract.coverage_block(
             result,
             source_sha256=source_fingerprints[index],
             mode=args.mode,
+            candidate_accounting=built.candidate_accounting,
         )
         target.parent.mkdir(parents=True, exist_ok=True)
         provenance = dict(result.pattern_set.prompt_provenance)
@@ -1947,9 +1951,10 @@ def command_extract(args: argparse.Namespace) -> int:
         # Held back into the file, not just onto the terminal: the staging file
         # is what a reviewer reads later, and a count that lives only in
         # scrollback is the same silent discard with an extra step.
-        held = extract.unusable(candidates)
+        held = list(built.unusable_candidates)
         if held:
             meta["review_notes"] = extract.unusable_note(held)
+        meta[CANDIDATE_ACCOUNTING_KEY] = built.candidate_accounting
         write_staging(target, records, meta, force=args.force)
         previous_patterns = pattern_store.get(run_patterns.source)
         if previous_patterns is not None and previous_patterns.reviewed and not args.force:
@@ -1966,6 +1971,10 @@ def command_extract(args: argparse.Namespace) -> int:
             1 for record in records if "already_known" in record.source.raw_fields
         )
         note = f", {len(held)} unusable" if held else ""
+        duplicate_count = built.candidate_accounting["duplicate_candidate_count"]
+        if duplicate_count:
+            noun = "proposal" if duplicate_count == 1 else "proposals"
+            note += f", {duplicate_count} duplicate {noun} preserved"
         coverage_note = f", coverage {coverage['status']}"
         print(
             f"{item.origin_path.name}: {len(records)} candidate(s) "
@@ -2035,15 +2044,15 @@ def _archive_run_provenance(meta: Mapping[str, Any]) -> dict[str, Any]:
 
 def _archive_for_run(
     base: Path, meta: Mapping[str, Any]
-) -> tuple[Path, list[VocabularyRecord]]:
+) -> tuple[Path, list[VocabularyRecord], dict[str, Any] | None]:
     """Choose this run's deterministic archive and any partial rows already there."""
     identity = _archive_run_provenance(meta)
     if not base.exists():
-        return base, []
+        return base, [], None
 
     previous, previous_meta = read_staging(base)
     if _archive_run_provenance(previous_meta) == identity:
-        return base, list(previous)
+        return base, list(previous), previous_meta
 
     try:
         encoded = json.dumps(
@@ -2061,14 +2070,14 @@ def _archive_for_run(
     digest = hashlib.sha256(encoded).hexdigest()
     candidate = base.with_name(f"{base.stem}.{digest}{base.suffix}")
     if not candidate.exists():
-        return candidate, []
+        return candidate, [], None
 
     previous, previous_meta = read_staging(candidate)
     if _archive_run_provenance(previous_meta) != identity:
         raise PromoteError(
             f"Archive provenance collision at {candidate}; nothing was promoted."
         )
-    return candidate, list(previous)
+    return candidate, list(previous), previous_meta
 
 
 def _provider_name(config: ProjectConfig, chosen: str | None) -> str:
@@ -2985,12 +2994,16 @@ def _complete_pattern_only_review(
         archived_meta = _pattern_only_archive_meta(meta, stored_patterns)
         archive_base = done
         while True:
-            selected, _archived = _archive_for_run(archive_base, meta)
+            selected, _archived, _archived_meta = _archive_for_run(
+                archive_base, meta
+            )
             with exclusive_path_lock(selected):
                 # Selection itself reads existing archives. Confirm after the
                 # selected path is locked: another completion may have created
                 # the base or candidate between those two operations.
-                confirmed, _archived = _archive_for_run(archive_base, meta)
+                confirmed, _archived, _archived_meta = _archive_for_run(
+                    archive_base, meta
+                )
                 if confirmed != selected:
                     continue
                 done = selected
@@ -3029,6 +3042,167 @@ def _complete_pattern_only_review(
     return 0
 
 
+def _record_review_snapshot(
+    path: Path,
+) -> tuple[bytes, list[VocabularyRecord], dict[str, Any]]:
+    """Read one exact live-review snapshot while its writer lock is held."""
+    with exclusive_path_lock(path):
+        wire = _staging_wire(path)
+        records, meta = read_staging(path)
+    return wire, records, meta
+
+
+def _validate_record_archive(
+    live_meta: Mapping[str, Any],
+    archived: Sequence[VocabularyRecord],
+    archived_meta: Mapping[str, Any] | None,
+) -> None:
+    """Prove a same-run record archive is intact before relying on it."""
+    # A completed pattern-only archive deliberately has no rows and carries a
+    # reviewed_pattern_set that the live raw answer does not. Its stricter
+    # retry contract lives in `_complete_pattern_only_review`.
+    if not archived:
+        return
+    if archived_meta is None:
+        raise PromoteError(
+            "[record-archive-divergent] archive rows have no metadata"
+        )
+
+    # The done copy is durable paid evidence too. A retry may delete the only
+    # live copy, so validate it independently rather than trusting the live
+    # block or merely comparing the run-id subset used for archive selection.
+    validate_coverage_facts(archived_meta)
+    promote.check_coverage(dict(archived_meta))
+    promote.check_candidate_accounting(
+        live_meta, (), archived, archived_meta=archived_meta
+    )
+
+    live_core = {
+        key: value for key, value in live_meta.items() if key != "review_notes"
+    }
+    archive_core = {
+        key: value for key, value in archived_meta.items() if key != "review_notes"
+    }
+    if archive_core != live_core:
+        raise PromoteError(
+            "[record-archive-divergent] the same-run archive metadata differs "
+            "from the live review"
+        )
+    note = archived_meta.get("review_notes")
+    suffix = f"Promoted {len(archived)} record(s) from this file."
+    if not isinstance(note, str) or not (
+        note.strip() == suffix or note.strip().endswith(f"\n\n{suffix}")
+    ):
+        raise PromoteError(
+            "[record-archive-divergent] the same-run archive does not record "
+            "its exact archived row count"
+        )
+
+
+def _finish_record_review(
+    path: Path,
+    archive_base: Path,
+    *,
+    expected_wire: bytes,
+    expected_meta: Mapping[str, Any],
+    expected_archived: Sequence[VocabularyRecord],
+    expected_archived_meta: Mapping[str, Any] | None,
+    promoted: Sequence[VocabularyRecord],
+    retry_records: Sequence[VocabularyRecord],
+    keep: Sequence[bool],
+    held: Sequence[VocabularyRecord],
+) -> tuple[Path, int]:
+    """Archive and retire rows as one live/done locked CAS transaction."""
+    if len(keep) - sum(keep) != len(promoted) + len(retry_records):
+        raise PromoteError(
+            "[record-promotion-invalid] row disposition does not match the "
+            "archive transaction"
+        )
+
+    with exclusive_path_lock(path):
+        if _staging_wire(path) != expected_wire:
+            raise PromoteError(
+                "[staging-review-stale] the live staging file changed while "
+                "promotion was completing. The replacement was kept."
+            )
+        current_records, current_meta = read_staging(path)
+        if dict(current_meta) != dict(expected_meta) or len(current_records) != len(keep):
+            raise PromoteError(
+                "[staging-review-stale] the live staging review no longer "
+                "matches the validated snapshot. The replacement was kept."
+            )
+
+        validate_coverage_facts(current_meta)
+        promote.check_coverage(current_meta)
+        while True:
+            selected, _rows, _meta = _archive_for_run(archive_base, current_meta)
+            with exclusive_path_lock(selected):
+                confirmed, archived, archived_meta = _archive_for_run(
+                    archive_base, current_meta
+                )
+                if confirmed != selected:
+                    continue
+                if list(archived) != list(expected_archived) or (
+                    None if archived_meta is None else dict(archived_meta)
+                ) != (
+                    None
+                    if expected_archived_meta is None
+                    else dict(expected_archived_meta)
+                ):
+                    raise PromoteError(
+                        "[record-archive-stale] the done archive changed while "
+                        "promotion was completing. The live review was kept."
+                    )
+                _validate_record_archive(current_meta, archived, archived_meta)
+                retry_flags = promote.check_candidate_accounting(
+                    current_meta,
+                    retry_records,
+                    archived,
+                    archived_meta=archived_meta,
+                )
+                if retry_records and not all(retry_flags):
+                    raise PromoteError(
+                        "[archive-retry-divergent] rows marked as archive retries "
+                        "are not exact promoted rows in the done archive"
+                    )
+                if any(
+                    promote.check_candidate_accounting(
+                        current_meta,
+                        promoted,
+                        archived,
+                        archived_meta=archived_meta,
+                    )
+                ):
+                    raise PromoteError(
+                        "[archive-retry-divergent] a pending row already exists "
+                        "in the done archive"
+                    )
+
+                done = confirmed
+                combined = list(archived) + list(promoted)
+                if promoted:
+                    done.parent.mkdir(parents=True, exist_ok=True)
+                    completed_meta = promote.archive_meta(
+                        dict(current_meta), len(combined)
+                    )
+                    write_staging_under_lock(
+                        done, combined, completed_meta, force=True
+                    )
+                    written, written_meta = read_staging(done)
+                    if written != combined or written_meta != completed_meta:
+                        raise PromoteError(
+                            f"[record-archive-divergent] {done} did not read back "
+                            "as the exact completed archive. The live review was kept."
+                        )
+
+                removed = prune_staging_under_lock(path, keep)
+                if held:
+                    rewrite_staging_under_lock(path, held)
+                else:
+                    path.unlink()
+                return done, removed
+
+
 def command_promote(args: argparse.Namespace) -> int:
     """Move a reviewed staging file's records into the normalized collection.
 
@@ -3045,14 +3219,24 @@ def command_promote(args: argparse.Namespace) -> int:
     """
     config = _load_config(args)
     path = args.file.resolve()
-    done = (config.staging_dir / "done" / path.name).resolve()
-    if _inside_archive(path, done.parent):
+    archive_base = (config.staging_dir / "done" / path.name).resolve()
+    if _inside_archive(path, archive_base.parent):
         raise PromoteError(
             f"{path} is inside the promoted archive. Those records are already in "
             "the collection; promoting the archive would only duplicate it."
         )
 
-    records, meta = read_staging(path)
+    expected_wire, records, meta = _record_review_snapshot(path)
+    # Validate every offline extraction invariant before `--accept-coverage`
+    # is allowed to spend a second model call. Coverage v2 binds the parsed
+    # candidate account; the matching done archive completes its row count on
+    # a partial promotion or an exact retry.
+    validate_coverage_facts(meta)
+    done, archived, archived_meta = _archive_for_run(archive_base, meta)
+    _validate_record_archive(meta, archived, archived_meta)
+    promote.check_candidate_accounting(
+        meta, (), archived, archived_meta=archived_meta
+    )
     if args.accept_coverage:
         # Before `check_coverage`, because it is what makes that gate pass.
         # Writes the approval into the staging file and re-reads, so the file
@@ -3060,19 +3244,43 @@ def command_promote(args: argparse.Namespace) -> int:
         # promote succeed leaving nothing behind that says why.
         if not _model_accepts_coverage(config, path, meta):
             return 1
-        records, meta = read_staging(path)
+        expected_wire, records, meta = _record_review_snapshot(path)
+        validate_coverage_facts(meta)
+        done, archived, archived_meta = _archive_for_run(archive_base, meta)
+        _validate_record_archive(meta, archived, archived_meta)
+        promote.check_candidate_accounting(
+            meta, (), archived, archived_meta=archived_meta
+        )
     # Coverage is an owner-review gate. Check it before a reading client is
     # created and before records, ledger, archive, or staging content can move.
     # A file written before M7.4 has no block and remains valid.
     promote.check_coverage(meta)
     if not records:
+        if archived:
+            # The archive is written before the live review is pruned and
+            # deleted. A crash after the prune leaves an empty extraction file;
+            # it is completion evidence, not a new pattern-only review.
+            done, _removed = _finish_record_review(
+                path,
+                archive_base,
+                expected_wire=expected_wire,
+                expected_meta=meta,
+                expected_archived=archived,
+                expected_archived_meta=archived_meta,
+                promoted=(),
+                retry_records=(),
+                keep=(),
+                held=(),
+            )
+            print(f"Completed exact archive retry for {path}; empty live review removed.")
+            print(f"  Archived to {done} (unchanged).")
+            return 0
         run_id = rich_extraction_review_run_id(meta)
         if run_id is None:
             print(f"{path} holds no records; nothing to promote.")
             return 0
-        expected_wire = _staging_wire(path)
         return _complete_pattern_only_review(
-            config, path, done, meta, expected_wire, run_id
+            config, path, archive_base, meta, expected_wire, run_id
         )
 
     # Everything that can refuse, before anything is written. read_staging goes
@@ -3093,11 +3301,45 @@ def command_promote(args: argparse.Namespace) -> int:
             f"is written under the same name, and that needs "
             f"{' or '.join(STAGING_SUFFIXES)}. Rename it and re-run."
         )
-    done, archived = _archive_for_run(done, meta)
+    raw_archive_retry = promote.check_candidate_accounting(
+        meta,
+        records,
+        archived,
+        archived_meta=archived_meta,
+    )
+    retry_records: list[VocabularyRecord] = [
+        record
+        for record, is_retry in zip(records, raw_archive_retry, strict=True)
+        if is_retry
+    ]
+    work_records = [
+        record
+        for record, is_retry in zip(records, raw_archive_retry, strict=True)
+        if not is_retry
+    ]
+    if not work_records:
+        done, removed = _finish_record_review(
+            path,
+            archive_base,
+            expected_wire=expected_wire,
+            expected_meta=meta,
+            expected_archived=archived,
+            expected_archived_meta=archived_meta,
+            promoted=(),
+            retry_records=retry_records,
+            keep=[False] * len(records),
+            held=(),
+        )
+        print(
+            f"Completed exact archive retry for {path}; {removed} "
+            "already-archived row(s) were removed from the live review."
+        )
+        print(f"  Archived to {done} (unchanged).")
+        return 0
 
     ai_provenance = _staged_ai_enrichment(
         meta,
-        [record.id for record in records],
+        [record.id for record in work_records],
         # `_archive_for_run` returns rows only from an exact provenance match,
         # never from a completed older run that happened to share the basename.
         archived_ids=[record.id for record in archived],
@@ -3130,7 +3372,7 @@ def command_promote(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
     result = promote.check_readings(
-        records,
+        work_records,
         client=client,
         skip_reading_check=args.skip_reading_check,
         already_stored=stored_ids,
@@ -3140,15 +3382,78 @@ def command_promote(args: argparse.Namespace) -> int:
     for warning in result.warnings:
         print(f"warning: {warning}", file=sys.stderr)
 
-    if not result.promoted:
+    exact_promoted = promote.check_candidate_accounting(
+        meta,
+        result.promoted,
+        archived,
+        archived_meta=archived_meta,
+    )
+    pending_promoted = [
+        record
+        for record, is_retry in zip(result.promoted, exact_promoted, strict=True)
+        if not is_retry
+    ]
+    retry_records.extend(
+        record
+        for record, is_retry in zip(result.promoted, exact_promoted, strict=True)
+        if is_retry
+    )
+    promoted_flags = iter(exact_promoted)
+    retry_by_work = [
+        False if stays else next(promoted_flags) for stays in result.keep
+    ]
+    work_keep = [
+        stays and not is_retry
+        for stays, is_retry in zip(result.keep, retry_by_work, strict=True)
+    ]
+    work_keep_iter = iter(work_keep)
+    keep = [
+        False if is_retry else next(work_keep_iter)
+        for is_retry in raw_archive_retry
+    ]
+    pending_records = [
+        record
+        for record, is_retry in zip(work_records, retry_by_work, strict=True)
+        if not is_retry
+    ]
+    pending_reminted: dict[str, str] = {}
+    promoted_iter = iter(result.promoted)
+    retry_iter = iter(exact_promoted)
+    for original, stays in zip(work_records, result.keep, strict=True):
+        if stays:
+            continue
+        transformed = next(promoted_iter)
+        is_retry = next(retry_iter)
+        if not is_retry and transformed.id != original.id:
+            pending_reminted[original.id] = transformed.id
+
+    if not pending_promoted:
         # The reasons still go in: a row held for a reading no dictionary lists
         # is something only promote can determine, and `status --staged` reads
         # it off the file rather than from this run's scrollback.
-        rewrite_staging(path, result.held)
-        print(
-            f"Nothing promoted: all {len(result.held)} row(s) are still held back, "
-            f"and {path} now records why."
+        done, removed = _finish_record_review(
+            path,
+            archive_base,
+            expected_wire=expected_wire,
+            expected_meta=meta,
+            expected_archived=archived,
+            expected_archived_meta=archived_meta,
+            promoted=(),
+            retry_records=retry_records,
+            keep=keep,
+            held=result.held,
         )
+        if retry_records:
+            print(
+                f"Completed exact archive retry for {path}; {removed} "
+                "already-archived row(s) were removed from the live review."
+            )
+            print(f"  Archived to {done} (unchanged).")
+        if result.held:
+            print(
+                f"Nothing promoted: all {len(result.held)} row(s) are still held "
+                f"back, and {path} now records why."
+            )
         return 0
 
     # `existing` and `output_path` were read above, before any id was decided.
@@ -3157,12 +3462,12 @@ def command_promote(args: argparse.Namespace) -> int:
 
     merged, outcomes = promote.merge_staged_records(
         existing,
-        result.promoted,
+        pending_promoted,
         meta,
-        validate_incoming=records,
+        validate_incoming=pending_records,
     )
     already_landed_fields = (
-        promote.already_landed_staged_fields(existing, result.promoted, meta)
+        promote.already_landed_staged_fields(existing, pending_promoted, meta)
         if ai_provenance is not None
         else {}
     )
@@ -3176,7 +3481,7 @@ def command_promote(args: argparse.Namespace) -> int:
     seen = sum(
         book.record_source_seen(record_id, source_type, source_ref)
         for record_id, source_type, source_ref in promote.source_references(
-            result.promoted
+            pending_promoted
         )
     )
     if ai_provenance is not None:
@@ -3206,7 +3511,7 @@ def command_promote(args: argparse.Namespace) -> int:
 
     if ledger_error is not None and ai_provenance is not None:
         print(
-            f"Promoted {len(result.promoted)} record(s) from {path} into "
+            f"Promoted {len(pending_promoted)} record(s) from {path} into "
             f"{output_path}; the live staging review was kept."
         )
         _print_merge_summary(outcomes, prefer_incoming_available=False)
@@ -3225,28 +3530,28 @@ def command_promote(args: argparse.Namespace) -> int:
         )
         return 1
 
-    # The archive is appended to, not replaced: promoting a file in two passes
-    # must not lose the first pass's rows.
-    done.parent.mkdir(parents=True, exist_ok=True)
-    archived = archived + list(result.promoted)
-    write_staging(done, archived, promote.archive_meta(meta, len(archived)), force=True)
+    # Archive append, live pruning/annotation, and final deletion are one CAS
+    # transaction. The live and selected done paths remain locked throughout,
+    # so neither a concurrent forced extraction nor an archive writer can
+    # replace the evidence between verification and cleanup.
+    done, removed = _finish_record_review(
+        path,
+        archive_base,
+        expected_wire=expected_wire,
+        expected_meta=meta,
+        expected_archived=archived,
+        expected_archived_meta=archived_meta,
+        promoted=pending_promoted,
+        retry_records=retry_records,
+        keep=keep,
+        held=result.held,
+    )
 
-    removed = prune_staging(path, result.keep)
-    if result.held:
-        # Rewritten in place with the reason each surviving row is still held,
-        # so a partly-promoted file always says what still needs attention.
-        rewrite_staging(path, result.held)
-    if not result.held:
-        # An emptied review is finished work; leaving it would have the next
-        # import report a file that can never be resolved.
-        with exclusive_path_lock(path):
-            path.unlink()
-
-    print(f"Promoted {len(result.promoted)} record(s) from {path} into {output_path}")
+    print(f"Promoted {len(pending_promoted)} record(s) from {path} into {output_path}")
     _print_merge_summary(outcomes, prefer_incoming_available=False)
-    if result.reminted:
+    if pending_reminted:
         print("Re-minted malformed IDs (these records were never in Anki):")
-        for old, new in sorted(result.reminted.items()):
+        for old, new in sorted(pending_reminted.items()):
             print(f"  {old} -> {new}")
     if result.held:
         print(f"  {len(result.held)} row(s) still held back; {path} keeps them.")

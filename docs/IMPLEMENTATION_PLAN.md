@@ -3912,10 +3912,10 @@ Files: `hardening.py`, `hardening_replay.py`, `cli.py`, `Makefile`,
 *Started 2026-08-16; reconciled 2026-08-18. `transitivity` and `imported_from`
 are done (701000b). The old “one source through; five remain” count was stale
 in two directions: four of the six collected sources completed the historical
-schema-v2 pipeline, while none can prove M7.6P's newer one-call rich-v3
-contract. The honest counters are therefore **historical source runs: 4/6;
-required current rich-v3 representative runs complete: 0/2**. Five rich-v3
-answers have completed and been staged across the two representative sources;
+schema-v2 pipeline, while none can prove M7.6P's newer one-call rich contract.
+The honest counters are therefore **historical source runs: 4/6; required
+current representative runs complete: 0/2**. Five schema-v3 rich answers have
+completed and been staged across the two representative sources;
 the older forced 27–34 answer remains in Git history while its latest paid run
 occupies the live staging path. Neither live run has crossed its human
 review/build/study gates, and only the te-form answer filled its intended
@@ -3946,11 +3946,12 @@ media, deck definitions, and history prove source preparation, coverage
 accounting, promotion, dictionary enrichment, audio, export, and build. The
 contemporaneous workflow records say the staging was reviewed, but those
 artifacts do not encode modern review authority. They also do **not** contain a
-rich-v3 `pattern_set`, `review_run_id`, response-schema fingerprint, or full
+modern rich `pattern_set`, `review_run_id`, response-schema fingerprint, or full
 request fingerprint. Keep that evidence and grandfather it; do not rebill four
 private sources only to mint newer provenance fields.
 
-Completion now requires two complementary rich-v3 runs:
+Completion now requires two complementary attributed rich runs: the existing
+pattern-only v3 run and a future candidate-bearing v4 run.
 
 1. `data/inbox/scans/teform_song.pdf` exercises the pattern-document shape. The
    old reason for skipping it — that it had already gone through a separate
@@ -4007,7 +4008,7 @@ Completion now requires two complementary rich-v3 runs:
    labelled/aligned examples and turn a marked error plus correction into the
    valid scoped pattern rather than an error template. The owner authorized an
    explicit `--mode prose` call on 2026-08-20. Review run
-   `127dac03-296f-4304-bfa6-a531efc16e4e` returned six raw prose candidate
+   `127dac03-296f-4304-bfa6-a531efc16e4e` returned six parsed prose candidate
    proposals, five persisted distinct records, five patterns, and nonblocking
    selection coverage. Its source, schema, complete request, staging, nested
    pattern, and pattern-store provenance all match, and the pattern set remains
@@ -4015,19 +4016,33 @@ Completion now requires two complementary rich-v3 runs:
    `prose_candidate_count: 6` versus five records and no held-note proves that
    `build_records` silently collapsed two proposals with the same deterministic
    ID; unlike table mode, prose has no `source_units` copy from which the
-   discarded proposal can be reviewed. That is a machinery/provenance defect
-   and requires a failing regression, mutation proof, and durable
+   discarded proposal can be reviewed. That was a machinery/provenance defect
+   and required a failing regression, mutation proof, and durable
    representation before any future run. Because the discarded proposal is
    unrecoverable, a later code fix cannot make this run complete retroactively;
    it remains nonqualifying unless the owner explicitly accepts that loss as a
-   risk, which has not happened. The five retained rows also
-   have empty meanings, examples, and usage notes; validation reports five
+   risk, which has not happened. The five retained rows also have empty
+   meanings, examples, and usage notes; validation reports five
    `missing-meaning` errors, and the retained `あげる` proposal has only `K` as
    context with no page or inclusion reason. Those are thin
    model-answer/content-review findings, not permission for Japanese auditing
    code. The incomplete paid-run artifacts and the fact of the unrecoverable
-   duplicate-proposal loss are preserved while the no-billing prompt and
-   machinery work proceeds. An owner-approved alternative source remains
+   duplicate-proposal loss were preserved while the no-billing prompt and
+   machinery work proceeded. The machinery defect is now fixed prospectively,
+   red-first and through two adversarial reviews. Schema v4 writes versioned,
+   fingerprinted `candidate_accounting`; coverage v2 binds the parsed,
+   canonical, unusable, duplicate, and collision-group counts, and every
+   parsed member of a stable-ID collision group survives with its original
+   index. Human row deletion and re-identification remain allowed. Promotion
+   validates that evidence, rejects converged final IDs, and uses a live/done
+   locked byte-CAS transaction so exact partial/archive retries are idempotent
+   across reminting and collection changes. The v3 paid artifact was not and
+   cannot be backfilled. The no-billing prompt fix also adds a final checklist:
+   every emitted card needs a meaning and exactly one polite plus one casual
+   complete example; prose candidates need page/context/reason and one
+   consolidated lexical identity; source-taught error corrections map the
+   valid rule to pattern template/gloss while the wrong form stays out of
+   pattern examples. An owner-approved alternative source remains
    another valid way to fill the candidate-bearing role. Content review also
    must settle the new kana-only `word:とまる:とまる` identity: the
    collection already has `word:止まる:とまる`, and historical staging has
@@ -4035,10 +4050,11 @@ Completion now requires two complementary rich-v3 runs:
    separate live Yotsubato staging artifact, so neither source's pending review
    may silently overwrite the other's evidence.
 
-A qualifying candidate-bearing run archives `response_schema_version: 3`, a
-`review_run_id`, response-schema and full-request fingerprints, and
-card/pattern provenance from the identical paid answer. A human then reviews
-the proposed records and patterns. Selection coverage proceeds without an
+A qualifying candidate-bearing run now archives `response_schema_version: 4`,
+coverage v2, fingerprinted `candidate_accounting`, a `review_run_id`,
+response-schema and full-request fingerprints, and card/pattern provenance
+from the identical paid answer. A human then reviews the proposed records and
+patterns. Selection coverage proceeds without an
 approval; only a blocking/unmeasured coverage block requires written owner
 approval or a separately opted-in `promote --accept-coverage` call. The human
 then promotes, enriches/voices what is missing, builds, and studies the deck.

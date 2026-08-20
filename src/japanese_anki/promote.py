@@ -29,7 +29,7 @@ no history to orphan.
 from __future__ import annotations
 
 import re
-from collections.abc import Container, Iterable, Sequence
+from collections.abc import Container, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from types import SimpleNamespace
 from typing import Any
@@ -46,6 +46,7 @@ from japanese_anki.models import (
     set_example_flags,
 )
 from japanese_anki.staging import (
+    CANDIDATE_ACCOUNTING_KEY,
     FIELD_REPLACEMENTS_KEY,
     HOLD_MISSING_READING,
     HOLD_READING_KANJI,
@@ -68,6 +69,7 @@ __all__ = [
     "PromoteResult",
     "check_readings",
     "check_coverage",
+    "check_candidate_accounting",
     "field_replacement_block",
     "already_landed_staged_fields",
     "merge_staged_records",
@@ -146,7 +148,109 @@ def check_coverage(meta: dict[str, Any]) -> None:
     block = meta.get("coverage")
     if not isinstance(block, dict):
         return
+    accounting = meta.get(CANDIDATE_ACCOUNTING_KEY)
+    if block.get("version") == 2:
+        if not isinstance(accounting, Mapping):
+            raise PromoteError(
+                "[candidate-accounting-invalid] coverage v2 needs candidate_accounting"
+            )
+        try:
+            extract.validate_candidate_accounting_block(accounting)
+        except JankiError as exc:
+            raise PromoteError(str(exc)) from exc
+    elif accounting is not None:
+        raise PromoteError(
+            "[candidate-accounting-invalid] candidate_accounting is not bound by "
+            "coverage v2; it cannot be backfilled onto an older paid artifact"
+        )
     _verify_coverage_facts(meta, block)
+
+
+def check_candidate_accounting(
+    meta: Mapping[str, Any],
+    live: Sequence[VocabularyRecord],
+    archived: Sequence[VocabularyRecord] = (),
+    *,
+    archived_meta: Mapping[str, Any] | None = None,
+) -> tuple[bool, ...]:
+    """Authenticate candidate accounting and classify transformed archive retries.
+
+    Reviewed record content, identity, and selection remain editable. The
+    immutable block describes what the model proposed, not what the human must
+    keep. An exact row in both a same-run done archive and live staging is the
+    recoverable boundary where archive writing succeeded but pruning failed.
+    """
+    coverage = meta.get("coverage")
+    coverage_version = (
+        coverage.get("version") if isinstance(coverage, Mapping) else None
+    )
+    accounting = meta.get(CANDIDATE_ACCOUNTING_KEY)
+    if coverage_version != 2:
+        if accounting is not None:
+            raise PromoteError(
+                "[candidate-accounting-invalid] candidate_accounting is not bound "
+                "by coverage v2; it cannot be backfilled onto an older paid artifact"
+            )
+    else:
+        if not isinstance(accounting, Mapping):
+            raise PromoteError(
+                "[candidate-accounting-invalid] coverage v2 needs candidate_accounting"
+            )
+        try:
+            extract.validate_candidate_accounting_block(accounting)
+        except JankiError as exc:
+            raise PromoteError(str(exc)) from exc
+        if archived_meta is not None and archived_meta.get(
+            CANDIDATE_ACCOUNTING_KEY
+        ) != dict(accounting):
+            raise PromoteError(
+                "[candidate-accounting-archive-divergent] the same-run archive "
+                "carries different candidate accounting"
+            )
+
+    archived_ids = [record.id for record in archived]
+    if len(set(archived_ids)) != len(archived_ids):
+        raise PromoteError(
+            "[archive-retry-divergent] the same-run archive repeats a canonical "
+            "record id"
+        )
+    live_ids = [record.id for record in live]
+    if len(set(live_ids)) != len(live_ids):
+        raise PromoteError(
+            "[canonical-record-id-collision] reviewed rows converge on one "
+            "canonical record id; resolve them explicitly before promotion"
+        )
+    unmatched_archive = set(range(len(archived)))
+    exact_retry: list[bool] = []
+    for record in live:
+        resolved = _accept_examples(_resolved(record))
+        stable = replace(
+            resolved,
+            id=stable_record_id(resolved.expression, resolved.reading),
+        )
+        variants = {resolved.id: resolved.to_dict(), stable.id: stable.to_dict()}
+        matches = [
+            index
+            for index in sorted(unmatched_archive)
+            if archived[index].to_dict() in variants.values()
+        ]
+        if len(matches) > 1:
+            raise PromoteError(
+                "[archive-retry-divergent] one live row matches multiple rows in "
+                "the same-run archive"
+            )
+        match = matches[0] if matches else None
+        exact_retry.append(match is not None)
+        if match is not None:
+            unmatched_archive.remove(match)
+            continue
+        if set(variants) & set(archived_ids):
+            raise PromoteError(
+                "[archive-retry-divergent] a live row's unchanged or stable-reminted "
+                "id exists in the same-run archive but its reviewed content differs"
+            )
+
+    return tuple(exact_retry)
 
 
 def _verify_coverage_facts(meta: dict[str, Any], block: dict[str, Any]) -> None:
@@ -226,6 +330,12 @@ def _verify_coverage_facts(meta: dict[str, Any], block: dict[str, Any]) -> None:
         extract.ExtractionResult(tuple(candidates), tuple(units), reported_count),
         source_sha256=str(block.get("source_fingerprint", "")),
         mode=mode,
+        candidate_accounting=(
+            meta.get(CANDIDATE_ACCOUNTING_KEY)
+            if block.get("version") == 2
+            and isinstance(meta.get(CANDIDATE_ACCOUNTING_KEY), Mapping)
+            else None
+        ),
     )
     stored_facts = {
         key: value

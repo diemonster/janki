@@ -205,6 +205,12 @@ parsed mechanically.
   model, mode, response-schema version and fingerprint, component prompt
   fingerprints, and a fingerprint of the full provider-normalized request
   across style, task, labelled data turn, transport prompt, and wire schema.
+- Schema-v4 answers write a versioned, fingerprinted `candidate_accounting`
+  block. Coverage v2 binds its parsed, canonical, unusable, duplicate, and
+  collision-group counts. One canonical row represents a stable ID, while
+  every parsed proposal in a collision group remains in original response
+  order as machine-owned evidence. This is structural preservation, not a
+  Japanese merge rule.
 - Output goes to `data/staging/<source-name>.yaml`, and the answer's unreviewed
   `PatternSet` goes to `data/patterns.json`. A copy of that set remains in the
   staging metadata so the paid answer is recoverable even when the stored set
@@ -215,9 +221,13 @@ parsed mechanically.
   candidates are annotated and sorted after new candidates so review effort
   goes to the new words.
 
-**Staging file shape**: a mapping with a `records:` list plus source,
-coverage, prompt-provenance, and `pattern_set` metadata. The source answer is
-a proposal, not implicit study-content approval. To accept its example text,
+**Staging file shape**: a mapping with a human-editable `records:` list plus
+source, coverage, prompt-provenance, `pattern_set`, and (for schema v4)
+`candidate_accounting` metadata. The accounting is machine-owned and must not
+be edited or backfilled onto an older paid v3 answer; deleting, correcting, or
+re-identifying a reviewed row does not change what the model originally
+proposed. The source answer is a proposal, not implicit study-content approval.
+To accept its example text,
 the reviewer adds `example_authority: staging-review` under that record's
 `source.raw_fields`; promotion replaces the sentinel with fingerprints of the
 exact Japanese sentences reviewed. Merely promoting a row does not grant that
@@ -243,7 +253,10 @@ authority.
   folded into the completed run. Schema-v2/no-id staging falls back to its
   recorded provenance. Held-back rows are *rewritten in place* with their hold
   reason inline, so a partially-promoted file always shows exactly what still
-  needs attention. The file is removed when empty.
+  needs attention. The file is removed when empty. The live review and selected
+  archive remain locked through a byte-checked archive/prune transaction. A
+  retry after the archive landed is idempotent, including after ID reminting;
+  a divergent or concurrently replaced review is preserved and refused.
 
 Model choice: extraction defaults to `claude-opus-5` — scans and dense
 handouts are where errors are most expensive, since they propagate into

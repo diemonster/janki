@@ -178,8 +178,15 @@ below is what is left, and it is the loop every other project already uses.*
    the file; never delete this recovery artifact by hand. Source
    extraction metadata fingerprints the source, style guide, task template,
    labelled data turn, response schema, and complete request; the pattern copy
-   carries the same provenance. Large `enrich --ai` staging records complete
-   request and input fingerprints per record. Its `field_replacements` hashes
+   carries the same provenance. Schema-v4 extraction also writes machine-owned
+   `candidate_accounting`: coverage v2 binds its parsed/canonical/unusable/
+   duplicate counts and fingerprint, and every stable-ID collision group keeps
+   all parsed schema proposals in original order. Reviewers may still edit,
+   delete, or re-identify rows under `records`; never edit that accounting or
+   backfill it onto a schema-v3/coverage-v1 paid artifact. It survives partial
+   promotion and the done archive unchanged. Large `enrich --ai` staging
+   records complete request and input fingerprints per record. Its
+   `field_replacements` hashes
    bind each authorized field to the record id, field name, and exact old wire
    value — not the proposed value, which a reviewer may improve. If any bound
    old value changes before promote, the whole staged replacement is stale and
@@ -187,7 +194,8 @@ below is what is left, and it is the loop every other project already uses.*
 5. `data/staging/done/`: canonical promoted rows as they actually landed, with
    the staging metadata preserved and archival count/review text added —
    **committed**, the record of what each source yielded and what a reviewer
-   accepted.
+   accepted. An exact retry after archive success is idempotent; divergent
+   same-run live/archive content refuses rather than overwriting either copy.
 6. `data/kanji.json`: machine-written kanji reference data — **committed** and
    replaced by `janki kanji --refresh`; do not add fields by hand because the
    source schema does not preserve unknown keys.
