@@ -10,6 +10,7 @@ one, and the one an expression-only check misses.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -17,7 +18,7 @@ from typing import Any
 import pytest
 import yaml
 
-from japanese_anki import cli, ledger
+from japanese_anki import cli, extract, ledger, patterns, staging
 from japanese_anki import status as status_module
 from japanese_anki.config import ProjectConfig
 from japanese_anki.ledger import (
@@ -677,6 +678,58 @@ def _stage(root: Path, name: str, ids: list[str]) -> Path:
     return path
 
 
+def _stage_pattern_only_extraction(
+    root: Path, *, blocking_coverage: bool = False
+) -> Path:
+    source = "teform_song.pdf"
+    run_id = "11111111-1111-4111-8111-111111111111"
+    mode = "table" if blocking_coverage else "auto"
+    provenance = {
+        "source_sha256": "1" * 64,
+        "mode": mode,
+        "provider": "anthropic",
+        "model": "claude-opus-5",
+        "response_schema_version": 3,
+        "system_prompt_fingerprint": "2" * 64,
+        "style_guide_fingerprint": "3" * 64,
+        "user_prompt_fingerprint": "4" * 64,
+        "response_schema_fingerprint": "5" * 64,
+        "request_fingerprint": "6" * 64,
+    }
+    proposed = patterns.PatternSet(
+        source=source,
+        kind="pattern",
+        patterns=(patterns.Pattern("う・つ・る → って", "te-form rule"),),
+    )
+    bound = replace(
+        patterns.with_prompt_provenance(proposed, provenance),
+        review_run_id=run_id,
+    )
+    result = extract.ExtractionResult(
+        candidates=(), source_units=(), model_reported_unit_count=0
+    )
+    meta = {
+        "source_file": source,
+        "review_run_id": run_id,
+        "prompt_provenance": provenance,
+        "pattern_set": bound.to_dict(),
+        "coverage": extract.coverage_block(
+            result,
+            source_sha256=provenance["source_sha256"],
+            mode=mode if blocking_coverage else None,
+        ),
+    }
+    # Keep the fixture honest: this is the same validated schema-v3 rich
+    # extraction shape as the live te-form run, not merely a lookalike key.
+    pending_coverage = staging.validate_coverage_facts(meta)
+    assert (pending_coverage is not None) is blocking_coverage
+    path = root / "data" / "staging" / f"{source}.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    staging.write_staging(path, [], meta)
+    patterns.save_store(root / "data" / "patterns.json", {source: bound})
+    return path
+
+
 def test_status_says_when_nothing_is_waiting_for_a_human(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -767,17 +820,268 @@ def test_a_staging_file_with_no_rows_is_not_a_review_queue(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # README step 3 is "delete the rows not worth keeping"; a reviewer who kept
-    # none leaves `records: []`. Reporting a queue and printing a bare "(0):"
-    # heading over it describes work that is already done.
+    # none leaves `records: []`. The file itself is still tracked project data,
+    # so status must report no waiting rows without inventing a deletion route.
     root = _project(tmp_path, [_raw("話す", "はなす")])
-    _stage(root, "shirabe-export-needs-reading.yaml", [])
+    path = root / "data" / "staging" / "shirabe-export-needs-reading.yaml"
+    path.parent.mkdir(parents=True)
+    staging.write_staging(
+        path,
+        [],
+        {
+            "source_file": "export.csv",
+            "extracted_at": "2026-08-20",
+            "review_notes": "Fill the missing reading, then promote.",
+        },
+    )
 
     assert _status(root, "--staged") == 0
 
     out = capsys.readouterr().out
-    assert "Staged for review: none (1 empty file(s) under data/staging" in out
-    assert "holds no rows" in out
+    assert "Staged for review: none (1 tracked empty file(s) under data/staging" in out
+    assert "no review rows are waiting" in out
+    assert "must be preserved as tracked staging data" in out
+    assert "status has no completion action" in out
+    assert "rich extraction evidence" not in out
+    assert "delete" not in out
     assert "(0):" not in out
+
+
+def test_a_pattern_only_rich_extraction_is_review_work_not_a_disposable_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")])
+    path = _stage_pattern_only_extraction(root)
+
+    assert _status(root, "--staged") == 0
+
+    out = capsys.readouterr().out
+    assert "Staged for review: no rows; 1 pattern-only extraction file(s)" in out
+    assert f"janki --root {root} patterns --review teform_song.pdf" in out
+    assert f"janki --root {root} promote {path}" in out
+    assert "preserve its extraction evidence" in out
+    assert "can be deleted" not in out
+
+    # The two advertised commands are an executable route from review to the
+    # zero-record archive, even when status was invoked with --root elsewhere.
+    assert cli.main(["--root", str(root), "patterns", "--review", "teform_song.pdf"]) == 0
+    capsys.readouterr()
+    assert _status(root, "--staged") == 0
+    reviewed_out = capsys.readouterr().out
+    assert "remain live until promotion or recovery" in reviewed_out
+    assert "matching pattern set is already reviewed" in reviewed_out
+    assert f"janki --root {root} promote {path}" in reviewed_out
+    assert "still need review" not in reviewed_out
+    assert cli.main(["--root", str(root), "promote", str(path)]) == 0
+    assert not path.exists()
+    assert (root / "data" / "staging" / "done" / path.name).is_file()
+
+
+def test_pattern_only_summary_is_visible_without_the_staged_detail_flag(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")])
+    _stage_pattern_only_extraction(root)
+
+    assert _status(root) == 0
+
+    out = capsys.readouterr().out
+    assert (
+        "Staged for review: no rows; 1 pattern-only extraction file(s) under "
+        "data/staging remain live until promotion or recovery"
+    ) in out
+    assert "patterns --review" not in out
+
+
+def test_nested_source_cannot_replace_the_top_level_source_promote_requires(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")])
+    path = _stage_pattern_only_extraction(root)
+    assert cli.main(["--root", str(root), "patterns", "--review", "teform_song.pdf"]) == 0
+    capsys.readouterr()
+    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    del payload["source_file"]
+    payload["pattern_set"]["source"] = "teform_song.pdf"
+    path.write_text(
+        yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
+
+    assert _status(root, "--staged") == 0
+
+    out = capsys.readouterr().out
+    assert "extraction metadata is incomplete or invalid" in out
+    assert "source_file" in out
+    assert "patterns --review" not in out
+    assert " promote " not in out
+    assert cli.main(["--root", str(root), "promote", str(path)]) == 1
+    assert "needs its source_file and pattern_set" in capsys.readouterr().err
+
+
+def test_source_file_is_not_stripped_to_a_different_pattern_store_key(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")])
+    path = _stage_pattern_only_extraction(root)
+    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    payload["source_file"] = " teform_song.pdf "
+    path.write_text(
+        yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
+
+    assert _status(root, "--staged") == 0
+
+    out = capsys.readouterr().out
+    assert "matching ' teform_song.pdf ' pattern-store entry is missing" in out
+    assert "patterns --review" not in out
+    assert " promote " not in out
+
+
+@pytest.mark.parametrize(
+    "remnant",
+    [
+        {"review_run_id": "11111111-1111-4111-8111-111111111111"},
+        {"candidate_accounting": {"version": 1}},
+        {"coverage": {}},
+        {"prompt_provenance": "damaged"},
+    ],
+)
+def test_damaged_extraction_only_metadata_is_preserved_as_review_evidence(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    remnant: dict[str, Any],
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")])
+    path = _stage(root, "damaged-rich.yaml", [])
+    path.write_text(
+        yaml.safe_dump({**remnant, "records": []}, sort_keys=False), encoding="utf-8"
+    )
+
+    assert _status(root, "--staged") == 0
+
+    out = capsys.readouterr().out
+    assert "carries rich extraction evidence" in out
+    assert "extraction metadata is incomplete or invalid" in out
+    assert "tracked empty file" not in out
+
+
+def test_damaged_rich_extraction_metadata_is_never_called_disposable(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")])
+    path = _stage_pattern_only_extraction(root)
+    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    del payload["pattern_set"]
+    path.write_text(
+        yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
+
+    assert _status(root, "--staged") == 0
+
+    out = capsys.readouterr().out
+    assert "extraction metadata is incomplete or invalid" in out
+    assert "Restore this exact staging artifact from version control" in out
+    assert "can be deleted" not in out
+
+
+def test_malformed_nested_pattern_answer_is_not_reported_as_promotion_ready(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")])
+    path = _stage_pattern_only_extraction(root)
+    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    payload["pattern_set"]["patterns"] = "not-a-list"
+    path.write_text(
+        yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
+
+    assert _status(root, "--staged") == 0
+
+    out = capsys.readouterr().out
+    assert "patterns must be a list" in out
+    assert " promote " not in out
+    assert "can be deleted" not in out
+
+
+def test_unresolved_coverage_is_an_owner_prerequisite_not_a_promote_command(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")])
+    _stage_pattern_only_extraction(root, blocking_coverage=True)
+
+    assert _status(root, "--staged") == 0
+
+    out = capsys.readouterr().out
+    assert "requires the repository owner's resolution" in out
+    assert "Status cannot grant that approval" in out
+    assert " promote " not in out
+    assert "can be deleted" not in out
+
+
+def test_unreadable_pattern_store_blocks_commands_but_preserves_staging(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")])
+    _stage_pattern_only_extraction(root)
+    (root / "data" / "patterns.json").write_text("[]\n", encoding="utf-8")
+
+    assert _status(root, "--staged") == 0
+
+    captured = capsys.readouterr()
+    assert "could not inspect pattern review state" in captured.err
+    assert "matching pattern-store state could not be verified" in captured.out
+    assert " promote " not in captured.out
+    assert "can be deleted" not in captured.out
+
+
+@pytest.mark.parametrize("store_state", ["missing", "stale"])
+def test_missing_or_stale_pattern_store_gets_recovery_guidance(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    store_state: str,
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")])
+    _stage_pattern_only_extraction(root)
+    store_path = root / "data" / "patterns.json"
+    if store_state == "missing":
+        store_path.unlink()
+    else:
+        store = patterns.load_store(store_path)
+        store["teform_song.pdf"] = replace(
+            store["teform_song.pdf"],
+            review_run_id="22222222-2222-4222-8222-222222222222",
+            reviewed=True,
+        )
+        patterns.save_store(store_path, store)
+
+    assert _status(root, "--staged") == 0
+
+    out = capsys.readouterr().out
+    expected = "is missing" if store_state == "missing" else "different extraction run"
+    assert expected in out
+    assert "There is no automatic recovery command" in out
+    assert "patterns --review" not in out
+    assert "can be deleted" not in out
+
+
+def test_waiting_rows_do_not_hide_pattern_only_extraction_review(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")])
+    _stage(root, "shirabe-export-needs-reading.yaml", ["word:食べ物:"])
+    _stage(root, "ordinary-empty.yaml", [])
+    _stage_pattern_only_extraction(root)
+
+    assert _status(root, "--staged") == 0
+
+    out = capsys.readouterr().out
+    assert "Staged for review: 1 row(s) in 1 file(s)" in out
+    assert "Pattern-only extraction review: 1 file(s)" in out
+    assert "word:食べ物: — missing reading" in out
+    assert "patterns --review teform_song.pdf" in out
+    assert "ordinary-empty.yaml holds no rows" in out
+    assert "must be preserved as tracked staging data" in out
+    assert "status has no completion action" in out
 
 
 def test_an_empty_staging_file_does_not_hide_the_rows_still_waiting(

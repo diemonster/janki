@@ -25,12 +25,14 @@ from __future__ import annotations
 import dataclasses
 import itertools
 import re
+import shlex
 from collections import Counter
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from japanese_anki import patterns
 from japanese_anki.collection import (
     CollectionError,
     clone_suffix_of,
@@ -55,7 +57,11 @@ from japanese_anki.ledger import (
     word_audio_filename_fingerprint,
 )
 from japanese_anki.models import SourceReference, VocabularyRecord
-from japanese_anki.staging import read_staging
+from japanese_anki.staging import (
+    read_staging,
+    require_resolved_coverage,
+    validate_coverage_facts,
+)
 from japanese_anki.tts import RenderProfile
 
 # Every media file janki generates is named ``janki-<filename fingerprint>``;
@@ -242,6 +248,76 @@ class StagedFile:
     path: Path
     ids: list[str]
     reasons: dict[str, str]
+    is_rich_extraction: bool
+    pattern_source: str | None
+    pattern_review_state: str
+    pattern_review_issue: str
+
+
+_RICH_EXTRACTION_META_KEYS = frozenset(
+    {
+        "review_run_id",
+        "coverage",
+        "prompt_provenance",
+        "pattern_set",
+        "reviewed_pattern_set",
+        "candidate_accounting",
+    }
+)
+
+
+def _looks_like_rich_extraction(meta: Mapping[str, Any]) -> bool:
+    """Whether empty staging carries (or carried) the rich extraction contract."""
+    return bool(_RICH_EXTRACTION_META_KEYS.intersection(meta))
+
+
+def _pattern_review_state(
+    meta: Mapping[str, Any],
+    pattern_source: str | None,
+    store: Mapping[str, patterns.PatternSet],
+    store_issue: str,
+) -> tuple[str, str]:
+    """Structural readiness of a zero-record rich extraction for archival."""
+    provenance = meta.get("prompt_provenance")
+    version = (
+        provenance.get("response_schema_version")
+        if isinstance(provenance, Mapping)
+        else None
+    )
+    if (
+        not isinstance(meta.get("pattern_set"), Mapping)
+        or pattern_source is None
+        or isinstance(version, bool)
+        or not isinstance(version, int)
+        or version < 3
+    ):
+        return (
+            "staging-invalid",
+            "its schema-v3-or-newer pattern_set, top-level source_file, or prompt "
+            "provenance is missing",
+        )
+    try:
+        patterns.PatternSet.from_dict(pattern_source, dict(meta["pattern_set"]))
+        validate_coverage_facts(meta)
+    except JankiError as exc:
+        return "staging-invalid", str(exc)
+    try:
+        require_resolved_coverage(meta)
+    except JankiError as exc:
+        return "coverage-unresolved", str(exc)
+    if store_issue:
+        return "store-unreadable", store_issue
+    stored = store.get(pattern_source)
+    if stored is None:
+        return "store-missing", ""
+    run_id = meta.get("review_run_id")
+    if (
+        stored.review_run_id != run_id
+        or not isinstance(provenance, Mapping)
+        or stored.prompt_provenance != dict(provenance)
+    ):
+        return "store-stale", ""
+    return ("reviewed" if stored.reviewed else "unreviewed"), ""
 
 
 def collect_staged(config: ProjectConfig) -> tuple[list[StagedFile], list[str]]:
@@ -253,6 +329,7 @@ def collect_staged(config: ProjectConfig) -> tuple[list[StagedFile], list[str]]:
     same rule the deck scan follows.
     """
     staged: list[StagedFile] = []
+    parsed: list[tuple[Path, list[VocabularyRecord], dict[str, Any]]] = []
     warnings: list[str] = []
     if not config.staging_dir.is_dir():
         # "No staging directory yet" and "staging_dir points at something that
@@ -269,10 +346,48 @@ def collect_staged(config: ProjectConfig) -> tuple[list[StagedFile], list[str]]:
         [*config.staging_dir.glob("*.yaml"), *config.staging_dir.glob("*.yml")]
     ):
         try:
-            records, _ = read_staging(path)
+            records, meta = read_staging(path)
         except JankiError as exc:
             warnings.append(f"skipping staging file {path}: {exc}")
             continue
+        parsed.append((path, records, meta))
+
+    needs_pattern_store = any(
+        not records and _looks_like_rich_extraction(meta)
+        for _path, records, meta in parsed
+    )
+    pattern_store: dict[str, patterns.PatternSet] = {}
+    pattern_store_issue = ""
+    if needs_pattern_store:
+        try:
+            pattern_store = patterns.load_store(config.patterns_file)
+        except JankiError as exc:
+            pattern_store_issue = str(exc)
+            warnings.append(
+                f"could not inspect pattern review state in {config.patterns_file}: {exc}"
+            )
+
+    for path, records, meta in parsed:
+        # Promote uses this exact top-level value as the pattern-store key.
+        # Whitespace is tested only for nonblankness, never normalized away;
+        # advertising a stripped key could make status's command disagree with
+        # the transition it claims is ready.
+        pattern_source_value = meta.get("source_file")
+        pattern_source = (
+            pattern_source_value
+            if isinstance(pattern_source_value, str) and pattern_source_value.strip()
+            else None
+        )
+        is_rich_extraction = _looks_like_rich_extraction(meta)
+        pattern_review_state = "not-applicable"
+        pattern_review_issue = ""
+        if not records and is_rich_extraction:
+            pattern_review_state, pattern_review_issue = _pattern_review_state(
+                meta,
+                pattern_source,
+                pattern_store,
+                pattern_store_issue,
+            )
         staged.append(
             StagedFile(
                 path=path,
@@ -281,6 +396,13 @@ def collect_staged(config: ProjectConfig) -> tuple[list[StagedFile], list[str]]:
                     record.id: str(record.source.raw_fields.get("hold_reason", ""))
                     for record in records
                 },
+                # Schema v3 introduced the attributed nested pattern answer.
+                # Any reserved remnant is evidence to preserve: losing one half
+                # must not make the other look like an ordinary empty file.
+                is_rich_extraction=is_rich_extraction,
+                pattern_source=pattern_source,
+                pattern_review_state=pattern_review_state,
+                pattern_review_issue=pattern_review_issue,
             )
         )
     return staged, warnings
@@ -559,21 +681,40 @@ def format_report(report: StatusReport) -> list[str]:
     else:
         lines.append(f"Missing pitch accent: {len(report.missing_pitch_accent)}")
 
-    # An empty staging file is not a review queue: a reviewer who decided no row
-    # was worth keeping leaves `records: []` behind, and counting that file as
-    # "staged for review" reports a queue with nothing in it.
+    # An ordinary empty staging file is not a review queue: a reviewer who
+    # decided no row was worth keeping leaves `records: []` behind. A rich
+    # extraction with no card rows is different: its nested pattern answer is
+    # attributed evidence that only the zero-record promote path archives safely.
     waiting = [item for item in report.staged if item.ids]
-    empty = [item for item in report.staged if not item.ids]
+    pattern_only = [
+        item for item in report.staged if not item.ids and item.is_rich_extraction
+    ]
+    empty = [
+        item for item in report.staged if not item.ids and not item.is_rich_extraction
+    ]
     if waiting:
         lines.append(
             f"Staged for review: {report.staged_count} row(s) in {len(waiting)} "
             f"file(s) under {display_path(report.staging_dir, root)} "
             "(not in the collection until a human resolves them)"
         )
+        if pattern_only:
+            lines.append(
+                f"Pattern-only extraction review: {len(pattern_only)} file(s) under "
+                f"{display_path(report.staging_dir, root)} remain live until "
+                "promotion or recovery"
+            )
+    elif pattern_only:
+        lines.append(
+            f"Staged for review: no rows; {len(pattern_only)} pattern-only extraction "
+            f"file(s) under {display_path(report.staging_dir, root)} remain live "
+            "until promotion or recovery"
+        )
     elif empty:
         lines.append(
-            f"Staged for review: none ({len(empty)} empty file(s) under "
-            f"{display_path(report.staging_dir, root)} that can be deleted)"
+            f"Staged for review: none ({len(empty)} tracked empty file(s) under "
+            f"{display_path(report.staging_dir, root)}; no rows are waiting; "
+            "preserve as repository data)"
         )
     else:
         lines.append("Staged for review: none")
@@ -582,6 +723,9 @@ def format_report(report: StatusReport) -> list[str]:
 
 def format_staged(report: StatusReport) -> list[str]:
     waiting = [item for item in report.staged if item.ids]
+    pattern_only = [
+        item for item in report.staged if not item.ids and item.is_rich_extraction
+    ]
     lines: list[str] = []
     if waiting:
         lines.append(f"Staged for review ({report.staged_count}):")
@@ -593,13 +737,81 @@ def format_staged(report: StatusReport) -> list[str]:
         lines.append("Resolve them in place, then run 'janki promote' on each file:")
         lines.append("it re-mints the malformed IDs above, checks every reading, and")
         lines.append("registers what lands. Moving them across by hand skips all three.")
+    elif pattern_only:
+        lines.append(
+            f"Staged for review: no rows; {len(pattern_only)} pattern-only extraction "
+            "file(s) remain live until completion."
+        )
     else:
         lines.append("Staged for review: none.")
     for item in report.staged:
         if not item.ids:
+            shown_path = display_path(item.path, report.root)
+            if item.is_rich_extraction:
+                lines.append(
+                    f"{shown_path} holds no card rows, but carries rich extraction "
+                    "evidence."
+                )
+                if item.pattern_review_state == "staging-invalid":
+                    lines.append(
+                        "Its extraction metadata is incomplete or invalid: "
+                        f"{item.pattern_review_issue}. Restore this exact staging "
+                        "artifact from version control before promotion; do not "
+                        "delete it by hand."
+                    )
+                    continue
+                if item.pattern_review_state == "store-unreadable":
+                    lines.append(
+                        "Its matching pattern-store state could not be verified. Fix "
+                        "the warning above before review or promotion; do not delete "
+                        "this staging file by hand."
+                    )
+                    continue
+                if item.pattern_review_state == "coverage-unresolved":
+                    lines.append(
+                        "Its coverage block still requires the repository owner's "
+                        "resolution before promotion. Status cannot grant that "
+                        "approval; preserve this file and do not delete it by hand."
+                    )
+                    continue
+                if item.pattern_review_state == "store-missing":
+                    lines.append(
+                        f"Its matching {item.pattern_source!r} pattern-store entry is "
+                        "missing. There is no automatic recovery command: restore the "
+                        "exact entry from history if it exists, or reconstruct it from "
+                        "this staging file's pattern_set copy before review or "
+                        "promotion. Do not delete this staging file by hand."
+                    )
+                    continue
+                if item.pattern_review_state == "store-stale":
+                    lines.append(
+                        f"Its matching {item.pattern_source!r} pattern-store entry "
+                        "belongs to a different extraction run. Preserve both and "
+                        "restore the exact entry from history if present, or reconcile "
+                        "it from this staging file's pattern_set copy before promotion. "
+                        "There is no automatic recovery command; do not delete this "
+                        "staging file by hand."
+                    )
+                    continue
+                command_root = f"janki --root {shlex.quote(str(report.root))}"
+                if item.pattern_review_state == "unreviewed":
+                    lines.append(
+                        "Review its matching pattern set: "
+                        f"{command_root} patterns --review "
+                        f"{shlex.quote(str(item.pattern_source))}"
+                    )
+                else:
+                    lines.append("Its matching pattern set is already reviewed.")
+                lines.append(
+                    f"Then run {command_root} promote {shlex.quote(str(item.path))} "
+                    "to preserve its extraction evidence in the done archive; do "
+                    "not delete it by hand."
+                )
+                continue
             lines.append(
-                f"{display_path(item.path, report.root)} holds no rows — nothing is "
-                "waiting in it, so it can be deleted."
+                f"{shown_path} holds no rows — no review rows are waiting. It "
+                "must be preserved as tracked staging data; status has no completion action "
+                "for it."
             )
     return lines
 

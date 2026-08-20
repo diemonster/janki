@@ -521,14 +521,24 @@ def test_a_staging_file_with_no_rows_is_not_called_a_finished_review(
     root, source = _project(tmp_path)
     staged_path = root / "staging" / "shirabe-export-needs-reading.yaml"
     staged_path.parent.mkdir(parents=True)
-    staged_path.write_text("records: []\n", encoding="utf-8")
+    original = (
+        "source_file: export.csv\n"
+        "extracted_at: '2026-08-20'\n"
+        "review_notes: Fill the missing reading, then promote.\n"
+        "records: []\n"
+    )
+    staged_path.write_text(original, encoding="utf-8")
 
     assert cli.main(["--root", str(root), "import-shirabe", str(source)]) == 0
 
     out = capsys.readouterr().out
     assert "it holds no rows" in out
+    assert "tracked staging data" in out
+    assert "no safe automatic completion route" in out
+    assert "Delete it" not in out
     assert "review is finished" not in out
     assert "move its records" not in out
+    assert staged_path.read_text(encoding="utf-8") == original
 
 
 def test_a_finished_review_is_described_the_way_validate_reports_it(

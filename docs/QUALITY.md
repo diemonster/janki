@@ -103,9 +103,30 @@ re-IDing a record would orphan that history anyway.
 every human-readable line moves to stderr — so it can be piped. Combined with
 a detail flag it emits that flag's IDs; on its own it emits every record.
 
-`--staged` lists the rows an import held back for reading review, with the
-reason each was held. The summary always carries a `Staged for review:` line so
-a review queue cannot sit unnoticed.
+`--staged` lists every live staging row, including importer reading holdbacks
+and source-extraction proposals, and shows a hold reason when one is present.
+The summary always carries a `Staged for review:` line so a review queue cannot
+sit unnoticed. A rich extraction may instead have no card
+rows while still carrying its attributed pattern answer. Status identifies that
+as pattern-only review work: review the matching `data/patterns.json` entry,
+then run `janki promote` on the staging file so the zero-record run is archived.
+Status checks that the store entry names the same review run and prompt; a
+missing, stale, unreadable, or incomplete half gets preservation/recovery
+guidance instead of a command that cannot work. Suggested commands carry the
+project root explicitly, so they remain valid when status was called with
+`--root` from another directory. The pattern-store key is the exact nonblank
+top-level `source_file`, matching `promote`; status neither strips it nor falls
+back to a nested value. Reserved review metadata such as `review_run_id`,
+coverage, prompt provenance, or candidate accounting keeps a damaged zero-row
+artifact in the preservation path even when another half is missing.
+
+There is no automatic pattern-store recovery command: when the matching run is
+missing or stale, preserve the staging file and restore the exact store entry
+from history if available, or reconstruct it from the staged `pattern_set`
+copy. Unresolved coverage remains the repository owner's decision; status never
+supplies that approval. An ordinary empty staging file has no rows waiting and
+no completion route status can name, but it remains tracked repository data;
+status never recommends deleting it by hand.
 
 `Pending audio recovery` is neither missing nor stale audio. It means exact
 paid bytes are staged while their record reference or canonical audio-ledger

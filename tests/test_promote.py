@@ -846,6 +846,12 @@ def _pattern_only_meta(
     return meta
 
 
+def _completed_pattern_archive_meta(meta: dict[str, Any]) -> dict[str, Any]:
+    source = str(meta["source_file"])
+    proposed = patterns.PatternSet.from_dict(source, meta["pattern_set"])
+    return cli._pattern_only_archive_meta(meta, replace(proposed, reviewed=True))
+
+
 def accounted_extract(
     tmp_path: Path, *candidates: Any
 ) -> tuple[list[VocabularyRecord], dict[str, Any]]:
@@ -1158,6 +1164,46 @@ def test_a_divergent_same_run_pattern_archive_is_refused_without_overwrite(
     assert "pattern-archive-divergent" in capsys.readouterr().err
 
 
+def test_a_completed_schema_v3_pattern_archive_cannot_grow_record_rows(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An empty done archive is present evidence, not an absent record archive."""
+    root = project(tmp_path, [])
+    path = root / "staging" / "teform_song.pdf.yaml"
+    path.parent.mkdir(parents=True)
+    proposed = patterns.PatternSet(
+        source="teform_song.pdf",
+        kind="pattern",
+        patterns=(patterns.Pattern("う・つ・る → って", "te-form rule"),),
+    )
+    meta = _pattern_only_meta(proposed, response_schema_version=3)
+    write_staging(path, [], meta)
+    reviewed = replace(
+        patterns.PatternSet.from_dict(proposed.source, meta["pattern_set"]),
+        reviewed=True,
+    )
+    patterns.save_store(root / "data" / "patterns.json", {reviewed.source: reviewed})
+    command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+
+    assert cli.main(command) == 0
+    archive = root / "staging" / "done" / path.name
+    archive_before = archive.read_bytes()
+
+    # A later hand edit recreated the live half of the same paid run but added
+    # a record. It must not turn the already-completed zero-row review into a
+    # record archive or erase its reviewed_pattern_set snapshot.
+    write_staging(path, [record()], meta)
+    live_before = path.read_bytes()
+
+    assert cli.main(command) == 1
+
+    assert path.read_bytes() == live_before
+    assert archive.read_bytes() == archive_before
+    assert json.loads((root / "vocabulary.json").read_text(encoding="utf-8")) == []
+    assert not (root / "ledger.json").exists()
+    assert "record-archive-divergent" in capsys.readouterr().err
+
+
 def test_a_pattern_archive_write_failure_keeps_the_live_review(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1305,7 +1351,10 @@ def test_completed_rich_extractions_with_one_staging_name_keep_separate_archives
         path,
         [first],
         _pattern_only_meta(
-            pattern_set, run_id=REVIEW_RUN_A, request_fingerprint="a" * 64
+            pattern_set,
+            run_id=REVIEW_RUN_A,
+            request_fingerprint="a" * 64,
+            candidates=(parsed_candidate(),),
         ),
     )
     assert cli.main(
@@ -1316,7 +1365,12 @@ def test_completed_rich_extractions_with_one_staging_name_keep_separate_archives
         path,
         [second],
         _pattern_only_meta(
-            pattern_set, run_id=REVIEW_RUN_B, request_fingerprint="b" * 64
+            pattern_set,
+            run_id=REVIEW_RUN_B,
+            request_fingerprint="b" * 64,
+            candidates=(
+                parsed_candidate(expression="聞く", reading="きく", meanings=["to hear"]),
+            ),
         ),
     )
     assert cli.main(
@@ -1349,7 +1403,10 @@ def test_completed_rich_extractions_with_the_same_request_are_distinct_runs(
         path,
         [first],
         _pattern_only_meta(
-            pattern_set, run_id=REVIEW_RUN_A, request_fingerprint="a" * 64
+            pattern_set,
+            run_id=REVIEW_RUN_A,
+            request_fingerprint="a" * 64,
+            candidates=(parsed_candidate(),),
         ),
     )
     command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
@@ -1358,7 +1415,12 @@ def test_completed_rich_extractions_with_the_same_request_are_distinct_runs(
         path,
         [second],
         _pattern_only_meta(
-            pattern_set, run_id=REVIEW_RUN_B, request_fingerprint="a" * 64
+            pattern_set,
+            run_id=REVIEW_RUN_B,
+            request_fingerprint="a" * 64,
+            candidates=(
+                parsed_candidate(expression="聞く", reading="きく", meanings=["to hear"]),
+            ),
         ),
     )
     assert cli.main(command) == 0
@@ -1383,6 +1445,15 @@ def test_review_run_id_survives_a_partial_promotion_retry(tmp_path: Path) -> Non
         patterns.PatternSet(source="lesson.pdf", kind="lesson"),
         run_id=REVIEW_RUN_A,
         request_fingerprint="a" * 64,
+        candidates=(
+            parsed_candidate(),
+            parsed_candidate(
+                expression="聞く",
+                reading="",
+                meanings=["to hear"],
+                page=2,
+            ),
+        ),
     )
     write_staging(
         path,
@@ -1474,6 +1545,142 @@ def test_exact_archive_retry_prunes_live_row_without_appending_it_twice(
     assert [item.id for item in archived] == ["word:話す:はなす"]
     assert archived_meta["candidate_accounting"] == meta["candidate_accounting"]
     assert archive.read_bytes() == first_archive, "an exact retry need not rewrite evidence"
+
+
+def test_candidate_accounting_caps_new_rows_across_an_exact_archive_retry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """One parsed proposal can be reidentified, but it cannot become two rows."""
+    root = project(tmp_path, [])
+    records, meta = accounted_extract(tmp_path, parsed_candidate())
+    path = root / "staging" / "lesson.yaml"
+    write_staging(path, records, meta)
+    command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    real_prune = cli.prune_staging_under_lock
+
+    def fail_after_archive(*_args: Any, **_kwargs: Any) -> int:
+        raise staging_module.StagingError("simulated prune failure")
+
+    monkeypatch.setattr(cli, "prune_staging_under_lock", fail_after_archive)
+    assert cli.main(command) == 1
+    monkeypatch.setattr(cli, "prune_staging_under_lock", real_prune)
+
+    archive = root / "staging" / "done" / "lesson.yaml"
+    archived_before = archive.read_bytes()
+    normalized_before = (root / "vocabulary.json").read_bytes()
+    ledger_before = (root / "ledger.json").read_bytes()
+    live, live_meta = read_staging(path)
+    appended = record(
+        id="word:聞く:きく",
+        expression="聞く",
+        reading="きく",
+        meanings=["to hear"],
+    )
+    # Keep the archived row as an exact retry and append one distinct row. The
+    # retry consumes no new proposal slot; the appended row would be a second
+    # accepted row from an account that proves the model parsed only one.
+    write_staging(path, [*live, appended], live_meta, force=True)
+    live_before = path.read_bytes()
+
+    assert cli.main(command) == 1
+
+    assert path.read_bytes() == live_before
+    assert archive.read_bytes() == archived_before
+    assert (root / "vocabulary.json").read_bytes() == normalized_before
+    assert (root / "ledger.json").read_bytes() == ledger_before
+    assert "candidate-accounting-population" in capsys.readouterr().err
+
+
+def test_candidate_accounting_counts_archived_and_nonretry_live_rows_together(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A live population within the ceiling can still exceed it with the archive."""
+    root = project(tmp_path, [])
+    records, meta = accounted_extract(
+        tmp_path,
+        parsed_candidate(),
+        parsed_candidate(
+            expression="聞く",
+            reading="",
+            meanings=["to hear"],
+            page=2,
+        ),
+    )
+    path = root / "staging" / "lesson.yaml"
+    write_staging(path, records, meta)
+    command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+
+    assert cli.main(command) == 0
+    archive = root / "staging" / "done" / "lesson.yaml"
+    archived_before = archive.read_bytes()
+    normalized_before = (root / "vocabulary.json").read_bytes()
+    ledger_before = (root / "ledger.json").read_bytes()
+    [held], live_meta = read_staging(path)
+    repaired = replace(held, reading="きく")
+    appended = record(
+        id="word:食べる:たべる",
+        expression="食べる",
+        reading="たべる",
+        meanings=["to eat"],
+    )
+    # Two live rows do not exceed the two parsed proposals by themselves. The
+    # already-archived row makes three unique accepted rows for that same run.
+    write_staging(path, [repaired, appended], live_meta, force=True)
+    live_before = path.read_bytes()
+
+    assert cli.main(command) == 1
+
+    assert path.read_bytes() == live_before
+    assert archive.read_bytes() == archived_before
+    assert (root / "vocabulary.json").read_bytes() == normalized_before
+    assert (root / "ledger.json").read_bytes() == ledger_before
+    assert "candidate-accounting-population" in capsys.readouterr().err
+
+
+def test_candidate_accounting_ceiling_keeps_collision_and_unusable_slots_editable(
+    tmp_path: Path,
+) -> None:
+    """The ceiling is parsed proposals, not only machine-canonical records."""
+    root = project(tmp_path, [])
+    records, meta = accounted_extract(
+        tmp_path,
+        parsed_candidate(meanings=["canonical"]),
+        parsed_candidate(meanings=["colliding proposal"], page=2),
+        parsed_candidate(expression="", reading="", page=3),
+    )
+    assert meta["candidate_accounting"]["parsed_candidate_count"] == 3
+    assert meta["candidate_accounting"]["canonical_record_count"] == 1
+    assert meta["candidate_accounting"]["duplicate_candidate_count"] == 1
+    assert meta["candidate_accounting"]["unusable_candidate_count"] == 1
+    reviewed = [
+        records[0],
+        record(
+            id="word:聞く:きく",
+            expression="聞く",
+            reading="きく",
+            meanings=["to hear"],
+        ),
+        record(
+            id="word:食べる:たべる",
+            expression="食べる",
+            reading="たべる",
+            meanings=["to eat"],
+        ),
+    ]
+    path = root / "staging" / "lesson.yaml"
+    write_staging(path, reviewed, meta)
+
+    assert cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    ) == 0
+
+    archived, _archived_meta = read_staging(
+        root / "staging" / "done" / "lesson.yaml"
+    )
+    assert {item.id for item in archived} == {item.id for item in reviewed}
 
 
 def test_schema_v3_exact_archive_retry_does_not_append_the_row_twice(
@@ -1689,8 +1896,114 @@ def test_normal_promotion_does_not_delete_a_concurrent_forced_replacement(
 
     surviving, _surviving_meta = read_staging(path)
     assert [item.id for item in surviving] == ["word:食べる:たべる"]
+    assert json.loads((root / "vocabulary.json").read_text(encoding="utf-8")) == []
+    assert not (root / "ledger.json").exists()
     assert not (root / "staging" / "done").exists()
     assert "staging-review-stale" in capsys.readouterr().err
+
+
+def test_late_zero_row_archive_refuses_before_canonical_writes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The final archive recheck precedes vocabulary and ledger mutation."""
+    root = project(tmp_path, [])
+    meta = _pattern_only_meta(
+        patterns.PatternSet(source="lesson.pdf", kind="lesson"),
+        candidates=(parsed_candidate(),),
+        response_schema_version=3,
+    )
+    path = root / "staging" / "lesson.yaml"
+    write_staging(path, [record()], meta)
+    live_before = path.read_bytes()
+    archive = root / "staging" / "done" / "lesson.yaml"
+    completed_pattern_meta = _completed_pattern_archive_meta(meta)
+    real_finish = cli._finish_record_review
+
+    def complete_pattern_run_before_finish(
+        *args: Any, **kwargs: Any
+    ) -> tuple[Path, int]:
+        write_staging(archive, [], completed_pattern_meta)
+        return real_finish(*args, **kwargs)
+
+    monkeypatch.setattr(
+        cli, "_finish_record_review", complete_pattern_run_before_finish
+    )
+
+    assert cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    ) == 1
+
+    assert path.read_bytes() == live_before
+    assert read_staging(archive) == ([], completed_pattern_meta)
+    assert json.loads((root / "vocabulary.json").read_text(encoding="utf-8")) == []
+    assert not (root / "ledger.json").exists()
+    assert "record-archive-stale" in capsys.readouterr().err
+
+
+def test_record_promotion_holds_the_done_lock_through_canonical_writes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A zero-row completer cannot enter after validation but before save."""
+    root = project(tmp_path, [])
+    meta = _pattern_only_meta(
+        patterns.PatternSet(source="lesson.pdf", kind="lesson"),
+        candidates=(parsed_candidate(),),
+        response_schema_version=3,
+    )
+    path = root / "staging" / "lesson.yaml"
+    write_staging(path, [record()], meta)
+    archive = root / "staging" / "done" / "lesson.yaml"
+    archive.parent.mkdir(parents=True)
+    completed_pattern_meta = _completed_pattern_archive_meta(meta)
+    start_writer = Event()
+    writer_attempting = Event()
+    writer_acquired = Event()
+    writer_finished = Event()
+    writer_errors: list[BaseException] = []
+
+    def complete_zero_row_archive() -> None:
+        try:
+            assert start_writer.wait(5)
+            writer_attempting.set()
+            with cli.exclusive_path_lock(archive):
+                writer_acquired.set()
+                if not archive.exists():
+                    cli.write_staging_under_lock(archive, [], completed_pattern_meta)
+        except BaseException as exc:  # pragma: no cover - asserted in parent thread
+            writer_errors.append(exc)
+        finally:
+            writer_finished.set()
+
+    writer = Thread(target=complete_zero_row_archive)
+    writer.start()
+    real_save_records = cli.save_records_json
+    acquired_before_save: list[bool] = []
+
+    def observe_canonical_save(*args: Any, **kwargs: Any) -> None:
+        start_writer.set()
+        assert writer_attempting.wait(5)
+        acquired_before_save.append(writer_acquired.wait(0.5))
+        real_save_records(*args, **kwargs)
+
+    monkeypatch.setattr(cli, "save_records_json", observe_canonical_save)
+
+    assert cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    ) == 0
+    assert writer_finished.wait(5)
+    writer.join(timeout=5)
+
+    assert writer_errors == []
+    assert acquired_before_save == [False]
+    assert not path.exists()
+    archived, archived_meta = read_staging(archive)
+    assert [item.id for item in archived] == ["word:話す:はなす"]
+    assert "reviewed_pattern_set" not in archived_meta
+    assert set(stored(root)) == {"word:話す:はなす"}
+    assert (root / "ledger.json").exists()
 
 
 def test_record_archive_selection_is_rechecked_under_its_lock(

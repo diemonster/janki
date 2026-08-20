@@ -309,8 +309,10 @@ def _stage_needs_reading(
             # that do not exist.
             return (
                 held + "exists and was left untouched — it holds no rows, so nothing "
-                "is waiting in it. Delete it, then re-run this import to stage these "
-                "rows there."
+                "is waiting in it. It is tracked staging data, so this import will "
+                "not overwrite or remove it. Preserve it and resolve this path "
+                "collision as a reviewed repository change before re-running; this "
+                "command has no safe automatic completion route."
             )
         if state == "clean":
             # The review is done; the import cannot consume the file, so the
@@ -3058,14 +3060,23 @@ def _validate_record_archive(
     archived_meta: Mapping[str, Any] | None,
 ) -> None:
     """Prove a same-run record archive is intact before relying on it."""
-    # A completed pattern-only archive deliberately has no rows and carries a
-    # reviewed_pattern_set that the live raw answer does not. Its stricter
-    # retry contract lives in `_complete_pattern_only_review`.
-    if not archived:
-        return
     if archived_meta is None:
+        if archived:
+            raise PromoteError(
+                "[record-archive-divergent] archive rows have no metadata"
+            )
+        return
+    if not archived:
+        # A zero-row same-run archive is still a completed review. In normal
+        # operation it is the pattern-only archive, whose reviewed_pattern_set
+        # exists only in the done copy. A later record-bearing live file must
+        # not turn absence of rows into absence of an archive and overwrite it.
+        # Exact pattern-only retries are routed to their stricter validator by
+        # command_promote before the record-archive validator is called.
         raise PromoteError(
-            "[record-archive-divergent] archive rows have no metadata"
+            "[record-archive-divergent] the same review run already has a "
+            "completed zero-record archive; later record rows cannot be appended "
+            "to it. Both the live review and done archive were kept."
         )
 
     # The done copy is durable paid evidence too. A retry may delete the only
@@ -3099,6 +3110,10 @@ def _validate_record_archive(
         )
 
 
+class _AiLedgerHandoffIncomplete(Exception):
+    """Keep the live review after records landed but AI attribution did not."""
+
+
 def _finish_record_review(
     path: Path,
     archive_base: Path,
@@ -3111,8 +3126,15 @@ def _finish_record_review(
     retry_records: Sequence[VocabularyRecord],
     keep: Sequence[bool],
     held: Sequence[VocabularyRecord],
+    canonical_commit: Callable[[], None] | None = None,
 ) -> tuple[Path, int]:
-    """Archive and retire rows as one live/done locked CAS transaction."""
+    """Commit, archive, and retire rows as one live/done locked transaction.
+
+    The optional canonical commit runs only after both snapshots have been
+    revalidated and while the selected done path remains locked. This closes
+    the window where a same-run zero-row completion could appear after
+    preflight but before vocabulary and ledger writes.
+    """
     if len(keep) - sum(keep) != len(promoted) + len(retry_records):
         raise PromoteError(
             "[record-promotion-invalid] row disposition does not match the "
@@ -3178,6 +3200,9 @@ def _finish_record_review(
                         "in the done archive"
                     )
 
+                if canonical_commit is not None:
+                    canonical_commit()
+
                 done = confirmed
                 combined = list(archived) + list(promoted)
                 if promoted:
@@ -3233,9 +3258,14 @@ def command_promote(args: argparse.Namespace) -> int:
     # a partial promotion or an exact retry.
     validate_coverage_facts(meta)
     done, archived, archived_meta = _archive_for_run(archive_base, meta)
-    _validate_record_archive(meta, archived, archived_meta)
+    # A zero-record extraction has a separate completion contract that checks
+    # its reviewed pattern snapshot byte for byte. Every record-bearing path,
+    # including one paired with an empty same-run archive, comes through the
+    # record validator.
+    if records or archived:
+        _validate_record_archive(meta, archived, archived_meta)
     promote.check_candidate_accounting(
-        meta, (), archived, archived_meta=archived_meta
+        meta, records, archived, archived_meta=archived_meta
     )
     if args.accept_coverage:
         # Before `check_coverage`, because it is what makes that gate pass.
@@ -3247,9 +3277,10 @@ def command_promote(args: argparse.Namespace) -> int:
         expected_wire, records, meta = _record_review_snapshot(path)
         validate_coverage_facts(meta)
         done, archived, archived_meta = _archive_for_run(archive_base, meta)
-        _validate_record_archive(meta, archived, archived_meta)
+        if records or archived:
+            _validate_record_archive(meta, archived, archived_meta)
         promote.check_candidate_accounting(
-            meta, (), archived, archived_meta=archived_meta
+            meta, records, archived, archived_meta=archived_meta
         )
     # Coverage is an owner-review gate. Check it before a reading client is
     # created and before records, ledger, archive, or staging content can move.
@@ -3471,7 +3502,6 @@ def command_promote(args: argparse.Namespace) -> int:
         if ai_provenance is not None
         else {}
     )
-    save_records_json(output_path, merged, expected=output_revision)
 
     added = sum(
         book.record_added(record_id)
@@ -3507,9 +3537,38 @@ def command_promote(args: argparse.Namespace) -> int:
                     fields=written_fields,
                     request_fingerprint=request_fp,
                 )
-    ledger_error = _save_ledger(book)
+    ledger_error: ledger.LedgerError | None = None
 
-    if ledger_error is not None and ai_provenance is not None:
+    def commit_canonical_state() -> None:
+        nonlocal ledger_error
+        save_records_json(output_path, merged, expected=output_revision)
+        ledger_error = _save_ledger(book)
+        if ledger_error is not None and ai_provenance is not None:
+            # The reviewed proposal remains the only recoverable attribution.
+            # Raising before archive/prune keeps it live while the outer locks
+            # still guarantee no competing completion changed either copy.
+            raise _AiLedgerHandoffIncomplete
+
+    # Canonical writes, archive append, and live pruning/deletion share the
+    # same live/done transaction. A same-run zero-row completion that wins the
+    # lock is refused before `commit_canonical_state`; one that loses cannot
+    # appear between validation and the canonical writes.
+    try:
+        done, removed = _finish_record_review(
+            path,
+            archive_base,
+            expected_wire=expected_wire,
+            expected_meta=meta,
+            expected_archived=archived,
+            expected_archived_meta=archived_meta,
+            promoted=pending_promoted,
+            retry_records=retry_records,
+            keep=keep,
+            held=result.held,
+            canonical_commit=commit_canonical_state,
+        )
+    except _AiLedgerHandoffIncomplete:
+        assert ledger_error is not None
         print(
             f"Promoted {len(pending_promoted)} record(s) from {path} into "
             f"{output_path}; the live staging review was kept."
@@ -3529,23 +3588,6 @@ def command_promote(args: argparse.Namespace) -> int:
             ),
         )
         return 1
-
-    # Archive append, live pruning/annotation, and final deletion are one CAS
-    # transaction. The live and selected done paths remain locked throughout,
-    # so neither a concurrent forced extraction nor an archive writer can
-    # replace the evidence between verification and cleanup.
-    done, removed = _finish_record_review(
-        path,
-        archive_base,
-        expected_wire=expected_wire,
-        expected_meta=meta,
-        expected_archived=archived,
-        expected_archived_meta=archived_meta,
-        promoted=pending_promoted,
-        retry_records=retry_records,
-        keep=keep,
-        held=result.held,
-    )
 
     print(f"Promoted {len(pending_promoted)} record(s) from {path} into {output_path}")
     _print_merge_summary(outcomes, prefer_incoming_available=False)

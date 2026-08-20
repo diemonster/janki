@@ -250,6 +250,19 @@ def check_candidate_accounting(
                 "id exists in the same-run archive but its reviewed content differs"
             )
 
+    if isinstance(accounting, Mapping):
+        accepted_population = len(archived) + exact_retry.count(False)
+        parsed_population = accounting["parsed_candidate_count"]
+        if accepted_population > parsed_population:
+            raise PromoteError(
+                "[candidate-accounting-population-exceeded] the same-run done "
+                f"archive and live review contain {accepted_population} unique "
+                "accepted row(s), but the immutable candidate account proves only "
+                f"{parsed_population} parsed proposal(s). Reviewers may delete or "
+                "re-identify proposals, but cannot split one proposal into extra "
+                "records. Remove the appended row(s); do not edit candidate_accounting."
+            )
+
     return tuple(exact_retry)
 
 
