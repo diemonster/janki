@@ -5,8 +5,8 @@ Selecting a candidate commits you to completing its entire card in this
 response. Populate every required card field, and complete all candidate cards
 before writing patterns.
 
-Judge each page for its source shape and classification. Page-by-page
-classification does not require lexical evidence to appear on only one page:
+Judge each page for its source shape when routing its contents. Page-by-page
+routing does not require lexical evidence to appear on only one page:
 parallel versions of the same exercise may jointly establish a lexical
 alignment under the bounded rules below. For each vocabulary list or table,
 account for every row in source_units. Give each row a stable page, section
@@ -97,20 +97,37 @@ Give every example Hepburn romaji with word spaces. Spell particles as spoken:
 は is wa, へ is e, and を is o. Write long vowels out as ou, uu, and ii; write
 ん as n, with an apostrophe before a vowel or y.
 
-Classify the whole source in document_kind as pattern, lesson, vocabulary, or
-unknown, and give its document_title when visible. Report the patterns it teaches,
-not patterns it merely happens to use. Repeated source examples that are
-explicitly labelled or aligned can teach a construction even when no heading
-names it. Report that construction when the repeated alignment makes its form
-and function unambiguous.
+Choose exactly one document_kind from the whole source's primary teaching
+purpose, not from an isolated page or whichever output arrays are non-empty.
+Use pattern for a standalone chart or reference whose primary purpose is
+teaching forms, conjugations, or transformations. Use lesson for a broader
+handout, slide set, dialogue, or exercise
+teaching sentence-level grammar or usage, including one that embeds a chart or
+reference. Use vocabulary when the source is primarily an explicit word list or
+vocabulary table. Use unknown only when no primary kind can be determined
+confidently. For a mixed source, choose its primary purpose; do not combine kinds
+or let an embedded section override the whole source. Give its document_title
+when visible.
 
-When the source marks an example incorrect, create a pattern from the
-correction only when the source teaches a generalizable correction or rule. In
-that case, the pattern's template must contain the valid corrected pattern, and
-its gloss must state the source-stated scope; do not leave either only in prose.
-An isolated correction that teaches no generalizable rule does not become a
-pattern. Never put the marked wrong form in a pattern template or in pattern
-examples; the source remains the evidence for that error.
+Report the patterns it teaches, not patterns it merely happens to use.
+An eligible pattern is a generalizable construction or rule the source teaches.
+Lexical alignment, mere use, contrast without a stated general rule, and a
+marked-wrong example without a source-stated valid rule are not eligible
+patterns. Repeated unheaded examples establish an eligible pattern only when the
+source labels or aligns them as instances of the same generalizable construction
+and makes its form and function unambiguous.
+
+When the source marks an example wrong, never rewrite it or infer an unstated
+replacement. Create a corrected pattern only when the source explicitly states
+a generalizable valid replacement or rule. Its template must contain the
+source-stated valid form, and its gloss must state the source-stated scope. If
+the source states only why the marked example is wrong, use that fact only to
+bound another independently source-taught pattern, or omit it from patterns.
+Never put the marked-wrong form in a pattern template or in pattern examples. A
+valid pattern example must be ordinary text actually present in the source and
+copied verbatim, or a complete result unambiguously encoded by the source's
+visual layout and transcribed under the rule below. Otherwise leave the
+pattern's examples empty; never synthesize or correct an example.
 
 For each pattern, give the
 recognisable template as the source presents it, a short English gloss,
@@ -138,3 +155,12 @@ selection and accounting rules above decide what must be emitted;
 incompleteness is not a reason to omit an otherwise required candidate or
 source unit. Complete every required candidate before returning the answer.
 usage_notes may remain empty when there is no useful nuance.
+
+Before returning the answer, perform a final pattern completeness check. Every
+eligible source-taught generalizable construction explicitly labelled by the
+source must appear exactly once in patterns. Every unheaded eligible construction
+taught unambiguously through repeated source-labelled or source-aligned instances
+of the same generalizable rule must also appear exactly once. Do not add a lexical
+pairing, mere use, contrast without a stated general rule, or a marked-wrong
+example without a source-stated valid rule to satisfy this check. Completing the
+candidate cards is not a reason to omit or postpone a required pattern.

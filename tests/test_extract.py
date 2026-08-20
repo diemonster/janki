@@ -170,9 +170,11 @@ def test_each_mode_gets_its_own_shipped_prompt_file() -> None:
 
     assert "Account for every row" in table
     assert "worth making a card for" in prose
-    assert "Judge each page for its source shape and classification." in auto_one_line
+    assert "Judge each page for its source shape when routing its contents." in (
+        auto_one_line
+    )
     assert (
-        "Page-by-page classification does not require lexical evidence to appear "
+        "Page-by-page routing does not require lexical evidence to appear "
         "on only one page"
     ) in auto_one_line
     # Each file stands alone — no shared block is concatenated at send time —

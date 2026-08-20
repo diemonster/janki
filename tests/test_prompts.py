@@ -385,41 +385,133 @@ def test_prose_explicit_teaching_requires_one_total_compact_selection() -> None:
 
 @pytest.mark.parametrize("name", ("extract-auto", "extract-table", "extract-prose"))
 def test_extraction_patterns_can_be_taught_without_a_heading(name: str) -> None:
-    """Repeated labelled evidence can teach what a title happens not to name."""
+    """Repeated evidence teaches only a bounded general construction."""
     text = " ".join(prompts.load(REPO_ROOT, name).split())
 
     assert (
-        "Repeated source examples that are explicitly labelled or aligned can "
-        "teach a construction even when no heading names it."
+        "An eligible pattern is a generalizable construction or rule the source "
+        "teaches."
     ) in text
     assert (
-        "Report that construction when the repeated alignment makes its form "
-        "and function unambiguous."
+        "Lexical alignment, mere use, contrast without a stated general rule, and "
+        "a marked-wrong example without a source-stated valid rule are not eligible "
+        "patterns."
     ) in text
+    assert (
+        "Repeated unheaded examples establish an eligible pattern only when the "
+        "source labels or aligns them as instances of the same generalizable "
+        "construction and makes its form and function unambiguous."
+    ) in text
+    assert (
+        "Repeated source examples that are explicitly labelled or aligned can "
+        "teach a construction"
+    ) not in text
+
+
+@pytest.mark.parametrize("name", ("extract-auto", "extract-table", "extract-prose"))
+def test_extraction_document_kinds_name_the_source_shapes(name: str) -> None:
+    """One whole-source primary purpose resolves mixed and embedded material."""
+    text = " ".join(prompts.load(REPO_ROOT, name).split())
+
+    assert (
+        "Choose exactly one document_kind from the whole source's primary teaching "
+        "purpose, not from an isolated page or whichever output arrays are non-empty."
+    ) in text
+    assert (
+        "Use pattern for a standalone chart or reference whose primary purpose is "
+        "teaching forms, conjugations, or transformations."
+    ) in text
+    assert (
+        "Use lesson for a broader handout, slide set, dialogue, or exercise teaching "
+        "sentence-level grammar or usage, including one that embeds a chart or "
+        "reference."
+    ) in text
+    assert (
+        "Use vocabulary when the source is primarily an explicit word list or "
+        "vocabulary table."
+    ) in text
+    assert (
+        "Use unknown only when no primary kind can be determined confidently."
+    ) in text
+    assert (
+        "For a mixed source, choose its primary purpose; do not combine kinds or let "
+        "an embedded section override the whole source."
+    ) in text
+    assert "Use unknown for anything else." not in text
+
+
+@pytest.mark.parametrize("name", ("extract-auto", "extract-table", "extract-prose"))
+def test_extraction_has_a_final_pattern_completeness_check(name: str) -> None:
+    """Candidate completion cannot consume the pattern half of the paid answer."""
+    text = " ".join(prompts.load(REPO_ROOT, name).split())
+
+    assert (
+        "Before returning the answer, perform a final pattern completeness check."
+    ) in text
+    assert (
+        "Every eligible source-taught generalizable construction explicitly labelled "
+        "by the source must appear exactly once in patterns."
+    ) in text
+    assert (
+        "Every unheaded eligible construction taught unambiguously through repeated "
+        "source-labelled or source-aligned instances of the same generalizable rule "
+        "must also appear exactly once."
+    ) in text
+    assert (
+        "Do not add a lexical pairing, mere use, contrast without a stated general "
+        "rule, or a marked-wrong example without a source-stated valid rule to "
+        "satisfy this check."
+    ) in text
+    assert (
+        "Completing the candidate cards is not a reason to omit or postpone a "
+        "required pattern."
+    ) in text
+    assert (
+        "Every construction explicitly labelled by the source must appear exactly "
+        "once in patterns."
+    ) not in text
+    assert (
+        "Every construction taught unambiguously through repeated labelled or "
+        "aligned source examples must also appear exactly once."
+    ) not in text
 
 
 @pytest.mark.parametrize("name", ("extract-auto", "extract-table", "extract-prose"))
 def test_extraction_patterns_keep_marked_errors_out_of_templates(name: str) -> None:
-    """A teaching counterexample is evidence for the correction, not a rule."""
+    """The model transcribes source-taught corrections; it never performs one."""
     text = " ".join(prompts.load(REPO_ROOT, name).split())
 
     assert (
-        "When the source marks an example incorrect, create a pattern from the "
-        "correction only when the source teaches a generalizable correction or rule."
+        "When the source marks an example wrong, never rewrite it or infer an "
+        "unstated replacement."
     ) in text
     assert (
-        "In that case, the pattern's template must contain the valid corrected "
-        "pattern, and its gloss must state the source-stated scope; do not leave "
-        "either only in prose."
+        "Create a corrected pattern only when the source explicitly states a "
+        "generalizable valid replacement or rule."
     ) in text
     assert (
-        "An isolated correction that teaches no generalizable rule does not become "
-        "a pattern."
+        "Its template must contain the source-stated valid form, and its gloss must "
+        "state the source-stated scope."
     ) in text
     assert (
-        "Never put the marked wrong form in a pattern template or in pattern "
-        "examples; the source remains the evidence for that error."
+        "If the source states only why the marked example is wrong, use that fact "
+        "only to bound another independently source-taught pattern, or omit it from "
+        "patterns."
     ) in text
+    assert (
+        "Never put the marked-wrong form in a pattern template or in pattern examples."
+    ) in text
+    assert (
+        "A valid pattern example must be ordinary text actually present in the source "
+        "and copied verbatim, or a complete result unambiguously encoded by the "
+        "source's visual layout and transcribed under the rule below."
+    ) in text
+    assert (
+        "Otherwise leave the pattern's examples empty; never synthesize or correct "
+        "an example."
+    ) in text
+    assert "source-derived valid example" not in text
+    assert "create a pattern from the correction" not in text
 
 
 @pytest.mark.parametrize("name", ("extract-auto", "extract-table", "extract-prose"))
@@ -562,16 +654,18 @@ def test_auto_extraction_requires_candidates_from_explicit_lexical_teaching() ->
     assert "study-worthy" not in text
 
 
-def test_auto_page_classification_allows_bounded_cross_page_alignment() -> None:
-    """Source shape is page-local; aligned lexical evidence need not be."""
+def test_auto_page_routing_does_not_reclassify_the_whole_document() -> None:
+    """Source shape is page-local; document_kind has one whole-source value."""
     text = " ".join(prompts.load(REPO_ROOT, "extract-auto").split())
 
-    assert "Judge each page for its source shape and classification." in text
+    assert "Judge each page for its source shape when routing its contents." in text
+    assert "page for its source shape and classification" not in text
     assert (
-        "Page-by-page classification does not require lexical evidence to appear "
+        "Page-by-page routing does not require lexical evidence to appear "
         "on only one page: parallel versions of the same exercise may jointly "
         "establish a lexical alignment under the bounded rules below."
     ) in text
+    assert "Page-by-page classification" not in text
     assert (
         "The alignment may appear in one place or in parallel versions of the "
         "same exercise on different pages."
