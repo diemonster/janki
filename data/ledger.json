@@ -5989,6 +5989,19 @@
         }
       ]
     },
+    "word:分:ふん": {
+      "added_at": "2026-08-20",
+      "audio": [],
+      "enriched": [],
+      "exports": {},
+      "sources": [
+        {
+          "ref": "Kanji Review 104 Week 1 and 2.pdf",
+          "seen_at": "2026-08-20",
+          "type": "extract"
+        }
+      ]
+    },
     "word:分:ぶん": {
       "added_at": "2026-08-12",
       "audio": [

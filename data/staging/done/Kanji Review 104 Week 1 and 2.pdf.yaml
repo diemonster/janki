@@ -26,7 +26,7 @@ coverage:
   non_vocabulary_units: []
   unreadable_units: []
   coverage_block_fingerprint: 029a8ae281ddbf8b1646d4e1b98b3bdceaa77d005f912d13579da3d7c0b4ef9c
-review_notes: Promoted 23 record(s) from this file.
+review_notes: Promoted 24 record(s) from this file.
 records:
 - id: word:昼:ひる
   expression: 昼
@@ -771,3 +771,37 @@ records:
       context: '1. A: ________ のひるの __________ はどうですか。/ てんき'
       inclusion_reason: Target kanji word for this exercise (hiragana てんき to be rewritten in kanji).
       provisional_fields: meanings:a620f00b66c5,part_of_speech:ee6cded62768
+- id: word:分:ふん
+  expression: 分
+  reading: ふん
+  furigana: 分[ふん]
+  romaji: fun
+  meanings:
+  - minute; counter for minutes
+  part_of_speech: counter
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags:
+  - kanji-review-104-week-1-and-2
+  usage_notes: The minute counter is read ふん or ぷん depending on the preceding number; 九分 is read きゅうふん.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: Kanji Review 104 Week 1 and 2.pdf
+    row: null
+    raw_fields:
+      extracted_from: Kanji Review 104 Week 1 and 2.pdf
+      confidence: medium
+      page: '1'
+      context: フェリーターミナルからバスで九分
+      inclusion_reason: Counter reading practice underlined in the hotel guide; confirm きゅうふん vs. くふん
+        at review.
+      provisional_fields: meanings:56f129f48fc2,part_of_speech:730e8ccb23f9
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
