@@ -3914,15 +3914,14 @@ are done (701000b). The old “one source through; five remain” count was stal
 in two directions: four of the six collected sources completed the historical
 schema-v2 pipeline, while none can prove M7.6P's newer one-call rich contract.
 The honest counters are therefore **historical source runs: 4/6; required
-current representative runs complete: 0/2**. Five schema-v3 rich answers have
-completed and been staged across the two representative sources;
-the older forced 27–34 answer remains in Git history while its latest paid run
-occupies the live staging path. Neither live run has crossed its human
-review/build/study gates, and only the te-form answer filled its intended
-representative role. The latest mixed-source run finally returned candidate
-proposals, but exposed a silent duplicate-proposal loss before that role could
-be counted complete. A separate 2026-08-19 API attempt truncated before any
-artifact write.*
+current representative runs complete: 0/2**. Five schema-v3 rich answers and
+one schema-v5 rich answer reached staging across the two
+representative sources. The older forced 27–34 answers remain in Git history
+while the schema-v5 paid run occupies the live staging path. Both intended
+response shapes now have attributed evidence, but neither live run has crossed
+its human review/build/study gates. The earlier candidate-bearing schema-v3
+answer exposed a silent duplicate-proposal loss and remains nonqualifying. A
+separate 2026-08-19 API attempt truncated before any artifact write.*
 
 *2026-08-18 paid-run checkpoint.* `teform_song.pdf` returned zero candidates,
 eight patterns, and nonblocking selection coverage: the intended pattern-only
@@ -3951,7 +3950,7 @@ request fingerprint. Keep that evidence and grandfather it; do not rebill four
 private sources only to mint newer provenance fields.
 
 Completion now requires two complementary attributed rich runs: the existing
-pattern-only v3 run and a future candidate-bearing v5 run.
+pattern-only v3 run and the current candidate-bearing v5 run.
 
 1. `data/inbox/scans/teform_song.pdf` exercises the pattern-document shape. The
    old reason for skipping it — that it had already gone through a separate
@@ -3988,7 +3987,8 @@ pattern-only v3 run and a future candidate-bearing v5 run.
    lexicalized-phrase boundary requires at least one prose candidate, while a
    compact-selection clause avoids another exhaustive rich-card response. The
    same contract preserves exhaustive list/table handling, keeps page-local
-   source classification, and forbids turning a sentence, grammar frame,
+   source-shape routing while reserving `document_kind` for the whole source's
+   primary teaching purpose, and forbids turning a sentence, grammar frame,
    generic prompt, or whole answer into a word card. Its load-bearing clauses
    are mutation-proved. The owner explicitly authorized one call under that
    prompt. Review run `cb4125df-1870-4fbd-9699-c273eb94280a` again returned
@@ -4004,9 +4004,12 @@ pattern-only v3 run and a future candidate-bearing v5 run.
    source-wide candidate set after its lexical and Known-expressions boundaries,
    preserves exact single-page context while citing cross-page cue evidence in
    `inclusion_reason`, and keeps prose coverage non-exhaustive. All three source
-   templates also now recognize an unheaded construction taught by repeated
-   labelled/aligned examples and turn a marked error plus correction into the
-   valid scoped pattern rather than an error template. The owner authorized an
+   templates now recognize an unheaded construction only when the source labels
+   or arranges repeated examples as instruction in the same generalizable rule.
+   A marked-wrong example is never rewritten: a corrected pattern requires an
+   explicit source-stated generalizable valid replacement or rule, and examples
+   remain verbatim source text or a complete result encoded by the source's
+   visual layout; otherwise the example list stays empty. The owner authorized an
    explicit `--mode prose` call on 2026-08-20. Review run
    `127dac03-296f-4304-bfa6-a531efc16e4e` returned six parsed prose candidate
    proposals, five persisted distinct records, five patterns, and nonblocking
@@ -4029,21 +4032,27 @@ pattern-only v3 run and a future candidate-bearing v5 run.
    code. The incomplete paid-run artifacts and the fact of the unrecoverable
    duplicate-proposal loss were preserved while the no-billing prompt and
    machinery work proceeded. The machinery defect is now fixed prospectively,
-   red-first and through two adversarial reviews. Schema v4 writes versioned,
+   red-first and through repeated adversarial review. Schema v4 writes versioned,
    fingerprinted `candidate_accounting`; coverage v2 binds the parsed,
    canonical, unusable, duplicate, and collision-group counts, and every
    parsed member of a stable-ID collision group survives with its original
    index. Human row deletion and re-identification remain allowed. Promotion
-   validates that evidence, rejects converged final IDs, and uses a live/done
-   locked byte-CAS transaction so exact partial/archive retries are idempotent
+   validates that evidence, rejects converged final IDs, and caps the unique
+   accepted population across the same-run archive plus non-retry live rows at
+   the paid answer's `parsed_candidate_count`. One proposal therefore cannot be
+   split into extra reviewed rows, and a completed zero-row same-run archive
+   cannot later grow record rows; refusal preserves the live and archived review
+   evidence without changing canonical records or attribution. The live/done
+   locked byte-CAS transaction keeps exact partial/archive retries idempotent
    across reminting and collection changes. The v3 paid artifact was not and
    cannot be backfilled. The no-billing prompt fix also adds a final checklist:
    every emitted card needs a meaning and exactly one polite plus one casual
    complete example; prose candidates need page/context/reason and one
-   consolidated lexical identity; source-taught error corrections map the
-   valid rule to pattern template/gloss while the wrong form stays out of
-   pattern examples. Schema v5 now makes the nonblank meaning, exact two
-   complete example fields, one-polite/one-casual cardinality, and
+   consolidated lexical identity; only an explicitly source-stated valid
+   correction may become a pattern template/gloss, and neither a wrong form nor
+   an inferred corrected example enters pattern examples. Schema v5 now makes
+   the nonblank meaning, exact two complete example fields,
+   one-polite/one-casual cardinality, and
    source-kind page/context/reason-or-table-key evidence structural response
    requirements. The Anthropic wire schema requires every candidate/example
    property and carries the supported meaning lower bound; Pydantic refuses
@@ -4058,6 +4067,36 @@ pattern-only v3 run and a future candidate-bearing v5 run.
    `word:泊まる:とまる`. The exact `あげる` and `もらう` IDs also occur in the
    separate live Yotsubato staging artifact, so neither source's pending review
    may silently overwrite the other's evidence.
+
+   On 2026-08-20 the owner explicitly authorized one more forced Claude Opus 5
+   call in `--mode prose` after the schema-v5 contract and its adversarial
+   review landed. Review run `23e4bfd9-6319-4795-84f1-a9a28feade89` returned
+   six parsed and six canonical candidate proposals, five patterns, coverage
+   v2 selection, and candidate accounting with zero unusable or duplicate
+   proposals. Independent audit reproduced the source and the then-live prompt,
+   wire-schema, and complete-request fingerprints recorded by this paid call;
+   staging, nested pattern, and pattern-store provenance all match that same
+   historical request. All six records validate with zero errors and zero
+   warnings. Every record has nonblank meanings,
+   exactly one complete polite and one complete casual example, and reviewable
+   page/context/reason evidence. This is the first answer to fill the current
+   candidate-bearing response-shape requirement. It remains unreviewed and is
+   not yet a completed representative run: the owner must decide whether the
+   source-faithful kana identity `word:とまる:とまる` should instead be
+   `word:泊まる:とまる`, the human must curate the records and patterns,
+   and promotion, dictionary enrichment, audio, build, and owner study
+   confirmation still remain. No coverage approval is needed because this is
+   selection coverage.
+
+   Post-run content review found that the broader exercise/slide lesson was
+   classified as `pattern` and that its repeatedly labelled transportation
+   construction was omitted. The no-billing prompt hardening described above
+   was completed after this call: it now chooses one whole-source primary kind,
+   performs a bounded final check for every eligible source-taught pattern, and
+   forbids inferred corrections or examples. Those changes are prospective;
+   the live prompt fingerprint therefore differs from this artifact's recorded
+   fingerprint, while the committed artifact remains exactly attributable to
+   the historical paid request that produced it.
 
 A qualifying candidate-bearing run now archives `response_schema_version: 5`,
 coverage v2, fingerprinted `candidate_accounting`, a `review_run_id`,
@@ -4081,9 +4120,10 @@ Authority remains explicit throughout. The owner authorized the two
 2026-08-18 paid calls, chose the overlapping 27–34 source, and authorized the
 forced replacement of `teform_song.pdf`'s reviewed legacy entry with the v3
 answer as unreviewed. That authority does not mark either returned pattern set
-reviewed. The four later 27–34 authorities were consumed by the truncated
-attempt, the two successful zero-candidate auto retries, and the
-candidate-bearing prose run respectively; none authorizes another paid call.
+reviewed. The five later 27–34 authorities were consumed by the truncated
+attempt, the two successful zero-candidate auto retries, the lossy/thin
+schema-v3 candidate-bearing prose run, and the schema-valid schema-v5
+candidate-bearing prose response respectively; none authorizes another paid call.
 The final study confirmation also remains an owner decision.
 For blocking coverage, the owner
 chooses whether to supply an owner approval or opt into model coverage review;
