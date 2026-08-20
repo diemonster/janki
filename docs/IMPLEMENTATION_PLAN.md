@@ -3914,12 +3914,14 @@ are done (701000b). The old “one source through; five remain” count was stal
 in two directions: four of the six collected sources completed the historical
 schema-v2 pipeline, while none can prove M7.6P's newer one-call rich-v3
 contract. The honest counters are therefore **historical source runs: 4/6;
-required current rich-v3 representative runs complete: 0/2**. Four rich-v3
+required current rich-v3 representative runs complete: 0/2**. Five rich-v3
 answers have completed and been staged across the two representative sources;
 the older forced 27–34 answer remains in Git history while its latest paid run
 occupies the live staging path. Neither live run has crossed its human
 review/build/study gates, and only the te-form answer filled its intended
-representative role. A separate 2026-08-19 API attempt truncated before any
+representative role. The latest mixed-source run finally returned candidate
+proposals, but exposed a silent duplicate-proposal loss before that role could
+be counted complete. A separate 2026-08-19 API attempt truncated before any
 artifact write.*
 
 *2026-08-18 paid-run checkpoint.* `teform_song.pdf` returned zero candidates,
@@ -4003,11 +4005,35 @@ Completion now requires two complementary rich-v3 runs:
    `inclusion_reason`, and keeps prose coverage non-exhaustive. All three source
    templates also now recognize an unheaded construction taught by repeated
    labelled/aligned examples and turn a marked error plus correction into the
-   valid scoped pattern rather than an error template. A future run would use
-   explicit `--mode prose`, which supplies the known-expression list and avoids
-   paying to rewrite the overlapping cards; no paid answer has run under this
-   prompt and fresh consent is still required. An owner-approved alternative
-   source remains another valid way to fill the candidate-bearing role.
+   valid scoped pattern rather than an error template. The owner authorized an
+   explicit `--mode prose` call on 2026-08-20. Review run
+   `127dac03-296f-4304-bfa6-a531efc16e4e` returned six raw prose candidate
+   proposals, five persisted distinct records, five patterns, and nonblocking
+   selection coverage. Its source, schema, complete request, staging, nested
+   pattern, and pattern-store provenance all match, and the pattern set remains
+   unreviewed. It is not yet a completed candidate-bearing run. The
+   `prose_candidate_count: 6` versus five records and no held-note proves that
+   `build_records` silently collapsed two proposals with the same deterministic
+   ID; unlike table mode, prose has no `source_units` copy from which the
+   discarded proposal can be reviewed. That is a machinery/provenance defect
+   and requires a failing regression, mutation proof, and durable
+   representation before any future run. Because the discarded proposal is
+   unrecoverable, a later code fix cannot make this run complete retroactively;
+   it remains nonqualifying unless the owner explicitly accepts that loss as a
+   risk, which has not happened. The five retained rows also
+   have empty meanings, examples, and usage notes; validation reports five
+   `missing-meaning` errors, and the retained `あげる` proposal has only `K` as
+   context with no page or inclusion reason. Those are thin
+   model-answer/content-review findings, not permission for Japanese auditing
+   code. The incomplete paid-run artifacts and the fact of the unrecoverable
+   duplicate-proposal loss are preserved while the no-billing prompt and
+   machinery work proceeds. An owner-approved alternative source remains
+   another valid way to fill the candidate-bearing role. Content review also
+   must settle the new kana-only `word:とまる:とまる` identity: the
+   collection already has `word:止まる:とまる`, and historical staging has
+   `word:泊まる:とまる`. The exact `あげる` and `もらう` IDs also occur in the
+   separate live Yotsubato staging artifact, so neither source's pending review
+   may silently overwrite the other's evidence.
 
 A qualifying candidate-bearing run archives `response_schema_version: 3`, a
 `review_run_id`, response-schema and full-request fingerprints, and
@@ -4030,9 +4056,10 @@ Authority remains explicit throughout. The owner authorized the two
 2026-08-18 paid calls, chose the overlapping 27–34 source, and authorized the
 forced replacement of `teform_song.pdf`'s reviewed legacy entry with the v3
 answer as unreviewed. That authority does not mark either returned pattern set
-reviewed. The three later 27–34 authorities were consumed by the truncated
-attempt and the two successful zero-candidate retries respectively; none
-authorizes another paid call. The final study confirmation also remains an owner decision.
+reviewed. The four later 27–34 authorities were consumed by the truncated
+attempt, the two successful zero-candidate auto retries, and the
+candidate-bearing prose run respectively; none authorizes another paid call.
+The final study confirmation also remains an owner decision.
 For blocking coverage, the owner
 chooses whether to supply an owner approval or opt into model coverage review;
 the model owns the latter verdict. Both new runs are selection coverage and

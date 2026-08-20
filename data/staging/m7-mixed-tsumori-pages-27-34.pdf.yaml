@@ -1,75 +1,74 @@
 source_file: m7-mixed-tsumori-pages-27-34.pdf
-extracted_at: '2026-08-19'
+extracted_at: '2026-08-20'
 model: claude-opus-5
-review_run_id: cb4125df-1870-4fbd-9699-c273eb94280a
+review_run_id: 127dac03-296f-4304-bfa6-a531efc16e4e
 prompt_provenance:
   source_sha256: 80286e6fed848d160fe270e74ffa33cc23a67477cd308c9aa673309b739ca785
-  mode: auto
+  mode: prose
   provider: anthropic
   model: claude-opus-5
   response_schema_version: 3
   response_schema_fingerprint: 5391cfce42271e02fabafd4f76d28fac1de0064687181ba24d53a8922bb75de8
-  system_prompt_fingerprint: 592325c124bf602220b88595036ff42e780431859766fbfc69f9c4c0212e9a37
+  system_prompt_fingerprint: 7f436717c0cd7a4bcca72cce0a6e445d8e14a105fdc2a1ba18e5a56f5017991d
   style_guide_fingerprint: 8db32a1f2b8297926f29238292e9e364697004d51a83ad0a34338e0a55935e57
-  user_prompt_fingerprint: f9b79d78d311d083bfdfe62b3e8e86efa39f4a2de7449e08d638d1394a6feb66
-  request_fingerprint: 22e06300e78e938d6e076c12460844b859983f6c151262a21c5c54dc100876f0
+  user_prompt_fingerprint: c36f62ca29b17c42cd46bab9459b66dc3a76716998503233591281bd68d4935b
+  request_fingerprint: e5b304b40e6297fa3c20a2293601fb036d0e0ba8b3f90e5cb33b9682fee79cf8
 pattern_set:
   kind: pattern
-  title: 'Pair Work: 〜つもりです。/ Occasion に'
+  title: 'Pair Work: ~つもりです。/ Occasion に'
   reviewed: false
   patterns:
-  - template: Verb (plain dictionary form) + つもりです
-    gloss: I plan to / I intend to do something
+  - template: Verb (dictionary form) + つもりです
+    gloss: I plan / intend to do ~
     examples:
-    - 'A: 月曜日はせんたくするつもりです。'
-    - ほんをよむつもりです。
+    - 月曜日はせんたくするつもりです。
     - 友達と晩ご飯を食べるつもりです。
-    - たくさんしゃしんをとるつもりです。
+    - トヨタの車を買うつもりです。
     - しんかんせんで行くつもりです。
     where: pages 1, 3, 4
-  - template: Verb (plain negative 〜ない) + つもりです
-    gloss: I plan not to / I don't intend to do something
+  - template: Verb (plain negative ない form) + つもりです
+    gloss: I plan / intend not to do ~
     examples:
     - しごとにいかないつもりです
     - あそびにいかないつもりです。
     - 何も食べないつもりです。
     - いいえ、今週はしないつもりです。
     where: pages 1, 5
-  - template: Verb (plain form) + つもりだ(よ)
-    gloss: 'casual form of 〜つもりです: I''m planning to ...'
+  - template: Verb + つもりだ(よ)
+    gloss: 'casual, plain-form version of 〜つもりです: I''m planning to ~'
     examples:
-    - 'B: 日本語の勉強するつもりだよ!'
+    - 日本語の勉強するつもりだよ!
     where: page 6
-  - template: Occasion/holiday + に + (event)
-    gloss: 'に marks a holiday or special day as a point in time: on/at that occasion'
+  - template: どうやって〜に行きますか？ — [means of transport]で行くつもりです。
+    gloss: How will you get to ~? — I plan to go by (transport); で marks the means of transport
+    examples:
+    - どうやってきょうとに行きますか？
+    - しんかんせんで行くつもりです。
+    - バスでいくつもりです。
+    - ひこうきでいくつもりです。
+    where: pages 3, 4
+  - template: '[holiday / special day] に + Verb'
+    gloss: に marks a holiday or special day as a point in time ("on Christmas", "on Valentine's Day")
     examples:
     - クリスマスにプレゼントをもらいました。
     - バレンタインデーに チョコレートをあげます。
     - 今年のクリスマスに何をしますか？
     - お正月にハワイでごろごろしたいんです。
+    - 'Counterexample, marked ❌ on the slide: はなびたいかいにアイスクリームを食べました。 — the slide explains that はなびたいかい
+      is considered an event/place where something happens, so it is not marked with occasion に.'
     where: pages 7, 8
-  - template: ✗ Event (はなびたいかい) + に + (action) → use で instead
-    gloss: An occasion understood as an event/place where something happens takes で, not に
-    examples:
-    - ✗ はなびたいかいにアイスクリームを食べました。(I ate ice cream at the fireworks festival.)
-    where: page 8
-  - template: どうやって + place + に行きますか？
-    gloss: How (by what means) will you get to ~?
-    examples:
-    - 'A: どうやってきょうとに行きますか？'
-    where: page 3
   prompt_provenance:
     source_sha256: 80286e6fed848d160fe270e74ffa33cc23a67477cd308c9aa673309b739ca785
-    mode: auto
+    mode: prose
     provider: anthropic
     model: claude-opus-5
     response_schema_version: 3
     response_schema_fingerprint: 5391cfce42271e02fabafd4f76d28fac1de0064687181ba24d53a8922bb75de8
-    system_prompt_fingerprint: 592325c124bf602220b88595036ff42e780431859766fbfc69f9c4c0212e9a37
+    system_prompt_fingerprint: 7f436717c0cd7a4bcca72cce0a6e445d8e14a105fdc2a1ba18e5a56f5017991d
     style_guide_fingerprint: 8db32a1f2b8297926f29238292e9e364697004d51a83ad0a34338e0a55935e57
-    user_prompt_fingerprint: f9b79d78d311d083bfdfe62b3e8e86efa39f4a2de7449e08d638d1394a6feb66
-    request_fingerprint: 22e06300e78e938d6e076c12460844b859983f6c151262a21c5c54dc100876f0
-  review_run_id: cb4125df-1870-4fbd-9699-c273eb94280a
+    user_prompt_fingerprint: c36f62ca29b17c42cd46bab9459b66dc3a76716998503233591281bd68d4935b
+    request_fingerprint: e5b304b40e6297fa3c20a2293601fb036d0e0ba8b3f90e5cb33b9682fee79cf8
+  review_run_id: 127dac03-296f-4304-bfa6-a531efc16e4e
 coverage:
   version: 1
   status: selection
@@ -77,13 +76,174 @@ coverage:
   source_fingerprint: 80286e6fed848d160fe270e74ffa33cc23a67477cd308c9aa673309b739ca785
   model_reported_unit_count: 0
   observed_unit_count: 0
-  prose_candidate_count: 0
-  prose_coverage: not-applicable
+  prose_candidate_count: 6
+  prose_coverage: unmeasured
   source_units: []
   duplicate_keys: []
   candidate_units: []
   duplicate_units: []
   non_vocabulary_units: []
   unreadable_units: []
-  coverage_block_fingerprint: f111d413f80a0f34e801c371f6a6dbd400fec1c2ac8a1688ef865ae1af25e175
-records: []
+  coverage_block_fingerprint: b056f0239976eb61d74500df1a753d36d4d81f8de513a96acadebca8ff54bd55
+records:
+- id: word:あげる:あげる
+  expression: あげる
+  reading: あげる
+  furigana: ''
+  romaji: ageru
+  meanings: []
+  part_of_speech: verb (ichidan/ru-verb, transitive)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-34.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-34.pdf
+      confidence: high
+      context: K
+      provisional_fields: part_of_speech:3fb391d6ef42
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:もらう:もらう
+  expression: もらう
+  reading: もらう
+  furigana: ''
+  romaji: morau
+  meanings: []
+  part_of_speech: verb (godan/u-verb, transitive)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-34.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-34.pdf
+      confidence: high
+      page: '8'
+      context: クリスマスにプレゼントをもらいました。
+      inclusion_reason: Page 8 prints the English translation "I got a present on Christmas." directly
+        under this Japanese sentence, aligning もらう with "to get / to receive"; it is the counterpart of
+        the あげる taught on page 7.
+      provisional_fields: part_of_speech:d6b8b4521551
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:せんたくする:せんたくする
+  expression: せんたくする
+  reading: せんたくする
+  furigana: ''
+  romaji: sentakusuru
+  meanings: []
+  part_of_speech: verb (suru-verb, irregular)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-34.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-34.pdf
+      confidence: high
+      page: '1'
+      context: 月曜日はせんたくするつもりです。
+      inclusion_reason: 'The worked example on page 1 pairs the cue "EX: 月曜日 | to do the laundry" with
+        the model answer copied into context, explicitly aligning せんたくする with "to do the laundry"; the
+        same cue appears on the parallel English slide, page 2.'
+      provisional_fields: part_of_speech:f074f2fb8fd8
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:とまる:とまる
+  expression: とまる
+  reading: とまる
+  furigana: ''
+  romaji: tomaru
+  meanings: []
+  part_of_speech: verb (godan/u-verb, intransitive)
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-34.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-34.pdf
+      confidence: medium
+      page: '1'
+      context: ともだちのいえにとまるつもりです。
+      inclusion_reason: The Saturday / Person A cell on page 1 corresponds cell-for-cell to the same cell
+        of the parallel English version of the table on page 2, which reads "to stay at a friend's house",
+        so the two pages together teach とまる = to stay overnight.
+      provisional_fields: part_of_speech:6a518b436685
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+- id: word:はなびたいかい:はなびたいかい
+  expression: はなびたいかい
+  reading: はなびたいかい
+  furigana: ''
+  romaji: hanabitaikai
+  meanings: []
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples: []
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: m7-mixed-tsumori-pages-27-34.pdf
+    row: null
+    raw_fields:
+      extracted_from: m7-mixed-tsumori-pages-27-34.pdf
+      confidence: high
+      page: '8'
+      context: はなびたいかいにアイスクリームを食べました。
+      inclusion_reason: Page 8 supplies the English "I ate ice cream at the fireworks festival." for this
+        sentence and the note "But はなびたいかい is considered an event/place where something happens", so the
+        slide explicitly glosses はなびたいかい as "fireworks festival" while teaching its particle behaviour.
+      provisional_fields: part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
+        Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
