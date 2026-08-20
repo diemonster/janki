@@ -75,7 +75,10 @@ def _rich_source_answer() -> dict[str, Any]:
                 "page": 1,
                 "context": "先生と話します。",
                 "confidence": "high",
+                "inclusion_reason": "The lesson explicitly teaches this word.",
                 "source_kind": "prose",
+                "section": "",
+                "ordinal": 0,
             }
         ],
         "source_units": [],
@@ -158,12 +161,14 @@ def test_the_shared_rich_answer_has_one_application_semantics(tmp_path: Path) ->
     assert fresh.examples == known.examples == bare.examples
 
 
-def test_source_and_bare_word_answers_share_the_rich_card_shape() -> None:
-    """One card contract, reached through two input shapes.
+def test_source_and_bare_word_answers_share_the_rich_card_wire_fields() -> None:
+    """One card product, with source extraction's stricter completeness bound.
 
     Keeping two independently described example schemas would let source cards
-    and CSV cards drift back into different products.  The singular extraction
-    ``example`` field is the superseded source-evidence-only path.
+    and CSV cards drift into different products. The field names and application
+    semantics remain shared, while bare-word enrichment may legitimately return
+    only an unoccupied example slot. The singular extraction ``example`` field
+    is the superseded source-evidence-only path.
     """
     source_candidate = _list_item(extract.candidate_schema(), "candidates")
     bare = enrich.ai_schema()
@@ -176,6 +181,166 @@ def test_source_and_bare_word_answers_share_the_rich_card_shape() -> None:
     source_example = _list_item(source_candidate, "examples")
     bare_example = _list_item(bare, "examples")
     assert source_example.model_json_schema() == bare_example.model_json_schema()
+    source_schema = source_candidate.model_json_schema()["properties"]
+    bare_schema = bare.model_json_schema()["properties"]
+    for name in ("meanings", "usage_notes"):
+        assert source_schema[name] == bare_schema[name]
+
+
+def test_shared_rich_card_values_are_complete_but_example_count_is_flexible() -> None:
+    """Both paid paths return complete values; enrich may return 0, 1, or N slots."""
+    schema = enrich.ai_schema()
+    example = {
+        "japanese": "話します。",
+        "speech_level": "polite",
+        "furigana": "話[はな]します。",
+        "romaji": "hanashimasu.",
+        "english": "I will speak.",
+    }
+    base = {"meanings": ["to speak"], "usage_notes": ""}
+
+    for examples in ([], [example], [example, example, example]):
+        schema.model_validate({**base, "examples": examples})
+
+    invalid = [
+        {"examples": [], "usage_notes": ""},
+        {"meanings": [], "examples": [], "usage_notes": ""},
+        {"meanings": ["   "], "examples": [], "usage_notes": ""},
+        {"meanings": ["to speak"], "examples": []},
+        {"meanings": ["to speak"], "usage_notes": ""},
+    ]
+    for field in ("japanese", "furigana", "romaji", "english"):
+        missing = copy.deepcopy(example)
+        del missing[field]
+        invalid.append({**base, "examples": [missing]})
+        blank = copy.deepcopy(example)
+        blank[field] = "   "
+        invalid.append({**base, "examples": [blank]})
+
+    for value in invalid:
+        with pytest.raises(ValueError):
+            schema.model_validate(value)
+
+
+def test_extraction_rejects_a_structurally_incomplete_card() -> None:
+    """A selected source candidate is a complete card, never an empty stub."""
+    complete = _rich_source_answer()["candidates"][0]
+    extract.candidate_schema().model_validate({"candidates": [complete]})
+
+    invalid_values = []
+    for replacement in ([], ["   "]):
+        value = copy.deepcopy(complete)
+        value["meanings"] = replacement
+        invalid_values.append(value)
+    for replacement in ([], complete["examples"][:1], complete["examples"] * 2):
+        value = copy.deepcopy(complete)
+        value["examples"] = replacement
+        invalid_values.append(value)
+    for field in ("japanese", "furigana", "romaji", "english"):
+        value = copy.deepcopy(complete)
+        value["examples"][0][field] = "   "
+        invalid_values.append(value)
+    same_level = copy.deepcopy(complete)
+    same_level["examples"][1]["speech_level"] = "polite"
+    invalid_values.append(same_level)
+
+    for value in invalid_values:
+        with pytest.raises(ValueError):
+            extract.candidate_schema().model_validate({"candidates": [value]})
+
+
+def test_extraction_requires_mode_appropriate_structural_evidence() -> None:
+    """Evidence fields are structural provenance; this does not judge Japanese."""
+    prose = _rich_source_answer()["candidates"][0]
+    prose["inclusion_reason"] = "The lesson explicitly pairs this word with its gloss."
+
+    extract.candidate_schema().model_validate({"candidates": [prose]})
+    for field, replacement in (
+        ("page", 0),
+        ("context", "   "),
+        ("inclusion_reason", "   "),
+    ):
+        value = copy.deepcopy(prose)
+        value[field] = replacement
+        with pytest.raises(ValueError):
+            extract.candidate_schema().model_validate({"candidates": [value]})
+
+    table = copy.deepcopy(prose)
+    table.update(
+        source_kind="table",
+        inclusion_reason="",
+        section="lesson-table",
+        ordinal=1,
+    )
+    extract.candidate_schema().model_validate({"candidates": [table]})
+    for field, replacement in (("section", "   "), ("ordinal", 0)):
+        value = copy.deepcopy(table)
+        value[field] = replacement
+        with pytest.raises(ValueError):
+            extract.candidate_schema().model_validate({"candidates": [value]})
+    for field, replacement in (("page", 0), ("context", "   ")):
+        value = copy.deepcopy(table)
+        value[field] = replacement
+        with pytest.raises(ValueError):
+            extract.candidate_schema().model_validate({"candidates": [value]})
+
+
+def test_extraction_strictness_does_not_change_bare_word_enrichment() -> None:
+    """Enrichment may preserve one pinned slot or request only an unoccupied one."""
+    enrich.ai_schema().model_validate(
+        {"meanings": ["to speak"], "examples": [], "usage_notes": ""}
+    )
+    enrich.ai_schema().model_validate(
+        {
+            "meanings": ["to speak"],
+            "examples": [
+                {
+                    "japanese": "話します。",
+                    "speech_level": "polite",
+                    "furigana": "話[はな]します。",
+                    "romaji": "hanashimasu.",
+                    "english": "I will speak.",
+                }
+            ],
+            "usage_notes": "",
+        }
+    )
+
+
+def test_extraction_schema_encodes_complete_card_collection_bounds() -> None:
+    candidate_type = _list_item(extract.candidate_schema(), "candidates")
+    schema = candidate_type.model_json_schema()
+
+    assert schema["properties"]["meanings"]["minItems"] == 1
+    assert schema["properties"]["examples"]["minItems"] == 2
+    assert schema["properties"]["examples"]["maxItems"] == 2
+    assert {"meanings", "examples", "source_kind"} <= set(schema["required"])
+
+
+def test_anthropic_wire_schema_requires_every_complete_candidate_field() -> None:
+    """Pin what the SDK can enforce on-wire and what remains local validation."""
+    from japanese_anki import claude_client
+
+    wire = claude_client.wire_schema(extract.candidate_schema())
+    candidate = wire["$defs"]["CandidateRecord"]
+    example = wire["$defs"]["GeneratedExample"]
+    bare = claude_client.wire_schema(enrich.ai_schema())
+
+    assert set(candidate["required"]) == set(candidate["properties"])
+    assert set(example["required"]) == set(example["properties"])
+    assert set(bare["required"]) == {"meanings", "examples", "usage_notes"}
+    assert set(bare["$defs"]["GeneratedExample"]["required"]) == set(
+        example["properties"]
+    )
+    assert candidate["properties"]["meanings"]["minItems"] == 1
+    assert "minItems" not in candidate["properties"]["examples"]
+    assert "{maxItems: 2, minItems: 2}" in candidate["properties"]["examples"][
+        "description"
+    ]
+    for name in ("japanese", "furigana", "romaji", "english"):
+        field = example["properties"][name]
+        assert "minLength" not in field
+        assert "{minLength: 1}" in field["description"]
 
 
 def test_the_shared_card_schema_allows_only_the_two_card_speech_levels() -> None:
@@ -185,12 +350,17 @@ def test_the_shared_card_schema_allows_only_the_two_card_speech_levels() -> None
     with pytest.raises(ValueError):
         enrich.ai_schema().model_validate(
             {
+                "meanings": ["to serve"],
                 "examples": [
                     {
                         "japanese": "候ふ。",
                         "speech_level": "literary",
+                        "furigana": "候[そうろ]ふ。",
+                        "romaji": "sourou.",
+                        "english": "I serve.",
                     }
-                ]
+                ],
+                "usage_notes": "",
             }
         )
 
@@ -219,7 +389,7 @@ def test_response_schema_descriptions_are_only_the_terse_structural_labels() -> 
         "$defs.CandidateRecord.expression": "The word as written, in Japanese.",
         "$defs.CandidateRecord.reading": "Kana reading.",
         "$defs.CandidateRecord.part_of_speech": "Part of speech, if known.",
-        "$defs.CandidateRecord.page": "1-indexed page this was read from; 0 when unknown.",
+        "$defs.CandidateRecord.page": "1-indexed page this was read from.",
         "$defs.CandidateRecord.context": "The line or cell this was read from, verbatim.",
         "$defs.CandidateRecord.confidence": "Confidence.",
         "$defs.CandidateRecord.inclusion_reason": (
@@ -298,11 +468,11 @@ def test_the_bare_word_template_completes_only_unoccupied_example_slots() -> Non
     assert "only for a polite or casual slot that is not already occupied" in text
 
 
-def test_the_shared_style_guide_agrees_that_rich_cards_have_two_examples() -> None:
-    """The common block must not contradict every shape-specific task template."""
+def test_the_shared_style_guide_leaves_cardinality_to_each_task_template() -> None:
+    """The common block defines style, not a pass-specific response branch."""
     text = " ".join(prompts.load(REPO_ROOT, "style-guide").lower().split())
 
-    assert "two natural example sentences and translations" in text
+    assert "two natural example sentences and translations" not in text
     assert "one natural example sentence" not in text
 
 

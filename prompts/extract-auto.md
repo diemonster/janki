@@ -1,6 +1,10 @@
 You are reading Japanese study material and proposing complete vocabulary
 records and lesson patterns for a human to review.
 
+Selecting a candidate commits you to completing its entire card in this
+response. Populate every required card field, and complete all candidate cards
+before writing patterns.
+
 Judge each page for its source shape and classification. Page-by-page
 classification does not require lexical evidence to appear on only one page:
 parallel versions of the same exercise may jointly establish a lexical
@@ -12,6 +16,9 @@ with the same key and context. Keep repeated rows as separate units. For
 running text, select the words worth a card. Set source_kind to table or prose
 on every candidate. One document may contain both. Prose selection is not
 exhaustive.
+
+For every candidate with source_kind set to prose, populate a non-empty
+inclusion_reason explaining why the source teaches or foregrounds that item.
 
 When a structured exercise, dialogue, or sentence grid contains complete
 Japanese sentences and is not an explicit vocabulary list or vocabulary table,

@@ -39,9 +39,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 def generated(
     japanese: str,
-    furigana: str = "",
-    english: str = "",
-    romaji: str = "",
+    furigana: str | None = None,
+    english: str | None = None,
+    romaji: str | None = None,
     speech_level: str = "polite",
     **extra: Any,
 ) -> Any:
@@ -56,9 +56,9 @@ def generated(
         raise TypeError(f"not a field of the generated-example schema: {unknown}")
     return item(
         japanese=japanese,
-        furigana=furigana,
-        english=english,
-        romaji=romaji,
+        furigana=furigana or japanese,
+        english=english or "Fixture translation.",
+        romaji=romaji or "fixture romaji",
         speech_level=speech_level,
         **extra,
     )
@@ -117,7 +117,7 @@ def test_request_provenance_tracks_provider_wire_prompt_and_schema(
 
 def answer(
     *examples: Any,
-    meanings: tuple[str, ...] | list[str] = (),
+    meanings: tuple[str, ...] | list[str] = ("to speak",),
     usage_notes: str = "",
 ) -> Any:
     return ai_schema()(
@@ -274,7 +274,7 @@ def test_the_prompt_carries_what_janki_knows_about_the_word() -> None:
     assert "Expression: 話す" in text
 
 
-def test_the_bare_word_and_source_paths_share_one_rich_card_schema() -> None:
+def test_the_bare_word_path_uses_the_shared_rich_card_value_schema() -> None:
     assert ai_schema() is ai_schema_module.rich_card_schema()
     assert set(ai_schema().model_fields) == {"meanings", "examples", "usage_notes"}
 
@@ -710,22 +710,15 @@ def test_existing_meanings_are_curated_until_explicitly_forced() -> None:
     )
 
 
-def test_empty_or_duplicate_meanings_never_blank_a_card() -> None:
+def test_duplicate_meanings_are_normalized_before_replacing_a_card() -> None:
     curated = record(meanings=["to speak"])
 
-    empty = apply_ai_result(
-        curated,
-        answer(meanings=["", "   "]),
-        force_fields=("meanings",),
-    )
     deduplicated = apply_ai_result(
         curated,
         answer(meanings=[" to talk ", "to talk", "to address"]),
         force_fields=("meanings",),
     )
 
-    assert empty.record.meanings == ["to speak"]
-    assert "meanings" not in empty.changes
     assert deduplicated.record.meanings == ["to talk", "to address"]
 
 

@@ -228,7 +228,15 @@ Each input produces one staging file named for it, `data/staging/lesson-3.pdf.ya
 holding one candidate per word with the page it was read from, the line it was
 read from, and the model's own confidence.
 
-For current schema-v4 runs, the file also carries machine-owned
+Current schema-v5 extraction accepts a selected candidate only when it has at
+least one nonblank meaning, exactly one complete polite and one complete casual
+example, and the page/context evidence its source kind requires. A response
+that misses this structural contract writes neither staging nor patterns.
+`enrich --ai` shares the nonblank meaning and complete-example value contract,
+but its returned example count remains flexible because an existing reviewed
+example may already occupy one slot.
+
+For schema-v4 and newer runs, the file also carries machine-owned
 `candidate_accounting`. Coverage v2 binds its parsed/canonical/unusable/
 duplicate counts and fingerprint. When two parsed proposals mint the same
 stable ID, the editable `records` list keeps one canonical row while the

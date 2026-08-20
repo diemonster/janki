@@ -296,9 +296,9 @@ def test_a_refusal_with_no_content_at_all_is_also_just_returned() -> None:
 
 
 def test_a_complete_answer_that_does_not_match_is_a_janki_error() -> None:
-    # Structured outputs are schema-valid on normal completion, so this is an
-    # anomaly — but it still has to reach the user as a formatted error rather
-    # than a pydantic traceback.
+    # The provider enforces its transformed wire subset. The local Pydantic
+    # contract can be stronger, and that mismatch still has to reach the user
+    # as a formatted fail-closed error rather than a pydantic traceback.
     client = fake_client('{"words": "not a list"}')
 
     with pytest.raises(JankiError) as excinfo:

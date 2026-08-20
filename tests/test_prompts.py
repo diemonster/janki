@@ -341,6 +341,16 @@ def test_prose_every_candidate_explains_its_source_teaching() -> None:
     ) in text
 
 
+def test_auto_prose_candidates_explain_their_source_teaching() -> None:
+    """Auto routing must not lose prose evidence that explicit prose mode requires."""
+    text = " ".join(prompts.load(REPO_ROOT, "extract-auto").split())
+
+    assert (
+        "For every candidate with source_kind set to prose, populate a non-empty "
+        "inclusion_reason explaining why the source teaches or foregrounds that item."
+    ) in text
+
+
 def test_prose_known_expressions_are_a_decidable_exclusion() -> None:
     """The model receives identities, not the unseen contents of existing cards."""
     text = " ".join(prompts.load(REPO_ROOT, "extract-prose").split())
@@ -439,6 +449,31 @@ def test_every_extraction_candidate_gets_a_final_completeness_check(name: str) -
     assert "Complete every required candidate before returning the answer." in text
     assert "finish it or omit it" not in text
     assert "usage_notes may remain empty when there is no useful nuance." in text
+
+
+@pytest.mark.parametrize("name", ("extract-auto", "extract-table", "extract-prose"))
+def test_every_extraction_prompt_prioritizes_complete_cards_before_patterns(
+    name: str,
+) -> None:
+    """The primary task is prominent before the longer selection instructions."""
+    text = " ".join(prompts.load(REPO_ROOT, name).split())
+    priority = (
+        "Selecting a candidate commits you to completing its entire card in this "
+        "response. Populate every required card field, and complete all candidate "
+        "cards before writing patterns."
+    )
+
+    assert priority in text
+    assert text.index(priority) < text.index("Return a complete study card")
+
+
+def test_style_guide_does_not_branch_on_a_card_writing_pass() -> None:
+    text = " ".join(prompts.load(REPO_ROOT, "style-guide").split())
+
+    assert "source-extraction" not in text
+    assert "Bare-word enrichment" not in text
+    preferred = text.split("## Preferred enrichments", 1)[1].split("## ", 1)[0]
+    assert "Two natural example sentences" not in preferred
 
 
 def test_prose_final_check_consolidates_identity_and_source_evidence() -> None:

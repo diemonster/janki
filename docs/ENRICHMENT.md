@@ -93,8 +93,9 @@ uses `prompts/enrich-bare-word.md` and returns the same card content in one
 answer:
 
 - a compact, natural English gloss list;
-- two beginner-friendly examples with Japanese, natural English,
-  `speech_level`, contextual Anki furigana, and spaced Hepburn romaji;
+- complete values for the unoccupied polite/casual example slots, with
+  Japanese, natural English, `speech_level`, contextual Anki furigana, and
+  spaced Hepburn romaji;
 - a concise usage note when there is something useful and certain to say.
 
 Reviewed lesson patterns from `data/patterns.json` ride in the labelled data

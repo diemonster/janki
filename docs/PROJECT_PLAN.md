@@ -93,9 +93,11 @@ Shirabe CSV / jpdb API / PDFs / manual YAML
 - `janki extract` — one Claude vision + structured-output call per source →
   complete proposed cards in `data/staging/` and unreviewed source patterns in
   `data/patterns.json`, accepting PDFs and phone photos and annotating
-  already-known words. Schema-v4 output binds coverage-v2 candidate counts to
-  fingerprinted accounting; stable-ID collision groups retain every parsed
-  proposal while the reviewer still controls the canonical row list.
+  already-known words. Schema-v5 requires structurally complete candidate cards
+  and source evidence before writing; schema-v4-and-newer output binds
+  coverage-v2 candidate counts to fingerprinted accounting, and stable-ID
+  collision groups retain every parsed proposal while the reviewer still
+  controls the canonical row list.
 - Human review, then `janki promote` with a dictionary reading-set
   cross-check, partial promotion, and locked idempotent archive retry;
   `janki patterns` only lists or marks the already-extracted pattern sets
@@ -104,7 +106,8 @@ Shirabe CSV / jpdb API / PDFs / manual YAML
 ### Phase 5: AI enrichment
 
 - `janki enrich --ai` — one complete bare-word answer containing English
-  glosses, two annotated examples, and a usage note; staging routing for large
+  glosses, completed polite/casual example slots, and a usage note; staging
+  routing for large
   runs and split batch submit/fetch. Provider-normalized full request
   fingerprints attribute every answer, while staged old-value bindings prevent
   a reviewed replacement from overwriting concurrent curation.

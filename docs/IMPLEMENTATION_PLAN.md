@@ -3951,7 +3951,7 @@ request fingerprint. Keep that evidence and grandfather it; do not rebill four
 private sources only to mint newer provenance fields.
 
 Completion now requires two complementary attributed rich runs: the existing
-pattern-only v3 run and a future candidate-bearing v4 run.
+pattern-only v3 run and a future candidate-bearing v5 run.
 
 1. `data/inbox/scans/teform_song.pdf` exercises the pattern-document shape. The
    old reason for skipping it — that it had already gone through a separate
@@ -4042,7 +4042,16 @@ pattern-only v3 run and a future candidate-bearing v4 run.
    complete example; prose candidates need page/context/reason and one
    consolidated lexical identity; source-taught error corrections map the
    valid rule to pattern template/gloss while the wrong form stays out of
-   pattern examples. An owner-approved alternative source remains
+   pattern examples. Schema v5 now makes the nonblank meaning, exact two
+   complete example fields, one-polite/one-casual cardinality, and
+   source-kind page/context/reason-or-table-key evidence structural response
+   requirements. The Anthropic wire schema requires every candidate/example
+   property and carries the supported meaning lower bound; Pydantic refuses
+   the remaining collection, string, numeric, and one-per-speech-level bounds
+   before any staging or pattern write.
+   Bare-word enrichment shares those complete field values while keeping only
+   example-list cardinality flexible for an already-occupied reviewed slot. An
+   owner-approved alternative source remains
    another valid way to fill the candidate-bearing role. Content review also
    must settle the new kana-only `word:とまる:とまる` identity: the
    collection already has `word:止まる:とまる`, and historical staging has
@@ -4050,7 +4059,7 @@ pattern-only v3 run and a future candidate-bearing v4 run.
    separate live Yotsubato staging artifact, so neither source's pending review
    may silently overwrite the other's evidence.
 
-A qualifying candidate-bearing run now archives `response_schema_version: 4`,
+A qualifying candidate-bearing run now archives `response_schema_version: 5`,
 coverage v2, fingerprinted `candidate_accounting`, a `review_run_id`,
 response-schema and full-request fingerprints, and card/pattern provenance
 from the identical paid answer. A human then reviews the proposed records and

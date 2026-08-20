@@ -87,7 +87,7 @@ SOURCE_UNIT_DISPOSITIONS: tuple[str, ...] = (
 # Increment this when the structured response contract changes. It is stored
 # with prompt provenance, so a later model drift report can separate a prompt
 # change from a parser or schema change.
-EXTRACTION_SCHEMA_VERSION = 4
+EXTRACTION_SCHEMA_VERSION = 5
 
 
 class ExtractError(JankiError):
@@ -193,59 +193,70 @@ def candidate_schema() -> Any:
     the word is what makes the staging file reviewable — a candidate a human
     cannot locate on the page is one they cannot check.
     """
-    from typing import Literal
+    from typing import Annotated, Literal
 
-    from pydantic import BaseModel, ConfigDict, Field
+    from pydantic import (
+        BaseModel,
+        ConfigDict,
+        Field,
+        StringConstraints,
+        model_validator,
+    )
 
-    RichCard = shared_ai_schema.rich_card_schema()
+    RichCard = shared_ai_schema.extraction_rich_card_schema()
     SourcePattern = shared_ai_schema.source_pattern_schema()
+    NonBlank = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
     class CandidateRecord(RichCard):
         model_config = ConfigDict(extra="forbid")
 
         expression: str = Field(description="The word as written, in Japanese.")
         reading: str = Field(
-            default="",
             description="Kana reading.",
         )
-        part_of_speech: str = Field(default="", description="Part of speech, if known.")
+        part_of_speech: str = Field(description="Part of speech, if known.")
         page: int = Field(
-            default=0,
-            ge=0,
-            description="1-indexed page this was read from; 0 when unknown.",
+            ge=1,
+            description="1-indexed page this was read from.",
         )
-        context: str = Field(
-            default="", description="The line or cell this was read from, verbatim."
+        context: NonBlank = Field(
+            description="The line or cell this was read from, verbatim."
         )
         confidence: Literal["high", "medium", "low"] = Field(
-            default="medium",
             description="Confidence.",
         )
         inclusion_reason: str = Field(
-            default="",
             description="In prose mode, why this word is worth a card.",
         )
         source_kind: Literal["table", "prose"] = Field(
-            default="prose",
             description=(
                 "Whether this candidate comes from a table/list source unit or "
                 "from prose selection."
             ),
         )
         section: str = Field(
-            default="",
             description=(
                 "Stable lowercase section slug. Required for a table candidate."
             ),
         )
         ordinal: int = Field(
-            default=0,
             ge=0,
             description=(
                 "One-based row ordinal within the section. Required for a table "
                 "candidate."
             ),
         )
+
+        @model_validator(mode="after")
+        def has_source_kind_evidence(self) -> Any:
+            if self.source_kind == "prose" and not self.inclusion_reason.strip():
+                raise ValueError("a prose candidate needs a nonblank inclusion_reason")
+            if self.source_kind == "table":
+                if not self.section.strip():
+                    raise ValueError("a table candidate needs a nonblank section")
+                if self.ordinal < 1:
+                    raise ValueError("a table candidate needs a one-based ordinal")
+            return self
 
     class SourceUnitRecord(BaseModel):
         model_config = ConfigDict(extra="forbid")
@@ -435,8 +446,11 @@ def extract_candidates(
             code="extract-schema-dependency-missing",
         ) from exc
     except JankiError as exc:
+        detail = str(exc).rstrip()
+        if "nothing was written" not in detail.casefold():
+            detail += " Nothing was written for this source."
         raise ExtractError(
-            f"{prepared.origin_path.name}: {exc}",
+            f"{prepared.origin_path.name}: {detail}",
             code="extract-model-call-failed",
         ) from exc
 
@@ -1162,12 +1176,6 @@ def _describe(candidate: Any) -> list[str]:
         if name == "expression":
             continue
         value = getattr(candidate, name, None)
-        # `page` uses 0 for "unknown", so suppress the sentinel by *field*, not
-        # by rendered text: a filter on the string "0" would also swallow a
-        # meaning of "0" or a context cell reading "0", which is the silent
-        # drop this note exists to prevent.
-        if name == "page" and not value:
-            continue
         if isinstance(value, list | tuple):
             text = ", ".join(str(item).strip() for item in value if str(item).strip())
         else:

@@ -115,7 +115,22 @@ def parsed_candidate(**overrides: Any) -> Any:
         "reading": "はなす",
         "meanings": ["to speak"],
         "part_of_speech": "verb",
-        "examples": [],
+        "examples": [
+            {
+                "japanese": "日本語を話します。",
+                "speech_level": "polite",
+                "furigana": "日本語[にほんご]を 話[はな]します。",
+                "romaji": "nihongo o hanashimasu.",
+                "english": "I speak Japanese.",
+            },
+            {
+                "japanese": "あとで話そう。",
+                "speech_level": "casual",
+                "furigana": "あとで 話[はな]そう。",
+                "romaji": "ato de hanasou.",
+                "english": "Let's talk later.",
+            },
+        ],
         "usage_notes": "",
         "page": 1,
         "context": "話す　はなす　to speak",
@@ -1494,6 +1509,40 @@ def test_schema_v3_exact_archive_retry_does_not_append_the_row_twice(
         root / "staging" / "done" / "lesson.yaml"
     )
     assert [item.id for item in archived] == [row.id]
+
+
+def test_schema_v4_still_requires_coverage_v2_candidate_accounting(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The v5 bump must not reopen v4's authenticated-accounting boundary."""
+    root = project(tmp_path, [])
+    parsed = parsed_candidate()
+    built = extract.build_records(
+        [parsed], type("Prepared", (), {"origin_path": tmp_path / "lesson.pdf"})()
+    )
+    meta = _pattern_only_meta(
+        patterns.PatternSet(source="lesson.pdf", kind="lesson"),
+        candidates=(parsed,),
+        response_schema_version=4,
+    )
+    del meta["candidate_accounting"]
+    meta["coverage"] = extract.coverage_block(
+        extract.ExtractionResult(
+            candidates=(parsed,), source_units=(), model_reported_unit_count=0
+        ),
+        source_sha256="1" * 64,
+        mode="prose",
+    )
+    path = root / "staging" / "lesson.yaml"
+    write_staging(path, list(built.records), meta)
+    before = path.read_bytes()
+
+    assert cli.main(
+        ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    ) == 1
+    assert path.read_bytes() == before
+    assert "candidate-accounting-invalid" in capsys.readouterr().err
 
 
 def test_exact_archive_retry_matches_the_post_remint_record(

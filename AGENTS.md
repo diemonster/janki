@@ -178,7 +178,14 @@ below is what is left, and it is the loop every other project already uses.*
    the file; never delete this recovery artifact by hand. Source
    extraction metadata fingerprints the source, style guide, task template,
    labelled data turn, response schema, and complete request; the pattern copy
-   carries the same provenance. Schema-v4 extraction also writes machine-owned
+   carries the same provenance. Both card-writing paths require a nonblank
+   meaning list, complete fields on every returned example, and an explicit
+   usage note that may be empty. Schema-v5 extraction additionally requires
+   exactly one polite and one casual example plus source-kind evidence before
+   the answer can be staged; enrich keeps example-list cardinality flexible so
+   it can complete only the unoccupied card slots. These are structural card
+   contracts, not Japanese audits. Schema-v4 and newer extraction also writes
+   machine-owned
    `candidate_accounting`: coverage v2 binds its parsed/canonical/unusable/
    duplicate counts and fingerprint, and every stable-ID collision group keeps
    all parsed schema proposals in original order. Reviewers may still edit,

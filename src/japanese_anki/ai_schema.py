@@ -1,10 +1,14 @@
 """Shared structured-output shapes for the two card-writing AI paths.
 
 ``extract`` reads source material and ``enrich --ai`` reads a bare vocabulary
-record.  The surrounding evidence differs, but the card content they return
-must not: meanings, examples, and a usage note have one schema here.  Keeping
-the model classes behind functions preserves the project's optional ``ai``
-dependency — importing janki for a build must not import Pydantic.
+record.  The surrounding evidence differs, but the card values they return use
+one schema here: nonblank meanings, complete example items, and an explicit
+usage note that may be empty. Extraction returns a complete candidate card,
+including for an already-known identity, and therefore requires both card
+slots; enrichment may preserve a reviewed example and return only the
+unoccupied slot, so only its example-list cardinality is flexible.
+Keeping the model classes behind functions preserves the project's optional
+``ai`` dependency — importing janki for a build must not import Pydantic.
 
 The field descriptions are intentionally terse.  They are serialized into the
 JSON schema and therefore reach the model, but the substantive instructions
@@ -20,6 +24,7 @@ from typing import Any, Literal
 __all__ = [
     "generated_example_schema",
     "adapt_rich_card",
+    "extraction_rich_card_schema",
     "RichCardContent",
     "rich_card_schema",
     "source_pattern_schema",
@@ -83,35 +88,80 @@ def adapt_rich_card(value: Any) -> RichCardContent:
 @functools.cache
 def generated_example_schema() -> Any:
     """The example shape shared byte-for-byte by both card-writing paths."""
-    from pydantic import BaseModel, ConfigDict, Field
+    from typing import Annotated
+
+    from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+
+    NonBlank = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
     class GeneratedExample(BaseModel):
         model_config = ConfigDict(extra="forbid")
 
-        japanese: str = Field(description="Japanese sentence.")
+        japanese: NonBlank = Field(description="Japanese sentence.")
         speech_level: Literal["polite", "casual"] = Field(
             description="Speech level."
         )
-        furigana: str = Field(default="", description="Sentence with Anki furigana.")
-        romaji: str = Field(default="", description="Sentence in Hepburn romaji.")
-        english: str = Field(default="", description="Natural English translation.")
+        furigana: NonBlank = Field(description="Sentence with Anki furigana.")
+        romaji: NonBlank = Field(description="Sentence in Hepburn romaji.")
+        english: NonBlank = Field(description="Natural English translation.")
 
     return GeneratedExample
 
 
 @functools.cache
 def rich_card_schema() -> Any:
-    """Meanings and teaching content common to source and bare-word answers."""
-    from pydantic import BaseModel, ConfigDict, Field
+    """Complete values common to source and bare-word card answers."""
+    from typing import Annotated
+
+    from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
     GeneratedExample = generated_example_schema()
+    NonBlank = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
     class RichCard(BaseModel):
         model_config = ConfigDict(extra="forbid")
 
-        meanings: list[str] = Field(default_factory=list, description="English glosses.")
-        examples: list[GeneratedExample] = Field(default_factory=list)
-        usage_notes: str = Field(default="", description="Usage note.")
+        meanings: list[NonBlank] = Field(
+            min_length=1,
+            description="English glosses.",
+        )
+        examples: list[GeneratedExample]
+        usage_notes: str = Field(description="Usage note.")
+
+    return RichCard
+
+
+@functools.cache
+def extraction_rich_card_schema() -> Any:
+    """The fixed-cardinality variant used only while extracting a source.
+
+    The shared shape already requires nonblank meanings and complete returned
+    example values. Extraction additionally returns a complete candidate card,
+    whether its identity is fresh or already known, so it must fill exactly the
+    two polite/casual slots the note type renders. These are artifact
+    constraints, not Japanese judgements; the Markdown template still does all
+    language work, including choosing and writing those values.
+
+    This is separate from :func:`rich_card_schema` because ``enrich --ai`` can
+    receive an already-reviewed polite or casual example that it must preserve.
+    Its legitimate response may therefore contain only the unoccupied slot.
+    """
+    from pydantic import Field, model_validator
+
+    SharedRichCard = rich_card_schema()
+    GeneratedExample = generated_example_schema()
+
+    class RichCard(SharedRichCard):
+        examples: list[GeneratedExample] = Field(min_length=2, max_length=2)
+
+        @model_validator(mode="after")
+        def has_one_example_for_each_card_slot(self) -> Any:
+            levels = [example.speech_level for example in self.examples]
+            if levels.count("polite") != 1 or levels.count("casual") != 1:
+                raise ValueError(
+                    "examples must contain exactly one polite and one casual value"
+                )
+            return self
 
     return RichCard
 

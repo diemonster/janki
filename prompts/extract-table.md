@@ -1,6 +1,10 @@
 You are reading Japanese study material and proposing complete vocabulary
 records and lesson patterns for a human to review.
 
+Selecting a candidate commits you to completing its entire card in this
+response. Populate every required card field, and complete all candidate cards
+before writing patterns.
+
 This page is a list or table. Account for every row in source_units, in source
 order. Give each row a stable page, section slug, and ordinal. Copy its full text
 to context. Give it exactly one disposition: candidate, duplicate,

@@ -19,7 +19,7 @@ from japanese_anki import cli, extract, patterns, prompts
 from japanese_anki.claude_client import CallResult, Refusal
 from japanese_anki.extract import ExtractError, build_records, known_ids, prompt_name
 from japanese_anki.inputs import PreparedInput
-from japanese_anki.models import PROVISIONAL_FIELDS_KEY, VocabularyRecord, provisional_fields
+from japanese_anki.models import VocabularyRecord, provisional_fields
 from japanese_anki.staging import read_staging
 
 PDF = b"%PDF-1.7 fake"
@@ -33,12 +33,27 @@ def candidate(**overrides: Any) -> Any:
         "reading": "はなす",
         "meanings": ["to speak"],
         "part_of_speech": "verb",
-        "examples": [],
+        "examples": [
+            {
+                "japanese": "日本語を話します。",
+                "speech_level": "polite",
+                "furigana": "日本語[にほんご]を 話[はな]します。",
+                "romaji": "nihongo o hanashimasu.",
+                "english": "I speak Japanese.",
+            },
+            {
+                "japanese": "あとで話そう。",
+                "speech_level": "casual",
+                "furigana": "あとで 話[はな]そう。",
+                "romaji": "ato de hanasou.",
+                "english": "Let's talk later.",
+            },
+        ],
         "usage_notes": "",
         "page": 12,
         "context": "話す　はなす　to speak",
         "confidence": "high",
-        "inclusion_reason": "",
+        "inclusion_reason": "The lesson explicitly teaches this word.",
         "source_kind": "prose",
         "section": "",
         "ordinal": 0,
@@ -274,7 +289,7 @@ def test_source_patterns_share_the_extraction_calls_prompt_provenance(
     assert result.pattern_set.kind == "lesson"
     assert [item.template for item in result.pattern_set.patterns] == ["〜んだ"]
     assert result.pattern_set.prompt_provenance["model"] == "claude-opus-5"
-    assert result.pattern_set.prompt_provenance["response_schema_version"] == 4
+    assert result.pattern_set.prompt_provenance["response_schema_version"] == 5
 
 
 # --- stop-reason discipline --------------------------------------------------
@@ -600,7 +615,14 @@ def test_rich_candidate_content_becomes_a_reviewable_record(tmp_path: Path) -> N
                         "furigana": "日本語[にほんご]を 話[はな]します。",
                         "romaji": "nihongo o hanashimasu.",
                         "english": "I speak Japanese.",
-                    }
+                    },
+                    {
+                        "japanese": "あとで話そう。",
+                        "speech_level": "casual",
+                        "furigana": "あとで 話[はな]そう。",
+                        "romaji": "ato de hanasou.",
+                        "english": "Let's talk later.",
+                    },
                 ],
                 usage_notes="Often takes と for the person spoken with.",
             )
@@ -608,21 +630,18 @@ def test_rich_candidate_content_becomes_a_reviewable_record(tmp_path: Path) -> N
         prepared(tmp_path),
     ).records
 
-    assert [item.japanese for item in record.examples] == ["日本語を話します。"]
+    assert [item.japanese for item in record.examples] == [
+        "日本語を話します。",
+        "あとで話そう。",
+    ]
     assert record.examples[0].register == "polite"
     assert record.usage_notes == "Often takes と for the person spoken with."
     assert "example_authority" not in record.source.raw_fields
 
 
-def test_a_candidate_without_examples_keeps_the_rich_fields_empty(
-    tmp_path: Path,
-) -> None:
-    [record] = build_records(
-        [candidate(examples=[])], prepared(tmp_path)
-    ).records
-
-    assert record.examples == []
-    assert "example" not in record.source.raw_fields
+def test_a_candidate_without_examples_never_reaches_record_building() -> None:
+    with pytest.raises(ValueError, match="at least 2 items"):
+        candidate(examples=[])
 
 
 def test_extracted_semantic_fields_are_marked_provisional(tmp_path: Path) -> None:
@@ -634,14 +653,14 @@ def test_extracted_semantic_fields_are_marked_provisional(tmp_path: Path) -> Non
     assert provisional_fields(record) == ["meanings", "part_of_speech"]
 
 
-def test_a_candidate_with_no_semantic_claims_is_not_marked(tmp_path: Path) -> None:
-    # Emptiness is not a claim; an empty mark would put every extracted record
-    # under dictionary authority it never needed.
+def test_blank_optional_metadata_is_not_marked_as_a_semantic_claim(
+    tmp_path: Path,
+) -> None:
     [record] = build_records(
-        [candidate(meanings=[], part_of_speech="")], prepared(tmp_path)
+        [candidate(part_of_speech="")], prepared(tmp_path)
     ).records
 
-    assert PROVISIONAL_FIELDS_KEY not in record.source.raw_fields
+    assert provisional_fields(record) == ["meanings"]
 
 
 def test_a_candidate_with_no_expression_cannot_become_a_record(
@@ -781,7 +800,14 @@ def test_duplicate_stable_id_proposals_are_preserved_and_reported(
                 "furigana": "二[ふた]つ 目[め]の 例[れい]です。",
                 "romaji": "futatsume no rei desu.",
                 "english": "This is the second example.",
-            }
+            },
+            {
+                "japanese": "これは二つ目の例だ。",
+                "speech_level": "casual",
+                "furigana": "これは 二[ふた]つ 目[め]の 例[れい]だ。",
+                "romaji": "kore wa futatsume no rei da.",
+                "english": "This is the second example.",
+            },
         ],
         usage_notes="second usage note",
         page=13,
@@ -1173,6 +1199,80 @@ def test_extract_force_replaces_reviewed_patterns_as_unreviewed(
     assert replacement.prompt_provenance == meta["prompt_provenance"]
     assert replacement.review_run_id == meta["review_run_id"]
     assert meta["pattern_set"]["review_run_id"] == meta["review_run_id"]
+
+
+def test_schema_validation_failure_preserves_forced_targets_byte_for_byte(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A paid but malformed answer cannot replace either durable artifact."""
+    root = project(tmp_path)
+    source = source_pdf(tmp_path)
+    monkeypatch.setattr(
+        cli.extract.claude_client,
+        "parse_call",
+        FakeCall(ok(candidate())),
+    )
+    assert cli.main(["--root", str(root), "extract", "--yes", str(source)]) == 0
+
+    target = root / "staging" / "lesson.pdf.yaml"
+    pattern_path = root / "data" / "patterns.json"
+    before = {
+        path.relative_to(root): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+    assert target.relative_to(root) in before
+    assert pattern_path.relative_to(root) in before
+
+    invalid_candidate = candidate().model_dump(mode="json")
+    invalid_candidate["meanings"] = []
+    invalid_candidate["examples"] = []
+    response = type(
+        "Response",
+        (),
+        {
+            "stop_reason": "end_turn",
+            "content": [
+                type(
+                    "TextBlock",
+                    (),
+                    {
+                        "type": "text",
+                        "text": json.dumps({"candidates": [invalid_candidate]}),
+                    },
+                )()
+            ],
+        },
+    )()
+
+    def return_invalid_response(
+        model: str,
+        _system: Any,
+        _content: Any,
+        schema: Any,
+        _client: Any = None,
+        **_kwargs: Any,
+    ) -> CallResult:
+        return cli.extract.claude_client._result_of(response, schema, model)
+
+    monkeypatch.setattr(
+        cli.extract.claude_client,
+        "parse_call",
+        return_invalid_response,
+    )
+
+    assert cli.main(
+        ["--root", str(root), "extract", "--yes", "--force", str(source)]
+    ) == 1
+    assert "Nothing was written for this source." in capsys.readouterr().err
+    after = {
+        path.relative_to(root): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+    assert after == before
 
 
 def test_extract_force_help_names_the_reviewed_pattern_reset(
@@ -1612,12 +1712,6 @@ def test_a_candidate_with_no_expression_is_counted_not_hidden(
                 candidate(),
                 candidate(
                     expression="  ",
-                    examples=[
-                        {
-                            "japanese": "毎日日本語を話します。",
-                            "speech_level": "polite",
-                        }
-                    ],
                     confidence="low",
                     inclusion_reason="new in this chapter",
                 ),
@@ -1639,24 +1733,23 @@ def test_a_candidate_with_no_expression_is_counted_not_hidden(
     assert "to speak" in note
     # Every field the model filled in, not a hand-picked few: the proposed
     # example and low-confidence flag both matter to whoever re-adds the word.
-    assert "毎日日本語を話します。" in note
+    assert "日本語を話します。" in note
     assert "verb" in note
     assert "low" in note
     assert "new in this chapter" in note
 
 
-def test_a_held_back_row_whose_values_are_zero_is_still_recorded(
+def test_a_held_back_row_whose_text_values_are_zero_is_still_recorded(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # A row for 〇/ゼロ: the gloss and the source cell are both "0". Filtering
-    # the *rendered text* to suppress the page sentinel swallowed them, which
-    # is the drop this note exists to prevent.
+    # rendered text by truthiness must not swallow them.
     root = project(tmp_path)
     monkeypatch.setattr(
         cli.extract.claude_client,
         "parse_call",
         FakeCall(
-            ok(candidate(expression="", reading="ゼロ", meanings=["0"], context="0", page=0))
+            ok(candidate(expression="", reading="ゼロ", meanings=["0"], context="0", page=1))
         ),
     )
 
@@ -1666,5 +1759,4 @@ def test_a_held_back_row_whose_values_are_zero_is_still_recorded(
     note = meta["review_notes"]
     assert "meanings: 0" in note
     assert "context: 0" in note
-    # The unknown-page sentinel is still suppressed rather than reported as 0.
-    assert "page:" not in note
+    assert "page: 1" in note

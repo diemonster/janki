@@ -84,7 +84,7 @@ judgment is generated — never the other way around.
 | --- | --- | --- |
 | Readings, furigana, pitch accent, frequency, POS/verb group | **jpdb dictionary data** | Facts. Never generate what you can look up. |
 | Canonical structural derivations and conjugation tables | **Plain code** | Deterministic artifact shaping, not interpretation of Japanese. |
-| Meanings, two examples, annotations, and usage notes | **Claude API or Codex** | One complete answer per bare vocabulary record. |
+| Meanings, completed polite/casual example slots, annotations, and usage notes | **Claude API or Codex** | One complete answer per bare vocabulary record. |
 | PDF/photo → complete candidate cards and source patterns | **Claude API (vision)** | One source-aware call preserves source context and avoids a second paid reading. |
 | Word/sentence audio | **VOICEVOX / OpenAI TTS** | VOICEVOX forces word accent; OpenAI reads examples naturally. |
 
@@ -205,7 +205,12 @@ parsed mechanically.
   model, mode, response-schema version and fingerprint, component prompt
   fingerprints, and a fingerprint of the full provider-normalized request
   across style, task, labelled data turn, transport prompt, and wire schema.
-- Schema-v4 answers write a versioned, fingerprinted `candidate_accounting`
+- Schema-v5 answers require at least one nonblank meaning, exactly one complete
+  polite and one complete casual example, and mode-appropriate source evidence
+  for every selected candidate. These are field/count/provenance constraints;
+  the prompt still makes every Japanese judgement. Bare-word enrichment keeps
+  its flexible example cardinality so it can preserve an occupied reviewed slot.
+- Schema-v4 and later answers write a versioned, fingerprinted `candidate_accounting`
   block. Coverage v2 binds its parsed, canonical, unusable, duplicate, and
   collision-group counts. One canonical row represents a stable ID, while
   every parsed proposal in a collision group remains in original response
@@ -222,7 +227,7 @@ parsed mechanically.
   goes to the new words.
 
 **Staging file shape**: a mapping with a human-editable `records:` list plus
-source, coverage, prompt-provenance, `pattern_set`, and (for schema v4)
+source, coverage, prompt-provenance, `pattern_set`, and (for schema v4 and newer)
 `candidate_accounting` metadata. The accounting is machine-owned and must not
 be edited or backfilled onto an older paid v3 answer; deleting, correcting, or
 re-identifying a reviewed row does not change what the model originally
@@ -458,7 +463,8 @@ preamble.
   (godan/ichidan/suru/くる rule tables; anything irregular beyond those is
   left empty and flagged, never guessed). Cheap, fast, run freely.
 - `--ai`: one complete structured answer per bare vocabulary record:
-  meanings, two annotated examples, and a usage note. The labelled data turn
+  meanings, completes the polite/casual example slots, and adds a usage note.
+  The labelled data turn
   includes the record, dictionary facts, accepted existing material, recent
   examples for variety, and reviewed patterns from lesson documents.
 - The model response is the Japanese interpretation. janki owns structural

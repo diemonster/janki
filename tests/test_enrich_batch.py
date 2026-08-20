@@ -72,12 +72,13 @@ def message(japanese: str, furigana: str = "") -> Any:
         type = "text"
         text = json.dumps(
             {
+                "meanings": ["to speak"],
                 "examples": [
                     {
                         "japanese": japanese,
-                        "furigana": furigana,
-                        "english": "",
-                        "romaji": "",
+                        "furigana": furigana or japanese,
+                        "english": "Fixture translation.",
+                        "romaji": "fixture romaji",
                         "speech_level": "polite",
                     }
                 ],
@@ -1758,7 +1759,9 @@ def test_a_batch_answer_is_stale_when_the_record_data_changed_after_submission()
         "succeeded",
         "",
         claude_client.CallResult(
-            enrich.ai_schema()(meanings=["to converse"], usage_notes="model note"),
+            enrich.ai_schema()(
+                meanings=["to converse"], examples=[], usage_notes="model note"
+            ),
             "end_turn",
             None,
         ),
@@ -1789,7 +1792,11 @@ def test_a_current_batch_answer_carries_its_submitted_request_provenance() -> No
         "succeeded",
         "",
         claude_client.CallResult(
-            enrich.ai_schema()(usage_notes="model note"), "end_turn", None
+            enrich.ai_schema()(
+                meanings=["to speak"], examples=[], usage_notes="model note"
+            ),
+            "end_turn",
+            None,
         ),
     )
 

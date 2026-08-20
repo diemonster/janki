@@ -8,16 +8,18 @@ cached, and the **stop reason is handed back to the caller** — the last of
 which is the point of the whole module.
 
 ``parse_call`` returns a :class:`CallResult` — ``(parsed, stop_reason,
-refusal)`` — and never just the parsed value. A structured-output response is
-schema-valid *on normal completion*; it is not schema-valid when the model
-refused or ran out of tokens, and both of those arrive as an ordinary
-successful response rather than an exception. Returning a tuple makes that
-impossible to forget: a caller has to name the stop reason to reach the data,
-so "check ``stop_reason`` before trusting the output" is enforced by the
+refusal)`` — and never just the parsed value. On normal completion the provider
+enforces its transformed wire schema; janki then applies the complete Pydantic
+contract, whose collection, string, numeric, and cross-field bounds can be
+stronger than the provider supports on-wire. A local mismatch fails closed. A
+refusal or token cutoff is not a complete answer at all, and both arrive as an
+ordinary successful response rather than an exception. Returning a tuple makes
+that impossible to forget: a caller has to name the stop reason to reach the
+data, so "check ``stop_reason`` before trusting the output" is enforced by the
 signature instead of by everyone remembering. What to *do* about each reason
 is the caller's — extraction turns ``refusal`` into an ``ExtractError`` naming
-the category and refuses truncated output outright, while per-record
-enrichment reports the affected record and continues.
+the category and refuses truncated output outright, while per-record enrichment
+reports the affected record and continues.
 
 Immediate ``enrich --ai`` calls may instead use :mod:`codex_client`; both
 providers return the same :class:`CallResult` shape.
@@ -385,9 +387,10 @@ def _result_of(response: Any, schema: Any, model: str) -> CallResult:
     try:
         return CallResult(_type_adapter(schema).validate_json(text), stop_reason, None)
     except Exception as exc:
-        # Structured outputs are schema-valid on normal completion, so this is
-        # an anomaly rather than an expected branch — but it still has to reach
-        # the user as a janki error rather than a pydantic traceback.
+        # The provider enforces the transformed wire schema. Pydantic can still
+        # reject stronger local artifact constraints that the wire subset only
+        # carries as descriptions; fail closed as a janki error rather than
+        # leaking a pydantic traceback or accepting a structurally thin answer.
         raise JankiError(
             f"{model} finished normally but its answer did not match the "
             f"expected shape: {exc}"

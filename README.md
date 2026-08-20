@@ -87,7 +87,15 @@ polite/casual slots. A table row with no sentence gets beginner-friendly
 examples from the same answer. The patterns also go to `data/patterns.json` as
 unreviewed proposals, with a recoverable copy beside the staged cards.
 
-Current schema-v4 runs also write fingerprinted `candidate_accounting` beside
+Current schema-v5 runs require every selected candidate to arrive as a complete
+card: at least one nonblank meaning, exactly one complete polite and one
+complete casual example, plus reviewable source-kind evidence. A structurally
+incomplete response is refused before either staging or patterns are written;
+`enrich --ai` shares the complete value fields but keeps its returned example
+list cardinality flexible because it may preserve one reviewed example and fill
+only the other slot.
+
+Schema-v4 and newer runs also write fingerprinted `candidate_accounting` beside
 the editable rows. It binds the parsed, canonical, unusable, and duplicate
 candidate counts into coverage v2. If several parsed proposals mint one stable
 ID, janki keeps one canonical row and preserves every proposal in that
@@ -219,7 +227,7 @@ own collection is the newer side. Details and the measurements behind them:
 | `janki repair PATH` | Show exact changes from registered safe repairs |
 | `janki promote FILE.yaml` | Move a reviewed staging file into the collection |
 | `janki enrich --jpdb` | Fill fields from the dictionary |
-| `janki enrich --ai` | Propose English glosses, two examples, and a usage note in one bare-word call |
+| `janki enrich --ai` | Propose English glosses, complete the polite/casual example slots, and add a usage note in one bare-word call |
 | `janki kanji` | Look up stroke order and on/kun readings |
 | `janki audio --words --examples` | Voice the words and the sentences |
 | `janki validate [PATH]` | Check records, decks, or a staging file |
