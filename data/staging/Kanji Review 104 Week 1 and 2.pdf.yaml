@@ -27,20 +27,21 @@ coverage:
   unreadable_units: []
   coverage_block_fingerprint: 029a8ae281ddbf8b1646d4e1b98b3bdceaa77d005f912d13579da3d7c0b4ef9c
 records:
-- id: word:九分:きゅうふん
-  expression: 九分
-  reading: きゅうふん
-  furigana: ''
-  romaji: kyuufun
+- expression: 分
+  reading: ふん
+  furigana: 分[ふん]
+  romaji: fun
   meanings:
-  - nine minutes
-  part_of_speech: noun (counter)
+  - minute; counter for minutes
+  part_of_speech: counter
   verb_group: ''
   transitivity: ''
   examples: []
   conjugations: {}
-  tags: []
-  usage_notes: ''
+  tags:
+  - kanji-review-104-week-1-and-2
+  usage_notes: The minute counter is read ふん or ぷん depending on the preceding number;
+    九分 is read きゅうふん.
   audio: ''
   image: ''
   pitch_accent: []

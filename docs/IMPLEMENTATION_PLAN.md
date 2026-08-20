@@ -3966,8 +3966,12 @@ Completion now requires two complementary rich-v3 runs:
    exercise the prose/mixed-card shape, but the old auto template returned a
    second pattern-only answer. The staged answer remains valid evidence for
    that request, not a completed substitute for the candidate-bearing role.
-   Completing that role now requires fresh consent to rerun this source against
-   the corrected prompt or an owner-approved alternative source.
+   The owner later authorized a forced Claude Opus 5 rerun against the corrected
+   prompt; the 2026-08-19 attempt ended with `extract-response-truncated` and
+   wrote no staging or pattern artifact. Any retry is paused until the owner
+   resumes it after token renewal; make no paid call in the meantime. An
+   owner-approved alternative source remains another valid way to fill the
+   candidate-bearing role.
 
 A qualifying candidate-bearing run archives `response_schema_version: 3`, a
 `review_run_id`, response-schema and full-request fingerprints, and
@@ -3990,16 +3994,18 @@ Authority remains explicit throughout. The owner authorized the two
 2026-08-18 paid calls, chose the overlapping 27–34 source, and authorized the
 forced replacement of `teform_song.pdf`'s reviewed legacy entry with the v3
 answer as unreviewed. That authority does not mark either returned pattern set
-reviewed and does not authorize another paid rerun. The final study
-confirmation also remains an owner decision. For blocking coverage, the owner
+reviewed. The later 27–34 rerun authority was consumed by the truncated
+2026-08-19 attempt; a retry is currently paused. The final study confirmation
+also remains an owner decision. For blocking coverage, the owner
 chooses whether to supply an owner approval or opt into model coverage review;
 the model owns the latter verdict. Both new runs are selection coverage and
-need neither route. One additional content decision is partly settled: the
+need neither route. One additional content decision is now settled: the
 owner chose to re-identify the sole unresolved historical schema-v2 M8.5
 record, `word:九分:きゅうふん`, held because that reading is not in the
 dictionary and found in `フェリーターミナルからバスで九分`. The exact
-replacement expression and reading are still required; an agent cannot infer
-them. Its schema-v2
+replacement was owner-approved on 2026-08-19 as `expression=分; reading=ふん`,
+with `九分[きゅうふん]` retained as the source lesson rather than made a
+standalone number-plus-counter identity. Its schema-v2
 staging file is the only recovery artifact, so a forced rerun of that source
 must not overwrite it.
 
