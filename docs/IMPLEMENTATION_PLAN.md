@@ -4133,10 +4133,14 @@ owner chose to re-identify the sole unresolved historical schema-v2 M8.5
 record, `word:九分:きゅうふん`, held because that reading is not in the
 dictionary and found in `フェリーターミナルからバスで九分`. The exact
 replacement was owner-approved on 2026-08-19 as `expression=分; reading=ふん`,
-with `九分[きゅうふん]` retained as the source lesson rather than made a
-standalone number-plus-counter identity. Its schema-v2
-staging file is the only recovery artifact, so a forced rerun of that source
-must not overwrite it.
+   with `九分[きゅうふん]` retained as the source lesson rather than made a
+   standalone number-plus-counter identity. On 2026-08-20 its normal
+   jpdb-backed promotion passed without `--skip-reading-check`, minted
+   `word:分:ふん`, cleared the old hold, appended the exact landed row as the
+   archive's twenty-fourth record, deleted the live staging file, and registered
+   its record/source ledger entry. The new row is still unexported and lacks a
+   word clip and example sentence; those downstream items remain ordinary
+   follow-up rather than an unresolved identity or recovery artifact.
 
 The six extraction/card defects found in the historical four-source rollout
 were curated in f91787b: six records were removed, `売る` was added, and
