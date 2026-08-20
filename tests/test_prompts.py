@@ -394,13 +394,75 @@ def test_extraction_patterns_keep_marked_errors_out_of_templates(name: str) -> N
     text = " ".join(prompts.load(REPO_ROOT, name).split())
 
     assert (
-        "When the source marks an example incorrect and supplies a correction or "
-        "explanation, report the valid corrected pattern and its scope."
+        "When the source marks an example incorrect, create a pattern from the "
+        "correction only when the source teaches a generalizable correction or rule."
     ) in text
     assert (
-        "Keep the marked error only as a labelled counterexample in examples; "
-        "never make the error itself a pattern template."
+        "In that case, the pattern's template must contain the valid corrected "
+        "pattern, and its gloss must state the source-stated scope; do not leave "
+        "either only in prose."
     ) in text
+    assert (
+        "An isolated correction that teaches no generalizable rule does not become "
+        "a pattern."
+    ) in text
+    assert (
+        "Never put the marked wrong form in a pattern template or in pattern "
+        "examples; the source remains the evidence for that error."
+    ) in text
+
+
+@pytest.mark.parametrize("name", ("extract-auto", "extract-table", "extract-prose"))
+def test_every_extraction_candidate_gets_a_final_completeness_check(name: str) -> None:
+    """One structured object is a card, not a stub the reviewer must author."""
+    text = " ".join(prompts.load(REPO_ROOT, name).split())
+
+    assert (
+        "Before returning the answer, check every emitted candidate for "
+        "completeness."
+    ) in text
+    assert "It must contain at least one non-empty meaning." in text
+    assert (
+        "It must contain exactly two examples: one with speech_level “polite” and "
+        "one with speech_level “casual”."
+    ) in text
+    assert (
+        "Each example must have non-empty japanese, furigana, romaji, english, and "
+        "speech_level fields."
+    ) in text
+    assert "Do not emit a partial or placeholder candidate." in text
+    assert (
+        "The selection and accounting rules above decide what must be emitted; "
+        "incompleteness is not a reason to omit an otherwise required candidate or "
+        "source unit."
+    ) in text
+    assert "Complete every required candidate before returning the answer." in text
+    assert "finish it or omit it" not in text
+    assert "usage_notes may remain empty when there is no useful nuance." in text
+
+
+def test_prose_final_check_consolidates_identity_and_source_evidence() -> None:
+    """Repeated evidence yields one complete card, with reviewable provenance."""
+    text = " ".join(prompts.load(REPO_ROOT, "extract-prose").split())
+
+    assert (
+        "Before returning prose candidates, perform a final evidence and identity "
+        "check."
+    ) in text
+    assert (
+        "Every candidate must have a source page, a non-empty inclusion_reason, "
+        "and context copied as the exact complete source sentence or, only when "
+        "none is available, the exact verbatim callout or source line."
+    ) in text
+    assert (
+        "When several source passages support the same expression and reading, "
+        "return one consolidated candidate for that lexical identity."
+    ) in text
+    assert (
+        "Choose one exact candidate-bearing source location for page and context, "
+        "and describe any cross-page support in inclusion_reason."
+    ) in text
+    assert "Never return duplicate or partial stubs for one identity." in text
 
 
 def test_auto_extraction_routes_sentence_grids_through_card_selection() -> None:

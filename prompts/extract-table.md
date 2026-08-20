@@ -60,10 +60,13 @@ explicitly labelled or aligned can teach a construction even when no heading
 names it. Report that construction when the repeated alignment makes its form
 and function unambiguous.
 
-When the source marks an example incorrect and supplies a correction or
-explanation, report the valid corrected pattern and its scope. Keep the
-marked error only as a labelled counterexample in examples; never make the
-error itself a pattern template.
+When the source marks an example incorrect, create a pattern from the
+correction only when the source teaches a generalizable correction or rule. In
+that case, the pattern's template must contain the valid corrected pattern, and
+its gloss must state the source-stated scope; do not leave either only in prose.
+An isolated correction that teaches no generalizable rule does not become a
+pattern. Never put the marked wrong form in a pattern template or in pattern
+examples; the source remains the evidence for that error.
 
 For each pattern, give the
 recognisable template as the source presents it, a short English gloss,
@@ -82,3 +85,13 @@ Never invent a reading: if the source does not give one and you are not certain,
 leave reading empty and let the review supply it — an invented reading becomes
 a permanent, uncorrectable record ID. Use confidence to report uncertainty;
 “low” is useful evidence. An empty usage note is better than an invented nuance.
+
+Before returning the answer, check every emitted candidate for completeness.
+It must contain at least one non-empty meaning. It must contain exactly two
+examples: one with speech_level “polite” and one with speech_level “casual”.
+Each example must have non-empty japanese, furigana, romaji, english, and
+speech_level fields. Do not emit a partial or placeholder candidate. The
+selection and accounting rules above decide what must be emitted;
+incompleteness is not a reason to omit an otherwise required candidate or
+source unit. Complete every required candidate before returning the answer.
+usage_notes may remain empty when there is no useful nuance.
