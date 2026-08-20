@@ -26,10 +26,14 @@ The source response classifies the document as one of four kinds:
 - `unknown` — no confident classification and no invented patterns.
 
 Each pattern has the template a learner recognizes, a short English gloss,
-verbatim source examples, and the page or slide where it appears. The resulting
-`PatternSet` is written under the source basename in `data/patterns.json` with
-`reviewed: false`. A complete copy also rides in the source's staging file, so
-a pattern-store write problem cannot lose half of a paid answer.
+examples found in the source, and the page or slide where it appears. Ordinary
+text examples remain verbatim. When a visual chart itself encodes a complete
+worked transformation through layout, its example is faithfully linearized as
+self-contained plain text; an ambiguous or incomplete graphic contributes no
+guessed example. The resulting `PatternSet` is written under the source basename
+in `data/patterns.json` with `reviewed: false`. A complete copy also rides in the
+source's staging file, so a pattern-store write problem cannot lose half of a
+paid answer.
 
 Each extraction mints one `review_run_id`. The staging metadata, its nested
 proposed `pattern_set`, and the corresponding pattern-store entry all carry

@@ -256,6 +256,37 @@ def test_auto_extraction_routes_sentence_grids_through_card_selection() -> None:
     ) in text
 
 
+@pytest.mark.parametrize(
+    "name", ("extract-auto", "extract-table", "extract-prose")
+)
+def test_visual_pattern_charts_become_self_contained_plain_text(name: str) -> None:
+    """Formatting cannot survive inside a pattern card's JSON string.
+
+    The te-form song placed whole verbs in one column, highlighted only their
+    final kana, and put replacement suffixes in another.  Flattening those
+    cells produced misleading examples such as ``かく → いて``.  The prompt,
+    not a Japanese-aware repair, owns that source-reading instruction in every
+    complete extraction mode.
+    """
+    text = " ".join(prompts.load(REPO_ROOT, name).split())
+
+    assert "Keep ordinary text examples verbatim." in text
+    assert (
+        "A pattern example whose meaning depends on visual layout must instead "
+        "be a faithful, self-contained plain-text transcription."
+    ) in text
+    assert (
+        "When a chart unambiguously aligns a complete input with a replacement "
+        "suffix or other fragment, transcribe it as the complete input and "
+        "complete transformed result, not as a whole-expression-to-fragment "
+        "transformation."
+    ) in text
+    assert (
+        "If the complete result is not unambiguously encoded by the source's "
+        "own layout and labels, omit the example rather than guess."
+    ) in text
+
+
 def test_a_staging_files_provenance_is_the_prompt_files_own_sha(tmp_path: Path) -> None:
     """What ties a card back to the asking that produced it.
 

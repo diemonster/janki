@@ -185,52 +185,51 @@
     "patterns": [
       {
         "template": "う・つ・る ⇨ って",
-        "gloss": "Godan (Group I) verbs ending in う, つ, or る take the て-form ending って",
+        "gloss": "For Godan (Group I) verbs, replace final う, つ, or る with って",
         "examples": [
-          "かう ⇨ って",
-          "まつ ⇨ って",
-          "とる ⇨ って",
-          "ex. かう ⇨ かって (う ending changes to って) (to buy)"
+          "かう ⇨ かって",
+          "まつ ⇨ まって",
+          "とる ⇨ とって"
         ],
         "where": "p.1 Te-form Song; p.2 U-Verb (Godan/ Group I)"
       },
       {
         "template": "む・ぶ・ぬ ⇨ んで",
-        "gloss": "Godan verbs ending in む, ぶ, or ぬ take the て-form ending んで",
+        "gloss": "For Godan (Group I) verbs, replace final む, ぶ, or ぬ with んで",
         "examples": [
-          "すむ ⇨ んで",
-          "あそぶ ⇨ んで",
-          "しぬ ⇨ んで"
+          "すむ ⇨ すんで",
+          "あそぶ ⇨ あそんで",
+          "しぬ ⇨ しんで"
         ],
         "where": "p.1 Te-form Song"
       },
       {
         "template": "く ⇨ いて",
-        "gloss": "Godan verbs ending in く take the て-form ending いて",
+        "gloss": "For Godan (Group I) verbs, replace final く with いて",
         "examples": [
-          "かく ⇨ いて"
+          "かく ⇨ かいて"
         ],
         "where": "p.1 Te-form Song"
       },
       {
         "template": "ぐ ⇨ いで",
-        "gloss": "Godan verbs ending in ぐ take the て-form ending いで",
+        "gloss": "For Godan (Group I) verbs, replace final ぐ with いで",
         "examples": [
-          "およぐ ⇨ いで"
+          "およぐ ⇨ およいで"
         ],
         "where": "p.1 Te-form Song"
       },
       {
         "template": "す ⇨ して",
-        "gloss": "Godan verbs ending in す take the て-form ending して",
+        "gloss": "For Godan (Group I) verbs, replace final す with して",
         "examples": [
-          "はなす ⇨ して"
+          "はなす ⇨ はなして"
         ],
         "where": "p.1 Te-form Song"
       },
       {
-        "template": "〜る ⇨ 〜て (Ichidan)",
-        "gloss": "For ru-verbs (Ichidan/Group II), simply change the final る to て",
+        "template": "Ichidan (Group II): る ⇨ て",
+        "gloss": "For a verb already identified as Ichidan (Group II), replace final る with て. Not every verb ending in る is Ichidan; Godan る-verbs use って",
         "examples": [
           "ex. たべる ⇨ たべて (to eat)",
           "おきる ⇨ おきて (to wake up)"
@@ -241,14 +240,13 @@
         "template": "いく ⇨ いって",
         "gloss": "いく is an exception: although it ends in く, its て-form is いって, not いいて",
         "examples": [
-          "いく ⇨ いって",
-          "いく is an exception and the te-form becomes いって"
+          "いく ⇨ いって"
         ],
         "where": "p.1 Te-form Song; p.2 Exception"
       },
       {
         "template": "くる ⇨ きて / する ⇨ して",
-        "gloss": "The two irregular verbs (Group III), and compounds ending in them, form きて and して",
+        "gloss": "The irregular verbs くる and する form きて and して. When one is the final verb of a compound or multiword expression, retain the preceding material: もってくる ⇨ もってきて; べんきょうする ⇨ べんきょうして",
         "examples": [
           "くる ⇨ きて (to come)",
           "する ⇨ して (to do)"

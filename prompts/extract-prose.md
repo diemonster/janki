@@ -54,8 +54,14 @@ Classify the whole source in document_kind as pattern, lesson, vocabulary, or
 unknown, and give its document_title when visible. Report the patterns it teaches,
 not patterns it merely happens to use. For each pattern, give the
 recognisable template as the source presents it, a short English gloss,
-verbatim examples found in the source, and the page or slide in the `where`
-field. A
+examples found in the source, and the page or slide in the `where` field. Keep
+ordinary text examples verbatim. A pattern example whose meaning depends on
+visual layout must instead be a faithful, self-contained plain-text
+transcription. When a chart unambiguously aligns a complete input with a
+replacement suffix or other fragment, transcribe it as the complete input and
+complete transformed result, not as a whole-expression-to-fragment
+transformation. If the complete result is not unambiguously encoded by the
+source's own layout and labels, omit the example rather than guess. A
 vocabulary source or unknown source may have no patterns.
 
 Never invent a reading: if the source does not give one and you are not certain,
