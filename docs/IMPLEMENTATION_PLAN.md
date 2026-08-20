@@ -3995,12 +3995,19 @@ Completion now requires two complementary rich-v3 runs:
    occasion/event `に` versus `で` contrast as a malformed negative pattern.
    This third auto-mode answer is preserved unreviewed, but it confirms that
    another auto retry is not a responsible use of API credit. The next
-   no-billing step is to harden the existing `extract-prose.md` template for
-   explicit callouts and aligned exercises, then mutation-prove and review it.
-   A future run would use explicit `--mode prose`, which also supplies the
-   known-expression list and avoids paying to rewrite the overlapping cards;
-   it still requires fresh paid consent. An owner-approved alternative source
-   remains another valid way to fill the candidate-bearing role.
+   no-billing step hardened the existing `extract-prose.md` template for
+   explicit callouts and aligned exercises, then mutation-proved and
+   adversarially reviewed it. The completed prompt requires a compact
+   source-wide candidate set after its lexical and Known-expressions boundaries,
+   preserves exact single-page context while citing cross-page cue evidence in
+   `inclusion_reason`, and keeps prose coverage non-exhaustive. All three source
+   templates also now recognize an unheaded construction taught by repeated
+   labelled/aligned examples and turn a marked error plus correction into the
+   valid scoped pattern rather than an error template. A future run would use
+   explicit `--mode prose`, which supplies the known-expression list and avoids
+   paying to rewrite the overlapping cards; no paid answer has run under this
+   prompt and fresh consent is still required. An owner-approved alternative
+   source remains another valid way to fill the candidate-bearing role.
 
 A qualifying candidate-bearing run archives `response_schema_version: 3`, a
 `review_run_id`, response-schema and full-request fingerprints, and

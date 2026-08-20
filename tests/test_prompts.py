@@ -226,6 +226,183 @@ def test_the_three_extraction_modes_are_three_complete_files() -> None:
     assert len(set(texts.values())) == 3, "the modes ask for different work"
 
 
+def test_prose_extraction_requires_candidates_from_explicit_lexical_teaching() -> None:
+    """A forced prose run must not turn a taught word into pattern-only output.
+
+    Auto mode ignored the same requirement over the pair-work source.  Prose
+    mode is the shape-specific escape hatch, so its complete template has to
+    carry the lexical-teaching contract itself rather than rely on auto's file.
+    """
+    text = " ".join(prompts.load(REPO_ROOT, "extract-prose").split())
+
+    assert (
+        "Explicit lexical teaching may be a direct expression paired with its "
+        "translation or a structured exercise that aligns a target-language "
+        "answer or example with a translation, gloss, prompt, cue, or answer key."
+    ) in text
+    assert (
+        "The alignment may appear in one place or in parallel versions of the "
+        "same exercise on different pages."
+    ) in text
+    assert (
+        "If any eligible explicitly taught items exist anywhere in the source, "
+        "return at least one candidate total from those items."
+    ) in text
+    assert (
+        "Then make one small, compact, high-value selection for the whole source; "
+        "this is not one candidate per cue, page, or alignment."
+    ) in text
+
+
+def test_prose_explicit_teaching_has_a_bounded_elementary_word_exception() -> None:
+    """The source's own callout wins only after a lexical boundary is proved."""
+    text = " ".join(prompts.load(REPO_ROOT, "extract-prose").split())
+
+    assert (
+        "Treat either alignment as lexical teaching only when it makes both a "
+        "reusable word or lexicalized phrase and that item's meaning unambiguous."
+    ) in text
+    assert (
+        "Do not select a whole sentence, grammar frame, generic prompt, or answer "
+        "merely because it is paired, translated, or glossed."
+    ) in text
+    assert (
+        "Choose the smallest source-supported lexical item that carries the "
+        "aligned meaning."
+    ) in text
+    assert (
+        "An explicitly taught item that meets the lexical boundary and passes the "
+        "Known expressions rule remains eligible even when it is elementary."
+    ) in text
+    assert (
+        "Include a listed expression only when the source itself explicitly "
+        "foregrounds a distinct meaning, register, or construction as lesson content."
+    ) in text
+
+
+def test_prose_pattern_focus_cannot_replace_source_taught_vocabulary() -> None:
+    """Cards and taught patterns are two outputs from the same paid answer."""
+    text = " ".join(prompts.load(REPO_ROOT, "extract-prose").split())
+
+    assert (
+        "Neither a grammar focus nor classifying the document as pattern may "
+        "suppress those vocabulary candidates; reporting patterns is not a "
+        "substitute for reporting taught vocabulary."
+    ) in text
+    assert "Do not inventory every cue or every word in an answer." in text
+
+
+def test_prose_selection_keeps_exhaustive_coverage_fields_empty() -> None:
+    """Forcing prose changes selection instructions, not its wire contract."""
+    text = " ".join(prompts.load(REPO_ROOT, "extract-prose").split())
+
+    assert "Prose selection remains non-exhaustive." in text
+    assert "source_units and model_reported_unit_count remain empty" in text
+
+
+def test_prose_candidate_context_uses_one_exact_source_authority() -> None:
+    """Context is evidence from the page, never an answer assembled by the model."""
+    text = " ".join(prompts.load(REPO_ROOT, "extract-prose").split())
+
+    assert (
+        "For each candidate, set context to the exact complete Japanese source "
+        "sentence containing it when one is available."
+    ) in text
+    assert (
+        "When no complete Japanese source sentence is available, use the exact "
+        "verbatim callout or source line that teaches the candidate."
+    ) in text
+    assert "Do not paraphrase, translate, concatenate, or reconstruct context." in text
+
+
+def test_prose_cross_page_alignment_keeps_page_and_context_local() -> None:
+    """A parallel translation is provenance, not text to splice into context."""
+    text = " ".join(prompts.load(REPO_ROOT, "extract-prose").split())
+
+    assert (
+        "Set page to the page containing the Japanese candidate-bearing sentence, "
+        "line, or callout copied into context."
+    ) in text
+    assert (
+        "If its paired cue, translation, or answer key is on another page, "
+        "inclusion_reason must name that page and the relationship."
+    ) in text
+    assert "Never merge text from different pages into one verbatim context." in text
+
+
+def test_prose_every_candidate_explains_its_source_teaching() -> None:
+    """The reviewer can tell why every selected identity crossed the boundary."""
+    text = " ".join(prompts.load(REPO_ROOT, "extract-prose").split())
+
+    assert "Every candidate must have a non-empty inclusion_reason." in text
+    assert (
+        "For a candidate from aligned material, inclusion_reason must explain "
+        "how the source explicitly teaches that item."
+    ) in text
+
+
+def test_prose_known_expressions_are_a_decidable_exclusion() -> None:
+    """The model receives identities, not the unseen contents of existing cards."""
+    text = " ".join(prompts.load(REPO_ROOT, "extract-prose").split())
+
+    assert (
+        "The Known expressions list names expressions janki already has. Normally "
+        "exclude every expression it lists."
+    ) in text
+    assert (
+        "Include a listed expression only when the source itself explicitly "
+        "foregrounds a distinct meaning, register, or construction as lesson content."
+    ) in text
+    assert (
+        "Do not speculate about an unseen existing card; the list establishes "
+        "only that the identity exists."
+    ) in text
+
+
+def test_prose_explicit_teaching_requires_one_total_compact_selection() -> None:
+    """The candidate floor is source-wide, not a rich-card explosion multiplier."""
+    text = " ".join(prompts.load(REPO_ROOT, "extract-prose").split())
+
+    assert (
+        "If any eligible explicitly taught items exist anywhere in the source, "
+        "return at least one candidate total from those items."
+    ) in text
+    assert (
+        "Then make one small, compact, high-value selection for the whole source; "
+        "this is not one candidate per cue, page, or alignment."
+    ) in text
+
+
+@pytest.mark.parametrize("name", ("extract-auto", "extract-table", "extract-prose"))
+def test_extraction_patterns_can_be_taught_without_a_heading(name: str) -> None:
+    """Repeated labelled evidence can teach what a title happens not to name."""
+    text = " ".join(prompts.load(REPO_ROOT, name).split())
+
+    assert (
+        "Repeated source examples that are explicitly labelled or aligned can "
+        "teach a construction even when no heading names it."
+    ) in text
+    assert (
+        "Report that construction when the repeated alignment makes its form "
+        "and function unambiguous."
+    ) in text
+
+
+@pytest.mark.parametrize("name", ("extract-auto", "extract-table", "extract-prose"))
+def test_extraction_patterns_keep_marked_errors_out_of_templates(name: str) -> None:
+    """A teaching counterexample is evidence for the correction, not a rule."""
+    text = " ".join(prompts.load(REPO_ROOT, name).split())
+
+    assert (
+        "When the source marks an example incorrect and supplies a correction or "
+        "explanation, report the valid corrected pattern and its scope."
+    ) in text
+    assert (
+        "Keep the marked error only as a labelled counterexample in examples; "
+        "never make the error itself a pattern template."
+    ) in text
+
+
 def test_auto_extraction_routes_sentence_grids_through_card_selection() -> None:
     """A grammar exercise can teach a pattern and still contain card material.
 

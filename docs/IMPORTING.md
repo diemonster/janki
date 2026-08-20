@@ -228,9 +228,12 @@ Each input produces one staging file named for it, `data/staging/lesson-3.pdf.ya
 holding one candidate per word with the page it was read from, the line it was
 read from, and the model's own confidence.
 
-`--mode table` transcribes a vocabulary list row by row; `--mode prose` mines
-running text for words worth a card and says why. Omit it and the model judges
-each page, which is right when one document holds both. `--model ID` overrides
+`--mode table` transcribes a vocabulary list row by row; `--mode prose` uses
+non-exhaustive candidate selection for running text, dialogues, sentence grids,
+and structured exercises that are not vocabulary lists or tables. Prose mode
+also receives the collection's known expressions, so it can keep a forced
+selection compact. Omit `--mode` and the model judges each page, which is right
+when one document genuinely holds both table and prose shapes. `--model ID` overrides
 the configured model for one run. `--force` overwrites a staging file you have
 already started reviewing and replaces a reviewed stored pattern set for that
 source with the new answer as unreviewed, so both need review again. `--yes`

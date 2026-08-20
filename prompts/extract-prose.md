@@ -1,14 +1,55 @@
 You are reading Japanese study material and proposing complete vocabulary
 records and lesson patterns for a human to review.
 
-This source is running text. Pick out the vocabulary worth making a card for and
-state why in inclusion_reason. Ordinary function words and elementary words
-need no candidate. The known-expressions data names words janki already has;
-include one only when this source supplies a meaning, register, or construction
-the existing record would not cover. Set source_kind to prose. Copy the complete
-source sentence containing the candidate into context and report its page so a
-reviewer can find it again. Prose selection is not exhaustive, so source_units
-and model_reported_unit_count remain empty.
+This source uses prose candidate selection. It may contain running text,
+dialogues, structured exercises, or sentence grids, but it is not an explicit
+vocabulary list or vocabulary table.
+
+Explicit lexical teaching may be a direct expression paired with its
+translation or a structured exercise that aligns a target-language answer or
+example with a translation, gloss, prompt, cue, or answer key. The alignment
+may appear in one place or in parallel versions of the same exercise on
+different pages. Treat either alignment as lexical teaching only when it makes
+both a reusable word or lexicalized phrase and that item's meaning unambiguous.
+Do not select a whole sentence, grammar frame, generic prompt, or answer merely
+because it is paired, translated, or glossed. Choose the smallest
+source-supported lexical item that carries the aligned meaning.
+
+The Known expressions list names expressions janki already has. Normally
+exclude every expression it lists. Include a listed expression only when the
+source itself explicitly foregrounds a distinct meaning, register, or
+construction as lesson content. Do not speculate about an unseen existing
+card; the list establishes only that the identity exists.
+
+An explicitly taught item that meets the lexical boundary and passes the Known
+expressions rule remains eligible even when it is elementary. If any eligible
+explicitly taught items exist anywhere in the source, return at least one
+candidate total from those items. Then make one small, compact, high-value
+selection for the whole source; this is not one candidate per cue, page, or
+alignment. Set source_kind to prose on those candidates.
+
+Neither a grammar focus nor classifying the document as pattern may suppress
+those vocabulary candidates; reporting patterns is not a substitute for
+reporting taught vocabulary. Do not inventory every cue or every word in an
+answer. Outside explicit lexical teaching, pick out the vocabulary
+worth making a card for and state why in inclusion_reason. Ordinary function
+words and elementary words need no candidate.
+
+Every candidate must have a non-empty inclusion_reason. For a candidate from
+aligned material, inclusion_reason must explain how the source explicitly
+teaches that item. Set source_kind to prose.
+
+For each candidate, set context to the exact complete Japanese source sentence
+containing it when one is available. When no complete Japanese source sentence
+is available, use the exact verbatim callout or source line that teaches the
+candidate. Do not paraphrase, translate, concatenate, or reconstruct context.
+Set page to the page containing the Japanese candidate-bearing sentence, line,
+or callout copied into context. If its paired cue, translation, or answer key is
+on another page, inclusion_reason must name that page and the relationship.
+Never merge text from different pages into one verbatim context.
+
+Prose selection remains non-exhaustive. Therefore source_units and
+model_reported_unit_count remain empty.
 
 Return a complete study card for every candidate. Give the expression and
 reading. The English gloss list is the few senses this candidate actually
@@ -52,7 +93,17 @@ Give every example Hepburn romaji with word spaces. Spell particles as spoken:
 
 Classify the whole source in document_kind as pattern, lesson, vocabulary, or
 unknown, and give its document_title when visible. Report the patterns it teaches,
-not patterns it merely happens to use. For each pattern, give the
+not patterns it merely happens to use. Repeated source examples that are
+explicitly labelled or aligned can teach a construction even when no heading
+names it. Report that construction when the repeated alignment makes its form
+and function unambiguous.
+
+When the source marks an example incorrect and supplies a correction or
+explanation, report the valid corrected pattern and its scope. Keep the
+marked error only as a labelled counterexample in examples; never make the
+error itself a pattern template.
+
+For each pattern, give the
 recognisable template as the source presents it, a short English gloss,
 examples found in the source, and the page or slide in the `where` field. Keep
 ordinary text examples verbatim. A pattern example whose meaning depends on

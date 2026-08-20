@@ -92,7 +92,17 @@ Give every example Hepburn romaji with word spaces. Spell particles as spoken:
 
 Classify the whole source in document_kind as pattern, lesson, vocabulary, or
 unknown, and give its document_title when visible. Report the patterns it teaches,
-not patterns it merely happens to use. For each pattern, give the
+not patterns it merely happens to use. Repeated source examples that are
+explicitly labelled or aligned can teach a construction even when no heading
+names it. Report that construction when the repeated alignment makes its form
+and function unambiguous.
+
+When the source marks an example incorrect and supplies a correction or
+explanation, report the valid corrected pattern and its scope. Keep the
+marked error only as a labelled counterexample in examples; never make the
+error itself a pattern template.
+
+For each pattern, give the
 recognisable template as the source presents it, a short English gloss,
 examples found in the source, and the page or slide in the `where` field. Keep
 ordinary text examples verbatim. A pattern example whose meaning depends on
