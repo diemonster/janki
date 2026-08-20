@@ -5992,7 +5992,17 @@
     "word:分:ふん": {
       "added_at": "2026-08-20",
       "audio": [],
-      "enriched": [],
+      "enriched": [
+        {
+          "at": "2026-08-20",
+          "fields": [
+            "frequency_rank",
+            "pitch_accent"
+          ],
+          "kind": "jpdb",
+          "model": "jpdb"
+        }
+      ],
       "exports": {},
       "sources": [
         {

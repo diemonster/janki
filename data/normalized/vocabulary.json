@@ -4870,9 +4870,11 @@
     "usage_notes": "The minute counter is read ふん or ぷん depending on the preceding number; 九分 is read きゅうふん.",
     "audio": "",
     "image": "",
-    "pitch_accent": [],
+    "pitch_accent": [
+      "HLL"
+    ],
     "audio_accent": "",
-    "frequency_rank": null,
+    "frequency_rank": 1000,
     "source": {
       "type": "extract",
       "imported_from": "Kanji Review 104 Week 1 and 2.pdf",
@@ -4883,8 +4885,8 @@
         "page": "1",
         "context": "フェリーターミナルからバスで九分",
         "inclusion_reason": "Counter reading practice underlined in the hotel guide; confirm きゅうふん vs. くふん at review.",
-        "provisional_fields": "meanings:56f129f48fc2,part_of_speech:730e8ccb23f9",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_pitch_accent_source": "jpdb:565e527bf8d46a47b29e5536502760c09d8859fe21d44dad632883733866c33a"
       }
     }
   },
