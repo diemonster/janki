@@ -256,6 +256,107 @@ def test_auto_extraction_routes_sentence_grids_through_card_selection() -> None:
     ) in text
 
 
+def test_auto_extraction_requires_candidates_from_explicit_lexical_teaching() -> None:
+    """A translation callout or aligned cue is card material, not just layout.
+
+    The second rich-v3 answer saw the structured exercise and quoted its
+    sentences as pattern examples, but still returned no candidates.  Routing
+    the sentences through prose selection was therefore not strong enough: the
+    template must say what the source's explicit lexical alignment entails.
+    """
+    text = " ".join(prompts.load(REPO_ROOT, "extract-auto").split())
+
+    assert (
+        "Outside those sources, explicit lexical teaching may be an expression "
+        "paired with its translation or a structured exercise that aligns a "
+        "target-language answer or example with a translation, gloss, prompt, "
+        "cue, or answer key."
+    ) in text
+    assert (
+        "The alignment may appear in one place or in parallel versions of the "
+        "same exercise on different pages."
+    ) in text
+    assert (
+        "When either kind of source-taught alignment contains at least one item "
+        "meeting that lexical boundary, return at least one candidate from that "
+        "material."
+    ) in text
+    assert (
+        "Keep the candidate selection compact and high-value, and set source_kind "
+        "to prose on those candidates."
+    ) in text
+    assert "study-worthy" not in text
+
+
+def test_auto_page_classification_allows_bounded_cross_page_alignment() -> None:
+    """Source shape is page-local; aligned lexical evidence need not be."""
+    text = " ".join(prompts.load(REPO_ROOT, "extract-auto").split())
+
+    assert "Judge each page for its source shape and classification." in text
+    assert (
+        "Page-by-page classification does not require lexical evidence to appear "
+        "on only one page: parallel versions of the same exercise may jointly "
+        "establish a lexical alignment under the bounded rules below."
+    ) in text
+    assert (
+        "The alignment may appear in one place or in parallel versions of the "
+        "same exercise on different pages."
+    ) in text
+    assert (
+        "Treat either alignment as lexical teaching only when it makes both a "
+        "reusable word or lexicalized phrase and that item's meaning unambiguous."
+    ) in text
+
+
+def test_auto_aligned_material_never_overrides_the_table_contract() -> None:
+    """Translated rows stay table rows when the source is a vocabulary table."""
+    text = " ".join(prompts.load(REPO_ROOT, "extract-auto").split())
+
+    assert (
+        "The aligned-material rules below apply only outside explicit vocabulary "
+        "lists and vocabulary tables."
+    ) in text
+    assert (
+        "Those list and table sources retain the exhaustive source_units contract "
+        "above, and their candidates keep source_kind set to table."
+    ) in text
+
+
+def test_auto_alignment_identifies_a_lexical_item_not_a_paired_utterance() -> None:
+    """Alignment proves a bounded lexical identity, not that every pair is one."""
+    text = " ".join(prompts.load(REPO_ROOT, "extract-auto").split())
+
+    assert (
+        "Treat either alignment as lexical teaching only when it makes both a "
+        "reusable word or lexicalized phrase and that item's meaning unambiguous."
+    ) in text
+    assert (
+        "Do not select a whole sentence, grammar frame, generic prompt, or answer "
+        "merely because it is paired, translated, or glossed."
+    ) in text
+    assert (
+        "Choose the smallest source-supported lexical item that carries the "
+        "aligned meaning."
+    ) in text
+
+
+def test_auto_extraction_keeps_pattern_focus_from_suppressing_vocabulary() -> None:
+    """Pattern reporting and bounded prose selection are independent outputs."""
+    text = " ".join(prompts.load(REPO_ROOT, "extract-auto").split())
+
+    assert (
+        "Neither a grammar focus nor classifying the document as pattern may "
+        "suppress those vocabulary candidates; reporting patterns is not a "
+        "substitute for reporting taught vocabulary."
+    ) in text
+    assert "Do not inventory every cue or every word in an answer." in text
+    assert (
+        "This requirement does not make ordinary prose exhaustive; prose "
+        "selection remains non-exhaustive."
+    ) in text
+    assert "Prose selection is not exhaustive." in text
+
+
 @pytest.mark.parametrize(
     "name", ("extract-auto", "extract-table", "extract-prose")
 )

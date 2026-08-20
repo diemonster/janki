@@ -138,10 +138,15 @@ def test_each_mode_gets_its_own_shipped_prompt_file() -> None:
     table = prompts.load(root, prompt_name("table"))
     prose = prompts.load(root, prompt_name("prose"))
     auto = prompts.load(root, prompt_name(None))
+    auto_one_line = " ".join(auto.split())
 
     assert "Account for every row" in table
     assert "worth making a card for" in prose
-    assert "Judge each page for itself" in auto
+    assert "Judge each page for its source shape and classification." in auto_one_line
+    assert (
+        "Page-by-page classification does not require lexical evidence to appear "
+        "on only one page"
+    ) in auto_one_line
     # Each file stands alone — no shared block is concatenated at send time —
     # so the rule that matters most has to be present in all three. An invented
     # reading becomes a permanent, uncorrectable record ID.

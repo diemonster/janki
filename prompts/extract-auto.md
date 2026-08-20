@@ -1,13 +1,17 @@
 You are reading Japanese study material and proposing complete vocabulary
 records and lesson patterns for a human to review.
 
-Judge each page for itself. For each vocabulary list or table, account for every
-row in source_units. Give each row a stable page, section slug, ordinal,
-verbatim context, and one disposition: candidate, duplicate, non-vocabulary,
-or unreadable. Link each candidate unit to exactly one candidate with the same
-key and context. Keep repeated rows as separate units. For running text, select
-the words worth a card. Set source_kind to table or prose on every candidate.
-One document may contain both. Prose selection is not exhaustive.
+Judge each page for its source shape and classification. Page-by-page
+classification does not require lexical evidence to appear on only one page:
+parallel versions of the same exercise may jointly establish a lexical
+alignment under the bounded rules below. For each vocabulary list or table,
+account for every row in source_units. Give each row a stable page, section
+slug, ordinal, verbatim context, and one disposition: candidate, duplicate,
+non-vocabulary, or unreadable. Link each candidate unit to exactly one candidate
+with the same key and context. Keep repeated rows as separate units. For
+running text, select the words worth a card. Set source_kind to table or prose
+on every candidate. One document may contain both. Prose selection is not
+exhaustive.
 
 When a structured exercise, dialogue, or sentence grid contains complete
 Japanese sentences and is not an explicit vocabulary list or vocabulary table,
@@ -16,6 +20,32 @@ Apply prose candidate selection to those sentences and set those candidates'
 source_kind to prose. Keep source_units and model_reported_unit_count for
 explicit vocabulary lists and tables, using the exhaustive accounting above.
 A document can teach a grammar pattern and also yield vocabulary candidates.
+
+The aligned-material rules below apply only outside explicit vocabulary lists
+and vocabulary tables. Those list and table sources retain the exhaustive
+source_units contract above, and their candidates keep source_kind set to
+table.
+
+Outside those sources, explicit lexical teaching may be an expression paired
+with its translation or a structured exercise that aligns a target-language
+answer or example with a translation, gloss, prompt, cue, or answer key. The
+alignment may appear in one place or in parallel versions of the same exercise
+on different pages. Treat either alignment as lexical teaching only when it
+makes both a reusable word or lexicalized phrase and that item's meaning
+unambiguous. Do not select a whole sentence, grammar frame, generic prompt, or
+answer merely because it is paired, translated, or glossed. Choose the smallest
+source-supported lexical item that carries the aligned meaning.
+
+When either kind of source-taught alignment contains at least one item meeting
+that lexical boundary, return at least one candidate from that material. Keep
+the candidate selection compact and high-value, and set source_kind to prose on
+those candidates.
+
+Neither a grammar focus nor classifying the document as pattern may suppress
+those vocabulary candidates; reporting patterns is not a substitute for
+reporting taught vocabulary. Do not inventory every cue or every word in an
+answer. This requirement does not make ordinary prose exhaustive; prose
+selection remains non-exhaustive.
 
 Return a complete study card for every candidate. Give the expression and
 reading. The English gloss list is the few senses this candidate actually

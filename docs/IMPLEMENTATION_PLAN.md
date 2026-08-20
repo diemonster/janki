@@ -3979,8 +3979,17 @@ Completion now requires two complementary rich-v3 runs:
    it still does not fill the candidate-bearing role. The Japanese review also
    found the explicit `あげる = to give` callout missing, so this is a thin
    answer rather than evidence that the source teaches no vocabulary. Another
-   paid rerun requires fresh consent. An owner-approved alternative source
-   remains another valid way to fill the candidate-bearing role.
+   red-first auto-template revision now treats direct translation callouts and
+   unambiguous lexical alignments across parallel exercise pages as explicit
+   vocabulary teaching. At least one item meeting that reusable word or
+   lexicalized-phrase boundary requires at least one prose candidate, while a
+   compact-selection clause avoids another exhaustive rich-card response. The
+   same contract preserves exhaustive list/table handling, keeps page-local
+   source classification, and forbids turning a sentence, grammar frame,
+   generic prompt, or whole answer into a word card. Its load-bearing clauses
+   are mutation-proved; no paid answer has run under this latest prompt.
+   Another paid rerun requires fresh consent. An owner-approved alternative
+   source remains another valid way to fill the candidate-bearing role.
 
 A qualifying candidate-bearing run archives `response_schema_version: 3`, a
 `review_run_id`, response-schema and full-request fingerprints, and
