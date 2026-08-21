@@ -228,15 +228,25 @@ def test_render_is_complete_escaped_and_existing_authority_is_display_only(
     assert 'value="word:猫:ねこ"' not in html
     assert html.count('value="word:犬:いぬ"') == 1
     assert "犬だよ。" in html
-    assert "I reviewed every Japanese example above" in html
+    assert "Cards and Japanese-example approval" in html
+    assert (
+        "Card checkboxes approve only the Japanese example sentences shown."
+        in html
+    )
+    assert (
+        "The displayed meanings are source-scoped context. These checkboxes "
+        "neither approve nor limit meanings, identity, translations, notes, or "
+        "other fields."
+    ) in html
+    assert "Meanings taught in this source (display only)" in html
     assert "I reviewed the current pattern-store entry" in html
     assert "restart the panel" in html
     assert "reload" not in html.lower()
     assert '<h3 lang="ja">猫 <small>ねこ</small></h3>' in html
     assert 'aria-label="Review examples for 犬 (いぬ)"' not in html
     assert (
-        "I reviewed every Japanese example above for 犬 (いぬ) and accept it "
-        "as teaching content."
+        "I reviewed and approve only the Japanese example sentences above for "
+        "犬 (いぬ) as teaching content."
     ) in html
     assert "<details open><summary>Current pattern-store entry</summary>" in html
     assert "<details open><summary>Staged pattern answer</summary>" not in html
@@ -995,6 +1005,7 @@ def test_http_boundary_has_security_headers_and_success_exits(tmp_path: Path) ->
         assert headers["content-security-policy"].startswith("default-src 'none'")
         assert headers["x-content-type-options"] == "nosniff"
         assert headers["cache-control"] == "no-store"
+        assert headers["referrer-policy"] == "same-origin"
         assert b"<script" not in body.lower()
 
         status, _headers, _body = _request(
@@ -1032,6 +1043,141 @@ def test_http_boundary_has_security_headers_and_success_exits(tmp_path: Path) ->
     finally:
         if thread.is_alive():
             server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
+
+
+def test_http_rejects_null_origin_without_consuming_review_token(
+    tmp_path: Path,
+) -> None:
+    files = _panel_files(tmp_path)
+    panel = _open(files)
+    before_staging = files.staging_path.read_bytes()
+    form = _valid_form(panel, files.records[0].id)
+    server, thread = _running_server(panel)
+    try:
+        status, _headers, _body = _request(
+            server,
+            "POST",
+            "/review",
+            body=form,
+            headers={
+                "Origin": "null",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+        )
+        assert status == 403
+        assert files.staging_path.read_bytes() == before_staging
+
+        status, _headers, body = _request(
+            server,
+            "POST",
+            "/review",
+            body=form,
+            headers={
+                "Origin": f"http://{server.expected_host}",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+        )
+        assert status == 200
+        assert b"Review saved" in body
+        thread.join(timeout=3)
+        assert not thread.is_alive(), "the valid retry exits after the rejection"
+    finally:
+        if thread.is_alive():
+            server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
+
+
+def test_http_accepts_localhost_when_host_and_origin_match_bound_port(
+    tmp_path: Path,
+) -> None:
+    files = _panel_files(tmp_path)
+    panel = _open(files)
+    server, thread = _running_server(panel)
+    port = server.server_address[1]
+    localhost_authority = f"localhost:{port}"
+    try:
+        assert server.allowed_authorities == frozenset(
+            {f"127.0.0.1:{port}", localhost_authority}
+        )
+        status, _headers, body = _request(
+            server,
+            "GET",
+            "/",
+            headers={"Host": localhost_authority},
+        )
+        assert status == 200
+        assert b"Extraction review" in body
+
+        status, _headers, body = _request(
+            server,
+            "POST",
+            "/review",
+            body=_valid_form(panel, files.records[0].id),
+            headers={
+                "Host": localhost_authority,
+                "Origin": f"http://{localhost_authority}",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+        )
+        assert status == 200
+        assert b"Review saved" in body
+        thread.join(timeout=3)
+        assert not thread.is_alive(), "a successful localhost submission exits"
+    finally:
+        if thread.is_alive():
+            server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
+
+
+def test_http_rejects_crossed_foreign_and_duplicate_authority_headers(
+    tmp_path: Path,
+) -> None:
+    files = _panel_files(tmp_path)
+    panel = _open(files)
+    server, thread = _running_server(panel)
+    port = server.server_address[1]
+    ipv4_authority = f"127.0.0.1:{port}"
+    localhost_authority = f"localhost:{port}"
+    try:
+        for host, origin in (
+            (ipv4_authority, f"http://{localhost_authority}"),
+            (localhost_authority, f"http://{ipv4_authority}"),
+            (f"evil.test:{port}", f"http://evil.test:{port}"),
+            (localhost_authority, f"https://{localhost_authority}"),
+        ):
+            status, _headers, _body = _request(
+                server,
+                "GET",
+                "/",
+                headers={"Host": host, "Origin": origin},
+            )
+            assert status == 403
+
+        for duplicate_lines in (
+            f"Host: {ipv4_authority}\r\nHost: {ipv4_authority}\r\n",
+            (
+                f"Host: {ipv4_authority}\r\n"
+                f"Origin: http://{ipv4_authority}\r\n"
+                f"Origin: http://{ipv4_authority}\r\n"
+            ),
+        ):
+            client = socket.create_connection(server.server_address, timeout=1)
+            try:
+                client.sendall(
+                    (f"GET / HTTP/1.1\r\n{duplicate_lines}Connection: close\r\n\r\n").encode(
+                        "ascii"
+                    )
+                )
+                response = client.recv(4096)
+            finally:
+                client.close()
+            assert b" 403 " in response.split(b"\r\n", 1)[0]
+    finally:
+        server.shutdown()
         server.server_close()
         thread.join(timeout=3)
 

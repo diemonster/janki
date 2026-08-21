@@ -347,7 +347,7 @@ def _record_html(record: VocabularyRecord, state: str) -> str:
         f'<h3 lang="ja">{_escaped(record.expression)} '
         f"<small>{_escaped(record.reading)}</small></h3>",
         "<dl class=fields>",
-        _field("Meanings", record.meanings),
+        _field("Meanings taught in this source (display only)", record.meanings),
         _optional_field("Usage notes", record.usage_notes),
         "</dl>",
         "<section><h4>Examples</h4>",
@@ -402,8 +402,8 @@ def _record_html(record: VocabularyRecord, state: str) -> str:
         parts.append(
             '<label class="decision"><input type=checkbox name=record '
             f'value="{escaped_id}"> '
-            f"I reviewed every Japanese example above for {_escaped(identity)} and "
-            "accept it as teaching content.</label>"
+            "I reviewed and approve only the Japanese example sentences above "
+            f"for {_escaped(identity)} as teaching content.</label>"
         )
     elif state == "existing":
         parts.append('<p class="status reviewed">Already reviewed</p>')
@@ -624,7 +624,12 @@ class ReviewPanel:
                 f'<input type=hidden name=staging_snapshot value="{self.staging_fingerprint}">',
                 f'<input type=hidden name=patterns_snapshot value="{self.patterns_fingerprint}">',
                 '<input type=hidden name=action value="save">',
-                "<fieldset class=records><legend>Cards and examples</legend>",
+                "<fieldset class=records><legend>Cards and Japanese-example approval</legend>",
+                '<p class="notice"><strong>Card checkboxes approve only the '
+                "Japanese example sentences shown.</strong> The displayed "
+                "meanings are source-scoped context. These checkboxes neither "
+                "approve nor limit meanings, identity, translations, notes, or "
+                "other fields.</p>",
                 cards or "<p>No candidate rows in this extraction.</p>",
                 "</fieldset>",
                 _pattern_html(
@@ -931,6 +936,7 @@ class _ReviewServer(ThreadingHTTPServer):
 
     panel: ReviewPanel
     expected_host: str
+    allowed_authorities: frozenset[str]
 
 
 class _ReviewHandler(BaseHTTPRequestHandler):
@@ -957,10 +963,10 @@ class _ReviewHandler(BaseHTTPRequestHandler):
 
     def _request_is_local(self) -> bool:
         hosts = self.headers.get_all("Host") or []
-        if hosts != [self.server.expected_host]:
+        if len(hosts) != 1 or hosts[0] not in self.server.allowed_authorities:
             return False
         origins = self.headers.get_all("Origin") or []
-        return not origins or origins == [f"http://{self.server.expected_host}"]
+        return not origins or origins == [f"http://{hosts[0]}"]
 
     def _send(
         self,
@@ -975,7 +981,10 @@ class _ReviewHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Referrer-Policy", "no-referrer")
+        # Chrome serializes a same-origin form POST as Origin: null under
+        # no-referrer. Preserve the exact localhost Origin that the boundary
+        # check below requires while still suppressing cross-origin referrers.
+        self.send_header("Referrer-Policy", "same-origin")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
         self.send_header(
@@ -1086,5 +1095,7 @@ def make_server(panel: ReviewPanel) -> _ReviewServer:
     """Create, but do not start, an ephemeral IPv4-loopback review server."""
     server = _ReviewServer(("127.0.0.1", 0), _ReviewHandler)
     server.panel = panel
-    server.expected_host = f"127.0.0.1:{server.server_address[1]}"
+    port = server.server_address[1]
+    server.expected_host = f"127.0.0.1:{port}"
+    server.allowed_authorities = frozenset({server.expected_host, f"localhost:{port}"})
     return server

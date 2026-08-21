@@ -120,9 +120,10 @@ It shows every proposed card and the matching current pattern set without
 making a model call or loading any remote asset. Checking a card immediately
 binds approval to the exact Japanese examples displayed; checking the pattern
 set marks that complete current set reviewed. Unchecked items are unchanged,
-and the panel never edits content or promotes records. If either underlying
-file changes while the page is open, submission refuses so an older page
-cannot approve newer text.
+and the panel never edits content or promotes records. Meanings and other card
+fields are source-scoped display context, not part of the example approval. If
+either underlying file changes while the page is open, submission refuses so
+an older page cannot approve newer text.
 
 The manual equivalent for a card is to type
 `example_authority: staging-review` in that extract row's
