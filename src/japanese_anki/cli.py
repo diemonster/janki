@@ -30,6 +30,7 @@ from japanese_anki import (
     repairs,
     review_panel,
     status,
+    workbench,
 )
 from japanese_anki.audio_cmd import AudioError
 from japanese_anki.collection import read_deck_notes
@@ -4322,6 +4323,13 @@ def command_review_panel(args: argparse.Namespace) -> int:
         server.server_close()
     return 0
 
+
+def command_workbench(args: argparse.Namespace) -> int:
+    """Open the read-only workbench dashboard over this repository."""
+    workbench.serve(_load_config(args), open_browser=not args.no_open)
+    return 0
+
+
 def command_kanji(args: argparse.Namespace) -> int:
     """Look up the characters this collection uses, once each.
 
@@ -5057,6 +5065,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print the localhost URL without opening the default browser.",
     )
     review_panel_parser.set_defaults(handler=command_review_panel)
+
+    workbench_parser = subparsers.add_parser(
+        "workbench",
+        help="Open a localhost dashboard showing every source's state.",
+    )
+    workbench_parser.add_argument(
+        "--no-open",
+        action="store_true",
+        help="Print the localhost URL without opening the default browser.",
+    )
+    workbench_parser.set_defaults(handler=command_workbench)
 
     kanji_parser = subparsers.add_parser(
         "kanji",
