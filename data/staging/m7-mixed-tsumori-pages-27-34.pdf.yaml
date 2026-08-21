@@ -192,10 +192,9 @@ records:
       provisional_fields: meanings:5da2c670e562,part_of_speech:4cee4289f0ba
       janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
         Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
-- id: word:とまる:とまる
-  expression: とまる
+- expression: 泊まる
   reading: とまる
-  furigana: ''
+  furigana: 泊[と]まる
   romaji: tomaru
   meanings:
   - to stay overnight
