@@ -1,0 +1,49 @@
+deck:
+  name: "Workbench Fixture::Week B"
+  deck_id: 2059499002
+  description: "W0 fixture deck; shares one record with Week A to model the deck-assignment conflict W4.0/W4.1 must resolve."
+  output: "workbench-fixture-week-b.apkg"
+  cards:
+    recognition: true
+    production: false
+    reading: false
+  include_tags: [week-b]
+
+notes:
+  - id: "word:あげる:あげる"
+    expression: "あげる"
+    reading: "あげる"
+    furigana: "あげる"
+    romaji: "ageru"
+    meanings:
+      - "to give (to someone outside the speaker's in-group)"
+    part_of_speech: "verb (ru-verb)"
+    usage_notes: "Same record as Week A: proposed by a second source (Yotsuba)."
+    examples:
+      - japanese: "これ、あげる。"
+        furigana: "これ、あげる。"
+        romaji: "kore, ageru."
+        english: "Here, I'll give you this."
+    tags:
+      - "week-a"
+      - "week-b"
+
+  # Decoy: tagged for Week A only, so this deck's include_tags filter has
+  # something real to exclude. Without a second note, include_tags could be
+  # deleted entirely and this file would still "select" its one inline note.
+  - id: "word:飲む:のむ"
+    expression: "飲む"
+    reading: "のむ"
+    furigana: "飲[の]む"
+    romaji: "nomu"
+    meanings:
+      - "to drink"
+    part_of_speech: "godan verb (u-verb)"
+    usage_notes: ""
+    examples:
+      - japanese: "水を飲みます。"
+        furigana: "水[みず]を 飲[の]みます。"
+        romaji: "mizu o nomimasu."
+        english: "I drink water."
+    tags:
+      - "week-a"

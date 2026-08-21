@@ -1,0 +1,41 @@
+{
+  "document_kind": "vocabulary",
+  "document_title": "Yotsubato! Volume 1 reading pack",
+  "model_reported_unit_count": 0,
+  "source_units": [],
+  "candidates": [
+    {
+      "expression": "あげる",
+      "reading": "あげる",
+      "part_of_speech": "verb (ichidan, transitive)",
+      "page": 14,
+      "context": "「これ、あげる。」とよつばが言った。",
+      "confidence": "high",
+      "inclusion_reason": "Yotsuba uses this word to offer something to another character.",
+      "source_kind": "prose",
+      "section": "",
+      "ordinal": 0,
+      "meanings": [
+        "to give (to someone outside the speaker's in-group)"
+      ],
+      "usage_notes": "Same verb as the textbook sense, here in a child's casual speech.",
+      "examples": [
+        {
+          "japanese": "これ、あげる。",
+          "speech_level": "casual",
+          "furigana": "これ、あげる。",
+          "romaji": "kore, ageru.",
+          "english": "Here, I'll give you this."
+        },
+        {
+          "japanese": "お姉ちゃんにもあげますね。",
+          "speech_level": "polite",
+          "furigana": "お 姉[ねえ]ちゃんにもあげますね。",
+          "romaji": "oneechan ni mo agemasu ne.",
+          "english": "I'll give one to my sister too."
+        }
+      ]
+    }
+  ],
+  "patterns": []
+}

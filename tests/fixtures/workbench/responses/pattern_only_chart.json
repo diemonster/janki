@@ -1,0 +1,21 @@
+{
+  "document_kind": "pattern",
+  "document_title": "て-form chart",
+  "model_reported_unit_count": 0,
+  "source_units": [],
+  "candidates": [],
+  "patterns": [
+    {
+      "template": "〜て + いる",
+      "gloss": "an ongoing action or a resulting state, depending on the verb",
+      "examples": ["今、本を読んでいる。", "窓が開いている。"],
+      "where": "chart row 1"
+    },
+    {
+      "template": "〜て + ください",
+      "gloss": "a polite request",
+      "examples": ["ここに名前を書いてください。", "ちょっと待ってください。"],
+      "where": "chart row 2"
+    }
+  ]
+}

@@ -1,0 +1,127 @@
+{
+  "document_kind": "vocabulary",
+  "document_title": "Genki Lesson 8 vocabulary table",
+  "model_reported_unit_count": 3,
+  "source_units": [
+    {
+      "page": 1,
+      "section": "verbs",
+      "ordinal": 1,
+      "context": "走る　はしる　to run",
+      "disposition": "candidate"
+    },
+    {
+      "page": 1,
+      "section": "verbs",
+      "ordinal": 2,
+      "context": "食べる　たべる　to eat",
+      "disposition": "candidate"
+    },
+    {
+      "page": 1,
+      "section": "verbs",
+      "ordinal": 3,
+      "context": "飲む　のむ　to drink",
+      "disposition": "candidate"
+    }
+  ],
+  "candidates": [
+    {
+      "expression": "走る",
+      "reading": "はしる",
+      "part_of_speech": "verb (godan, intransitive)",
+      "page": 1,
+      "context": "走る　はしる　to run",
+      "confidence": "high",
+      "inclusion_reason": "",
+      "source_kind": "table",
+      "section": "verbs",
+      "ordinal": 1,
+      "meanings": [
+        "to run"
+      ],
+      "usage_notes": "",
+      "examples": [
+        {
+          "japanese": "毎朝、公園を走ります。",
+          "speech_level": "polite",
+          "furigana": "毎朝[まいあさ]、 公園[こうえん]を 走[はし]ります。",
+          "romaji": "maiasa, kouen o hashirimasu.",
+          "english": "I run through the park every morning."
+        },
+        {
+          "japanese": "一緒に走ろうよ。",
+          "speech_level": "casual",
+          "furigana": "一緒[いっしょ]に 走[はし]ろうよ。",
+          "romaji": "issho ni hashirou yo.",
+          "english": "Let's run together."
+        }
+      ]
+    },
+    {
+      "expression": "食べる",
+      "reading": "たべる",
+      "part_of_speech": "verb (ichidan, transitive)",
+      "page": 1,
+      "context": "食べる　たべる　to eat",
+      "confidence": "high",
+      "inclusion_reason": "",
+      "source_kind": "table",
+      "section": "verbs",
+      "ordinal": 2,
+      "meanings": [
+        "to eat"
+      ],
+      "usage_notes": "",
+      "examples": [
+        {
+          "japanese": "朝ごはんを食べます。",
+          "speech_level": "polite",
+          "furigana": "朝[あさ]ごはんを 食[た]べます。",
+          "romaji": "asagohan o tabemasu.",
+          "english": "I eat breakfast."
+        },
+        {
+          "japanese": "これ、食べてもいい？",
+          "speech_level": "casual",
+          "furigana": "これ、 食[た]べてもいい？",
+          "romaji": "kore, tabete mo ii?",
+          "english": "Can I eat this?"
+        }
+      ]
+    },
+    {
+      "expression": "飲む",
+      "reading": "のむ",
+      "part_of_speech": "verb (godan, transitive)",
+      "page": 1,
+      "context": "飲む　のむ　to drink",
+      "confidence": "high",
+      "inclusion_reason": "",
+      "source_kind": "table",
+      "section": "verbs",
+      "ordinal": 3,
+      "meanings": [
+        "to drink"
+      ],
+      "usage_notes": "",
+      "examples": [
+        {
+          "japanese": "水を飲みます。",
+          "speech_level": "polite",
+          "furigana": "水[みず]を 飲[の]みます。",
+          "romaji": "mizu o nomimasu.",
+          "english": "I drink water."
+        },
+        {
+          "japanese": "お茶飲む？",
+          "speech_level": "casual",
+          "furigana": "お 茶[ちゃ] 飲[の]む？",
+          "romaji": "ocha nomu?",
+          "english": "Want some tea?"
+        }
+      ]
+    }
+  ],
+  "patterns": []
+}

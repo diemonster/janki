@@ -1,0 +1,49 @@
+deck:
+  name: "Workbench Fixture::Week A"
+  deck_id: 2059499001
+  description: "W0 fixture deck standing in for a per-handout study deck."
+  output: "workbench-fixture-week-a.apkg"
+  cards:
+    recognition: true
+    production: false
+    reading: false
+  include_tags: [week-a]
+
+notes:
+  - id: "word:あげる:あげる"
+    expression: "あげる"
+    reading: "あげる"
+    furigana: "あげる"
+    romaji: "ageru"
+    meanings:
+      - "to give (to someone outside the speaker's in-group)"
+    part_of_speech: "verb (ru-verb)"
+    usage_notes: "Used when the speaker or an in-group member gives something to someone else."
+    examples:
+      - japanese: "誕生日にプレゼントをあげます。"
+        furigana: "誕生日[たんじょうび]にプレゼントをあげます。"
+        romaji: "tanjoubi ni purezento o agemasu."
+        english: "I'll give them a present for their birthday."
+    tags:
+      - "week-a"
+      - "week-b"
+
+  # Decoy: tagged for Week B only, so this deck's include_tags filter has
+  # something real to exclude. Without a second note, include_tags could be
+  # deleted entirely and this file would still "select" its one inline note.
+  - id: "word:食べる:たべる"
+    expression: "食べる"
+    reading: "たべる"
+    furigana: "食[た]べる"
+    romaji: "taberu"
+    meanings:
+      - "to eat"
+    part_of_speech: "verb (ru-verb)"
+    usage_notes: ""
+    examples:
+      - japanese: "朝ごはんを食べます。"
+        furigana: "朝[あさ]ごはんを 食[た]べます。"
+        romaji: "asagohan o tabemasu."
+        english: "I eat breakfast."
+    tags:
+      - "week-b"

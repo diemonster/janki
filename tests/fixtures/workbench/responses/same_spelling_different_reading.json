@@ -1,0 +1,74 @@
+{
+  "document_kind": "vocabulary",
+  "document_title": "Calendar vocabulary",
+  "model_reported_unit_count": 0,
+  "source_units": [],
+  "candidates": [
+    {
+      "expression": "一日",
+      "reading": "いちにち",
+      "part_of_speech": "noun",
+      "page": 5,
+      "context": "きのうは一日中忙しかったです。",
+      "confidence": "high",
+      "inclusion_reason": "The passage uses this word to mean the whole day, not the calendar date.",
+      "source_kind": "prose",
+      "section": "",
+      "ordinal": 0,
+      "meanings": [
+        "one day",
+        "a whole day"
+      ],
+      "usage_notes": "The duration sense: an entire day, as opposed to the calendar's first day.",
+      "examples": [
+        {
+          "japanese": "一日中、雨でした。",
+          "speech_level": "polite",
+          "furigana": "一日中[いちにちじゅう]、 雨[あめ]でした。",
+          "romaji": "ichinichi juu, ame deshita.",
+          "english": "It rained all day."
+        },
+        {
+          "japanese": "今日は忙しい一日だったね。",
+          "speech_level": "casual",
+          "furigana": "今日[きょう]は 忙[いそが]しい 一日[いちにち]だったね。",
+          "romaji": "kyou wa isogashii ichinichi datta ne.",
+          "english": "Today was a busy day, huh."
+        }
+      ]
+    },
+    {
+      "expression": "一日",
+      "reading": "ついたち",
+      "part_of_speech": "noun",
+      "page": 5,
+      "context": "四月一日から新学期が始まります。",
+      "confidence": "high",
+      "inclusion_reason": "The same spelling appears again on this page naming a calendar date rather than a duration.",
+      "source_kind": "prose",
+      "section": "",
+      "ordinal": 0,
+      "meanings": [
+        "the first day of the month"
+      ],
+      "usage_notes": "The calendar-date sense: only the first of the month, never a count of days.",
+      "examples": [
+        {
+          "japanese": "会議は来月の一日に行われます。",
+          "speech_level": "polite",
+          "furigana": "会議[かいぎ]は 来月[らいげつ]の 一日[ついたち]に 行[おこな]われます。",
+          "romaji": "kaigi wa raigetsu no tsuitachi ni okonawaremasu.",
+          "english": "The meeting will be held on the first of next month."
+        },
+        {
+          "japanese": "一日から新学期だよ。",
+          "speech_level": "casual",
+          "furigana": "一日[ついたち]から 新学期[しんがっき]だよ。",
+          "romaji": "tsuitachi kara shingakki da yo.",
+          "english": "The new term starts on the first."
+        }
+      ]
+    }
+  ],
+  "patterns": []
+}

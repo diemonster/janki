@@ -1,0 +1,73 @@
+{
+  "document_kind": "vocabulary",
+  "document_title": "Travel phrases",
+  "model_reported_unit_count": 0,
+  "source_units": [],
+  "candidates": [
+    {
+      "expression": "泊まる",
+      "reading": "",
+      "part_of_speech": "verb (godan, intransitive)",
+      "page": 9,
+      "context": "京都では旅館に泊まりました。",
+      "confidence": "low",
+      "inclusion_reason": "The passage clearly teaches this verb, but the model could not confirm the reading against the source.",
+      "source_kind": "prose",
+      "section": "",
+      "ordinal": 0,
+      "meanings": [
+        "to stay overnight"
+      ],
+      "usage_notes": "",
+      "examples": [
+        {
+          "japanese": "今夜はホテルに泊まります。",
+          "speech_level": "polite",
+          "furigana": "今夜[こんや]はホテルに 泊[と]まります。",
+          "romaji": "konya wa hoteru ni tomarimasu.",
+          "english": "I'll stay at a hotel tonight."
+        },
+        {
+          "japanese": "今夜はうちに泊まってもいい？",
+          "speech_level": "casual",
+          "furigana": "今夜[こんや]はうちに 泊[と]まってもいい？",
+          "romaji": "konya wa uchi ni tomatte mo ii?",
+          "english": "Can I stay at your place tonight?"
+        }
+      ]
+    },
+    {
+      "expression": "走る",
+      "reading": "わしる",
+      "part_of_speech": "verb (godan, intransitive)",
+      "page": 10,
+      "context": "健康のために毎朝走っています。",
+      "confidence": "medium",
+      "inclusion_reason": "The passage teaches this verb; the model's reading transcription does not match the dictionary.",
+      "source_kind": "prose",
+      "section": "",
+      "ordinal": 0,
+      "meanings": [
+        "to run"
+      ],
+      "usage_notes": "",
+      "examples": [
+        {
+          "japanese": "毎朝走ります。",
+          "speech_level": "polite",
+          "furigana": "毎朝[まいあさ] 走[はし]ります。",
+          "romaji": "maiasa hashirimasu.",
+          "english": "I run every morning."
+        },
+        {
+          "japanese": "一緒に走ろうよ。",
+          "speech_level": "casual",
+          "furigana": "一緒[いっしょ]に 走[はし]ろうよ。",
+          "romaji": "issho ni hashirou yo.",
+          "english": "Let's run together."
+        }
+      ]
+    }
+  ],
+  "patterns": []
+}

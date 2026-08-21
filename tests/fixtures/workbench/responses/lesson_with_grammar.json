@@ -1,0 +1,92 @@
+{
+  "document_kind": "lesson",
+  "document_title": "Genki Lesson 8: giving and receiving",
+  "model_reported_unit_count": 0,
+  "source_units": [],
+  "candidates": [
+    {
+      "expression": "あげる",
+      "reading": "あげる",
+      "part_of_speech": "verb (ichidan, transitive)",
+      "page": 27,
+      "context": "たんじょう日にプレゼントをあげました。",
+      "confidence": "high",
+      "inclusion_reason": "The lesson explicitly teaches giving verbs with this word.",
+      "source_kind": "prose",
+      "section": "",
+      "ordinal": 0,
+      "meanings": [
+        "to give (to someone outside the speaker's in-group)"
+      ],
+      "usage_notes": "Used when the speaker or an in-group member gives something to someone else. The receiver is not the speaker.",
+      "examples": [
+        {
+          "japanese": "誕生日にプレゼントをあげます。",
+          "speech_level": "polite",
+          "furigana": "誕生日[たんじょうび]にプレゼントをあげます。",
+          "romaji": "tanjoubi ni purezento o agemasu.",
+          "english": "I'll give them a present for their birthday."
+        },
+        {
+          "japanese": "これあげるよ。",
+          "speech_level": "casual",
+          "furigana": "これあげるよ。",
+          "romaji": "kore ageru yo.",
+          "english": "I'll give you this."
+        }
+      ]
+    },
+    {
+      "expression": "もらう",
+      "reading": "もらう",
+      "part_of_speech": "verb (godan, transitive)",
+      "page": 28,
+      "context": "たけしさんはメアリーさんにチョコレートをもらいました。",
+      "confidence": "high",
+      "inclusion_reason": "The lesson pairs this with あげる as the receiving half of the same grammar point.",
+      "source_kind": "prose",
+      "section": "",
+      "ordinal": 0,
+      "meanings": [
+        "to receive"
+      ],
+      "usage_notes": "Used when the speaker or an in-group member receives something. Marks the giver with に or から.",
+      "examples": [
+        {
+          "japanese": "友達にお土産をもらいました。",
+          "speech_level": "polite",
+          "furigana": "友達[ともだち]にお 土産[みやげ]をもらいました。",
+          "romaji": "tomodachi ni omiyage o moraimashita.",
+          "english": "I received a souvenir from my friend."
+        },
+        {
+          "japanese": "それもらってもいい？",
+          "speech_level": "casual",
+          "furigana": "それもらってもいい？",
+          "romaji": "sore moratte mo ii?",
+          "english": "Can I have that?"
+        }
+      ]
+    }
+  ],
+  "patterns": [
+    {
+      "template": "〜てあげる",
+      "gloss": "does something as a favor for someone outside the speaker's in-group",
+      "examples": [
+        "友達に本を貸してあげた。",
+        "手伝ってあげようか。"
+      ],
+      "where": "page 27"
+    },
+    {
+      "template": "〜てもらう",
+      "gloss": "has someone do something as a favor, framed from the receiver's viewpoint",
+      "examples": [
+        "友達に手伝ってもらった。",
+        "先生に直してもらいました。"
+      ],
+      "where": "page 28"
+    }
+  ]
+}
