@@ -146,6 +146,7 @@ records:
       provisional_fields: meanings:f646f571662b,part_of_speech:9d0afde8e086
       janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
         Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 262c3b44ade7,9b8f26b15330
 - id: word:せんたくする:せんたくする
   expression: せんたくする
   reading: せんたくする
@@ -192,6 +193,7 @@ records:
       provisional_fields: meanings:5da2c670e562,part_of_speech:4cee4289f0ba
       janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
         Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: e4cf6fc8aed6,2cde6d5bead5
 - expression: 泊まる
   reading: とまる
   furigana: 泊[と]まる
@@ -240,6 +242,7 @@ records:
       provisional_fields: meanings:1cf2e2ba1542,part_of_speech:1db9001e5c28
       janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
         Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 4d6023f20e1c,deff8d87b562
 - id: word:もらう:もらう
   expression: もらう
   reading: もらう
@@ -288,6 +291,7 @@ records:
       provisional_fields: meanings:173627602d57,part_of_speech:0a8731a8d8e3
       janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
         Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 5a7be181e7c4,dec4578f7d5c
 - id: word:はなびたいかい:はなびたいかい
   expression: はなびたいかい
   reading: はなびたいかい
@@ -337,6 +341,7 @@ records:
       provisional_fields: meanings:58b53d084e8f,part_of_speech:ee6cded62768
       janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
         Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 035783ab96c0,159ea4bf12fe
 - id: word:お正月:おしょうがつ
   expression: お正月
   reading: おしょうがつ
@@ -385,3 +390,4 @@ records:
       provisional_fields: meanings:c43e0aab4452,part_of_speech:ee6cded62768
       janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived
         Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 4d7a79083ada,ebe6fa8d4ed0

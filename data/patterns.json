@@ -99,7 +99,7 @@
   "m7-mixed-tsumori-pages-27-34.pdf": {
     "kind": "pattern",
     "title": "Pair Work: ~つもりです。/ Occasion に",
-    "reviewed": false,
+    "reviewed": true,
     "patterns": [
       {
         "template": "[verb dictionary form] + つもりです",
