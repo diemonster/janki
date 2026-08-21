@@ -1,27 +1,23 @@
 """The exact-approval write transaction, and nothing else.
 
-This began as `review_panel.py`, a one-shot localhost page. W2b deleted
-that page: the workbench renders the review now, and what survived the
-fold is the part that was worth keeping — the transaction that turns a
-human's tick into durable authority without ever letting a stale page, a
-swapped symlink, or a concurrent editor lose someone's work.
+This began as `review_panel.py`, a one-shot localhost page. W2b deleted that
+page — the workbench renders the review now — and what survived the fold is
+the part worth keeping: the transaction that turns a human's tick into durable
+authority without letting a stale page, a swapped symlink, or a concurrent
+editor lose someone's work.
 
-No HTTP, no HTML, no session. The caller proves authority; this proves
-the bytes it read are still the bytes it writes over.
+No HTTP, no HTML, no session, no rendering. The caller proves authority; this
+proves the bytes it read are still the bytes it writes over.
 
-Original module docstring follows.
+It makes no network or model call, and it never edits Japanese or promotes a
+row. Its only writes are the two human-review marks:
 
-
-The panel renders one active staging file and the matching current pattern
-store entry.  It does not edit Japanese, promote rows, or make network/model
-calls.  Its only writes are the two existing human-review marks:
-
-* exact fingerprints for every nonblank Japanese example shown on selected rows;
+* exact fingerprints for every nonblank Japanese example on the selected rows;
 * ``reviewed = true`` on the matching pattern-store entry.
 
-The HTTP layer is intentionally small and dependency-free.  All substantive
-state checks also live in :class:`ReviewPanel`, so a future CLI can start the
-server without becoming another review implementation.
+Both land through a compare-and-swap bound to the exact snapshot the caller
+captured, and a write that cannot prove which side of the seam it fell on says
+so rather than reporting success.
 """
 
 from __future__ import annotations
@@ -54,6 +50,7 @@ __all__ = [
     "PanelRequestError",
     "PartialReviewError",
     "ReviewOutcome",
+    "IndeterminateWriteError",
     "ReviewPanel",
     "bound_replace",
     "ReviewPanelError",
@@ -80,7 +77,6 @@ class PanelRequestError(ReviewPanelError):
     """A submitted action was not one the rendered page offered."""
 
 
-
 @dataclass(frozen=True, slots=True)
 class ReviewOutcome:
     accepted_record_ids: tuple[str, ...] = ()
@@ -95,7 +91,7 @@ class PartialReviewError(ReviewPanelError):
         self.outcome = outcome
 
 
-class _IndeterminateWriteError(ReviewPanelError):
+class IndeterminateWriteError(ReviewPanelError):
     """A final replace failed after the target stopped matching its snapshot."""
 
     def __init__(self, message: str, *, intended_bytes_are_live: bool) -> None:
@@ -134,7 +130,7 @@ def bound_replace(path: Path, text: str, snapshot: bytes, *, label: str) -> None
             raise ReviewPanelError(
                 f"Could not save the {label}; its captured bytes remain unchanged: {exc}"
             ) from exc
-        raise _IndeterminateWriteError(
+        raise IndeterminateWriteError(
             f"The {label} write failed after its exact snapshot stopped matching; "
             "restart the panel and inspect the recorded decisions",
             intended_bytes_are_live=live == intended,
@@ -300,7 +296,6 @@ def _pattern_warning(
             "Pattern review is disabled; card review remains available."
         )
     return None
-
 
 
 def parse_review_form(body: bytes) -> dict[str, list[str]]:
@@ -547,7 +542,7 @@ class ReviewPanel:
                         self.staging_bytes,
                         label="staging file",
                     )
-                except _IndeterminateWriteError as exc:
+                except IndeterminateWriteError as exc:
                     outcome = ReviewOutcome(
                         selected if exc.intended_bytes_are_live else (),
                         False,
@@ -568,7 +563,7 @@ class ReviewPanel:
                         self.patterns_bytes,
                         label="pattern store",
                     )
-                except _IndeterminateWriteError as exc:
+                except IndeterminateWriteError as exc:
                     outcome = ReviewOutcome(
                         saved.accepted_record_ids,
                         exc.intended_bytes_are_live,

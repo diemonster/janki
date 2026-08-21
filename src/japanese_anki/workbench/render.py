@@ -64,6 +64,8 @@ pre {
 .empty { color: GrayText; }
 .edit { display: grid; gap: .25rem; margin: .5rem 0; }
 .edit label { font-size: .85rem; font-weight: 700; color: GrayText; }
+select { font: inherit; padding: .4rem; background: Canvas; color: CanvasText;
+  border: 1px solid GrayText; border-radius: .25rem; min-height: 44px; }
 textarea { font: inherit; width: 100%; padding: .4rem; resize: vertical;
   background: Canvas; color: CanvasText; border: 1px solid GrayText; border-radius: .25rem; }
 textarea[lang=ja] { font-size: 1.15rem; line-height: 1.9; }
@@ -216,20 +218,42 @@ def _textarea(name: str, label: str, value: str, *, rows: int = 2,
     )
 
 
-def _example_editor(example: Any, card: int, index: int) -> str:
+def _register_select(name: str, value: str) -> str:
+    """Register is a choice, not free text.
+
+    `ExampleSentence.is_incomplete` treats anything outside polite/casual as
+    incomplete, so a typo in a text box would quietly degrade the card. Two
+    options and a blank are the whole domain, so offer exactly those.
+    """
+    ident = html.escape(name, quote=True)
+    options = []
+    for option, label in (("", "— not set —"), ("polite", "Polite"), ("casual", "Casual")):
+        selected = " selected" if option == value.strip().lower() else ""
+        options.append(
+            f'<option value="{html.escape(option, quote=True)}"{selected}>'
+            f"{_escaped(label)}</option>"
+        )
+    return (
+        f'<p class=edit><label for="{ident}">Register</label>'
+        f'<select id="{ident}" name="{ident}">{"".join(options)}</select></p>'
+    )
+
+
+def _example_editor(example: Any, card_index: int, example_index: int) -> str:
     """The five example fields a person may retype.
 
     Japanese is editable on purpose — correcting a mis-transcribed sentence is
     the point — and doing so voids that card's approval by fingerprint, so a
     tick can never end up covering text nobody read.
     """
+    key = f"{card_index}_{example_index}"
     return "".join(
         [
-            _textarea(f"ej{card}_{index}", "Japanese", example.japanese, japanese=True),
-            _textarea(f"ef{card}_{index}", "Furigana", example.furigana, japanese=True),
-            _textarea(f"ee{card}_{index}", "English", example.english),
-            _textarea(f"er{card}_{index}", "Romaji", example.romaji, rows=1),
-            _textarea(f"eg{card}_{index}", "Register", example.register, rows=1),
+            _textarea(f"ej{key}", "Japanese", example.japanese, japanese=True),
+            _textarea(f"ef{key}", "Furigana", example.furigana, japanese=True),
+            _textarea(f"ee{key}", "English", example.english),
+            _textarea(f"er{key}", "Romaji", example.romaji, rows=1),
+            _register_select(f"eg{key}", example.register),
         ]
     )
 

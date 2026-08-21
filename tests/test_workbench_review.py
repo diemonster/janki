@@ -1,4 +1,13 @@
-"""The single-file localhost extraction review panel."""
+"""The exact-approval write transaction.
+
+These are the tests that survived W2b's fold. The localhost page they were
+written against is deleted; what they still cover is the part that mattered —
+that an approval binds the exact sentences shown, that a stale snapshot or a
+swapped symlink refuses before either write, that the two writes are ordered
+so a failure between them reports precisely which one landed, and that the
+locks are taken in a deterministic order. The workbench surface that calls
+this is tested in ``tests/test_workbench.py``.
+"""
 
 from __future__ import annotations
 

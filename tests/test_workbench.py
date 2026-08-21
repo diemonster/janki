@@ -1310,3 +1310,62 @@ def test_the_hand_typed_sentinel_is_a_blanket_mark_not_a_sentence_binding(
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_an_uncertain_edit_write_never_claims_nothing_was_written(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`bound_replace` distinguishes two failures that must never be reported
+    the same way. A refused compare-and-swap proves nothing was written. A
+    write that failed *after* its snapshot stopped matching proves nothing at
+    all — it may have landed. Saying "nothing was written" there is a lie at
+    exactly the moment someone needs the truth."""
+    from japanese_anki.workbench import review as review_module
+
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+
+    def indeterminate(*_args: object, **_kwargs: object) -> None:
+        raise review_module.IndeterminateWriteError(
+            "The staging file write failed after its exact snapshot stopped "
+            "matching; whether it landed is unknown.",
+            intended_bytes_are_live=False,
+        )
+
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
+        monkeypatch.setattr(review_module, "bound_replace", indeterminate)
+        status, _headers, body = _submit_edit(
+            server,
+            session,
+            "table.pdf",
+            _form_fields(page),
+            [("ee0_0", "I jog through the park every morning.")],
+        )
+        assert status == 409
+        text = body.decode()
+        assert "whether it landed is unknown" in text
+        assert "Nothing was written" not in text
+        assert "check the cards" in text
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_register_is_a_choice_not_a_text_box(tmp_path: Path) -> None:
+    """Anything outside polite/casual makes the example incomplete, so a free
+    text box would let a typo quietly degrade a card. Offer the whole domain
+    instead: the two values and a blank."""
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
+        text = page.decode()
+        assert '<select id="eg0_0"' in text
+        assert '<option value="polite" selected>' in text
+        assert '<option value="casual">' in text
+        # ...and no textarea claiming to hold a register.
+        assert '<textarea id="eg0_0"' not in text
+    finally:
+        server.shutdown()
+        server.server_close()

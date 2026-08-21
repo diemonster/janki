@@ -364,8 +364,22 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 panel.staging_bytes,
                 label="staging file",
             )
-        except JankiError as exc:
+        except review.StaleReviewError as exc:
+            # Proven: the compare-and-swap refused before writing anything.
             self._error(409, f"{exc}. Nothing was written by this attempt.")
+            return
+        except review.IndeterminateWriteError as exc:
+            # NOT proven. The write failed after its snapshot stopped matching,
+            # so whether it landed is unknown — and "nothing was written" would
+            # be a lie at exactly the moment someone needs the truth.
+            self._error(
+                409,
+                f"{exc} Reload this source and check the cards before editing "
+                "again.",
+            )
+            return
+        except JankiError as exc:
+            self._error(500, f"{exc}. Nothing was proven written.")
             return
         self._redirect_to_source(source, saved=0, grammar=False, edited=len(changed))
 
