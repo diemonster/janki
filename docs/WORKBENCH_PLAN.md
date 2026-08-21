@@ -373,7 +373,7 @@ Volume 1 Reading Pack Vocab` inside `anki-yotsubato-….yaml`, so opening a
 source cannot mean `staging_dir / (name + ".yaml")`. The traversal tests now
 state what they do and do not prove.
 
-### [ ] W2b Approval writes, and `review-panel` deleted
+### [x] W2b Approval writes, and `review-panel` deleted
 
 Approval is exact and narrow. The checkbox reads **Approve these Japanese
 example sentences** and repeats the expression and reading; the text beside it
@@ -400,6 +400,46 @@ sorted lock acquisition, exact-byte snapshots and compare-and-swap writes.
   `README.md`.
 - **Ships when:** you review a real staged source end to end in the browser
   and the CLI review path is gone. This is the whole W2 stage's ship line.
+
+**Done 2026-08-21.** Approval now happens in the workbench. A card's checkbox
+reads "Approve these Japanese example sentences for X (Y)", and the sentence
+stating what it does *not* cover — not the meanings, the English, the spelling
+and reading, or the usage note — is inside the label being clicked, not in
+help text. Grammar has its own separate checkbox recording that a person read
+the extracted set. There is no Approve all. Two separate secrets guard the
+page: the path token gates reading it, and a session CSRF token in the form
+body gates writing. They defend different things — one stops another local
+process reading the page, the other stops a page the browser was tricked into
+submitting — and unlike the deleted panel's, the CSRF token is not one-shot,
+because a dashboard approves many sources in a row. The snapshot is the
+compare-and-swap: the form carries the exact staging and pattern fingerprints
+the page was rendered from, and a form rendered against older bytes is
+refused whole with 409 and nothing written. Post/redirect/get, so a reload
+cannot resubmit. `janki review-panel` is deleted — the command, its parser,
+its own HTTP server and handler, its own CSS and HTML rendering, and its
+one-shot CSRF. `review_panel.py` moved to `workbench/review.py` carrying only
+the write transaction: exact-byte capture, `O_NOFOLLOW`, sorted lock
+acquisition, compare-and-swap writes, and the partial-write reporting. Net
+−2,139 / +897 lines. README, `AGENTS.md` and `DESIGN_V2.md` all repointed to
+`janki workbench`. Of the panel's 41 tests, 19 covered the write machinery
+and moved to `tests/test_workbench_review.py`; 22 covered the deleted
+HTTP/HTML surface and went with it. Four gaps that deletion would have left
+were closed in `tests/test_workbench.py`: `Origin: null`, duplicate `Host`
+headers, a duplicated form field, and two concurrent approvals of one source.
+**Scope note:** two findings, both of which are the useful part. First,
+concurrency works differently here than in the panel: the workbench opens a
+*fresh* panel per request, so the panel's in-process submission lock cannot
+serialize two requests the way it did for a single long-lived page. What
+protects the file is the advisory lock plus the exact-byte snapshot — the
+request that loses the race finds the bytes changed and is refused.
+`test_two_concurrent_approvals_land_exactly_once` pins that one lands and one
+409s. Second, the write path has two independent guards, and a mutation
+proved neither alone is the whole story: removing `submit()`'s early byte
+re-check left every test green, because `_bound_replace`'s own
+compare-and-swap (`expected_revision`) still refused the write and the file
+was not corrupted — so that was redundant defense-in-depth, not an untested
+guard. Removing *both* fails four tests. Recorded so a future reader does not
+delete the "redundant" check believing it is dead.
 
 ### [ ] W2c Field edits, removal, undo before save
 
