@@ -98,6 +98,24 @@ Staging completion similarly holds the live review and selected archive locks
 through one byte-checked archive/prune transaction, so an exact interrupted
 retry cannot duplicate rows or delete a concurrently replaced review.
 
+Every paid model call — currently `extract`, `enrich --ai`, and
+`promote --accept-coverage` — follows the same write-ahead shape as that paid
+audio staging: journaled durably before dispatch, its exact response persisted
+as a pending artifact before parsing, so neither a crash nor a parse failure
+can lose an answer already paid for. The journal moves
+`authorized → dispatching → running → result_captured → committed`, with
+`outcome_unknown`, `failed_before_send`, `canceled_before_send`, and `expired`
+as terminal or holding states. A dispatched call whose outcome is unknown is
+never retried automatically — a fresh charge requires fresh authority.
+
+## Surfaces
+
+A local browser workbench and the CLI are the same tool twice: views and
+controllers over the same repository files and the same operations. The
+workbench is not a second database of what happened — the repository already
+is — and it may not weaken an authority gate the CLI enforces: a consent,
+review, or approval demanded at the prompt is demanded identically in the tab.
+
 ## What janki's own logic is for
 
 Enrichment, derivation, and artifact structure: identifiers, fingerprints,
