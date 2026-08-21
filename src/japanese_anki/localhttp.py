@@ -25,11 +25,16 @@ import html
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 __all__ = [
+    "MAX_BODY_BYTES",
     "REQUEST_TIMEOUT_SECONDS",
     "LocalOnlyHandler",
     "LocalOnlyServer",
     "bind_loopback",
 ]
+
+#: The largest form body either surface will read. Both are small HTML
+#: forms; anything larger is a mistake or an attempt to exhaust memory.
+MAX_BODY_BYTES = 64 * 1024
 
 #: How long one request may hold a handler thread. Short: every body this
 #: serves is small, and a stalled socket must not pin the process open.

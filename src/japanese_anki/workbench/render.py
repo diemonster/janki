@@ -62,6 +62,12 @@ pre {
 .done { color: GrayText; }
 .warnings { border: 1px solid red; border-radius: .5rem; padding: 1rem; }
 .empty { color: GrayText; }
+.decision { display: flex; gap: .75rem; align-items: flex-start; cursor: pointer;
+  padding: .75rem; border: 1px solid GrayText; border-radius: .35rem; margin-top: .75rem; }
+input[type=checkbox] { inline-size: 1.4rem; block-size: 1.4rem; flex: none; }
+button { min-height: 44px; padding: .65rem 1rem; font: inherit; font-weight: 700; }
+.submit { position: sticky; bottom: 0; padding: 1rem; background: Canvas;
+  border-top: 1px solid GrayText; }
 .card, .pattern {
   border: 1px solid GrayText; border-radius: .5rem;
   padding: 1rem; margin-block-end: 1rem;
@@ -259,7 +265,7 @@ def _meaning_panels(card: Any) -> str:
     )
 
 
-def _card_html(card: Any) -> str:
+def _card_html(card: Any, *, actionable: bool = False) -> str:
     record = card.record
     parts = [
         '<article class="card">',
@@ -282,10 +288,32 @@ def _card_html(card: Any) -> str:
         )
     if record.usage_notes:
         parts.append(f"<h4>How to use it</h4><p>{_escaped(record.usage_notes)}</p>")
-    parts.append(_approval_html(card))
+    if actionable and card.needs_example_review:
+        parts.append(_checkbox_html(card))
+    else:
+        parts.append(_approval_html(card))
     parts.append(_evidence_html(card))
     parts.append("</article>")
     return "".join(parts)
+
+
+def _checkbox_html(card: Any) -> str:
+    """The approval control, with its exact scope stated beside it.
+
+    Not in help text, not in a tooltip: the sentence that says this covers the
+    sentences and nothing else sits in the label the person is clicking.
+    """
+    identity = f"{card.record.expression} ({card.record.reading})"
+    again = " again" if card.authority == "stale" else ""
+    return (
+        '<label class="decision">'
+        f'<input type=checkbox name=record value="{html.escape(card.record.id, quote=True)}">'
+        f"<span>Approve these Japanese example sentences{again} for "
+        f'<b lang="ja">{_escaped(identity)}</b>. '
+        "This approves the sentences above and nothing else — not the "
+        "meanings, the English, the spelling and reading, or the usage note."
+        "</span></label>"
+    )
 
 
 def _approval_html(card: Any) -> str:
@@ -336,7 +364,7 @@ def _evidence_html(card: Any) -> str:
     )
 
 
-def _grammar_html(detail: Any) -> str:
+def _grammar_html(detail: Any, *, actionable: bool = False) -> str:
     pattern_set = detail.pattern_set
     if pattern_set is None or not pattern_set.patterns:
         return ""
@@ -345,6 +373,16 @@ def _grammar_html(detail: Any) -> str:
         '<section class="grammar">',
         f"<h2>Grammar from this lesson</h2><p class=state>{_escaped(state)}</p>",
     ]
+    # Only when the page actually carries a form. A checkbox on a page that
+    # cannot submit is a control that silently does nothing.
+    if actionable and not detail.pattern_reviewed and detail.can_review_grammar:
+        parts.append(
+            '<label class="decision">'
+            '<input type=checkbox name=patterns value="review">'
+            "<span>I read this lesson's grammar above. Marking it reviewed "
+            "records that a person read the extracted set — it does not "
+            "approve any word card.</span></label>"
+        )
     for pattern in pattern_set.patterns:
         parts.append('<article class="pattern">')
         parts.append(f'<h3 lang="ja">{_escaped(pattern.template)}</h3>')
@@ -359,11 +397,26 @@ def _grammar_html(detail: Any) -> str:
     return "".join(parts)
 
 
-def render_source(detail: Any, *, token: str = "") -> str:
-    """One source's cards and grammar, read-only."""
+def render_source(
+    detail: Any,
+    *,
+    token: str = "",
+    csrf: str = "",
+    staging_snapshot: str = "",
+    patterns_snapshot: str = "",
+    saved: tuple[int, bool] | None = None,
+) -> str:
+    """One source's cards and grammar.
+
+    Without `csrf` this renders read-only — there is no form at all, so a page
+    that cannot prove its session cannot show controls that would fail anyway.
+    """
     prefix = f"/{html.escape(token, quote=True)}" if token else ""
     journey = detail.journey
     waiting = sum(1 for card in detail.cards if card.needs_example_review)
+    actionable = bool(csrf) and (
+        waiting or (not detail.pattern_reviewed and detail.can_review_grammar)
+    )
     body = [
         "<!doctype html><html lang=en><head><meta charset=utf-8>",
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
@@ -375,16 +428,52 @@ def render_source(detail: Any, *, token: str = "") -> str:
         f"<p class=saved>{_escaped(journey.state)}. "
         f"{_escaped(journey.next_action)}.</p>",
     ]
+    if saved is not None:
+        body.append(_saved_banner(*saved))
     if waiting:
         body.append(
             f"<p class=counts>{waiting} of {len(detail.cards)} cards still need "
             "their Japanese examples approved.</p>"
         )
-    if not detail.cards:
+    if actionable:
+        action = f"{prefix}/source/{quote(journey.source, safe='')}/approve"
+        body.append(f'<form method=post action="{html.escape(action, quote=True)}">')
         body.append(
-            "<p class=empty>This source proposed no word cards.</p>"
+            '<input type=hidden name=action value="save">'
+            f'<input type=hidden name=csrf value="{html.escape(csrf, quote=True)}">'
+            "<input type=hidden name=staging_snapshot "
+            f'value="{html.escape(staging_snapshot, quote=True)}">'
+            "<input type=hidden name=patterns_snapshot "
+            f'value="{html.escape(patterns_snapshot, quote=True)}">'
         )
-    body.extend(_card_html(card) for card in detail.cards)
-    body.append(_grammar_html(detail))
+    if not detail.cards:
+        body.append("<p class=empty>This source proposed no word cards.</p>")
+    body.extend(_card_html(card, actionable=actionable) for card in detail.cards)
+    body.append(_grammar_html(detail, actionable=actionable))
+    if actionable:
+        # One button, named for what it does. There is deliberately no
+        # "approve all": cards, grammar, coverage and deck ownership are
+        # separate decisions and a single control would blur them.
+        body.append(
+            '<div class="submit"><button type=submit>Save the approvals I '
+            "ticked</button></div></form>"
+        )
     body.append("</main></body></html>")
     return "".join(body)
+
+
+def _saved_banner(records: int, grammar: bool) -> str:
+    saved = []
+    if records:
+        saved.append(f"{records} card{'s' if records != 1 else ''}")
+    if grammar:
+        saved.append("this lesson's grammar")
+    if not saved:
+        return '<p class="status">Nothing was ticked, so nothing was saved.</p>'
+    return (
+        f'<p class="status reviewed">Saved: {_escaped(" and ".join(saved))}.</p>'
+    )
+
+
+def _saved_where(root: Path | None) -> str:
+    return f" at {_escaped(root)}" if root is not None else ""

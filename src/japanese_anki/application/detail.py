@@ -22,7 +22,12 @@ from typing import Any
 
 from japanese_anki import patterns, promote, staging
 from japanese_anki.application.authority import example_authority_state
-from japanese_anki.application.journey import SourceJourney, source_journeys
+from japanese_anki.application.journey import (
+    GRAMMAR_NEEDS_REVIEW,
+    GRAMMAR_REVIEWED,
+    SourceJourney,
+    source_journeys,
+)
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.io import load_records
@@ -74,6 +79,11 @@ class SourceDetail:
     meta: dict[str, Any]
     pattern_set: patterns.PatternSet | None
     pattern_reviewed: bool
+    #: Whether marking this grammar reviewed is even offerable. False when
+    #: the store's lineage does not match this staging run — the panel
+    #: refuses such a review, so offering the control would be a button
+    #: that only ever produces an error.
+    can_review_grammar: bool = False
 
 
 def _merge_preview(
@@ -153,5 +163,7 @@ def source_detail(config: ProjectConfig, source: str) -> SourceDetail | None:
         cards=cards,
         meta=meta,
         pattern_set=pattern_set,
-        pattern_reviewed=journey.grammar == "Grammar reviewed",
+        pattern_reviewed=journey.grammar == GRAMMAR_REVIEWED,
+        can_review_grammar=journey.grammar
+        in {GRAMMAR_REVIEWED, GRAMMAR_NEEDS_REVIEW},
     )

@@ -36,6 +36,7 @@ from japanese_anki.application.authority import (
 from japanese_anki.errors import JankiError
 from japanese_anki.io import atomic_write_text_bound, exclusive_path_lock
 from japanese_anki.localhttp import (
+    MAX_BODY_BYTES,
     LocalOnlyHandler,
     LocalOnlyServer,
     bind_loopback,
@@ -55,10 +56,10 @@ __all__ = [
     "ReviewPanelError",
     "StaleReviewError",
     "make_server",
+    "parse_review_form",
 ]
 
 
-MAX_BODY_BYTES = 64 * 1024
 _FORM_SINGLETONS = frozenset(
     {"csrf", "staging_snapshot", "patterns_snapshot", "action", "patterns"}
 )
@@ -470,6 +471,49 @@ def _pattern_html(
     return "".join(parts)
 
 
+def parse_review_form(body: bytes) -> dict[str, list[str]]:
+    """Parse and structurally validate an approval form body.
+
+    Shared because the workbench and the panel must agree on what a malformed
+    submission *is*. Everything here is about shape — encoding, unknown keys,
+    how many times a field may appear, the literal action word — and none of it
+    is about authority: the caller still checks the CSRF token and the exact
+    snapshot the form claims to have been rendered from.
+    """
+    try:
+        text = body.decode("utf-8", errors="strict")
+        pairs = parse_qsl(
+            text,
+            keep_blank_values=True,
+            strict_parsing=True,
+            encoding="utf-8",
+            errors="strict",
+            max_num_fields=4096,
+        )
+    except (UnicodeError, ValueError) as exc:
+        raise PanelRequestError("The submitted form is malformed") from exc
+    unknown = sorted({key for key, _value in pairs} - _FORM_FIELDS)
+    if unknown:
+        raise PanelRequestError("Unknown form action: " + ", ".join(unknown))
+    grouped: dict[str, list[str]] = {}
+    for key, value in pairs:
+        grouped.setdefault(key, []).append(value)
+    for key in _FORM_SINGLETONS:
+        count = len(grouped.get(key, []))
+        expected = 0 if key == "patterns" else 1
+        if count not in ({0, 1} if key == "patterns" else {expected}):
+            raise PanelRequestError(
+                f"Form action {key!r} must appear "
+                + ("at most once" if key == "patterns" else "exactly once")
+            )
+    if grouped["action"][0] != "save":
+        raise PanelRequestError("The form action must be 'save'")
+    pattern_values = grouped.get("patterns", [])
+    if pattern_values and pattern_values != ["review"]:
+        raise PanelRequestError("The pattern action is invalid")
+    return grouped
+
+
 @dataclass(slots=True)
 class ReviewPanel:
     staging_path: Path
@@ -772,42 +816,13 @@ class ReviewPanel:
             return saved
 
     def consume_form(self, body: bytes) -> ReviewOutcome:
-        try:
-            text = body.decode("utf-8", errors="strict")
-            pairs = parse_qsl(
-                text,
-                keep_blank_values=True,
-                strict_parsing=True,
-                encoding="utf-8",
-                errors="strict",
-                max_num_fields=4096,
-            )
-        except (UnicodeError, ValueError) as exc:
-            raise PanelRequestError("The submitted form is malformed") from exc
-        unknown = sorted({key for key, _value in pairs} - _FORM_FIELDS)
-        if unknown:
-            raise PanelRequestError("Unknown form action: " + ", ".join(unknown))
-        grouped: dict[str, list[str]] = {}
-        for key, value in pairs:
-            grouped.setdefault(key, []).append(value)
-        for key in _FORM_SINGLETONS:
-            count = len(grouped.get(key, []))
-            expected = 0 if key == "patterns" else 1
-            if count not in ({0, 1} if key == "patterns" else {expected}):
-                raise PanelRequestError(
-                    f"Form action {key!r} must appear "
-                    + ("at most once" if key == "patterns" else "exactly once")
-                )
-        if grouped["action"][0] != "save":
-            raise PanelRequestError("The form action must be 'save'")
+        grouped = parse_review_form(body)
+        pattern_values = grouped.get("patterns", [])
         if (
             grouped["staging_snapshot"][0] != self.staging_fingerprint
             or grouped["patterns_snapshot"][0] != self.patterns_fingerprint
         ):
             raise _PanelSecurityError("The form snapshot does not belong to this page")
-        pattern_values = grouped.get("patterns", [])
-        if pattern_values and pattern_values != ["review"]:
-            raise PanelRequestError("The pattern action is invalid")
         token = grouped["csrf"][0]
         with self._submission_lock:
             if (

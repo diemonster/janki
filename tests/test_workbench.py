@@ -13,10 +13,12 @@ from __future__ import annotations
 
 import http.client
 import json
+import re
 import threading
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import pytest
 import yaml
@@ -185,27 +187,6 @@ def test_the_page_ships_no_script_and_no_remote_asset(tmp_path: Path) -> None:
         assert b"<script" not in lowered
         assert b"http://" not in lowered.replace(b"http://127.0.0.1", b"")
         assert b"https://" not in lowered
-    finally:
-        server.shutdown()
-        server.server_close()
-
-
-def test_w1_2_has_no_write_route_at_all(tmp_path: Path) -> None:
-    """Read-only is a property of the server, not of the buttons on the page."""
-    session = _session(tmp_path)
-    server, _thread = _running(session)
-    try:
-        status, _headers, _body = _request(
-            server,
-            "POST",
-            f"/{session.token}/",
-            headers={
-                "Host": server.expected_host,
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-            body=b"action=save",
-        )
-        assert status == 405
     finally:
         server.shutdown()
         server.server_close()
@@ -477,6 +458,9 @@ def test_the_grammar_section_is_display_only(tmp_path: Path) -> None:
     assert "Grammar from this lesson" in html
     assert "〜てあげる" in html
     assert "〜てもらう" in html
+    # Display-only means the *content* cannot be edited here. Rendered without
+    # a session there is no form at all; the only control W2b ever adds is the
+    # "I read this" checkbox, which records a review rather than editing text.
     assert "<textarea" not in html
     assert "<input" not in html
 
@@ -589,3 +573,316 @@ def test_a_source_is_opened_by_name_not_by_filename(tmp_path: Path) -> None:
 
     assert detail is not None
     assert [card.record.expression for card in detail.cards] == ["走る", "食べる", "飲む"]
+
+
+# --- W2b: approval writes ---------------------------------------------------
+
+
+def _form_fields(body: bytes) -> dict[str, str]:
+    """The hidden fields the page rendered, as a browser would submit them."""
+    text = body.decode()
+    return {
+        name: value
+        for name, value in re.findall(
+            r'<input type=hidden name=(\w+) value="([^"]*)">', text
+        )
+    }
+
+
+def _approve(
+    server: Any,
+    session: WorkbenchSession,
+    source: str,
+    *,
+    fields: dict[str, str],
+    records: Sequence[str] = (),
+    patterns_too: bool = False,
+    headers: dict[str, str] | None = None,
+) -> tuple[int, dict[str, str], bytes]:
+    pairs = [(key, value) for key, value in fields.items()]
+    pairs += [("record", record) for record in records]
+    if patterns_too:
+        pairs.append(("patterns", "review"))
+    return _request(
+        server,
+        "POST",
+        f"/{session.token}/source/{quote(source, safe='')}/approve",
+        headers={
+            "Host": server.expected_host,
+            "Content-Type": "application/x-www-form-urlencoded",
+            **(headers or {}),
+        },
+        body=urlencode(pairs).encode(),
+    )
+
+
+def _staged(tmp_path: Path, name: str = "table.pdf") -> Any:
+    _stage(tmp_path, "table_exhaustive", filename=name)
+    return WorkbenchSession.open(ProjectConfig.load(tmp_path))
+
+
+def test_approving_a_card_writes_the_exact_approval(tmp_path: Path) -> None:
+    """The end-to-end W2b path: render, tick, submit, and the staging file on
+    disk now carries authority for exactly that card."""
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(
+            server, "GET", _source_url(session, "table.pdf")
+        )
+        fields = _form_fields(page)
+        status, headers, _body = _approve(
+            server, session, "table.pdf", fields=fields, records=["word:走る:はしる"]
+        )
+        assert status == 303  # post/redirect/get: a reload cannot resubmit
+        assert "saved=1" in headers["location"]
+
+        detail = session.detail("table.pdf")
+        by_id = {card.record.id: card for card in detail.cards}
+        assert by_id["word:走る:はしる"].authority == "existing"
+        # ...and only that card.
+        assert by_id["word:食べる:たべる"].authority == "available"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_an_approval_without_the_session_csrf_is_refused(tmp_path: Path) -> None:
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(
+            server, "GET", _source_url(session, "table.pdf")
+        )
+        fields = _form_fields(page)
+        fields["csrf"] = "not-the-session-token"
+        status, _headers, _body = _approve(
+            server, session, "table.pdf", fields=fields, records=["word:走る:はしる"]
+        )
+        assert status == 403
+        assert session.detail("table.pdf").cards[0].authority == "available"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_an_approval_rendered_against_older_bytes_is_refused_whole(
+    tmp_path: Path,
+) -> None:
+    """The compare-and-swap. Someone editing the staging file in another window
+    must not have a stale page's approval land on top of their edit."""
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(
+            server, "GET", _source_url(session, "table.pdf")
+        )
+        fields = _form_fields(page)
+
+        staging_path = tmp_path / "staging" / "table.pdf.yaml"
+        before = staging_path.read_bytes()
+        staging_path.write_bytes(before + b"\n# a concurrent human edit\n")
+        changed = staging_path.read_bytes()
+
+        status, _headers, body = _approve(
+            server, session, "table.pdf", fields=fields, records=["word:走る:はしる"]
+        )
+        assert status == 409
+        assert b"Nothing was written" in body
+        # The concurrent edit survives byte-identically.
+        assert staging_path.read_bytes() == changed
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_replaying_the_same_approval_cannot_land_twice(tmp_path: Path) -> None:
+    """The first submit changes the file, so the second's snapshot no longer
+    matches. A resend is refused rather than re-applied."""
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(
+            server, "GET", _source_url(session, "table.pdf")
+        )
+        fields = _form_fields(page)
+        first = _approve(
+            server, session, "table.pdf", fields=fields, records=["word:走る:はしる"]
+        )
+        assert first[0] == 303
+        after_first = (tmp_path / "staging" / "table.pdf.yaml").read_bytes()
+
+        second = _approve(
+            server, session, "table.pdf", fields=fields, records=["word:走る:はしる"]
+        )
+        assert second[0] == 409
+        assert (tmp_path / "staging" / "table.pdf.yaml").read_bytes() == after_first
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_grammar_is_approved_separately_from_cards(tmp_path: Path) -> None:
+    """There is no Approve all: ticking cards leaves grammar unreviewed."""
+    _stage(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(
+            server, "GET", _source_url(session, "lesson-8.pdf")
+        )
+        fields = _form_fields(page)
+        status, _headers, _body = _approve(
+            server,
+            session,
+            "lesson-8.pdf",
+            fields=fields,
+            records=["word:あげる:あげる"],
+        )
+        assert status == 303
+
+        detail = session.detail("lesson-8.pdf")
+        assert detail.pattern_reviewed is False
+        assert detail.journey.grammar == GRAMMAR_NEEDS_REVIEW
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_grammar_can_be_reviewed_without_approving_any_card(
+    tmp_path: Path,
+) -> None:
+    _stage(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(
+            server, "GET", _source_url(session, "lesson-8.pdf")
+        )
+        status, _headers, _body = _approve(
+            server,
+            session,
+            "lesson-8.pdf",
+            fields=_form_fields(page),
+            patterns_too=True,
+        )
+        assert status == 303
+
+        detail = session.detail("lesson-8.pdf")
+        assert detail.pattern_reviewed is True
+        assert all(card.authority == "available" for card in detail.cards)
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.mark.parametrize(
+    ("headers", "body", "expected"),
+    [
+        ({"Transfer-Encoding": "chunked"}, b"0\r\n\r\n", 400),
+        ({"Content-Type": "text/plain"}, b"action=save", 415),
+    ],
+)
+def test_a_malformed_submission_is_refused(
+    tmp_path: Path, headers: dict[str, str], body: bytes, expected: int
+) -> None:
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        status, _headers, _body = _request(
+            server,
+            "POST",
+            f"/{session.token}/source/table.pdf/approve",
+            headers={
+                "Host": server.expected_host,
+                "Content-Type": "application/x-www-form-urlencoded",
+                **headers,
+            },
+            body=body,
+        )
+        assert status == expected
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_an_oversized_form_is_refused_before_it_is_read(tmp_path: Path) -> None:
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        status, _headers, _body = _request(
+            server,
+            "POST",
+            f"/{session.token}/source/table.pdf/approve",
+            headers={
+                "Host": server.expected_host,
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Content-Length": str(64 * 1024 + 1),
+            },
+            body=b"x" * 16,
+        )
+        assert status == 413
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_an_approval_post_needs_the_path_token_too(tmp_path: Path) -> None:
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        status, _headers, _body = _request(
+            server,
+            "POST",
+            "/source/table.pdf/approve",
+            headers={
+                "Host": server.expected_host,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body=urlencode([("action", "save")]).encode(),
+        )
+        assert status == 404
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_cross_origin_approval_is_refused(tmp_path: Path) -> None:
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(
+            server, "GET", _source_url(session, "table.pdf")
+        )
+        status, _headers, _body = _approve(
+            server,
+            session,
+            "table.pdf",
+            fields=_form_fields(page),
+            records=["word:走る:はしる"],
+            headers={"Origin": "http://evil.example"},
+        )
+        assert status == 403
+        assert session.detail("table.pdf").cards[0].authority == "available"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_the_checkbox_states_what_it_does_not_approve(tmp_path: Path) -> None:
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(
+            server, "GET", _source_url(session, "table.pdf")
+        )
+        text = page.decode()
+        assert "Approve these Japanese example sentences" in text
+        assert "走る (はしる)" in text
+        assert "not the meanings" in text
+        assert "usage note" in text
+        # No single control that would blur separate decisions together.
+        assert "Approve all" not in text
+    finally:
+        server.shutdown()
+        server.server_close()

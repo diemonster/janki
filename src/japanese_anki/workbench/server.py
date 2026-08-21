@@ -29,11 +29,15 @@ import secrets
 import sys
 import webbrowser
 from dataclasses import dataclass
-from urllib.parse import unquote
+from typing import Any
+from urllib.parse import parse_qsl, quote, unquote
 
+from japanese_anki import review_panel
 from japanese_anki.application import SourceJourney, source_detail, source_journeys
 from japanese_anki.config import ProjectConfig
+from japanese_anki.errors import JankiError
 from japanese_anki.localhttp import (
+    MAX_BODY_BYTES,
     LocalOnlyHandler,
     LocalOnlyServer,
     bind_loopback,
@@ -56,17 +60,48 @@ class WorkbenchSession:
     """
 
     config: ProjectConfig
+    #: Gates *reading* the page at all. In the URL path.
     token: str
+    #: Gates *writing*, carried in the form body. Separate from `token`
+    #: because they defend different things: the path token stops another
+    #: local process reading the page, and this stops a page the browser
+    #: was tricked into submitting. Unlike the one-shot panel's, this one
+    #: survives the request — a dashboard approves many sources in a row.
+    csrf_token: str
 
     @classmethod
     def open(cls, config: ProjectConfig) -> WorkbenchSession:
-        return cls(config=config, token=secrets.token_urlsafe(32))
+        return cls(
+            config=config,
+            token=secrets.token_urlsafe(32),
+            csrf_token=secrets.token_urlsafe(32),
+        )
 
     def journeys(self) -> tuple[list[SourceJourney], list[str]]:
         return source_journeys(self.config)
 
     def detail(self, source: str):
         return source_detail(self.config, source)
+
+    def panel(self, source: str) -> review_panel.ReviewPanel | None:
+        """A freshly opened review panel for one source, or None.
+
+        Opened per request, never cached. The panel captures the exact
+        bytes it read, and those bytes are what its compare-and-swap write
+        binds against — a cached panel would bind an approval to a file
+        state that may be minutes stale.
+        """
+        detail = self.detail(source)
+        if detail is None or detail.journey.staging_path is None:
+            return None
+        try:
+            return review_panel.ReviewPanel.open(
+                detail.journey.staging_path,
+                staging_dir=self.config.staging_dir,
+                patterns_path=self.config.patterns_file,
+            )
+        except JankiError:
+            return None
 
 
 class _WorkbenchServer(LocalOnlyServer):
@@ -92,6 +127,22 @@ class _WorkbenchHandler(LocalOnlyHandler):
         if not secrets.compare_digest(offered, self.server.session.token):
             return None
         return "/" + "/".join(parts[2:])
+
+    def _saved_banner(self) -> tuple[int, bool] | None:
+        """The post-redirect-get result, if this is one. Display only."""
+        query = self.path.split("?", 1)
+        if len(query) != 2:
+            return None
+        fields = dict(parse_qsl(query[1]))
+        if "saved" not in fields:
+            return None
+        try:
+            records = int(fields.get("saved", "0"))
+        except ValueError:
+            return None
+        # Clamped: this is a self-reported number in a URL a person can edit,
+        # so it may say what it likes — it never means anything was written.
+        return max(records, 0), fields.get("grammar") == "1"
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         if not self._request_is_local():
@@ -126,18 +177,135 @@ class _WorkbenchHandler(LocalOnlyHandler):
             if detail is None:
                 self._error(404, "No such source.")
                 return
+            # The panel is opened here only for the exact bytes it read: those
+            # fingerprints go into the form, and the approval is refused later
+            # unless the file is still byte-identical to them.
+            panel = self.server.session.panel(name)
             self._send(
-                200, render_source(detail, token=self.server.session.token)
+                200,
+                render_source(
+                    detail,
+                    token=self.server.session.token,
+                    csrf=self.server.session.csrf_token if panel else "",
+                    staging_snapshot=panel.staging_fingerprint if panel else "",
+                    patterns_snapshot=panel.patterns_fingerprint if panel else "",
+                    saved=self._saved_banner(),
+                ),
             )
             return
         self._error(404, "No such workbench page.")
 
+    def _read_body(self) -> bytes | None:
+        """The exact declared body, or None having already sent the refusal.
+
+        Every check the one-shot panel made, for the same reasons: a chunked
+        body has no length to bound, two `Content-Length` headers let a proxy
+        and this server disagree about where the body ends, and a short read
+        means the client vanished mid-submission and its intent is unknown.
+        """
+        if self.headers.get_all("Transfer-Encoding"):
+            self._error(400, "Transfer-encoded forms are not accepted.")
+            return None
+        lengths = self.headers.get_all("Content-Length") or []
+        if len(lengths) != 1 or not lengths[0].isdigit():
+            self._error(411, "One exact Content-Length is required.")
+            return None
+        length = int(lengths[0])
+        if length > MAX_BODY_BYTES:
+            self._error(413, "That form is larger than the 64 KiB limit.")
+            return None
+        if (self.headers.get_all("Content-Type") or []) != [
+            "application/x-www-form-urlencoded"
+        ]:
+            self._error(415, "That form has the wrong content type.")
+            return None
+        try:
+            body = self.rfile.read(length)
+        except TimeoutError:
+            self._error(408, "The form body timed out.")
+            return None
+        if len(body) != length:
+            self._error(400, "The form ended before its Content-Length.")
+            return None
+        return body
+
     def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
-        """W1.2 is read-only. Every mutation still goes through the CLI."""
         if not self._request_is_local():
             self._error(403, "The workbench accepts only its exact localhost origin.")
             return
-        self._error(405, "The workbench does not change anything yet.")
+        route = self._route()
+        if route is None or not route.startswith(_SOURCE_PREFIX):
+            self._error(404, "No such workbench action.")
+            return
+        rest = route[len(_SOURCE_PREFIX) :]
+        name, _, action = rest.rpartition("/")
+        if action != "approve" or not name:
+            self._error(404, "No such workbench action.")
+            return
+        body = self._read_body()
+        if body is None:
+            return
+        self._approve(unquote(name), body)
+
+    def _approve(self, source: str, body: bytes) -> None:
+        session = self.server.session
+        try:
+            form = review_panel.parse_review_form(body)
+        except review_panel.PanelRequestError as exc:
+            self._error(400, str(exc))
+            return
+        # Authority first, and constant-time: a form that cannot prove it came
+        # from this session's page is refused before its contents are read for
+        # anything else.
+        if not secrets.compare_digest(form["csrf"][0], session.csrf_token):
+            self._error(403, "That form did not come from this workbench session.")
+            return
+        panel = session.panel(source)
+        if panel is None:
+            self._error(404, "No such source.")
+            return
+        # The snapshot is the compare-and-swap. A form rendered against older
+        # bytes is refused whole — never partly applied to what is there now.
+        if (
+            form["staging_snapshot"][0] != panel.staging_fingerprint
+            or form["patterns_snapshot"][0] != panel.patterns_fingerprint
+        ):
+            self._error(
+                409,
+                "This source changed after the page was rendered. Nothing was "
+                "written. Reload and review the current cards.",
+            )
+            return
+        try:
+            outcome = panel.submit(
+                record_ids=form.get("record", []),
+                review_patterns=bool(form.get("patterns", [])),
+            )
+        except review_panel.PanelRequestError as exc:
+            self._error(400, str(exc))
+        except review_panel.StaleReviewError as exc:
+            self._error(409, f"{exc}. Nothing was written by this attempt.")
+        except review_panel.PartialReviewError as exc:
+            # Never "nothing changed": say exactly which file landed.
+            self._error(409, str(exc))
+        except JankiError as exc:
+            self._error(500, f"{exc}. Nothing was proven written.")
+        else:
+            self._redirect_to_source(source, outcome)
+
+    def _redirect_to_source(self, source: str, outcome: Any) -> None:
+        """Post/redirect/get, so a reload cannot resubmit an approval."""
+        target = (
+            f"/{self.server.session.token}/source/{quote(source, safe='')}"
+            f"?saved={len(outcome.accepted_record_ids)}"
+            f"&grammar={'1' if outcome.pattern_reviewed else '0'}"
+        )
+        self.send_response(303)
+        self.send_header("Location", target)
+        self.send_header("Content-Length", "0")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.close_connection = True
 
 
 def make_server(session: WorkbenchSession) -> _WorkbenchServer:
