@@ -352,10 +352,10 @@ class VocabularyRecord:
 
 #: Field-level acceptance provenance for an extract-sourced record's examples.
 #: The reviewer types the sentinel value (``staging-review``) into a staging
-#: row's ``raw_fields`` — the explicit acceptance M7.6T requires — and
-#: ``promote._accept_examples`` replaces it with the accepted sentences'
-#: content fingerprints, binding the acceptance to the exact Japanese the
-#: reviewer saw. A sentence added or rewritten later carries no covering
+#: row's ``raw_fields``, or explicitly checks that row in the localhost review
+#: panel, which writes the accepted sentences' content fingerprints directly.
+#: ``promote._accept_examples`` replaces the manual sentinel with those same
+#: fingerprints. A sentence added or rewritten later carries no covering
 #: fingerprint and is simply not accepted; a stale stamp can never bless text
 #: no reviewer read.
 EXAMPLE_AUTHORITY_KEY = "example_authority"

@@ -45,7 +45,7 @@ from japanese_anki.io import (
     load_structured,
     validate_prefer_incoming,
 )
-from japanese_anki.models import VocabularyRecord
+from japanese_anki.models import EXAMPLE_AUTHORITY_KEY, VocabularyRecord
 
 
 class StagingError(JankiError):
@@ -1187,6 +1187,17 @@ def _load_document(path: Path) -> Any:
     return document
 
 
+def _load_document_text(text: str, *, source: str) -> Any:
+    """Parse one captured staging wire value for a surgical in-memory edit."""
+    try:
+        document = _parser().load(io.StringIO(text))
+    except YAMLError as exc:
+        raise StagingError(f"Could not read {source} for rewriting: {exc}") from exc
+    if not isinstance(document, MutableMapping) or _RECORDS_KEY not in document:
+        raise StagingError(f"Expected a staging mapping with a '{_RECORDS_KEY}:' list in {source}")
+    return document
+
+
 def check_rewritable(path: Path) -> None:
     """Raise :class:`StagingError` now if :func:`rewrite_staging` could not write.
 
@@ -1224,6 +1235,197 @@ def _apply_changes(
             _apply_changes(current, old_value, new_value)
             continue
         target[key] = new_value
+
+
+def _authority_update(
+    before: VocabularyRecord,
+    after: VocabularyRecord,
+    *,
+    row: int,
+    source: str,
+) -> str | None:
+    """Return one authority replacement, proving it is the row's only change."""
+    if before == after:
+        return None
+    before_raw = dict(before.source.raw_fields)
+    after_raw = dict(after.source.raw_fields)
+    before_authority = before_raw.pop(EXAMPLE_AUTHORITY_KEY, None)
+    after_authority = after_raw.pop(EXAMPLE_AUTHORITY_KEY, None)
+    expected_source = replace(before.source, raw_fields=dict(after.source.raw_fields))
+    if (
+        before_raw != after_raw
+        or replace(before, source=expected_source) != after
+        or not isinstance(after_authority, str)
+        or not after_authority
+    ):
+        raise StagingError(
+            f"{source} record {row}: captured-wire review may change only "
+            f"source.raw_fields.{EXAMPLE_AUTHORITY_KEY} to non-empty text"
+        )
+    return None if before_authority == after_authority else after_authority
+
+
+def _block_mapping(value: Any, *, where: str, source: str) -> MutableMapping[str, Any]:
+    """Require the generated block mapping shape the surgical writer understands."""
+    if (
+        not isinstance(value, MutableMapping)
+        or not hasattr(value, "lc")
+        or not hasattr(value, "fa")
+    ):
+        raise StagingError(f"{source}: {where} must be a block-style mapping")
+    if value.fa.flow_style() is True:
+        raise StagingError(f"{source}: {where} must be a block-style mapping")
+    return value
+
+
+def _line_indent(line: str) -> int:
+    content = line.rstrip("\r\n")
+    if "\t" in content[: len(content) - len(content.lstrip())]:
+        return -1
+    return len(content) - len(content.lstrip(" "))
+
+
+def render_example_authority_updates(
+    captured_text: str,
+    records: Sequence[VocabularyRecord],
+    *,
+    source: str = "<captured staging file>",
+) -> str:
+    """Surgically render only selected rows' example-authority wire lines.
+
+    The review panel shows one exact byte snapshot. Re-serializing that entire
+    YAML document to add a fingerprint line churns folded metadata, comments,
+    omitted IDs, and null spellings that are unrelated to the human decision.
+    This helper instead locates generated block-style ``source.raw_fields``
+    mappings structurally with ruamel, inserts or replaces only the authority
+    scalar line, and then proves that the result parses to exactly ``records``
+    with unchanged metadata. Ambiguous flow or duplicate-key documents refuse.
+    """
+    original, original_meta = read_staging_text(captured_text, source=source)
+    if len(original) != len(records):
+        raise StagingError(f"{source} holds {len(original)} row(s) but {len(records)} were given")
+    document = _load_document_text(captured_text, source=source)
+    raw_records = document[_RECORDS_KEY] or []
+    if not isinstance(raw_records, list) or len(raw_records) != len(original):
+        raise StagingError(f"{source}: records must be one block-style sequence")
+
+    lines = captured_text.splitlines(keepends=True)
+    operations: list[tuple[str, int, str]] = []
+    for index, (before, after) in enumerate(zip(original, records, strict=True)):
+        authority = _authority_update(
+            before,
+            after,
+            row=index + 1,
+            source=source,
+        )
+        if authority is None:
+            continue
+        record_node = _block_mapping(raw_records[index], where=f"record {index + 1}", source=source)
+        source_node = _block_mapping(
+            record_node.get("source"),
+            where=f"record {index + 1}.source",
+            source=source,
+        )
+        raw_node = _block_mapping(
+            source_node.get("raw_fields"),
+            where=f"record {index + 1}.source.raw_fields",
+            source=source,
+        )
+        try:
+            raw_key_line, raw_key_column = source_node.lc.key("raw_fields")
+        except (KeyError, TypeError, ValueError) as exc:
+            raise StagingError(
+                f"{source}: record {index + 1}.source.raw_fields has no unambiguous block location"
+            ) from exc
+        child_column = raw_key_column + 2
+        for key in raw_node:
+            try:
+                _key_line, key_column = raw_node.lc.key(key)
+            except (KeyError, TypeError, ValueError) as exc:
+                raise StagingError(
+                    f"{source}: record {index + 1}.source.raw_fields has an "
+                    "unsupported key location"
+                ) from exc
+            if key_column != child_column:
+                raise StagingError(
+                    f"{source}: record {index + 1}.source.raw_fields must use "
+                    "generated block indentation"
+                )
+
+        if EXAMPLE_AUTHORITY_KEY in raw_node:
+            line_number, key_column = raw_node.lc.key(EXAMPLE_AUTHORITY_KEY)
+            value_line, _value_column = raw_node.lc.value(EXAMPLE_AUTHORITY_KEY)
+            if key_column != child_column or value_line != line_number:
+                raise StagingError(
+                    f"{source}: record {index + 1} has an unsupported "
+                    f"{EXAMPLE_AUTHORITY_KEY} wire shape"
+                )
+            line = lines[line_number]
+            content = line.rstrip("\r\n")
+            ending = line[len(content) :]
+            scalar = re.fullmatch(
+                rf"(?P<prefix>[ ]{{{child_column}}}{EXAMPLE_AUTHORITY_KEY}"
+                r"[ ]*:[ ]*)(?P<quote>['\"]?)(?P<value>[0-9a-f, ]+)"
+                r"(?P=quote)(?P<suffix>[ ]*(?:#.*)?)",
+                content,
+            )
+            if scalar is None:
+                raise StagingError(
+                    f"{source}: record {index + 1} has an unsupported "
+                    f"{EXAMPLE_AUTHORITY_KEY} wire shape"
+                )
+            replacement = (
+                scalar["prefix"]
+                + scalar["quote"]
+                + authority
+                + scalar["quote"]
+                + scalar["suffix"]
+                + ending
+            )
+            operations.append(("replace", line_number, replacement))
+            continue
+
+        insertion = raw_key_line + 1
+        while insertion < len(lines):
+            content = lines[insertion].rstrip("\r\n")
+            if not content.strip():
+                insertion += 1
+                continue
+            indent = _line_indent(lines[insertion])
+            if indent < 0:
+                raise StagingError(f"{source}: tab-indented YAML is not reviewable")
+            if indent <= raw_key_column:
+                break
+            insertion += 1
+        if insertion == 0 or not lines[insertion - 1].endswith(("\n", "\r")):
+            raise StagingError(
+                f"{source}: generated staging must end authority insertion rows with a newline"
+            )
+        newline = "\r\n" if lines[insertion - 1].endswith("\r\n") else "\n"
+        operations.append(
+            (
+                "insert",
+                insertion,
+                " " * child_column + f"{EXAMPLE_AUTHORITY_KEY}: {authority}" + newline,
+            )
+        )
+
+    for operation, line_number, replacement in sorted(
+        operations, key=lambda item: item[1], reverse=True
+    ):
+        if operation == "replace":
+            lines[line_number] = replacement
+        else:
+            lines.insert(line_number, replacement)
+    rendered = "".join(lines)
+    reparsed, reparsed_meta = read_staging_text(rendered, source=source)
+    _load_document_text(rendered, source=source)
+    if reparsed != list(records) or reparsed_meta != original_meta:
+        raise StagingError(
+            f"{source}: surgical example-authority update did not preserve the "
+            "captured staging structure"
+        )
+    return rendered
 
 
 def _rewrite_staging_unlocked(
@@ -1412,6 +1614,44 @@ def prune_staging_under_lock(path: Path, keep: Sequence[bool]) -> int:
     return _prune_staging_unlocked(path, keep)
 
 
+def _read_staging_data(data: Any, *, source: str) -> tuple[list[VocabularyRecord], dict[str, Any]]:
+    """Build records and metadata from one already-captured YAML value."""
+    if not isinstance(data, Mapping):
+        raise StagingError(
+            f"Expected a staging mapping with a '{_RECORDS_KEY}:' list in {source}, "
+            f"got {type(data).__name__}"
+        )
+    if _RECORDS_KEY not in data:
+        raise StagingError(f"Staging file {source} has no '{_RECORDS_KEY}:' list")
+
+    raw_records = data[_RECORDS_KEY] or []
+    if not isinstance(raw_records, list):
+        raise StagingError(f"'{_RECORDS_KEY}' in {source} must be a list of records")
+
+    records: list[VocabularyRecord] = []
+    for index, item in enumerate(raw_records, start=1):
+        if not isinstance(item, Mapping):
+            raise StagingError(
+                f"Record {index} in {source} must be a mapping, got {type(item).__name__}"
+            )
+        records.append(VocabularyRecord.from_dict(dict(item)))
+
+    meta = {str(key): value for key, value in data.items() if key != _RECORDS_KEY}
+    review_run_id(meta)
+    return records, meta
+
+
+def read_staging_text(
+    text: str, *, source: str = "<captured staging file>"
+) -> tuple[list[VocabularyRecord], dict[str, Any]]:
+    """Read records and metadata from captured staging text, without a path race."""
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise StagingError(f"Could not parse staging file {source}: {exc}") from exc
+    return _read_staging_data(data, source=source)
+
+
 def read_staging(path: Path) -> tuple[list[VocabularyRecord], dict[str, Any]]:
     """Read a staging file, returning ``(records, meta)``.
 
@@ -1419,27 +1659,4 @@ def read_staging(path: Path) -> tuple[list[VocabularyRecord], dict[str, Any]]:
     survives a read/write round trip.
     """
     path = Path(path)
-    data = load_structured(path)
-    if not isinstance(data, Mapping):
-        raise StagingError(
-            f"Expected a staging mapping with a '{_RECORDS_KEY}:' list in {path}, "
-            f"got {type(data).__name__}"
-        )
-    if _RECORDS_KEY not in data:
-        raise StagingError(f"Staging file {path} has no '{_RECORDS_KEY}:' list")
-
-    raw_records = data[_RECORDS_KEY] or []
-    if not isinstance(raw_records, list):
-        raise StagingError(f"'{_RECORDS_KEY}' in {path} must be a list of records")
-
-    records: list[VocabularyRecord] = []
-    for index, item in enumerate(raw_records, start=1):
-        if not isinstance(item, Mapping):
-            raise StagingError(
-                f"Record {index} in {path} must be a mapping, got {type(item).__name__}"
-            )
-        records.append(VocabularyRecord.from_dict(dict(item)))
-
-    meta = {str(key): value for key, value in data.items() if key != _RECORDS_KEY}
-    review_run_id(meta)
-    return records, meta
+    return _read_staging_data(load_structured(path), source=str(path))

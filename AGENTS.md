@@ -178,7 +178,14 @@ below is what is left, and it is the loop every other project already uses.*
    the file; never delete this recovery artifact by hand. Source
    extraction metadata fingerprints the source, style guide, task template,
    labelled data turn, response schema, and complete request; the pattern copy
-   carries the same provenance. Both card-writing paths require a nonblank
+   carries the same provenance. `janki review-panel` is a localhost-only human
+   authority surface: a checked card immediately binds the exact Japanese
+   examples displayed to their content fingerprints, while the manual
+   `staging-review` sentinel remains available for a reviewer editing YAML by
+   hand. Its separate pattern-set checkbox writes only the matching store
+   entry's existing `reviewed` mark. It never edits content, promotes rows,
+   accepts coverage, or calls a model. Both
+   card-writing paths require a nonblank
    meaning list, complete fields on every returned example, and an explicit
    usage note that may be empty. Schema-v5 extraction additionally requires
    exactly one polite and one casual example plus source-kind evidence before

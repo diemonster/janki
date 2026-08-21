@@ -109,11 +109,26 @@ unique. Janki refuses the collision before it calls a model; give each source a
 unique name before you put it in the inbox.
 
 Nothing reaches your collection yet. Open the staging file, fix what is wrong,
-delete what is not worth a card, and type
-`example_authority: staging-review` in an extract row's `source.raw_fields`
-when you have reviewed and accept its proposed Japanese examples. Promotion
-binds that acceptance to the exact sentences; merely leaving a model proposal
-in the file is not acceptance. Then:
+and delete what is not worth a card. For the final human approvals, use the
+small localhost panel:
+
+```bash
+janki review-panel data/staging/lesson-3.pdf.yaml
+```
+
+It shows every proposed card and the matching current pattern set without
+making a model call or loading any remote asset. Checking a card immediately
+binds approval to the exact Japanese examples displayed; checking the pattern
+set marks that complete current set reviewed. Unchecked items are unchanged,
+and the panel never edits content or promotes records. If either underlying
+file changes while the page is open, submission refuses so an older page
+cannot approve newer text.
+
+The manual equivalent for a card is to type
+`example_authority: staging-review` in that extract row's
+`source.raw_fields`. Promotion replaces that manual sentinel with the same
+sentence fingerprints the panel writes directly. Merely leaving a model
+proposal in the file is not acceptance. Then:
 
 ```bash
 janki validate data/staging/lesson-3.pdf.yaml   # what is still incomplete
@@ -220,6 +235,7 @@ own collection is the newer side. Details and the measurements behind them:
 | Command | What it does |
 | --- | --- |
 | `janki extract FILE...` | Read each PDF or photo once into rich staged cards and unreviewed patterns |
+| `janki review-panel FILE.yaml` | Open a local page for explicit staged-example and pattern approvals |
 | `janki patterns [--review DOCUMENT]` | List or review patterns already emitted by `extract` |
 | `janki import-shirabe FILE.csv` | Import a Shirabe Jisho export |
 | `janki import-jpdb --deck NAME` | Import a jpdb deck (`--all-decks` for every one) |

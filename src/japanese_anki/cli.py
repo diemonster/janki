@@ -5,6 +5,7 @@ import dataclasses
 import hashlib
 import json
 import sys
+import webbrowser
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import ExitStack
@@ -27,6 +28,7 @@ from japanese_anki import (
     promote,
     prompts,
     repairs,
+    review_panel,
     status,
 )
 from japanese_anki.audio_cmd import AudioError
@@ -1881,7 +1883,11 @@ def command_extract(args: argparse.Namespace) -> int:
         item.source_sha256 or extract.source_fingerprint(item.origin_path)
         for item in prepared
     ]
-    pattern_store = patterns.load_store(config.patterns_file)
+    # Validate the complete store before a paid call. The mapping itself is not
+    # kept: a human can finish reviewing a source while that call is in flight,
+    # and the post-call decision must see that newer state under the writer
+    # lock rather than replacing it from this stale preflight snapshot.
+    patterns.load_store(config.patterns_file)
 
     if not _confirm_live_model(prepared, model, args.yes):
         # Says what was *kept*, not only what was not sent. `prepare_inputs`
@@ -1958,16 +1964,30 @@ def command_extract(args: argparse.Namespace) -> int:
             meta["review_notes"] = extract.unusable_note(held)
         meta[CANDIDATE_ACCOUNTING_KEY] = built.candidate_accounting
         write_staging(target, records, meta, force=args.force)
-        previous_patterns = pattern_store.get(run_patterns.source)
-        if previous_patterns is not None and previous_patterns.reviewed and not args.force:
+        kept_reviewed_patterns = False
+        # Reload inside the lock after the paid call. `patterns --review` uses
+        # the same lock, so either its complete decision wins first and is
+        # preserved here, or this fresh unreviewed answer lands first and the
+        # reviewer sees that answer. Neither transition can silently erase the
+        # other or an unrelated source added while the model was answering.
+        with exclusive_path_lock(config.patterns_file):
+            pattern_store = patterns.load_store(config.patterns_file)
+            previous_patterns = pattern_store.get(run_patterns.source)
+            if (
+                previous_patterns is not None
+                and previous_patterns.reviewed
+                and not args.force
+            ):
+                kept_reviewed_patterns = True
+            else:
+                pattern_store[run_patterns.source] = run_patterns
+                patterns.save_store_under_lock(config.patterns_file, pattern_store)
+        if kept_reviewed_patterns:
             print(
                 f"note: kept the reviewed patterns already stored for "
                 f"{run_patterns.source}; pass extract --force to replace "
                 "them with this answer and review them again"
             )
-        else:
-            pattern_store[run_patterns.source] = run_patterns
-            patterns.save_store(config.patterns_file, pattern_store)
         written += 1
         already = sum(
             1 for record in records if "already_known" in record.source.raw_fields
@@ -4236,19 +4256,24 @@ def _collection_lines(config: ProjectConfig) -> list[str]:
 def command_patterns(args: argparse.Namespace) -> int:
     """List source patterns or mark an extracted source reviewed."""
     config = _load_config(args)
-    store = patterns.load_store(config.patterns_file)
 
     if args.review:
-        unknown = [name for name in args.review if name not in store]
-        if unknown:
-            raise JankiError(
-                "No extracted document named "
-                + ", ".join(sorted(unknown))
-                + f". Known: {', '.join(sorted(store)) or 'none'}"
-            )
-        for name in args.review:
-            store[name] = dataclasses.replace(store[name], reviewed=True)
-        patterns.save_store(config.patterns_file, store)
+        # The review bit is a human decision in a whole-file JSON store. Keep
+        # its read, validation, mutation, and atomic replacement under the one
+        # path lock shared by extraction and the local review panel, or two
+        # reviewers of different sources can each erase the other's decision.
+        with exclusive_path_lock(config.patterns_file):
+            store = patterns.load_store(config.patterns_file)
+            unknown = [name for name in args.review if name not in store]
+            if unknown:
+                raise JankiError(
+                    "No extracted document named "
+                    + ", ".join(sorted(unknown))
+                    + f". Known: {', '.join(sorted(store)) or 'none'}"
+                )
+            for name in args.review:
+                store[name] = dataclasses.replace(store[name], reviewed=True)
+            patterns.save_store_under_lock(config.patterns_file, store)
         for name in args.review:
             entry = store[name]
             print(f"Marked {name} reviewed.")
@@ -4261,6 +4286,7 @@ def command_patterns(args: argparse.Namespace) -> int:
                 )
         return 0
 
+    store = patterns.load_store(config.patterns_file)
     for name, entry in sorted(store.items()):
         mark = "reviewed" if entry.reviewed else "UNREVIEWED"
         if entry.reviewed and entry.kind not in patterns.STEERING_KINDS:
@@ -4271,6 +4297,29 @@ def command_patterns(args: argparse.Namespace) -> int:
             print(f"    {pattern.template}{gloss}")
     if not store:
         print("No patterns extracted yet. Run janki extract on source material.")
+    return 0
+
+
+def command_review_panel(args: argparse.Namespace) -> int:
+    """Open one explicit, localhost-only extraction review session."""
+    config = _load_config(args)
+    panel = review_panel.ReviewPanel.open(
+        args.file,
+        staging_dir=config.staging_dir,
+        patterns_path=config.patterns_file,
+    )
+    server = review_panel.make_server(panel)
+    url = f"http://{server.expected_host}/"
+    print(f"Review panel: {url}", flush=True)
+    print("The panel exits after one terminal submission; Ctrl-C stops it.", flush=True)
+    if not args.no_open and not webbrowser.open(url):
+        print("warning: could not open a browser; copy the URL above", file=sys.stderr)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nReview panel stopped. Reopen it to confirm recorded decisions.")
+    finally:
+        server.server_close()
     return 0
 
 def command_kanji(args: argparse.Namespace) -> int:
@@ -4991,6 +5040,23 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     patterns_parser.set_defaults(handler=command_patterns)
+
+    review_panel_parser = subparsers.add_parser(
+        "review-panel",
+        help="Open a localhost page for staged example and pattern approvals.",
+    )
+    review_panel_parser.add_argument(
+        "file",
+        type=_path,
+        metavar="FILE",
+        help="One active rich-extraction staging file to review.",
+    )
+    review_panel_parser.add_argument(
+        "--no-open",
+        action="store_true",
+        help="Print the localhost URL without opening the default browser.",
+    )
+    review_panel_parser.set_defaults(handler=command_review_panel)
 
     kanji_parser = subparsers.add_parser(
         "kanji",

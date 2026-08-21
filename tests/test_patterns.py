@@ -13,6 +13,7 @@ from japanese_anki.patterns import (
     PatternSet,
     format_patterns,
     load_store,
+    render_reviewed_update,
     reviewed_patterns,
     save_store,
     verb_pairs_in,
@@ -165,6 +166,48 @@ def test_a_pattern_store_refuses_a_malformed_review_run_id(
 
     with pytest.raises(PatternError, match="review-run-id-invalid"):
         load_store(path)
+
+
+@pytest.mark.parametrize("value", ["false", "no", 1, 0, None])
+def test_a_pattern_store_reviewed_mark_must_be_an_exact_boolean(
+    tmp_path: Path, value: object
+) -> None:
+    path = tmp_path / "patterns.json"
+    path.write_text(
+        json.dumps({"week11.pdf": {"reviewed": value, "patterns": []}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(PatternError, match="reviewed must be a boolean"):
+        load_store(path)
+
+
+def test_a_reviewed_update_preserves_every_other_captured_json_byte() -> None:
+    captured = (
+        '{"week11.pdf" : {"owner":{"keep" : [1, 2]}, "reviewed" : false,'
+        '"patterns":[]},"other.pdf":{"reviewed":false,"patterns":[],"x":9}}\n'
+    )
+    false_at = captured.index("false")
+    expected = captured[:false_at] + "true" + captured[false_at + len("false") :]
+
+    assert render_reviewed_update(captured, "week11.pdf") == expected
+
+
+@pytest.mark.parametrize(
+    "captured",
+    [
+        '{"week11.pdf":{"reviewed":false,"patterns":[]},'
+        '"week11.pdf":{"reviewed":false,"patterns":[]}}',
+        '{"week11.pdf":{"reviewed":false,"reviewed":false,"patterns":[]}}',
+        '{"week11.pdf":{"patterns":[]}}',
+        '{"week11.pdf":{"reviewed":true,"patterns":[]}}',
+    ],
+)
+def test_a_reviewed_update_refuses_an_ambiguous_or_absent_false_token(
+    captured: str,
+) -> None:
+    with pytest.raises(PatternError, match="exactly one|one exact|boolean false"):
+        render_reviewed_update(captured, "week11.pdf")
 
 
 def test_a_missing_store_is_empty_not_an_error(tmp_path: Path) -> None:

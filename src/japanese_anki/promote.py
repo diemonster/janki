@@ -619,16 +619,17 @@ def _accept_examples(record: VocabularyRecord) -> VocabularyRecord:
     """Bind the reviewer's explicit example acceptance to the sentences it saw.
 
     The acceptance is the reviewer *typing* ``example_authority:
-    staging-review`` into the row during staging review — never inferred from
-    an example merely being present, because presence proves nothing about who
-    wrote it: the large AI-enrichment route stages model-generated sentences
-    on extract-type rows, and a pre-boundary staging file may still hold
-    machine-copied excerpts. Promotion's only job here is to replace the
-    hand-typed sentinel with the accepted sentences' content fingerprints, so
-    the durable stamp covers exactly the Japanese the reviewer read and
-    nothing that arrives later. A row without the sentinel promotes its
-    examples unstamped — preserved, but never pinned as curated. Non-extract
-    sources are the user's own data and need no stamp at all.
+    staging-review`` into the row. The localhost review panel takes the other
+    explicit route and writes fingerprints for the exact displayed sentences
+    directly. Neither authority is inferred from an example merely being
+    present, because presence proves nothing about who wrote it: the large
+    AI-enrichment route stages model-generated sentences on extract-type rows,
+    and a pre-boundary staging file may still hold machine-copied excerpts.
+    Promotion replaces only the manual sentinel with the same fingerprints;
+    an already-bound panel decision stays bound to exactly what the reviewer
+    saw. A row without either mark promotes its examples unstamped — preserved,
+    but never pinned as curated. Non-extract sources are the user's own data
+    and need no stamp at all.
     """
     if record.source.type != "extract":
         return record

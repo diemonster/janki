@@ -35,15 +35,15 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 from uuid import UUID
 
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import han_character_class, normalize_identity_part
-from japanese_anki.io import atomic_write_text
+from japanese_anki.io import atomic_write_text, exclusive_path_lock
 
 __all__ = [
     "CHECKABLE_KINDS",
@@ -54,8 +54,12 @@ __all__ = [
     "PatternSet",
     "format_patterns",
     "load_store",
+    "load_store_text",
+    "render_store",
+    "render_reviewed_update",
     "reviewed_patterns",
     "save_store",
+    "save_store_under_lock",
     "verb_pairs_in",
     "with_prompt_provenance",
     "worked_examples_in",
@@ -189,12 +193,17 @@ class PatternSet:
                 f"{source}: prompt_provenance must be an object, got "
                 f"{type(provenance).__name__}"
             )
+        reviewed = raw.get("reviewed", False)
+        if not isinstance(reviewed, bool):
+            raise PatternError(
+                f"{source}: reviewed must be a boolean, got {type(reviewed).__name__}"
+            )
         return cls(
             source=source,
             kind=str(raw.get("kind") or "unknown"),
             title=str(raw.get("title") or ""),
             patterns=built,
-            reviewed=bool(raw.get("reviewed", False)),
+            reviewed=reviewed,
             prompt_provenance={str(key): value for key, value in provenance.items()},
             review_run_id=_review_run_id(source, raw),
         )
@@ -319,17 +328,16 @@ def worked_examples_in(entry: PatternSet) -> dict[str, list[tuple[str, str]]]:
                 )
     return by_template
 
-def load_store(path: Path) -> dict[str, PatternSet]:
-    """Every document janki has read, keyed by its file name."""
-    file = Path(path)
-    if not file.exists():
-        return {}
+def load_store_text(
+    text: str, *, source: str = "<captured pattern store>"
+) -> dict[str, PatternSet]:
+    """Parse one captured pattern-store wire value without re-reading a path."""
     try:
-        raw = json.loads(file.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise PatternError(f"Could not read {file}: {exc}") from exc
+        raw = json.loads(text)
+    except ValueError as exc:
+        raise PatternError(f"Could not read {source}: {exc}") from exc
     if not isinstance(raw, dict):
-        raise PatternError(f"{file} must hold a JSON object keyed by document name")
+        raise PatternError(f"{source} must hold a JSON object keyed by document name")
     # Refused, not skipped. `save_store` rewrites the whole file from what was
     # loaded, so dropping an entry it could not read would erase that document
     # from the committed store on the next command that writes — silently, and
@@ -337,18 +345,164 @@ def load_store(path: Path) -> dict[str, PatternSet]:
     for name, value in raw.items():
         if not isinstance(value, dict):
             raise PatternError(
-                f"{file}: entry for {str(name)!r} must be an object, got "
-                f"{type(value).__name__}"
+                f"{source}: entry for {str(name)!r} must be an object, got {type(value).__name__}"
             )
     return {str(name): PatternSet.from_dict(str(name), value) for name, value in raw.items()}
 
 
-def save_store(path: Path, store: dict[str, PatternSet]) -> None:
-    """Write the pattern file, sorted, so a re-read produces no diff by itself."""
+def load_store(path: Path) -> dict[str, PatternSet]:
+    """Every document janki has read, keyed by its file name."""
+    file = Path(path)
+    if not file.exists():
+        return {}
+    try:
+        text = file.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise PatternError(f"Could not read {file}: {exc}") from exc
+    return load_store_text(text, source=str(file))
+
+
+def render_store(store: Mapping[str, PatternSet]) -> str:
+    """Render a captured-and-transformed store without touching the filesystem."""
     payload = {name: store[name].to_dict() for name in sorted(store)}
-    atomic_write_text(
-        Path(path), json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+
+
+@dataclass(frozen=True, slots=True)
+class _JsonMember:
+    key: str
+    value_start: int
+    value_end: int
+
+
+_JSON_DECODER = json.JSONDecoder()
+
+
+def _skip_json_whitespace(text: str, offset: int) -> int:
+    while offset < len(text) and text[offset] in " \t\r\n":
+        offset += 1
+    return offset
+
+
+def _json_object_members(
+    text: str,
+    offset: int,
+    *,
+    source: str,
+) -> tuple[list[_JsonMember], int]:
+    """Return direct member value spans without reserializing their JSON."""
+    offset = _skip_json_whitespace(text, offset)
+    if offset >= len(text) or text[offset] != "{":
+        raise PatternError(f"{source}: expected a JSON object")
+    offset = _skip_json_whitespace(text, offset + 1)
+    members: list[_JsonMember] = []
+    if offset < len(text) and text[offset] == "}":
+        return members, offset + 1
+    while True:
+        try:
+            key, key_end = _JSON_DECODER.raw_decode(text, offset)
+        except ValueError as exc:
+            raise PatternError(f"{source}: could not locate JSON object keys: {exc}") from exc
+        if not isinstance(key, str):
+            raise PatternError(f"{source}: JSON object keys must be strings")
+        offset = _skip_json_whitespace(text, key_end)
+        if offset >= len(text) or text[offset] != ":":
+            raise PatternError(f"{source}: expected ':' after JSON object key {key!r}")
+        value_start = _skip_json_whitespace(text, offset + 1)
+        try:
+            _value, value_end = _JSON_DECODER.raw_decode(text, value_start)
+        except ValueError as exc:
+            raise PatternError(f"{source}: could not locate value for {key!r}: {exc}") from exc
+        members.append(_JsonMember(key, value_start, value_end))
+        offset = _skip_json_whitespace(text, value_end)
+        if offset < len(text) and text[offset] == "}":
+            return members, offset + 1
+        if offset >= len(text) or text[offset] != ",":
+            raise PatternError(f"{source}: expected ',' or '}}' after {key!r}")
+        offset = _skip_json_whitespace(text, offset + 1)
+
+
+def render_reviewed_update(
+    captured_text: str,
+    source_key: str,
+    *,
+    source: str = "<captured pattern store>",
+) -> str:
+    """Flip one captured entry's exact ``reviewed`` token without wire churn.
+
+    Unknown fields, ordering, indentation, and every unrelated byte belong to
+    the captured store and remain untouched. Ambiguous duplicate keys and a
+    missing/non-boolean/already-true mark are refused instead of reserializing.
+    """
+    before = load_store_text(captured_text, source=source)
+    top_members, top_end = _json_object_members(captured_text, 0, source=source)
+    if _skip_json_whitespace(captured_text, top_end) != len(captured_text):
+        raise PatternError(f"{source}: unexpected content after the pattern-store object")
+    matching_entries = [member for member in top_members if member.key == source_key]
+    if len(matching_entries) != 1:
+        raise PatternError(
+            f"{source}: expected exactly one pattern-store entry for {source_key!r}"
+        )
+    entry = matching_entries[0]
+    entry_members, entry_end = _json_object_members(
+        captured_text,
+        entry.value_start,
+        source=f"{source}: entry {source_key!r}",
     )
+    if entry_end != entry.value_end:
+        raise PatternError(f"{source}: entry {source_key!r} is not one exact JSON object")
+    reviewed_members = [member for member in entry_members if member.key == "reviewed"]
+    if len(reviewed_members) != 1:
+        raise PatternError(
+            f"{source}: entry {source_key!r} must contain one exact reviewed boolean"
+        )
+    reviewed = reviewed_members[0]
+    if captured_text[reviewed.value_start : reviewed.value_end] != "false":
+        raise PatternError(
+            f"{source}: entry {source_key!r} reviewed mark must be the JSON boolean false"
+        )
+    rendered = (
+        captured_text[: reviewed.value_start]
+        + "true"
+        + captured_text[reviewed.value_end :]
+    )
+    expected = dict(before)
+    try:
+        expected[source_key] = replace(before[source_key], reviewed=True)
+    except KeyError as exc:
+        raise PatternError(f"{source}: no pattern-store entry for {source_key!r}") from exc
+    if load_store_text(rendered, source=source) != expected:
+        raise PatternError(
+            f"{source}: surgical reviewed update did not preserve the parsed pattern store"
+        )
+    return rendered
+
+
+def _save_store_unlocked(path: Path, store: Mapping[str, PatternSet]) -> None:
+    """Render and atomically replace a store whose caller owns the transaction."""
+    atomic_write_text(Path(path), render_store(store))
+
+
+def save_store(path: Path, store: Mapping[str, PatternSet]) -> None:
+    """Write a complete pattern store under its path lock.
+
+    The lock makes one direct replacement indivisible with another cooperative
+    writer. A read-modify-write caller must hold the same lock across its
+    preceding :func:`load_store` and call :func:`save_store_under_lock` instead;
+    locking only this final write cannot protect a stale mapping loaded earlier.
+    """
+    with exclusive_path_lock(Path(path)):
+        save_store_under_lock(path, store)
+
+
+def save_store_under_lock(path: Path, store: Mapping[str, PatternSet]) -> None:
+    """Write a store when the caller already holds this exact path's lock.
+
+    Path locks are not re-entrant. This seam lets a command protect the whole
+    load-modify-save transition, and lets a transaction spanning staging and
+    patterns acquire both locks before changing either file.
+    """
+    _save_store_unlocked(path, store)
 
 
 #: The only kind that steers a sentence. A ``pattern`` document is a conjugation

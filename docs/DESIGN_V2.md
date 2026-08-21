@@ -232,11 +232,14 @@ source, coverage, prompt-provenance, `pattern_set`, and (for schema v4 and newer
 be edited or backfilled onto an older paid v3 answer; deleting, correcting, or
 re-identifying a reviewed row does not change what the model originally
 proposed. The source answer is a proposal, not implicit study-content approval.
-To accept its example text,
-the reviewer adds `example_authority: staging-review` under that record's
-`source.raw_fields`; promotion replaces the sentinel with fingerprints of the
-exact Japanese sentences reviewed. Merely promoting a row does not grant that
-authority.
+To accept its example text, the reviewer checks that row in
+`janki review-panel`; the panel immediately writes fingerprints of the exact
+Japanese sentences displayed. The manual equivalent is to add
+`example_authority: staging-review` under that record's `source.raw_fields`,
+which promotion then replaces with the same sentence fingerprints. The
+panel's separate pattern-set checkbox writes only the existing whole-set
+`reviewed` mark in `data/patterns.json`. Merely promoting a row does not grant
+either authority.
 
 **Step 2 — human review, then promote** (`janki promote data/staging/X.yaml`):
 

@@ -7,6 +7,10 @@ source entries have been reviewed.
 
 from __future__ import annotations
 
+import json
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -126,6 +130,86 @@ def test_review_marks_every_named_source_without_losing_store_provenance(
     out = capsys.readouterr().out
     assert "Marked week11.pdf reviewed." in out
     assert "Marked week12.pdf reviewed." in out
+
+
+def test_two_review_commands_cannot_clobber_each_others_decisions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The path lock must cover load, mutation, and save as one transaction.
+
+    Atomic rename alone only protects one write from being torn. Without a
+    lock around the preceding read, both commands load the same old store,
+    each marks its own source, and the writer that finishes last silently
+    erases the other person's review.
+    """
+    first = pattern_set("week11.pdf")
+    second = pattern_set("week12.pdf")
+    root = project(tmp_path, {first.source: first, second.source: second})
+    real_atomic_write = patterns_module.atomic_write_text
+    first_in_writer = threading.Event()
+    release_first = threading.Event()
+    second_done = threading.Event()
+    results: dict[str, int] = {}
+
+    def held_write(path: Path, text: str) -> None:
+        payload = json.loads(text)
+        if (
+            payload[first.source]["reviewed"] is True
+            and payload[second.source]["reviewed"] is False
+            and not first_in_writer.is_set()
+        ):
+            first_in_writer.set()
+            release_first.wait(timeout=2)
+        real_atomic_write(path, text)
+
+    def review(source: str, label: str) -> None:
+        try:
+            results[label] = cli.main(
+                ["--root", str(root), "patterns", "--review", source]
+            )
+        finally:
+            if label == "second":
+                second_done.set()
+
+    monkeypatch.setattr(patterns_module, "atomic_write_text", held_write)
+    first_thread = threading.Thread(target=review, args=(first.source, "first"))
+    second_thread = threading.Thread(target=review, args=(second.source, "second"))
+    first_thread.start()
+    assert first_in_writer.wait(timeout=2)
+    second_thread.start()
+    second_finished_before_release = second_done.wait(timeout=0.1)
+    release_first.set()
+    first_thread.join(timeout=2)
+    second_thread.join(timeout=2)
+
+    assert not first_thread.is_alive() and not second_thread.is_alive()
+    assert not second_finished_before_release
+    assert results == {"first": 0, "second": 0}
+    after = stored(root)
+    assert after[first.source].reviewed is True
+    assert after[second.source].reviewed is True
+
+
+def test_the_already_locked_writer_does_not_reacquire_the_path_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A caller spanning staging and patterns needs a non-reentrant seam."""
+    path = tmp_path / "patterns.json"
+    locks: list[Path] = []
+
+    @contextmanager
+    def observed_lock(target: Path) -> Iterator[None]:
+        locks.append(Path(target))
+        yield
+
+    monkeypatch.setattr(patterns_module, "exclusive_path_lock", observed_lock)
+    entry = pattern_set("week11.pdf")
+
+    patterns_module.save_store_under_lock(path, {entry.source: entry})
+    assert locks == []
+
+    patterns_module.save_store(path, {entry.source: entry})
+    assert locks == [path]
 
 
 def test_an_unknown_review_name_lists_known_sources_and_changes_nothing(

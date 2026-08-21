@@ -8,6 +8,7 @@ annotation, the staging shape — rather than the SDK's.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -1148,6 +1149,74 @@ def test_extract_preserves_reviewed_patterns_but_stages_the_new_rich_answer(
     assert staged[0].usage_notes == "fresh card answer"
     assert meta["pattern_set"]["reviewed"] is False
     assert meta["pattern_set"]["patterns"][0]["template"] == "〜んだ"
+    assert "kept the reviewed patterns" in capsys.readouterr().out
+
+
+def test_extract_reloads_patterns_after_the_paid_call_before_deciding_what_to_replace(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A review completed during the model call is newer than its preflight read.
+
+    The early load still validates the store before money is spent. The
+    decision after the call must use a fresh load under the writer lock, or it
+    replaces that new human decision and also erases unrelated entries added
+    while the call was running.
+    """
+    root = project(tmp_path)
+    pattern_path = root / "data" / "patterns.json"
+    initial = patterns.PatternSet(
+        source="lesson.pdf",
+        kind="lesson",
+        title="Awaiting review",
+        patterns=(patterns.Pattern("〜たことがある", "past experience"),),
+        reviewed=False,
+        prompt_provenance={"request_fingerprint": "original-request"},
+    )
+    patterns.save_store(pattern_path, {initial.source: initial})
+    unrelated = patterns.PatternSet(
+        source="other.pdf",
+        kind="lesson",
+        title="Other lesson",
+        patterns=(patterns.Pattern("〜ながら", "while doing"),),
+        reviewed=True,
+        prompt_provenance={"request_fingerprint": "other-request"},
+    )
+    parsed = extract.candidate_schema()(
+        candidates=[candidate()],
+        document_kind="lesson",
+        document_title="Fresh model answer",
+        patterns=[
+            {
+                "template": "〜んだ",
+                "gloss": "explanation",
+                "examples": ["大変だったんだ。"],
+                "where": "page 1",
+            }
+        ],
+    )
+
+    class ReviewDuringCall(FakeCall):
+        def __call__(self, *args: Any, **kwargs: Any) -> CallResult:
+            current = patterns.load_store(pattern_path)
+            current[initial.source] = replace(current[initial.source], reviewed=True)
+            current[unrelated.source] = unrelated
+            patterns.save_store(pattern_path, current)
+            return super().__call__(*args, **kwargs)
+
+    call = ReviewDuringCall(CallResult(parsed, "end_turn", None))
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", call)
+
+    code = cli.main(
+        ["--root", str(root), "extract", "--yes", str(source_pdf(tmp_path))]
+    )
+
+    assert code == 0
+    after = patterns.load_store(pattern_path)
+    assert after[initial.source].reviewed is True
+    assert after[initial.source].patterns == initial.patterns
+    assert after[unrelated.source] == unrelated
     assert "kept the reviewed patterns" in capsys.readouterr().out
 
 
