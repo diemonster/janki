@@ -1502,6 +1502,34 @@ def _rewrite_staging_unlocked(
     return path
 
 
+def render_staging_update(path: Path, records: Sequence[VocabularyRecord]) -> str:
+    """The text :func:`rewrite_staging` would write, without writing it.
+
+    The workbench needs the same round-trip edit but a different *write*: a
+    compare-and-swap bound to the exact bytes the browser rendered, so an
+    approval or edit from a stale page cannot land on top of someone else's.
+    Splitting render from write lets both callers share one implementation of
+    "change only what changed" instead of growing a second one.
+    """
+    original, _meta = read_staging(path)
+    document = _load_document(path)
+    raw_records = document[_RECORDS_KEY] or []
+    if not (len(raw_records) == len(original) == len(records)):
+        raise StagingError(
+            f"{path} holds {len(raw_records)} row(s) but {len(records)} were given. "
+            "render_staging_update annotates the rows already in a file."
+        )
+    for raw, before, after in zip(raw_records, original, records, strict=True):
+        if not isinstance(raw, MutableMapping):
+            raise StagingError(
+                f"Record in {path} must be a mapping, got {type(raw).__name__}"
+            )
+        _apply_changes(raw, before.to_dict(), after.to_dict())
+    buffer = io.StringIO()
+    _parser().dump(document, buffer)
+    return buffer.getvalue()
+
+
 @_path_locked
 def rewrite_staging(path: Path, records: Sequence[VocabularyRecord]) -> Path:
     """Update rows while preserving review-only YAML under the path lock."""

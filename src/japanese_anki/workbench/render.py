@@ -62,6 +62,11 @@ pre {
 .done { color: GrayText; }
 .warnings { border: 1px solid red; border-radius: .5rem; padding: 1rem; }
 .empty { color: GrayText; }
+.edit { display: grid; gap: .25rem; margin: .5rem 0; }
+.edit label { font-size: .85rem; font-weight: 700; color: GrayText; }
+textarea { font: inherit; width: 100%; padding: .4rem; resize: vertical;
+  background: Canvas; color: CanvasText; border: 1px solid GrayText; border-radius: .25rem; }
+textarea[lang=ja] { font-size: 1.15rem; line-height: 1.9; }
 .decision { display: flex; gap: .75rem; align-items: flex-start; cursor: pointer;
   padding: .75rem; border: 1px solid GrayText; border-radius: .35rem; margin-top: .75rem; }
 input[type=checkbox] { inline-size: 1.4rem; block-size: 1.4rem; flex: none; }
@@ -200,6 +205,35 @@ def _saved_where(root: Path | None) -> str:
 # --- one source, opened ------------------------------------------------------
 
 
+def _textarea(name: str, label: str, value: str, *, rows: int = 2,
+              japanese: bool = False) -> str:
+    lang = ' lang="ja"' if japanese else ""
+    ident = html.escape(name, quote=True)
+    return (
+        f'<p class=edit><label for="{ident}">{_escaped(label)}</label>'
+        f'<textarea id="{ident}" name="{ident}" rows={rows}{lang}>'
+        f"{_escaped(value)}</textarea></p>"
+    )
+
+
+def _example_editor(example: Any, card: int, index: int) -> str:
+    """The five example fields a person may retype.
+
+    Japanese is editable on purpose — correcting a mis-transcribed sentence is
+    the point — and doing so voids that card's approval by fingerprint, so a
+    tick can never end up covering text nobody read.
+    """
+    return "".join(
+        [
+            _textarea(f"ej{card}_{index}", "Japanese", example.japanese, japanese=True),
+            _textarea(f"ef{card}_{index}", "Furigana", example.furigana, japanese=True),
+            _textarea(f"ee{card}_{index}", "English", example.english),
+            _textarea(f"er{card}_{index}", "Romaji", example.romaji, rows=1),
+            _textarea(f"eg{card}_{index}", "Register", example.register, rows=1),
+        ]
+    )
+
+
 def _example_html(example: Any, index: int) -> str:
     register = getattr(example, "register", "") or ""
     label = {"polite": "Polite example", "casual": "Casual example"}.get(
@@ -256,7 +290,9 @@ def _meaning_panels(card: Any) -> str:
     )
 
 
-def _card_html(card: Any, *, actionable: bool = False) -> str:
+def _card_html(
+    card: Any, *, actionable: bool = False, editing: bool = False, index: int = 0
+) -> str:
     record = card.record
     parts = [
         '<article class="card">',
@@ -270,14 +306,37 @@ def _card_html(card: Any, *, actionable: bool = False) -> str:
             f'<p class="status problem">Held for a reading decision: '
             f"{_escaped(card.hold_reason)}</p>"
         )
-    parts.append(_meaning_panels(card))
+    if editing:
+        parts.append(
+            _textarea(
+                f"m{index}",
+                "Meaning in this lesson (one per line)",
+                "\n".join(card.record.meanings),
+                rows=3,
+            )
+        )
+    else:
+        parts.append(_meaning_panels(card))
     if record.examples:
         parts.append("<h4>Japanese examples</h4>")
-        parts.extend(
-            _example_html(example, number)
-            for number, example in enumerate(record.examples, start=1)
+        if editing:
+            for number, example in enumerate(record.examples):
+                parts.append(
+                    f'<article class="example"><h5>Example {number + 1}</h5>'
+                    + _example_editor(example, index, number)
+                    + "</article>"
+                )
+        else:
+            parts.extend(
+                _example_html(example, number)
+                for number, example in enumerate(record.examples, start=1)
+            )
+    if editing:
+        parts.append("<h4>How to use it</h4>")
+        parts.append(
+            _textarea(f"u{index}", "Usage note", record.usage_notes, rows=3)
         )
-    if record.usage_notes:
+    elif record.usage_notes:
         parts.append(f"<h4>How to use it</h4><p>{_escaped(record.usage_notes)}</p>")
     if actionable and card.needs_example_review:
         parts.append(_checkbox_html(card))
@@ -395,7 +454,8 @@ def render_source(
     csrf: str = "",
     staging_snapshot: str = "",
     patterns_snapshot: str = "",
-    saved: tuple[int, bool] | None = None,
+    saved: tuple[int, bool, int] | None = None,
+    editing: bool = False,
 ) -> str:
     """One source's cards and grammar.
 
@@ -405,9 +465,16 @@ def render_source(
     prefix = f"/{html.escape(token, quote=True)}" if token else ""
     journey = detail.journey
     waiting = sum(1 for card in detail.cards if card.needs_example_review)
-    actionable = bool(csrf) and (
-        waiting or (not detail.pattern_reviewed and detail.can_review_grammar)
+    # Editing and approving are different acts, so they are different views.
+    # One form carrying both would let a stray click approve sentences the
+    # person was only correcting.
+    editing = editing and bool(csrf) and bool(detail.cards)
+    actionable = (
+        bool(csrf)
+        and not editing
+        and (waiting or (not detail.pattern_reviewed and detail.can_review_grammar))
     )
+    source_path = f"{prefix}/source/{quote(journey.source, safe='')}"
     body = [
         "<!doctype html><html lang=en><head><meta charset=utf-8>",
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
@@ -426,8 +493,21 @@ def render_source(
             f"<p class=counts>{waiting} of {len(detail.cards)} cards still need "
             "their Japanese examples approved.</p>"
         )
+    if editing:
+        body.append(
+            f'<form method=post action="{html.escape(source_path + "/edit", quote=True)}">'
+            '<input type=hidden name=action value="edit">'
+            f'<input type=hidden name=csrf value="{html.escape(csrf, quote=True)}">'
+            "<input type=hidden name=staging_snapshot "
+            f'value="{html.escape(staging_snapshot, quote=True)}">'
+        )
+    elif bool(csrf) and detail.cards:
+        body.append(
+            f'<p><a href="{html.escape(source_path + "?edit=1", quote=True)}">'
+            "Correct these cards</a></p>"
+        )
     if actionable:
-        action = f"{prefix}/source/{quote(journey.source, safe='')}/approve"
+        action = f"{source_path}/approve"
         body.append(f'<form method=post action="{html.escape(action, quote=True)}">')
         body.append(
             '<input type=hidden name=action value="save">'
@@ -439,7 +519,10 @@ def render_source(
         )
     if not detail.cards:
         body.append("<p class=empty>This source proposed no word cards.</p>")
-    body.extend(_card_html(card, actionable=actionable) for card in detail.cards)
+    body.extend(
+        _card_html(card, actionable=actionable, editing=editing, index=index)
+        for index, card in enumerate(detail.cards)
+    )
     body.append(_grammar_html(detail, actionable=actionable))
     if actionable:
         # One button, named for what it does. There is deliberately no
@@ -449,12 +532,24 @@ def render_source(
             '<div class="submit"><button type=submit>Save the approvals I '
             "ticked</button></div></form>"
         )
+    if editing:
+        # `type=reset` is undo-before-save with no JavaScript and no server
+        # round trip: it restores every field to what this page was rendered
+        # with. Leaving without saving writes nothing at all.
+        body.append(
+            '<div class="submit"><button type=submit>Save these corrections'
+            "</button> <button type=reset>Undo my changes</button> "
+            f'<a href="{html.escape(source_path, quote=True)}">Leave without '
+            "saving</a></div></form>"
+        )
     body.append("</main></body></html>")
     return "".join(body)
 
 
-def _saved_banner(records: int, grammar: bool) -> str:
+def _saved_banner(records: int, grammar: bool, edited: int = 0) -> str:
     saved = []
+    if edited:
+        saved.append(f"corrections to {edited} card{'s' if edited != 1 else ''}")
     if records:
         saved.append(f"{records} card{'s' if records != 1 else ''}")
     if grammar:

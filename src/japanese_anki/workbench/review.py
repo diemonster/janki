@@ -55,6 +55,7 @@ __all__ = [
     "PartialReviewError",
     "ReviewOutcome",
     "ReviewPanel",
+    "bound_replace",
     "ReviewPanelError",
     "StaleReviewError",
     "parse_review_form",
@@ -106,7 +107,7 @@ def _fingerprint(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
-def _bound_replace(path: Path, text: str, snapshot: bytes, *, label: str) -> None:
+def bound_replace(path: Path, text: str, snapshot: bytes, *, label: str) -> None:
     """CAS one rendered snapshot and classify a final-seam interference safely."""
     intended = text.encode("utf-8")
     try:
@@ -540,7 +541,7 @@ class ReviewPanel:
             saved = ReviewOutcome()
             if staging_text is not None:
                 try:
-                    _bound_replace(
+                    bound_replace(
                         self.staging_path,
                         staging_text,
                         self.staging_bytes,
@@ -561,7 +562,7 @@ class ReviewPanel:
             # erase a concurrent human edit made before a later failure.
             if patterns_text is not None:
                 try:
-                    _bound_replace(
+                    bound_replace(
                         self.patterns_path,
                         patterns_text,
                         self.patterns_bytes,

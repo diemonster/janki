@@ -11,6 +11,7 @@ Nothing here starts a browser or touches the network beyond 127.0.0.1.
 
 from __future__ import annotations
 
+import difflib
 import http.client
 import json
 import re
@@ -1001,6 +1002,311 @@ def test_two_concurrent_approvals_land_exactly_once(tmp_path: Path) -> None:
         cards = {c.record.id: c for c in session.detail("table.pdf").cards}
         assert cards["word:走る:はしる"].authority == "existing"
         assert cards["word:食べる:たべる"].authority == "available"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+# --- W2c: correcting a card's human-owned fields ----------------------------
+
+
+def _edit_url(session: WorkbenchSession, name: str) -> str:
+    return f"{_source_url(session, name)}?edit=1"
+
+
+def _submit_edit(
+    server: Any,
+    session: WorkbenchSession,
+    source: str,
+    fields: dict[str, str],
+    edits: Sequence[tuple[str, str]],
+    *,
+    headers: dict[str, str] | None = None,
+) -> tuple[int, dict[str, str], bytes]:
+    return _request(
+        server,
+        "POST",
+        f"/{session.token}/source/{quote(source, safe='')}/edit",
+        headers={
+            "Host": server.expected_host,
+            "Content-Type": "application/x-www-form-urlencoded",
+            **(headers or {}),
+        },
+        body=urlencode(list(fields.items()) + list(edits)).encode(),
+    )
+
+
+def test_correcting_a_gloss_changes_only_that_line(tmp_path: Path) -> None:
+    """W2c's ships-when: every byte you did not edit survives unchanged."""
+    session = _staged(tmp_path)
+    staging_path = tmp_path / "staging" / "table.pdf.yaml"
+    before = staging_path.read_text(encoding="utf-8").split("\n")
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
+        status, headers, _body = _submit_edit(
+            server,
+            session,
+            "table.pdf",
+            _form_fields(page),
+            [("ee0_0", "I jog through the park every morning.")],
+        )
+        assert status == 303
+        assert "edited=1" in headers["location"]
+
+        after = staging_path.read_text(encoding="utf-8").split("\n")
+        changed = [
+            line
+            for line in difflib.unified_diff(before, after, lineterm="", n=0)
+            if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
+        ]
+        assert changed == [
+            "-    english: I run through the park every morning.",
+            "+    english: I jog through the park every morning.",
+        ], changed
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_correcting_the_japanese_voids_that_cards_approval(tmp_path: Path) -> None:
+    """Approval binds the exact sentence by fingerprint, so rewriting the
+    sentence makes the approval stop covering it. A tick must never end up
+    standing over text nobody read."""
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        # Approve through the workbench, which binds each sentence's exact text
+        # by fingerprint — not the hand-typed sentinel, which is a blanket mark
+        # (see the test below).
+        _status, _headers, page = _request(
+            server, "GET", _source_url(session, "table.pdf")
+        )
+        _approve(
+            server,
+            session,
+            "table.pdf",
+            fields=_form_fields(page),
+            records=["word:走る:はしる", "word:食べる:たべる"],
+        )
+        assert session.detail("table.pdf").cards[0].authority == "existing"
+
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
+        status, _headers, _body = _submit_edit(
+            server,
+            session,
+            "table.pdf",
+            _form_fields(page),
+            [("ej0_0", "毎朝、公園を走っています。")],
+        )
+        assert status == 303
+
+        cards = {c.record.id: c for c in session.detail("table.pdf").cards}
+        assert cards["word:走る:はしる"].authority == "stale"
+        # ...and only that card. The others were never touched.
+        assert cards["word:食べる:たべる"].authority == "existing"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_correcting_the_english_leaves_approval_standing(tmp_path: Path) -> None:
+    """Approval never covered the English, so changing it changes nothing
+    about what a person approved."""
+    session = _staged(tmp_path)
+    _approve_examples(tmp_path, "table.pdf.yaml")
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
+        _submit_edit(
+            server,
+            session,
+            "table.pdf",
+            _form_fields(page),
+            [("ee0_0", "I jog through the park each morning.")],
+        )
+        assert session.detail("table.pdf").cards[0].authority == "existing"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_source_evidence_has_no_edit_field(tmp_path: Path) -> None:
+    """The page, the source sentence and the inclusion reason are a record of
+    what happened. A form that let someone retype them would let them retype
+    history, so no control exists for them at all."""
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
+        text = page.decode()
+        names = set(re.findall(r'<textarea id="(\w+)"', text))
+        # Only the allowlisted prefixes: meanings, usage, and the five example
+        # fields. Nothing addressing source evidence or the accounting block.
+        assert names
+        assert all(re.match(r"\A(m|u|ej|ef|er|ee|eg)\d", name) for name in names), names
+        assert "inclusion_reason" not in text.replace("Why it was included", "")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_an_unknown_edit_field_is_refused_not_ignored(tmp_path: Path) -> None:
+    """Ignoring it would report a saved edit that never happened, and would be
+    the seam through which an uneditable field became editable."""
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
+        status, _headers, body = _submit_edit(
+            server,
+            session,
+            "table.pdf",
+            _form_fields(page),
+            [("inclusion_reason0", "because I said so")],
+        )
+        assert status == 400
+        assert b"Unknown edit field" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_an_edit_naming_a_card_that_is_not_there_is_refused(
+    tmp_path: Path,
+) -> None:
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
+        status, _headers, _body = _submit_edit(
+            server, session, "table.pdf", _form_fields(page), [("m99", "nope")]
+        )
+        assert status == 400
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_an_edit_without_the_session_csrf_is_refused(tmp_path: Path) -> None:
+    session = _staged(tmp_path)
+    staging_path = tmp_path / "staging" / "table.pdf.yaml"
+    before = staging_path.read_bytes()
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
+        fields = _form_fields(page)
+        fields["csrf"] = "forged"
+        status, _headers, _body = _submit_edit(
+            server, session, "table.pdf", fields, [("ee0_0", "nope")]
+        )
+        assert status == 403
+        assert staging_path.read_bytes() == before
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_an_edit_from_a_stale_page_is_refused_whole(tmp_path: Path) -> None:
+    session = _staged(tmp_path)
+    staging_path = tmp_path / "staging" / "table.pdf.yaml"
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
+        fields = _form_fields(page)
+        staging_path.write_bytes(
+            staging_path.read_bytes() + b"\n# a concurrent human edit\n"
+        )
+        changed = staging_path.read_bytes()
+
+        status, _headers, body = _submit_edit(
+            server, session, "table.pdf", fields, [("ee0_0", "nope")]
+        )
+        assert status == 409
+        assert b"Nothing was written" in body
+        assert staging_path.read_bytes() == changed
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_submitting_no_change_writes_nothing(tmp_path: Path) -> None:
+    """Rewriting an identical file would still touch its mtime and its Git
+    status for no reason, and would claim a save that changed nothing."""
+    session = _staged(tmp_path)
+    staging_path = tmp_path / "staging" / "table.pdf.yaml"
+    before = staging_path.read_bytes()
+    before_mtime = staging_path.stat().st_mtime_ns
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
+        status, headers, _body = _submit_edit(
+            server, session, "table.pdf", _form_fields(page), []
+        )
+        assert status == 303
+        assert "edited=0" in headers["location"]
+        assert staging_path.read_bytes() == before
+        assert staging_path.stat().st_mtime_ns == before_mtime
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_edit_mode_offers_undo_and_is_separate_from_approving(
+    tmp_path: Path,
+) -> None:
+    """Correcting and approving are different acts. One form carrying both
+    would let a stray click approve sentences someone was only fixing."""
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, edit_page = _request(
+            server, "GET", _edit_url(session, "table.pdf")
+        )
+        _status, _headers, read_page = _request(
+            server, "GET", _source_url(session, "table.pdf")
+        )
+        edit_text, read_text = edit_page.decode(), read_page.decode()
+
+        # Undo before save, with no JavaScript and no server round trip.
+        assert "type=reset" in edit_text
+        assert "Leave without saving" in edit_text
+        # The edit view offers no approval checkbox...
+        assert 'name=record' not in edit_text
+        assert "Approve these Japanese example sentences" not in edit_text
+        # ...and the read view offers no edit field.
+        assert "<textarea" not in read_text
+        assert "Approve these Japanese example sentences" in read_text
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_the_hand_typed_sentinel_is_a_blanket_mark_not_a_sentence_binding(
+    tmp_path: Path,
+) -> None:
+    """A trap worth naming. `example_authority: staging-review`, typed into
+    YAML by hand, is not bound to any particular sentence — so editing the
+    Japanese afterwards does *not* void it, and `promote` will later bind
+    whatever sentences are in the file at that moment. The workbench's own
+    approval writes per-sentence fingerprints instead, which is why editing
+    through the tab does void it. Anyone hand-editing YAML should know these
+    two marks are not interchangeable."""
+    session = _staged(tmp_path)
+    _approve_examples(tmp_path, "table.pdf.yaml")
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
+        _submit_edit(
+            server,
+            session,
+            "table.pdf",
+            _form_fields(page),
+            [("ej0_0", "まったく違う文。")],
+        )
+        card = session.detail("table.pdf").cards[0]
+        assert card.record.examples[0].japanese == "まったく違う文。"
+        assert card.authority == "existing"
     finally:
         server.shutdown()
         server.server_close()

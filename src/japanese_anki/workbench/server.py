@@ -32,9 +32,9 @@ import secrets
 import sys
 import webbrowser
 from dataclasses import dataclass
-from typing import Any
 from urllib.parse import parse_qsl, quote, unquote
 
+from japanese_anki import staging
 from japanese_anki.application import SourceJourney, source_detail, source_journeys
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
@@ -44,7 +44,7 @@ from japanese_anki.localhttp import (
     LocalOnlyServer,
     bind_loopback,
 )
-from japanese_anki.workbench import review
+from japanese_anki.workbench import edit, review
 from japanese_anki.workbench.render import STYLE, render_dashboard, render_source
 
 __all__ = ["WorkbenchSession", "make_server", "serve"]
@@ -131,7 +131,11 @@ class _WorkbenchHandler(LocalOnlyHandler):
             return None
         return "/" + "/".join(parts[2:])
 
-    def _saved_banner(self) -> tuple[int, bool] | None:
+    def _wants_edit(self) -> bool:
+        query = self.path.split("?", 1)
+        return len(query) == 2 and dict(parse_qsl(query[1])).get("edit") == "1"
+
+    def _saved_banner(self) -> tuple[int, bool, int] | None:
         """The post-redirect-get result, if this is one. Display only."""
         query = self.path.split("?", 1)
         if len(query) != 2:
@@ -145,7 +149,11 @@ class _WorkbenchHandler(LocalOnlyHandler):
             return None
         # Clamped: this is a self-reported number in a URL a person can edit,
         # so it may say what it likes — it never means anything was written.
-        return max(records, 0), fields.get("grammar") == "1"
+        try:
+            edited = int(fields.get("edited", "0"))
+        except ValueError:
+            edited = 0
+        return max(records, 0), fields.get("grammar") == "1", max(edited, 0)
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         if not self._request_is_local():
@@ -193,6 +201,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                     staging_snapshot=panel.staging_fingerprint if panel else "",
                     patterns_snapshot=panel.patterns_fingerprint if panel else "",
                     saved=self._saved_banner(),
+                    editing=self._wants_edit(),
                 ),
             )
             return
@@ -242,13 +251,16 @@ class _WorkbenchHandler(LocalOnlyHandler):
             return
         rest = route[len(_SOURCE_PREFIX) :]
         name, _, action = rest.rpartition("/")
-        if action != "approve" or not name:
+        if action not in {"approve", "edit"} or not name:
             self._error(404, "No such workbench action.")
             return
         body = self._read_body()
         if body is None:
             return
-        self._approve(unquote(name), body)
+        if action == "approve":
+            self._approve(unquote(name), body)
+        else:
+            self._edit(unquote(name), body)
 
     def _approve(self, source: str, body: bytes) -> None:
         session = self.server.session
@@ -294,14 +306,81 @@ class _WorkbenchHandler(LocalOnlyHandler):
         except JankiError as exc:
             self._error(500, f"{exc}. Nothing was proven written.")
         else:
-            self._redirect_to_source(source, outcome)
+            self._redirect_to_source(
+                source,
+                saved=len(outcome.accepted_record_ids),
+                grammar=outcome.pattern_reviewed,
+            )
 
-    def _redirect_to_source(self, source: str, outcome: Any) -> None:
-        """Post/redirect/get, so a reload cannot resubmit an approval."""
+    def _edit(self, source: str, body: bytes) -> None:
+        session = self.server.session
+        try:
+            pairs = parse_qsl(
+                body.decode("utf-8", errors="strict"),
+                keep_blank_values=True,
+                strict_parsing=True,
+                encoding="utf-8",
+                errors="strict",
+                max_num_fields=4096,
+            )
+            submission = edit.parse_edit_form(pairs)
+        except (UnicodeError, ValueError) as exc:
+            self._error(400, f"The submitted form is malformed: {exc}")
+            return
+        except edit.EditError as exc:
+            self._error(400, str(exc))
+            return
+        if not secrets.compare_digest(submission.csrf, session.csrf_token):
+            self._error(403, "That form did not come from this workbench session.")
+            return
+        panel = session.panel(source)
+        if panel is None:
+            self._error(404, "No such source.")
+            return
+        if submission.staging_snapshot != panel.staging_fingerprint:
+            self._error(
+                409,
+                "This source changed after the page was rendered. Nothing was "
+                "written. Reload and edit the current cards.",
+            )
+            return
+        try:
+            updated = edit.apply_edits(panel.records, submission)
+        except edit.EditError as exc:
+            self._error(400, str(exc))
+            return
+        changed = edit.changed_records(panel.records, updated)
+        if not changed:
+            # Nothing to write, so nothing is written. Rewriting an identical
+            # file would still touch its mtime and its Git status for no
+            # reason, and would report a save that changed nothing.
+            self._redirect_to_source(source, saved=0, grammar=False, edited=0)
+            return
+        try:
+            text = staging.render_staging_update(panel.staging_path, updated)
+            review.bound_replace(
+                panel.staging_path,
+                text,
+                panel.staging_bytes,
+                label="staging file",
+            )
+        except JankiError as exc:
+            self._error(409, f"{exc}. Nothing was written by this attempt.")
+            return
+        self._redirect_to_source(source, saved=0, grammar=False, edited=len(changed))
+
+    def _redirect_to_source(
+        self,
+        source: str,
+        *,
+        saved: int = 0,
+        grammar: bool = False,
+        edited: int = 0,
+    ) -> None:
+        """Post/redirect/get, so a reload cannot resubmit a write."""
         target = (
             f"/{self.server.session.token}/source/{quote(source, safe='')}"
-            f"?saved={len(outcome.accepted_record_ids)}"
-            f"&grammar={'1' if outcome.pattern_reviewed else '0'}"
+            f"?saved={saved}&grammar={'1' if grammar else '0'}&edited={edited}"
         )
         self.send_response(303)
         self.send_header("Location", target)
