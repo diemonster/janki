@@ -233,7 +233,7 @@ be edited or backfilled onto an older paid v3 answer; deleting, correcting, or
 re-identifying a reviewed row does not change what the model originally
 proposed. The source answer is a proposal, not implicit study-content approval.
 To accept its example text, the reviewer checks that row in
-`janki review-panel`; the panel immediately writes fingerprints of the exact
+`janki workbench`; it immediately writes fingerprints of the exact
 Japanese sentences displayed. The manual equivalent is to add
 `example_authority: staging-review` under that record's `source.raw_fields`,
 which promotion then replaces with the same sentence fingerprints. The

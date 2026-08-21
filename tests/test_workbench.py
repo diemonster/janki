@@ -14,6 +14,7 @@ from __future__ import annotations
 import http.client
 import json
 import re
+import socket
 import threading
 from collections.abc import Sequence
 from pathlib import Path
@@ -249,8 +250,7 @@ def test_the_grammar_badge_is_visible_beside_the_card_state(tmp_path: Path) -> N
 def test_a_promoted_source_is_shown_without_a_review_command(
     tmp_path: Path,
 ) -> None:
-    """It has no live staging file, so offering `janki review-panel <file>`
-    would print a command that fails."""
+    """It has no live staging file, so it has no cards left to review."""
     journeys = [
         SourceJourney(
             source="week-8.pdf",
@@ -262,6 +262,7 @@ def test_a_promoted_source_is_shown_without_a_review_command(
     html = _render(journeys)
 
     assert ADDED in html
+    # No stale instruction to run a command that no longer exists.
     assert "review-panel" not in html
 
 
@@ -883,6 +884,123 @@ def test_the_checkbox_states_what_it_does_not_approve(tmp_path: Path) -> None:
         assert "usage note" in text
         # No single control that would blur separate decisions together.
         assert "Approve all" not in text
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+# --- boundary cases inherited from the deleted panel's adversarial suite ----
+
+
+def test_a_null_origin_is_refused(tmp_path: Path) -> None:
+    """Chrome serializes a same-origin form POST as `Origin: null` under
+    no-referrer, which is why the boundary sends `Referrer-Policy:
+    same-origin` rather than a stricter one. `null` itself is not this
+    origin and must still be refused."""
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        status, _headers, _body = _request(
+            server,
+            "GET",
+            _source_url(session, "table.pdf"),
+            headers={"Host": server.expected_host, "Origin": "null"},
+        )
+        assert status == 403
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_duplicate_authority_headers_are_refused(tmp_path: Path) -> None:
+    """Two `Host` headers let a proxy and this server disagree about which
+    authority the request was for. Exactly one is required."""
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        port = server.server_address[1]
+        raw = (
+            f"GET /{session.token}/ HTTP/1.1\r\n"
+            f"Host: {server.expected_host}\r\n"
+            f"Host: {server.expected_host}\r\n"
+            "Connection: close\r\n\r\n"
+        ).encode()
+        with socket.create_connection(("127.0.0.1", port), timeout=3) as client:
+            client.sendall(raw)
+            response = client.recv(4096)
+        assert b" 403 " in response.split(b"\r\n", 1)[0]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_duplicated_form_field_is_refused(tmp_path: Path) -> None:
+    """Two `csrf` values would let a submission carry both a valid token and a
+    forged one and hope the server reads the right index."""
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(
+            server, "GET", _source_url(session, "table.pdf")
+        )
+        fields = _form_fields(page)
+        pairs = list(fields.items()) + [("csrf", "second-value")]
+        status, _headers, _body = _request(
+            server,
+            "POST",
+            f"/{session.token}/source/table.pdf/approve",
+            headers={
+                "Host": server.expected_host,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body=urlencode(pairs).encode(),
+        )
+        assert status == 400
+        assert session.detail("table.pdf").cards[0].authority == "available"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_two_concurrent_approvals_land_exactly_once(tmp_path: Path) -> None:
+    """The workbench opens a *fresh* panel per request, so the panel's own
+    in-process submission lock cannot serialize two requests the way it did for
+    the single long-lived page. What protects the file here is the advisory
+    lock plus the exact-byte snapshot: whichever request loses the race finds
+    the bytes changed and is refused, rather than applying its approval on top
+    of the other's write."""
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(
+            server, "GET", _source_url(session, "table.pdf")
+        )
+        fields = _form_fields(page)
+        results: list[int] = []
+        barrier = threading.Barrier(2)
+
+        def submit() -> None:
+            barrier.wait()
+            status, _h, _b = _approve(
+                server,
+                session,
+                "table.pdf",
+                fields=fields,
+                records=["word:走る:はしる"],
+            )
+            results.append(status)
+
+        threads = [threading.Thread(target=submit) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+
+        assert sorted(results) == [303, 409], results
+        # And exactly one approval is on disk.
+        cards = {c.record.id: c for c in session.detail("table.pdf").cards}
+        assert cards["word:走る:はしる"].authority == "existing"
+        assert cards["word:食べる:たべる"].authority == "available"
     finally:
         server.shutdown()
         server.server_close()

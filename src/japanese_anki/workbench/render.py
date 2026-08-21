@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from japanese_anki.application import ADDED, SourceJourney
+from japanese_anki.application import SourceJourney
 
 __all__ = ["STYLE", "render_dashboard", "render_source"]
 
@@ -138,15 +138,6 @@ def _source_html(journey: SourceJourney, prefix: str = "") -> str:
     parts.append(
         f'<p class=next><b>Next:</b> {_escaped(journey.next_action)}</p>'
     )
-    if journey.staging_path is not None and journey.state != ADDED:
-        # Approval still lives in the one-shot panel. Print the command rather
-        # than linking: a link this page could follow would be this page taking
-        # an action, and W1.2 is a view.
-        parts.append(
-            "<details><summary>How to review this source</summary>"
-            "<pre>janki review-panel "
-            f"{_escaped(journey.staging_path.name)}</pre></details>"
-        )
     detail = " ".join(filter(None, (journey.detail, journey.grammar_detail)))
     if detail:
         parts.append(

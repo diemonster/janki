@@ -18,9 +18,12 @@ server on every other port, so any unrelated local service would receive this
 session's secret. A path segment is scoped to the request it is written on, and
 `Referrer-Policy: same-origin` keeps it out of cross-origin referrers.
 
-Read-only, in this milestone. There is no POST route at all — not a disabled
-one, not a guarded one. Approval still happens in `janki review-panel`, which
-this page links to; W2 folds that in.
+W2b added the one write route: approving the exact Japanese examples on a
+card, and marking a lesson's grammar read. Both go through the same
+transaction the deleted one-shot panel used (`workbench.review`), so the
+guarantees a browser gets are the ones that were reviewed adversarially
+there — an exact-byte snapshot, a compare-and-swap write, and a refusal
+that leaves the file untouched rather than half-applied.
 """
 
 from __future__ import annotations
@@ -32,7 +35,6 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import parse_qsl, quote, unquote
 
-from japanese_anki import review_panel
 from japanese_anki.application import SourceJourney, source_detail, source_journeys
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
@@ -42,6 +44,7 @@ from japanese_anki.localhttp import (
     LocalOnlyServer,
     bind_loopback,
 )
+from japanese_anki.workbench import review
 from japanese_anki.workbench.render import STYLE, render_dashboard, render_source
 
 __all__ = ["WorkbenchSession", "make_server", "serve"]
@@ -83,7 +86,7 @@ class WorkbenchSession:
     def detail(self, source: str):
         return source_detail(self.config, source)
 
-    def panel(self, source: str) -> review_panel.ReviewPanel | None:
+    def panel(self, source: str) -> review.ReviewPanel | None:
         """A freshly opened review panel for one source, or None.
 
         Opened per request, never cached. The panel captures the exact
@@ -95,7 +98,7 @@ class WorkbenchSession:
         if detail is None or detail.journey.staging_path is None:
             return None
         try:
-            return review_panel.ReviewPanel.open(
+            return review.ReviewPanel.open(
                 detail.journey.staging_path,
                 staging_dir=self.config.staging_dir,
                 patterns_path=self.config.patterns_file,
@@ -250,8 +253,8 @@ class _WorkbenchHandler(LocalOnlyHandler):
     def _approve(self, source: str, body: bytes) -> None:
         session = self.server.session
         try:
-            form = review_panel.parse_review_form(body)
-        except review_panel.PanelRequestError as exc:
+            form = review.parse_review_form(body)
+        except review.PanelRequestError as exc:
             self._error(400, str(exc))
             return
         # Authority first, and constant-time: a form that cannot prove it came
@@ -281,11 +284,11 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 record_ids=form.get("record", []),
                 review_patterns=bool(form.get("patterns", [])),
             )
-        except review_panel.PanelRequestError as exc:
+        except review.PanelRequestError as exc:
             self._error(400, str(exc))
-        except review_panel.StaleReviewError as exc:
+        except review.StaleReviewError as exc:
             self._error(409, f"{exc}. Nothing was written by this attempt.")
-        except review_panel.PartialReviewError as exc:
+        except review.PartialReviewError as exc:
             # Never "nothing changed": say exactly which file landed.
             self._error(409, str(exc))
         except JankiError as exc:

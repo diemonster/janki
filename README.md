@@ -109,15 +109,18 @@ unique. Janki refuses the collision before it calls a model; give each source a
 unique name before you put it in the inbox.
 
 Nothing reaches your collection yet. Open the staging file, fix what is wrong,
-and delete what is not worth a card. For the final human approvals, use the
-small localhost panel:
+and delete what is not worth a card. For the final human approvals, open the
+workbench:
 
 ```bash
-janki review-panel data/staging/lesson-3.pdf.yaml
+janki workbench
 ```
 
-It shows every proposed card and the matching current pattern set without
-making a model call or loading any remote asset. Checking a card immediately
+It lists every source and what each is waiting for, and opening one shows its
+proposed cards beside their source evidence. The address it prints carries
+that session's key: the page is served only to this computer, and only to a
+request that presents the key. It makes no model call and loads no remote
+asset. Checking a card immediately
 binds approval to the exact Japanese examples displayed; checking the pattern
 set marks that complete current set reviewed. Unchecked items are unchanged,
 and the panel never edits content or promotes records. Meanings and other card
@@ -236,7 +239,7 @@ own collection is the newer side. Details and the measurements behind them:
 | Command | What it does |
 | --- | --- |
 | `janki extract FILE...` | Read each PDF or photo once into rich staged cards and unreviewed patterns |
-| `janki review-panel FILE.yaml` | Open a local page for explicit staged-example and pattern approvals |
+| `janki workbench` | Open a local page showing every source's state, and approve staged examples and grammar |
 | `janki patterns [--review DOCUMENT]` | List or review patterns already emitted by `extract` |
 | `janki import-shirabe FILE.csv` | Import a Shirabe Jisho export |
 | `janki import-jpdb --deck NAME` | Import a jpdb deck (`--all-decks` for every one) |

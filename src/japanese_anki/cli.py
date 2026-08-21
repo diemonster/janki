@@ -5,7 +5,6 @@ import dataclasses
 import hashlib
 import json
 import sys
-import webbrowser
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import ExitStack
@@ -28,7 +27,6 @@ from japanese_anki import (
     promote,
     prompts,
     repairs,
-    review_panel,
     status,
     workbench,
 )
@@ -4301,28 +4299,6 @@ def command_patterns(args: argparse.Namespace) -> int:
     return 0
 
 
-def command_review_panel(args: argparse.Namespace) -> int:
-    """Open one explicit, localhost-only extraction review session."""
-    config = _load_config(args)
-    panel = review_panel.ReviewPanel.open(
-        args.file,
-        staging_dir=config.staging_dir,
-        patterns_path=config.patterns_file,
-    )
-    server = review_panel.make_server(panel)
-    url = f"http://{server.expected_host}/"
-    print(f"Review panel: {url}", flush=True)
-    print("The panel exits after one terminal submission; Ctrl-C stops it.", flush=True)
-    if not args.no_open and not webbrowser.open(url):
-        print("warning: could not open a browser; copy the URL above", file=sys.stderr)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\nReview panel stopped. Reopen it to confirm recorded decisions.")
-    finally:
-        server.server_close()
-    return 0
-
 
 def command_workbench(args: argparse.Namespace) -> int:
     """Open the read-only workbench dashboard over this repository."""
@@ -5049,22 +5025,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     patterns_parser.set_defaults(handler=command_patterns)
 
-    review_panel_parser = subparsers.add_parser(
-        "review-panel",
-        help="Open a localhost page for staged example and pattern approvals.",
-    )
-    review_panel_parser.add_argument(
-        "file",
-        type=_path,
-        metavar="FILE",
-        help="One active rich-extraction staging file to review.",
-    )
-    review_panel_parser.add_argument(
-        "--no-open",
-        action="store_true",
-        help="Print the localhost URL without opening the default browser.",
-    )
-    review_panel_parser.set_defaults(handler=command_review_panel)
 
     workbench_parser = subparsers.add_parser(
         "workbench",

@@ -178,7 +178,7 @@ below is what is left, and it is the loop every other project already uses.*
    the file; never delete this recovery artifact by hand. Source
    extraction metadata fingerprints the source, style guide, task template,
    labelled data turn, response schema, and complete request; the pattern copy
-   carries the same provenance. `janki review-panel` is a localhost-only human
+   carries the same provenance. `janki workbench` is a localhost-only human
    authority surface: a checked card immediately binds the exact Japanese
    examples displayed to their content fingerprints, while the manual
    `staging-review` sentinel remains available for a reviewer editing YAML by

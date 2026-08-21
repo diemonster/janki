@@ -7,7 +7,7 @@ Claude structured-output answer to ``janki extract`` — the same schema
 loads each one, drives it through the *real* pipeline functions
 (``extract.build_records``, ``staging.write_staging``, ``patterns.save_store``,
 ``promote.check_readings``, ``exporters.anki.resolve_deck_records``,
-``review_panel.ReviewPanel``) exactly as ``cli.command_extract`` would, and
+``workbench.review.ReviewPanel``) exactly as ``cli.command_extract`` would, and
 asserts the derived staging/pattern/record/deck state is what each scenario
 promises. No network call, no live model: the fixture *is* the model's
 answer.
@@ -27,8 +27,8 @@ from japanese_anki.identifiers import stable_record_id
 from japanese_anki.inputs import PreparedInput
 from japanese_anki.jpdb import JpdbClient
 from japanese_anki.promote import HOLD_MISSING_READING, HOLD_UNKNOWN_READING
-from japanese_anki.review_panel import ReviewPanel
 from japanese_anki.staging import CANDIDATE_ACCOUNTING_KEY, new_review_run_id, write_staging
+from japanese_anki.workbench.review import ReviewPanel
 
 FIXTURES = Path(__file__).parent / "fixtures" / "workbench"
 RESPONSES = FIXTURES / "responses"
@@ -182,13 +182,13 @@ def test_same_spelling_different_reading_are_distinct_ids(tmp_path: Path) -> Non
     assert len(set(ids)) == 2
 
 
-def test_same_spelling_different_reading_renders_in_the_review_panel(
+def test_same_spelling_different_reading_are_separately_reviewable(
     tmp_path: Path,
 ) -> None:
-    """Two readings of 一日 are two separate cards, and the panel offers both
-    for review independently — the case a reviewer must not be able to
-    collapse by accident. (W0's ships-when duplicate-word render is
-    ``test_duplicate_word_renders_in_the_review_panel`` below.)"""
+    """Two readings of 一日 are two separate cards, and the review transaction
+    offers both independently — the case a reviewer must not be able to
+    collapse by accident. (How they *render* is the workbench's concern now;
+    `tests/test_workbench.py` covers the page.)"""
     state = materialize(tmp_path, "same_spelling_different_reading")
 
     panel = ReviewPanel.open(
@@ -196,13 +196,7 @@ def test_same_spelling_different_reading_renders_in_the_review_panel(
         staging_dir=state["staging_path"].parent,
         patterns_path=state["patterns_path"],
     )
-    html = panel.render()
 
-    # Each reading rendered as its own card heading. A bare `"ついたち" in html`
-    # would also match the furigana, romaji or source-evidence blocks, so it
-    # cannot tell "both cards rendered" from "one card mentioned it twice".
-    for reading in ("いちにち", "ついたち"):
-        assert f'<h3 lang="ja">一日 <small>{reading}</small></h3>' in html
     assert panel.reviewable_record_ids == {
         "word:一日:いちにち",
         "word:一日:ついたち",
@@ -243,35 +237,25 @@ def test_shared_word_would_be_claimed_by_two_candidate_decks() -> None:
     assert [record.id for record in week_b_records] == [shared_id]
 
 
-def test_duplicate_word_renders_in_the_review_panel(tmp_path: Path) -> None:
-    """W0's ships-when: the existing review-panel renders the duplicate-word
-    fixture. Each source gets its own staging file and its own panel, and the
-    same stable ID is reviewable from both — the panel shows one source at a
-    time and cannot see that another source proposed the same word. Making
-    that collision visible is W4.1's job; W0 only has to prove the panel
-    renders each side today."""
+def test_the_duplicate_word_is_reviewable_from_either_source(
+    tmp_path: Path,
+) -> None:
+    """Each source gets its own staging file and its own review transaction,
+    and the same stable ID is reviewable from both. Neither can see that the
+    other proposed the same word; making that collision visible is W4.1's
+    job."""
     from_a = materialize(tmp_path, "shared_word_source_a", filename="lesson-8.pdf")
     from_b = materialize(
         tmp_path, "shared_word_source_b", filename="yotsubato-vol1.pdf"
     )
     shared_id = stable_record_id("あげる", "あげる")
 
-    for state, sentence in (
-        (from_a, "誕生日にプレゼントをあげます。"),
-        (from_b, "これ、あげる。"),
-    ):
+    for state in (from_a, from_b):
         panel = ReviewPanel.open(
             state["staging_path"],
             staging_dir=state["staging_path"].parent,
             patterns_path=state["patterns_path"],
         )
-        html = panel.render()
-
-        # The exact rendered Japanese *example* field, not a bare substring
-        # match: source_b's evidence context is 「これ、あげる。」とよつばが言った。,
-        # which quotes the sentence, so `sentence in html` passes off the
-        # Source-evidence block even when the example itself is wrong.
-        assert f'<dt>Japanese</dt><dd lang="ja">{sentence}</dd>' in html
         assert panel.reviewable_record_ids == {shared_id}
 
 

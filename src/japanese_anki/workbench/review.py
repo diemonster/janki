@@ -1,4 +1,16 @@
-"""A narrow localhost surface for extraction-review attestations.
+"""The exact-approval write transaction, and nothing else.
+
+This began as `review_panel.py`, a one-shot localhost page. W2b deleted
+that page: the workbench renders the review now, and what survived the
+fold is the part that was worth keeping — the transaction that turns a
+human's tick into durable authority without ever letting a stale page, a
+swapped symlink, or a concurrent editor lose someone's work.
+
+No HTTP, no HTML, no session. The caller proves authority; this proves
+the bytes it read are still the bytes it writes over.
+
+Original module docstring follows.
+
 
 The panel renders one active staging file and the matching current pattern
 store entry.  It does not edit Japanese, promote rows, or make network/model
@@ -16,9 +28,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
-import html
 import os
-import secrets
 import stat
 import threading
 from collections.abc import Iterable, Mapping, Sequence
@@ -30,17 +40,10 @@ from urllib.parse import parse_qsl
 
 from japanese_anki import patterns, staging
 from japanese_anki.application.authority import (
-    example_authority_state,
     needs_example_review,
 )
 from japanese_anki.errors import JankiError
 from japanese_anki.io import atomic_write_text_bound, exclusive_path_lock
-from japanese_anki.localhttp import (
-    MAX_BODY_BYTES,
-    LocalOnlyHandler,
-    LocalOnlyServer,
-    bind_loopback,
-)
 from japanese_anki.models import (
     EXAMPLE_AUTHORITY_KEY,
     VocabularyRecord,
@@ -48,14 +51,12 @@ from japanese_anki.models import (
 )
 
 __all__ = [
-    "MAX_BODY_BYTES",
     "PanelRequestError",
     "PartialReviewError",
     "ReviewOutcome",
     "ReviewPanel",
     "ReviewPanelError",
     "StaleReviewError",
-    "make_server",
     "parse_review_form",
 ]
 
@@ -77,9 +78,6 @@ class StaleReviewError(ReviewPanelError):
 class PanelRequestError(ReviewPanelError):
     """A submitted action was not one the rendered page offered."""
 
-
-class _PanelSecurityError(PanelRequestError):
-    """The localhost request did not come from this exact review session."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -303,173 +301,6 @@ def _pattern_warning(
     return None
 
 
-def _escaped(value: Any) -> str:
-    if value is None:
-        return "—"
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, (list, tuple)):
-        return ", ".join(_escaped(item) for item in value) or "—"
-    if isinstance(value, Mapping):
-        return ", ".join(f"{_escaped(key)}: {_escaped(item)}" for key, item in value.items()) or "—"
-    text = str(value)
-    return html.escape(text, quote=True) if text else "—"
-
-
-def _field(label: str, value: Any, *, japanese: bool = False) -> str:
-    language = ' lang="ja"' if japanese else ""
-    return (
-        f"<div class=field><dt>{html.escape(label)}</dt><dd{language}>{_escaped(value)}</dd></div>"
-    )
-
-
-def _optional_field(label: str, value: Any, *, japanese: bool = False) -> str:
-    return "" if value in (None, "", [], (), {}) else _field(label, value, japanese=japanese)
-
-
-def _record_html(record: VocabularyRecord, state: str) -> str:
-    parts = [
-        '<article class="card-review">',
-        f'<h3 lang="ja">{_escaped(record.expression)} '
-        f"<small>{_escaped(record.reading)}</small></h3>",
-        "<dl class=fields>",
-        _field("Meanings taught in this source (display only)", record.meanings),
-        _optional_field("Usage notes", record.usage_notes),
-        "</dl>",
-        "<section><h4>Examples</h4>",
-    ]
-    if not record.examples:
-        parts.append("<p>None.</p>")
-    for number, example in enumerate(record.examples, start=1):
-        parts.extend(
-            [
-                '<article class="example">',
-                f"<h5>Example {number}</h5><dl class=fields>",
-                _field("Japanese", example.japanese, japanese=True),
-                _field("English", example.english),
-                _optional_field("Furigana", example.furigana, japanese=True),
-                _optional_field("Romaji", example.romaji),
-                _optional_field("Register", example.register),
-                "</dl></article>",
-            ]
-        )
-    parts.extend(
-        [
-            "</section><details><summary>More card fields</summary><dl class=fields>",
-            _field("ID", record.id),
-            _optional_field("Furigana", record.furigana, japanese=True),
-            _optional_field("Romaji", record.romaji),
-            _optional_field("Part of speech", record.part_of_speech),
-            _optional_field("Verb group", record.verb_group),
-            _optional_field("Transitivity", record.transitivity),
-            _optional_field("Tags", record.tags),
-            "</dl></details>",
-            "<details><summary>Source evidence</summary><dl class=fields>",
-            _optional_field("Page", record.source.raw_fields.get("page")),
-            _optional_field("Context", record.source.raw_fields.get("context"), japanese=True),
-            _optional_field(
-                "Inclusion reason",
-                record.source.raw_fields.get("inclusion_reason"),
-            ),
-        ]
-    )
-    if record.source.raw_fields.get("hold_reason"):
-        parts.append(_field("Hold", record.source.raw_fields["hold_reason"]))
-    parts.append("</dl></details>")
-    if state in {"available", "stale"}:
-        escaped_id = html.escape(record.id, quote=True)
-        identity = f"{record.expression} ({record.reading})"
-        if state == "stale":
-            parts.append(
-                '<p class="status problem">Stored example fingerprints do not '
-                "cover every current Japanese example. Reviewing this card will "
-                "replace them with fingerprints for exactly the examples shown.</p>"
-            )
-        parts.append(
-            '<label class="decision"><input type=checkbox name=record '
-            f'value="{escaped_id}"> '
-            "I reviewed and approve only the Japanese example sentences above "
-            f"for {_escaped(identity)} as teaching content.</label>"
-        )
-    elif state == "existing":
-        parts.append('<p class="status reviewed">Already reviewed</p>')
-    elif state == "invalid":
-        parts.append(
-            '<p class="status problem">The existing example authority is not a '
-            "recognized review value. Correct it in the staging file.</p>"
-        )
-    else:
-        parts.append('<p class="status">No reviewable Japanese examples.</p>')
-    parts.append("</article>")
-    return "".join(parts)
-
-
-def _pattern_set_html(
-    entry: patterns.PatternSet,
-    heading: str,
-    *,
-    open_by_default: bool = False,
-) -> str:
-    opened = " open" if open_by_default else ""
-    parts = [
-        f"<details{opened}><summary>{html.escape(heading)}</summary><dl class=fields>",
-        _field("Source", entry.source),
-        _field("Kind", entry.kind),
-        _field("Title", entry.title),
-        _field("Review run ID", entry.review_run_id),
-        "</dl>",
-    ]
-    if not entry.patterns:
-        parts.append("<p>No patterns proposed.</p>")
-    for number, pattern in enumerate(entry.patterns, start=1):
-        parts.extend(
-            [
-                '<article class="pattern">',
-                f"<h3>Pattern {number}</h3><dl class=fields>",
-                _field("Template", pattern.template, japanese=True),
-                _field("Gloss", pattern.gloss),
-                _field("Examples", pattern.examples, japanese=True),
-                _field("Where", pattern.where),
-                "</dl></article>",
-            ]
-        )
-    parts.append("</details>")
-    return "".join(parts)
-
-
-def _pattern_html(
-    staged: patterns.PatternSet,
-    current: patterns.PatternSet | None,
-    warning: str | None,
-) -> str:
-    parts = [
-        '<fieldset class="patterns"><legend>Pattern review</legend>',
-        _pattern_set_html(staged, "Staged pattern answer"),
-    ]
-    if current is None:
-        parts.append("<p>No current pattern-store entry.</p>")
-    else:
-        parts.append(
-            _pattern_set_html(
-                current,
-                "Current pattern-store entry",
-                open_by_default=True,
-            )
-        )
-    if warning is not None:
-        parts.append(f'<p class="status problem">{html.escape(warning)}</p>')
-    elif current is not None and current.reviewed:
-        parts.append('<p class="status reviewed">Already reviewed</p>')
-    elif current is not None:
-        parts.append(
-            '<label class="decision"><input type=checkbox name=patterns '
-            'value="review"> I reviewed the current pattern-store entry—kind, '
-            "title, templates, glosses, examples, and locations—and approve it "
-            "for use.</label>"
-        )
-    parts.append("</fieldset>")
-    return "".join(parts)
-
 
 def parse_review_form(body: bytes) -> dict[str, list[str]]:
     """Parse and structurally validate an approval form body.
@@ -530,10 +361,6 @@ class ReviewPanel:
     pattern_warning: str | None
     staging_bytes: bytes
     patterns_bytes: bytes
-    csrf_token: str
-    _csrf_used: bool = False
-    _session_terminal: bool = False
-    _submission_inflight: bool = False
     _submission_lock: threading.RLock = field(
         default_factory=threading.RLock,
         repr=False,
@@ -598,7 +425,6 @@ class ReviewPanel:
             pattern_warning=pattern_warning,
             staging_bytes=staging_bytes,
             patterns_bytes=patterns_bytes,
-            csrf_token=secrets.token_urlsafe(32),
         )
 
     @property
@@ -623,56 +449,6 @@ class ReviewPanel:
             self.pattern_warning is None
             and self.pattern_set is not None
             and not self.pattern_set.reviewed
-        )
-
-    def render(self) -> str:
-        coverage = self.meta.get("coverage")
-        coverage_status = coverage.get("status") if isinstance(coverage, Mapping) else "—"
-        cards = "".join(
-            _record_html(record, example_authority_state(record))
-            for record in self.records
-        )
-        return "".join(
-            [
-                "<!doctype html><html lang=en><head><meta charset=utf-8>",
-                '<meta name=viewport content="width=device-width,initial-scale=1">',
-                "<title>janki extraction review</title>",
-                '<link rel=stylesheet href="/style.css"></head><body><main>',
-                "<h1>Extraction review</h1>",
-                '<p class="notice">This page records review attestations only. '
-                "If anything needs correction, stop here, request or make the "
-                "correction outside this page, then restart the panel.</p>",
-                '<details class="summary"><summary>Extraction details</summary><dl class=fields>',
-                _field("Staging file", self.staging_path.name),
-                _field("Source file", self.source),
-                _field("Extracted at", self.meta.get("extracted_at")),
-                _field("Model", self.meta.get("model")),
-                _field("Mode", self.provenance.get("mode")),
-                _field("Review run ID", self.run_id),
-                _field("Coverage", coverage_status),
-                _field("Record count", len(self.records)),
-                "</dl></details><form method=post action=/review autocomplete=off>",
-                f'<input type=hidden name=csrf value="{html.escape(self.csrf_token, quote=True)}">',
-                f'<input type=hidden name=staging_snapshot value="{self.staging_fingerprint}">',
-                f'<input type=hidden name=patterns_snapshot value="{self.patterns_fingerprint}">',
-                '<input type=hidden name=action value="save">',
-                "<fieldset class=records><legend>Cards and Japanese-example approval</legend>",
-                '<p class="notice"><strong>Card checkboxes approve only the '
-                "Japanese example sentences shown.</strong> The displayed "
-                "meanings are source-scoped context. These checkboxes neither "
-                "approve nor limit meanings, identity, translations, notes, or "
-                "other fields.</p>",
-                cards or "<p>No candidate rows in this extraction.</p>",
-                "</fieldset>",
-                _pattern_html(
-                    self.staged_pattern_set,
-                    self.pattern_set,
-                    self.pattern_warning,
-                ),
-                "<div class=submit><button type=submit>Save review decisions</button>",
-                "<p>Unchecked items remain unchanged. This does not promote cards.</p>",
-                "</div></form></main></body></html>",
-            ]
         )
 
     def _validate_actions(
@@ -814,217 +590,3 @@ class ReviewPanel:
                 self.pattern_set = updated_store[self.source]
                 self.patterns_bytes = patterns_text.encode("utf-8")
             return saved
-
-    def consume_form(self, body: bytes) -> ReviewOutcome:
-        grouped = parse_review_form(body)
-        pattern_values = grouped.get("patterns", [])
-        if (
-            grouped["staging_snapshot"][0] != self.staging_fingerprint
-            or grouped["patterns_snapshot"][0] != self.patterns_fingerprint
-        ):
-            raise _PanelSecurityError("The form snapshot does not belong to this page")
-        token = grouped["csrf"][0]
-        with self._submission_lock:
-            if (
-                self._csrf_used
-                or self._session_terminal
-                or self._submission_inflight
-                or not secrets.compare_digest(token, self.csrf_token)
-            ):
-                raise _PanelSecurityError(
-                    "The review form token is invalid, already used, or already submitting"
-                )
-            self._submission_inflight = True
-            try:
-                outcome = self.submit(
-                    record_ids=grouped.get("record", []),
-                    review_patterns=bool(pattern_values),
-                )
-            except PartialReviewError:
-                self._session_terminal = True
-                raise
-            else:
-                self._csrf_used = True
-                self._session_terminal = True
-                return outcome
-            finally:
-                self._submission_inflight = False
-
-    def success_html(self, outcome: ReviewOutcome) -> str:
-        changes = [
-            f"Accepted examples for {_escaped(record_id)}."
-            for record_id in outcome.accepted_record_ids
-        ]
-        if outcome.pattern_reviewed:
-            changes.append(f"Marked {_escaped(self.source)} patterns reviewed.")
-        if not changes:
-            changes.append("No review decisions were selected; nothing changed.")
-        return "".join(
-            [
-                "<!doctype html><html lang=en><head><meta charset=utf-8>",
-                '<meta name=viewport content="width=device-width,initial-scale=1">',
-                "<title>Review saved</title>",
-                '<link rel=stylesheet href="/style.css"></head><body><main>',
-                "<h1>Review saved</h1><ul>",
-                *(f"<li>{item}</li>" for item in changes),
-                "</ul><p>This did not promote any cards.</p></main></body></html>",
-            ]
-        )
-
-    def partial_html(self, error: PartialReviewError) -> str:
-        saved = []
-        if error.outcome.accepted_record_ids:
-            saved.append(
-                "Card example approval saved for: "
-                + ", ".join(_escaped(item) for item in error.outcome.accepted_record_ids)
-                + "."
-            )
-        if error.outcome.pattern_reviewed:
-            saved.append(f"Pattern review saved for {_escaped(self.source)}.")
-        if not saved:
-            saved.append("The final write result is indeterminate; inspect both files.")
-        return "".join(
-            [
-                "<!doctype html><html lang=en><head><meta charset=utf-8>",
-                '<meta name=viewport content="width=device-width,initial-scale=1">',
-                "<title>Partial review result</title></head><body><main>",
-                "<h1>Partial review result</h1><ul>",
-                *(f"<li>{item}</li>" for item in saved),
-                f'</ul><p role="alert">{html.escape(str(error))}</p>',
-                "<p>The panel has stopped. Restart it to confirm current decisions.</p>",
-                "</main></body></html>",
-            ]
-        )
-
-
-_STYLE = """
-:root { color-scheme: light dark; font: 16px/1.55 system-ui, sans-serif; }
-body { margin: 0; background: Canvas; color: CanvasText; }
-main { width: min(72rem, calc(100% - 2rem)); margin: 1.5rem auto 6rem; }
-h1, h2, h3, h4, h5 { line-height: 1.2; }
-.notice, .status, .decision { padding: .8rem; border: 1px solid GrayText; border-radius: .5rem; }
-.card-review, .patterns, .summary {
-  margin: 1rem 0; padding: 1rem; border: 1px solid GrayText; border-radius: .75rem;
-}
-fieldset { min-inline-size: 0; }
-legend { padding: 0 .35rem; font-size: 1.35rem; font-weight: 700; }
-.example, .pattern {
-  margin: .75rem 0; padding: .75rem;
-  background: color-mix(in srgb, CanvasText 6%, Canvas); border-radius: .5rem;
-}
-.fields { display: grid; gap: .35rem 1rem; margin: 0; }
-.field { min-width: 0; }
-dt { font-weight: 700; }
-dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
-.decision { display: flex; gap: .75rem; align-items: flex-start; cursor: pointer; }
-input[type=checkbox] { inline-size: 1.4rem; block-size: 1.4rem; flex: none; }
-button { min-height: 44px; padding: .65rem 1rem; font: inherit; font-weight: 700; }
-button:focus-visible, input:focus-visible { outline: 3px solid Highlight; outline-offset: 3px; }
-.submit {
-  position: sticky; bottom: 0; padding: 1rem;
-  background: Canvas; border-top: 1px solid GrayText;
-}
-.reviewed { border-color: green; }
-.problem { border-color: red; }
-@media (min-width: 48rem) { .fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
-""".strip()
-
-
-class _ReviewServer(LocalOnlyServer):
-    panel: ReviewPanel
-
-
-class _ReviewHandler(LocalOnlyHandler):
-    server: _ReviewServer
-    error_title = "Review error"
-
-    def _terminal_send(self, status: int, body: str) -> None:
-        """Stop a used/stale session even when its client has disconnected."""
-        try:
-            self._send(status, body)
-        except OSError:
-            self.close_connection = True
-        finally:
-            self.server.shutdown()
-
-    def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
-        if not self._request_is_local():
-            self._error(403, "This review page accepts only its exact localhost origin.")
-            return
-        if self.path == "/":
-            self._send(200, self.server.panel.render())
-            return
-        if self.path == "/style.css":
-            self._send(200, _STYLE, content_type="text/css; charset=utf-8")
-            return
-        self._error(404, "No such review page.")
-
-    def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
-        if not self._request_is_local():
-            self._error(403, "This review page accepts only its exact localhost origin.")
-            return
-        if self.path != "/review":
-            self._error(404, "No such review action.")
-            return
-        if self.headers.get_all("Transfer-Encoding"):
-            self._error(400, "Transfer-encoded review forms are not accepted.")
-            return
-        lengths = self.headers.get_all("Content-Length") or []
-        if len(lengths) != 1 or not lengths[0].isdigit():
-            self._error(411, "One exact Content-Length is required.")
-            return
-        length = int(lengths[0])
-        if length > MAX_BODY_BYTES:
-            self._error(413, "The review form exceeds the 64 KiB limit.")
-            return
-        content_types = self.headers.get_all("Content-Type") or []
-        if content_types != ["application/x-www-form-urlencoded"]:
-            self._error(415, "The review form has the wrong content type.")
-            return
-        try:
-            body = self.rfile.read(length)
-        except TimeoutError:
-            try:
-                self._error(408, "The review form body timed out.")
-            except OSError:
-                self.close_connection = True
-            return
-        if len(body) != length:
-            self._error(400, "The review form ended before Content-Length.")
-            return
-        try:
-            outcome = self.server.panel.consume_form(body)
-        except _PanelSecurityError as exc:
-            self._error(403, str(exc))
-        except PanelRequestError as exc:
-            self._error(400, str(exc))
-        except PartialReviewError as exc:
-            self._terminal_send(409, self.server.panel.partial_html(exc))
-        except StaleReviewError as exc:
-            self._terminal_send(
-                409,
-                self._error_html(
-                    f"{exc}. Nothing was written by this attempt. Restart the panel "
-                    "to review the current files."
-                ),
-            )
-        except ReviewPanelError as exc:
-            self._error(
-                500,
-                f"{exc}. Nothing was proven written; resolve the error and retry, "
-                "or restart the panel to confirm current decisions.",
-            )
-        else:
-            # A successful one-submit review is terminal. Shutting the server
-            # down lets the future CLI call return instead of leaving a stale,
-            # already-consumed form listening on localhost.
-            self._terminal_send(200, self.server.panel.success_html(outcome))
-
-
-def make_server(panel: ReviewPanel) -> _ReviewServer:
-    """Create, but do not start, an ephemeral IPv4-loopback review server."""
-    server = _ReviewServer(("127.0.0.1", 0), _ReviewHandler)
-    server.panel = panel
-    bind_loopback(server)
-    return server
