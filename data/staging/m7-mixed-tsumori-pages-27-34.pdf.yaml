@@ -123,7 +123,8 @@ records:
     audio: ''
     register: casual
   conjugations: {}
-  tags: []
+  tags:
+  - m7-mixed-tsumori
   usage_notes: 'Used when the speaker (or someone on the speaker''s side) gives something to another person:
     〜に〜をあげる. It cannot be used for what you receive; the dialogue''s もらう covers that direction.'
   audio: ''
@@ -171,7 +172,8 @@ records:
     audio: ''
     register: casual
   conjugations: {}
-  tags: []
+  tags:
+  - m7-mixed-tsumori
   usage_notes: せんたく (洗濯) is the noun 'laundry/washing'; せんたくをする is also common with the particle を.
   audio: ''
   image: ''
@@ -218,7 +220,8 @@ records:
     audio: ''
     register: casual
   conjugations: {}
-  tags: []
+  tags:
+  - m7-mixed-tsumori
   usage_notes: The place stayed at is marked with に. Written 泊まる, it is a different word from 止まる (to
     stop, to come to a halt), which sounds the same.
   audio: ''
@@ -268,7 +271,8 @@ records:
     audio: ''
     register: casual
   conjugations: {}
-  tags: []
+  tags:
+  - m7-mixed-tsumori
   usage_notes: 'The giver is marked with に (or から): 〜に〜をもらう. It is the receiving counterpart of あげる, which
     the same lesson glosses as ''to give''.'
   audio: ''
@@ -317,7 +321,8 @@ records:
     audio: ''
     register: casual
   conjugations: {}
-  tags: []
+  tags:
+  - m7-mixed-tsumori
   usage_notes: The slide treats はなびたいかい as an event/place where something happens, so an action done there
     takes で, not the 'occasion に' used with holidays like クリスマス. に is still fine as the destination of
     行く.
@@ -367,7 +372,8 @@ records:
     audio: ''
     register: casual
   conjugations: {}
-  tags: []
+  tags:
+  - m7-mixed-tsumori
   usage_notes: A holiday treated as a point in time, so it takes に (お正月に) like クリスマスに and バレンタインデーに in
     this lesson. The お is part of the everyday word and is normally kept.
   audio: ''
