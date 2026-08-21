@@ -6,7 +6,9 @@ imported and then repaired — it has to wait in staging for a human.
 
 from __future__ import annotations
 
+import difflib
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -21,6 +23,7 @@ from japanese_anki.staging import (
     annotate,
     annotations,
     read_staging,
+    rewrite_staging,
     write_staging,
 )
 
@@ -660,3 +663,37 @@ def test_the_staging_notes_give_an_exit_that_exists_today(
     # recipe competing with it.
     assert "Milestone" not in notes
     assert "status --rebuild" not in notes
+
+
+def test_rewrite_touches_only_the_row_whose_field_changed(tmp_path: Path) -> None:
+    """`rewrite_staging` promises to leave the rest of the file "byte-for-byte
+    as it was". It did not: every staging file is created by `write_staging`
+    through PyYAML, which spells an absent value `null`, while ruamel's
+    round-trip representer spells it as an empty scalar — so re-dumping
+    rewrote that line on every record, and annotating one row produced a diff
+    touching rows nobody edited.
+    """
+    records = [
+        _record(id="word:走る:はしる", expression="走る", reading="はしる",
+                meanings=["to run"]),
+        _record(id="word:食べる:たべる", expression="食べる", reading="たべる",
+                meanings=["to eat"]),
+        _record(id="word:飲む:のむ", expression="飲む", reading="のむ",
+                meanings=["to drink"]),
+    ]
+    path = tmp_path / "source.pdf.yaml"
+    write_staging(path, records, {"source_file": "source.pdf"})
+    before = path.read_text(encoding="utf-8").split("\n")
+
+    loaded, _meta = read_staging(path)
+    edited = list(loaded)
+    edited[1] = replace(edited[1], meanings=["to eat (corrected)"])
+    rewrite_staging(path, edited)
+    after = path.read_text(encoding="utf-8").split("\n")
+
+    changed = [
+        line
+        for line in difflib.unified_diff(before, after, lineterm="", n=0)
+        if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
+    ]
+    assert changed == ["-  - to eat", "+  - to eat (corrected)"], changed

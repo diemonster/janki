@@ -1160,6 +1160,20 @@ def _parser() -> YAML:
     parser.preserve_quotes = True
     parser.allow_unicode = True
     parser.width = 100
+    # Write `null` where PyYAML wrote `null`. Every staging file is *created*
+    # by `write_staging` through PyYAML, which spells an absent value `null`;
+    # ruamel's round-trip representer spells it as an empty scalar. The two
+    # mean the same thing to a parser and nothing to a reader, but re-dumping
+    # rewrote that line on *every* record in the file — so annotating one row
+    # produced a diff touching rows nobody edited, and this function's own
+    # promise to leave the rest "byte-for-byte as it was" was not kept. One
+    # edited field is now one changed line.
+    parser.representer.add_representer(
+        type(None),
+        lambda representer, data: representer.represent_scalar(
+            "tag:yaml.org,2002:null", "null"
+        ),
+    )
     return parser
 
 
