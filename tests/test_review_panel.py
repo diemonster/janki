@@ -973,7 +973,12 @@ def test_partial_post_body_times_out_without_blocking_server_close(
 ) -> None:
     files = _panel_files(tmp_path)
     panel = _open(files)
-    monkeypatch.setattr(panel_module, "REQUEST_TIMEOUT_SECONDS", 0.05, raising=False)
+    # Patch the handler class, not a module global: `setup` reads the class
+    # attribute, and `raising=False` on a module name that no longer exists
+    # would silently leave the real 5s timeout in place.
+    monkeypatch.setattr(
+        panel_module._ReviewHandler, "request_timeout_seconds", 0.05
+    )
     server, thread = _running_server(panel)
     client = socket.create_connection(server.server_address, timeout=1)
     client.settimeout(1)

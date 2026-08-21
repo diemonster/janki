@@ -18,32 +18,36 @@ import contextlib
 import hashlib
 import html
 import os
-import re
 import secrets
 import stat
 import threading
 from collections.abc import Iterable, Mapping, Sequence
 from contextlib import ExitStack
 from dataclasses import dataclass, field, replace
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl
 
 from japanese_anki import patterns, staging
+from japanese_anki.application.authority import (
+    example_authority_state,
+    needs_example_review,
+)
 from japanese_anki.errors import JankiError
 from japanese_anki.io import atomic_write_text_bound, exclusive_path_lock
+from japanese_anki.localhttp import (
+    LocalOnlyHandler,
+    LocalOnlyServer,
+    bind_loopback,
+)
 from japanese_anki.models import (
     EXAMPLE_AUTHORITY_KEY,
-    EXAMPLE_AUTHORITY_STAGING,
     VocabularyRecord,
-    example_accepted,
     set_example_flags,
 )
 
 __all__ = [
     "MAX_BODY_BYTES",
-    "REQUEST_TIMEOUT_SECONDS",
     "PanelRequestError",
     "PartialReviewError",
     "ReviewOutcome",
@@ -55,8 +59,6 @@ __all__ = [
 
 
 MAX_BODY_BYTES = 64 * 1024
-REQUEST_TIMEOUT_SECONDS = 5.0
-_BOUND_AUTHORITY = re.compile(r"\s*[0-9a-f]{12}(?:\s*,\s*[0-9a-f]{12})*\s*\Z")
 _FORM_SINGLETONS = frozenset(
     {"csrf", "staging_snapshot", "patterns_snapshot", "action", "patterns"}
 )
@@ -298,23 +300,6 @@ def _pattern_warning(
             "Pattern review is disabled; card review remains available."
         )
     return None
-
-
-def _authority_state(record: VocabularyRecord) -> str:
-    """``available``, ``stale``, ``existing``, ``ineligible``, or ``invalid``."""
-    value = record.source.raw_fields.get(EXAMPLE_AUTHORITY_KEY, "")
-    examples = [example for example in record.examples if example.japanese]
-    if record.source.type != "extract" or not examples:
-        return "ineligible"
-    if value:
-        if value == EXAMPLE_AUTHORITY_STAGING:
-            return "existing"
-        if _BOUND_AUTHORITY.fullmatch(value):
-            if all(example_accepted(record, example) for example in examples):
-                return "existing"
-            return "stale"
-        return "invalid"
-    return "available"
 
 
 def _escaped(value: Any) -> str:
@@ -585,7 +570,7 @@ class ReviewPanel:
         return frozenset(
             record.id
             for record in self.records
-            if _authority_state(record) in {"available", "stale"}
+            if needs_example_review(record)
         )
 
     @property
@@ -599,7 +584,10 @@ class ReviewPanel:
     def render(self) -> str:
         coverage = self.meta.get("coverage")
         coverage_status = coverage.get("status") if isinstance(coverage, Mapping) else "—"
-        cards = "".join(_record_html(record, _authority_state(record)) for record in self.records)
+        cards = "".join(
+            _record_html(record, example_authority_state(record))
+            for record in self.records
+        )
         return "".join(
             [
                 "<!doctype html><html lang=en><head><meta charset=utf-8>",
@@ -928,85 +916,13 @@ button:focus-visible, input:focus-visible { outline: 3px solid Highlight; outlin
 """.strip()
 
 
-class _ReviewServer(ThreadingHTTPServer):
-    # ThreadingHTTPServer opts into daemon handlers. A CLI cancellation followed
-    # by server_close must instead wait until an in-flight approval's bound
-    # replace has finished, so the command cannot return while it may still write.
-    daemon_threads = False
-
+class _ReviewServer(LocalOnlyServer):
     panel: ReviewPanel
-    expected_host: str
-    allowed_authorities: frozenset[str]
 
 
-class _ReviewHandler(BaseHTTPRequestHandler):
+class _ReviewHandler(LocalOnlyHandler):
     server: _ReviewServer
-    server_version = "janki"
-    sys_version = ""
-
-    def setup(self) -> None:
-        super().setup()
-        self.connection.settimeout(REQUEST_TIMEOUT_SECONDS)
-
-    def log_message(self, _format: str, *args: object) -> None:
-        return
-
-    def send_error(
-        self,
-        code: int,
-        message: str | None = None,
-        explain: str | None = None,
-    ) -> None:
-        """Keep unsupported-method and parser errors under the same headers."""
-        del explain
-        self._error(code, message or "The review request was refused.")
-
-    def _request_is_local(self) -> bool:
-        hosts = self.headers.get_all("Host") or []
-        if len(hosts) != 1 or hosts[0] not in self.server.allowed_authorities:
-            return False
-        origins = self.headers.get_all("Origin") or []
-        return not origins or origins == [f"http://{hosts[0]}"]
-
-    def _send(
-        self,
-        status: int,
-        body: str | bytes,
-        *,
-        content_type: str = "text/html; charset=utf-8",
-    ) -> None:
-        payload = body.encode("utf-8") if isinstance(body, str) else body
-        self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(payload)))
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("X-Content-Type-Options", "nosniff")
-        # Chrome serializes a same-origin form POST as Origin: null under
-        # no-referrer. Preserve the exact localhost Origin that the boundary
-        # check below requires while still suppressing cross-origin referrers.
-        self.send_header("Referrer-Policy", "same-origin")
-        self.send_header("X-Frame-Options", "DENY")
-        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
-        self.send_header(
-            "Content-Security-Policy",
-            "default-src 'none'; style-src 'self'; form-action 'self'; "
-            "base-uri 'none'; frame-ancestors 'none'",
-        )
-        self.send_header("Connection", "close")
-        self.end_headers()
-        self.wfile.write(payload)
-        self.close_connection = True
-
-    def _error(self, status: int, message: str) -> None:
-        self._send(status, self._error_html(message))
-
-    @staticmethod
-    def _error_html(message: str) -> str:
-        return (
-            "<!doctype html><html lang=en><head><meta charset=utf-8>"
-            "<title>Review error</title></head><body><main><h1>Review error</h1>"
-            f'<p role="alert">{html.escape(message)}</p></main></body></html>'
-        )
+    error_title = "Review error"
 
     def _terminal_send(self, status: int, body: str) -> None:
         """Stop a used/stale session even when its client has disconnected."""
@@ -1095,7 +1011,5 @@ def make_server(panel: ReviewPanel) -> _ReviewServer:
     """Create, but do not start, an ephemeral IPv4-loopback review server."""
     server = _ReviewServer(("127.0.0.1", 0), _ReviewHandler)
     server.panel = panel
-    port = server.server_address[1]
-    server.expected_host = f"127.0.0.1:{port}"
-    server.allowed_authorities = frozenset({server.expected_host, f"localhost:{port}"})
+    bind_loopback(server)
     return server
