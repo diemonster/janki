@@ -4205,6 +4205,19 @@ Depends on: M7.6P, M8.1–M8.4.
 Files: `data/inbox/` sources already collected, staging archives, deck
 definitions under `data/decks/`.
 
+### [ ] M8.6 / M8.7 — moved to `docs/WORKBENCH_PLAN.md`
+
+The browser workbench and its optional hosted edition were drafted here as two
+monolithic tasks. They were neither task-sized nor deliverable in that shape,
+so they moved to `docs/WORKBENCH_PLAN.md` and were restructured into twenty
+staged tasks (**W0–W7** local, **H1.0–H7** hosted), each with its own
+dependencies, files and a statement of what it ships. That file follows this
+one's **How to work this plan** and **Conventions** sections unchanged.
+
+The local workbench depends on M7.6P and M8.1–M8.4 — the *code*. It does not
+depend on M8.5, whose remaining work is paid representative runs; W0 builds
+committed offline fixtures instead of waiting for them.
+
 ### [ ] M7.6B Pilot pair — scans and camera captures
 
 > *Cancelled 2026-08-15 — superseded by M8.5. The oracle, coverage-cell

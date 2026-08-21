@@ -129,6 +129,50 @@ Shirabe CSV / jpdb API / PDFs / manual YAML
 - Optional AnkiConnect integration; dry-run diff before modifying a live
   collection; explicit backup and rollback instructions.
 
+### Phase 8: local workbench (planned)
+
+- A local, browser-based journey for an English-speaking Japanese learner:
+  add a PDF, review source-scoped meanings and exact Japanese examples beside
+  the page, choose one home deck, add reviewed cards to the library, preview,
+  and build the Anki file without terminal, JSON, or YAML work.
+- Workflow-first, not chat-first. Approving twelve exact sentences is a
+  decision with a durable consequence and a bill attached, so it gets a page
+  with the sentences on it and a button that names the action. An optional
+  read-only assistant may explain and navigate; it never holds authority and
+  never becomes a third Japanese card-writing path.
+- The CLI and workbench call the same typed application services and preserve
+  the same repository authority, paid consent, identity, review, provenance,
+  locking, and recovery contracts.
+- Delivered in eight stages (W0–W7) in `docs/WORKBENCH_PLAN.md`, each ending
+  at something usable that day: offline fixtures, a read-only dashboard, card
+  review, intake and paid extraction, deck assignment and promotion, the
+  finish-and-build path, learner polish, and finally the optional assistant.
+
+### Phase 9: hosted workbench (optional, after Phase 8)
+
+- A Cloudflare Worker provides the authenticated web front door; one
+  SQLite-backed Durable Object per corpus stores structured library state; R2
+  stores private authoritative source/media bytes, pending paid artifacts, and
+  separately evictable previews/builds; Workflows coordinate resumable jobs;
+  and a Cloudflare Container runs the real Python pipeline. An optional AI
+  Gateway transport centralizes provider keys and metadata-only cost controls
+  with payload logs, cache, retries, and model fallback disabled.
+- Local files and hosted Durable Object storage are two adapters behind one
+  behavioral corpus-store contract. Backup, independent fork, and
+  authority-transfer move are explicit protocols; there is no automatic
+  two-master synchronization.
+- The first two stages (H1 store seam, H2 export/import) are worth doing with
+  no cloud at all — H2 is the backup story this repository does not yet have.
+  Everything from H3 on is a real service, and `docs/WORKBENCH_PLAN.md`
+  requires written answers on monthly cost, who may hold an account, and what
+  would cause the effort to be abandoned before that stage may be claimed.
+- This phase cannot ship under the current repository-only authority sentence.
+  It starts with a reviewed `docs/DESIGN.md` amendment (task H1.0) defining
+  Git authority for local mode and committed Durable Object revision plus
+  referenced immutable R2 manifest authority for hosted mode, along with
+  lineage, portability, and invariant-preserving migration. `AGENTS.md` and
+  the README carry the same sentence and change with it.
+
 ## Non-goals
 
 - *Guessed* pitch accent or furigana segmentation — both now come from jpdb
