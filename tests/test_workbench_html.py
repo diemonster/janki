@@ -45,6 +45,35 @@ _VOID = frozenset(
     }
 )
 
+#: Elements HTML5 lets you leave unclosed, mapped to the start tags that
+#: implicitly close them. Without this the checker rejects perfectly valid
+#: markup — `<li>one<li>two` is legal HTML and `HTMLParser` does no implicit
+#: closing of its own. A checker that cries wolf on valid input is a checker
+#: someone eventually deletes, so it has to model this much of the parse.
+_BLOCK = frozenset(
+    {
+        "address", "article", "aside", "blockquote", "details", "div", "dl",
+        "fieldset", "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5",
+        "h6", "header", "hr", "main", "nav", "ol", "p", "pre", "section",
+        "table", "ul",
+    }
+)
+_CLOSED_BY: dict[str, frozenset[str]] = {
+    "li": frozenset({"li"}),
+    "dt": frozenset({"dt", "dd"}),
+    "dd": frozenset({"dt", "dd"}),
+    "p": _BLOCK,
+    "option": frozenset({"option", "optgroup"}),
+    "optgroup": frozenset({"optgroup"}),
+    "tr": frozenset({"tr"}),
+    "td": frozenset({"td", "th", "tr"}),
+    "th": frozenset({"td", "th", "tr"}),
+    "thead": frozenset({"tbody", "tfoot"}),
+    "tbody": frozenset({"tbody", "tfoot"}),
+    "rt": frozenset({"rt", "rp"}),
+    "rp": frozenset({"rt", "rp"}),
+}
+
 #: Controls that submit a value and therefore need a name to submit it under.
 _NAMED_CONTROLS = frozenset({"input", "select", "textarea"})
 
@@ -67,8 +96,19 @@ class _Document(HTMLParser):
         self.unbalanced: list[str] = []
         self.controls_outside_forms: list[str] = []
 
+    def _close_implicit(self, upcoming: str | None) -> None:
+        """Pop elements HTML5 closes for you before `upcoming` opens or closes."""
+        while self.open_tags:
+            top = self.open_tags[-1]
+            if top not in _CLOSED_BY:
+                return
+            if upcoming is not None and upcoming not in _CLOSED_BY[top]:
+                return
+            self.open_tags.pop()
+
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = {key: (value or "") for key, value in attrs}
+        self._close_implicit(tag)
         if tag == "form":
             self.form_depth += 1
             self.max_form_depth = max(self.max_form_depth, self.form_depth)
@@ -101,6 +141,14 @@ class _Document(HTMLParser):
             self.form_depth -= 1
         if tag in _VOID:
             return
+        if tag not in _CLOSED_BY:
+            # `</ul>` closes an open `<li>`; `</select>` closes an `<option>`.
+            while (
+                self.open_tags
+                and self.open_tags[-1] != tag
+                and self.open_tags[-1] in _CLOSED_BY
+            ):
+                self.open_tags.pop()
         if not self.open_tags:
             self.unbalanced.append(f"</{tag}> with nothing open")
             return
@@ -224,23 +272,85 @@ def test_a_page_with_no_session_offers_no_controls(tmp_path: Path) -> None:
     assert "<button" not in html
 
 
-def test_the_checker_catches_a_nested_form() -> None:
-    """The checker's own red test: the exact shape that shipped past the
-    HTTP-level suite must fail here."""
-    nested = (
-        "<!doctype html><html><body><form method=post>"
-        '<form method=post><button type=submit>x</button></form>'
-        "</form></body></html>"
-    )
-    with pytest.raises(AssertionError, match="nested"):
-        _check(nested)
 
 
-def test_the_checker_catches_a_dangling_form_reference() -> None:
-    dangling = (
-        "<!doctype html><html><body>"
-        '<button type=submit form="nope">x</button>'
-        "</body></html>"
-    )
-    with pytest.raises(AssertionError, match="no such form"):
-        _check(dangling)
+# --- the checker's own red tests -------------------------------------------
+#
+# A checker nobody has seen fail is a checker that might not check anything.
+# Every assertion in `_check` gets a shape that must trip it, and every legal
+# shape it once rejected gets one that must not.
+
+
+@pytest.mark.parametrize(
+    ("name", "html", "expected"),
+    [
+        (
+            "nested form",
+            "<html><body><form><form><button>x</button></form></form></body></html>",
+            "nested",
+        ),
+        (
+            "dangling form reference",
+            '<html><body><button form="nope">x</button></body></html>',
+            "no such form",
+        ),
+        (
+            "duplicate id",
+            '<html><body><p id="a"></p><p id="a"></p></body></html>',
+            "duplicate id",
+        ),
+        (
+            "label attached to nothing",
+            '<html><body><form><label for="ghost">L</label></form></body></html>',
+            "points at no control",
+        ),
+        (
+            "control with no name",
+            "<html><body><form><textarea></textarea></form></body></html>",
+            "submits no value",
+        ),
+        (
+            "control belonging to no form",
+            '<html><body><textarea name="x"></textarea></body></html>',
+            "outside any form",
+        ),
+        (
+            "crossed tags",
+            "<html><body><div><span></div></span></body></html>",
+            "closed while",
+        ),
+        (
+            "element never closed",
+            "<html><body><div></body></html>",
+            "closed while",
+        ),
+    ],
+)
+def test_the_checker_catches(name: str, html: str, expected: str) -> None:
+    with pytest.raises(AssertionError, match=expected):
+        _check(html)
+
+
+@pytest.mark.parametrize(
+    ("name", "html"),
+    [
+        ("omitted </li>", "<html><body><ul><li>one<li>two</ul></body></html>"),
+        ("omitted </p>", "<html><body><p>one<p>two</body></html>"),
+        (
+            "omitted </option>",
+            "<html><body><form><select name=s><option>a<option>b</select>"
+            "</form></body></html>",
+        ),
+        ("omitted </dt> and </dd>", "<html><body><dl><dt>t<dd>d</dl></body></html>"),
+        (
+            "omitted </td> and </tr>",
+            "<html><body><table><tr><td>a<td>b<tr><td>c</table></body></html>",
+        ),
+    ],
+)
+def test_the_checker_accepts_legal_omitted_end_tags(name: str, html: str) -> None:
+    """HTML5 lets these close themselves and `HTMLParser` does not, so without
+    the implicit-close rules the checker rejected valid markup. A checker that
+    cries wolf gets deleted, or — worse — gets "satisfied" by rewriting correct
+    HTML into something it happens to accept."""
+    _check(html)
