@@ -7,6 +7,7 @@ imported and then repaired — it has to wait in staging for a human.
 from __future__ import annotations
 
 import difflib
+import io
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -22,6 +23,7 @@ from japanese_anki.staging import (
     StagingError,
     annotate,
     annotations,
+    prune_staging,
     read_staging,
     rewrite_staging,
     write_staging,
@@ -699,39 +701,53 @@ def test_rewrite_touches_only_the_row_whose_field_changed(tmp_path: Path) -> Non
     assert changed == ["-  - to eat", "+  - to eat (corrected)"], changed
 
 
-def test_a_bare_load_and_dump_already_reformats(tmp_path: Path) -> None:
-    """A known, pre-existing divergence between the two writers, pinned here
-    so nobody mistakes it for a bug a later change introduced.
+def test_the_two_yaml_writers_agree_byte_for_byte(tmp_path: Path) -> None:
+    """Staging files are *created* by PyYAML and *edited* by ruamel, and the
+    two must produce identical bytes for identical data.
 
-    Staging files are created by `write_staging` through PyYAML and edited
-    through ruamel. Both wrap at width 100, but they choose different break
-    points, so re-emitting a long plain scalar re-folds it — and ruamel leaves
-    a trailing space at the break. Every path that dumps through ruamel
-    inherits this: `rewrite_staging`, `prune_staging`, `record_coverage_approval`
-    and the workbench's edit and remove actions. It is cosmetic in YAML terms
-    and it is *not* what `rewrite_staging`'s docstring promises, which is why
-    it is recorded rather than quietly tolerated.
+    They did not. Both wrapped at width 100 but chose different break points,
+    so re-emitting a long plain scalar re-folded it and left a trailing space
+    at the break. A bare load-and-dump with nothing edited changed 54 lines of
+    a real staging file — which made `rewrite_staging`'s promise to leave the
+    rest "byte-for-byte as it was" untrue, and churned the diff of every
+    promotion, since `promote` calls both `rewrite_staging` and
+    `prune_staging`. Neither writer folds now; both read `STAGING_YAML_WIDTH`.
     """
     long_note = (
         "Used when the speaker or an in-group member gives something to "
         "someone else. The receiver is not the speaker, and the giver is "
-        "marked with the particle が in a neutral description."
+        "marked with the particle が in a neutral description of the event."
     )
     records = [_record(usage_notes=long_note)]
     path = tmp_path / "source.pdf.yaml"
     write_staging(path, records, {"source_file": "source.pdf"})
-    original = path.read_text(encoding="utf-8")
-    assert "\n" in original
+    written = path.read_text(encoding="utf-8")
 
+    # PyYAML wrote it; a ruamel round trip must reproduce it exactly.
+    document = staging_module._load_document(path)
+    buffer = io.StringIO()
+    staging_module._parser().dump(document, buffer)
+    assert buffer.getvalue() == written
+
+    # ...and so must every writer built on that round trip.
     loaded, _meta = read_staging(path)
-    rewrite_staging(path, loaded)  # no field changed
-    after = path.read_text(encoding="utf-8")
+    rewrite_staging(path, loaded)
+    assert path.read_text(encoding="utf-8") == written
+    prune_staging(path, [True])
+    assert path.read_text(encoding="utf-8") == written
 
-    assert loaded[0].usage_notes == long_note
-    reread, _meta = read_staging(path)
-    assert reread[0].usage_notes == long_note, "the value itself must survive"
-    if after != original:
-        # The shape moved even though nothing was edited.
-        assert any(line.rstrip() != line for line in after.split("\n")), (
-            "expected ruamel's trailing space at a fold point"
-        )
+    assert long_note in written, "a long scalar stays on one line"
+    assert not any(
+        line.rstrip() != line for line in written.split("\n")
+    ), "no writer may leave trailing whitespace"
+
+
+def test_both_writers_read_the_same_width_constant() -> None:
+    """The constant exists so the two cannot drift apart again; a literal in
+    either writer would reintroduce the divergence silently."""
+    source = (
+        Path(staging_module.__file__).read_text(encoding="utf-8")
+    )
+    assert "width=STAGING_YAML_WIDTH" in source
+    assert "parser.width = STAGING_YAML_WIDTH" in source
+    assert "width=100" not in source

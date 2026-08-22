@@ -1113,7 +1113,7 @@ def _write_staging_unlocked(
         allow_unicode=True,
         sort_keys=False,
         default_flow_style=False,
-        width=100,
+        width=STAGING_YAML_WIDTH,
     )
     atomic_write_text(path, text)
     return path
@@ -1154,12 +1154,29 @@ def write_staging_under_lock(
     return _write_staging_unlocked(path, records, meta, force)
 
 
+#: Line width for every writer that touches a staging file — and the reason
+#: there is a constant rather than two literals.
+#:
+#: These files are *created* by PyYAML and *edited* by ruamel. Both used to
+#: wrap at 100, but they choose different break points, so re-emitting a long
+#: plain scalar re-folded it and left a trailing space at the break. A bare
+#: load-and-dump with nothing edited changed 54 lines of a real staging file,
+#: which made `rewrite_staging`'s promise to leave the rest "byte-for-byte as
+#: it was" untrue, and churned every promotion's diff.
+#:
+#: Folding is what the two disagree about, so neither folds. Long scalars go
+#: on one line: less pretty in a terminal diff, and exactly stable, which is
+#: what a file holding work that exists nowhere else needs. Keep both writers
+#: on this constant.
+STAGING_YAML_WIDTH = 1 << 30
+
+
 def _parser() -> YAML:
     """The round-trip parser used to edit a file in place, configured once."""
     parser = YAML()  # round-trip mode: comments, order and quoting survive
     parser.preserve_quotes = True
     parser.allow_unicode = True
-    parser.width = 100
+    parser.width = STAGING_YAML_WIDTH
     # Write `null` where PyYAML wrote `null`. Every staging file is *created*
     # by `write_staging` through PyYAML, which spells an absent value `null`;
     # ruamel's round-trip representer spells it as an empty scalar. The two
