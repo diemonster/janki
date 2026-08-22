@@ -1932,3 +1932,82 @@ def test_a_reidentification_from_a_stale_page_is_refused(tmp_path: Path) -> None
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_a_reidentification_carrying_an_unknown_field_is_refused(
+    tmp_path: Path,
+) -> None:
+    """`confirm` is the only optional field. Anything else means the form is
+    not the one this page rendered, and guessing which parts to honour is how
+    a field nobody offered becomes a field somebody can set."""
+    session = _held(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "lesson-9.pdf"))
+        fields = _reidentify_fields(page, 0)
+        fields["expression"] = "泊まる"
+        fields["reading"] = "とまる"
+        fields["meanings"] = "sneaked in"
+
+        status, _headers, body = _reidentify(server, session, "lesson-9.pdf", fields)
+
+        assert status == 400
+        assert b"meanings" in body
+        assert [c.record.id for c in session.detail("lesson-9.pdf").cards] == [
+            "word:泊まる:",
+            "word:走る:わしる",
+        ]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_re_identifying_into_a_word_you_already_own_is_allowed(
+    tmp_path: Path,
+) -> None:
+    """The most useful thing this flow does: realising a staged card *is* the
+    word already in your collection, and saying so. Promote's existing-wins
+    merge is built for exactly that, so refusing it would block the case the
+    feature exists for — even though the preview said it would merge."""
+    session = _held(tmp_path)
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps(
+            [
+                {
+                    "id": "word:泊まる:とまる",
+                    "expression": "泊まる",
+                    "reading": "とまる",
+                    "meanings": ["to stay the night (already curated)"],
+                    "examples": [],
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "lesson-9.pdf"))
+        fields = _reidentify_fields(page, 0)
+        fields["expression"] = "泊まる"
+        fields["reading"] = "とまる"
+
+        _status, _headers, preview = _reidentify(server, session, "lesson-9.pdf", fields)
+        text = preview.decode()
+        assert "would merge into that record" in text
+        assert "name=confirm" in text, "the merge case must be confirmable"
+
+        fields["confirm"] = "word:泊まる:とまる"
+        status, _headers, _body = _reidentify(server, session, "lesson-9.pdf", fields)
+
+        assert status == 303
+        ids = [c.record.id for c in session.detail("lesson-9.pdf").cards]
+        assert ids == ["word:泊まる:とまる", "word:走る:わしる"]
+        # ...and the page now shows the merge it will make.
+        _status, _headers, page = _request(
+            server, "GET", _source_url(session, "lesson-9.pdf")
+        )
+        assert b"already curated" in page
+    finally:
+        server.shutdown()
+        server.server_close()

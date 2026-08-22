@@ -198,13 +198,12 @@ def test_the_edit_view_is_structurally_sound(tmp_path: Path, scenario: str) -> N
 
 def test_the_reidentify_preview_is_structurally_sound(tmp_path: Path) -> None:
     session = _session(tmp_path, "reading_holds", "source.pdf")
-    detail = session.detail("source.pdf")
     panel = session.panel("source.pdf")
     assert panel is not None
     plan = plan_reidentification(panel.records, 0, "泊まる", "とまる")
     _check(
         render_reidentify(
-            detail,
+            "source.pdf",
             plan,
             token=session.token,
             csrf=session.csrf_token,

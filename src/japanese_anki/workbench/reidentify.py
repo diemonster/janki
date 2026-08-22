@@ -80,27 +80,47 @@ class Reidentification:
         return self.old_id != self.new_id
 
     @property
-    def collides(self) -> bool:
-        """Whether something already holds the new identity."""
-        return any(neighbour.relation == "same-id" for neighbour in self.neighbours)
+    def collides_in_source(self) -> bool:
+        """Whether another row in *this file* already holds the new identity.
+
+        Genuinely impossible: one staging file cannot carry two rows claiming
+        the same word, and promotion would not know which one to believe.
+        """
+        return any(
+            n.relation == "same-id" and n.where == "this source"
+            for n in self.neighbours
+        )
+
+    @property
+    def matches_collection(self) -> bool:
+        """Whether the collection already holds the new identity.
+
+        Not an error — the opposite. Deciding that a staged card *is* the word
+        you already have is the most useful thing this flow does, and promote's
+        existing-wins merge is built for exactly it. Refusing it would block
+        the case the feature exists for.
+        """
+        return any(
+            n.relation == "same-id" and n.where == "your collection"
+            for n in self.neighbours
+        )
 
     def consequences(self) -> list[str]:
         """Plain sentences, in the order they matter."""
         said: list[str] = []
         if not self.is_change:
             return ["This is the same word it already was. Nothing would change."]
-        collision = next(
-            (n for n in self.neighbours if n.relation == "same-id"), None
-        )
-        if collision is not None:
+        if self.collides_in_source:
+            said.append(
+                f"Another card in this source is already {self.new_expression} "
+                f"({self.new_reading}). Two cards cannot share one identity, so "
+                "this change cannot be saved."
+            )
+        elif self.matches_collection:
             said.append(
                 f"Your collection already has {self.new_expression} "
                 f"({self.new_reading}). Adding this card would merge into that "
                 "record, and the meanings already on it are kept."
-                if collision.where == "your collection"
-                else f"Another card in this source is already "
-                f"{self.new_expression} ({self.new_reading}). Two cards cannot "
-                "share one identity."
             )
         if self.was_exported:
             said.append(
@@ -212,10 +232,10 @@ def apply_reidentification(
     staged: Sequence[VocabularyRecord], plan: Reidentification
 ) -> tuple[VocabularyRecord, ...]:
     """The records with this card's identity changed. Pure."""
-    if plan.collides:
+    if plan.collides_in_source:
         raise ReidentifyError(
-            "Another card already has that identity, so this change would make "
-            "two cards claim one word."
+            "Another card in this source already has that identity, so this "
+            "change would make two cards claim one word."
         )
     updated = list(staged)
     record = updated[plan.index]

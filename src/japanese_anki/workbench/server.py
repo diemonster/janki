@@ -532,14 +532,22 @@ class _WorkbenchHandler(LocalOnlyHandler):
         fields: dict[str, list[str]] = {}
         for key, value in pairs:
             fields.setdefault(key, []).append(value)
-        required = {"action", "card", "csrf", "staging_snapshot", "expression", "reading"}
+        required = {
+            "action", "card", "csrf", "staging_snapshot", "expression", "reading",
+        }
         if not required <= set(fields) or any(
             len(values) != 1 for values in fields.values()
         ):
             self._error(400, "That form is not one this page offered.")
             return
-        if set(fields) - required != set() and set(fields) - required != {"confirm"}:
-            self._error(400, "That form carries a field this page does not offer.")
+        # `confirm` is the only optional field; anything else means the form is
+        # not the one this page rendered.
+        unknown = set(fields) - required - {"confirm"}
+        if unknown:
+            self._error(
+                400, f"That form carries a field this page does not offer: "
+                f"{', '.join(sorted(unknown))}"
+            )
             return
         if fields["action"][0] != "reidentify":
             self._error(400, "The form action must be 'reidentify'")
@@ -547,9 +555,11 @@ class _WorkbenchHandler(LocalOnlyHandler):
         if not secrets.compare_digest(fields["csrf"][0], session.csrf_token):
             self._error(403, "That form did not come from this workbench session.")
             return
-        detail = session.detail(source)
+        # One read, not two: `detail` and `panel` each re-open the file, and
+        # a plan computed from one while the page is rendered from the other
+        # would describe a state nothing was actually looked at.
         panel = session.panel(source)
-        if detail is None or panel is None:
+        if panel is None:
             self._error(404, "No such source.")
             return
         if fields["staging_snapshot"][0] != panel.staging_fingerprint:
@@ -584,7 +594,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
             self._send(
                 200,
                 render_reidentify(
-                    detail,
+                    source,
                     plan,
                     token=session.token,
                     csrf=session.csrf_token,

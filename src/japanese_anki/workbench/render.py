@@ -739,7 +739,7 @@ def _neighbour_html(neighbour: Any) -> str:
 
 
 def render_reidentify(
-    detail: Any,
+    source: str,
     plan: Any,
     *,
     token: str = "",
@@ -748,10 +748,8 @@ def render_reidentify(
 ) -> str:
     """Show what changing this card's identity would do, before it is done."""
     prefix = f"/{html.escape(token, quote=True)}" if token else ""
-    source = detail.journey.source
     source_path = f"{prefix}/source/{quote(source, safe='')}"
     action = html.escape(source_path + "/reidentify", quote=True)
-    card = detail.cards[plan.index]
 
     body = [
         "<!doctype html><html lang=en><head><meta charset=utf-8>",
@@ -794,11 +792,12 @@ def render_reidentify(
 
     body.append('<article class="card"><h4>What would happen</h4>')
     for sentence in plan.consequences():
-        css = "status problem" if plan.collides else "status"
+        # A same-file collision is an error; matching the collection is not.
+        css = "status problem" if plan.collides_in_source else "status"
         body.append(f'<p class="{css}">{_escaped(sentence)}</p>')
     body.append("</article>")
 
-    if plan.collides:
+    if plan.collides_in_source:
         body.append(
             '<div class="submit"><button type=submit>Check a different '
             "identity</button></div>"
@@ -822,6 +821,5 @@ def render_reidentify(
             "is</a></div>"
         )
     body.append("</form>")
-    del card
     body.append("</main></body></html>")
     return "".join(body)
