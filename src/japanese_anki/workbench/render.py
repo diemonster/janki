@@ -226,9 +226,17 @@ def _register_select(name: str, value: str) -> str:
     options and a blank are the whole domain, so offer exactly those.
     """
     ident = html.escape(name, quote=True)
+    current = value.strip().lower()
+    choices = [("", "— not set —"), ("polite", "Polite"), ("casual", "Casual")]
+    if current and current not in {"polite", "casual"}:
+        # A value this select cannot represent still has to survive being
+        # looked at. Without its own option nothing would be selected, the
+        # browser would fall back to the first entry, and merely opening the
+        # editor and saving would erase what someone wrote by hand.
+        choices.append((current, f"{value.strip()} (kept as written)"))
     options = []
-    for option, label in (("", "— not set —"), ("polite", "Polite"), ("casual", "Casual")):
-        selected = " selected" if option == value.strip().lower() else ""
+    for option, label in choices:
+        selected = " selected" if option == current else ""
         options.append(
             f'<option value="{html.escape(option, quote=True)}"{selected}>'
             f"{_escaped(label)}</option>"

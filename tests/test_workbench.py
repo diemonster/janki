@@ -12,6 +12,7 @@ Nothing here starts a browser or touches the network beyond 127.0.0.1.
 from __future__ import annotations
 
 import difflib
+import html as html_module
 import http.client
 import json
 import re
@@ -1366,6 +1367,83 @@ def test_register_is_a_choice_not_a_text_box(tmp_path: Path) -> None:
         assert '<option value="casual">' in text
         # ...and no textarea claiming to hold a register.
         assert '<textarea id="eg0_0"' not in text
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_register_the_select_cannot_represent_survives_being_edited(
+    tmp_path: Path,
+) -> None:
+    """A `<select>` destroys anything outside its options: nothing matches, the
+    browser falls back to the first entry, and merely opening the editor and
+    saving erases what someone wrote by hand. An unrecognized value therefore
+    gets its own option and comes back unchanged."""
+    session = _staged(tmp_path)
+    staging_path = tmp_path / "staging" / "table.pdf.yaml"
+    data = yaml.safe_load(staging_path.read_text(encoding="utf-8"))
+    data["records"][0]["examples"][0]["register"] = "formal"
+    staging_path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
+        assert '<option value="formal" selected>' in page.decode()
+
+        # Round-trip through a save that changes something else entirely.
+        status, _headers, _body = _submit_edit(
+            server,
+            session,
+            "table.pdf",
+            _form_fields(page),
+            [("eg0_0", "formal"), ("ee0_0", "I jog through the park.")],
+        )
+        assert status == 303
+        card = session.detail("table.pdf").cards[0]
+        assert card.record.examples[0].register == "formal"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_resubmitting_every_field_verbatim_writes_nothing(tmp_path: Path) -> None:
+    """The strongest form of "only what you edited changes": submit the whole
+    editor back exactly as rendered and the file must be byte-identical.
+
+    This is the test that catches a false positive in the changed-record
+    comparison. One did exist — examples were rebuilt as a tuple while
+    `to_dict` emits the declared list, so every card compared as changed and
+    every save rewrote every row, re-folding long scalars the editor does not
+    even expose, including `inclusion_reason`.
+    """
+    _stage(tmp_path, "lesson_with_grammar", filename="lesson.pdf")
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+    staging_path = tmp_path / "staging" / "lesson.pdf.yaml"
+    before = staging_path.read_bytes()
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "lesson.pdf"))
+        text = page.decode()
+        fields: list[tuple[str, str]] = [
+            (name, html_module.unescape(value))
+            for name, value in re.findall(
+                r'<textarea id="(\w+)"[^>]*>(.*?)</textarea>', text, re.S
+            )
+        ]
+        for name, options in re.findall(
+            r'<select id="(\w+)"[^>]*>(.*?)</select>', text, re.S
+        ):
+            chosen = re.search(r'<option value="([^"]*)" selected>', options)
+            fields.append((name, chosen.group(1) if chosen else ""))
+        assert fields, "the editor rendered no fields"
+
+        status, headers, _body = _submit_edit(
+            server, session, "lesson.pdf", _form_fields(page), fields
+        )
+        assert status == 303
+        assert "edited=0" in headers["location"]
+        assert staging_path.read_bytes() == before
     finally:
         server.shutdown()
         server.server_close()

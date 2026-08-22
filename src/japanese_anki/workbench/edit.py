@@ -167,7 +167,10 @@ def apply_edits(
                 current[example_index],
                 **{name: value.strip() for name, value in fields.items()},
             )
-        updated[card_index] = replace(record, examples=tuple(current))
+        # A list, matching `VocabularyRecord.examples`' declared type.
+        # A tuple compares unequal to the list `to_dict` emits, which
+        # made every resubmit look changed and rewrote untouched rows.
+        updated[card_index] = replace(record, examples=current)
     return tuple(updated)
 
 
