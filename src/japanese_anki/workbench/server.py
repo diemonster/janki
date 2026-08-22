@@ -31,21 +31,29 @@ from __future__ import annotations
 import secrets
 import sys
 import webbrowser
+from collections.abc import Sequence
 from dataclasses import dataclass
 from urllib.parse import parse_qsl, quote, unquote
 
-from japanese_anki import staging
+from japanese_anki import ledger, staging
 from japanese_anki.application import SourceJourney, source_detail, source_journeys
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
+from japanese_anki.io import load_records
 from japanese_anki.localhttp import (
     MAX_BODY_BYTES,
     LocalOnlyHandler,
     LocalOnlyServer,
     bind_loopback,
 )
-from japanese_anki.workbench import edit, review
-from japanese_anki.workbench.render import STYLE, render_dashboard, render_source
+from japanese_anki.models import VocabularyRecord
+from japanese_anki.workbench import edit, reidentify, review
+from japanese_anki.workbench.render import (
+    STYLE,
+    render_dashboard,
+    render_reidentify,
+    render_source,
+)
 
 __all__ = ["WorkbenchSession", "make_server", "serve"]
 
@@ -85,6 +93,24 @@ class WorkbenchSession:
 
     def detail(self, source: str):
         return source_detail(self.config, source)
+
+    def canonical_records(self) -> list[VocabularyRecord]:
+        """What the collection already holds, for collision detection."""
+        if not self.config.normalized_file.exists():
+            return []
+        return load_records(self.config.normalized_file)
+
+    def exported_ids(
+        self, records: Sequence[VocabularyRecord]
+    ) -> frozenset[str]:
+        """Which of these have already shipped in a built deck."""
+        if not self.config.ledger_file.exists():
+            return frozenset()
+        try:
+            book = ledger.load(self.config.ledger_file)
+        except JankiError:
+            return frozenset()
+        return book.ever_exported(record.id for record in records)
 
     def panel(self, source: str) -> review.ReviewPanel | None:
         """A freshly opened review panel for one source, or None.
@@ -135,7 +161,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
         query = self.path.split("?", 1)
         return len(query) == 2 and dict(parse_qsl(query[1])).get("edit") == "1"
 
-    def _saved_banner(self) -> tuple[int, bool, int, int] | None:
+    def _saved_banner(self) -> tuple[int, bool, int, int, int] | None:
         """The post-redirect-get result, if this is one. Display only."""
         query = self.path.split("?", 1)
         if len(query) != 2:
@@ -157,11 +183,16 @@ class _WorkbenchHandler(LocalOnlyHandler):
             removed = int(fields.get("removed", "0"))
         except ValueError:
             removed = 0
+        try:
+            reidentified = int(fields.get("reidentified", "0"))
+        except ValueError:
+            reidentified = 0
         return (
             max(records, 0),
             fields.get("grammar") == "1",
             max(edited, 0),
             max(removed, 0),
+            max(reidentified, 0),
         )
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
@@ -260,7 +291,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
             return
         rest = route[len(_SOURCE_PREFIX) :]
         name, _, action = rest.rpartition("/")
-        if action not in {"approve", "edit", "remove"} or not name:
+        if action not in {"approve", "edit", "remove", "reidentify"} or not name:
             self._error(404, "No such workbench action.")
             return
         body = self._read_body()
@@ -270,8 +301,10 @@ class _WorkbenchHandler(LocalOnlyHandler):
             self._approve(unquote(name), body)
         elif action == "edit":
             self._edit(unquote(name), body)
-        else:
+        elif action == "remove":
             self._remove(unquote(name), body)
+        else:
+            self._reidentify(unquote(name), body)
 
     def _approve(self, source: str, body: bytes) -> None:
         session = self.server.session
@@ -473,6 +506,113 @@ class _WorkbenchHandler(LocalOnlyHandler):
             return
         self._redirect_to_source(source, removed=1)
 
+    def _reidentify(self, source: str, body: bytes) -> None:
+        """Two passes over one route: preview, then apply.
+
+        The first submission renders what the change would do — the new
+        identity, the neighbours it would sit beside or collide with, and what
+        happens to review history. Only a second submission carrying the exact
+        identity that preview showed actually writes. Binding the confirmation
+        to that string is what stops the form drifting between the page
+        someone read and the change they authorised.
+        """
+        session = self.server.session
+        try:
+            pairs = parse_qsl(
+                body.decode("utf-8", errors="strict"),
+                keep_blank_values=True,
+                strict_parsing=True,
+                encoding="utf-8",
+                errors="strict",
+                max_num_fields=64,
+            )
+        except (UnicodeError, ValueError) as exc:
+            self._error(400, f"The submitted form is malformed: {exc}")
+            return
+        fields: dict[str, list[str]] = {}
+        for key, value in pairs:
+            fields.setdefault(key, []).append(value)
+        required = {"action", "card", "csrf", "staging_snapshot", "expression", "reading"}
+        if not required <= set(fields) or any(
+            len(values) != 1 for values in fields.values()
+        ):
+            self._error(400, "That form is not one this page offered.")
+            return
+        if set(fields) - required != set() and set(fields) - required != {"confirm"}:
+            self._error(400, "That form carries a field this page does not offer.")
+            return
+        if fields["action"][0] != "reidentify":
+            self._error(400, "The form action must be 'reidentify'")
+            return
+        if not secrets.compare_digest(fields["csrf"][0], session.csrf_token):
+            self._error(403, "That form did not come from this workbench session.")
+            return
+        detail = session.detail(source)
+        panel = session.panel(source)
+        if detail is None or panel is None:
+            self._error(404, "No such source.")
+            return
+        if fields["staging_snapshot"][0] != panel.staging_fingerprint:
+            self._error(
+                409,
+                "This source changed after the page was rendered. Nothing was "
+                "changed. Reload and review the current cards.",
+            )
+            return
+        try:
+            index = int(fields["card"][0])
+        except ValueError:
+            self._error(400, "That form names no card.")
+            return
+        try:
+            plan = reidentify.plan_reidentification(
+                panel.records,
+                index,
+                fields["expression"][0],
+                fields["reading"][0],
+                existing=session.canonical_records(),
+                exported_ids=session.exported_ids(panel.records),
+            )
+        except reidentify.ReidentifyError as exc:
+            self._error(400, str(exc))
+            return
+
+        confirmed = fields.get("confirm", [""])[0]
+        if confirmed != plan.new_id:
+            # First pass, or a confirmation that does not match what the
+            # preview showed. Either way: show, do not write.
+            self._send(
+                200,
+                render_reidentify(
+                    detail,
+                    plan,
+                    token=session.token,
+                    csrf=session.csrf_token,
+                    staging_snapshot=panel.staging_fingerprint,
+                ),
+            )
+            return
+        try:
+            updated = reidentify.apply_reidentification(panel.records, plan)
+        except reidentify.ReidentifyError as exc:
+            self._error(409, str(exc))
+            return
+        try:
+            text = staging.render_staging_update(panel.staging_path, updated)
+            review.bound_replace(
+                panel.staging_path, text, panel.staging_bytes, label="staging file"
+            )
+        except review.StaleReviewError as exc:
+            self._error(409, f"{exc}. Nothing was changed by this attempt.")
+            return
+        except review.IndeterminateWriteError as exc:
+            self._error(409, f"{exc} Reload this source and check the card.")
+            return
+        except JankiError as exc:
+            self._error(500, f"{exc}. Nothing was proven changed.")
+            return
+        self._redirect_to_source(source, reidentified=1)
+
     def _redirect_to_source(
         self,
         source: str,
@@ -481,12 +621,13 @@ class _WorkbenchHandler(LocalOnlyHandler):
         grammar: bool = False,
         edited: int = 0,
         removed: int = 0,
+        reidentified: int = 0,
     ) -> None:
         """Post/redirect/get, so a reload cannot resubmit a write."""
         target = (
             f"/{self.server.session.token}/source/{quote(source, safe='')}"
             f"?saved={saved}&grammar={'1' if grammar else '0'}"
-            f"&edited={edited}&removed={removed}"
+            f"&edited={edited}&removed={removed}&reidentified={reidentified}"
         )
         self.send_response(303)
         self.send_header("Location", target)

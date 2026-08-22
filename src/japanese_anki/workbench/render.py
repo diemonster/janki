@@ -21,7 +21,7 @@ from urllib.parse import quote
 
 from japanese_anki.application import SourceJourney
 
-__all__ = ["STYLE", "render_dashboard", "render_source"]
+__all__ = ["STYLE", "render_dashboard", "render_reidentify", "render_source"]
 
 STYLE = """
 :root { color-scheme: light dark; }
@@ -331,6 +331,7 @@ def _card_html(
     editing: bool = False,
     index: int = 0,
     remove_action: str = "",
+    reidentify_action: str = "",
 ) -> str:
     record = card.record
     parts = [
@@ -384,6 +385,8 @@ def _card_html(
     parts.append(_evidence_html(card))
     if remove_action:
         parts.append(remove_action)
+    if reidentify_action:
+        parts.append(reidentify_action)
     parts.append("</article>")
     return "".join(parts)
 
@@ -539,7 +542,7 @@ def render_source(
     csrf: str = "",
     staging_snapshot: str = "",
     patterns_snapshot: str = "",
-    saved: tuple[int, bool, int, int] | None = None,
+    saved: tuple[int, bool, int, int, int] | None = None,
     editing: bool = False,
 ) -> str:
     """One source's cards and grammar.
@@ -617,6 +620,11 @@ def render_source(
                 if editing
                 else ""
             ),
+            reidentify_action=(
+                _reidentify_form(index)
+                if editing
+                else ""
+            ),
         )
         for index, card in enumerate(detail.cards)
     )
@@ -640,14 +648,23 @@ def render_source(
             "saving</a></div></form>"
         )
         body.append(_remove_forms(detail, source_path, csrf, staging_snapshot))
+        body.append(
+            _reidentify_forms(detail, source_path, csrf, staging_snapshot)
+        )
     body.append("</main></body></html>")
     return "".join(body)
 
 
 def _saved_banner(
-    records: int, grammar: bool, edited: int = 0, removed: int = 0
+    records: int,
+    grammar: bool,
+    edited: int = 0,
+    removed: int = 0,
+    reidentified: int = 0,
 ) -> str:
     saved = []
+    if reidentified:
+        saved.append("a card's identity")
     if removed:
         saved.append(f"{removed} card{'s' if removed != 1 else ''} removed")
     if edited:
@@ -661,3 +678,150 @@ def _saved_banner(
     return (
         f'<p class="status reviewed">Saved: {_escaped(" and ".join(saved))}.</p>'
     )
+
+
+# --- W2d: re-identification -------------------------------------------------
+
+
+def _reidentify_form(index: int) -> str:
+    """The control that opens the flow, from inside the editor.
+
+    It submits to a route that *shows* before it writes, so this is a button
+    that leads to a decision rather than one that makes it.
+    """
+    return (
+        '<div class="reidentify">'
+        f'<button type=submit form="ri{index}">'
+        "This is a different word than it says</button>"
+        "<span class=counts>Changing the expression or reading changes which "
+        "word this card is. That is a different question from fixing a gloss, "
+        "so it gets its own page.</span>"
+        "</div>"
+    )
+
+
+def _reidentify_forms(
+    detail: Any, source_path: str, csrf: str, snapshot: str
+) -> str:
+    """One form per card, declared after the editor's form closes."""
+    action = html.escape(source_path + "/reidentify", quote=True)
+    parts = []
+    for index, card in enumerate(detail.cards):
+        record = card.record
+        parts.append(
+            f'<form id="ri{index}" method=post action="{action}" hidden>'
+            '<input type=hidden name=action value="reidentify">'
+            f'<input type=hidden name=csrf value="{html.escape(csrf, quote=True)}">'
+            "<input type=hidden name=staging_snapshot "
+            f'value="{html.escape(snapshot, quote=True)}">'
+            f'<input type=hidden name=card value="{index}">'
+            "<input type=hidden name=expression "
+            f'value="{html.escape(record.expression, quote=True)}">'
+            "<input type=hidden name=reading "
+            f'value="{html.escape(record.reading, quote=True)}">'
+            "</form>"
+        )
+    return "".join(parts)
+
+
+def _neighbour_html(neighbour: Any) -> str:
+    label = {
+        "same-id": "Already this exact word",
+        "same-reading": "Same reading, different spelling",
+        "same-spelling": "Same spelling, different reading",
+    }[neighbour.relation]
+    identity = f"{neighbour.expression} ({neighbour.reading})"
+    return (
+        f"<li><b>{_escaped(label)}</b> — "
+        f'<span lang="ja">{_escaped(identity)}</span>'
+        f" in {_escaped(neighbour.where)}</li>"
+    )
+
+
+def render_reidentify(
+    detail: Any,
+    plan: Any,
+    *,
+    token: str = "",
+    csrf: str = "",
+    staging_snapshot: str = "",
+) -> str:
+    """Show what changing this card's identity would do, before it is done."""
+    prefix = f"/{html.escape(token, quote=True)}" if token else ""
+    source = detail.journey.source
+    source_path = f"{prefix}/source/{quote(source, safe='')}"
+    action = html.escape(source_path + "/reidentify", quote=True)
+    card = detail.cards[plan.index]
+
+    body = [
+        "<!doctype html><html lang=en><head><meta charset=utf-8>",
+        '<meta name="viewport" content="width=device-width, initial-scale=1">',
+        f"<title>Re-identify — {_escaped(source)}</title>",
+        f'<link rel=stylesheet href="{prefix}/style.css">',
+        "</head><body><main>",
+        f'<p><a href="{html.escape(source_path, quote=True)}">&larr; Back to '
+        f"{_escaped(source)}</a></p>",
+        "<h1>Is this a different word?</h1>",
+        '<article class="card">',
+        "<h4>What this card says now</h4>",
+        f'<p class="ja" lang="ja">{_escaped(plan.old_expression)} '
+        f"({_escaped(plan.old_reading)})</p>",
+        f"<p class=counts>{_escaped(plan.old_id)}</p>",
+        "</article>",
+        f'<form method=post action="{action}">',
+        '<input type=hidden name=action value="reidentify">',
+        f'<input type=hidden name=csrf value="{html.escape(csrf, quote=True)}">',
+        "<input type=hidden name=staging_snapshot "
+        f'value="{html.escape(staging_snapshot, quote=True)}">',
+        f'<input type=hidden name=card value="{plan.index}">',
+        '<article class="card"><h4>What it should say</h4>',
+        # Prefilled with what was typed, never with a suggestion: deciding that
+        # a kana spelling "should" be a particular kanji is reading Japanese,
+        # which this project reserves for the model and the person.
+        _textarea("expression", "Japanese expression", plan.new_expression,
+                  rows=1, japanese=True),
+        _textarea("reading", "Reading", plan.new_reading, rows=1, japanese=True),
+        f"<p class=counts>New identity: {_escaped(plan.new_id)}</p>",
+        "</article>",
+    ]
+
+    if plan.neighbours:
+        body.append(
+            '<article class="card"><h4>Words this would sit beside</h4><ul>'
+            + "".join(_neighbour_html(n) for n in plan.neighbours)
+            + "</ul></article>"
+        )
+
+    body.append('<article class="card"><h4>What would happen</h4>')
+    for sentence in plan.consequences():
+        css = "status problem" if plan.collides else "status"
+        body.append(f'<p class="{css}">{_escaped(sentence)}</p>')
+    body.append("</article>")
+
+    if plan.collides:
+        body.append(
+            '<div class="submit"><button type=submit>Check a different '
+            "identity</button></div>"
+        )
+    elif plan.is_change:
+        body.append(
+            "<div class=\"submit\">"
+            "<button type=submit name=confirm "
+            f'value="{html.escape(plan.new_id, quote=True)}">'
+            f"Yes — this card is {_escaped(plan.new_expression)} "
+            f"({_escaped(plan.new_reading)})</button> "
+            "<button type=submit>Check a different identity</button> "
+            f'<a href="{html.escape(source_path, quote=True)}">Leave it as it '
+            "is</a></div>"
+        )
+    else:
+        body.append(
+            '<div class="submit"><button type=submit>Check a different '
+            "identity</button> "
+            f'<a href="{html.escape(source_path, quote=True)}">Leave it as it '
+            "is</a></div>"
+        )
+    body.append("</form>")
+    del card
+    body.append("</main></body></html>")
+    return "".join(body)

@@ -1166,6 +1166,21 @@ class Ledger:
                 result.append(key)
         return result
 
+    def ever_exported(self, ids: Iterable[str]) -> frozenset[str]:
+        """Which of ``ids`` have shipped in *any* deck build.
+
+        `unexported` asks about one deck because that is what `build
+        --only-new` needs. Re-identification asks a different question: an
+        Anki note is matched by a GUID derived from the record ID, so changing
+        that ID strands whatever has already shipped under the old one — in
+        any deck at all.
+        """
+        return frozenset(
+            key
+            for key in {str(record_id) for record_id in ids}
+            if (self.records.get(key) or {}).get("exports")
+        )
+
     def audio_file_for(
         self,
         record_id: str,

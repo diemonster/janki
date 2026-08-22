@@ -1635,3 +1635,300 @@ def test_removal_says_it_cannot_be_undone(tmp_path: Path) -> None:
     finally:
         server.shutdown()
         server.server_close()
+
+
+# --- W2d: deliberate re-identification --------------------------------------
+
+
+def _reidentify_fields(body: bytes, index: int) -> dict[str, str]:
+    match = re.search(rf'<form id="ri{index}"[^>]*>(.*?)</form>', body.decode(), re.S)
+    assert match, f"no re-identify form for card {index}"
+    return dict(
+        re.findall(r'<input type=hidden name=(\w+) value="([^"]*)">', match.group(1))
+    )
+
+
+def _reidentify(
+    server: Any,
+    session: WorkbenchSession,
+    source: str,
+    fields: dict[str, str],
+) -> tuple[int, dict[str, str], bytes]:
+    return _request(
+        server,
+        "POST",
+        f"/{session.token}/source/{quote(source, safe='')}/reidentify",
+        headers={
+            "Host": server.expected_host,
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body=urlencode(list(fields.items())).encode(),
+    )
+
+
+def _held(tmp_path: Path) -> WorkbenchSession:
+    _stage(tmp_path, "reading_holds", filename="lesson-9.pdf")
+    return WorkbenchSession.open(ProjectConfig.load(tmp_path))
+
+
+def test_the_first_submission_previews_and_writes_nothing(tmp_path: Path) -> None:
+    """The whole point of the flow: see the consequence before causing it."""
+    session = _held(tmp_path)
+    staging_path = tmp_path / "staging" / "lesson-9.pdf.yaml"
+    before = staging_path.read_bytes()
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "lesson-9.pdf"))
+        fields = _reidentify_fields(page, 0)
+        fields["expression"] = "泊まる"
+        fields["reading"] = "とまる"
+
+        status, _headers, body = _reidentify(server, session, "lesson-9.pdf", fields)
+
+        assert status == 200
+        text = body.decode()
+        assert "word:泊まる:とまる" in text
+        assert "Is this a different word?" in text
+        assert staging_path.read_bytes() == before
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_confirming_the_previewed_identity_applies_it(tmp_path: Path) -> None:
+    session = _held(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "lesson-9.pdf"))
+        fields = _reidentify_fields(page, 0)
+        fields["expression"] = "泊まる"
+        fields["reading"] = "とまる"
+        fields["confirm"] = "word:泊まる:とまる"
+
+        status, headers, _body = _reidentify(server, session, "lesson-9.pdf", fields)
+
+        assert status == 303
+        assert "reidentified=1" in headers["location"]
+        ids = [c.record.id for c in session.detail("lesson-9.pdf").cards]
+        assert ids == ["word:泊まる:とまる", "word:走る:わしる"]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_confirmation_for_a_different_identity_only_previews(
+    tmp_path: Path,
+) -> None:
+    """The confirmation is bound to the exact identity the preview showed. A
+    mismatch means the form drifted between the page someone read and the
+    change they authorised, so it shows again rather than writing."""
+    session = _held(tmp_path)
+    staging_path = tmp_path / "staging" / "lesson-9.pdf.yaml"
+    before = staging_path.read_bytes()
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "lesson-9.pdf"))
+        fields = _reidentify_fields(page, 0)
+        fields["expression"] = "泊まる"
+        fields["reading"] = "とまる"
+        fields["confirm"] = "word:止まる:とまる"  # not what the preview computed
+
+        status, _headers, _body = _reidentify(server, session, "lesson-9.pdf", fields)
+
+        assert status == 200
+        assert staging_path.read_bytes() == before
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_collision_is_shown_and_refused(tmp_path: Path) -> None:
+    """Two cards cannot claim one word. The preview says so and offers no
+    confirm button at all, rather than letting the write fail later."""
+    session = _held(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "lesson-9.pdf"))
+        fields = _reidentify_fields(page, 0)
+        # card 1 is already 走る (わしる)
+        fields["expression"] = "走る"
+        fields["reading"] = "わしる"
+
+        status, _headers, body = _reidentify(server, session, "lesson-9.pdf", fields)
+        text = body.decode()
+
+        assert status == 200
+        assert "Already this exact word" in text
+        assert "Two cards cannot" in text
+        assert "name=confirm" not in text
+
+        # ...and even a forced confirmation is refused.
+        fields["confirm"] = "word:走る:わしる"
+        status, _headers, _body = _reidentify(server, session, "lesson-9.pdf", fields)
+        assert status == 409
+        ids = [c.record.id for c in session.detail("lesson-9.pdf").cards]
+        assert ids == ["word:泊まる:", "word:走る:わしる"]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_an_exported_card_is_warned_about_review_history(tmp_path: Path) -> None:
+    """The Anki GUID derives from the record ID, so a card that already
+    shipped becomes a *different* note under a new identity. Someone deciding
+    this needs to know their review history stays with the old one."""
+    session = _held(tmp_path)
+    (tmp_path / "ledger.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "pending_batches": {},
+                "records": {
+                    "word:泊まる:": {
+                        "added_at": "2026-08-01",
+                        "exports": {"week-3": {"at": "2026-08-02"}},
+                    }
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "lesson-9.pdf"))
+        fields = _reidentify_fields(page, 0)
+        fields["expression"] = "泊まる"
+        fields["reading"] = "とまる"
+        _status, _headers, body = _reidentify(server, session, "lesson-9.pdf", fields)
+        text = body.decode()
+        assert "already been built into a deck" in text
+        assert "no review history" in text
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_blank_reading_cannot_become_an_identity(tmp_path: Path) -> None:
+    """A blank reading is exactly what the promote gate holds a row back for.
+    Minting a permanent ID from one would walk into that refusal with the ID
+    already written."""
+    session = _held(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "lesson-9.pdf"))
+        fields = _reidentify_fields(page, 0)
+        fields["expression"] = "泊まる"
+        fields["reading"] = "   "
+        status, _headers, body = _reidentify(server, session, "lesson-9.pdf", fields)
+        assert status == 400
+        assert b"reading" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_re_identification_never_proposes_an_identity(tmp_path: Path) -> None:
+    """Deciding a kana spelling "should" be particular kanji is reading
+    Japanese, which this project reserves for the model and the person. The
+    form is prefilled with what the card already says, never a guess."""
+    session = _held(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "lesson-9.pdf"))
+        fields = _reidentify_fields(page, 0)
+        assert fields["expression"] == "泊まる"
+        assert fields["reading"] == ""  # the card's own blank reading, not a guess
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_re_identification_leaves_approval_and_sentences_alone(
+    tmp_path: Path,
+) -> None:
+    """Approval covers the exact Japanese sentences, and those do not change
+    when the card's identity does."""
+    session = _held(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(
+            server, "GET", _source_url(session, "lesson-9.pdf")
+        )
+        _approve(
+            server,
+            session,
+            "lesson-9.pdf",
+            fields=_form_fields(page),
+            records=["word:泊まる:"],
+        )
+        before = session.detail("lesson-9.pdf").cards[0]
+        assert before.authority == "existing"
+        sentences = [e.japanese for e in before.record.examples]
+
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "lesson-9.pdf"))
+        fields = _reidentify_fields(page, 0)
+        fields["expression"] = "泊まる"
+        fields["reading"] = "とまる"
+        fields["confirm"] = "word:泊まる:とまる"
+        status, _headers, _body = _reidentify(server, session, "lesson-9.pdf", fields)
+        assert status == 303
+
+        after = session.detail("lesson-9.pdf").cards[0]
+        assert after.record.id == "word:泊まる:とまる"
+        assert [e.japanese for e in after.record.examples] == sentences
+        assert after.authority == "existing"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_reidentification_without_the_session_csrf_is_refused(
+    tmp_path: Path,
+) -> None:
+    session = _held(tmp_path)
+    staging_path = tmp_path / "staging" / "lesson-9.pdf.yaml"
+    before = staging_path.read_bytes()
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "lesson-9.pdf"))
+        fields = _reidentify_fields(page, 0)
+        fields["expression"] = "泊まる"
+        fields["reading"] = "とまる"
+        fields["confirm"] = "word:泊まる:とまる"
+        fields["csrf"] = "forged"
+
+        status, _headers, _body = _reidentify(server, session, "lesson-9.pdf", fields)
+
+        assert status == 403
+        assert staging_path.read_bytes() == before
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_reidentification_from_a_stale_page_is_refused(tmp_path: Path) -> None:
+    """The identity someone confirmed was computed against specific bytes. If
+    the file moved under them, the card at that index may not be the card they
+    were looking at."""
+    session = _held(tmp_path)
+    staging_path = tmp_path / "staging" / "lesson-9.pdf.yaml"
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "lesson-9.pdf"))
+        fields = _reidentify_fields(page, 0)
+        fields["expression"] = "泊まる"
+        fields["reading"] = "とまる"
+        fields["confirm"] = "word:泊まる:とまる"
+
+        staging_path.write_bytes(staging_path.read_bytes() + b"\n# concurrent edit\n")
+        changed = staging_path.read_bytes()
+
+        status, _headers, body = _reidentify(server, session, "lesson-9.pdf", fields)
+
+        assert status == 409
+        assert b"Nothing was changed" in body
+        assert staging_path.read_bytes() == changed
+    finally:
+        server.shutdown()
+        server.server_close()
