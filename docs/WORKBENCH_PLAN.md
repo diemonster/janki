@@ -441,7 +441,7 @@ was not corrupted — so that was redundant defense-in-depth, not an untested
 guard. Removing *both* fails four tests. Recorded so a future reader does not
 delete the "redundant" check believing it is dead.
 
-### [ ] W2c Field edits, removal, undo before save
+### [x] W2c Field edits, removal, undo before save
 
 Grow the review snapshot into safe field edits, card removal, and undo before
 save. Round-trip and surgical writers preserve every unedited byte, comment,
@@ -453,7 +453,51 @@ read-only in the form.
 - **Ships when:** you fix a gloss, remove a card and undo it in the tab, and
   every byte you did not edit survives unchanged.
 
-### [ ] W2d Deliberate re-identification
+**Done 2026-08-22.** `?edit=1` renders textareas for the human-owned fields,
+and saving goes through the same compare-and-swap as approval. Editable is an
+**allowlist** — meanings, the usage note, and five example fields. Source
+page, source sentence, inclusion reason, confidence and the accounting block
+have no control at all: a form that let someone retype the evidence would let
+them retype history. An unrecognized form field is refused, not ignored.
+Editing and approving are separate views; one form carrying both would let a
+stray click approve sentences someone was only correcting. Undo-before-save
+is a `type=reset` button — no JavaScript, no round trip — plus a "Leave
+without saving" link. Register is a `<select>`, not free text: anything
+outside polite/casual makes an example incomplete, so a typo would quietly
+degrade a card. Card removal drops one proposed row through
+`render_staging_prune` plus the same bound write, and the control says the
+deletion cannot be undone and that re-reading the source would be another
+paid call, because the row is the model's output and nothing else in the
+repository holds it once it leaves live staging. **Scope note:** four
+findings, all of which are the useful part. First, a `<select>` destroys
+what it cannot represent: a register value outside its options rendered with
+nothing selected, so the browser fell back to the first entry and merely
+opening the editor and saving erased it — the fix for one silent-degradation
+risk had created another. Unrecognized values now get their own option and
+survive a round trip. Second, every save was rewriting every card:
+`apply_edits` rebuilt examples as a tuple while `VocabularyRecord.examples`
+is declared a list and `to_dict` passes the container through, so the
+changed-record comparison was always true. Every row got rewritten,
+re-folding long scalars the editor does not expose, including
+`inclusion_reason`. The guard now is a test that resubmits the entire editor
+verbatim and demands byte-identity. Third, the removal buttons would not
+have worked in a browser: they were first rendered as a `<form>` nested
+inside the edit form, and forms cannot nest, so a browser silently drops the
+inner one. They now use the HTML5 `form=` attribute with the forms declared
+after the editor's form closes, and a test pins that no `<form>` opens
+inside the editor. Fourth, the two YAML writers disagreed: staging files are
+created by PyYAML and edited by ruamel, and both wrapped at width 100 but
+chose different break points, so a bare load-and-dump with nothing edited
+changed 54 lines of a real staging file and left trailing whitespace. That
+made `rewrite_staging`'s "byte-for-byte as it was" promise untrue and
+churned every promotion's diff, since `promote` calls both `rewrite_staging`
+and `prune_staging`. Both writers now read one `STAGING_YAML_WIDTH` constant
+and neither folds. The two live staging files were reformatted once, with
+every record and metadata value read back and asserted identical; the twelve
+archives under `data/staging/done/` were deliberately left alone as
+immutable promotion evidence that nothing rewrites.
+
+### [x] W2d Deliberate re-identification
 
 A deliberate **Re-identify this draft word** flow. Re-identification is a
 separate flow because changing `とまる` to
@@ -466,6 +510,33 @@ scope.
 - **Depends on:** W2c. **Files:** `workbench/`, `application/`, `staging.py`.
 - **Ships when:** a staged `とまる` becomes `泊まる[とまる]` in the tab, with
   neighbours and the study-history consequence shown before the save.
+
+**Done 2026-08-22.** `workbench/reidentify.py` plans a change without
+writing: the new stable ID, the neighbours it would sit beside — same
+identity, same reading, same spelling, in this source and in the collection —
+and what happens to review history. The route makes two passes: the first
+submission renders the consequences, and only a second carrying the exact
+identity the preview computed actually writes. Binding the confirmation to
+that string stops the form drifting between the page someone read and the
+change they authorised. Because the Anki GUID derives from the record ID, a
+card that already shipped becomes a different note under a new identity —
+the old note keeps its review history and the new one starts from zero.
+`Ledger.ever_exported` (new) answers that, asking about any deck rather than
+one, which is what `unexported` is for. A collision refuses: the preview
+shows it and offers no confirm button, and a forced confirmation is still
+refused. A blank reading cannot become an identity — that is exactly what
+the promote gate holds a row back for. It never proposes an identity: the
+form is prefilled with what the card already says, and deciding a kana
+spelling "should" be particular kanji is reading Japanese, which
+`docs/DESIGN.md` reserves for the model and the person. Approval and
+sentences are untouched — approval covers the exact Japanese, and that does
+not change when the identity does. **Scope note:** five mutations were run
+against the route and two initially survived — the CSRF check and the
+snapshot check had no tests, because coverage from the approve, edit and
+remove routes does not carry over to a new one. Both now have tests. V1
+re-identifies staged rows only; migrating a canonical identity has to move
+review history and rewrite what the ledger says shipped, and remains out of
+scope.
 
 ### [ ] W3 Intake and the extraction job
 
