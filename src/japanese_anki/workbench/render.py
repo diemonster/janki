@@ -591,7 +591,3 @@ def _saved_banner(records: int, grammar: bool, edited: int = 0) -> str:
     return (
         f'<p class="status reviewed">Saved: {_escaped(" and ".join(saved))}.</p>'
     )
-
-
-def _saved_where(root: Path | None) -> str:
-    return f" at {_escaped(root)}" if root is not None else ""
