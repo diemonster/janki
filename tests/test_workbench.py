@@ -582,14 +582,23 @@ def test_a_source_is_opened_by_name_not_by_filename(tmp_path: Path) -> None:
 
 
 def _form_fields(body: bytes) -> dict[str, str]:
-    """The hidden fields the page rendered, as a browser would submit them."""
+    """The first form's hidden fields, as a browser would submit them.
+
+    First-wins, not last-wins: an edit page also carries a removal form per
+    card, and those repeat `action`, `csrf` and `staging_snapshot` with
+    different values. Taking the last occurrence would silently build a
+    removal submission while claiming to be an edit.
+    """
     text = body.decode()
-    return {
-        name: value
-        for name, value in re.findall(
-            r'<input type=hidden name=(\w+) value="([^"]*)">', text
-        )
-    }
+    # Only the first form. An edit page also carries one removal form per card,
+    # each repeating `action`/`csrf`/`staging_snapshot` and adding `card` — and
+    # a browser submits the fields of *one* form, never a union of all of them.
+    end = text.find("</form>")
+    if end != -1:
+        text = text[:end]
+    return dict(
+        re.findall(r'<input type=hidden name=(\w+) value="([^"]*)">', text)
+    )
 
 
 def _approve(
@@ -1444,6 +1453,185 @@ def test_resubmitting_every_field_verbatim_writes_nothing(tmp_path: Path) -> Non
         assert status == 303
         assert "edited=0" in headers["location"]
         assert staging_path.read_bytes() == before
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+# --- W2c: removing a proposed card ------------------------------------------
+
+
+def _remove_fields(body: bytes, index: int) -> dict[str, str]:
+    """The hidden fields of one card's removal form."""
+    match = re.search(
+        rf'<form id="rm{index}"[^>]*>(.*?)</form>', body.decode(), re.S
+    )
+    assert match, f"no removal form for card {index}"
+    return dict(
+        re.findall(r'<input type=hidden name=(\w+) value="([^"]*)">', match.group(1))
+    )
+
+
+def _remove(
+    server: Any,
+    session: WorkbenchSession,
+    source: str,
+    fields: dict[str, str],
+    *,
+    headers: dict[str, str] | None = None,
+) -> tuple[int, dict[str, str], bytes]:
+    return _request(
+        server,
+        "POST",
+        f"/{session.token}/source/{quote(source, safe='')}/remove",
+        headers={
+            "Host": server.expected_host,
+            "Content-Type": "application/x-www-form-urlencoded",
+            **(headers or {}),
+        },
+        body=urlencode(list(fields.items())).encode(),
+    )
+
+
+def test_removal_forms_are_never_nested_inside_the_editor(tmp_path: Path) -> None:
+    """Forms cannot nest — a browser silently drops an inner one, so a per-card
+    <form> inside the editor would render a button that does nothing at all.
+    The buttons are associated by `form=` with forms declared after the
+    editor's form closes.
+    """
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
+        text = page.decode()
+        editor_end = text.index("</form>")
+        # No <form> opens between the editor's <form> and its closing tag.
+        editor = text[text.index("<form method=post") : editor_end]
+        assert "<form" not in editor[len("<form method=post") :]
+        # ...and every removal form lives after it, with a button pointing at it.
+        for index in range(3):
+            assert f'<form id="rm{index}"' in text[editor_end:]
+            assert f'form="rm{index}"' in editor
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_removing_a_card_drops_only_that_row(tmp_path: Path) -> None:
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
+        status, headers, _body = _remove(
+            server, session, "table.pdf", _remove_fields(page, 1)
+        )
+        assert status == 303
+        assert "removed=1" in headers["location"]
+
+        remaining = [c.record.expression for c in session.detail("table.pdf").cards]
+        assert remaining == ["走る", "飲む"]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_removal_deletes_only_the_removed_cards_lines(tmp_path: Path) -> None:
+    """On this fixture every changed line is a deletion belonging to the
+    removed card.
+
+    Note what this does *not* prove. Any ruamel dump re-folds long plain
+    scalars that PyYAML folded differently, so on real prose a write also
+    re-wraps untouched text elsewhere in the file — see
+    `test_a_bare_load_and_dump_already_reformats` in `tests/test_staging.py`.
+    That is pre-existing and orthogonal to removal; this fixture's text is
+    short enough never to fold, which is exactly why it isolates removal.
+    """
+    session = _staged(tmp_path)
+    staging_path = tmp_path / "staging" / "table.pdf.yaml"
+    before = staging_path.read_text(encoding="utf-8").split("\n")
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
+        _remove(server, session, "table.pdf", _remove_fields(page, 1))
+        after = staging_path.read_text(encoding="utf-8").split("\n")
+        changed = [
+            line
+            for line in difflib.unified_diff(before, after, lineterm="", n=0)
+            if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
+        ]
+        # Only deletions, and every one of them belongs to the removed card.
+        assert changed, "nothing was removed"
+        assert all(line.startswith("-") for line in changed), changed
+        assert any("食べる" in line for line in changed)
+        assert not any("走る" in line or "飲む" in line for line in changed)
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_removal_without_the_session_csrf_is_refused(tmp_path: Path) -> None:
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
+        fields = _remove_fields(page, 1)
+        fields["csrf"] = "forged"
+        status, _headers, _body = _remove(server, session, "table.pdf", fields)
+        assert status == 403
+        assert len(session.detail("table.pdf").cards) == 3
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_removal_from_a_stale_page_is_refused(tmp_path: Path) -> None:
+    session = _staged(tmp_path)
+    staging_path = tmp_path / "staging" / "table.pdf.yaml"
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
+        fields = _remove_fields(page, 1)
+        staging_path.write_bytes(staging_path.read_bytes() + b"\n# concurrent edit\n")
+        changed = staging_path.read_bytes()
+
+        status, _headers, body = _remove(server, session, "table.pdf", fields)
+        assert status == 409
+        assert b"Nothing was removed" in body
+        assert staging_path.read_bytes() == changed
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_removal_naming_a_card_that_is_not_there_is_refused(
+    tmp_path: Path,
+) -> None:
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
+        fields = _remove_fields(page, 1)
+        fields["card"] = "99"
+        status, _headers, _body = _remove(server, session, "table.pdf", fields)
+        assert status == 400
+        assert len(session.detail("table.pdf").cards) == 3
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_removal_says_it_cannot_be_undone(tmp_path: Path) -> None:
+    """Corrections can be undone before saving; this cannot be undone at all,
+    and re-reading the source would cost another paid call. The control says
+    so rather than leaving someone to find out."""
+    session = _staged(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", _edit_url(session, "table.pdf"))
+        text = page.decode()
+        assert "Remove 走る (はしる) from this review" in text
+        assert "cannot be undone" in text
+        assert "another paid call" in text
     finally:
         server.shutdown()
         server.server_close()

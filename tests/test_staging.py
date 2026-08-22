@@ -697,3 +697,41 @@ def test_rewrite_touches_only_the_row_whose_field_changed(tmp_path: Path) -> Non
         if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
     ]
     assert changed == ["-  - to eat", "+  - to eat (corrected)"], changed
+
+
+def test_a_bare_load_and_dump_already_reformats(tmp_path: Path) -> None:
+    """A known, pre-existing divergence between the two writers, pinned here
+    so nobody mistakes it for a bug a later change introduced.
+
+    Staging files are created by `write_staging` through PyYAML and edited
+    through ruamel. Both wrap at width 100, but they choose different break
+    points, so re-emitting a long plain scalar re-folds it — and ruamel leaves
+    a trailing space at the break. Every path that dumps through ruamel
+    inherits this: `rewrite_staging`, `prune_staging`, `record_coverage_approval`
+    and the workbench's edit and remove actions. It is cosmetic in YAML terms
+    and it is *not* what `rewrite_staging`'s docstring promises, which is why
+    it is recorded rather than quietly tolerated.
+    """
+    long_note = (
+        "Used when the speaker or an in-group member gives something to "
+        "someone else. The receiver is not the speaker, and the giver is "
+        "marked with the particle が in a neutral description."
+    )
+    records = [_record(usage_notes=long_note)]
+    path = tmp_path / "source.pdf.yaml"
+    write_staging(path, records, {"source_file": "source.pdf"})
+    original = path.read_text(encoding="utf-8")
+    assert "\n" in original
+
+    loaded, _meta = read_staging(path)
+    rewrite_staging(path, loaded)  # no field changed
+    after = path.read_text(encoding="utf-8")
+
+    assert loaded[0].usage_notes == long_note
+    reread, _meta = read_staging(path)
+    assert reread[0].usage_notes == long_note, "the value itself must survive"
+    if after != original:
+        # The shape moved even though nothing was edited.
+        assert any(line.rstrip() != line for line in after.split("\n")), (
+            "expected ruamel's trailing space at a fold point"
+        )

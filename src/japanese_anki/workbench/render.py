@@ -62,6 +62,8 @@ pre {
 .done { color: GrayText; }
 .warnings { border: 1px solid red; border-radius: .5rem; padding: 1rem; }
 .empty { color: GrayText; }
+.remove { margin-top: .75rem; display: grid; gap: .35rem; }
+.remove button { border: 1px solid GrayText; background: Canvas; color: CanvasText; }
 .edit { display: grid; gap: .25rem; margin: .5rem 0; }
 .edit label { font-size: .85rem; font-weight: 700; color: GrayText; }
 select { font: inherit; padding: .4rem; background: Canvas; color: CanvasText;
@@ -323,7 +325,12 @@ def _meaning_panels(card: Any) -> str:
 
 
 def _card_html(
-    card: Any, *, actionable: bool = False, editing: bool = False, index: int = 0
+    card: Any,
+    *,
+    actionable: bool = False,
+    editing: bool = False,
+    index: int = 0,
+    remove_action: str = "",
 ) -> str:
     record = card.record
     parts = [
@@ -375,6 +382,8 @@ def _card_html(
     else:
         parts.append(_approval_html(card))
     parts.append(_evidence_html(card))
+    if remove_action:
+        parts.append(remove_action)
     parts.append("</article>")
     return "".join(parts)
 
@@ -479,6 +488,50 @@ def _grammar_html(detail: Any, *, actionable: bool = False) -> str:
     return "".join(parts)
 
 
+def _remove_form(
+    card: Any, index: int, source_path: str, csrf: str, snapshot: str
+) -> str:
+    """Removing a card is its own form, deliberately.
+
+    It sits outside the edit form because it is a different act with a
+    different consequence: corrections can be undone before saving, and this
+    cannot be undone at all. The row is the model's proposal, and once it
+    leaves a live staging file nothing else in the repository holds it — so
+    the control says that rather than leaving someone to find out.
+    """
+    del source_path, csrf, snapshot
+    identity = f"{card.record.expression} ({card.record.reading})"
+    # `form=` associates this button with a form declared outside the edit
+    # form. Forms cannot nest — a browser silently drops an inner one — so a
+    # per-card <form> inside the editor would render a button that does
+    # nothing at all.
+    return (
+        '<div class="remove">'
+        f'<button type=submit form="rm{index}">'
+        f"Remove {_escaped(identity)} from this review</button>"
+        "<span class=counts>This deletes the proposal. It cannot be undone, and "
+        "re-reading the source would be another paid call.</span>"
+        "</div>"
+    )
+
+
+def _remove_forms(
+    detail: Any, source_path: str, csrf: str, snapshot: str
+) -> str:
+    """The removal forms themselves, emitted after the editor's form closes."""
+    action = html.escape(source_path + "/remove", quote=True)
+    return "".join(
+        f'<form id="rm{index}" method=post action="{action}" hidden>'
+        '<input type=hidden name=action value="remove">'
+        f'<input type=hidden name=csrf value="{html.escape(csrf, quote=True)}">'
+        "<input type=hidden name=staging_snapshot "
+        f'value="{html.escape(snapshot, quote=True)}">'
+        f'<input type=hidden name=card value="{index}">'
+        "</form>"
+        for index in range(len(detail.cards))
+    )
+
+
 def render_source(
     detail: Any,
     *,
@@ -486,7 +539,7 @@ def render_source(
     csrf: str = "",
     staging_snapshot: str = "",
     patterns_snapshot: str = "",
-    saved: tuple[int, bool, int] | None = None,
+    saved: tuple[int, bool, int, int] | None = None,
     editing: bool = False,
 ) -> str:
     """One source's cards and grammar.
@@ -552,7 +605,19 @@ def render_source(
     if not detail.cards:
         body.append("<p class=empty>This source proposed no word cards.</p>")
     body.extend(
-        _card_html(card, actionable=actionable, editing=editing, index=index)
+        _card_html(
+            card,
+            actionable=actionable,
+            editing=editing,
+            index=index,
+            remove_action=(
+                _remove_form(
+                    card, index, source_path, csrf, staging_snapshot
+                )
+                if editing
+                else ""
+            ),
+        )
         for index, card in enumerate(detail.cards)
     )
     body.append(_grammar_html(detail, actionable=actionable))
@@ -574,12 +639,17 @@ def render_source(
             f'<a href="{html.escape(source_path, quote=True)}">Leave without '
             "saving</a></div></form>"
         )
+        body.append(_remove_forms(detail, source_path, csrf, staging_snapshot))
     body.append("</main></body></html>")
     return "".join(body)
 
 
-def _saved_banner(records: int, grammar: bool, edited: int = 0) -> str:
+def _saved_banner(
+    records: int, grammar: bool, edited: int = 0, removed: int = 0
+) -> str:
     saved = []
+    if removed:
+        saved.append(f"{removed} card{'s' if removed != 1 else ''} removed")
     if edited:
         saved.append(f"corrections to {edited} card{'s' if edited != 1 else ''}")
     if records:

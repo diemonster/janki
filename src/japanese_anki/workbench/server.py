@@ -135,7 +135,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
         query = self.path.split("?", 1)
         return len(query) == 2 and dict(parse_qsl(query[1])).get("edit") == "1"
 
-    def _saved_banner(self) -> tuple[int, bool, int] | None:
+    def _saved_banner(self) -> tuple[int, bool, int, int] | None:
         """The post-redirect-get result, if this is one. Display only."""
         query = self.path.split("?", 1)
         if len(query) != 2:
@@ -153,7 +153,16 @@ class _WorkbenchHandler(LocalOnlyHandler):
             edited = int(fields.get("edited", "0"))
         except ValueError:
             edited = 0
-        return max(records, 0), fields.get("grammar") == "1", max(edited, 0)
+        try:
+            removed = int(fields.get("removed", "0"))
+        except ValueError:
+            removed = 0
+        return (
+            max(records, 0),
+            fields.get("grammar") == "1",
+            max(edited, 0),
+            max(removed, 0),
+        )
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         if not self._request_is_local():
@@ -251,7 +260,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
             return
         rest = route[len(_SOURCE_PREFIX) :]
         name, _, action = rest.rpartition("/")
-        if action not in {"approve", "edit"} or not name:
+        if action not in {"approve", "edit", "remove"} or not name:
             self._error(404, "No such workbench action.")
             return
         body = self._read_body()
@@ -259,8 +268,10 @@ class _WorkbenchHandler(LocalOnlyHandler):
             return
         if action == "approve":
             self._approve(unquote(name), body)
-        else:
+        elif action == "edit":
             self._edit(unquote(name), body)
+        else:
+            self._remove(unquote(name), body)
 
     def _approve(self, source: str, body: bytes) -> None:
         session = self.server.session
@@ -383,6 +394,85 @@ class _WorkbenchHandler(LocalOnlyHandler):
             return
         self._redirect_to_source(source, saved=0, grammar=False, edited=len(changed))
 
+    def _remove(self, source: str, body: bytes) -> None:
+        """Drop one proposed card from the review file.
+
+        Destructive in a way editing is not: the row is the model's proposal,
+        and once it leaves a live staging file nothing else in the repository
+        holds it. The page says so before the button is pressed.
+        """
+        session = self.server.session
+        try:
+            pairs = parse_qsl(
+                body.decode("utf-8", errors="strict"),
+                keep_blank_values=True,
+                strict_parsing=True,
+                encoding="utf-8",
+                errors="strict",
+                max_num_fields=64,
+            )
+        except (UnicodeError, ValueError) as exc:
+            self._error(400, f"The submitted form is malformed: {exc}")
+            return
+        fields: dict[str, list[str]] = {}
+        for key, value in pairs:
+            fields.setdefault(key, []).append(value)
+        if sorted(fields) != ["action", "card", "csrf", "staging_snapshot"] or any(
+            len(values) != 1 for values in fields.values()
+        ):
+            self._error(400, "That removal form is not one this page offered.")
+            return
+        if fields["action"][0] != "remove":
+            self._error(400, "The form action must be 'remove'")
+            return
+        if not secrets.compare_digest(fields["csrf"][0], session.csrf_token):
+            self._error(403, "That form did not come from this workbench session.")
+            return
+        panel = session.panel(source)
+        if panel is None:
+            self._error(404, "No such source.")
+            return
+        if fields["staging_snapshot"][0] != panel.staging_fingerprint:
+            self._error(
+                409,
+                "This source changed after the page was rendered. Nothing was "
+                "removed. Reload and review the current cards.",
+            )
+            return
+        try:
+            index = int(fields["card"][0])
+        except ValueError:
+            self._error(400, "That removal names no card.")
+            return
+        if not 0 <= index < len(panel.records):
+            self._error(400, "That removal names a card which is not on this page.")
+            return
+        keep = [position != index for position in range(len(panel.records))]
+        try:
+            text = staging.render_staging_prune(panel.staging_path, keep)
+            if text is None:
+                self._redirect_to_source(source, removed=0)
+                return
+            review.bound_replace(
+                panel.staging_path,
+                text,
+                panel.staging_bytes,
+                label="staging file",
+            )
+        except review.StaleReviewError as exc:
+            self._error(409, f"{exc}. Nothing was removed by this attempt.")
+            return
+        except review.IndeterminateWriteError as exc:
+            self._error(
+                409,
+                f"{exc} Reload this source and check which cards are there.",
+            )
+            return
+        except JankiError as exc:
+            self._error(500, f"{exc}. Nothing was proven removed.")
+            return
+        self._redirect_to_source(source, removed=1)
+
     def _redirect_to_source(
         self,
         source: str,
@@ -390,11 +480,13 @@ class _WorkbenchHandler(LocalOnlyHandler):
         saved: int = 0,
         grammar: bool = False,
         edited: int = 0,
+        removed: int = 0,
     ) -> None:
         """Post/redirect/get, so a reload cannot resubmit a write."""
         target = (
             f"/{self.server.session.token}/source/{quote(source, safe='')}"
-            f"?saved={saved}&grammar={'1' if grammar else '0'}&edited={edited}"
+            f"?saved={saved}&grammar={'1' if grammar else '0'}"
+            f"&edited={edited}&removed={removed}"
         )
         self.send_response(303)
         self.send_header("Location", target)

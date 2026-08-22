@@ -1645,6 +1645,33 @@ def _prune_staging_unlocked(path: Path, keep: Sequence[bool]) -> int:
     return removed
 
 
+def render_staging_prune(path: Path, keep: Sequence[bool]) -> str | None:
+    """The text :func:`prune_staging` would write, or None if nothing goes.
+
+    The workbench needs the same pruning bound to a compare-and-swap, for the
+    same reason the edit path does: the browser rendered a specific set of
+    rows, and a removal aimed at that set must not land on a different one.
+    """
+    path = Path(path)
+    document = _load_document(path)
+    raw_records = document[_RECORDS_KEY] or []
+    if len(raw_records) != len(keep):
+        raise StagingError(
+            f"{path} holds {len(raw_records)} row(s) but {len(keep)} flag(s) were "
+            "given; pruning needs one flag per row, in file order."
+        )
+    survivors = [raw for raw, wanted in zip(raw_records, keep, strict=True) if wanted]
+    if len(survivors) == len(raw_records):
+        return None
+    # Assigned by slice so ruamel keeps the sequence object — and with it the
+    # comments attached to the rows that stay.
+    raw_records[:] = survivors
+    document[_RECORDS_KEY] = raw_records
+    buffer = io.StringIO()
+    _parser().dump(document, buffer)
+    return buffer.getvalue()
+
+
 @_path_locked
 def prune_staging(path: Path, keep: Sequence[bool]) -> int:
     """Drop selected rows under the path lock, preserving review-only YAML."""
