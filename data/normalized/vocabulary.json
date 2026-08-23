@@ -530,8 +530,7 @@
     "romaji": "umi",
     "meanings": [
       "sea",
-      "ocean",
-      "beach"
+      "ocean"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -568,8 +567,7 @@
         "page": "4",
         "context": "・うみでおよぐつもりです。",
         "inclusion_reason": "Basic nature noun in the Okinawa plan memo.",
-        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"},{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "provisional_fields": "meanings:611a8c4aa4cf"
+        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"},{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
       }
     }
   },
@@ -14129,7 +14127,7 @@
     "furigana": "貴方[あなた]",
     "romaji": "anata",
     "meanings": [
-      "you (polite/formal)"
+      "you"
     ],
     "part_of_speech": "pronoun",
     "verb_group": "",
@@ -14167,8 +14165,7 @@
         "context": "その前に差し支えなければ黄金律の修復について貴方の見解を伺いたく",
         "inclusion_reason": "Kanji spelling of あなた, glossed with ruby here; worth recognizing in print.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]",
-        "janki_pitch_accent_source": "jpdb:14f37be7e2a00a852334f4b7d4db63c44a9df77c3a79614f359c1a5538606f58",
-        "provisional_fields": "meanings:477610fff948"
+        "janki_pitch_accent_source": "jpdb:14f37be7e2a00a852334f4b7d4db63c44a9df77c3a79614f359c1a5538606f58"
       }
     }
   },
@@ -15681,7 +15678,8 @@
     "furigana": "飼[か]う",
     "romaji": "kau",
     "meanings": [
-      "to keep (a pet or other animal), to have, to own, to raise, to rear, to feed"
+      "to keep (a pet)",
+      "to raise (an animal)"
     ],
     "part_of_speech": "verb",
     "verb_group": "godan",
@@ -15736,7 +15734,8 @@
         "inclusion_reason": "Verb for keeping pets (飼う); easily confused with 買う, so worth a card.",
         "example": "ペット(を)かって(い)る？",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:912d3ee0fafc1138c2c7c025d5214d492da77475a1b0789f5fd6ebcc6b49846c"
+        "janki_pitch_accent_source": "jpdb:912d3ee0fafc1138c2c7c025d5214d492da77475a1b0789f5fd6ebcc6b49846c",
+        "provisional_fields": "meanings:7e29990372e3"
       }
     }
   },
