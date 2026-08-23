@@ -56,6 +56,11 @@ owns:
   speech, verb group, transitivity, conjugations, pitch accent, frequency rank. It
   is also the reading witness at the promote gate, where a reading it
   contradicts is held back rather than minted into a permanent record ID.
+  **Meanings are not on that list, and a dictionary may not write them even to
+  replace a model's guess** — a card's meaning is the sense its source taught,
+  and a gloss list keyed on spelling cannot tell おたふく "mumps" from the
+  identically-spelled お多福 "homely woman". Only a person or `enrich --ai`,
+  both of which read the card, may settle a provisional meaning.
 - **KANJIDIC** — kanji meanings, readings and stroke *count*. Stroke **order**
   comes from KanjiVG, a separate source under CC BY-SA 3.0 that a shared deck
   must credit.

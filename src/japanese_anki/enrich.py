@@ -58,6 +58,7 @@ from japanese_anki.romaji import kana_to_romaji
 from japanese_anki.staging import NON_READING_HOLDS, annotate, annotations
 
 __all__ = [
+    "DICTIONARY_MAY_NOT_SETTLE",
     "ENRICHABLE_FIELDS",
     "DictionaryReadings",
     "EnrichError",
@@ -92,6 +93,28 @@ __all__ = [
 
 class EnrichError(JankiError):
     pass
+
+
+#: Fields a dictionary may never settle, however exactly the entry matches.
+#:
+#: ``ENRICHABLE_FIELDS`` below says what a jpdb pass may write into a *hole*.
+#: This says what it may not overwrite when the field is already full but
+#: provisional — a distinct question, and the one that got answered wrong.
+#:
+#: A card's meanings are the sense **this source taught**, not everything the
+#: word can mean, so a dictionary has no vote on them. The failure that put
+#: this here: a medical sheet taught おたふく = "mumps", and reconciliation
+#: replaced it with jpdb's entry for the identically-spelled お多福 — "homely
+#: woman (esp. one with a small low nose, high flat forehead, and bulging
+#: cheeks)" — on a card whose own example sentence reads "My child came down
+#: with the mumps." The spelling guard below cannot catch that: both spell
+#: おたふく, and only the sense differs. Sixty-four of that sheet's eighty-six
+#: cards lost their taught meaning this way.
+#:
+#: A provisional meaning is settled by a person, or by ``enrich --ai``, which
+#: reads the record's own examples. Both can tell homographs apart. A gloss
+#: list keyed on spelling cannot.
+DICTIONARY_MAY_NOT_SETTLE: frozenset[str] = frozenset({"meanings"})
 
 
 #: The fields a jpdb pass may write, in the order a diff lists them.
@@ -632,7 +655,9 @@ def enrich_records(
         reconcile = [
             name
             for name in active
-            if name not in force_fields and not is_empty(getattr(record, name))
+            if name not in force_fields
+            and not is_empty(getattr(record, name))
+            and name not in DICTIONARY_MAY_NOT_SETTLE
         ]
         if reconcile and not record.reading:
             result.warnings.append(
@@ -768,8 +793,6 @@ def enrich_records(
             )
             reconcile = []
         proposals = _proposals(record, token, entry, kanji_store)
-        if "meanings" in reconcile:
-            proposals["meanings"] = _dictionary_meanings(client, entry)
         _valid_pitch, invalid_pitch = _compatible_pitch_patterns(
             record.reading, entry.get("pitch_accent")
         )
@@ -820,23 +843,6 @@ def enrich_records(
             result.records[by_id[record_id]] = updated
     return result
 
-
-def _dictionary_meanings(
-    client: jpdb.JpdbClient, entry: Mapping[str, Any]
-) -> list[str]:
-    """The entry's glosses, fetched only when reconciliation needs them.
-
-    A separate lookup rather than a widened ``/parse``: the parse field list is
-    a pinned contract (M2.1), and glosses matter only to a record whose
-    meanings are a provisional model claim — so the extra call is paid exactly
-    where the question is asked, and every other record costs what it always
-    did.
-    """
-    vid, sid = entry.get("vid"), entry.get("sid")
-    if vid is None or sid is None:
-        return []
-    rows = client.lookup_vocabulary([(vid, sid)], ("meanings_chunks",))
-    return jpdb.meanings_lines(rows[0].get("meanings_chunks") if rows else None)
 
 
 @dataclass(slots=True)

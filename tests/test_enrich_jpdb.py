@@ -317,9 +317,11 @@ def hanasu_senses() -> dict[tuple[int, int], dict[str, Any]]:
     }
 
 
-def test_an_exact_match_replaces_provisional_meanings_and_pos() -> None:
-    # The camera pilot's precedence failure, inverted: the model's gloss and
-    # POS held the seat only until dictionary evidence arrived.
+def test_an_exact_match_settles_provisional_pos_and_never_meanings() -> None:
+    # A model's *grammatical* claim holds its seat only until the dictionary
+    # states the word class — jpdb knows 話す is a verb no matter which sense
+    # this source taught. Its *glosses* are a different kind of claim and are
+    # refused: see `DICTIONARY_MAY_NOT_SETTLE`.
     api = FakeApi(
         unforced={"話す": parse_response((HANASU_FURIGANA, HANASU))},
         senses=hanasu_senses(),
@@ -328,14 +330,16 @@ def test_an_exact_match_replaces_provisional_meanings_and_pos() -> None:
     result = enrich_records(client_for(api), [provisional_record()])
 
     [updated] = result.records
-    assert updated.meanings == ["to talk, to speak", "to tell"]
     assert updated.part_of_speech == "verb"
+    assert updated.meanings == ["to converse"]
     changed = result.changes["word:話す:はなす"]
-    assert "meanings" in changed and "part_of_speech" in changed
-    # Authority resolved: the mark is gone, so a later force or edit cannot be
-    # silently outranked by a rerun of this pass.
-    assert PROVISIONAL_FIELDS_KEY not in updated.source.raw_fields
-    assert api.calls("lookup-vocabulary")[-1]["fields"] == ["meanings_chunks"]
+    assert "part_of_speech" in changed
+    assert "meanings" not in changed
+    # POS settled, meanings still awaiting a reader.
+    assert provisional_fields(updated) == ["meanings"]
+    # No gloss lookup was even attempted: the refusal is upstream of the call,
+    # so it costs nothing rather than fetching an answer to discard.
+    assert api.calls("lookup-vocabulary") == []
 
 
 def test_a_human_edit_after_extraction_outranks_the_dictionary() -> None:
@@ -379,25 +383,23 @@ def test_a_different_reading_holds_provisional_fields() -> None:
 
 
 def test_a_silent_dictionary_leaves_the_mark_and_says_so() -> None:
+    # jpdb states no word class for this entry, so the provisional POS has
+    # nothing to reconcile against: it keeps the model's value, keeps its
+    # mark, and the run says which field is still waiting.
+    silent = vocab(1562350, 4280520068, "話す", "はなす", ["LHLL"], 200, [])
     api = FakeApi(
-        unforced={"話す": parse_response((HANASU_FURIGANA, HANASU))},
-        senses={
-            (1562350, 4280520068): {
-                "reading": "はなす",
-                "alt_sids": [],
-                "meanings_chunks": [],
-            }
-        },
+        unforced={"話す": parse_response((HANASU_FURIGANA, silent))},
+        senses={(1562350, 4280520068): {"reading": "はなす", "alt_sids": []}},
     )
 
     result = enrich_records(client_for(api), [provisional_record()])
 
     [updated] = result.records
-    assert updated.meanings == ["to converse"]
-    assert updated.part_of_speech == "verb"
-    assert provisional_fields(updated) == ["meanings"]
+    assert updated.part_of_speech == "noun"
+    assert sorted(provisional_fields(updated)) == ["meanings", "part_of_speech"]
     assert any(
-        "no answer for provisional meanings" in warning for warning in result.warnings
+        "no answer for provisional part_of_speech" in warning
+        for warning in result.warnings
     )
 
 
@@ -419,10 +421,7 @@ def test_mark_clears_are_reported_for_persistence() -> None:
 def test_a_confirming_dictionary_also_reports_its_clear() -> None:
     # The dictionary agreeing with the model claim settles the authority
     # question with no visible field change; the clear still has to reach disk.
-    confirmed = provisional_record(
-        part_of_speech="verb",
-        meanings=["to talk, to speak", "to tell"],
-    )
+    confirmed = provisional_record(part_of_speech="verb")
     api = FakeApi(
         unforced={"話す": parse_response((HANASU_FURIGANA, HANASU))},
         senses=hanasu_senses(),
@@ -430,9 +429,11 @@ def test_a_confirming_dictionary_also_reports_its_clear() -> None:
 
     result = enrich_records(client_for(api), [confirmed])
 
-    assert sorted(result.cleared["word:話す:はなす"]) == ["meanings", "part_of_speech"]
+    assert result.cleared["word:話す:はなす"] == ["part_of_speech"]
+    # `meanings` is never in that list: a dictionary cannot confirm a sense it
+    # was never allowed to read, so the mark it leaves is not a clear.
     [updated] = result.records
-    assert PROVISIONAL_FIELDS_KEY not in updated.source.raw_fields
+    assert provisional_fields(updated) == ["meanings"]
 
 
 def test_a_forced_write_settles_the_mark_it_overwrote() -> None:
@@ -484,15 +485,79 @@ def test_a_kana_homograph_cannot_settle_a_provisional_claim() -> None:
     assert api.calls("lookup-vocabulary") == []
 
 
+def test_a_kana_homograph_cannot_replace_the_meaning_its_source_taught() -> None:
+    """The bug this rule exists for, with the real word that hit it.
+
+    A Meguro Language Center medical sheet taught おたふく = "mumps". jpdb's
+    entry for おたふく is お多福, the *other* word spelled that way: "homely
+    woman (esp. one with a small low nose ...)". Reconciliation took it, and
+    the shipped card read "homely woman" above its own example sentence,
+    "My child came down with the mumps."
+
+    Nothing earlier in the pass can catch this. The spelling matches exactly —
+    both are おたふく — so the wrong-spelling guard passes; the reading matches
+    too. Only the *sense* differs, and telling two senses apart is reading
+    Japanese, which a gloss list keyed on spelling does not do. So the refusal
+    has to be categorical, and this is the test that says so.
+
+    64 of that sheet's 86 cards were overwritten this way before the rule
+    existed, which is why the assertion is `== ["mumps"]` and not merely
+    "unchanged": what makes the bug expensive is that the replacement is
+    plausible prose, so nobody notices until they read the sentence under it.
+    """
+    otafuku = vocab(1000320, 1, "おたふく", "おたふく", ["LHHHH"], 92300, ["n"])
+    api = FakeApi(
+        unforced={"おたふく": parse_response(([["おたふく", "おたふく"]], otafuku))},
+        senses={
+            (1000320, 1): {
+                "reading": "おたふく",
+                "alt_sids": [],
+                "meanings_chunks": [
+                    ["homely woman (esp. one with a small low nose)", "plain woman"]
+                ],
+            }
+        },
+    )
+    taught = mark_provisional(
+        record(
+            id="word:おたふく:おたふく",
+            expression="おたふく",
+            reading="おたふく",
+            meanings=["mumps"],
+            source=SourceReference(type="extract", imported_from="medical.pdf"),
+        )
+    )
+
+    result = enrich_records(client_for(api), [taught])
+
+    [updated] = result.records
+    assert updated.meanings == ["mumps"]
+    assert "meanings" not in result.changes.get("word:おたふく:おたふく", {})
+    # Still a model claim, still marked, still waiting for a reader — the
+    # dictionary declining to answer is not the same as it confirming.
+    assert "meanings" in provisional_fields(updated)
+    # And no gloss was fetched: the refusal is a rule, not a comparison, so
+    # there is no request whose answer someone could later decide to trust.
+    assert api.calls("lookup-vocabulary") == []
+    # The rest of the pass is unaffected: this is a narrow refusal, not a
+    # record that enrichment skips.
+    assert updated.frequency_rank == 92300
+    assert updated.pitch_accent == ["LHHHH"]
+
+
 def test_a_suru_stem_entry_cannot_settle_a_provisional_claim() -> None:
     # The suru-suffix allowance deliberately accepts 勉強's entry for a
-    # 勉強する record — the stem noun's glosses are not the verb's meanings.
+    # 勉強する record, so the entry reached here spells something other than
+    # the record does. The spelling guard is what stops that entry settling a
+    # provisional claim: 勉強 is a noun, and letting it say so would file the
+    # verb 勉強する under the stem's word class.
     compound = mark_provisional(
         record(
             id="word:勉強する:べんきょうする",
             expression="勉強する",
             reading="べんきょうする",
             meanings=["to study"],
+            part_of_speech="verb",
             source=SourceReference(type="extract", imported_from="page.jpg"),
         )
     )
@@ -508,7 +573,8 @@ def test_a_suru_stem_entry_cannot_settle_a_provisional_claim() -> None:
 
     [updated] = result.records
     assert updated.meanings == ["to study"]
-    assert provisional_fields(updated) == ["meanings"]
+    assert updated.part_of_speech == "verb"
+    assert sorted(provisional_fields(updated)) == ["meanings", "part_of_speech"]
     assert any("stay provisional" in warning for warning in result.warnings)
     # One pinned parse, not two. The surviving one is the kana-homograph retry,
     # which fires whenever jpdb's reading and spelling both differ from the
