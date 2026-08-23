@@ -160,10 +160,12 @@ def test_asking_for_effort_also_asks_for_thinking() -> None:
     thinking buys a fraction of what the budget was measured against, and does
     it without erroring."""
     with_effort = claude_client._request_body(
-        NEW, [], "x", enrich.ai_schema(), 16000, claude_client.effort_for(NEW)
+        NEW, [], "x", enrich.ai_schema(),
+        claude_client.DEFAULT_MAX_TOKENS, claude_client.effort_for(NEW),
     )
     without = claude_client._request_body(
-        OLD, [], "x", enrich.ai_schema(), 16000, claude_client.effort_for(OLD)
+        OLD, [], "x", enrich.ai_schema(),
+        claude_client.DEFAULT_MAX_TOKENS, claude_client.effort_for(OLD),
     )
 
     assert with_effort["thinking"] == {"type": "adaptive"}
@@ -172,7 +174,7 @@ def test_asking_for_effort_also_asks_for_thinking() -> None:
     # effort left exactly those two silently thinking-off.
     assert "thinking" not in without
     pair = claude_client._request_body(
-        "claude-opus-4-6", [], "x", enrich.ai_schema(), 16000,
+        "claude-opus-4-6", [], "x", enrich.ai_schema(), claude_client.DEFAULT_MAX_TOKENS,
         claude_client.effort_for("claude-opus-4-6"),
     )
     assert pair["output_config"].get("effort") is None

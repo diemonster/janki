@@ -1966,7 +1966,15 @@ def command_extract(args: argparse.Namespace) -> int:
             held = operations.OperationJournal.load(
                 config.operations_file
             ).operations.get(operation_id)
-            if held is not None and held.state == "result_captured":
+            captured_answer = ""
+            if held is not None and held.artifact:
+                try:
+                    captured_answer = operations.answer_text(
+                        config.operations_file, held
+                    )
+                except JankiError:
+                    captured_answer = ""
+            if held is not None and held.state == "result_captured" and captured_answer:
                 # The answer arrived and something after it refused — a
                 # refusal, a truncation, a schema mismatch. Leaving the entry
                 # at `result_captured` is the truthful state: the paid bytes
@@ -1976,6 +1984,19 @@ def command_extract(args: argparse.Namespace) -> int:
                     f"The answer for {item.origin_path.name} arrived and was "
                     f"saved before it was refused: {held.artifact}\n"
                     f"  It has been paid for. Operation {operation_id}.",
+                    file=sys.stderr,
+                )
+            elif held is not None and held.state == "result_captured":
+                # A response arrived carrying no answer — the usual cause is
+                # `max_tokens` reached while still reasoning. Saying "the
+                # answer was saved" here would be false and would send someone
+                # looking for cards in a file that holds none.
+                print(
+                    f"The reply for {item.origin_path.name} was saved, but it "
+                    f"contains no answer — only the model's reasoning: "
+                    f"{held.artifact}\n"
+                    f"  It has still been paid for. Operation {operation_id}. "
+                    f"There is nothing in it to recover.",
                     file=sys.stderr,
                 )
             else:

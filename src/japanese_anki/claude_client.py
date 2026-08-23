@@ -81,7 +81,20 @@ API_KEY_ENV = "ANTHROPIC_API_KEY"
 #: alone truncates mid-thought. That truncation arrives as
 #: ``stop_reason == "max_tokens"``, which is exactly what this module makes
 #: callers look at.
-DEFAULT_MAX_TOKENS = 16000
+#: The output ceiling for one call, and the reason it is not 16000.
+#:
+#: Thinking counts against `max_tokens`, and every call here runs at
+#: `DEFAULT_EFFORT` (`xhigh`). On a dense source that combination spent the
+#: entire 16000-token budget reasoning and returned a `max_tokens` stop with a
+#: thinking block and *no answer at all* — a paid call that produced nothing.
+#:
+#: Claude Opus 5 accepts up to 128000. The SDK requires streaming above the
+#: non-streaming timeout range, which every call in this module already does
+#: (`messages.stream(...)` + `get_final_message()`), so the ceiling is a real
+#: choice rather than a transport limit. 64000 is the documented default for
+#: streaming requests: room for extended thinking *and* a long structured
+#: answer, without sizing every request for the worst case.
+DEFAULT_MAX_TOKENS = 64000
 
 #: Reasoning depth for every pass. Inside ``output_config`` beside the schema,
 #: not a top-level field.

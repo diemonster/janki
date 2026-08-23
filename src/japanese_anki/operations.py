@@ -49,6 +49,7 @@ __all__ = [
     "Operation",
     "OperationError",
     "OperationJournal",
+    "answer_text",
     "capture_artifact",
     "serialize_response",
 ]
@@ -122,6 +123,34 @@ def serialize_response(response: Any) -> bytes:
         return json.dumps(response, ensure_ascii=False, default=str).encode("utf-8")
     except (TypeError, ValueError):
         return repr(response).encode("utf-8")
+
+
+def answer_text(journal_path: Path, operation: Operation) -> str:
+    """The answer inside a captured artifact, or empty when it holds none.
+
+    A captured response is not the same thing as a captured *answer*. A call
+    that reaches `max_tokens` while still reasoning returns a thinking block
+    and no text at all — the reply is real, and paid for, and contains nothing
+    to recover. Telling someone their answer was saved in that case sends them
+    looking for cards in a file that has none.
+    """
+    if not operation.artifact:
+        return ""
+    path = Path(journal_path).parent / operation.artifact
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    if not isinstance(payload, Mapping):
+        return ""
+    blocks = payload.get("content")
+    if not isinstance(blocks, list):
+        return ""
+    return "".join(
+        str(block.get("text", ""))
+        for block in blocks
+        if isinstance(block, Mapping) and block.get("type") == "text"
+    )
 
 
 def capture_artifact(journal_path: Path, operation_id: str, payload: bytes) -> str:

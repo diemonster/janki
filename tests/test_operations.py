@@ -24,6 +24,8 @@ from japanese_anki.operations import (
     Operation,
     OperationError,
     OperationJournal,
+    answer_text,
+    capture_artifact,
 )
 
 
@@ -294,3 +296,69 @@ def test_a_missing_journal_is_simply_empty(tmp_path: Path) -> None:
     """Absent is not corrupt: a corpus that has never run a paid call has no
     file, and that is not an error."""
     assert OperationJournal.load(tmp_path / "nope.json").operations == {}
+
+
+# --- a captured response is not the same as a captured answer ---------------
+
+
+def test_a_thinking_only_reply_reports_no_answer(tmp_path: Path) -> None:
+    """What a real `janki extract` run produced: `stop_reason: max_tokens` with
+    a single thinking block and no text at all. The reply is real and paid for
+    and contains nothing to recover, so saying "your answer was saved" would
+    send someone looking for cards in a file that has none."""
+    journal = _journal(tmp_path)
+    _authorize(journal)
+    journal.advance("op-1", "dispatching")
+    artifact = capture_artifact(
+        tmp_path / "operations.json",
+        "op-1",
+        json.dumps(
+            {
+                "stop_reason": "max_tokens",
+                "content": [
+                    {"type": "thinking", "thinking": "", "signature": "x" * 200}
+                ],
+            }
+        ).encode(),
+    )
+    operation = journal.advance("op-1", "result_captured", artifact=artifact)
+
+    assert operation.money_may_have_been_spent is True
+    assert answer_text(tmp_path / "operations.json", operation) == ""
+
+
+def test_a_reply_carrying_text_reports_the_answer(tmp_path: Path) -> None:
+    journal = _journal(tmp_path)
+    _authorize(journal)
+    journal.advance("op-1", "dispatching")
+    artifact = capture_artifact(
+        tmp_path / "operations.json",
+        "op-1",
+        json.dumps(
+            {
+                "stop_reason": "end_turn",
+                "content": [
+                    {"type": "thinking", "thinking": "", "signature": "x"},
+                    {"type": "text", "text": '{"candidates": []}'},
+                ],
+            }
+        ).encode(),
+    )
+    operation = journal.advance("op-1", "result_captured", artifact=artifact)
+
+    assert answer_text(tmp_path / "operations.json", operation) == '{"candidates": []}'
+
+
+def test_an_unreadable_artifact_reports_no_answer_rather_than_raising(
+    tmp_path: Path,
+) -> None:
+    """This runs on the error path, where raising would replace a readable
+    failure with a worse one."""
+    journal = _journal(tmp_path)
+    _authorize(journal)
+    journal.advance("op-1", "dispatching")
+    operation = journal.advance(
+        "op-1", "result_captured", artifact=".pending/missing.json"
+    )
+
+    assert answer_text(tmp_path / "operations.json", operation) == ""

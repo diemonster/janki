@@ -460,3 +460,27 @@ def test_a_batch_entry_carries_the_same_effort_a_live_call_does() -> None:
     batched = batch_request("r1", "m", blocks, "hi", SCHEMA, effort=DEFAULT_EFFORT)
 
     assert batched["params"] == client.messages.calls[0]
+
+
+def test_the_output_ceiling_leaves_room_for_thinking_and_an_answer() -> None:
+    """A regression with a receipt. At 16000, a real `janki extract` run on a
+    two-page vocabulary chart spent the entire budget on extended thinking and
+    returned `stop_reason: max_tokens` with a thinking block and no answer —
+    a paid call that produced nothing.
+
+    Thinking counts against `max_tokens`, and every call here runs at
+    `DEFAULT_EFFORT`. The ceiling has to hold both. Claude Opus 5 accepts up to
+    128000, and this module always streams, which is what makes a large value
+    safe to send.
+    """
+    assert DEFAULT_MAX_TOKENS >= 64000
+    assert DEFAULT_MAX_TOKENS <= 128000
+
+
+def test_every_call_streams_so_a_large_ceiling_is_safe() -> None:
+    """The SDK requires streaming for large `max_tokens`. If a non-streaming
+    call ever appears here, the ceiling above stops being safe to send."""
+    source = Path(claude_client.__file__).read_text(encoding="utf-8")
+    assert "messages.stream(" in source
+    assert "get_final_message()" in source
+    assert "messages.create(" not in source
