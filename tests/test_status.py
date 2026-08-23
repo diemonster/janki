@@ -27,7 +27,11 @@ from japanese_anki.ledger import (
     word_audio_content_fingerprint,
     word_audio_filename_fingerprint,
 )
-from japanese_anki.models import ExampleSentence, VocabularyRecord
+from japanese_anki.models import (
+    ExampleSentence,
+    VocabularyRecord,
+    mark_provisional,
+)
 
 TODAY = date.today().isoformat()
 
@@ -2046,3 +2050,138 @@ def test_a_sentence_naming_a_clip_the_ledger_never_wrote_is_not_voiced(
     )
 
     assert book.unvoiced_examples([record]) == [], "and voiced once the ledger says so"
+
+
+# --- unsettled model claims ---------------------------------------------------
+#
+# A mark nobody can see does not do its job. Extraction marks the fields a model
+# wrote so that a later pass — or a person — knows they are guesses, but until
+# `--unsettled` the mark was visible only to the code acting on it. A wrong
+# guess therefore looked exactly like curated content: that is how a medical
+# sheet teaching おたふく = "mumps" shipped a card reading "homely woman".
+
+
+def _guessed(expression: str, reading: str, **overrides: Any) -> dict[str, Any]:
+    """A record whose meanings (and part of speech, if given) are model claims."""
+    raw = _raw(expression, reading, **overrides)
+    raw["source"] = {"type": "extract", "imported_from": "sheet.pdf"}
+    return mark_provisional(VocabularyRecord.from_dict(raw)).to_dict()
+
+
+def test_the_summary_counts_unsettled_claims_by_field(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(
+        tmp_path,
+        [
+            _guessed("おたふく", "おたふく", meanings=["mumps"]),
+            _guessed("話す", "はなす", part_of_speech="noun"),
+            _raw("食べる", "たべる"),
+        ],
+        {"vocabulary": _sourced_deck()},
+    )
+
+    assert _status(root) == 0
+
+    out = capsys.readouterr().out
+    # Per field, because the remedy differs: a meaning is settled by reading
+    # the card, a part of speech by a dictionary that resolved the exact word.
+    assert "Unsettled model claims: meanings 2, part_of_speech 1" in out
+
+
+def test_a_collection_with_nothing_unsettled_says_so(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Silence would be indistinguishable from the line not existing."""
+    root = _project(
+        tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()}
+    )
+
+    assert _status(root) == 0
+
+    assert "Unsettled model claims: none" in capsys.readouterr().out
+
+
+def test_a_field_edited_after_extraction_is_not_a_model_claim(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The mark is bound to the value it was written for. Editing the field
+    breaks that binding, which is what makes the content curated — reporting it
+    as a guess would be the exact opposite of the truth, and would send a
+    person to re-check the one record they had already fixed."""
+    marked = _guessed("おたふく", "おたふく", meanings=["mumps"])
+    marked["meanings"] = ["mumps (hand-checked)"]
+    root = _project(tmp_path, [marked], {"vocabulary": _sourced_deck()})
+
+    assert _status(root) == 0
+
+    assert "Unsettled model claims: none" in capsys.readouterr().out
+
+
+def test_the_detail_flag_groups_the_records_by_field(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(
+        tmp_path,
+        [
+            _guessed("おたふく", "おたふく", meanings=["mumps"]),
+            _guessed("話す", "はなす", part_of_speech="noun"),
+        ],
+        {"vocabulary": _sourced_deck()},
+    )
+
+    assert _status(root, "--unsettled") == 0
+
+    out = capsys.readouterr().out
+    assert "Unsettled meanings (2):" in out
+    assert "Unsettled part_of_speech (1):" in out
+    assert "  word:おたふく:おたふく" in out
+
+
+def test_unsettled_ids_pipe_into_the_pass_that_settles_them(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The point of the surface. Without this the answer to "which records are
+    guesses" is a number a person cannot act on; with it,
+    `janki status --unsettled --format ids` is the argument list for the pass
+    that settles them.
+
+    A record marked in two fields appears once — `selected_ids` deduplicates
+    every detail flag alike, so this observes that rather than proving
+    `provisional_ids` does it. The property's own guarantee is pinned below.
+    """
+    root = _project(
+        tmp_path,
+        [
+            _guessed("おたふく", "おたふく", meanings=["mumps"], part_of_speech="noun"),
+            _raw("食べる", "たべる"),
+        ],
+        {"vocabulary": _sourced_deck()},
+    )
+
+    assert _status(root, "--unsettled", "--format", "ids") == 0
+
+    assert capsys.readouterr().out == "word:おたふく:おたふく\n"
+
+
+def test_provisional_ids_names_each_record_once(tmp_path: Path) -> None:
+    """`selected_ids` deduplicates whatever it is handed, so a duplicate here
+    is invisible from the CLI — and would surface only in whichever caller
+    reads the report object directly and trusted the property to mean
+    "the records to re-check"."""
+    root = _project(
+        tmp_path,
+        [_guessed("おたふく", "おたふく", meanings=["mumps"], part_of_speech="noun")],
+        {"vocabulary": _sourced_deck()},
+    )
+    config = ProjectConfig.load(root)
+    report = status_module.build_report(
+        config,
+        status_module.collect_records(config),
+        ledger.load(root / "ledger.json"),
+        word_provider=None,
+        example_provider=None,
+    )
+
+    assert sorted(report.provisional) == ["meanings", "part_of_speech"]
+    assert report.provisional_ids == ["word:おたふく:おたふく"]

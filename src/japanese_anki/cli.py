@@ -4642,6 +4642,7 @@ def command_status(args: argparse.Namespace) -> int:
             missing_audio=args.missing_audio,
             duplicates=args.duplicates,
             staged=args.staged,
+            provisional=args.unsettled,
         ):
             print(record_id)
         return 0
@@ -4660,10 +4661,19 @@ def command_status(args: argparse.Namespace) -> int:
     if args.staged:
         for line in status.format_staged(report):
             print(line)
-    if not (args.unexported or args.missing_audio or args.duplicates or args.staged):
+    if args.unsettled:
+        for line in status.format_provisional(report):
+            print(line)
+    if not (
+        args.unexported
+        or args.missing_audio
+        or args.duplicates
+        or args.staged
+        or args.unsettled
+    ):
         print(
-            "Details: --unexported, --missing-audio, --duplicates, --staged "
-            "(add --format ids to pipe them)."
+            "Details: --unexported, --missing-audio, --duplicates, --staged, "
+            "--unsettled (add --format ids to pipe them)."
         )
     return 0
 
@@ -5188,6 +5198,15 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "List the record ids waiting in data/staging for a human, with the "
             "reason each was held back."
+        ),
+    )
+    status_parser.add_argument(
+        "--unsettled",
+        action="store_true",
+        help=(
+            "List the records still carrying a model's guess in a field nobody "
+            "has confirmed. Pipe with --format ids into "
+            "'enrich --ai --force-fields meanings' to settle them."
         ),
     )
     status_parser.add_argument(

@@ -56,7 +56,11 @@ from japanese_anki.ledger import (
     word_audio_content_fingerprint,
     word_audio_filename_fingerprint,
 )
-from japanese_anki.models import SourceReference, VocabularyRecord
+from japanese_anki.models import (
+    SourceReference,
+    VocabularyRecord,
+    split_provisional,
+)
 from japanese_anki.staging import (
     read_staging,
     require_resolved_coverage,
@@ -443,7 +447,16 @@ class StatusReport:
     # None means "the schema has no pitch accent yet", which is not the same
     # answer as "no record is missing one".
     missing_pitch_accent: list[str] | None
-    staging_dir: Path
+    #: ``field name -> record ids`` whose value is still a model's claim: the
+    #: mark extraction wrote and nobody who can read the card has settled.
+    #:
+    #: Here because a mark nobody can see does not do its job. It exists to say
+    #: "this is a guess", and until this line it was visible only to the code
+    #: that acts on it — so a wrong guess looked exactly like curated content,
+    #: and the only way to find one was to already suspect it. That is how a
+    #: sheet teaching おたふく = "mumps" shipped reading "homely woman".
+    provisional: dict[str, list[str]] = field(default_factory=dict)
+    staging_dir: Path = Path()
     staged: list[StagedFile] = field(default_factory=list)
 
     @property
@@ -453,6 +466,31 @@ class StatusReport:
     @property
     def staged_count(self) -> int:
         return sum(len(item.ids) for item in self.staged)
+
+    @property
+    def provisional_ids(self) -> list[str]:
+        """Every record with at least one unsettled field, in report order."""
+        seen: dict[str, None] = {}
+        for ids in self.provisional.values():
+            seen.update(dict.fromkeys(ids))
+        return list(seen)
+
+
+def _provisional_by_field(
+    records: Sequence[VocabularyRecord],
+) -> dict[str, list[str]]:
+    """Unsettled fields, grouped by field name, in ``records`` order.
+
+    Only *active* marks. A stale one means the field was edited after
+    extraction, so it is curated content wearing a mark the next enrich run
+    will clear — reporting it as a model's guess would be the opposite of the
+    truth.
+    """
+    found: dict[str, list[str]] = {}
+    for record in records:
+        for name in split_provisional(record)[0]:
+            found.setdefault(name, []).append(record.id)
+    return {name: found[name] for name in sorted(found)}
 
 
 def build_report(
@@ -506,6 +544,7 @@ def build_report(
         ),
         missing_enrichment=Ledger.missing_enrichment(records),
         missing_pitch_accent=missing_pitch,
+        provisional=_provisional_by_field(records),
         staging_dir=config.staging_dir,
         staged=list(staged),
     )
@@ -676,6 +715,16 @@ def format_report(report: StatusReport) -> list[str]:
         f"Missing enrichment: {len(report.missing_enrichment)} "
         "(no meanings or example sentence)"
     )
+    if report.provisional:
+        lines.append(
+            "Unsettled model claims: "
+            + ", ".join(
+                f"{name} {len(ids)}" for name, ids in report.provisional.items()
+            )
+            + " (a model's guess; settle by editing it or with 'enrich --ai')"
+        )
+    else:
+        lines.append("Unsettled model claims: none")
     if report.missing_pitch_accent is None:
         lines.append("Missing pitch accent: n/a until the pitch-accent schema lands (M2.2)")
     else:
@@ -824,6 +873,25 @@ def format_unexported(report: StatusReport) -> list[str]:
     for deck in pending:
         lines.append(f"Never exported by {deck.stem} ({len(deck.unexported_ids)}):")
         lines.extend(f"  {record_id}" for record_id in deck.unexported_ids)
+    return lines
+
+
+def format_provisional(report: StatusReport) -> list[str]:
+    """Which records are still carrying a guess, and in which field.
+
+    Grouped by field rather than by record because the remedy differs: a
+    meaning is settled by reading the card, a part of speech by a dictionary
+    that resolved the exact word.
+    """
+    if not report.provisional:
+        return [
+            "Unsettled model claims: none — every extracted field has been "
+            "confirmed, edited, or settled from a dictionary."
+        ]
+    lines: list[str] = []
+    for name, ids in report.provisional.items():
+        lines.append(f"Unsettled {name} ({len(ids)}):")
+        lines.extend(f"  {record_id}" for record_id in ids)
     return lines
 
 
@@ -1261,6 +1329,7 @@ def selected_ids(
     missing_audio: bool = False,
     duplicates: bool = False,
     staged: bool = False,
+    provisional: bool = False,
 ) -> list[str]:
     """The ids the chosen detail flags name, deduplicated, in report order.
 
@@ -1280,6 +1349,8 @@ def selected_ids(
     if staged:
         for item in report.staged:
             chosen.extend(item.ids)
-    if not (unexported or missing_audio or duplicates or staged):
+    if provisional:
+        chosen.extend(report.provisional_ids)
+    if not (unexported or missing_audio or duplicates or staged or provisional):
         chosen = list(report.record_ids)
     return list(dict.fromkeys(chosen))
