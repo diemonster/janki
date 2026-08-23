@@ -401,6 +401,12 @@ def test_a_silent_dictionary_leaves_the_mark_and_says_so() -> None:
         "no answer for provisional part_of_speech" in warning
         for warning in result.warnings
     )
+    # Load-bearing, and not a duplicate of the warning check: the warning is
+    # the only thing above that distinguishes this from the pre-refusal code,
+    # and it does so by a substring that a reword or a sort of the `unresolved`
+    # join would quietly retire. This says the same thing structurally — the
+    # meanings mark was never a candidate, so no gloss was fetched to judge it.
+    assert api.calls("lookup-vocabulary") == []
 
 
 def test_mark_clears_are_reported_for_persistence() -> None:
@@ -456,6 +462,23 @@ def test_a_forced_write_settles_the_mark_it_overwrote() -> None:
     assert updated.part_of_speech == "verb"
     assert "part_of_speech" not in dict(provisional_entries(updated))
     assert not any("edited since extraction" in warning for warning in result.warnings)
+
+
+def test_the_jpdb_pass_refuses_a_force_fields_meanings_flag() -> None:
+    """The same refusal one layer up, and the layer a user actually touches.
+
+    `DICTIONARY_MAY_NOT_SETTLE` stops the pass writing meanings from inside;
+    this stops `--jpdb --force-fields meanings` being spelled at all, so the
+    answer a user gets is a sentence rather than a silent no-op. Untested until
+    now: if `meanings` were ever added to `ENRICHABLE_FIELDS` only the
+    behaviour tests would have objected, and this is the cheaper alarm.
+    """
+    with pytest.raises(EnrichError, match="--ai"):
+        parse_force_fields("meanings")
+
+    # And it is a real field name to the pass that does own it, so the refusal
+    # is about authority rather than a typo check.
+    assert parse_force_fields("meanings", ai=True) == ("meanings",)
 
 
 def test_a_kana_homograph_cannot_settle_a_provisional_claim() -> None:
@@ -539,8 +562,11 @@ def test_a_kana_homograph_cannot_replace_the_meaning_its_source_taught() -> None
     # And no gloss was fetched: the refusal is a rule, not a comparison, so
     # there is no request whose answer someone could later decide to trust.
     assert api.calls("lookup-vocabulary") == []
-    # The rest of the pass is unaffected: this is a narrow refusal, not a
-    # record that enrichment skips.
+    # The rest of the pass still writes, and this pins the boundary rather
+    # than endorsing it: these come from the same wrong-word entry, and for an
+    # all-kana record no guard can say otherwise. DESIGN.md draws the line at
+    # *sense* — accent and frequency describe the word either way — and says
+    # why the residue is left to a person instead of refused wholesale.
     assert updated.frequency_rank == 92300
     assert updated.pitch_accent == ["LHHHH"]
 

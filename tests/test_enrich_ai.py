@@ -11,6 +11,7 @@ noted here because that key is what hid the pass's own key dependency until
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +32,14 @@ from japanese_anki.enrich import (
 from japanese_anki.identifiers import short_fingerprint
 from japanese_anki.jpdb import JpdbClient
 from japanese_anki.ledger import Ledger
-from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
+from japanese_anki.models import (
+    PROVISIONAL_FIELDS_KEY,
+    ExampleSentence,
+    SourceReference,
+    VocabularyRecord,
+    mark_provisional,
+    provisional_fields,
+)
 from japanese_anki.staging import read_staging
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -1663,3 +1671,111 @@ def test_the_models_romaji_reaches_the_record_when_it_verifies() -> None:
     [example] = outcome.record.examples
     assert example.romaji == "mainichi hanashimasu.", "the spacing survives"
     assert not outcome.romaji_rejected
+
+
+# --- settling a provisional meaning -------------------------------------------
+#
+# `docs/DESIGN.md` names the AI pass as one of the two things that may settle a
+# provisional meaning, because it reads the card. These pin that it actually
+# does — the sentence was written into the design before the code honoured it.
+
+
+def provisional(**overrides: Any) -> VocabularyRecord:
+    """An extract-sourced record whose meanings are still a model claim."""
+    values: dict[str, Any] = {
+        "source": SourceReference(type="extract", imported_from="medical.pdf"),
+        "meanings": ["mumps"],
+        "examples": [ExampleSentence(japanese="子供がおたふくにかかりました。")],
+    }
+    values.update(overrides)
+    return mark_provisional(record(**values))
+
+
+def test_writing_a_meaning_settles_the_mark_it_overwrote() -> None:
+    """Otherwise the mark outlives the write, and the next jpdb run reads the
+    broken value binding as a human edit — reporting "edited since extraction
+    ... kept as curated" about a value janki wrote itself, and rewriting the
+    collection to say so."""
+    marked = provisional()
+    assert provisional_fields(marked) == ["meanings"]
+
+    outcome = apply_ai_result(
+        marked,
+        answer(meanings=["mumps (infectious parotitis)"]),
+        force_fields=("meanings",),
+    )
+
+    assert outcome.record.meanings == ["mumps (infectious parotitis)"]
+    assert provisional_fields(outcome.record) == []
+    # The mark is gone, not merely inactive: an inactive one still reads as a
+    # stale edit to the next pass that looks.
+    assert PROVISIONAL_FIELDS_KEY not in outcome.record.source.raw_fields
+
+
+def test_a_model_that_restates_the_meaning_settles_it_too() -> None:
+    """Agreement is evidence. A mark means nobody who can read this card has
+    confirmed the claim, and here somebody just did.
+
+    Without this the 136 meanings restored from source archives would keep a
+    mark permanently whenever the model agreed with them: the value never
+    changes, so no janki operation would ever have cause to touch the field
+    again, and nothing surfaces the mark to a person either."""
+    marked = provisional()
+
+    outcome = apply_ai_result(
+        marked, answer(meanings=["mumps"]), force_fields=("meanings",)
+    )
+
+    assert outcome.record.meanings == ["mumps"]
+    assert "meanings" not in outcome.changes
+    assert provisional_fields(outcome.record) == []
+
+
+def test_an_answer_the_pass_discards_leaves_the_mark_alone() -> None:
+    """No `--force-fields`, so a full field is not writable and the model's
+    answer is dropped. Settling the mark on an answer that was never written
+    would record a confirmation that did not happen."""
+    marked = provisional()
+
+    outcome = apply_ai_result(marked, answer(meanings=["homely woman"]))
+
+    assert outcome.record.meanings == ["mumps"]
+    assert provisional_fields(outcome.record) == ["meanings"]
+
+
+def test_a_stale_mark_on_an_untouched_field_is_left_for_its_reporter() -> None:
+    """A mark whose binding is broken means the field really was edited after
+    extraction. The jpdb pass clears it with a warning saying so, and that
+    warning is the only notice the user gets — so a pass that did not write the
+    field must not swallow it by clearing the mark first."""
+    edited = replace(provisional(), meanings=["mumps (hand-checked)"])
+    assert provisional_fields(edited) == []  # bound to the extraction value
+
+    outcome = apply_ai_result(edited, answer(meanings=["mumps"]))
+
+    assert outcome.record.meanings == ["mumps (hand-checked)"]
+    assert PROVISIONAL_FIELDS_KEY in outcome.record.source.raw_fields
+
+
+def test_a_stale_mark_on_a_field_this_pass_overwrote_is_cleared() -> None:
+    """The mirror case, and the one that decides the rule.
+
+    Here a person edited the meaning after extraction (breaking the binding)
+    and then asked the AI pass to overwrite it anyway. The mark now describes a
+    value two writes gone. Keeping it because it is "stale rather than active"
+    arms exactly the misreport this settle exists to prevent: the next jpdb run
+    would announce "edited since extraction ... kept as curated" about a value
+    the model wrote seconds ago.
+
+    So what decides is whether this pass acted on the field, not whether the
+    mark still matched.
+    """
+    edited = replace(provisional(), meanings=["mumps (hand-checked)"])
+
+    outcome = apply_ai_result(
+        edited, answer(meanings=["mumps (infectious parotitis)"]),
+        force_fields=("meanings",),
+    )
+
+    assert outcome.record.meanings == ["mumps (infectious parotitis)"]
+    assert PROVISIONAL_FIELDS_KEY not in outcome.record.source.raw_fields

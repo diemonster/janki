@@ -52,6 +52,7 @@ from japanese_anki.models import (
     VocabularyRecord,
     clear_provisional,
     example_accepted,
+    provisional_entries,
     split_provisional,
 )
 from japanese_anki.romaji import kana_to_romaji
@@ -1315,6 +1316,51 @@ def _complete_unoccupied_example_slots(
     return merged, discarded
 
 
+def _settle_ai_marks(
+    record: VocabularyRecord,
+    updated: VocabularyRecord,
+    changes: Mapping[str, tuple[Any, Any]],
+    writable: Sequence[str],
+    proposals: Mapping[str, Any],
+) -> VocabularyRecord:
+    """Clear the provisional marks this pass's own answer resolved.
+
+    The AI pass is the one thing `docs/DESIGN.md` allows to settle a
+    provisional meaning, because it reads the record — its examples, its usage
+    note, the sense the source actually taught. So when it writes that field,
+    the value stops being extraction's claim and becomes this pass's write, and
+    the mark has to go with it.
+
+    Without this the mark outlives the write and the *next* jpdb run finds a
+    fingerprint that no longer matches. It reads that as a human edit and
+    reports "edited since extraction; the field is kept as curated" about a
+    value janki wrote itself — the exact misreport
+    :func:`enrich_records`' forced-write settle exists to prevent, and one that
+    then rewrites the collection to say so.
+
+    A model that re-states the value it was shown settles it too. That is
+    evidence, not a no-op: a mark means "nobody who can read this card has
+    confirmed it", and one just did. Without this clause a restored meaning the
+    model agrees with keeps its mark permanently, because no janki operation
+    would ever have cause to touch the field again.
+
+    What decides is whether *this pass acted on the field*, not whether the
+    mark was still bound to its value. A stale mark on a field this pass then
+    overwrote describes a value that is now two writes gone, so keeping it only
+    arms the misreport above. A stale mark on a field this pass left alone is
+    the real thing — a human edit outranking the dictionary — and stays for the
+    jpdb pass to clear with the warning that says so, which is the only notice
+    the user gets.
+    """
+    settled = [
+        name
+        for name, _fingerprint in provisional_entries(record)
+        if name in changes
+        or (name in writable and not is_empty(proposals.get(name)))
+    ]
+    return clear_provisional(updated, settled) if settled else updated
+
+
 def apply_ai_result(
     record: VocabularyRecord,
     parsed: Any,
@@ -1360,16 +1406,13 @@ def apply_ai_result(
         if merged_examples != record.examples:
             changes["examples"] = (record.examples, merged_examples)
             updated = replace(record, examples=merged_examples)
-        updated, other_changes = _apply(
-            updated,
-            proposals,
-            [
-                name
-                for name in AI_FIELDS
-                if name != "examples"
-                and (name in force_fields or is_empty(getattr(record, name)))
-            ],
-        )
+        writable = [
+            name
+            for name in AI_FIELDS
+            if name != "examples"
+            and (name in force_fields or is_empty(getattr(record, name)))
+        ]
+        updated, other_changes = _apply(updated, proposals, writable)
         changes.update(other_changes)
     else:
         writable = [
@@ -1378,6 +1421,7 @@ def apply_ai_result(
             if name in force_fields or is_empty(getattr(record, name))
         ]
         updated, changes = _apply(record, proposals, writable)
+    updated = _settle_ai_marks(record, updated, changes, writable, proposals)
     outcome.record = updated
     outcome.changes = changes
     outcome.romaji_rejected = list(content.romaji_rejected)

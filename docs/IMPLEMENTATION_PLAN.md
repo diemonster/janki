@@ -2993,7 +2993,13 @@ later pass can pick them up: gloss reconciliation issues one
 lookup-vocabulary call per marked record on its first enrich (batchable; the
 mark clears on settlement); an unresolvable provisional mark (kana homograph,
 suru stem) re-parses per run until a person settles it, which is the "hold
-until evidence or review" contract; shipping builds validate twice (CLI
+until evidence or review" contract; *(Correction 2026-08-23: gloss
+reconciliation is deleted. A dictionary may not settle `meanings` at all — see
+`DICTIONARY_MAY_NOT_SETTLE` in `enrich.py` and the jpdb bullet in DESIGN.md.
+The kana homograph was never an "unresolvable" case the pass held: おたふく
+resolved cleanly to お多福's entry on matching spelling and reading, and 136
+records across seven sources had the meaning their source taught replaced
+before anyone noticed.)* shipping builds validate twice (CLI
 ordering gate plus exporter backstop, ~2 ms measured); the learner-load known
 set is parameter-threaded rather than derived in the absorb layer; rare
 i-column noun endings (にじます) can false-positive the register gate; and
@@ -3058,7 +3064,10 @@ Make these production changes:
 3. Mark semantic extraction fields as provisional. For an exact identity
    match, dictionary reconciliation can replace only provisional meanings,
    parts of speech, and related facts, and must show the authority change in a
-   reviewable diff. Preserve human-curated fields. Hold or propose a decision
+   reviewable diff. *(Correction 2026-08-23: not meanings. "Exact identity
+   match" is spelling plus reading, and two words can share both — おたふく
+   is お多福 and it is also mumps. Meanings are settled by a person or
+   `enrich --ai`, which read the card.)* Preserve human-curated fields. Hold or propose a decision
    for near matches, absent entries, conflicting evidence, or a different
    reading.
 4. Add a local teaching-example gate. Keep the existing furigana, romaji, and

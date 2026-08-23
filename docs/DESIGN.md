@@ -61,6 +61,14 @@ owns:
   and a gloss list keyed on spelling cannot tell おたふく "mumps" from the
   identically-spelled お多福 "homely woman". Only a person or `enrich --ai`,
   both of which read the card, may settle a provisional meaning.
+  The line is drawn at *sense*: everything still granted above is a property of
+  the word rather than of the meaning taught, so an entry resolved on matching
+  spelling and reading states it correctly for either sense. That leaves a
+  narrower hole, and it is deliberate rather than overlooked: for an all-kana
+  record spelling and reading are the same string, so a true homograph pair
+  passes the guard and can differ in accent or word class. Refusing the fields
+  outright would cost every legitimate kana word, and telling which pair is
+  which is reading Japanese. So janki keeps writing them and a person decides.
 - **KANJIDIC** — kanji meanings, readings and stroke *count*. Stroke **order**
   comes from KanjiVG, a separate source under CC BY-SA 3.0 that a shared deck
   must credit.
