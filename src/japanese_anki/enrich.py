@@ -109,8 +109,8 @@ class EnrichError(JankiError):
 #: woman (esp. one with a small low nose, high flat forehead, and bulging
 #: cheeks)" — on a card whose own example sentence reads "My child came down
 #: with the mumps." The spelling guard below cannot catch that: both spell
-#: おたふく, and only the sense differs. Sixty-four of that sheet's eighty-six
-#: cards lost their taught meaning this way.
+#: おたふく, and only the sense differs. Sixty-three of that sheet's eighty-five
+#: cards lost their taught meaning this way, and 135 across the collection.
 #:
 #: A provisional meaning is settled by a person, or by ``enrich --ai``, which
 #: reads the record's own examples. Both can tell homographs apart. A gloss
@@ -1221,6 +1221,12 @@ class AiOutcome:
 
     record: VocabularyRecord
     changes: dict[str, tuple[Any, Any]] = field(default_factory=dict)
+    #: Fields whose provisional mark this answer settled. Its own channel
+    #: because a mark can be settled *without* a value change — the model was
+    #: shown the claim and restated it — and the caller's save gate reads
+    #: ``changes``. Folded in, a confirming answer would look like no answer
+    #: at all and the settled record would be dropped on the floor.
+    cleared: list[str] = field(default_factory=list)
     #: True when generated examples were discarded while stored ones were
     #: preserved. A generated sentence may now fill an unoccupied labelled slot;
     #: this records only the remainder that had nowhere safe to land, so the
@@ -1322,7 +1328,7 @@ def _settle_ai_marks(
     changes: Mapping[str, tuple[Any, Any]],
     writable: Sequence[str],
     proposals: Mapping[str, Any],
-) -> VocabularyRecord:
+) -> tuple[VocabularyRecord, list[str]]:
     """Clear the provisional marks this pass's own answer resolved.
 
     The AI pass is the one thing `docs/DESIGN.md` allows to settle a
@@ -1358,7 +1364,7 @@ def _settle_ai_marks(
         if name in changes
         or (name in writable and not is_empty(proposals.get(name)))
     ]
-    return clear_provisional(updated, settled) if settled else updated
+    return (clear_provisional(updated, settled) if settled else updated), settled
 
 
 def apply_ai_result(
@@ -1421,7 +1427,9 @@ def apply_ai_result(
             if name in force_fields or is_empty(getattr(record, name))
         ]
         updated, changes = _apply(record, proposals, writable)
-    updated = _settle_ai_marks(record, updated, changes, writable, proposals)
+    updated, outcome.cleared = _settle_ai_marks(
+        record, updated, changes, writable, proposals
+    )
     outcome.record = updated
     outcome.changes = changes
     outcome.romaji_rejected = list(content.romaji_rejected)
@@ -1434,6 +1442,16 @@ class AiResult:
 
     records: list[VocabularyRecord] = field(default_factory=list)
     changes: dict[str, dict[str, tuple[Any, Any]]] = field(default_factory=dict)
+    #: ``record id -> [field]`` whose provisional mark this pass settled with
+    #: no value change — the model was shown the claim and restated it.
+    #:
+    #: The same channel, and for the same reason, as ``EnrichResult.cleared``:
+    #: every save gate reads ``changes``, so a settle that rode only on
+    #: ``changes`` would never reach disk when the answer agreed. The record
+    #: would keep its mark, reappear in ``status --unsettled``, and buy another
+    #: paid call the next time somebody piped that list into this pass — for
+    #: as long as the model kept agreeing.
+    cleared: dict[str, list[str]] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     no_changes: list[str] = field(default_factory=list)
     #: Exact full-call fingerprints, keyed by the record whose answer they
@@ -1575,8 +1593,16 @@ def absorb_ai_call(
         # answer was not internally consistent, and that is a human's to look
         # at rather than something to repair quietly.
         result.warnings.append(f"{record.id}: {rejected}")
-    if outcome.changes:
+    if outcome.cleared:
+        result.cleared.setdefault(record.id, []).extend(outcome.cleared)
+    if outcome.changes or outcome.cleared:
+        # `or outcome.cleared`: an answer that restates the stored value writes
+        # no field but still resolves the authority question, and the object
+        # carrying that resolution is `outcome.record`. Keeping only the
+        # changed ones dropped it, which left the mark on disk and made the
+        # next run ask the model the same question again, at the same price.
         result.records[positions[record.id]] = outcome.record
+    if outcome.changes:
         result.changes[record.id] = {
             **result.changes.get(record.id, {}),
             **outcome.changes,

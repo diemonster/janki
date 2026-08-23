@@ -2997,7 +2997,7 @@ until evidence or review" contract; *(Correction 2026-08-23: gloss
 reconciliation is deleted. A dictionary may not settle `meanings` at all — see
 `DICTIONARY_MAY_NOT_SETTLE` in `enrich.py` and the jpdb bullet in DESIGN.md.
 The kana homograph was never an "unresolvable" case the pass held: おたふく
-resolved cleanly to お多福's entry on matching spelling and reading, and 136
+resolved cleanly to お多福's entry on matching spelling and reading, and 135
 records across seven sources had the meaning their source taught replaced
 before anyone noticed.)* shipping builds validate twice (CLI
 ordering gate plus exporter backstop, ~2 ms measured); the learner-load known

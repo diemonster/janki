@@ -447,6 +447,7 @@ class StatusReport:
     # None means "the schema has no pitch accent yet", which is not the same
     # answer as "no record is missing one".
     missing_pitch_accent: list[str] | None
+    staging_dir: Path
     #: ``field name -> record ids`` whose value is still a model's claim: the
     #: mark extraction wrote and nobody who can read the card has settled.
     #:
@@ -456,7 +457,6 @@ class StatusReport:
     #: and the only way to find one was to already suspect it. That is how a
     #: sheet teaching おたふく = "mumps" shipped reading "homely woman".
     provisional: dict[str, list[str]] = field(default_factory=dict)
-    staging_dir: Path = Path()
     staged: list[StagedFile] = field(default_factory=list)
 
     @property

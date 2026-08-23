@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -1716,7 +1717,7 @@ def test_a_model_that_restates_the_meaning_settles_it_too() -> None:
     """Agreement is evidence. A mark means nobody who can read this card has
     confirmed the claim, and here somebody just did.
 
-    Without this the 136 meanings restored from source archives would keep a
+    Without this the 135 meanings restored from source archives would keep a
     mark permanently whenever the model agreed with them: the value never
     changes, so no janki operation would ever have cause to touch the field
     again, and nothing surfaces the mark to a person either."""
@@ -1740,6 +1741,82 @@ def test_an_answer_the_pass_discards_leaves_the_mark_alone() -> None:
     outcome = apply_ai_result(marked, answer(meanings=["homely woman"]))
 
     assert outcome.record.meanings == ["mumps"]
+    assert provisional_fields(outcome.record) == ["meanings"]
+
+
+def test_a_settle_survives_the_pass_that_wrote_no_field(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The settle has to reach the caller's save gate, not just the record.
+
+    `apply_ai_result` clearing the mark is worth nothing on its own: every
+    save gate in `cli.py` reads `result.changes`, and an answer that restates
+    the stored meaning writes no field. Carried only on `changes`, the settled
+    record was built and then dropped — `absorb_ai_call` kept the original —
+    so the mark stayed on disk, the record came back in `status --unsettled`,
+    and piping that list into this pass bought the identical answer again, at
+    the identical price, for as long as the model kept agreeing.
+
+    So `cleared` is its own channel, exactly as `EnrichResult.cleared` is for
+    the jpdb pass and for the same reason.
+    """
+    marked = mark_provisional(
+        record(
+            source=SourceReference(type="extract", imported_from="medical.pdf"),
+            meanings=["mumps"],
+            usage_notes="Commonly said in full as おたふく風邪.",
+            examples=[
+                ExampleSentence(japanese="子供がおたふくにかかりました。",
+                                register="polite"),
+                ExampleSentence(japanese="おたふくで一週間休んだ。", register="casual"),
+            ],
+        )
+    )
+    assert provisional_fields(marked) == ["meanings"]
+    # The model is shown the claim and restates it. Nothing else is fillable:
+    # both register slots are occupied and the usage note is written.
+    monkeypatch.setattr(
+        enrich.claude_client,
+        "parse_call",
+        FakeCall(CallResult(answer(meanings=["mumps"]), "end_turn", None)),
+    )
+
+    # Named explicitly, which is what the pipeline does: a complete record is
+    # not a content-defined target, so `status --unsettled --format ids` is
+    # how it gets selected at all.
+    result = enrich.enrich_ai(
+        [marked], model="m", style_guide="S", instructions="I",
+        ids=[marked.id], force_fields=("meanings",),
+    )
+
+    assert result.changes == {}
+    assert result.cleared == {marked.id: ["meanings"]}
+    # The settled object is the one the caller will save, not the original.
+    assert provisional_fields(result.records[0]) == []
+    assert result.records[0].meanings == ["mumps"]
+
+
+def test_an_answer_that_offers_nothing_confirms_nothing() -> None:
+    """Settling on *writability* alone would be enough while the wire schema
+    guarantees a non-empty `meanings` — and wrong the moment anything hands
+    `apply_ai_result` an answer it did not validate, which its signature
+    (`parsed: Any`, read via `getattr`) allows. An empty answer writes no
+    field, so it has confirmed nothing; treating the field as settled would
+    retire the mark on the strength of silence.
+    """
+    marked = mark_provisional(
+        record(
+            source=SourceReference(type="extract", imported_from="medical.pdf"),
+            meanings=["mumps"],
+            examples=[ExampleSentence(japanese="子供がおたふくにかかりました。")],
+        )
+    )
+    silent = SimpleNamespace(meanings=[], examples=[], usage_notes="")
+
+    outcome = apply_ai_result(marked, silent, force_fields=("meanings",))
+
+    assert outcome.record.meanings == ["mumps"]
+    assert outcome.cleared == []
     assert provisional_fields(outcome.record) == ["meanings"]
 
 
@@ -1779,3 +1856,109 @@ def test_a_stale_mark_on_a_field_this_pass_overwrote_is_cleared() -> None:
 
     assert outcome.record.meanings == ["mumps (infectious parotitis)"]
     assert PROVISIONAL_FIELDS_KEY not in outcome.record.source.raw_fields
+
+
+def test_a_confirming_answer_is_written_to_disk_not_reported_as_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The whole point, at the layer the user meets it.
+
+    `enrich --ai` bails early on `if not result.changes`, prints "Nothing
+    written", and returns before saving. An answer that restates the stored
+    meaning fills no field, so it took that exit — and the settle it had just
+    computed never reached the file. The record kept its mark, came back in
+    `status --unsettled`, and the next run down that pipeline paid for the same
+    answer again.
+    """
+    marked = mark_provisional(
+        record(
+            source=SourceReference(type="extract", imported_from="medical.pdf"),
+            meanings=["mumps"],
+            usage_notes="Commonly said in full as おたふく風邪.",
+            examples=[
+                ExampleSentence(japanese="子供がおたふくにかかりました。",
+                                register="polite"),
+                ExampleSentence(japanese="おたふくで一週間休んだ。", register="casual"),
+            ],
+        )
+    )
+    root = project(tmp_path, [marked])
+    assert "provisional_fields" in stored(root)[marked.id]["source"]["raw_fields"]
+    patch_all(
+        monkeypatch,
+        FakeCall(CallResult(answer(meanings=["mumps"]), "end_turn", None)),
+        FakeJpdb({}),
+    )
+
+    code = cli.main([
+        "--root", str(root), "enrich", "--ai", "--yes",
+        "--force-fields", "meanings", marked.id,
+    ])
+
+    assert code == 0
+    written = stored(root)[marked.id]
+    assert written["meanings"] == ["mumps"]
+    # Settled on disk: the next `status --unsettled` no longer names it, and
+    # nobody pays to ask the same question again.
+    assert "provisional_fields" not in written["source"]["raw_fields"]
+    assert "Nothing written" not in capsys.readouterr().out
+
+
+def test_the_staging_route_carries_a_settle_with_no_field_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The staging route writes only the records it thinks the run touched, and
+    it is the *only* write that run makes — the normalized file is left for
+    `promote`. So a record whose sole outcome is a settled mark has to be in
+    that file or the settle is not deferred, it is lost, and the record comes
+    back marked with another paid call behind it.
+    """
+    marked = mark_provisional(
+        record(
+            source=SourceReference(type="extract", imported_from="medical.pdf"),
+            meanings=["mumps"],
+            usage_notes="Commonly said in full as おたふく風邪.",
+            examples=[
+                ExampleSentence(japanese="子供がおたふくにかかりました。",
+                                register="polite"),
+                ExampleSentence(japanese="おたふくで一週間休んだ。", register="casual"),
+            ],
+        )
+    )
+    # The AI staging route is chosen by run size, not by a flag, so the settle
+    # rides in a run big enough to take it.
+    filler = [
+        record(id=f"word:話す{index}:はなす", expression=f"話す{index}")
+        for index in range(enrich.STAGING_THRESHOLD - 1)
+    ]
+    root = project(tmp_path, [marked, *filler])
+    patch_all(
+        monkeypatch,
+        FakeCall(
+            CallResult(answer(meanings=["mumps"]), "end_turn", None),
+            *[
+                CallResult(
+                    answer(generated(f"話す{index}。", furigana=f"話[はな]す{index}。")),
+                    "end_turn",
+                    None,
+                )
+                for index in range(enrich.STAGING_THRESHOLD - 1)
+            ],
+        ),
+        FakeJpdb(),
+    )
+
+    # Named explicitly, as `status --unsettled --format ids` would: a complete
+    # record is not a content-defined target, so without the ids the run is one
+    # short of the threshold and takes the diff route instead.
+    code = cli.main([
+        "--root", str(root), "enrich", "--ai", "--yes",
+        "--force-fields", "meanings",
+        marked.id, *[item.id for item in filler],
+    ])
+
+    assert code == 0
+    staged, _meta = read_staging(root / "staging" / "ai-enrichment.yaml")
+    settled = [item for item in staged if item.id == marked.id]
+    assert settled, "the settle-only record was dropped from the staging file"
+    assert provisional_fields(settled[0]) == []

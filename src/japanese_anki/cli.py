@@ -1197,7 +1197,10 @@ def _enrich_ai(
     for warning in result.warnings:
         print(f"warning: {warning}", file=sys.stderr)
     _report_ai_no_changes(result)
-    if not result.changes:
+    # `and not result.cleared`: an answer that restates the stored value fills
+    # nothing and still has to be saved — it settles the provisional mark, and
+    # a settle that never reaches disk buys the same answer again next run.
+    if not result.changes and not result.cleared:
         print(
             f"Nothing written: looked at {result.looked_up} record(s), and none "
             "of the answers had anything to fill."
@@ -1249,7 +1252,7 @@ def _write_ai_result(
         written = [
             result.records[index]
             for index, record in enumerate(records)
-            if record.id in result.changes
+            if record.id in result.changes or record.id in result.cleared
         ]
         write_staging(
             staging_target,
@@ -1659,7 +1662,7 @@ def _batch_fetch(
             "is still recorded as pending, so nothing was lost."
         )
 
-    if not result.changes:
+    if not result.changes and not result.cleared:
         if outcome.invalid:
             return _keep_for_invalid(book, batch_id, outcome.invalid)
         print(

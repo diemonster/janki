@@ -523,7 +523,7 @@ def test_a_kana_homograph_cannot_replace_the_meaning_its_source_taught() -> None
     Japanese, which a gloss list keyed on spelling does not do. So the refusal
     has to be categorical, and this is the test that says so.
 
-    64 of that sheet's 86 cards were overwritten this way before the rule
+    63 of that sheet's 85 cards were overwritten this way before the rule
     existed, which is why the assertion is `== ["mumps"]` and not merely
     "unchanged": what makes the bug expensive is that the replacement is
     plausible prose, so nobody notices until they read the sentence under it.
