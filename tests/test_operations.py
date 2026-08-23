@@ -362,3 +362,41 @@ def test_an_unreadable_artifact_reports_no_answer_rather_than_raising(
     )
 
     assert answer_text(tmp_path / "operations.json", operation) == ""
+
+
+def test_forgetting_an_operation_takes_its_artifact_with_it(tmp_path: Path) -> None:
+    """A captured answer is a recovery buffer, not an archive. Once the answer
+    has become staging, `data/staging/done/` holds the durable copy — leaving
+    the blob behind accumulates an unreferenced megabyte per paid call in a
+    repository whose whole point is being portable."""
+    journal = _journal(tmp_path)
+    _authorize(journal)
+    journal.advance("op-1", "dispatching")
+    artifact = capture_artifact(
+        tmp_path / "operations.json", "op-1", b'{"content": []}'
+    )
+    journal.advance("op-1", "result_captured", artifact=artifact)
+    journal.advance("op-1", "committed")
+    blob = tmp_path / artifact
+    assert blob.exists()
+
+    journal.forget(["op-1"])
+
+    assert not blob.exists()
+
+
+def test_an_unfinished_operation_keeps_its_artifact(tmp_path: Path) -> None:
+    """`forget` refuses anything but a committed operation, so the buffer for
+    work someone still has to decide about cannot be swept away."""
+    journal = _journal(tmp_path)
+    _authorize(journal)
+    journal.advance("op-1", "dispatching")
+    artifact = capture_artifact(
+        tmp_path / "operations.json", "op-1", b'{"content": []}'
+    )
+    journal.advance("op-1", "result_captured", artifact=artifact)
+
+    with pytest.raises(OperationError, match="not committed"):
+        journal.forget(["op-1"])
+
+    assert (tmp_path / artifact).exists()

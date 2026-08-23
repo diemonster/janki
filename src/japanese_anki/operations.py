@@ -28,6 +28,7 @@ enforced by refusing the transition rather than documented as a convention.
 
 from __future__ import annotations
 
+import contextlib
 import json
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
@@ -415,6 +416,15 @@ class OperationJournal:
                         f"Operation {operation_id!r} is {held.state!r}, not "
                         "committed; only a committed operation may be forgotten"
                     )
+                # The artifact goes with the entry. It is a recovery buffer,
+                # and once the answer has become staging the archive under
+                # `data/staging/done/` is the durable copy — leaving the blob
+                # behind would accumulate an unreferenced megabyte per paid
+                # call in a repository whose whole point is being portable.
+                if held.artifact:
+                    blob = Path(self.path).parent / held.artifact
+                    with contextlib.suppress(OSError):
+                        blob.unlink()
                 del current.operations[operation_id]
                 removed += 1
             if removed:

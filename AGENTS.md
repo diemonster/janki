@@ -164,6 +164,17 @@ below is what is left, and it is the loop every other project already uses.*
 ## Data lifecycle
 
 1. `data/inbox/`: untouched source exports.
+1b. `data/operations.json` and `data/.pending/`: the paid-model-call journal and
+   the exact provider answers it captures, written **before** each call is
+   dispatched and **before** its reply is parsed. The journal is committed — it
+   is the only durable record that a call was billed, and an entry in
+   `outcome_unknown` or `result_captured` is money someone still has to make a
+   decision about. A captured artifact is a *recovery buffer*, not an archive:
+   once its operation reaches `committed` the answer has become staging, and
+   `data/staging/done/` holds the durable copy, so the artifact is deleted with
+   the journal entry. Never delete either by hand while an operation is
+   unfinished, and never re-dispatch an `outcome_unknown` one — a fresh charge
+   needs fresh authority.
 2. `data/normalized/`: mechanical conversion into the canonical schema.
 3. `data/decks/`: curated deck definitions and human edits.
 4. `data/staging/`: rows an import held back for a human — **committed**, so a
