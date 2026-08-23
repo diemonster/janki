@@ -189,8 +189,7 @@
     "furigana": "",
     "romaji": "isu",
     "meanings": [
-      "chair, stool",
-      "post, office, position"
+      "chair"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -237,7 +236,8 @@
         "inclusion_reason": "Common furniture noun used with the に particle.",
         "example": "だれがいすにすわっていますか。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:6116b91852c82f35b7309fb8f8067f688e1731694f0a6fd88720ca11ab84173f"
+        "janki_pitch_accent_source": "jpdb:6116b91852c82f35b7309fb8f8067f688e1731694f0a6fd88720ca11ab84173f",
+        "provisional_fields": "meanings:b2709d3efd5a"
       }
     }
   },
@@ -313,7 +313,8 @@
     "furigana": "うがい 薬[ぐすり]",
     "romaji": "ugaigusuri",
     "meanings": [
-      "mouthwash"
+      "mouthwash",
+      "gargle medicine"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -359,7 +360,8 @@
         "context": "8. mouth wash ugaigusuri うがいぐすり うがい薬",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "fb1302cd3261,9f8a16fb1aab",
-        "janki_pitch_accent_source": "jpdb:51d992449fd5685c3e1a7317a4e17cc5d2915a270d41c64a39dca56dce707e71"
+        "janki_pitch_accent_source": "jpdb:51d992449fd5685c3e1a7317a4e17cc5d2915a270d41c64a39dca56dce707e71",
+        "provisional_fields": "meanings:309f5b00c6b0"
       }
     }
   },
@@ -528,7 +530,8 @@
     "romaji": "umi",
     "meanings": [
       "sea",
-      "ocean"
+      "ocean",
+      "beach"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -565,7 +568,8 @@
         "page": "4",
         "context": "・うみでおよぐつもりです。",
         "inclusion_reason": "Basic nature noun in the Okinawa plan memo.",
-        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"},{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+        "janki_repairs": "[{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.0.0\"},{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "provisional_fields": "meanings:611a8c4aa4cf"
       }
     }
   },
@@ -688,7 +692,9 @@
     "furigana": "",
     "romaji": "osake",
     "meanings": [
-      "alcohol, sake"
+      "sake",
+      "alcohol",
+      "alcoholic drink"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -735,7 +741,8 @@
         "inclusion_reason": "Core everyday noun used in the interview prompt; commonly written お酒.",
         "example": "よくおさけ(を)飲む？",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:6a2b94089c62aa1e7869d8c00221be10d635f03139ed081da474f495b5a3795a"
+        "janki_pitch_accent_source": "jpdb:6a2b94089c62aa1e7869d8c00221be10d635f03139ed081da474f495b5a3795a",
+        "provisional_fields": "meanings:cefb5693ff7a"
       }
     }
   },
@@ -746,7 +753,7 @@
     "furigana": "",
     "romaji": "otafuku",
     "meanings": [
-      "homely woman (esp. one with a small low nose, high flat forehead, and bulging cheeks), plain woman"
+      "mumps"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -792,7 +799,8 @@
         "context": "3. mumps otafuku おたふく",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "ba33fa1c8040,c107a4dd8aa8",
-        "janki_pitch_accent_source": "jpdb:f306e5743fc39b78249c22fc1b6a02dcac760cd818b402241e93fc654f387eb8"
+        "janki_pitch_accent_source": "jpdb:f306e5743fc39b78249c22fc1b6a02dcac760cd818b402241e93fc654f387eb8",
+        "provisional_fields": "meanings:cef21d3ff67b"
       }
     }
   },
@@ -1070,7 +1078,9 @@
     "furigana": "お 尻[しり]",
     "romaji": "oshiri",
     "meanings": [
-      "bottom, buttocks"
+      "bottom",
+      "buttocks",
+      "hip"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -1116,7 +1126,8 @@
         "context": "19. hip oshiri おしり 尻",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "c17e51d48fe1,eebc1411ac8a",
-        "janki_pitch_accent_source": "jpdb:699638d5cbcc768784ce57c50ebc7c6800157867738ed1a6fa476da29036f62b"
+        "janki_pitch_accent_source": "jpdb:699638d5cbcc768784ce57c50ebc7c6800157867738ed1a6fa476da29036f62b",
+        "provisional_fields": "meanings:ef6658bdca57"
       }
     }
   },
@@ -1184,7 +1195,9 @@
     "furigana": "お 腹[なか]",
     "romaji": "onaka",
     "meanings": [
-      "belly, abdomen, stomach"
+      "stomach",
+      "belly",
+      "abdomen"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -1230,7 +1243,8 @@
         "context": "(1) Onaka ga itai desu. お腹が痛いです。 have a pain / abdomen, stomach, bowel, (tummy)",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "fa149869ca3e,964d62b80ae8",
-        "janki_pitch_accent_source": "jpdb:42cf47bf61b095ee5be31bd1f90117f6fe24063c38e369ab04605531b3238cb5"
+        "janki_pitch_accent_source": "jpdb:42cf47bf61b095ee5be31bd1f90117f6fe24063c38e369ab04605531b3238cb5",
+        "provisional_fields": "meanings:ca3ad774f651"
       }
     }
   },
@@ -1241,31 +1255,8 @@
     "furigana": "",
     "romaji": "kakeru",
     "meanings": [
-      "to hang up (e.g. a coat, a picture on the wall), to let hang, to suspend (from), to hoist (e.g. sail), to raise (e.g. flag)",
-      "to put on (e.g. a blanket), to put on top of, to cover, to lay, to spread",
-      "to put on (glasses, etc.), to wear (a necklace, etc.)",
-      "to make (a call)",
-      "to spend (time, money), to expend, to use",
-      "to pour (liquid) onto, to sprinkle (powder or spices) onto, to splash, to throw (e.g. water) onto",
-      "to turn on (engine, radio, etc.), to set (dial, alarm clock, etc.), to put on (DVD, song, etc.), to use (device, implement, etc.)",
-      "to cause (somebody inconvenience, trouble, etc.), to burden (someone), to impose",
-      "to multiply (arithmetic operation)",
-      "to secure (e.g. lock)",
-      "to take a seat, to sit, to rest (something on something else), to support (something on something else)",
-      "to bind",
-      "to wager, to bet, to risk, to stake, to gamble",
-      "to put an effect (spell, anaesthetic, etc.) on",
-      "to hold (a play, festival, etc.)",
-      "to hold an emotion for (pity, hope, etc.)",
-      "to argue (in court), to deliberate (in a meeting), to present (e.g. idea to a conference, etc.)",
-      "to increase further",
-      "to catch (in a trap, etc.)",
-      "to set atop",
-      "to erect (a makeshift building)",
-      "to apply (insurance)",
-      "to pun (on a word), to use (a word) as a pivot word, to play on words",
-      "to be partway doing ..., to begin (but not complete) ..., to be about to ...",
-      "to address (someone), to direct (something, to someone), to do (something, to someone)"
+      "to wear (glasses)",
+      "to put on (glasses)"
     ],
     "part_of_speech": "verb",
     "verb_group": "ichidan",
@@ -1320,7 +1311,8 @@
         "inclusion_reason": "One of the specific 'wearing' verbs contrasted in this lesson.",
         "example": "だれがめがねをかけていますか。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.settle_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]",
-        "janki_pitch_accent_source": "jpdb:b5d8927a52bce5c827d7012cce92a6a5bfb4fded23a49a259062c8be47bda099"
+        "janki_pitch_accent_source": "jpdb:b5d8927a52bce5c827d7012cce92a6a5bfb4fded23a49a259062c8be47bda099",
+        "provisional_fields": "meanings:1b7791d0f80e"
       }
     }
   },
@@ -1331,16 +1323,8 @@
     "furigana": "",
     "romaji": "kaburu",
     "meanings": [
-      "to put on (one's head), to wear, to have on, to pull over (one's head), to crown (oneself)",
-      "to be covered with (dust, snow, etc.), to pour (water, etc.) on oneself, to dash on oneself, to ship water",
-      "to bear (e.g. someone's debts, faults, etc.), to take (blame), to assume (responsibility), to shoulder (burden)",
-      "to overlap (e.g. sound or color)",
-      "to be similar, to be redundant",
-      "to be fogged (due to overexposure, etc.)",
-      "to close, to come to an end",
-      "to get a full house, to sell out",
-      "to blunder, to bungle, to fail",
-      "to be deceived"
+      "to wear (on the head)",
+      "to put on (a hat)"
     ],
     "part_of_speech": "verb",
     "verb_group": "godan",
@@ -1395,7 +1379,8 @@
         "inclusion_reason": "Wearing verb for headwear, contrasted with かける and はく.",
         "example": "しゅんさんがかぶっています。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:6e645d23537af07286ad5431edef60eeaafefeb55c4c495d5d258b88ed833c8e"
+        "janki_pitch_accent_source": "jpdb:6e645d23537af07286ad5431edef60eeaafefeb55c4c495d5d258b88ed833c8e",
+        "provisional_fields": "meanings:7977fe3ecd90"
       }
     }
   },
@@ -1455,11 +1440,7 @@
     "furigana": "",
     "romaji": "kirikiri",
     "meanings": [
-      "chafing, grinding (e.g. teeth)",
-      "binding tightly, pulling tight (e.g. a bow)",
-      "rotating quickly",
-      "hurting sharply",
-      "briskly, quickly, promptly, at once, right away"
+      "sharp stabbing pain"
     ],
     "part_of_speech": "adverb",
     "verb_group": "",
@@ -1505,7 +1486,8 @@
         "context": "20. Sharp pain in his stomach. I ga kirikiri shimasu. 胃がきりきりします。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "4a6684c3f377,a9b9c4a587e1",
-        "janki_pitch_accent_source": "jpdb:f252611513c7b13e7b26e0e386f82e75a769c5be5a630bbb28b81ff5bb8eaf92"
+        "janki_pitch_accent_source": "jpdb:f252611513c7b13e7b26e0e386f82e75a769c5be5a630bbb28b81ff5bb8eaf92",
+        "provisional_fields": "meanings:949e33ff917e"
       }
     }
   },
@@ -1573,7 +1555,7 @@
     "furigana": "",
     "romaji": "kutsu",
     "meanings": [
-      "shoe, shoes, boots, footwear, footgear"
+      "shoes"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -1620,7 +1602,8 @@
         "inclusion_reason": "Clothing noun paired with the verb はく.",
         "example": "だれが白いくつをはいていますか。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:638db35202017790a94ee49225cb4cf026eae25110c82e61071fb27dfcf30126"
+        "janki_pitch_accent_source": "jpdb:638db35202017790a94ee49225cb4cf026eae25110c82e61071fb27dfcf30126",
+        "provisional_fields": "meanings:2a358a951d3a"
       }
     }
   },
@@ -1631,7 +1614,8 @@
     "furigana": "",
     "romaji": "kurakura",
     "meanings": [
-      "dizzy, giddy"
+      "dizzy",
+      "lightheaded"
     ],
     "part_of_speech": "verb",
     "verb_group": "suru",
@@ -1677,7 +1661,8 @@
         "context": "21. I feel dizzy. Atama ga kura kura shimasu. 頭がくらくらします。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "cd0bd9126600,564bb4e0f0f8",
-        "janki_pitch_accent_source": "jpdb:13dae70a3f9bc8ee2e8d5cf71c9137643ec07d4964ed72b50229efd25ab812ef"
+        "janki_pitch_accent_source": "jpdb:13dae70a3f9bc8ee2e8d5cf71c9137643ec07d4964ed72b50229efd25ab812ef",
+        "provisional_fields": "meanings:74089a969c77"
       }
     }
   },
@@ -2273,9 +2258,8 @@
     "furigana": "",
     "romaji": "suwaru",
     "meanings": [
-      "to sit, to squat",
-      "to assume (a position)",
-      "to hold steady, to hold still"
+      "to sit",
+      "to sit down"
     ],
     "part_of_speech": "verb",
     "verb_group": "godan",
@@ -2330,7 +2314,8 @@
         "inclusion_reason": "Basic posture verb (座る) used with に in the drill.",
         "example": "だれがいすにすわっていますか。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:7ac57414e768a65c76052afb22350f5717b0da78d1b701e375587aa4fffe2268"
+        "janki_pitch_accent_source": "jpdb:7ac57414e768a65c76052afb22350f5717b0da78d1b701e375587aa4fffe2268",
+        "provisional_fields": "meanings:17c1371723b3"
       }
     }
   },
@@ -2341,7 +2326,7 @@
     "furigana": "",
     "romaji": "zukizuki",
     "meanings": [
-      "throbbing with pain"
+      "throbbing"
     ],
     "part_of_speech": "verb",
     "verb_group": "suru",
@@ -2387,7 +2372,8 @@
         "context": "22. My head is throbbing. Atama ga zukizuki shimasu. 頭がずきずきします。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "fc2e614e31fa,458f4a2020bd",
-        "janki_pitch_accent_source": "jpdb:9ff6f46f4724b33f97406c3f81958db64ff28d31138abe37973af009e28d669d"
+        "janki_pitch_accent_source": "jpdb:9ff6f46f4724b33f97406c3f81958db64ff28d31138abe37973af009e28d669d",
+        "provisional_fields": "meanings:fb0c37a1c519"
       }
     }
   },
@@ -2569,8 +2555,9 @@
     "furigana": "",
     "romaji": "darui",
     "meanings": [
-      "sluggish, languid, listless, heavy (heart, legs, etc.), dull",
-      "bothersome, tiresome, pain-in-the-ass"
+      "sluggish",
+      "listless",
+      "worn out"
     ],
     "part_of_speech": "i-adjective",
     "verb_group": "",
@@ -2623,7 +2610,8 @@
         "context": "11. I feel sluggish. Karada ga darui desu. 体がだるいです。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "9f33ec3fbaec,768bedf9b175",
-        "janki_pitch_accent_source": "jpdb:b1ea88f34d6c13b9d2964deeaf0e4fbcc44f4b9d39280d09e22cd8728a54b321"
+        "janki_pitch_accent_source": "jpdb:b1ea88f34d6c13b9d2964deeaf0e4fbcc44f4b9d39280d09e22cd8728a54b321",
+        "provisional_fields": "meanings:3517db499330"
       }
     }
   },
@@ -2692,7 +2680,8 @@
     "furigana": "",
     "romaji": "chikuchiku",
     "meanings": [
-      "prickling, stinging, tingling"
+      "prickly",
+      "tingling"
     ],
     "part_of_speech": "verb",
     "verb_group": "suru",
@@ -2739,7 +2728,8 @@
         "context": "23. I have a prickly pain. Chikuchiku shimasu. ちくちくします。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "e1b44fd9c18c,165d7f0ed726",
-        "janki_pitch_accent_source": "jpdb:3f96c8d631704e26f3ab87d2c61edb30e119df758879fb00c77f97f84ab459a6"
+        "janki_pitch_accent_source": "jpdb:3f96c8d631704e26f3ab87d2c61edb30e119df758879fb00c77f97f84ab459a6",
+        "provisional_fields": "meanings:8a68eb5a8d81"
       }
     }
   },
@@ -2750,7 +2740,7 @@
     "furigana": "",
     "romaji": "tenkan",
     "meanings": [
-      "epilepsy, epileptic fit"
+      "epilepsy"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -2797,7 +2787,8 @@
         "context": "22. petit mal tenkan てんかん",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "ce1087fdd7f5,d7d5ee639a76",
-        "janki_pitch_accent_source": "jpdb:201bb0fdfe8459e702b8788c9530dc38a800f624b566f5848d2513aeb180b2ee"
+        "janki_pitch_accent_source": "jpdb:201bb0fdfe8459e702b8788c9530dc38a800f624b566f5848d2513aeb180b2ee",
+        "provisional_fields": "meanings:ebce3b90cfe4"
       }
     }
   },
@@ -2939,7 +2930,9 @@
     "furigana": "",
     "romaji": "douyatte",
     "meanings": [
-      "how, in what way, by what means"
+      "how",
+      "by what means",
+      "in what way"
     ],
     "part_of_speech": "expression",
     "verb_group": "",
@@ -2986,7 +2979,8 @@
         "inclusion_reason": "Useful question expression for asking means of transportation.",
         "example": "うちから仕事までどうやって行く？",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:7b694047ab76ab7396c8dd1cd375450719e860b3d56570909b02084ab5bf0655"
+        "janki_pitch_accent_source": "jpdb:7b694047ab76ab7396c8dd1cd375450719e860b3d56570909b02084ab5bf0655",
+        "provisional_fields": "meanings:116e80e2ccfc"
       }
     }
   },
@@ -3291,7 +3285,8 @@
     "furigana": "",
     "romaji": "hirihiri",
     "meanings": [
-      "stinging (pain), smarting, tingling"
+      "burning",
+      "stinging"
     ],
     "part_of_speech": "verb",
     "verb_group": "suru",
@@ -3337,7 +3332,8 @@
         "context": "24. I have a burning pain. Hirihiri shimasu. ひりひりします。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "a61c4d809e4f,b26bd3618a8e",
-        "janki_pitch_accent_source": "jpdb:9fa683bfff94232c49f2f213eb0af291e4bb435550cfcc0a31c82cd5fea5cada"
+        "janki_pitch_accent_source": "jpdb:9fa683bfff94232c49f2f213eb0af291e4bb435550cfcc0a31c82cd5fea5cada",
+        "provisional_fields": "meanings:b765445ca923"
       }
     }
   },
@@ -3511,8 +3507,8 @@
     "furigana": "",
     "romaji": "mukamuka",
     "meanings": [
-      "feeling sick, feeling queasy, feeling nauseated",
-      "being angry, being offended, being disgusted"
+      "queasy",
+      "nauseated"
     ],
     "part_of_speech": "verb",
     "verb_group": "suru",
@@ -3558,7 +3554,8 @@
         "context": "19. I’m sick at my stomach. I ga mukamuka shimasu. 胃がむかむかします。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "4ba08d96ed3e,a7991b55f428",
-        "janki_pitch_accent_source": "jpdb:0fe6f3b4560ea6ed06b76167e96337e553f381bd8cb0d7c937494a4ed88fd1e9"
+        "janki_pitch_accent_source": "jpdb:0fe6f3b4560ea6ed06b76167e96337e553f381bd8cb0d7c937494a4ed88fd1e9",
+        "provisional_fields": "meanings:3e047c314617"
       }
     }
   },
@@ -3569,8 +3566,8 @@
     "furigana": "",
     "romaji": "megane",
     "meanings": [
-      "glasses, eyeglasses, spectacles",
-      "judgment, judgement, discrimination, discernment, insight"
+      "glasses",
+      "eyeglasses"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -3617,7 +3614,8 @@
         "inclusion_reason": "Clothing/accessory noun needed for the wearing-verb practice.",
         "example": "だれがめがねをかけていますか。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:f694867ef647c4ab954a500eddcec0693190380363b24fc68ed5f1908d805555"
+        "janki_pitch_accent_source": "jpdb:f694867ef647c4ab954a500eddcec0693190380363b24fc68ed5f1908d805555",
+        "provisional_fields": "meanings:efd2b61648ce"
       }
     }
   },
@@ -3628,7 +3626,7 @@
     "furigana": "",
     "romaji": "memai",
     "meanings": [
-      "dizziness, giddiness, vertigo"
+      "dizziness"
     ],
     "part_of_speech": "no-adjective",
     "verb_group": "suru",
@@ -3674,7 +3672,8 @@
         "context": "10. I feel dizzy. Memai ga shimasu. めまいがします。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "42786b94c83c,085be079c165",
-        "janki_pitch_accent_source": "jpdb:b996c2a13465ab2c0f8663cdbf30efff507330a28c206b7388b01cf75a4bafcb"
+        "janki_pitch_accent_source": "jpdb:b996c2a13465ab2c0f8663cdbf30efff507330a28c206b7388b01cf75a4bafcb",
+        "provisional_fields": "meanings:4221707806c3"
       }
     }
   },
@@ -3846,7 +3845,7 @@
     "furigana": "",
     "romaji": "atopii",
     "meanings": [
-      "atopic, predisposition toward allergies",
+      "atopy",
       "atopic dermatitis"
     ],
     "part_of_speech": "no-adjective",
@@ -3893,7 +3892,8 @@
         "context": "6. atopy atop i アトピー",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "d5f7bb6394a0,0415e6e664d7",
-        "janki_pitch_accent_source": "jpdb:edae35d6987911e18426ee5c0cb9d21fa2708687c8194c5a39f70882356ccd8f"
+        "janki_pitch_accent_source": "jpdb:edae35d6987911e18426ee5c0cb9d21fa2708687c8194c5a39f70882356ccd8f",
+        "provisional_fields": "meanings:2f05078f0fa0"
       }
     }
   },
@@ -4019,7 +4019,8 @@
     "furigana": "",
     "romaji": "infuruenza",
     "meanings": [
-      "influenza, flu"
+      "influenza",
+      "the flu"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -4065,7 +4066,8 @@
         "context": "9. influenza infuruenza インフルエンザ",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "2247324e864c,2313eee2eda1",
-        "janki_pitch_accent_source": "jpdb:334c5b90f94fb82fb650156838fe0c29779b8aa94dcd553db526d7f82e3b2ab3"
+        "janki_pitch_accent_source": "jpdb:334c5b90f94fb82fb650156838fe0c29779b8aa94dcd553db526d7f82e3b2ab3",
+        "provisional_fields": "meanings:339c3bdf205d"
       }
     }
   },
@@ -4192,7 +4194,8 @@
     "furigana": "",
     "romaji": "bandoeido",
     "meanings": [
-      "band aid, adhesive bandage"
+      "band-aid",
+      "adhesive bandage"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -4238,7 +4241,8 @@
         "context": "5. band aid bandoeido バンドエイド",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "27466ab757f1,54f6c03e7b72",
-        "janki_pitch_accent_source": "jpdb:9b921da9a5aa88f14fb8aa35a4e9c6802b4721de0dbcc4ff530cf6b94999aa1f"
+        "janki_pitch_accent_source": "jpdb:9b921da9a5aa88f14fb8aa35a4e9c6802b4721de0dbcc4ff530cf6b94999aa1f",
+        "provisional_fields": "meanings:0252ec092135"
       }
     }
   },
@@ -4249,8 +4253,7 @@
     "furigana": "",
     "romaji": "petto",
     "meanings": [
-      "pet",
-      "trumpet"
+      "pet"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -4297,7 +4300,8 @@
         "inclusion_reason": "Loanword noun central to one of the interview questions.",
         "example": "ペット(を)かって(い)る？",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:45ca3bfc1f43728ca496f4195c47587075f2fd61d6cdafbf0660efddb3baf761"
+        "janki_pitch_accent_source": "jpdb:45ca3bfc1f43728ca496f4195c47587075f2fd61d6cdafbf0660efddb3baf761",
+        "provisional_fields": "meanings:658734568e7e"
       }
     }
   },
@@ -4308,9 +4312,8 @@
     "furigana": "一[いち] 度[ど]",
     "romaji": "ichido",
     "meanings": [
-      "once, one time, on one occasion",
-      "temporarily, for a moment",
-      "one degree, one tone, one musical interval"
+      "once",
+      "one time"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -4358,7 +4361,8 @@
         "context": "一度",
         "example": "もう一度こちらにサインしてください。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:b1c4286858f5171e218ef8b0998e6484652467db9d3884d9d6780d80d1d4c8ab"
+        "janki_pitch_accent_source": "jpdb:b1c4286858f5171e218ef8b0998e6484652467db9d3884d9d6780d80d1d4c8ab",
+        "provisional_fields": "meanings:5b9186c65c7e"
       }
     }
   },
@@ -4429,8 +4433,8 @@
     "furigana": "上[じょう] 手[ず]",
     "romaji": "jouzu",
     "meanings": [
-      "skillful, skilled, proficient, good (at), adept, clever",
-      "flattery"
+      "skillful",
+      "good at"
     ],
     "part_of_speech": "na-adjective",
     "verb_group": "",
@@ -4477,7 +4481,8 @@
         "inclusion_reason": "Key na-adjective for describing ability, used with the が pattern.",
         "example": "何をするのが上手？",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:c875e4f337c6b9da22133bdddcc7a210d6fb33bf191534cf9314e4be9f79aeb2"
+        "janki_pitch_accent_source": "jpdb:c875e4f337c6b9da22133bdddcc7a210d6fb33bf191534cf9314e4be9f79aeb2",
+        "provisional_fields": "meanings:1804d220b7af"
       }
     }
   },
@@ -4543,7 +4548,7 @@
     "furigana": "下[げ] 痢[り]",
     "romaji": "geri",
     "meanings": [
-      "diarrhea, diarrhoea"
+      "diarrhea"
     ],
     "part_of_speech": "noun",
     "verb_group": "suru",
@@ -4589,7 +4594,8 @@
         "context": "12. I have diarrhea. Geri desu. 下痢です。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "448c2c7e04fe,bfe0fedf8817",
-        "janki_pitch_accent_source": "jpdb:5b777831a6e9e1438ba7c81f08c01c641c404050982ea4a5b25a08af486d5162"
+        "janki_pitch_accent_source": "jpdb:5b777831a6e9e1438ba7c81f08c01c641c404050982ea4a5b25a08af486d5162",
+        "provisional_fields": "meanings:23a5ab4bb4e8"
       }
     }
   },
@@ -4729,7 +4735,7 @@
     "furigana": "二[ふた] 人[り]",
     "romaji": "futari",
     "meanings": [
-      "two persons, two people, pair, couple"
+      "two people"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -4776,7 +4782,8 @@
         "context": "二人で 2万3000円！",
         "inclusion_reason": "Irregular counter reading tested in the hotel guide.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:bf16b732c24c410b5ae4ef0b03dd896639b2a57cd149f7f36c418ae5bd88f070"
+        "janki_pitch_accent_source": "jpdb:bf16b732c24c410b5ae4ef0b03dd896639b2a57cd149f7f36c418ae5bd88f070",
+        "provisional_fields": "meanings:fa2e9014beca"
       }
     }
   },
@@ -4901,8 +4908,8 @@
     "furigana": "今[いま]",
     "romaji": "ima",
     "meanings": [
-      "now, the present time, just now, soon, immediately",
-      "another, more"
+      "now",
+      "at present"
     ],
     "part_of_speech": "no-adjective",
     "verb_group": "",
@@ -4947,7 +4954,8 @@
         "page": "1",
         "context": "いま",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:a9c407aeb1fe033eb31669700c9fb63c175b6bc6f1a4754c739a39227f2fc9c6"
+        "janki_pitch_accent_source": "jpdb:a9c407aeb1fe033eb31669700c9fb63c175b6bc6f1a4754c739a39227f2fc9c6",
+        "provisional_fields": "meanings:175971d8dc66"
       }
     }
   },
@@ -5072,8 +5080,9 @@
     "furigana": "仕[し] 事[ごと]",
     "romaji": "shigoto",
     "meanings": [
-      "work, job, labor, labour, business, task, assignment, occupation, employment",
-      "work"
+      "job",
+      "work",
+      "occupation"
     ],
     "part_of_speech": "noun",
     "verb_group": "suru",
@@ -5120,7 +5129,8 @@
         "inclusion_reason": "Key noun in the commute question; frequent beginner vocabulary.",
         "example": "うちから仕事までどうやって行く？",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:bb7b5590f9ac021c1017da5ffe267ea937c26b24780cef828abbc880b6ccdff2"
+        "janki_pitch_accent_source": "jpdb:bb7b5590f9ac021c1017da5ffe267ea937c26b24780cef828abbc880b6ccdff2",
+        "provisional_fields": "meanings:af16d5619b02"
       }
     }
   },
@@ -5131,11 +5141,8 @@
     "furigana": "以[い] 上[じょう]",
     "romaji": "ijou",
     "meanings": [
-      "not less than, ... and over, ... and above, ... and upwards, ... or more",
-      "beyond (e.g. one's expectations), above, more than, further than",
-      "above-mentioned, aforementioned, foregoing",
-      "since ..., seeing that ..., now that ..., once ...",
-      "that's all, that is the end, the end"
+      "or more",
+      "or above"
     ],
     "part_of_speech": "no-adjective",
     "verb_group": "",
@@ -5181,7 +5188,8 @@
         "context": "以上(いじょう) = X or above",
         "example": "体温が38度以上の方は病院に来る前にお電話ください。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:6408f943970510463cde73f4ea50942aae80dc7dff1052709d86def65fc4d1e9"
+        "janki_pitch_accent_source": "jpdb:6408f943970510463cde73f4ea50942aae80dc7dff1052709d86def65fc4d1e9",
+        "provisional_fields": "meanings:c76d90f58b2b"
       }
     }
   },
@@ -5192,9 +5200,9 @@
     "furigana": "休[やす]み",
     "romaji": "yasumi",
     "meanings": [
-      "rest, recess, respite",
-      "vacation, holiday, absence, suspension",
-      "dormancy (of a silkworm prior to moulting)"
+      "holiday",
+      "day off",
+      "closed"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -5239,7 +5247,8 @@
         "page": "1",
         "context": "休み",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-furigana-space-after-punctuation\",\"evidence\":{\"algorithm\":\"japanese_anki.repairs._spaced_furigana\"},\"fields\":[\"examples[0].furigana\"],\"provenance\":\"Restored the space between punctuation and a following ruby group, which Anki needs to keep the punctuation out of the base.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:820f7dc6ef6965c75fd35e8c49065e9a1f04d2f7a13d7c686016fec55429dc67"
+        "janki_pitch_accent_source": "jpdb:820f7dc6ef6965c75fd35e8c49065e9a1f04d2f7a13d7c686016fec55429dc67",
+        "provisional_fields": "meanings:9c4cf4b4e46e"
       }
     }
   },
@@ -5250,8 +5259,8 @@
     "furigana": "会[あ]う",
     "romaji": "au",
     "meanings": [
-      "to meet, to encounter, to see",
-      "to have an accident, to have a bad experience"
+      "to meet",
+      "to see (a person)"
     ],
     "part_of_speech": "verb",
     "verb_group": "godan",
@@ -5305,7 +5314,8 @@
         "context": "あいました",
         "inclusion_reason": "Prompt gives the past polite form あいました; card uses the dictionary form.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:59c3936a387863898bb5639806b988cbba44d69a7487e478021bbe4e8ac5b19a"
+        "janki_pitch_accent_source": "jpdb:59c3936a387863898bb5639806b988cbba44d69a7487e478021bbe4e8ac5b19a",
+        "provisional_fields": "meanings:170836f6afe2"
       }
     }
   },
@@ -5316,8 +5326,8 @@
     "furigana": "会[かい] 社[しゃ]",
     "romaji": "kaisha",
     "meanings": [
-      "company, corporation",
-      "workplace"
+      "company",
+      "firm"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -5362,7 +5372,8 @@
         "page": "2",
         "context": "会社　company",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:65761f7bc520bc64a7556bfab58e752ba6c5ec1368a63d286dbc37af44c71584"
+        "janki_pitch_accent_source": "jpdb:65761f7bc520bc64a7556bfab58e752ba6c5ec1368a63d286dbc37af44c71584",
+        "provisional_fields": "meanings:b63da4ba1e9d"
       }
     }
   },
@@ -5373,7 +5384,7 @@
     "furigana": "体[たい] 温[おん]",
     "romaji": "taion",
     "meanings": [
-      "temperature, body temperature (human, animal)"
+      "body temperature"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -5420,7 +5431,8 @@
         "context": "体温(たいおん) = body temperature",
         "example": "体温が38度以上の方は病院に来る前にお電話ください。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:a4ff00c0f53a837c29691e62921800533de2a18263d44f3bf902e9d3278c3653"
+        "janki_pitch_accent_source": "jpdb:a4ff00c0f53a837c29691e62921800533de2a18263d44f3bf902e9d3278c3653",
+        "provisional_fields": "meanings:06e47419e04a"
       }
     }
   },
@@ -5431,7 +5443,7 @@
     "furigana": "何[なん] 時[じ]",
     "romaji": "nanji",
     "meanings": [
-      "what time, which hour"
+      "what time"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -5478,7 +5490,8 @@
         "inclusion_reason": "Basic time question word appearing in the prompt.",
         "example": "よく何時におきる？",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:600a87fd13b790061815592f10757551512a5010b4d9e9b5700b4841e3240154"
+        "janki_pitch_accent_source": "jpdb:600a87fd13b790061815592f10757551512a5010b4d9e9b5700b4841e3240154",
+        "provisional_fields": "meanings:1db7f608a492"
       }
     }
   },
@@ -5721,15 +5734,9 @@
     "furigana": "元[もと]",
     "romaji": "moto",
     "meanings": [
-      "origin, source",
-      "base, basis, foundation, root",
-      "cause",
-      "ingredient, material",
-      "(somebody's) side, (somebody's) location",
-      "original cost (or capital, principal, etc.)",
-      "(plant) root, (tree) trunk",
-      "first section of a waka",
-      "handle (chopsticks, brush, etc.), grip"
+      "origin",
+      "source",
+      "basis"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -5775,7 +5782,8 @@
         "page": "3",
         "context": "元 (origin) Pictogram　くんよみ もと／おんよみ げん・がん",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:2f155d8cce35afeef73eb687f8a0f0d63ae9640c797977eb7facd2d21fa46a42"
+        "janki_pitch_accent_source": "jpdb:2f155d8cce35afeef73eb687f8a0f0d63ae9640c797977eb7facd2d21fa46a42",
+        "provisional_fields": "meanings:a21ba69a6bc2"
       }
     }
   },
@@ -5786,7 +5794,8 @@
     "furigana": "元[もと] 々[もと]",
     "romaji": "motomoto",
     "meanings": [
-      "originally, by nature, from the start"
+      "originally",
+      "from the start"
     ],
     "part_of_speech": "no-adjective",
     "verb_group": "",
@@ -5831,7 +5840,8 @@
         "page": "3",
         "context": "元々　originally",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:a22e4f4d88a9d315ceb108d053ed3c2dce803332163e4ea0e98b384441a69ec5"
+        "janki_pitch_accent_source": "jpdb:a22e4f4d88a9d315ceb108d053ed3c2dce803332163e4ea0e98b384441a69ec5",
+        "provisional_fields": "meanings:7b0ec6bae063"
       }
     }
   },
@@ -5842,7 +5852,8 @@
     "furigana": "元[がん] 日[じつ]",
     "romaji": "ganjitsu",
     "meanings": [
-      "New Year's Day"
+      "New Year's Day",
+      "the first day of the year"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -5887,7 +5898,8 @@
         "page": "3",
         "context": "元日　the first day of the year",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:32bb94af927cd90663faecde91a542e320121ab3b1a80b0ac7fc3896f30a1c3b"
+        "janki_pitch_accent_source": "jpdb:32bb94af927cd90663faecde91a542e320121ab3b1a80b0ac7fc3896f30a1c3b",
+        "provisional_fields": "meanings:7bf255de820c"
       }
     }
   },
@@ -5958,10 +5970,8 @@
     "furigana": "先[せん] 生[せい]",
     "romaji": "sensei",
     "meanings": [
-      "teacher, instructor, master",
-      "sensei, title or form of address for a teacher, master, doctor, lawyer, etc.",
-      "intimate or teasing form of address",
-      "one's elder"
+      "teacher",
+      "doctor (as a title)"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -6007,7 +6017,8 @@
         "context": "田中先生*",
         "inclusion_reason": "Underlined item is 田中先生; the card covers 先生 (田中 is a surname). The page notes that doctors are also called 先生.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:6ebf947b1dd667d47127e2364b9c343bd355ce9391786a68dcbabc6cf95207df"
+        "janki_pitch_accent_source": "jpdb:6ebf947b1dd667d47127e2364b9c343bd355ce9391786a68dcbabc6cf95207df",
+        "provisional_fields": "meanings:f7019c84a678"
       }
     }
   },
@@ -6018,7 +6029,7 @@
     "furigana": "先[せん] 週[しゅう]",
     "romaji": "senshuu",
     "meanings": [
-      "last week, the week before"
+      "last week"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -6063,7 +6074,8 @@
         "page": "1",
         "context": "せんしゅう",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-furigana-space-after-punctuation\",\"evidence\":{\"algorithm\":\"japanese_anki.repairs._spaced_furigana\"},\"fields\":[\"examples[0].furigana\",\"examples[1].furigana\"],\"provenance\":\"Restored the space between punctuation and a following ruby group, which Anki needs to keep the punctuation out of the base.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:f5b5e79bc6bd69eefb9fbd409b0ee62fa868fcd4b742eaa92f36e4833206586d"
+        "janki_pitch_accent_source": "jpdb:f5b5e79bc6bd69eefb9fbd409b0ee62fa868fcd4b742eaa92f36e4833206586d",
+        "provisional_fields": "meanings:42d0527b6306"
       }
     }
   },
@@ -6397,16 +6409,8 @@
     "furigana": "前[まえ]",
     "romaji": "mae",
     "meanings": [
-      "in front (of), before (e.g. a building)",
-      "before, earlier, previously, prior, ago, (minutes) to (the hour)",
-      "(the) front, frontal part, fore, head (e.g. of a line)",
-      "forward, ahead",
-      "(in the) presence (of), in front (of someone)",
-      "previous (e.g. page), prior (e.g. engagement), first (e.g. half), former (e.g. example)",
-      "portion, helping",
-      "front (of one's body or clothing), breast (of a coat, kimono, etc.)",
-      "privates, private parts",
-      "criminal record, previous conviction, (a) prior"
+      "before",
+      "in front of"
     ],
     "part_of_speech": "no-adjective",
     "verb_group": "",
@@ -6453,7 +6457,8 @@
         "inclusion_reason": "Underlined for reading practice; used here in the ～る前に pattern.",
         "example": "病院に来る前にお電話ください。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:4d3acd555335531b59db1f4329223f581466eff8288c8ef6f518320324f06aa1"
+        "janki_pitch_accent_source": "jpdb:4d3acd555335531b59db1f4329223f581466eff8288c8ef6f518320324f06aa1",
+        "provisional_fields": "meanings:50cc641855bb"
       }
     }
   },
@@ -6465,8 +6470,7 @@
     "romaji": "benkyou",
     "meanings": [
       "study",
-      "diligence",
-      "discount, reduction"
+      "studying"
     ],
     "part_of_speech": "noun",
     "verb_group": "suru",
@@ -6512,7 +6516,8 @@
         "context": "勉強",
         "example": "来年大学院でビジネスの勉強をするつもりです。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:fa9788489515afc552cfa1d8a30d78da2a538861ca49b0391858bf68f6c15b43"
+        "janki_pitch_accent_source": "jpdb:fa9788489515afc552cfa1d8a30d78da2a538861ca49b0391858bf68f6c15b43",
+        "provisional_fields": "meanings:4acdbf0647a9"
       }
     }
   },
@@ -6577,7 +6582,7 @@
     "furigana": "北[ほっ] 海[かい] 道[どう]",
     "romaji": "hokkaidou",
     "meanings": [
-      "Hokkaido (island, prefectural-level administrative unit)"
+      "Hokkaido"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -6622,7 +6627,8 @@
         "page": "1",
         "context": "北海道　Hokkaido",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:da9d937b251aba79978933d1a63468f7f6b305d78c2eafed2a932655df9808ae"
+        "janki_pitch_accent_source": "jpdb:da9d937b251aba79978933d1a63468f7f6b305d78c2eafed2a932655df9808ae",
+        "provisional_fields": "meanings:03539cc8dc89"
       }
     }
   },
@@ -6633,7 +6639,8 @@
     "furigana": "午[ご] 前[ぜん]",
     "romaji": "gozen",
     "meanings": [
-      "morning, a.m."
+      "a.m.",
+      "morning"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -6678,7 +6685,8 @@
         "page": "1",
         "context": "午前（9:30〜12:00）",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:b10be5c346129ee088e2c4327de9dcba22358c0f2e09c892630ef7aab4299cf9"
+        "janki_pitch_accent_source": "jpdb:b10be5c346129ee088e2c4327de9dcba22358c0f2e09c892630ef7aab4299cf9",
+        "provisional_fields": "meanings:48a5e27a3409"
       }
     }
   },
@@ -6689,7 +6697,8 @@
     "furigana": "午[ご] 後[ご]",
     "romaji": "gogo",
     "meanings": [
-      "afternoon, p.m."
+      "p.m.",
+      "afternoon"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -6734,7 +6743,8 @@
         "page": "1",
         "context": "午後（13:30〜16:00）",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.settle_example_romaji\"},\"fields\":[\"examples[1].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]",
-        "janki_pitch_accent_source": "jpdb:200473e2c990bd6b7422f5b7da619afd01200e2805876e791c6aac8b9f778dbb"
+        "janki_pitch_accent_source": "jpdb:200473e2c990bd6b7422f5b7da619afd01200e2805876e791c6aac8b9f778dbb",
+        "provisional_fields": "meanings:ac8863e57bc7"
       }
     }
   },
@@ -6745,10 +6755,8 @@
     "furigana": "半[はん]",
     "romaji": "han",
     "meanings": [
-      "half, semi-",
-      "half-past",
-      "odd number",
-      "unit of land area (595.8 m^2)"
+      "half",
+      "half past (the hour)"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -6794,7 +6802,8 @@
         "context": "チェックアウト: 十時半まで",
         "inclusion_reason": "Time suffix needed to read 十時半 in the hotel guide.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:b3a5ef7db835feb281df4ef49ab61e6a4a5925d591505cc7a009549192b72b65"
+        "janki_pitch_accent_source": "jpdb:b3a5ef7db835feb281df4ef49ab61e6a4a5925d591505cc7a009549192b72b65",
+        "provisional_fields": "meanings:910858ba2a71"
       }
     }
   },
@@ -6873,7 +6882,8 @@
     "furigana": "口[こう] 内[ない] 炎[えん]",
     "romaji": "kounaien",
     "meanings": [
-      "mouth ulcer, stomatitis"
+      "canker sore",
+      "mouth ulcer"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -6920,7 +6930,8 @@
         "context": "19. canker sore konaien こうないえん 口内炎",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "7156c09709db,c40c03f653c8",
-        "janki_pitch_accent_source": "jpdb:d39f52b509f1691253b7b7ed0b47181700c3fe02b3e9ae1e191926638c370883"
+        "janki_pitch_accent_source": "jpdb:d39f52b509f1691253b7b7ed0b47181700c3fe02b3e9ae1e191926638c370883",
+        "provisional_fields": "meanings:aae153735f68"
       }
     }
   },
@@ -6931,7 +6942,7 @@
     "furigana": "名[な] 古[ご] 屋[や] 市[し]",
     "romaji": "nagoyashi",
     "meanings": [
-      "Nagoya (city)"
+      "Nagoya City"
     ],
     "part_of_speech": "proper noun",
     "verb_group": "",
@@ -6975,7 +6986,7 @@
         "confidence": "high",
         "page": "3",
         "context": "名古屋市　Nagoya City",
-        "provisional_fields": "part_of_speech:1e6a32319743",
+        "provisional_fields": "meanings:014c8bf77e0d,part_of_speech:1e6a32319743",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:6bdfc4fd0bfe1e60c7125e305cc77a1c9ff3caf288eff5f442d5dda762244fd2"
       }
@@ -6988,7 +6999,8 @@
     "furigana": "吐[は]き 気[け]",
     "romaji": "hakike",
     "meanings": [
-      "nausea, sickness in the stomach"
+      "nausea",
+      "feeling sick"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -7034,7 +7046,8 @@
         "context": "8. I feel nauseous. Hakike ga shimasu. 吐き気がします。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "7dbfae2260f2,279060418258",
-        "janki_pitch_accent_source": "jpdb:d3185c9cb68dff4a60d5c89efc0a3295557cfd1f80b8bc9939ea81291088262b"
+        "janki_pitch_accent_source": "jpdb:d3185c9cb68dff4a60d5c89efc0a3295557cfd1f80b8bc9939ea81291088262b",
+        "provisional_fields": "meanings:f7433d9083c3"
       }
     }
   },
@@ -7045,7 +7058,7 @@
     "furigana": "咳[せき]",
     "romaji": "seki",
     "meanings": [
-      "cough, coughing, tussis"
+      "cough"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -7091,7 +7104,8 @@
         "context": "5. I have a cough. Seki ga demasu. 咳がでます。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "e69d37057552,098897afb573",
-        "janki_pitch_accent_source": "jpdb:8d47cbdc91c544d47d6d2f4f37ae2cebc9099c6677ad834e75f20d878c973b90"
+        "janki_pitch_accent_source": "jpdb:8d47cbdc91c544d47d6d2f4f37ae2cebc9099c6677ad834e75f20d878c973b90",
+        "provisional_fields": "meanings:5e2b3d2178fb"
       }
     }
   },
@@ -7164,7 +7178,9 @@
     "furigana": "売[ばい] 店[てん]",
     "romaji": "baiten",
     "meanings": [
-      "stand, stall, booth, kiosk, store"
+      "stand",
+      "stall",
+      "kiosk"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -7209,7 +7225,8 @@
         "page": "3",
         "context": "売店　stand; stall",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:959b81f9bdfe40e87270df67a14c310b9fb2ee70679fad9a03bede2455684e3e"
+        "janki_pitch_accent_source": "jpdb:959b81f9bdfe40e87270df67a14c310b9fb2ee70679fad9a03bede2455684e3e",
+        "provisional_fields": "meanings:0a940aa31e10"
       }
     }
   },
@@ -7220,7 +7237,8 @@
     "furigana": "売[ばい] 買[ばい]",
     "romaji": "baibai",
     "meanings": [
-      "trade, buying and selling, trafficking (e.g. of humans, arms, drugs), dealing"
+      "buying and selling",
+      "trade"
     ],
     "part_of_speech": "noun",
     "verb_group": "suru",
@@ -7265,7 +7283,8 @@
         "page": "2",
         "context": "売買　sell and buy",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:505fb33b044999f79bc26ab961e276713073aa8c798cb031bfddba21a6328cbc"
+        "janki_pitch_accent_source": "jpdb:505fb33b044999f79bc26ab961e276713073aa8c798cb031bfddba21a6328cbc",
+        "provisional_fields": "meanings:523acb531c53"
       }
     }
   },
@@ -7333,7 +7352,8 @@
     "furigana": "夕[ゆう] 食[しょく]",
     "romaji": "yuushoku",
     "meanings": [
-      "evening meal, dinner"
+      "dinner",
+      "evening meal"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -7379,7 +7399,8 @@
         "context": "🍽夕食⚪︎ チェックイン: 十六時 から 二十一時 まで",
         "inclusion_reason": "Hotel/restaurant vocabulary whose reading is asked for.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.settle_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]",
-        "janki_pitch_accent_source": "jpdb:83e62aef7aa2f7d4ab58b042e2270e7d9ea85f0590037d7b6c294d618ddcfe66"
+        "janki_pitch_accent_source": "jpdb:83e62aef7aa2f7d4ab58b042e2270e7d9ea85f0590037d7b6c294d618ddcfe66",
+        "provisional_fields": "meanings:c9d6ab463f84"
       }
     }
   },
@@ -7390,8 +7411,8 @@
     "furigana": "夜[よる]",
     "romaji": "yoru",
     "meanings": [
-      "evening, night",
-      "dinner"
+      "night",
+      "evening"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -7437,7 +7458,8 @@
         "context": "B: ひるは _____ がふります。でも _____ は _____ が _______________。/ よる",
         "inclusion_reason": "Basic time-of-day noun targeted for kanji conversion.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-furigana-space-after-punctuation\",\"evidence\":{\"algorithm\":\"japanese_anki.repairs._spaced_furigana\"},\"fields\":[\"examples[0].furigana\"],\"provenance\":\"Restored the space between punctuation and a following ruby group, which Anki needs to keep the punctuation out of the base.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:2e2979fa0e8b300d6ec14459904978f727c08fc91373751ac15a06ad2d4a02aa"
+        "janki_pitch_accent_source": "jpdb:2e2979fa0e8b300d6ec14459904978f727c08fc91373751ac15a06ad2d4a02aa",
+        "provisional_fields": "meanings:24c295ef2d1b"
       }
     }
   },
@@ -7560,8 +7582,7 @@
     "furigana": "天[てん] 気[き]",
     "romaji": "tenki",
     "meanings": [
-      "weather, the elements",
-      "fair weather, fine weather"
+      "weather"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -7606,7 +7627,8 @@
         "page": "1",
         "context": "天気",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.settle_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"},{\"code\":\"example-furigana-space-after-punctuation\",\"evidence\":{\"algorithm\":\"japanese_anki.repairs._spaced_furigana\"},\"fields\":[\"examples[0].furigana\",\"examples[1].furigana\"],\"provenance\":\"Restored the space between punctuation and a following ruby group, which Anki needs to keep the punctuation out of the base.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:2dc48b85dc0253e7e4ab7f349292b26f208f7d2b55ec3aa4de9af3cc8c8663c5"
+        "janki_pitch_accent_source": "jpdb:2dc48b85dc0253e7e4ab7f349292b26f208f7d2b55ec3aa4de9af3cc8c8663c5",
+        "provisional_fields": "meanings:a620f00b66c5"
       }
     }
   },
@@ -7674,8 +7696,8 @@
     "furigana": "安[やす]い",
     "romaji": "yasui",
     "meanings": [
-      "cheap, inexpensive",
-      "calm, peaceful, quiet"
+      "cheap",
+      "inexpensive"
     ],
     "part_of_speech": "i-adjective",
     "verb_group": "",
@@ -7727,7 +7749,8 @@
         "context": "5. __________ のひこうきは _________ です。/ やすい",
         "inclusion_reason": "Basic adjective targeted for kanji conversion.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:3c6c04000ef89ef777671da476ccb8ebc397da539df77a548c9df41bdd655a48"
+        "janki_pitch_accent_source": "jpdb:3c6c04000ef89ef777671da476ccb8ebc397da539df77a548c9df41bdd655a48",
+        "provisional_fields": "meanings:a03800747d04"
       }
     }
   },
@@ -7795,8 +7818,7 @@
     "furigana": "寒[さむ] 気[け]",
     "romaji": "samuke",
     "meanings": [
-      "chill, the shivers, shivering fit",
-      "cold, coldness, cold air"
+      "chills"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -7842,7 +7864,8 @@
         "context": "9. I have been having chills. Samuke ga shimasu. 寒気がします。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "50d1115963cd,6d9c475d87fc",
-        "janki_pitch_accent_source": "jpdb:7bb21f918e3c2b9cc408e40ead9a4210eb23944c4e753432143b0aad3f5933e7"
+        "janki_pitch_accent_source": "jpdb:7bb21f918e3c2b9cc408e40ead9a4210eb23944c4e753432143b0aad3f5933e7",
+        "provisional_fields": "meanings:7a8ed722e743"
       }
     }
   },
@@ -7955,7 +7978,8 @@
     "furigana": "帰[かえ]り 道[みち]",
     "romaji": "kaerimichi",
     "meanings": [
-      "the way back, the way home, return trip"
+      "the way home",
+      "on the way home"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -8000,7 +8024,8 @@
         "page": "2",
         "context": "帰り道　on the way home",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.settle_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]",
-        "janki_pitch_accent_source": "jpdb:76fef0b48c53b51189b289201283f3ef1451b99272612f09ea947ccd194fd438"
+        "janki_pitch_accent_source": "jpdb:76fef0b48c53b51189b289201283f3ef1451b99272612f09ea947ccd194fd438",
+        "provisional_fields": "meanings:fae96569de94"
       }
     }
   },
@@ -8011,9 +8036,8 @@
     "furigana": "帰[かえ]る",
     "romaji": "kaeru",
     "meanings": [
-      "to return, to come home, to go home, to go back",
-      "to leave",
-      "to get home, to get to home plate"
+      "to go home",
+      "to return"
     ],
     "part_of_speech": "verb",
     "verb_group": "godan",
@@ -8066,7 +8090,8 @@
         "page": "2",
         "context": "帰る　go home",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:30ae99c09da075ccb78b37a7215a8d936e153fca6915ead740a4a18e576c20bc"
+        "janki_pitch_accent_source": "jpdb:30ae99c09da075ccb78b37a7215a8d936e153fca6915ead740a4a18e576c20bc",
+        "provisional_fields": "meanings:9d5d90880111"
       }
     }
   },
@@ -8077,7 +8102,7 @@
     "furigana": "帰[き] 国[こく]",
     "romaji": "kikoku",
     "meanings": [
-      "return to one's country"
+      "returning to one's home country"
     ],
     "part_of_speech": "noun",
     "verb_group": "suru",
@@ -8122,7 +8147,8 @@
         "page": "2",
         "context": "帰国　return to one's home",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:f1238e79d3d51ee67f036446d747211fd36816233a9e896fce0db68ce792c632"
+        "janki_pitch_accent_source": "jpdb:f1238e79d3d51ee67f036446d747211fd36816233a9e896fce0db68ce792c632",
+        "provisional_fields": "meanings:0d772bdb7cf7"
       }
     }
   },
@@ -8190,12 +8216,8 @@
     "furigana": "度[ど]",
     "romaji": "do",
     "meanings": [
-      "degree (angle, temperature, scale, etc.)",
-      "counter for occurrences",
-      "strength (of glasses), glasses prescription",
-      "alcohol content (percentage), alcohol by volume",
-      "extent, degree, limit",
-      "presence of mind, composure"
+      "degree (temperature)",
+      "counter for degrees"
     ],
     "part_of_speech": "counter",
     "verb_group": "",
@@ -8242,7 +8264,8 @@
         "inclusion_reason": "Underlined for reading practice in the notice; useful counter for temperature.",
         "example": "体温が38度以上の方は病院に来る前にお電話ください。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:30975fcb4c34ecb69cdc15bdb52631341335bc9860c4a7a289e3b13629e4e417"
+        "janki_pitch_accent_source": "jpdb:30975fcb4c34ecb69cdc15bdb52631341335bc9860c4a7a289e3b13629e4e417",
+        "provisional_fields": "meanings:805df1778938"
       }
     }
   },
@@ -8504,7 +8527,8 @@
     "furigana": "指[ゆび]",
     "romaji": "yubi",
     "meanings": [
-      "finger, toe, digit"
+      "finger",
+      "fingers"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -8550,7 +8574,8 @@
         "context": "17. fingers yubi ゆび 指",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "98a6eb5996e6,0a8013cb0210",
-        "janki_pitch_accent_source": "jpdb:5ac566d7787130dd7c10d5e265974ce627d455ba6771e58aa530e02592430021"
+        "janki_pitch_accent_source": "jpdb:5ac566d7787130dd7c10d5e265974ce627d455ba6771e58aa530e02592430021",
+        "provisional_fields": "meanings:ecc6e5859383"
       }
     }
   },
@@ -8785,12 +8810,7 @@
     "furigana": "方[かた]",
     "romaji": "kata",
     "meanings": [
-      "direction, way",
-      "person, lady, gentleman",
-      "method of, manner of, way of",
-      "care of ...",
-      "person in charge of ...",
-      "side (e.g. \"on my mother's side\")"
+      "person (polite)"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -8837,7 +8857,8 @@
         "inclusion_reason": "Underlined for reading practice; polite reading かた contrasts with ほう.",
         "example": "体温が38度以上の方は病院に来る前にお電話ください。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:66fb69ee92cd20d1119b0fc01d759e9acc6ab698885cb696e1ece8cc2c4b7252"
+        "janki_pitch_accent_source": "jpdb:66fb69ee92cd20d1119b0fc01d759e9acc6ab698885cb696e1ece8cc2c4b7252",
+        "provisional_fields": "meanings:a5bb33e47a8d"
       }
     }
   },
@@ -8848,7 +8869,7 @@
     "furigana": "日[にっ] 射[しゃ] 病[びょう]",
     "romaji": "nisshabyou",
     "meanings": [
-      "heatstroke, sunstroke"
+      "sunstroke"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -8894,7 +8915,8 @@
         "context": "24. sunstroke nisshabyo にっしゃびょう 日射病",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "4cd211c93b40,1c017ff7d8a5",
-        "janki_pitch_accent_source": "jpdb:5c4a50c153c58431812592e37263d3739da9913fa6e0ea495270f98bff8b70d5"
+        "janki_pitch_accent_source": "jpdb:5c4a50c153c58431812592e37263d3739da9913fa6e0ea495270f98bff8b70d5",
+        "provisional_fields": "meanings:029412dd5fe1"
       }
     }
   },
@@ -9108,9 +9130,8 @@
     "furigana": "昼[ひる]",
     "romaji": "hiru",
     "meanings": [
-      "noon, midday",
-      "daytime",
-      "lunch"
+      "noon",
+      "daytime"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -9156,7 +9177,8 @@
         "context": "1. A: ________ のひるの __________ はどうですか。",
         "inclusion_reason": "Everyday time-of-day noun appearing in the exercise sentence.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:0fdb4eb9d80dced302c857b8ed2d528364f552876857fbf4634cbd481c18db6b"
+        "janki_pitch_accent_source": "jpdb:0fdb4eb9d80dced302c857b8ed2d528364f552876857fbf4634cbd481c18db6b",
+        "provisional_fields": "meanings:cc445a1c079d"
       }
     }
   },
@@ -9168,8 +9190,7 @@
     "romaji": "jikan",
     "meanings": [
       "time",
-      "hour",
-      "period, class, lesson"
+      "hour"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -9214,7 +9235,8 @@
         "page": "1",
         "context": "診察*時間",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:1152e163245fedcb9e1d048c4814a2e09174edf7163689e06d31df8f110a170d"
+        "janki_pitch_accent_source": "jpdb:1152e163245fedcb9e1d048c4814a2e09174edf7163689e06d31df8f110a170d",
+        "provisional_fields": "meanings:e36e15cd7032"
       }
     }
   },
@@ -9274,7 +9296,8 @@
     "furigana": "更[こう] 年[ねん] 期[き] 障[しょう] 害[がい]",
     "romaji": "kounenkishougai",
     "meanings": [
-      "menopausal disorders"
+      "menopausal disorder",
+      "menopausal symptoms"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -9320,7 +9343,8 @@
         "context": "34. a menopausal disorder konenkishogai こうねんきしょうがい 更年期障害",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "7be22fee40ba,3d0171193682",
-        "janki_pitch_accent_source": "jpdb:75eb6226fa1041a0528fa2b7c1c83ef7d688e476dc426afa258992aada79ba00"
+        "janki_pitch_accent_source": "jpdb:75eb6226fa1041a0528fa2b7c1c83ef7d688e476dc426afa258992aada79ba00",
+        "provisional_fields": "meanings:94ebd2c50091"
       }
     }
   },
@@ -9452,7 +9476,7 @@
     "romaji": "yuumei",
     "meanings": [
       "famous",
-      "fame"
+      "well-known"
     ],
     "part_of_speech": "na-adjective",
     "verb_group": "",
@@ -9497,7 +9521,8 @@
         "page": "1",
         "context": "ゆうめい",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:59a0ef7a50ca53f2f76daa1277eb00522d48179bd2d9d6fcfded53b5f8e9837a"
+        "janki_pitch_accent_source": "jpdb:59a0ef7a50ca53f2f76daa1277eb00522d48179bd2d9d6fcfded53b5f8e9837a",
+        "provisional_fields": "meanings:da7ef6e6638c"
       }
     }
   },
@@ -9508,8 +9533,9 @@
     "furigana": "有[ゆう] 料[りょう]",
     "romaji": "yuuryou",
     "meanings": [
-      "fee-charging, paid, not free",
-      "toll road"
+      "fee-charging",
+      "not free",
+      "paid"
     ],
     "part_of_speech": "no-adjective",
     "verb_group": "",
@@ -9554,7 +9580,8 @@
         "page": "3",
         "context": "有料　cost money",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:543ae428d6f44b8dec4b2ecd1c20b70075c1c83de6f970cbac4c87b335d714da"
+        "janki_pitch_accent_source": "jpdb:543ae428d6f44b8dec4b2ecd1c20b70075c1c83de6f970cbac4c87b335d714da",
+        "provisional_fields": "meanings:441c7020d176"
       }
     }
   },
@@ -9803,7 +9830,8 @@
     "furigana": "椎[つい] 間[かん] 板[ばん]ヘルニア",
     "romaji": "tsuikanbanherunia",
     "meanings": [
-      "disk herniation, herniated disk, hernia of intervertebral disk, slipped disk"
+      "slipped disc",
+      "herniated disc"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -9849,7 +9877,8 @@
         "context": "21. slipped disc tsuikamban herunia ついかんばんヘルニア 椎間板ヘルニア",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "555f93fcaf43,e5fddc52144b",
-        "janki_pitch_accent_source": "jpdb:0183ed431d585996e9ea5edd760182d9829ec1d189d1c3ba558592dc8da1e703"
+        "janki_pitch_accent_source": "jpdb:0183ed431d585996e9ea5edd760182d9829ec1d189d1c3ba558592dc8da1e703",
+        "provisional_fields": "meanings:d30f11169f5f"
       }
     }
   },
@@ -9916,9 +9945,8 @@
     "furigana": "止[と]まる",
     "romaji": "tomaru",
     "meanings": [
-      "to stop (moving), to come to a stop",
-      "to stop (doing, working, being supplied), to come to a halt, to cease, to be stopped, to be suspended",
-      "to alight, to perch on"
+      "to stop",
+      "to come to a halt"
     ],
     "part_of_speech": "verb",
     "verb_group": "godan",
@@ -9972,7 +10000,8 @@
         "context": "3. エスカレーター*が ____________________。/ とまっています",
         "inclusion_reason": "Intransitive verb targeted for kanji conversion; contrasts with 止む.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:c451decc2bf0519b4f13f5c0e0e6abf811cc9c59f4b1391e1beb0c8118cc2772"
+        "janki_pitch_accent_source": "jpdb:c451decc2bf0519b4f13f5c0e0e6abf811cc9c59f4b1391e1beb0c8118cc2772",
+        "provisional_fields": "meanings:c69122c4eb4a"
       }
     }
   },
@@ -9983,7 +10012,8 @@
     "furigana": "止[や]む",
     "romaji": "yamu",
     "meanings": [
-      "to cease, to stop, to be over"
+      "to stop (of rain, wind)",
+      "to cease"
     ],
     "part_of_speech": "verb",
     "verb_group": "godan",
@@ -10037,7 +10067,8 @@
         "context": "B: ひるは _____ がふります。でも _____ は _____ が _______________。/ やみます",
         "inclusion_reason": "The hiragana やみます is to be rewritten with the kanji 止; useful weather verb contrasting with 止まる.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.settle_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"},{\"code\":\"example-furigana-space-after-punctuation\",\"evidence\":{\"algorithm\":\"japanese_anki.repairs._spaced_furigana\"},\"fields\":[\"examples[0].furigana\"],\"provenance\":\"Restored the space between punctuation and a following ruby group, which Anki needs to keep the punctuation out of the base.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:b0292acb5109c31a5704e3a6318ee31c018f39f4d17c56b0b9758f91d3071eca"
+        "janki_pitch_accent_source": "jpdb:b0292acb5109c31a5704e3a6318ee31c018f39f4d17c56b0b9758f91d3071eca",
+        "provisional_fields": "meanings:dbc0c326149c"
       }
     }
   },
@@ -10048,7 +10079,8 @@
     "furigana": "歯[は]",
     "romaji": "ha",
     "meanings": [
-      "tooth"
+      "tooth",
+      "teeth"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -10094,7 +10126,8 @@
         "context": "4. teeth ha は 歯",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "6d3f577cb805,4a808b4fd01c",
-        "janki_pitch_accent_source": "jpdb:9534a9fc829b917db6338dc1077e4fb7035fc74a02f8bfa28e863384ffbabaae"
+        "janki_pitch_accent_source": "jpdb:9534a9fc829b917db6338dc1077e4fb7035fc74a02f8bfa28e863384ffbabaae",
+        "provisional_fields": "meanings:09b3ed391fd7"
       }
     }
   },
@@ -10161,7 +10194,7 @@
     "furigana": "水[みず] 疱[ぼう] 瘡[そう]",
     "romaji": "mizubousou",
     "meanings": [
-      "chickenpox, chicken pox"
+      "chicken pox"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -10207,7 +10240,8 @@
         "context": "2. chicken pox mizuboso みずぼうそう 水疱瘡",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "bf8124430046,d32e282a49fb",
-        "janki_pitch_accent_source": "jpdb:6414a1b3366411fffbccf2acc9f7c52dcd4286e65c32c25479b266269c5a6236"
+        "janki_pitch_accent_source": "jpdb:6414a1b3366411fffbccf2acc9f7c52dcd4286e65c32c25479b266269c5a6236",
+        "provisional_fields": "meanings:9d0d21931d0d"
       }
     }
   },
@@ -10218,9 +10252,7 @@
     "furigana": "水[みず] 虫[むし]",
     "romaji": "mizumushi",
     "meanings": [
-      "athlete's foot",
-      "water boatman (esp. species Hesperocorixa distanti)",
-      "Asellus hilgendorfi (species of aquatic sowbug)"
+      "athlete's foot"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -10266,7 +10298,8 @@
         "context": "32. athlete’s foot mizumushi みずむし 水虫",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "40283ed37548,1cfe22928527",
-        "janki_pitch_accent_source": "jpdb:e94cee67bfe06e96284c4c97b50e5ee9747f501aab5e5fba5a4705083af467cb"
+        "janki_pitch_accent_source": "jpdb:e94cee67bfe06e96284c4c97b50e5ee9747f501aab5e5fba5a4705083af467cb",
+        "provisional_fields": "meanings:ff30308fc58e"
       }
     }
   },
@@ -10277,7 +10310,8 @@
     "furigana": "湿[しっ] 布[ぷ]",
     "romaji": "shippu",
     "meanings": [
-      "(wet) compress, poultice, fomentation"
+      "compress",
+      "medicated patch"
     ],
     "part_of_speech": "noun",
     "verb_group": "suru",
@@ -10323,7 +10357,8 @@
         "context": "7. compress shippu しっぷ 湿布",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "fa605c18f49c,aee7f1816315",
-        "janki_pitch_accent_source": "jpdb:10c40d7c3f8f8aa8df4bf74a268dbc5ed57268ded496eff2f005e6bd705f2204"
+        "janki_pitch_accent_source": "jpdb:10c40d7c3f8f8aa8df4bf74a268dbc5ed57268ded496eff2f005e6bd705f2204",
+        "provisional_fields": "meanings:a448411bcd60"
       }
     }
   },
@@ -10391,7 +10426,7 @@
     "furigana": "火傷[やけど]",
     "romaji": "yakedo",
     "meanings": [
-      "burn, scald"
+      "burn"
     ],
     "part_of_speech": "noun",
     "verb_group": "suru",
@@ -10437,7 +10472,8 @@
         "context": "31. burn yakedo やけど 火傷",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "d5e3e01341d8,bf1f9c33e90a",
-        "janki_pitch_accent_source": "jpdb:2edc8321def4edabb9b47bf20fee932d275c18cc5146780395de4db8e7d8b840"
+        "janki_pitch_accent_source": "jpdb:2edc8321def4edabb9b47bf20fee932d275c18cc5146780395de4db8e7d8b840",
+        "provisional_fields": "meanings:f5f2d0b166ab"
       }
     }
   },
@@ -10504,9 +10540,8 @@
     "furigana": "熱[ねつ]",
     "romaji": "netsu",
     "meanings": [
-      "heat",
-      "fever, temperature",
-      "zeal, passion, enthusiasm, mania, craze, rage"
+      "fever",
+      "temperature"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -10552,7 +10587,8 @@
         "context": "1. I have a fever. Netsu ga arimasu. 熱があります。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "8ccbb547cb28,895dbce8eb98",
-        "janki_pitch_accent_source": "jpdb:c524ac0695b883d7f29507aec07cd276bf58dcf28199237c37ae57aea316cde7"
+        "janki_pitch_accent_source": "jpdb:c524ac0695b883d7f29507aec07cd276bf58dcf28199237c37ae57aea316cde7",
+        "provisional_fields": "meanings:6a6073b9c4f7"
       }
     }
   },
@@ -10563,9 +10599,8 @@
     "furigana": "爪[つめ]",
     "romaji": "tsume",
     "meanings": [
-      "nail (e.g. fingernail, toenail), claw, talon, hoof",
-      "plectrum, pick",
-      "hook, clasp"
+      "nail",
+      "nails"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -10611,7 +10646,8 @@
         "context": "18. nails tsume つめ 爪",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "a67fde3d0681,68e81c5eebad",
-        "janki_pitch_accent_source": "jpdb:0e39492a341cef5b6103f1e6228142a2170966ca3719a69ef78243c6f46b3587"
+        "janki_pitch_accent_source": "jpdb:0e39492a341cef5b6103f1e6228142a2170966ca3719a69ef78243c6f46b3587",
+        "provisional_fields": "meanings:7754433adb54"
       }
     }
   },
@@ -10622,7 +10658,8 @@
     "furigana": "爪[つま] 先[さき]",
     "romaji": "tsumasaki",
     "meanings": [
-      "toes, tips of the toes, toe of a shoe, sock, etc."
+      "toes",
+      "tiptoe"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -10668,7 +10705,8 @@
         "context": "21. toes tsumasaki つまさき 爪先",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "d11fdd798662,af388a711bac",
-        "janki_pitch_accent_source": "jpdb:50e85c00b9d4f3e8d6a4ba16f9b050054f8035c0f388201610586d2511a803ca"
+        "janki_pitch_accent_source": "jpdb:50e85c00b9d4f3e8d6a4ba16f9b050054f8035c0f388201610586d2511a803ca",
+        "provisional_fields": "meanings:e6769a123b6e"
       }
     }
   },
@@ -10679,7 +10717,7 @@
     "furigana": "病[びょう] 院[いん]",
     "romaji": "byouin",
     "meanings": [
-      "hospital, clinic, doctor's office, doctor's surgery, infirmary"
+      "hospital"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -10726,7 +10764,8 @@
         "inclusion_reason": "Underlined item is 東京病院; the card covers the vocabulary word 病院 (東京 is a place name).",
         "example": "体温が38度以上の方は病院に来る前にお電話ください。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:66dd7e457f1543f7fd3ad496487c2df6aadbeee73c77e0c3f4df2c26e79e4223"
+        "janki_pitch_accent_source": "jpdb:66dd7e457f1543f7fd3ad496487c2df6aadbeee73c77e0c3f4df2c26e79e4223",
+        "provisional_fields": "meanings:7240f0e9bd9c"
       }
     }
   },
@@ -10800,7 +10839,8 @@
     "furigana": "痔[じ]",
     "romaji": "ji",
     "meanings": [
-      "hemorrhoids, piles"
+      "hemorrhoid",
+      "hemorrhoids"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -10846,7 +10886,8 @@
         "context": "20. hemorrhoid ji じ 痔",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "3a549145eb6c,e8a903d234cc",
-        "janki_pitch_accent_source": "jpdb:b7177da8b3e1a21c032b5ea7b544f735a3fd52e8f19614786082e17bce080d60"
+        "janki_pitch_accent_source": "jpdb:b7177da8b3e1a21c032b5ea7b544f735a3fd52e8f19614786082e17bce080d60",
+        "provisional_fields": "meanings:64a1d273499e"
       }
     }
   },
@@ -10857,9 +10898,9 @@
     "furigana": "痛[いた]い",
     "romaji": "itai",
     "meanings": [
-      "painful, sore",
-      "cringy, embarrassing",
-      "exceeding"
+      "painful",
+      "sore",
+      "it hurts"
     ],
     "part_of_speech": "i-adjective",
     "verb_group": "",
@@ -10911,7 +10952,8 @@
         "context": "1. I have a pain in my ______. ______ ga itai desu. が痛いです。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "fa149869ca3e,db122a12e981",
-        "janki_pitch_accent_source": "jpdb:429b4e671a7e65ec0d47581c96aec54f588aaef5802a60145b18f895237308b6"
+        "janki_pitch_accent_source": "jpdb:429b4e671a7e65ec0d47581c96aec54f588aaef5802a60145b18f895237308b6",
+        "provisional_fields": "meanings:bacf16615472"
       }
     }
   },
@@ -11158,7 +11200,7 @@
     "furigana": "百[ひゃく] 日[にち] 咳[せき]",
     "romaji": "hyakunichizeki",
     "meanings": [
-      "whooping cough, pertussis"
+      "whooping cough"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -11204,7 +11246,8 @@
         "context": "4. whooping cough hyakunichizeki ひゃくにちぜき 百日咳",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "36944ebed26d,be7c6dc9a899",
-        "janki_pitch_accent_source": "jpdb:4b70273a82fc8207f6f773333e3a0ef87954fa881ff4185fe68784fafb542c49"
+        "janki_pitch_accent_source": "jpdb:4b70273a82fc8207f6f773333e3a0ef87954fa881ff4185fe68784fafb542c49",
+        "provisional_fields": "meanings:d37cc4159f71"
       }
     }
   },
@@ -11215,25 +11258,8 @@
     "furigana": "目[め]",
     "romaji": "me",
     "meanings": [
-      "eye, eyeball",
-      "eyesight, sight, vision",
-      "look, stare, gaze, glance",
-      "notice, attention, observation, eyes (of the world, public, etc.)",
-      "an experience",
-      "viewpoint",
-      "discrimination, discernment, judgement, eye (e.g. for quality)",
-      "appearance",
-      "chance to succeed, possibility",
-      "spacing (between crossed strands of a net, mesh, etc.), opening, stitch, texture, weave",
-      "grain (of wood)",
-      "eye (of a storm, needle, etc.)",
-      "intersection (on a go board), square (on a chess board)",
-      "dot (on a dice), pip, rolled number",
-      "graduation, division (of a scale)",
-      "tooth (of a saw, comb, etc.)",
-      "ordinal number suffix",
-      "somewhat, -ish",
-      "point (e.g. of change)"
+      "eye",
+      "eyes"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -11279,7 +11305,8 @@
         "context": "2. eyes me め 目",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "bf5ea73c04be,0ce1cfc2b3cd",
-        "janki_pitch_accent_source": "jpdb:f5aa71f52c4d15ec772c4c96e912ca76b95d5248b01a8256ec14b3113ce5a9d8"
+        "janki_pitch_accent_source": "jpdb:f5aa71f52c4d15ec772c4c96e912ca76b95d5248b01a8256ec14b3113ce5a9d8",
+        "provisional_fields": "meanings:267c31f5533e"
       }
     }
   },
@@ -11290,7 +11317,7 @@
     "furigana": "目[め] 薬[ぐすり]",
     "romaji": "megusuri",
     "meanings": [
-      "eye drops, eyewash"
+      "eye drops"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -11336,7 +11363,8 @@
         "context": "6. eye drops megusuri めぐすり 目薬",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "99f85eeee37d,97d447a320e5",
-        "janki_pitch_accent_source": "jpdb:12117c424999d68254cbcbf83802ac12b019c4edf29c69aa23287579449c4873"
+        "janki_pitch_accent_source": "jpdb:12117c424999d68254cbcbf83802ac12b019c4edf29c69aa23287579449c4873",
+        "provisional_fields": "meanings:275574a2036a"
       }
     }
   },
@@ -11471,7 +11499,7 @@
     "furigana": "睡[すい] 眠[みん] 薬[やく]",
     "romaji": "suimin'yaku",
     "meanings": [
-      "sleeping pill, sleep medication"
+      "sleeping pill"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -11517,7 +11545,8 @@
         "context": "3. sleeping pill suiminyaku すいみんやく 睡眠薬",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "6139c0e45610,a4fb99b58f2a",
-        "janki_pitch_accent_source": "jpdb:3ea02e02b4260443ef51d16492445715f10adc58ebead7d7052e4664d3547331"
+        "janki_pitch_accent_source": "jpdb:3ea02e02b4260443ef51d16492445715f10adc58ebead7d7052e4664d3547331",
+        "provisional_fields": "meanings:061ac34d8de1"
       }
     }
   },
@@ -11653,7 +11682,7 @@
     "furigana": "破[は] 傷[しょう] 風[ふう]",
     "romaji": "hashoufuu",
     "meanings": [
-      "tetanus, lockjaw"
+      "tetanus"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -11699,7 +11728,8 @@
         "context": "5. tetanus hashofu はしょうふう 破傷風",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "47affe38ebda,53a0cd2f86e4",
-        "janki_pitch_accent_source": "jpdb:77b644ba40a5920ac4b5b060375c606ffe7b564dd5ebaa6c5a23dbac2c79d4e9"
+        "janki_pitch_accent_source": "jpdb:77b644ba40a5920ac4b5b060375c606ffe7b564dd5ebaa6c5a23dbac2c79d4e9",
+        "provisional_fields": "meanings:b8bf55ad08c1"
       }
     }
   },
@@ -11710,7 +11740,8 @@
     "furigana": "社[しゃ] 会[かい] 人[じん]",
     "romaji": "shakaijin",
     "meanings": [
-      "working adult, full-fledged member of society"
+      "working adult",
+      "member of society"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -11755,7 +11786,8 @@
         "page": "2",
         "context": "社会人　working adult",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:a122295fd84616021d8b17e78b18c38c8c92e79cfba4fa3c353b0335daa53643"
+        "janki_pitch_accent_source": "jpdb:a122295fd84616021d8b17e78b18c38c8c92e79cfba4fa3c353b0335daa53643",
+        "provisional_fields": "meanings:54eb918823d7"
       }
     }
   },
@@ -11866,10 +11898,8 @@
     "furigana": "神[かみ]",
     "romaji": "kami",
     "meanings": [
-      "god, deity, divinity, spirit, kami",
-      "incredible, fantastic, amazing",
-      "Emperor (of Japan)",
-      "thunder"
+      "god",
+      "deity"
     ],
     "part_of_speech": "na-adjective",
     "verb_group": "",
@@ -11914,7 +11944,8 @@
         "page": "1",
         "context": "神 (god) Radical ネ altar　くんよみ かみ／おんよみ しん・じん",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-furigana-space-after-punctuation\",\"evidence\":{\"algorithm\":\"japanese_anki.repairs._spaced_furigana\"},\"fields\":[\"examples[1].furigana\"],\"provenance\":\"Restored the space between punctuation and a following ruby group, which Anki needs to keep the punctuation out of the base.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:5d43ed4291f4e6c53e0343aa3acecedd95f38b22690113d3f009fed29ee57e85"
+        "janki_pitch_accent_source": "jpdb:5d43ed4291f4e6c53e0343aa3acecedd95f38b22690113d3f009fed29ee57e85",
+        "provisional_fields": "meanings:d75ee73d6db2"
       }
     }
   },
@@ -11925,8 +11956,8 @@
     "furigana": "神[かみ] 様[さま]",
     "romaji": "kamisama",
     "meanings": [
-      "God, god",
-      "ace, king, superior person, god (amongst men)"
+      "god",
+      "deity (polite)"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -11971,7 +12002,8 @@
         "page": "1",
         "context": "神様　god",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:be6e3741a977c8635ce80aa706e99a5f3a34e35e808e2b5c4079258ecc746eda"
+        "janki_pitch_accent_source": "jpdb:be6e3741a977c8635ce80aa706e99a5f3a34e35e808e2b5c4079258ecc746eda",
+        "provisional_fields": "meanings:130d47434305"
       }
     }
   },
@@ -12151,7 +12183,7 @@
     "furigana": "糖[とう] 尿[にょう] 病[びょう]",
     "romaji": "tounyoubyou",
     "meanings": [
-      "diabetes, diabetes mellitus"
+      "diabetes"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -12197,7 +12229,8 @@
         "context": "23. diabetes tonyobyo とうにょうびょう 糖尿病",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "a88487a7846e,a22e031dddd5",
-        "janki_pitch_accent_source": "jpdb:d871ba6ed946a959a835f1bbad7837ee46289c237df84975dbdb991e10046acb"
+        "janki_pitch_accent_source": "jpdb:d871ba6ed946a959a835f1bbad7837ee46289c237df84975dbdb991e10046acb",
+        "provisional_fields": "meanings:476bd782aa92"
       }
     }
   },
@@ -12267,9 +12300,7 @@
     "romaji": "mimi",
     "meanings": [
       "ear",
-      "hearing",
-      "edge, crust",
-      "selvedge (non-fray machined edge of fabrics), selvage"
+      "ears"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -12315,7 +12346,8 @@
         "context": "5. ears mimi みみ 耳",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "54c22b08b326,0581a5e1916a",
-        "janki_pitch_accent_source": "jpdb:5221227ea194e44520abe6cfd298b538bcde971d9e23ffd7f4ecad9e44768096"
+        "janki_pitch_accent_source": "jpdb:5221227ea194e44520abe6cfd298b538bcde971d9e23ffd7f4ecad9e44768096",
+        "provisional_fields": "meanings:6dbb4051163b"
       }
     }
   },
@@ -12562,7 +12594,7 @@
     "furigana": "肝[かん] 硬[こう] 変[へん]",
     "romaji": "kankouhen",
     "meanings": [
-      "cirrhosis (of the liver)"
+      "liver cirrhosis"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -12608,7 +12640,8 @@
         "context": "14. liver cirrhosis kankohen かんこうへん 肝硬変",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "6649b7a233c7,9f284f81b43d",
-        "janki_pitch_accent_source": "jpdb:2102cfe28b01b9ce9574c41242201cf8efbc498c72324a0df66eee730414ca5e"
+        "janki_pitch_accent_source": "jpdb:2102cfe28b01b9ce9574c41242201cf8efbc498c72324a0df66eee730414ca5e",
+        "provisional_fields": "meanings:1fffe0af22cc"
       }
     }
   },
@@ -12676,7 +12709,7 @@
     "furigana": "肩[かた]こり",
     "romaji": "katakori",
     "meanings": [
-      "stiff neck, stiff shoulders"
+      "stiff shoulders"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -12722,7 +12755,8 @@
         "context": "11. stiff shoulder katakori かたこり 肩こり",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "1ee3ef81a02f,5777851d6db1",
-        "janki_pitch_accent_source": "jpdb:33e3d4231d25823da8203e659fd90ce5863102212da27ace2a9e96b67bb918d0"
+        "janki_pitch_accent_source": "jpdb:33e3d4231d25823da8203e659fd90ce5863102212da27ace2a9e96b67bb918d0",
+        "provisional_fields": "meanings:79f4326dd7f3"
       }
     }
   },
@@ -12733,8 +12767,7 @@
     "furigana": "胃[い]",
     "romaji": "i",
     "meanings": [
-      "stomach",
-      "Chinese \"stomach\" constellation (one of the 28 mansions)"
+      "stomach"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -12780,7 +12813,8 @@
         "context": "13. stomach ｉ い 胃",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "20e8c1f71175,ac373a6c0761",
-        "janki_pitch_accent_source": "jpdb:0e203ea6d79746367c77164977d96fd73b74ca775fe5a4f949e8b59d94533439"
+        "janki_pitch_accent_source": "jpdb:0e203ea6d79746367c77164977d96fd73b74ca775fe5a4f949e8b59d94533439",
+        "provisional_fields": "meanings:1eecca56f028"
       }
     }
   },
@@ -12848,7 +12882,7 @@
     "furigana": "背[せ] 中[なか]",
     "romaji": "senaka",
     "meanings": [
-      "back (of body)"
+      "back"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -12894,7 +12928,8 @@
         "context": "9. back senaka せなか 背中",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "5b1fa98a749f,fa8e2f2a855b",
-        "janki_pitch_accent_source": "jpdb:3289766af353dc9ca108c2351ed288d465f27d91069fd1abef53618bd2f74ef5"
+        "janki_pitch_accent_source": "jpdb:3289766af353dc9ca108c2351ed288d465f27d91069fd1abef53618bd2f74ef5",
+        "provisional_fields": "meanings:d2aa69793b26"
       }
     }
   },
@@ -12905,12 +12940,8 @@
     "furigana": "胸[むね]",
     "romaji": "mune",
     "meanings": [
-      "chest, breast",
-      "breasts, bosom, bust",
-      "heart",
-      "lungs",
-      "stomach",
-      "heart, mind, feelings"
+      "chest",
+      "breast"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -12956,7 +12987,8 @@
         "context": "8. chest・breast mune むね 胸",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "c165fd230873,11fa30cc4c72",
-        "janki_pitch_accent_source": "jpdb:7b12104ebf0fa437dc4affed9496daf4baa6db49ac6a9c7729f667170f98a050"
+        "janki_pitch_accent_source": "jpdb:7b12104ebf0fa437dc4affed9496daf4baa6db49ac6a9c7729f667170f98a050",
+        "provisional_fields": "meanings:b526ee146fdf"
       }
     }
   },
@@ -12967,7 +12999,7 @@
     "furigana": "脳[のう] 卒[そっ] 中[ちゅう]",
     "romaji": "nousotchuu",
     "meanings": [
-      "stroke, cerebral haemorrhage, cerebral hemorrhage"
+      "stroke"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -13014,7 +13046,8 @@
         "ai_warnings": "[\"romaji 'sofu wa nousocchuu de taoremashita.' does not transliterate 'そふはのうそっちゅうでたおれました。'; replaced with 'sofuhanousotchuudetaoremashita.'\", \"romaji 'nousocchuu wa kyuu ni okoru kara kowai.' does not transliterate 'のうそっちゅうはきゅうにおこるからこわい。'; replaced with 'nousotchuuhakyuuniokorukarakowai.'\"]",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "18a4769dc411,799289d107ad",
-        "janki_pitch_accent_source": "jpdb:0e3ea577ed93fabe205b848c54c598ea5509236cacc5d818c7639cf4f591f6cd"
+        "janki_pitch_accent_source": "jpdb:0e3ea577ed93fabe205b848c54c598ea5509236cacc5d818c7639cf4f591f6cd",
+        "provisional_fields": "meanings:612e31276dea"
       }
     }
   },
@@ -13025,8 +13058,7 @@
     "furigana": "腕[うで]",
     "romaji": "ude",
     "meanings": [
-      "arm",
-      "skill, efforts, ability"
+      "arm"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -13072,7 +13104,8 @@
         "context": "14. arm ude うで 腕",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "b28eae92ae9d,5fba53ba94c9",
-        "janki_pitch_accent_source": "jpdb:8515eb22002365f05de521f88dfb2491e6ddef288643922bc754bfa05ddeb235"
+        "janki_pitch_accent_source": "jpdb:8515eb22002365f05de521f88dfb2491e6ddef288643922bc754bfa05ddeb235",
+        "provisional_fields": "meanings:275c320f3ee0"
       }
     }
   },
@@ -13083,8 +13116,8 @@
     "furigana": "腰[こし]",
     "romaji": "koshi",
     "meanings": [
-      "lower back, waist, hips, lumbar region",
-      "body (of hair, noodle, paper, etc.), resilience, spring"
+      "lower back",
+      "waist"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -13130,7 +13163,8 @@
         "context": "(2) Koshi ga itai desu. 腰が痛いです。 I have a backache.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "60c737a95064,92fbed5bbaa0",
-        "janki_pitch_accent_source": "jpdb:e2ea76bba0b48f749cef7e019ae12c5e5dbb3cce0a9809997cdeea72c248ed11"
+        "janki_pitch_accent_source": "jpdb:e2ea76bba0b48f749cef7e019ae12c5e5dbb3cce0a9809997cdeea72c248ed11",
+        "provisional_fields": "meanings:5ba5fd88e554"
       }
     }
   },
@@ -13141,7 +13175,8 @@
     "furigana": "腰[よう] 痛[つう]",
     "romaji": "youtsuu",
     "meanings": [
-      "lower back (or hip) pain, lumbago"
+      "backache",
+      "lower back pain"
     ],
     "part_of_speech": "no-adjective",
     "verb_group": "",
@@ -13187,7 +13222,8 @@
         "context": "12. backache yotsu ようつう 腰痛",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "48897677619e,99386dc37096",
-        "janki_pitch_accent_source": "jpdb:1553fcc429c57e2349d5b988cc1b2a2b305c0fdbbed4b98cb8c3e1c76140c913"
+        "janki_pitch_accent_source": "jpdb:1553fcc429c57e2349d5b988cc1b2a2b305c0fdbbed4b98cb8c3e1c76140c913",
+        "provisional_fields": "meanings:407b8c570471"
       }
     }
   },
@@ -13249,8 +13285,8 @@
     "furigana": "苦[にが] 手[て]",
     "romaji": "nigate",
     "meanings": [
-      "poor (at), weak (in), not very good (at)",
-      "not one's cup of tea, not one's favorite"
+      "not good at",
+      "weak point"
     ],
     "part_of_speech": "na-adjective",
     "verb_group": "",
@@ -13297,7 +13333,8 @@
         "context": "5. ... でも _______________ のがにがてです。",
         "inclusion_reason": "Useful expression for talking about weaknesses, written in hiragana here.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:f625edf01fd8fb0d29f54ac3f4b4c8b010fde1ae3b1446148e9c4552a71e241b"
+        "janki_pitch_accent_source": "jpdb:f625edf01fd8fb0d29f54ac3f4b4c8b010fde1ae3b1446148e9c4552a71e241b",
+        "provisional_fields": "meanings:40c2f3da464b"
       }
     }
   },
@@ -13308,7 +13345,7 @@
     "furigana": "茶[さ] 道[どう]",
     "romaji": "sadou",
     "meanings": [
-      "tea ceremony, Way of Tea"
+      "tea ceremony"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -13353,7 +13390,8 @@
         "page": "1",
         "context": "茶道　tea ceremony",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:01dcdcab031b7e385644afcb8e6754c4e5c6f17e458a24bbab1c4d1de4623743"
+        "janki_pitch_accent_source": "jpdb:01dcdcab031b7e385644afcb8e6754c4e5c6f17e458a24bbab1c4d1de4623743",
+        "provisional_fields": "meanings:a38cb82a2921"
       }
     }
   },
@@ -13364,7 +13402,8 @@
     "furigana": "虫[むし] 歯[ば]",
     "romaji": "mushiba",
     "meanings": [
-      "cavity, tooth decay, decayed tooth, dental caries"
+      "cavity",
+      "tooth decay"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -13410,7 +13449,8 @@
         "context": "18. cavity mushiba むしば 虫歯",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "54281dbb31dd,31e32cffc672",
-        "janki_pitch_accent_source": "jpdb:e317c14750120c1c731c9667664c3192d9b18d006ceae2ddeb7ea7507615386e"
+        "janki_pitch_accent_source": "jpdb:e317c14750120c1c731c9667664c3192d9b18d006ceae2ddeb7ea7507615386e",
+        "provisional_fields": "meanings:8f33aec7f00e"
       }
     }
   },
@@ -13602,7 +13642,8 @@
     "furigana": "解[げ] 熱[ねつ] 剤[ざい]",
     "romaji": "genetsuzai",
     "meanings": [
-      "fever medicine, antipyretic, antifebrile"
+      "fever reducer",
+      "antipyretic"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -13649,7 +13690,8 @@
         "context": "4. antipyretic genetsuzai げねつざい 解熱剤",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "47fd7bfda868,0e89d48afe18",
-        "janki_pitch_accent_source": "jpdb:e75baf80376285d20f509f7fc478e4603d804189a8bd5a5e744c505357e9e230"
+        "janki_pitch_accent_source": "jpdb:e75baf80376285d20f509f7fc478e4603d804189a8bd5a5e744c505357e9e230",
+        "provisional_fields": "meanings:82f2e5e69c6b"
       }
     }
   },
@@ -13913,7 +13955,7 @@
     "romaji": "kai",
     "meanings": [
       "shellfish",
-      "seashell, shell"
+      "shell"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -13958,7 +14000,8 @@
         "page": "2",
         "context": "貝 (shellfish) Pictogram shell　くんよみ かい／おんよみ ばい",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:b4a1e30617b18752b9e4ba06c2038b7706167dd42ca8d147c563d9eea46ded33"
+        "janki_pitch_accent_source": "jpdb:b4a1e30617b18752b9e4ba06c2038b7706167dd42ca8d147c563d9eea46ded33",
+        "provisional_fields": "meanings:71c491a389af"
       }
     }
   },
@@ -13969,7 +14012,8 @@
     "furigana": "貝[かい]がら",
     "romaji": "kaigara",
     "meanings": [
-      "seashell, shell"
+      "seashell",
+      "shell"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -14015,7 +14059,8 @@
         "page": "2",
         "context": "貝がら　seashell",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:343f8474638ccf59a114190aaa49aacda7c3046141c8e9f382d78459039da26a"
+        "janki_pitch_accent_source": "jpdb:343f8474638ccf59a114190aaa49aacda7c3046141c8e9f382d78459039da26a",
+        "provisional_fields": "meanings:4e55700ddfc9"
       }
     }
   },
@@ -14026,7 +14071,7 @@
     "furigana": "貧[ひん] 血[けつ]",
     "romaji": "hinketsu",
     "meanings": [
-      "anemia, anaemia"
+      "anemia"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -14072,7 +14117,8 @@
         "context": "33. anemia hinketsu ひんけつ 貧血",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "1ae7c9aedcf8,e8ef314b5640",
-        "janki_pitch_accent_source": "jpdb:7b4dc934ffed95c278cdd27df4ae9c2efa0f2923eafa18fd4c2fa0be13c6ca67"
+        "janki_pitch_accent_source": "jpdb:7b4dc934ffed95c278cdd27df4ae9c2efa0f2923eafa18fd4c2fa0be13c6ca67",
+        "provisional_fields": "meanings:c32200515d14"
       }
     }
   },
@@ -14083,7 +14129,7 @@
     "furigana": "貴方[あなた]",
     "romaji": "anata",
     "meanings": [
-      "you"
+      "you (polite/formal)"
     ],
     "part_of_speech": "pronoun",
     "verb_group": "",
@@ -14121,7 +14167,8 @@
         "context": "その前に差し支えなければ黄金律の修復について貴方の見解を伺いたく",
         "inclusion_reason": "Kanji spelling of あなた, glossed with ruby here; worth recognizing in print.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]",
-        "janki_pitch_accent_source": "jpdb:14f37be7e2a00a852334f4b7d4db63c44a9df77c3a79614f359c1a5538606f58"
+        "janki_pitch_accent_source": "jpdb:14f37be7e2a00a852334f4b7d4db63c44a9df77c3a79614f359c1a5538606f58",
+        "provisional_fields": "meanings:477610fff948"
       }
     }
   },
@@ -14132,7 +14179,8 @@
     "furigana": "買[か]い 物[もの]",
     "romaji": "kaimono",
     "meanings": [
-      "shopping, purchased goods"
+      "shopping",
+      "purchase"
     ],
     "part_of_speech": "noun",
     "verb_group": "suru",
@@ -14177,7 +14225,8 @@
         "page": "2",
         "context": "買い物　shopping",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:3b6b3c018ca0e98fff3bb7714b99912b2e1d6912df90d9f6c7d0638ce11ae563"
+        "janki_pitch_accent_source": "jpdb:3b6b3c018ca0e98fff3bb7714b99912b2e1d6912df90d9f6c7d0638ce11ae563",
+        "provisional_fields": "meanings:176db71f1978"
       }
     }
   },
@@ -14253,9 +14302,8 @@
     "furigana": "起[お]きる",
     "romaji": "okiru",
     "meanings": [
-      "to get up, to rise, to blaze up (fire)",
-      "to wake up, to be awake, to stay awake",
-      "to occur (usu. of unfavourable incidents), to happen, to take place"
+      "to get up",
+      "to wake up"
     ],
     "part_of_speech": "verb",
     "verb_group": "ichidan",
@@ -14309,7 +14357,8 @@
         "context": "5. ... でも _______________ のがにがてです。/ 早く起きる",
         "inclusion_reason": "Appears in the kanji phrase 早く起きる; core daily-routine verb.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:1137bd77ef6907dbf72e8210b8d456621673c6e798305f31137b5747b406d397"
+        "janki_pitch_accent_source": "jpdb:1137bd77ef6907dbf72e8210b8d456621673c6e798305f31137b5747b406d397",
+        "provisional_fields": "meanings:46db77578b44"
       }
     }
   },
@@ -14320,13 +14369,8 @@
     "furigana": "足[あし]",
     "romaji": "ashi",
     "meanings": [
-      "foot, paw, arm (of an octopus, squid, etc.)",
       "leg",
-      "gait",
-      "pace",
-      "bottom structural component (i.e. radical) of a kanji",
-      "means of transportation",
-      "money, coin"
+      "foot"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -14372,7 +14416,8 @@
         "context": "20. leg・foot ashi あし 脚・足",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "8fd24600bb24,f584da535a6b",
-        "janki_pitch_accent_source": "jpdb:a8059ffa7b1708d057d834e764ab0de55a4b84695e5ddf43a583c2c78a554c53"
+        "janki_pitch_accent_source": "jpdb:a8059ffa7b1708d057d834e764ab0de55a4b84695e5ddf43a583c2c78a554c53",
+        "provisional_fields": "meanings:cf7f5c71b6e6"
       }
     }
   },
@@ -14432,14 +14477,9 @@
     "furigana": "道[みち]",
     "romaji": "michi",
     "meanings": [
-      "road, path, street, lane, passage",
-      "route, way",
-      "distance, journey",
-      "road (e.g. to victory), course",
-      "way (of living, proper conduct, etc.), moral principles",
-      "teachings (esp. Confucian or Buddhist), dogma",
-      "field (e.g. of medicine), subject, speciality",
-      "means, way, method"
+      "road",
+      "street",
+      "way"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -14484,7 +14524,8 @@
         "page": "1",
         "context": "道 (road) Radical 辶 road　くんよみ みち／おんよみ どう",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:1240021ff06dacc6ef3647d546cc27d01cb139fb8e43ba372b691a343eb34117"
+        "janki_pitch_accent_source": "jpdb:1240021ff06dacc6ef3647d546cc27d01cb139fb8e43ba372b691a343eb34117",
+        "provisional_fields": "meanings:613a7b891f5d"
       }
     }
   },
@@ -14495,7 +14536,8 @@
     "furigana": "道[みち]にまよう",
     "romaji": "michinimayou",
     "meanings": [
-      "to lose one's way, to get lost"
+      "to get lost",
+      "to lose one's way"
     ],
     "part_of_speech": "expression",
     "verb_group": "godan",
@@ -14548,7 +14590,8 @@
         "page": "1",
         "context": "道にまよう to get lost",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:dede6da684778e9ce629e3e68da2060de4ffb148af55d657d59764da35f8d3e2"
+        "janki_pitch_accent_source": "jpdb:dede6da684778e9ce629e3e68da2060de4ffb148af55d657d59764da35f8d3e2",
+        "provisional_fields": "meanings:a1df69628705"
       }
     }
   },
@@ -14559,7 +14602,8 @@
     "furigana": "道[どう] 路[ろ]",
     "romaji": "douro",
     "meanings": [
-      "road, highway"
+      "road",
+      "roadway"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -14604,7 +14648,8 @@
         "page": "1",
         "context": "道路　road",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:98bdd84d56503279d01c2e3c1ea7f5016e6497aca667cdabc5cb2ba80d184a31"
+        "janki_pitch_accent_source": "jpdb:98bdd84d56503279d01c2e3c1ea7f5016e6497aca667cdabc5cb2ba80d184a31",
+        "provisional_fields": "meanings:7da1675d4336"
       }
     }
   },
@@ -14615,7 +14660,8 @@
     "furigana": "都[と] 市[し]",
     "romaji": "toshi",
     "meanings": [
-      "town, city, municipal, urban"
+      "city",
+      "urban area"
     ],
     "part_of_speech": "no-adjective",
     "verb_group": "",
@@ -14660,7 +14706,8 @@
         "page": "3",
         "context": "都市　city",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:af207bd59c0b1cb537fa805d8b1f6df7fe3275402bce1376db993cec1d229952"
+        "janki_pitch_accent_source": "jpdb:af207bd59c0b1cb537fa805d8b1f6df7fe3275402bce1376db993cec1d229952",
+        "provisional_fields": "meanings:2521591ab199"
       }
     }
   },
@@ -14671,7 +14718,7 @@
     "furigana": "鎮[ちん] 痛[つう] 剤[ざい]",
     "romaji": "chintsuuzai",
     "meanings": [
-      "analgesic, painkiller, sedative, tranquilizer, tranquiliser"
+      "painkiller"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -14718,7 +14765,8 @@
         "context": "2. painkiller chintsu zai ちんつうざい 鎮痛剤",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "bfd168bb8a7a,531e3cf1ce01",
-        "janki_pitch_accent_source": "jpdb:ef0c565e7e57b83047561e70889de72caf308fd83623272bf851c4897591e86d"
+        "janki_pitch_accent_source": "jpdb:ef0c565e7e57b83047561e70889de72caf308fd83623272bf851c4897591e86d",
+        "provisional_fields": "meanings:a9765f76f7f6"
       }
     }
   },
@@ -14729,10 +14777,7 @@
     "furigana": "降[ふ]る",
     "romaji": "furu",
     "meanings": [
-      "to fall (of rain, snow, ash, etc.), to come down",
-      "to form (of frost)",
-      "to beam down (of sunlight or moonlight), to pour in",
-      "to visit (of luck, misfortune, etc.), to come, to arrive"
+      "to fall (rain, snow)"
     ],
     "part_of_speech": "verb",
     "verb_group": "godan",
@@ -14786,7 +14831,8 @@
         "context": "B: ひるは _____ がふります。でも _____ は _____ が _______________。",
         "inclusion_reason": "Standard weather verb paired with 雨/雪 in the exercise.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:ad49d99700b4b2776938759717a444f7f11371ca57e94bc75c0ee1c62b1a9172"
+        "janki_pitch_accent_source": "jpdb:ad49d99700b4b2776938759717a444f7f11371ca57e94bc75c0ee1c62b1a9172",
+        "provisional_fields": "meanings:660e8454485a"
       }
     }
   },
@@ -14865,9 +14911,7 @@
     "furigana": "雨[あめ]",
     "romaji": "ame",
     "meanings": [
-      "rain",
-      "rainy day, rainy weather",
-      "the November suit (in hanafuda)"
+      "rain"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -14913,7 +14957,8 @@
         "context": "B: ひるは _____ がふります。でも _____ は _____ が _______________。/ あめ",
         "inclusion_reason": "Weather kanji targeted twice in this week's practice.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:e2c2671b4a085fa4a5d4bd36c15fd933ee58805ab26ab0b8a96079528bd308c1"
+        "janki_pitch_accent_source": "jpdb:e2c2671b4a085fa4a5d4bd36c15fd933ee58805ab26ab0b8a96079528bd308c1",
+        "provisional_fields": "meanings:aa44b9c1e6ca"
       }
     }
   },
@@ -14924,7 +14969,7 @@
     "furigana": "雨[う] 天[てん] 中[ちゅう] 止[し]",
     "romaji": "utenchuushi",
     "meanings": [
-      "cancelled because of rain, wash out"
+      "cancelled in case of rain"
     ],
     "part_of_speech": "expression",
     "verb_group": "",
@@ -14970,7 +15015,8 @@
         "context": "4. このイベントは ____________________ です。/ 雨天中止",
         "inclusion_reason": "Set phrase seen on event notices; reading is not printed, so confirm at review.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:f879ee2babc266b2fd0177153802a7672ccfc378d7ff0e33cd376808d643360d"
+        "janki_pitch_accent_source": "jpdb:f879ee2babc266b2fd0177153802a7672ccfc378d7ff0e33cd376808d643360d",
+        "provisional_fields": "meanings:7afd38c4601d"
       }
     }
   },
@@ -14981,7 +15027,7 @@
     "furigana": "雪[ゆき]",
     "romaji": "yuki",
     "meanings": [
-      "snow, snowfall"
+      "snow"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -15027,7 +15073,8 @@
         "context": "2. とうきょうはあまり _____ がふりません。/ ゆき",
         "inclusion_reason": "Weather kanji targeted in the exercise.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:d9628d9a298472f7ce976d3f1c0957c0ed050da7aa1c52cf478b47c57629ef10"
+        "janki_pitch_accent_source": "jpdb:d9628d9a298472f7ce976d3f1c0957c0ed050da7aa1c52cf478b47c57629ef10",
+        "provisional_fields": "meanings:5117508a924a"
       }
     }
   },
@@ -15039,7 +15086,7 @@
     "romaji": "denki",
     "meanings": [
       "electricity",
-      "(electric) light"
+      "electric light"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -15084,7 +15131,8 @@
         "page": "1",
         "context": "電気　electricity",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:636a23f957b784a38398ffffdbf0fde67a3e1fd454653e44bdd605841fbb61e2"
+        "janki_pitch_accent_source": "jpdb:636a23f957b784a38398ffffdbf0fde67a3e1fd454653e44bdd605841fbb61e2",
+        "provisional_fields": "meanings:c522faddfa44"
       }
     }
   },
@@ -15095,8 +15143,8 @@
     "furigana": "電[でん] 話[わ]",
     "romaji": "denwa",
     "meanings": [
-      "telephone call, phone call",
-      "telephone (device), phone"
+      "telephone",
+      "phone call"
     ],
     "part_of_speech": "no-adjective",
     "verb_group": "suru",
@@ -15143,7 +15191,8 @@
         "inclusion_reason": "Underlined as お電話; card covers the base word 電話.",
         "example": "病院に来る前にお電話ください。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.settle_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]",
-        "janki_pitch_accent_source": "jpdb:15a6124c6d98d1795ec737fde5ab19d3b44eaeee8c5570606555ce67b5715103"
+        "janki_pitch_accent_source": "jpdb:15a6124c6d98d1795ec737fde5ab19d3b44eaeee8c5570606555ce67b5715103",
+        "provisional_fields": "meanings:3b92ac97167b"
       }
     }
   },
@@ -15154,7 +15203,8 @@
     "furigana": "電[でん] 車[しゃ]",
     "romaji": "densha",
     "meanings": [
-      "train, electric train"
+      "train",
+      "electric train"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -15200,7 +15250,8 @@
         "page": "1",
         "context": "電車　train",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:e8efe1b06ef14c52619f77b447c69fd932a140a28b2ae11cc051b640abc83c23"
+        "janki_pitch_accent_source": "jpdb:e8efe1b06ef14c52619f77b447c69fd932a140a28b2ae11cc051b640abc83c23",
+        "provisional_fields": "meanings:362893c31651"
       }
     }
   },
@@ -15211,16 +15262,7 @@
     "furigana": "頭[あたま]",
     "romaji": "atama",
     "meanings": [
-      "head",
-      "hair (on one's head)",
-      "mind, brains, intellect",
-      "leader, chief, boss, captain",
-      "top, tip",
-      "beginning, start",
-      "head, person",
-      "down payment, deposit",
-      "top structural component of a kanji",
-      "pair"
+      "head"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -15267,7 +15309,8 @@
         "context": "1. head atama あたま 頭",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "7f4be773d699,0300206ea52b",
-        "janki_pitch_accent_source": "jpdb:69aafb0216672c7d90bea55e9da4b8c91134659cab899a7714c299090a7dfaec"
+        "janki_pitch_accent_source": "jpdb:69aafb0216672c7d90bea55e9da4b8c91134659cab899a7714c299090a7dfaec",
+        "provisional_fields": "meanings:1f13dd6b9809"
       }
     }
   },
@@ -15333,7 +15376,7 @@
     "furigana": "風[か] 邪[ぜ]",
     "romaji": "kaze",
     "meanings": [
-      "(common) cold, influenza, flu, ague, inflammatory respiratory system illness (in general)"
+      "cold (illness)"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -15379,7 +15422,8 @@
         "context": "16. I have a cold. Kaze desu. 風邪です。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "37f7718de55c,2daf5584b0fa",
-        "janki_pitch_accent_source": "jpdb:ee7536dd8953974277744e94308864d134c15926dc796a5491e65e4af1157324"
+        "janki_pitch_accent_source": "jpdb:ee7536dd8953974277744e94308864d134c15926dc796a5491e65e4af1157324",
+        "provisional_fields": "meanings:adb47f5f0216"
       }
     }
   },
@@ -15390,7 +15434,7 @@
     "furigana": "飛[ひ] 行[こう] 機[き]",
     "romaji": "hikouki",
     "meanings": [
-      "aeroplane, airplane, aircraft"
+      "airplane"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -15436,7 +15480,8 @@
         "context": "5. __________ のひこうきは _________ です。",
         "inclusion_reason": "Travel noun written in hiragana to be converted to kanji.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
-        "janki_pitch_accent_source": "jpdb:949e6119bb2c24030273139c90826f5dadd8d674ce679e38f55b55c32cd42b4a"
+        "janki_pitch_accent_source": "jpdb:949e6119bb2c24030273139c90826f5dadd8d674ce679e38f55b55c32cd42b4a",
+        "provisional_fields": "meanings:1565adba9d64"
       }
     }
   },
@@ -15509,7 +15554,7 @@
     "furigana": "食[しょく] 欲[よく]",
     "romaji": "shokuyoku",
     "meanings": [
-      "appetite (for food)"
+      "appetite"
     ],
     "part_of_speech": "no-adjective",
     "verb_group": "",
@@ -15556,7 +15601,8 @@
         "context": "4. I don’t have an appetite. Shokuyoku ga arimasen. 食欲がありません。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "90da5709424b,951ec0233da3",
-        "janki_pitch_accent_source": "jpdb:9321735c9eb1ba8f638b01dddee76eb25e7370dea67926cc77d8587e98d33d29"
+        "janki_pitch_accent_source": "jpdb:9321735c9eb1ba8f638b01dddee76eb25e7370dea67926cc77d8587e98d33d29",
+        "provisional_fields": "meanings:d7bdabd6bf5b"
       }
     }
   },
@@ -15701,9 +15747,7 @@
     "furigana": "首[くび]",
     "romaji": "kubi",
     "meanings": [
-      "neck",
-      "head",
-      "dismissal, discharge, firing (from a job)"
+      "neck"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -15749,7 +15793,8 @@
         "context": "12. neck kubi くび 首",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "026872b2745d,b01d8cc8b926",
-        "janki_pitch_accent_source": "jpdb:463529a0af565fb55bf842c4e76f0b87629277cb1d4fd71c15daef250f82abac"
+        "janki_pitch_accent_source": "jpdb:463529a0af565fb55bf842c4e76f0b87629277cb1d4fd71c15daef250f82abac",
+        "provisional_fields": "meanings:ef227368ce60"
       }
     }
   },
@@ -15760,11 +15805,7 @@
     "furigana": "骨[ほね]",
     "romaji": "hone",
     "meanings": [
-      "bone",
-      "frame",
-      "outline, core",
-      "backbone, spirit, fortitude",
-      "laborious, troublesome, difficult"
+      "bone"
     ],
     "part_of_speech": "na-adjective",
     "verb_group": "",
@@ -15810,7 +15851,8 @@
         "context": "10. bone hone ほね 骨",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "d10512ea19c2,9dbb4f2adafe",
-        "janki_pitch_accent_source": "jpdb:bb0caefc6df99e1557d49e19aed1890a9c4c728920223487b519028e6d4c06f8"
+        "janki_pitch_accent_source": "jpdb:bb0caefc6df99e1557d49e19aed1890a9c4c728920223487b519028e6d4c06f8",
+        "provisional_fields": "meanings:817e77b1d7bd"
       }
     }
   },
@@ -15821,7 +15863,7 @@
     "furigana": "高[こう] 血[けつ] 圧[あつ]",
     "romaji": "kouketsuatsu",
     "meanings": [
-      "high blood pressure, hypertension"
+      "high blood pressure"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -15868,7 +15910,8 @@
         "context": "17. high blood pressure koketsuatsu こうけつあつ 高血圧",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "797b0114118f,b53539cb88d0",
-        "janki_pitch_accent_source": "jpdb:4dde8233b6763502e3042b3ecc4279cbf886709233a86d175b335691b44905e2"
+        "janki_pitch_accent_source": "jpdb:4dde8233b6763502e3042b3ecc4279cbf886709233a86d175b335691b44905e2",
+        "provisional_fields": "meanings:4d297e8fe206"
       }
     }
   },
@@ -16099,7 +16142,8 @@
     "furigana": "鼻[はな] 水[みず]",
     "romaji": "hanamizu",
     "meanings": [
-      "nasal mucus, dripping nose, snot"
+      "runny nose",
+      "nasal mucus"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -16147,7 +16191,8 @@
         "context": "7. I have a runny nose. Hanamizu ga demasu. 鼻水が出ます。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "example_authority": "fcf73d9a5a42,21ba179d0e66",
-        "janki_pitch_accent_source": "jpdb:04a7ccf55a558be6569750984f92f9bfeabb8db748136b383ff32ade5680cc01"
+        "janki_pitch_accent_source": "jpdb:04a7ccf55a558be6569750984f92f9bfeabb8db748136b383ff32ade5680cc01",
+        "provisional_fields": "meanings:91f83f64fd80"
       }
     }
   }
