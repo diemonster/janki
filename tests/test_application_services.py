@@ -18,10 +18,13 @@ from pathlib import Path
 
 import pytest
 import yaml
+from test_workbench_fixtures import materialize
 
-from japanese_anki.application import deck_membership
+from japanese_anki import cli, promote
+from japanese_anki.application import deck_membership, plan_promotion
 from japanese_anki.config import ProjectConfig
 from japanese_anki.exporters.anki import resolve_deck_records
+from japanese_anki.io import load_records
 from japanese_anki.models import SourceReference, VocabularyRecord
 
 CONFIG = """
@@ -340,3 +343,701 @@ def test_the_preview_answers_for_a_record_the_collection_does_not_have(
     [item] = deck_membership(config, staged)
 
     assert item.takes is True
+
+
+# --- what adding a source would do ------------------------------------------
+#
+# Driven off the W0 fixtures, materialized through the real extraction
+# pipeline, so the preview is answering about staging files `extract` actually
+# writes rather than hand-typed YAML that could drift from them.
+
+
+def _staged(tmp_path: Path, scenario: str, *, filename: str | None = None) -> Path:
+    (tmp_path / "janki.toml").write_text(CONFIG, encoding="utf-8")
+    if not (tmp_path / "vocabulary.json").exists():
+        (tmp_path / "vocabulary.json").write_text("[]", encoding="utf-8")
+    (tmp_path / "decks").mkdir(exist_ok=True)
+    (tmp_path / "inbox").mkdir(exist_ok=True)
+    return Path(materialize(tmp_path, scenario, filename=filename)["staging_path"])
+
+
+def test_a_fresh_source_is_all_new_cards(tmp_path: Path) -> None:
+    path = _staged(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    config = ProjectConfig.load(tmp_path)
+
+    plan = plan_promotion(config, path)
+
+    assert not plan.is_blocked, plan.blocked
+    assert plan.landing
+    assert plan.adding == plan.landing
+    assert plan.merging == ()
+    assert plan.reminted == {}
+
+
+def test_an_unresolved_coverage_block_stops_the_plan_and_says_which(
+    tmp_path: Path,
+) -> None:
+    """The gate `promote` applies before it reads a client or writes a byte,
+    reported in the same words. A preview that listed the cards this file would
+    add would be describing a promote that cannot happen — and `--accept-coverage`
+    is a paid model call, so it is a decision to put in front of a person rather
+    than a step to run on their behalf."""
+    path = _staged(tmp_path, "table_exhaustive", filename="table.pdf")
+    config = ProjectConfig.load(tmp_path)
+
+    plan = plan_promotion(config, path)
+
+    assert plan.is_blocked
+    assert "coverage" in plan.blocked
+    assert plan.landing == ()
+    assert plan.held == ()
+
+
+def test_a_word_the_collection_already_has_merges_and_keeps_its_meanings(
+    tmp_path: Path,
+) -> None:
+    """The existing-wins surprise, previewed. `promote` keeps the meaning
+    already on the card and files this lesson's wording as source evidence, so
+    a person who expected their new gloss to appear needs telling first."""
+    path = _staged(tmp_path, "shared_word_source_a", filename="a.pdf")
+    config = ProjectConfig.load(tmp_path)
+    from japanese_anki.staging import read_staging
+
+    staged_records, _meta = read_staging(path)
+    owned = replace(staged_records[0], meanings=["the wording already on my card"])
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps([owned.to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+
+    plan = plan_promotion(config, path)
+
+    merging = {card.staged.id: card for card in plan.merging}
+    assert owned.id in merging, [card.staged.id for card in plan.landing]
+    card = merging[owned.id]
+    assert card.landing.meanings == ["the wording already on my card"]
+    assert card.keeps_existing_meanings is True
+
+
+def test_a_card_whose_meanings_survive_untouched_is_not_reported_as_overridden(
+    tmp_path: Path,
+) -> None:
+    """The negative half. Flagging every merge as "your wording won" would make
+    the warning meaningless on the sources where nothing was lost."""
+    path = _staged(tmp_path, "shared_word_source_a", filename="a.pdf")
+    config = ProjectConfig.load(tmp_path)
+    from japanese_anki.staging import read_staging
+
+    staged_records, _meta = read_staging(path)
+    same = staged_records[0]
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps([same.to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+
+    plan = plan_promotion(config, path)
+
+    card = next(item for item in plan.merging if item.staged.id == same.id)
+    assert card.keeps_existing_meanings is False
+
+
+def test_a_held_row_is_reported_with_the_reason_it_was_held(tmp_path: Path) -> None:
+    path = _staged(tmp_path, "reading_holds", filename="holds.pdf")
+    config = ProjectConfig.load(tmp_path)
+
+    plan = plan_promotion(config, path)
+
+    assert plan.held, "the reading_holds fixture stages a row promote holds"
+    assert all(card.reason for card in plan.held)
+    landing_ids = {card.staged.id for card in plan.landing}
+    assert not landing_ids & {card.record.id for card in plan.held}
+
+
+def test_the_preview_says_the_dictionary_has_not_been_asked(tmp_path: Path) -> None:
+    """Load-bearing, not decorative. The real promote holds back a row whose
+    reading no dictionary lists, and that check costs a paid lookup per row —
+    so this plan never makes it. A row listed as landing may still be held when
+    the source is actually added, and the flag is what stops the page claiming
+    otherwise."""
+    path = _staged(tmp_path, "table_exhaustive", filename="table.pdf")
+    config = ProjectConfig.load(tmp_path)
+
+    plan = plan_promotion(config, path)
+
+    assert plan.readings_unchecked is True
+
+
+def test_the_preview_makes_no_network_call(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A page refresh must not be able to spend money. Asserted against the
+    client itself rather than by inspecting arguments, because the argument
+    that matters (`client=None`) is exactly the one a refactor drops."""
+    from japanese_anki import jpdb
+
+    def refuse(*args: object, **kwargs: object) -> None:
+        raise AssertionError("the promotion preview contacted jpdb")
+
+    monkeypatch.setattr(jpdb, "JpdbClient", refuse)
+    monkeypatch.setattr(jpdb, "api_key_from_env", refuse)
+    path = _staged(tmp_path, "reading_holds", filename="holds.pdf")
+    config = ProjectConfig.load(tmp_path)
+
+    plan_promotion(config, path)
+
+
+def test_the_preview_writes_nothing(tmp_path: Path) -> None:
+    """Including the staging file it reads: a preview that pruned or annotated
+    would turn opening a page into a half-finished promote."""
+    path = _staged(tmp_path, "reading_holds", filename="holds.pdf")
+    config = ProjectConfig.load(tmp_path)
+    before = {
+        item: item.read_bytes()
+        for item in sorted(tmp_path.rglob("*"))
+        if item.is_file()
+    }
+
+    plan_promotion(config, path)
+
+    after = {
+        item: item.read_bytes()
+        for item in sorted(tmp_path.rglob("*"))
+        if item.is_file()
+    }
+    assert after == before
+
+
+def test_an_unreadable_staging_file_is_reported_not_raised(tmp_path: Path) -> None:
+    """"You cannot add this yet, here is why" is the answer a page needs. A
+    traceback from a view that changes nothing is not."""
+    (tmp_path / "janki.toml").write_text(CONFIG, encoding="utf-8")
+    (tmp_path / "vocabulary.json").write_text("[]", encoding="utf-8")
+    (tmp_path / "decks").mkdir(exist_ok=True)
+    (tmp_path / "staging").mkdir(exist_ok=True)
+    broken = tmp_path / "staging" / "broken.yaml"
+    broken.write_text("records: [oh dear\n", encoding="utf-8")
+    config = ProjectConfig.load(tmp_path)
+
+    plan = plan_promotion(config, broken)
+
+    assert plan.is_blocked
+    assert plan.landing == ()
+
+
+def test_the_plan_names_exactly_what_promote_then_does(tmp_path: Path) -> None:
+    """The anti-drift test for the promotion preview.
+
+    Every decision in the plan comes from a function `promote` itself calls, so
+    the two should never disagree — but "should never" is what a second
+    implementation always says. This runs the plan, then runs the real
+    `janki promote` over the same file, and demands the collection contain
+    exactly the records the plan named, under exactly the ids it predicted,
+    with exactly the meanings it previewed.
+
+    `--skip-reading-check` keeps it offline, which also makes the comparison
+    fair: that is the one check the preview declines to make.
+    """
+    path = _staged(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    config = ProjectConfig.load(tmp_path)
+    from japanese_anki.staging import read_staging
+
+    staged_records, _meta = read_staging(path)
+    assert len(staged_records) > 1, (
+        "a one-row fixture makes the under-report direction vacuous: dropping "
+        "one of N rows needs N > 1 to be visible"
+    )
+    owned = replace(staged_records[0], meanings=["the wording already on my card"])
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps([owned.to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+
+    plan = plan_promotion(config, path)
+    assert not plan.is_blocked, plan.blocked
+    # The whole record, not just id and meanings: a landing card with a wrong
+    # reading or a dropped example is exactly the drift this test is named for,
+    # and comparing two fields would sail past it.
+    predicted = {card.landing.id: card.landing.to_dict() for card in plan.landing}
+    assert predicted
+
+    code = cli.main([
+        "--root", str(tmp_path), "promote", str(path), "--skip-reading-check",
+    ])
+    assert code == 0
+
+    stored = {
+        record.id: record.to_dict()
+        for record in load_records(tmp_path / "vocabulary.json")
+    }
+    for record_id, expected in predicted.items():
+        assert record_id in stored, f"{record_id} was predicted but did not land"
+        assert stored[record_id] == expected, record_id
+    # And nothing landed that the plan did not name — a preview that
+    # under-reports is as wrong as one that over-reports, and only this
+    # direction catches it.
+    assert set(stored) == set(predicted) | {owned.id}
+
+    # A row the plan held is still in the staging file, not in the collection.
+    for held in plan.held:
+        assert held.record.id not in stored
+
+
+def test_a_corrected_reading_is_reported_as_a_change_of_identity(
+    tmp_path: Path,
+) -> None:
+    """The case `promote.remint` exists for, and the one worth warning about.
+
+    A reviewer fixes a reading, but the id was minted from the wrong one and
+    ids are uncorrectable by design — so promote files the card under a
+    different id than it was staged with. That is a *different Anki note*: any
+    card already shipped under the old id keeps its review history and this one
+    starts from zero. Nobody guesses that from a card that looks the same.
+    """
+    path = _staged(tmp_path, "shared_word_source_a", filename="a.pdf")
+    config = ProjectConfig.load(tmp_path)
+    from japanese_anki.staging import read_staging, write_staging
+
+    records, meta = read_staging(path)
+    # The id keeps the reading it was minted from; the record now carries the
+    # corrected one. Only the id still remembers, which is the docstring's point.
+    corrected = replace(records[0], reading="ちがうよみ")
+    write_staging(path, [corrected, *records[1:]], meta, force=True)
+
+    plan = plan_promotion(config, path)
+
+    assert not plan.is_blocked, plan.blocked
+    assert plan.reminted, "a corrected reading should change the identity"
+    assert records[0].id in plan.reminted
+    new_id = plan.reminted[records[0].id]
+    assert new_id != records[0].id
+    assert "ちがうよみ" in new_id
+    card = next(item for item in plan.landing if item.reminted_from == records[0].id)
+    assert card.landing.id == new_id
+
+    # And promote agrees: the record lands under the predicted id, not the
+    # staged one.
+    assert cli.main([
+        "--root", str(tmp_path), "promote", str(path), "--skip-reading-check",
+    ]) == 0
+    stored = {record.id for record in load_records(tmp_path / "vocabulary.json")}
+    assert new_id in stored
+    assert records[0].id not in stored
+
+
+def test_rows_already_in_this_runs_archive_are_not_offered_again(
+    tmp_path: Path,
+) -> None:
+    """A partial promote writes what landed to `staging/done/` and prunes only
+    those rows. Re-running is meant to be safe — and this axis shipped
+    untested, so the plan could have ignored the archive entirely and no test
+    would have noticed.
+
+    The rows already there are reported as `already_archived`, not as cards to
+    add: offering them again is how a retry doubles a review.
+    """
+    path = _staged(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    config = ProjectConfig.load(tmp_path)
+    from japanese_anki.staging import read_staging, write_staging
+
+    records, meta = read_staging(path)
+    assert len(records) > 1
+    done = tmp_path / "staging" / "done"
+    done.mkdir(parents=True, exist_ok=True)
+    # The same run's archive, holding the first row exactly as it was staged.
+    write_staging(done / path.name, [records[0]], promote.archive_meta(meta, 1))
+
+    plan = plan_promotion(config, path)
+
+    assert not plan.is_blocked, plan.blocked
+    assert plan.already_archived == (records[0].id,)
+    landing_ids = {card.staged.id for card in plan.landing}
+    assert records[0].id not in landing_ids
+    assert {record.id for record in records[1:]} == landing_ids
+
+
+def test_a_file_inside_the_promoted_archive_is_refused(tmp_path: Path) -> None:
+    """Promoting the archive would duplicate a committed file that is the only
+    copy of a finished review. promote refuses it; so does the preview, rather
+    than listing every row as ready to add."""
+    path = _staged(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    config = ProjectConfig.load(tmp_path)
+    done = tmp_path / "staging" / "done"
+    done.mkdir(parents=True, exist_ok=True)
+    archived = done / path.name
+    archived.write_bytes(path.read_bytes())
+
+    plan = plan_promotion(config, archived)
+
+    assert plan.is_blocked
+    assert "already in the collection" in plan.blocked
+    assert plan.landing == ()
+
+
+def test_a_suffix_write_staging_could_not_rewrite_is_refused(tmp_path: Path) -> None:
+    """The archive is written under the same name, so a suffix `write_staging`
+    refuses is a review that can never be finished however often it is retried.
+
+    The content has to be valid JSON, not YAML renamed: `read_staging` parses
+    by suffix, so a renamed YAML file is refused by the *parser* and never
+    reaches the gate this test is named for.
+    """
+    path = _staged(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    config = ProjectConfig.load(tmp_path)
+    renamed = path.with_suffix(".json")
+    renamed.write_text(
+        json.dumps(yaml.safe_load(path.read_text(encoding="utf-8")),
+                   ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    plan = plan_promotion(config, renamed)
+
+    assert plan.is_blocked
+    assert "rename it" in plan.blocked.lower()
+
+
+def test_a_staging_file_ruamel_could_not_rewrite_is_refused(tmp_path: Path) -> None:
+    """`check_rewritable`, which the suffix gate above does not reach.
+
+    `read_staging` goes through PyYAML, which accepts a duplicate key silently;
+    the rewrite goes through ruamel, which does not. Finding that out *after*
+    the records and the archive were written leaves the promoted rows still in
+    the staging file, and the re-run appends them to the archive a second time
+    — so promote checks it up front, and so does the plan.
+    """
+    path = _staged(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    config = ProjectConfig.load(tmp_path)
+    path.write_text(
+        path.read_text(encoding="utf-8") + "\nsource_file: duplicated\n",
+        encoding="utf-8",
+    )
+
+    plan = plan_promotion(config, path)
+
+    assert plan.is_blocked
+    assert plan.landing == ()
+
+
+def test_a_collection_that_will_not_load_is_reported_not_raised(
+    tmp_path: Path,
+) -> None:
+    """`vocabulary.json` is a file people hand-edit. A preview that raised on a
+    broken one would put a traceback on a page whose whole job is to say what
+    is wrong."""
+    path = _staged(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    (tmp_path / "vocabulary.json").write_text("{not json", encoding="utf-8")
+    config = ProjectConfig.load(tmp_path)
+
+    plan = plan_promotion(config, path)
+
+    assert plan.is_blocked
+    assert plan.landing == ()
+
+
+def test_a_deck_that_will_not_parse_holds_a_re_mint_and_says_why(
+    tmp_path: Path,
+) -> None:
+    """`remint_blocked`: with a deck unreadable, the ids the collection holds
+    cannot be completed, so a row whose id would change is held rather than
+    promoted under an id that would then be permanent. The plan carries the
+    same sentence the command prints."""
+    path = _staged(tmp_path, "shared_word_source_a", filename="a.pdf")
+    config = ProjectConfig.load(tmp_path)
+    from japanese_anki.staging import read_staging, write_staging
+
+    records, meta = read_staging(path)
+    write_staging(
+        path, [replace(records[0], reading="ちがうよみ"), *records[1:]], meta,
+        force=True,
+    )
+    # A deck whose `deck:` section is not a mapping: `deck_declared_ids`
+    # refuses it, so the ids it holds are unknown.
+    (tmp_path / "decks" / "broken.yaml").write_text(
+        "deck: [1, 2, 3]\n", encoding="utf-8"
+    )
+
+    plan = plan_promotion(config, path)
+
+    assert not plan.is_blocked, plan.blocked
+    assert any("cannot be checked" in warning for warning in plan.warnings)
+    # Held, not re-minted: the id it arrived with must not become permanent.
+    assert plan.reminted == {}
+    assert records[0].id in {card.record.id for card in plan.held}
+
+
+def test_two_rows_that_would_mint_one_id_block_the_plan(tmp_path: Path) -> None:
+    """The collision only exists after the re-mint, which is why the plan has
+    to run the accounting check a second time.
+
+    A reviewer corrects two rows to the same expression and reading. Their
+    staged ids still differ — they were minted from the wrong readings — so the
+    first check passes. Both then mint the same id, and `promote` refuses the
+    whole file. Checking once left the plan cheerfully listing two cards that
+    could never be added.
+    """
+    path = _staged(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    config = ProjectConfig.load(tmp_path)
+    from japanese_anki.staging import read_staging, write_staging
+
+    records, meta = read_staging(path)
+    assert len(records) > 1
+    assert records[0].id != records[1].id
+    collide = [
+        replace(records[0], expression="話す", reading="はなす"),
+        replace(records[1], expression="話す", reading="はなす"),
+        *records[2:],
+    ]
+    write_staging(path, collide, meta, force=True)
+
+    plan = plan_promotion(config, path)
+
+    assert plan.is_blocked, [card.landing.id for card in plan.landing]
+    assert "collision" in plan.blocked
+    assert plan.landing == ()
+
+    # And promote agrees: it refuses the file rather than adding either row.
+    assert cli.main([
+        "--root", str(tmp_path), "promote", str(path), "--skip-reading-check",
+    ]) != 0
+
+
+def test_a_stale_binding_on_a_held_row_blocks_the_whole_plan(tmp_path: Path) -> None:
+    """A reading hold narrows what may *land*, not what review the old-value
+    binding covers.
+
+    `merge_staged_records` refuses the entire merge when any replacement target
+    was edited since the review — that atomicity is the point, so a stale
+    review cannot land half its rows. The command therefore validates every
+    live row, held ones included. Validating only the promotable subset hid the
+    held row's stale binding, and the plan previewed a card from a promote that
+    refuses outright.
+
+    Both rows carry a binding, because the provenance maps must name identical
+    ids. The landing row's still matches the collection; the held row's does
+    not. So the *only* thing that can notice is validating the held row.
+    """
+    (tmp_path / "janki.toml").write_text(CONFIG, encoding="utf-8")
+    (tmp_path / "decks").mkdir(exist_ok=True)
+    (tmp_path / "staging").mkdir(exist_ok=True)
+    from japanese_anki.staging import write_staging
+
+    lands = _record(id="word:話す:はなす")
+    held = _record(
+        id="word:食べる:たべる", expression="食べる", reading="たべる",
+        meanings=["to eat"], verb_group="ichidan",
+    )
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps(
+            [
+                lands.to_dict(),
+                # Edited since the review, so the binding recorded below no
+                # longer matches what the collection holds.
+                replace(held, meanings=["to eat (hand-checked)"]).to_dict(),
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    ids = [lands.id, held.id]
+    changes = {
+        lands.id: {"meanings": (["to speak"], ["to speak, to talk"])},
+        held.id: {"meanings": (["to eat"], ["to consume"])},
+    }
+    meta = {
+        "source_file": "vocabulary.json",
+        "model": "claude-opus-5",
+        "provider": "anthropic",
+        "ai_enrichment": {
+            "version": 1,
+            "model": "claude-opus-5",
+            "provider": "anthropic",
+            "request_fingerprints": {record_id: "a" * 64 for record_id in ids},
+            "input_fingerprints": {record_id: "b" * 64 for record_id in ids},
+            "fields": {record_id: ["meanings"] for record_id in ids},
+        },
+        "field_replacements": promote.field_replacement_block(
+            [lands, held], changes
+        ),
+    }
+    path = tmp_path / "staging" / "ai.yaml"
+    write_staging(
+        path,
+        [
+            replace(lands, meanings=["to speak, to talk"]),
+            # Held: a blank reading cannot mint an id, whatever a dictionary says.
+            replace(held, reading="", meanings=["to consume"]),
+        ],
+        meta,
+    )
+    config = ProjectConfig.load(tmp_path)
+
+    plan = plan_promotion(config, path)
+
+    assert plan.is_blocked, [card.landing.id for card in plan.landing]
+    assert "field-replacements-stale" in plan.blocked
+    assert held.id in plan.blocked
+    assert plan.landing == ()
+
+    # And promote agrees: it refuses rather than landing the other row.
+    assert cli.main([
+        "--root", str(tmp_path), "promote", str(path), "--skip-reading-check",
+    ]) != 0
+    stored = {
+        record.id: tuple(record.meanings)
+        for record in load_records(tmp_path / "vocabulary.json")
+    }
+    assert stored[lands.id] == ("to speak",), "nothing landed"
+
+
+def test_a_divergent_same_run_archive_is_refused(tmp_path: Path) -> None:
+    """`validate_record_archive`. A same-run archive whose own record of what
+    it archived does not match what it holds is not a partial promotion this
+    run can complete — promote refuses rather than guessing, and a plan that
+    previewed cards from it would be describing a promote that never happens."""
+    path = _staged(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    config = ProjectConfig.load(tmp_path)
+    from japanese_anki.staging import read_staging, write_staging
+
+    records, meta = read_staging(path)
+    done = tmp_path / "staging" / "done"
+    done.mkdir(parents=True, exist_ok=True)
+    archived_meta = promote.archive_meta(meta, 1)
+    # Says it archived one row; the archive's own note no longer records it.
+    archived_meta["review_notes"] = "no count here"
+    write_staging(done / path.name, [records[0]], archived_meta)
+
+    plan = plan_promotion(config, path)
+
+    assert plan.is_blocked
+    assert plan.landing == ()
+
+
+def test_a_ledger_that_will_not_load_blocks_a_promote_that_would_write(
+    tmp_path: Path,
+) -> None:
+    """promote reads the ledger before the records land, so a corrupt one stops
+    the whole thing — and the preview has to say so rather than listing cards
+    that cannot be added."""
+    path = _staged(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    (tmp_path / "ledger.json").write_text("{not json", encoding="utf-8")
+    config = ProjectConfig.load(tmp_path)
+
+    plan = plan_promotion(config, path)
+
+    assert plan.is_blocked
+    assert plan.landing == ()
+
+
+def test_a_ledger_that_will_not_load_does_not_block_a_promote_that_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    """The other half, and the one that makes the gate honest.
+
+    promote reads the ledger only once it knows rows will land. When every row
+    is held it returns having written hold reasons and never opens the ledger —
+    so a plan that read it up front reported *every* zero-landing source as
+    blocked on one corrupt file, which is telling somebody their work is
+    unusable when it is not.
+    """
+    path = _staged(tmp_path, "reading_holds", filename="holds.pdf")
+    config = ProjectConfig.load(tmp_path)
+    from japanese_anki.staging import read_staging, write_staging
+
+    records, meta = read_staging(path)
+    # Every row held: a blank reading cannot mint an id.
+    write_staging(
+        path, [replace(record, reading="") for record in records], meta, force=True
+    )
+    (tmp_path / "ledger.json").write_text("{not json", encoding="utf-8")
+
+    plan = plan_promotion(config, path)
+
+    assert not plan.is_blocked, plan.blocked
+    assert plan.landing == ()
+    assert len(plan.held) == len(records)
+
+    # And promote agrees: it succeeds, because it never opens the ledger.
+    assert cli.main([
+        "--root", str(tmp_path), "promote", str(path), "--skip-reading-check",
+    ]) == 0
+
+
+def test_an_enrichment_block_naming_rows_this_file_lacks_is_refused(
+    tmp_path: Path,
+) -> None:
+    """`staged_ai_enrichment`. Nothing downstream catches this: the merge's own
+    binding check never reads `ai_enrichment`, so without this gate the plan
+    previewed cards from a file promote refuses on provenance."""
+    path = _staged(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    config = ProjectConfig.load(tmp_path)
+    from japanese_anki.staging import read_staging, write_staging
+
+    records, meta = read_staging(path)
+    ghost = "word:存在しない:そんざいしない"
+    meta = dict(meta)
+    meta["ai_enrichment"] = {
+        "version": 1,
+        "model": "claude-opus-5",
+        "provider": "anthropic",
+        "request_fingerprints": {ghost: "a" * 64},
+        "input_fingerprints": {ghost: "b" * 64},
+        "fields": {ghost: ["meanings"]},
+    }
+    ghost_record = replace(records[0], id=ghost)
+    meta["field_replacements"] = promote.field_replacement_block(
+        [ghost_record],
+        {ghost: {"meanings": (list(ghost_record.meanings), ["new"])}},
+    )
+    write_staging(path, records, meta, force=True)
+
+    plan = plan_promotion(config, path)
+
+    assert plan.is_blocked
+    assert plan.landing == ()
+
+
+def test_a_grammar_only_source_nobody_reviewed_cannot_be_added(
+    tmp_path: Path,
+) -> None:
+    """A zero-record rich extraction has its own completion contract, and it
+    refuses a source whose grammar has not been reviewed.
+
+    Without this the plan called such a file clean — no cards, nothing blocked
+    — and an Add button keyed on that invoked a promote that refuses.
+    """
+    path = _staged(tmp_path, "pattern_only_chart", filename="chart.pdf")
+    config = ProjectConfig.load(tmp_path)
+
+    plan = plan_promotion(config, path)
+
+    assert plan.is_blocked
+    assert "patterns-unreviewed" in plan.blocked
+
+    # And promote agrees.
+    assert cli.main([
+        "--root", str(tmp_path), "promote", str(path), "--skip-reading-check",
+    ]) != 0
+
+
+def test_an_empty_file_beside_its_own_archive_says_the_rows_already_landed(
+    tmp_path: Path,
+) -> None:
+    """The shape a crash between the prune and the unlink leaves behind.
+
+    Every row is in this run's archive and the live file is empty. promote
+    completes the retry and removes the empty review. The plan has to say the
+    rows already landed — reporting an empty file with nothing archived reads
+    as "nothing to do here", which is true of the file and false of the source.
+    """
+    path = _staged(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    config = ProjectConfig.load(tmp_path)
+    from japanese_anki.staging import read_staging, write_staging
+
+    records, meta = read_staging(path)
+    done = tmp_path / "staging" / "done"
+    done.mkdir(parents=True, exist_ok=True)
+    write_staging(done / path.name, records, promote.archive_meta(meta, len(records)))
+    write_staging(path, [], meta, force=True)
+
+    plan = plan_promotion(config, path)
+
+    assert not plan.is_blocked, plan.blocked
+    assert plan.landing == ()
+    assert plan.already_archived == tuple(record.id for record in records)

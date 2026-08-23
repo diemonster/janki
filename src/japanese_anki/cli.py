@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
-import hashlib
 import json
 import sys
 import uuid
@@ -31,6 +30,14 @@ from japanese_anki import (
     repairs,
     status,
     workbench,
+)
+from japanese_anki.application.promotion import (
+    AiLedgerHandoffIncomplete,
+    archive_for_run,
+    inside_archive,
+    staged_ai_enrichment,
+    unreadable_deck_warning,
+    validate_record_archive,
 )
 from japanese_anki.audio_cmd import AudioError
 from japanese_anki.collection import read_deck_notes
@@ -79,7 +86,6 @@ from japanese_anki.staging import (
     prune_staging_under_lock,
     read_staging,
     record_coverage_approval,
-    review_run_id,
     rewrite_staging,
     rewrite_staging_under_lock,
     rich_extraction_review_run_id,
@@ -2128,95 +2134,6 @@ def command_extract(args: argparse.Namespace) -> int:
     return 0
 
 
-def _inside_archive(path: Path, archive_dir: Path) -> bool:
-    """Is ``path`` the promoted archive, or inside it?
-
-    Identity where the filesystem can answer it, because a lexical comparison
-    is wrong on a case-insensitive filesystem: ``staging/Done/lesson.yaml``
-    opens the real archive while comparing unequal to ``staging/done/...``, and
-    promoting it doubles a committed file that is the only copy of a finished
-    review. The lexical test stays as the fallback for a path that does not
-    exist yet.
-    """
-    try:
-        if archive_dir.exists() and path.parent.samefile(archive_dir):
-            return True
-    except OSError:
-        pass
-    return path.is_relative_to(archive_dir)
-
-
-def _archive_run_provenance(meta: Mapping[str, Any]) -> dict[str, Any]:
-    """The model-run identity that decides whether an archive may be appended.
-
-    New model-review files carry a persisted ``review_run_id`` as well as their
-    request provenance. Partial promotion retries carry both byte-for-byte
-    through the live staging file. A later invocation may reuse the staging
-    basename and even the exact request, but its run id is different and its
-    rows must not be folded into the earlier archive. Schema-v2 extraction
-    staging is intentionally included: without a run id, its smaller
-    ``prompt_provenance`` block remains the identity that version knew to record.
-
-    Files older than model provenance retain their historical basename-based
-    retry behavior through the explicit ``legacy`` identity.
-    """
-    run_id = review_run_id(meta)
-    if "ai_enrichment" in meta:
-        identity = {
-            "kind": "ai",
-            "ai_enrichment": meta.get("ai_enrichment"),
-            "field_replacements": meta.get("field_replacements"),
-        }
-    elif "prompt_provenance" in meta:
-        identity = {
-            "kind": "extract",
-            "prompt_provenance": meta.get("prompt_provenance"),
-        }
-    else:
-        identity = {"kind": "legacy"}
-    if run_id is not None:
-        identity["review_run_id"] = run_id
-    return identity
-
-
-def _archive_for_run(
-    base: Path, meta: Mapping[str, Any]
-) -> tuple[Path, list[VocabularyRecord], dict[str, Any] | None]:
-    """Choose this run's deterministic archive and any partial rows already there."""
-    identity = _archive_run_provenance(meta)
-    if not base.exists():
-        return base, [], None
-
-    previous, previous_meta = read_staging(base)
-    if _archive_run_provenance(previous_meta) == identity:
-        return base, list(previous), previous_meta
-
-    try:
-        encoded = json.dumps(
-            identity,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-            allow_nan=False,
-        ).encode("utf-8")
-    except (TypeError, ValueError) as exc:
-        raise PromoteError(
-            "This staging file has model-run provenance that cannot name a "
-            f"durable archive: {exc}. Nothing was promoted."
-        ) from exc
-    digest = hashlib.sha256(encoded).hexdigest()
-    candidate = base.with_name(f"{base.stem}.{digest}{base.suffix}")
-    if not candidate.exists():
-        return candidate, [], None
-
-    previous, previous_meta = read_staging(candidate)
-    if _archive_run_provenance(previous_meta) != identity:
-        raise PromoteError(
-            f"Archive provenance collision at {candidate}; nothing was promoted."
-        )
-    return candidate, list(previous), previous_meta
-
-
 def _provider_name(config: ProjectConfig, chosen: str | None) -> str:
     """The engine this run speaks words through, normalised once.
 
@@ -2918,128 +2835,6 @@ def _model_accepts_coverage(
     return True
 
 
-def _staged_ai_enrichment(
-    meta: Mapping[str, Any],
-    record_ids: Sequence[str],
-    *,
-    archived_ids: Sequence[str] = (),
-) -> tuple[str, str, dict[str, tuple[str, tuple[str, ...]]]] | None:
-    """Validate AI provenance before a staged review can write anything.
-
-    A partial promote keeps the original top-level metadata while moving some
-    rows to the corresponding ``done`` archive.  Provenance may therefore name
-    a row absent from the current staging file only when that exact id is
-    already in the archive.  An older, completed run under the same basename is
-    the opposite shape: archive-only ids need not appear in this run's maps.
-    """
-    raw = meta.get("ai_enrichment")
-    if raw is None:
-        if "field_replacements" in meta:
-            raise PromoteError(
-                "This staging file authorizes field replacements but has no "
-                "ai_enrichment provenance. Nothing was promoted."
-            )
-        return None
-    version = raw.get("version") if isinstance(raw, Mapping) else None
-    if (
-        not isinstance(raw, Mapping)
-        or isinstance(version, bool)
-        or not isinstance(version, int)
-        or version != 1
-    ):
-        raise PromoteError("ai_enrichment must be a version 1 metadata block")
-    raw_model = raw.get("model")
-    model = raw_model.strip() if isinstance(raw_model, str) else ""
-    raw_provider = raw.get("provider")
-    provider = raw_provider.strip() if isinstance(raw_provider, str) else ""
-    requests = raw.get("request_fingerprints")
-    inputs = raw.get("input_fingerprints")
-    fields = raw.get("fields")
-    if (
-        not model
-        or provider not in ledger.AI_PROVIDERS
-        or not all(isinstance(value, Mapping) for value in (requests, inputs, fields))
-    ):
-        raise PromoteError(
-            "ai_enrichment needs a provider, model, plus request, input, and field maps"
-        )
-    replacement_block = meta.get("field_replacements")
-    replacement_records = (
-        replacement_block.get("records")
-        if isinstance(replacement_block, Mapping)
-        else None
-    )
-    if not isinstance(replacement_records, Mapping):
-        raise PromoteError(
-            "ai_enrichment needs its field_replacements record map. Nothing "
-            "was promoted."
-        )
-
-    maps = {
-        "request_fingerprints": requests,
-        "input_fingerprints": inputs,
-        "fields": fields,
-        "field_replacements": replacement_records,
-    }
-    id_sets: dict[str, set[str]] = {}
-    for label, values in maps.items():
-        if any(not isinstance(record_id, str) or not record_id for record_id in values):
-            raise PromoteError(f"{label} record ids must be non-empty text")
-        id_sets[label] = set(values)
-    provenance_ids = id_sets["request_fingerprints"]
-    if any(ids != provenance_ids for ids in id_sets.values()):
-        raise PromoteError(
-            "ai_enrichment request, input, field, and replacement maps must "
-            "name identical record ids. Nothing was promoted."
-        )
-
-    current_ids = {str(record_id) for record_id in record_ids}
-    known_ids = current_ids | {str(record_id) for record_id in archived_ids}
-    missing = sorted(current_ids - provenance_ids)
-    unknown = sorted(provenance_ids - known_ids)
-    if missing or unknown:
-        details = []
-        if missing:
-            details.append("missing current " + ", ".join(missing))
-        if unknown:
-            details.append("unknown " + ", ".join(unknown))
-        raise PromoteError(
-            "ai_enrichment provenance does not match this staging file or its "
-            "done archive: " + "; ".join(details) + ". Nothing was promoted."
-        )
-
-    proven: dict[str, tuple[str, tuple[str, ...]]] = {}
-    for record_id in sorted(provenance_ids):
-        request_fp = requests.get(record_id)
-        input_fp = inputs.get(record_id)
-        raw_fields = fields.get(record_id)
-        replacement_fields = replacement_records.get(record_id)
-        if (
-            not isinstance(request_fp, str)
-            or len(request_fp) != 64
-            or any(character not in "0123456789abcdef" for character in request_fp)
-            or not isinstance(input_fp, str)
-            or len(input_fp) != 64
-            or any(character not in "0123456789abcdef" for character in input_fp)
-            or not isinstance(raw_fields, list)
-            or not raw_fields
-            or any(not isinstance(name, str) for name in raw_fields)
-            or any(name not in enrich.AI_FIELDS for name in raw_fields)
-            or len(set(raw_fields)) != len(raw_fields)
-            or not isinstance(replacement_fields, Mapping)
-            or any(not isinstance(name, str) for name in replacement_fields)
-            or set(raw_fields) != set(replacement_fields)
-        ):
-            raise PromoteError(
-                f"ai_enrichment has incomplete provenance for {record_id}"
-            )
-        proven[record_id] = (
-            request_fp,
-            tuple(dict.fromkeys(str(name) for name in raw_fields)),
-        )
-    return provider, model, proven
-
-
 def _staging_wire(path: Path) -> bytes:
     """Read the exact live-review bytes used by pattern-only promotion's CAS."""
     try:
@@ -3131,14 +2926,14 @@ def _complete_pattern_only_review(
         archived_meta = _pattern_only_archive_meta(meta, stored_patterns)
         archive_base = done
         while True:
-            selected, _archived, _archived_meta = _archive_for_run(
+            selected, _archived, _archived_meta = archive_for_run(
                 archive_base, meta
             )
             with exclusive_path_lock(selected):
                 # Selection itself reads existing archives. Confirm after the
                 # selected path is locked: another completion may have created
                 # the base or candidate between those two operations.
-                confirmed, _archived, _archived_meta = _archive_for_run(
+                confirmed, _archived, _archived_meta = archive_for_run(
                     archive_base, meta
                 )
                 if confirmed != selected:
@@ -3189,66 +2984,6 @@ def _record_review_snapshot(
     return wire, records, meta
 
 
-def _validate_record_archive(
-    live_meta: Mapping[str, Any],
-    archived: Sequence[VocabularyRecord],
-    archived_meta: Mapping[str, Any] | None,
-) -> None:
-    """Prove a same-run record archive is intact before relying on it."""
-    if archived_meta is None:
-        if archived:
-            raise PromoteError(
-                "[record-archive-divergent] archive rows have no metadata"
-            )
-        return
-    if not archived:
-        # A zero-row same-run archive is still a completed review. In normal
-        # operation it is the pattern-only archive, whose reviewed_pattern_set
-        # exists only in the done copy. A later record-bearing live file must
-        # not turn absence of rows into absence of an archive and overwrite it.
-        # Exact pattern-only retries are routed to their stricter validator by
-        # command_promote before the record-archive validator is called.
-        raise PromoteError(
-            "[record-archive-divergent] the same review run already has a "
-            "completed zero-record archive; later record rows cannot be appended "
-            "to it. Both the live review and done archive were kept."
-        )
-
-    # The done copy is durable paid evidence too. A retry may delete the only
-    # live copy, so validate it independently rather than trusting the live
-    # block or merely comparing the run-id subset used for archive selection.
-    validate_coverage_facts(archived_meta)
-    promote.check_coverage(dict(archived_meta))
-    promote.check_candidate_accounting(
-        live_meta, (), archived, archived_meta=archived_meta
-    )
-
-    live_core = {
-        key: value for key, value in live_meta.items() if key != "review_notes"
-    }
-    archive_core = {
-        key: value for key, value in archived_meta.items() if key != "review_notes"
-    }
-    if archive_core != live_core:
-        raise PromoteError(
-            "[record-archive-divergent] the same-run archive metadata differs "
-            "from the live review"
-        )
-    note = archived_meta.get("review_notes")
-    suffix = f"Promoted {len(archived)} record(s) from this file."
-    if not isinstance(note, str) or not (
-        note.strip() == suffix or note.strip().endswith(f"\n\n{suffix}")
-    ):
-        raise PromoteError(
-            "[record-archive-divergent] the same-run archive does not record "
-            "its exact archived row count"
-        )
-
-
-class _AiLedgerHandoffIncomplete(Exception):
-    """Keep the live review after records landed but AI attribution did not."""
-
-
 def _finish_record_review(
     path: Path,
     archive_base: Path,
@@ -3292,9 +3027,9 @@ def _finish_record_review(
         validate_coverage_facts(current_meta)
         promote.check_coverage(current_meta)
         while True:
-            selected, _rows, _meta = _archive_for_run(archive_base, current_meta)
+            selected, _rows, _meta = archive_for_run(archive_base, current_meta)
             with exclusive_path_lock(selected):
-                confirmed, archived, archived_meta = _archive_for_run(
+                confirmed, archived, archived_meta = archive_for_run(
                     archive_base, current_meta
                 )
                 if confirmed != selected:
@@ -3310,7 +3045,7 @@ def _finish_record_review(
                         "[record-archive-stale] the done archive changed while "
                         "promotion was completing. The live review was kept."
                     )
-                _validate_record_archive(current_meta, archived, archived_meta)
+                validate_record_archive(current_meta, archived, archived_meta)
                 retry_flags = promote.check_candidate_accounting(
                     current_meta,
                     retry_records,
@@ -3380,7 +3115,7 @@ def command_promote(args: argparse.Namespace) -> int:
     config = _load_config(args)
     path = args.file.resolve()
     archive_base = (config.staging_dir / "done" / path.name).resolve()
-    if _inside_archive(path, archive_base.parent):
+    if inside_archive(path, archive_base.parent):
         raise PromoteError(
             f"{path} is inside the promoted archive. Those records are already in "
             "the collection; promoting the archive would only duplicate it."
@@ -3392,13 +3127,13 @@ def command_promote(args: argparse.Namespace) -> int:
     # candidate account; the matching done archive completes its row count on
     # a partial promotion or an exact retry.
     validate_coverage_facts(meta)
-    done, archived, archived_meta = _archive_for_run(archive_base, meta)
+    done, archived, archived_meta = archive_for_run(archive_base, meta)
     # A zero-record extraction has a separate completion contract that checks
     # its reviewed pattern snapshot byte for byte. Every record-bearing path,
     # including one paired with an empty same-run archive, comes through the
     # record validator.
     if records or archived:
-        _validate_record_archive(meta, archived, archived_meta)
+        validate_record_archive(meta, archived, archived_meta)
     promote.check_candidate_accounting(
         meta, records, archived, archived_meta=archived_meta
     )
@@ -3411,9 +3146,9 @@ def command_promote(args: argparse.Namespace) -> int:
             return 1
         expected_wire, records, meta = _record_review_snapshot(path)
         validate_coverage_facts(meta)
-        done, archived, archived_meta = _archive_for_run(archive_base, meta)
+        done, archived, archived_meta = archive_for_run(archive_base, meta)
         if records or archived:
-            _validate_record_archive(meta, archived, archived_meta)
+            validate_record_archive(meta, archived, archived_meta)
         promote.check_candidate_accounting(
             meta, records, archived, archived_meta=archived_meta
         )
@@ -3503,10 +3238,10 @@ def command_promote(args: argparse.Namespace) -> int:
         print(f"  Archived to {done} (unchanged).")
         return 0
 
-    ai_provenance = _staged_ai_enrichment(
+    ai_provenance = staged_ai_enrichment(
         meta,
         [record.id for record in work_records],
-        # `_archive_for_run` returns rows only from an exact provenance match,
+        # `archive_for_run` returns rows only from an exact provenance match,
         # never from a completed older run that happened to share the basename.
         archived_ids=[record.id for record in archived],
     )
@@ -3532,11 +3267,7 @@ def command_promote(args: argparse.Namespace) -> int:
     existing = load_records(output_path) if output_path.exists() else []
     stored_ids, unreadable = status.surviving_ids(config, existing)
     for problem in unreadable:
-        print(
-            f"warning: {problem}; ids in that deck cannot be checked, so any "
-            "row needing a new id stays in the staging file until it parses.",
-            file=sys.stderr,
-        )
+        print(f"warning: {unreadable_deck_warning(problem)}", file=sys.stderr)
     result = promote.check_readings(
         work_records,
         client=client,
@@ -3682,7 +3413,7 @@ def command_promote(args: argparse.Namespace) -> int:
             # The reviewed proposal remains the only recoverable attribution.
             # Raising before archive/prune keeps it live while the outer locks
             # still guarantee no competing completion changed either copy.
-            raise _AiLedgerHandoffIncomplete
+            raise AiLedgerHandoffIncomplete
 
     # Canonical writes, archive append, and live pruning/deletion share the
     # same live/done transaction. A same-run zero-row completion that wins the
@@ -3702,7 +3433,7 @@ def command_promote(args: argparse.Namespace) -> int:
             held=result.held,
             canonical_commit=commit_canonical_state,
         )
-    except _AiLedgerHandoffIncomplete:
+    except AiLedgerHandoffIncomplete:
         assert ledger_error is not None
         print(
             f"Promoted {len(pending_promoted)} record(s) from {path} into "

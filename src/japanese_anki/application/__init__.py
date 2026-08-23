@@ -42,6 +42,14 @@ from japanese_anki.application.journey import (
     SourceJourney,
     source_journeys,
 )
+from japanese_anki.application.promotion import (
+    HeldCard,
+    LandingCard,
+    PromotionPlan,
+    archive_for_run,
+    archive_run_provenance,
+    plan_promotion,
+)
 
 __all__ = [
     "ADDED",
@@ -56,6 +64,9 @@ __all__ = [
     "GRAMMAR_ONLY",
     "GRAMMAR_REVIEWED",
     "GRAMMAR_UNKNOWN",
+    "HeldCard",
+    "LandingCard",
+    "PromotionPlan",
     "JOURNEY_STATES",
     "NOT_EXTRACTED",
     "READING_HOLD",
@@ -63,8 +74,11 @@ __all__ = [
     "STAGING_UNREADABLE",
     "SourceDetail",
     "SourceJourney",
+    "archive_for_run",
+    "archive_run_provenance",
     "deck_membership",
     "example_authority_state",
+    "plan_promotion",
     "needs_example_review",
     "source_detail",
     "source_journeys",
