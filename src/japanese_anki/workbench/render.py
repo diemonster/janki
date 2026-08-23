@@ -62,6 +62,10 @@ pre {
 .done { color: GrayText; }
 .warnings { border: 1px solid red; border-radius: .5rem; padding: 1rem; }
 .empty { color: GrayText; }
+.add-source { border: 1px solid GrayText; border-radius: .5rem; padding: 1rem;
+  margin-block-end: 2rem; display: grid; gap: .5rem; }
+.add-source h2 { font-size: 1.1rem; margin: 0; }
+input[type=file] { font: inherit; padding: .4rem; }
 .remove { margin-top: .75rem; display: grid; gap: .35rem; }
 .remove button { border: 1px solid GrayText; background: Canvas; color: CanvasText; }
 .edit { display: grid; gap: .25rem; margin: .5rem 0; }
@@ -163,6 +167,8 @@ def render_dashboard(
     warnings: Sequence[str] = (),
     root: Path | None = None,
     token: str = "",
+    csrf: str = "",
+    added: tuple[str, bool] | None = None,
 ) -> str:
     """The whole page. `token` prefixes every same-session link."""
     prefix = f"/{html.escape(token, quote=True)}" if token else ""
@@ -188,6 +194,21 @@ def render_dashboard(
         f"<p class=saved>Saved on this computer{_saved_where(root)}. "
         f"{_escaped(heading)}.</p>",
     ]
+    if added is not None:
+        name, stored = added
+        body.append(
+            '<p class="status reviewed">'
+            + (
+                f"Added {_escaped(name)} to your corpus. Nothing has been "
+                "sent to a model."
+                if stored
+                else f"{_escaped(name)} was already in your corpus, so "
+                "nothing changed."
+            )
+            + "</p>"
+        )
+    if csrf:
+        body.append(_add_source_form(prefix, csrf))
     if warnings:
         body.append('<section class="warnings"><h2>Could not be read</h2><ul>')
         body.extend(f"<li>{_escaped(warning)}</li>" for warning in warnings)
@@ -200,6 +221,32 @@ def render_dashboard(
     body.extend(_source_html(journey, prefix) for journey in journeys)
     body.append("</main></body></html>")
     return "".join(body)
+
+
+def _add_source_form(prefix: str, csrf: str) -> str:
+    """Put a source in the corpus. This form sends nothing to any provider.
+
+    Saying so on the control matters more than it looks: the whole intake
+    design rests on adding and sending being two separate acts, and a person
+    who believes an upload already cost money will hesitate over the wrong
+    button for the rest of the workflow.
+    """
+    action = html.escape(f"{prefix}/add-source", quote=True)
+    return (
+        f'<form method=post action="{action}" enctype="multipart/form-data" '
+        'class="add-source">'
+        "<h2>Add source material</h2>"
+        f'<input type=hidden name=csrf value="{html.escape(csrf, quote=True)}">'
+        '<p class=edit><label for="source-file">A PDF or photo of your study '
+        "material</label>"
+        '<input id="source-file" name="file" type=file '
+        'accept=".pdf,.jpg,.jpeg,.png,.heic,.heif" required></p>'
+        "<button type=submit>Add this to my corpus</button>"
+        "<span class=counts>This copies the file into your corpus and sends it "
+        "nowhere. Reading it with a model is a separate, paid step you choose "
+        "afterwards.</span>"
+        "</form>"
+    )
 
 
 def _saved_where(root: Path | None) -> str:

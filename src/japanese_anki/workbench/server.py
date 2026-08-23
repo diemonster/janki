@@ -33,9 +33,11 @@ import sys
 import webbrowser
 from collections.abc import Sequence
 from dataclasses import dataclass
+from email import policy as email_policy
+from email.parser import BytesParser
 from urllib.parse import parse_qsl, quote, unquote
 
-from japanese_anki import ledger, staging
+from japanese_anki import inputs, ledger, staging
 from japanese_anki.application import SourceJourney, source_detail, source_journeys
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
@@ -58,6 +60,12 @@ from japanese_anki.workbench.render import (
 __all__ = ["WorkbenchSession", "make_server", "serve"]
 
 _SOURCE_PREFIX = "/source/"
+
+#: An uploaded source is orders of magnitude larger than a form. It is
+#: still bounded: this is a localhost tool reading a scan or a lesson PDF,
+#: and an unbounded read is a way to exhaust memory from another local
+#: process that guessed the token.
+MAX_UPLOAD_BYTES = 64 * 1024 * 1024
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,6 +165,16 @@ class _WorkbenchHandler(LocalOnlyHandler):
             return None
         return "/" + "/".join(parts[2:])
 
+    def _added_banner(self) -> tuple[str, bool] | None:
+        """The post-redirect-get result of an upload, if this is one."""
+        query = self.path.split("?", 1)
+        if len(query) != 2:
+            return None
+        fields = dict(parse_qsl(query[1]))
+        if "added" not in fields or "name" not in fields:
+            return None
+        return fields["name"], fields["added"] == "1"
+
     def _wants_edit(self) -> bool:
         query = self.path.split("?", 1)
         return len(query) == 2 and dict(parse_qsl(query[1])).get("edit") == "1"
@@ -212,6 +230,8 @@ class _WorkbenchHandler(LocalOnlyHandler):
                     warnings=warnings,
                     root=self.server.session.config.root,
                     token=self.server.session.token,
+                    csrf=self.server.session.csrf_token,
+                    added=self._added_banner(),
                 ),
             )
             return
@@ -246,6 +266,71 @@ class _WorkbenchHandler(LocalOnlyHandler):
             )
             return
         self._error(404, "No such workbench page.")
+
+    def _upload(self, body: bytes, content_type: str) -> None:
+        """Store one uploaded source in the durable inbox. Sends nothing.
+
+        Adding a file to the corpus and sending it to a model are two separate
+        actions, always — this route is the first one, and it has no provider
+        call anywhere behind it.
+        """
+        session = self.server.session
+        try:
+            name, data, fields = _parse_upload(body, content_type)
+        except ValueError as exc:
+            self._error(400, f"That upload could not be read: {exc}")
+            return
+        if not secrets.compare_digest(fields.get("csrf", ""), session.csrf_token):
+            self._error(403, "That form did not come from this workbench session.")
+            return
+        try:
+            intake = inputs.receive_upload(
+                name, data, inbox_root=session.config.scan_inbox
+            )
+        except JankiError as exc:
+            self._error(409, str(exc))
+            return
+        added = "1" if intake.stored else "0"
+        self.send_response(303)
+        self.send_header(
+            "Location",
+            f"/{session.token}/?added={added}&name={quote(intake.path.name, safe='')}",
+        )
+        self.send_header("Content-Length", "0")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.close_connection = True
+
+    def _read_upload_body(self) -> tuple[bytes, str] | None:
+        """The multipart body, or None having already sent the refusal."""
+        if self.headers.get_all("Transfer-Encoding"):
+            self._error(400, "Transfer-encoded uploads are not accepted.")
+            return None
+        lengths = self.headers.get_all("Content-Length") or []
+        if len(lengths) != 1 or not lengths[0].isdigit():
+            self._error(411, "One exact Content-Length is required.")
+            return None
+        length = int(lengths[0])
+        if length > MAX_UPLOAD_BYTES:
+            self._error(
+                413,
+                f"That file is larger than the "
+                f"{MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit.",
+            )
+            return None
+        types = self.headers.get_all("Content-Type") or []
+        if len(types) != 1 or not types[0].startswith("multipart/form-data"):
+            self._error(415, "An upload must be multipart/form-data.")
+            return None
+        try:
+            body = self.rfile.read(length)
+        except TimeoutError:
+            self._error(408, "The upload timed out.")
+            return None
+        if len(body) != length:
+            self._error(400, "The upload ended before its Content-Length.")
+            return None
+        return body, types[0]
 
     def _read_body(self) -> bytes | None:
         """The exact declared body, or None having already sent the refusal.
@@ -286,8 +371,17 @@ class _WorkbenchHandler(LocalOnlyHandler):
             self._error(403, "The workbench accepts only its exact localhost origin.")
             return
         route = self._route()
-        if route is None or not route.startswith(_SOURCE_PREFIX):
+        if route is None:
             self._error(404, "No such workbench action.")
+            return
+        if route != "/add-source" and not route.startswith(_SOURCE_PREFIX):
+            self._error(404, "No such workbench action.")
+            return
+        if route == "/add-source":
+            read = self._read_upload_body()
+            if read is None:
+                return
+            self._upload(*read)
             return
         rest = route[len(_SOURCE_PREFIX) :]
         name, _, action = rest.rpartition("/")
@@ -645,6 +739,45 @@ class _WorkbenchHandler(LocalOnlyHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.close_connection = True
+
+
+def _parse_upload(body: bytes, content_type: str) -> tuple[str, bytes, dict[str, str]]:
+    """`(filename, file bytes, other fields)` from one multipart submission.
+
+    Built on `email`, which has parsed MIME for decades, rather than on a
+    hand-rolled boundary split — the boundary rules have enough corner cases
+    (quoting, epilogues, a boundary appearing inside the payload) that a fresh
+    implementation is a guess about attacker-shaped input.
+
+    Exactly one file part is accepted. Two would raise the question of which
+    one the consent screen later names, and a screen that names the wrong file
+    is worse than no upload at all.
+    """
+    parsed = BytesParser(policy=email_policy.default).parsebytes(
+        b"Content-Type: " + content_type.encode("latin-1") + b"\r\n\r\n" + body
+    )
+    if not parsed.is_multipart():
+        raise ValueError("it is not a multipart form")
+
+    files: list[tuple[str, bytes]] = []
+    fields: dict[str, str] = {}
+    for part in parsed.iter_parts():
+        disposition = part.get("Content-Disposition")
+        if disposition is None:
+            continue
+        name = part.get_param("name", header="content-disposition")
+        filename = part.get_param("filename", header="content-disposition")
+        payload = part.get_payload(decode=True)
+        if filename is not None:
+            files.append((str(filename), payload or b""))
+            continue
+        if name is not None:
+            fields[str(name)] = (payload or b"").decode("utf-8", errors="replace")
+    if not files:
+        raise ValueError("it carried no file")
+    if len(files) > 1:
+        raise ValueError("it carried more than one file; add them one at a time")
+    return files[0][0], files[0][1], fields
 
 
 def make_server(session: WorkbenchSession) -> _WorkbenchServer:

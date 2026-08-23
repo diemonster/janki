@@ -32,6 +32,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unicodedata
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,6 +40,7 @@ from typing import Any
 
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import short_fingerprint
+from japanese_anki.io import atomic_write_bytes
 
 __all__ = [
     "DOCUMENT_TYPES",
@@ -214,6 +216,82 @@ def _durable_name_collision(source: Path, conflicts: list[Path]) -> InputError:
         "different content. Give each source a unique filename before you put "
         "it in the inbox."
     )
+
+
+@dataclass(frozen=True, slots=True)
+class Intake:
+    """Where an uploaded source landed, and whether this call put it there."""
+
+    path: Path
+    stored: bool
+
+    @property
+    def already_present(self) -> bool:
+        return not self.stored
+
+
+def safe_upload_name(raw: str) -> str:
+    """The basename janki will store an uploaded file under.
+
+    A browser sends whatever the operating system called the file, and some
+    browsers historically sent a full path. Everything before the last
+    separator is discarded rather than sanitised, because a name is the only
+    thing this function is willing to believe: it is about to become a path
+    under `data/inbox/`, and a value that can still contain `..` or a separator
+    at that point is a value that can choose where it lands.
+    """
+    name = raw.replace("\\", "/").rsplit("/", 1)[-1].strip()
+    name = unicodedata.normalize("NFC", name)
+    if not name or name in {".", ".."} or name.startswith("."):
+        raise InputError(
+            f"{raw!r} is not a usable filename. Give the file an ordinary name "
+            "before adding it."
+        )
+    if any(char in name for char in '\x00/\\'):
+        raise InputError(f"{raw!r} is not a usable filename.")
+    return name
+
+
+def receive_upload(raw_name: str, data: bytes, *, inbox_root: Path) -> Intake:
+    """Put uploaded bytes into the durable inbox, or explain why not.
+
+    The inbox is immutable, so there are exactly three outcomes: these bytes
+    are already there under this name (nothing to do), a *different* file is
+    already there under this name (refuse — one name cannot mean two sources),
+    or it is new and gets written.
+
+    Deliberately not `_copy_into_inbox`: that one starts from a path on disk
+    and has five ways out, four of which are about a file the caller already
+    had. An upload has bytes and no path, and the only question worth asking is
+    whether this name is free.
+    """
+    name = safe_upload_name(raw_name)
+    _classify(Path(name))  # refuses an unsupported suffix, naming what is read
+    if not data:
+        raise InputError(f"{name} is empty; there is nothing to read in it.")
+
+    inbox_root = Path(inbox_root)
+    inbox_root.mkdir(parents=True, exist_ok=True)
+    matches, conflicts = _durable_namesakes(name, inbox_root, data)
+    if conflicts:
+        raise InputError(
+            f"A different source called {name} is already in your corpus. "
+            "Rename this file before continuing."
+        )
+    if matches:
+        return Intake(path=matches[0], stored=False)
+
+    target = inbox_root / name
+    if _occupied(target):
+        # Nothing readable matched by name or bytes, yet the path is taken —
+        # a directory, a broken symlink, something not ours. Refuse rather
+        # than write through it.
+        raise InputError(
+            f"{target} already exists and is not a readable source file. "
+            "Move it aside before adding this one."
+        )
+    atomic_write_bytes(target, data)
+    return Intake(path=target, stored=True)
 
 
 def _copy_into_inbox(

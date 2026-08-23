@@ -2011,3 +2011,312 @@ def test_re_identifying_into_a_word_you_already_own_is_allowed(
     finally:
         server.shutdown()
         server.server_close()
+
+
+# --- W3b: adding a source to the corpus -------------------------------------
+
+
+def _multipart(
+    filename: str | None, data: bytes, fields: dict[str, str], boundary: str = "ZZZ"
+) -> bytes:
+    parts = [
+        f"--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n"
+        f"{value}\r\n".encode()
+        for name, value in fields.items()
+    ]
+    if filename is not None:
+        # A quoted-string escapes `\\` and `"`. Sending them raw is malformed,
+        # and the parser then eats the backslashes — see the test below.
+        quoted = filename.replace("\\", "\\\\").replace('"', '\\"')
+        parts.append(
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; "
+            f'filename="{quoted}"\r\nContent-Type: application/pdf\r\n\r\n'.encode()
+            + data
+            + b"\r\n"
+        )
+    parts.append(f"--{boundary}--\r\n".encode())
+    return b"".join(parts)
+
+
+def _add_source(
+    server: Any,
+    session: WorkbenchSession,
+    filename: str | None,
+    data: bytes = b"%PDF-1.7 body",
+    *,
+    csrf: str | None = None,
+    boundary: str = "ZZZ",
+    content_type: str | None = None,
+) -> tuple[int, dict[str, str], bytes]:
+    body = _multipart(
+        filename, data, {"csrf": session.csrf_token if csrf is None else csrf}, boundary
+    )
+    return _request(
+        server,
+        "POST",
+        f"/{session.token}/add-source",
+        headers={
+            "Host": server.expected_host,
+            "Content-Type": content_type
+            or f'multipart/form-data; boundary="{boundary}"',
+        },
+        body=body,
+    )
+
+
+def _empty_project(tmp_path: Path) -> WorkbenchSession:
+    _project(tmp_path)
+    return WorkbenchSession.open(ProjectConfig.load(tmp_path))
+
+
+def test_adding_a_source_copies_it_into_the_inbox(tmp_path: Path) -> None:
+    session = _empty_project(tmp_path)
+    server, _thread = _running(session)
+    try:
+        status, headers, _body = _add_source(server, session, "Genki Lesson 8.pdf")
+
+        assert status == 303
+        assert "added=1" in headers["location"]
+        assert [p.name for p in (tmp_path / "inbox").iterdir()] == [
+            "Genki Lesson 8.pdf"
+        ]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_adding_a_source_sends_nothing_to_a_provider(tmp_path: Path) -> None:
+    """The rule the whole intake design rests on: adding a file to the corpus
+    and sending it to a model are two separate actions, always. The control
+    says so, and there is no provider call behind this route to contradict it."""
+    session = _empty_project(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _status, _headers, page = _request(server, "GET", f"/{session.token}/")
+        text = page.decode()
+        assert "sends it\nnowhere" in text or "sends it nowhere" in text
+        assert "separate, paid step you choose" in text
+        # The dashboard offers no way to spend money.
+        assert "add-source" in text
+        assert "extract" not in text.lower().replace("janki extract", "")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_the_same_file_twice_changes_nothing(tmp_path: Path) -> None:
+    session = _empty_project(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _add_source(server, session, "lesson.pdf", b"%PDF-1.7 one")
+        status, headers, _body = _add_source(
+            server, session, "lesson.pdf", b"%PDF-1.7 one"
+        )
+
+        assert status == 303
+        assert "added=0" in headers["location"]
+        assert len(list((tmp_path / "inbox").iterdir())) == 1
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_one_name_cannot_mean_two_different_sources(tmp_path: Path) -> None:
+    """The inbox is immutable, so a second file under a taken name is refused
+    in words a person can act on rather than silently overwriting evidence."""
+    session = _empty_project(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _add_source(server, session, "lesson-3.pdf", b"%PDF-1.7 one")
+        status, _headers, body = _add_source(
+            server, session, "lesson-3.pdf", b"%PDF-1.7 something else"
+        )
+
+        assert status == 409
+        assert b"already in your corpus" in body
+        assert b"Rename this file" in body
+        assert (tmp_path / "inbox" / "lesson-3.pdf").read_bytes() == b"%PDF-1.7 one"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.mark.parametrize(
+    ("sent", "lands_as"),
+    [
+        # A browser sends whatever the OS called the file, and some send a
+        # full path. Everything before the last separator is discarded, so
+        # these are ordinary uploads that succeed under a plain basename...
+        ("C:\\Users\\me\\lesson.pdf", "lesson.pdf"),
+        ("/home/me/scans/week-3.pdf", "week-3.pdf"),
+        ("../../escape.pdf", "escape.pdf"),
+        ("sub/dir/x.pdf", "x.pdf"),
+    ],
+)
+def test_an_uploaded_name_lands_as_a_plain_basename(
+    tmp_path: Path, sent: str, lands_as: str
+) -> None:
+    """...and none of them can choose where the file goes. The name is about to
+    become a path under `data/inbox/`, so it is reduced to something that
+    cannot contain a separator at all."""
+    session = _empty_project(tmp_path)
+    server, _thread = _running(session)
+    try:
+        status, _headers, _body = _add_source(server, session, sent)
+
+        assert status == 303, "a full path is an ordinary upload, not an error"
+        assert [p.name for p in (tmp_path / "inbox").rglob("*")] == [lands_as]
+        assert not (tmp_path / "escape.pdf").exists()
+        assert not (tmp_path.parent / "escape.pdf").exists()
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.mark.parametrize("hostile", ["", ".", "..", ".hidden.pdf", "a\x00b.pdf"])
+def test_a_name_that_cannot_be_a_basename_is_refused(
+    tmp_path: Path, hostile: str
+) -> None:
+    """The safety net under the basename reduction: anything that still could
+    not be a plain filename is refused rather than guessed at."""
+    session = _empty_project(tmp_path)
+    server, _thread = _running(session)
+    try:
+        status, _headers, _body = _add_source(server, session, hostile)
+        assert status in {400, 409}
+        assert list((tmp_path / "inbox").iterdir()) == []
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_an_upload_without_the_session_csrf_is_refused(tmp_path: Path) -> None:
+    session = _empty_project(tmp_path)
+    server, _thread = _running(session)
+    try:
+        status, _headers, _body = _add_source(
+            server, session, "lesson.pdf", csrf="forged"
+        )
+
+        assert status == 403
+        assert list((tmp_path / "inbox").iterdir()) == []
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_an_upload_with_no_file_is_refused(tmp_path: Path) -> None:
+    session = _empty_project(tmp_path)
+    server, _thread = _running(session)
+    try:
+        status, _headers, body = _add_source(server, session, None)
+        assert status == 400
+        assert b"no file" in body
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_an_unsupported_file_type_is_refused_by_name(tmp_path: Path) -> None:
+    session = _empty_project(tmp_path)
+    server, _thread = _running(session)
+    try:
+        status, _headers, body = _add_source(server, session, "notes.txt")
+        assert status == 409
+        assert b"cannot read" in body
+        assert list((tmp_path / "inbox").iterdir()) == []
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_an_upload_that_is_not_multipart_is_refused(tmp_path: Path) -> None:
+    session = _empty_project(tmp_path)
+    server, _thread = _running(session)
+    try:
+        status, _headers, _body = _add_source(
+            server,
+            session,
+            "lesson.pdf",
+            content_type="application/x-www-form-urlencoded",
+        )
+        assert status == 415
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_an_oversized_upload_is_refused_before_it_is_read(tmp_path: Path) -> None:
+    session = _empty_project(tmp_path)
+    server, _thread = _running(session)
+    try:
+        status, _headers, _body = _request(
+            server,
+            "POST",
+            f"/{session.token}/add-source",
+            headers={
+                "Host": server.expected_host,
+                "Content-Type": 'multipart/form-data; boundary="Z"',
+                "Content-Length": str(64 * 1024 * 1024 + 1),
+            },
+            body=b"x" * 16,
+        )
+        assert status == 413
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_an_added_source_appears_on_the_dashboard_as_unread(tmp_path: Path) -> None:
+    """The point of the whole slice: the source is in the corpus and the
+    dashboard says plainly that nothing has read it yet."""
+    session = _empty_project(tmp_path)
+    server, _thread = _running(session)
+    try:
+        _add_source(server, session, "week-3.pdf")
+        _status, _headers, page = _request(server, "GET", f"/{session.token}/")
+        text = page.decode()
+        assert "week-3.pdf" in text
+        assert NOT_EXTRACTED in text
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_sender_that_does_not_escape_its_filename_still_lands_safely(
+    tmp_path: Path,
+) -> None:
+    """A backslash inside a quoted-string is an escape character. A sender that
+    puts a raw Windows path in `filename="..."` is malformed, and the parser
+    eats the separators before janki ever sees them — so the stored name is
+    ugly rather than a path. Recorded because "why is my file called
+    `C:Usersmelesson.pdf`" has an answer, and because the answer is *safe*:
+    what arrives cannot contain a separator at all."""
+    session = _empty_project(tmp_path)
+    server, _thread = _running(session)
+    try:
+        raw = (
+            b'--Z\r\nContent-Disposition: form-data; name="csrf"\r\n\r\n'
+            + session.csrf_token.encode()
+            + b'\r\n--Z\r\nContent-Disposition: form-data; name="file"; '
+            b'filename="C:\\Users\\me\\lesson.pdf"\r\n'
+            b"Content-Type: application/pdf\r\n\r\n%PDF-1.7\r\n--Z--\r\n"
+        )
+        status, _headers, _body = _request(
+            server,
+            "POST",
+            f"/{session.token}/add-source",
+            headers={
+                "Host": server.expected_host,
+                "Content-Type": 'multipart/form-data; boundary="Z"',
+            },
+            body=raw,
+        )
+
+        assert status == 303
+        landed = [p.name for p in (tmp_path / "inbox").iterdir()]
+        assert landed == ["C:Usersmelesson.pdf"]
+        assert all("/" not in name and "\\" not in name for name in landed)
+    finally:
+        server.shutdown()
+        server.server_close()
