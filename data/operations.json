@@ -12,28 +12,6 @@
       "updated_at": "2026-08-23T18:46:29+00:00",
       "artifact": ".pending/1a85e6fd-bb25-43fd-aabd-658895bdbaf5.json"
     },
-    "8543c34a-7bab-43fa-959e-ec4d0609e2b7": {
-      "kind": "extract",
-      "state": "committed",
-      "source_file": "medical-conditions-vocab.pdf",
-      "source_sha256": "2b54834d5cd5f1061b013a238bcbf55de2c9f90c178d1ec7f38b7836b70de0d1",
-      "request_fp": "27435645b16b0fef176c27a1a03c7458314a90aa5ac28a847fbe7e7f7dc59bd2",
-      "model": "claude-opus-5",
-      "authorized_at": "2026-08-23T19:14:15+00:00",
-      "updated_at": "2026-08-23T19:24:25+00:00",
-      "artifact": ".pending/8543c34a-7bab-43fa-959e-ec4d0609e2b7.json"
-    },
-    "8dd0370d-cf4a-4da6-966b-bd76e75c1198": {
-      "kind": "extract",
-      "state": "committed",
-      "source_file": "medical-conditions-vocab.pdf",
-      "source_sha256": "2b54834d5cd5f1061b013a238bcbf55de2c9f90c178d1ec7f38b7836b70de0d1",
-      "request_fp": "cbdf3d4b2d62bc6b17eec95529e13d42aee1fd31602f92812a6446053da43b8f",
-      "model": "claude-opus-5",
-      "authorized_at": "2026-08-23T18:56:10+00:00",
-      "updated_at": "2026-08-23T19:01:41+00:00",
-      "artifact": ".pending/8dd0370d-cf4a-4da6-966b-bd76e75c1198.json"
-    },
     "be867ad4-f42e-4dc7-a068-e213cbfeddf8": {
       "kind": "extract",
       "state": "outcome_unknown",

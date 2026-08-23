@@ -1,0 +1,5297 @@
+source_file: medical-conditions-vocab.pdf
+extracted_at: '2026-08-23'
+model: claude-opus-5
+review_run_id: 095c8696-4fea-4689-a3f1-3b9dc8d9c159
+prompt_provenance:
+  source_sha256: 2b54834d5cd5f1061b013a238bcbf55de2c9f90c178d1ec7f38b7836b70de0d1
+  mode: auto
+  provider: anthropic
+  model: claude-opus-5
+  response_schema_version: 5
+  response_schema_fingerprint: 3b9963cc313ede5b40a96328ecf57a5a87e6237200510c020225f70d15394382
+  system_prompt_fingerprint: 9c6a5c4fb11964fe7f5ab91c7538b692f2cd5b5449dc49f43eb17d00218b2127
+  style_guide_fingerprint: 220c73a9cdf9487bf74daf734d6b448b3029056855d3b8d72ab40faf27276f12
+  user_prompt_fingerprint: 6ab309b4b7cdb61601b40f85bef392dae47318b69fa3e975160ec3070d097703
+  request_fingerprint: 63f159d45340b8087c6356da16f6573914b0b485bf377462c4fb6a817fc00baf
+pattern_set:
+  kind: vocabulary
+  title: Medical Vocabulary and Phrases (MLC BP1-21)
+  reviewed: false
+  patterns:
+  - template: ＿＿＿が痛いです。
+    gloss: I have a pain in my ___. The aching body part is marked with が.
+    examples:
+    - お腹が痛いです。
+    - 腰が痛いです。
+    where: p.1 (1) Useful structures 1; [Common expression] (1), (2)
+  - template: ＿＿＿が痒いです。
+    gloss: My ___ itches. The itching body part is marked with が.
+    examples: []
+    where: p.1 (1) Useful structures 2
+  - template: ＿＿＿をください。
+    gloss: Please give me ___ . Used to ask for an item at the hospital or drugstore.
+    examples: []
+    where: p.4 (4) At the hospital or drugstore
+  prompt_provenance:
+    source_sha256: 2b54834d5cd5f1061b013a238bcbf55de2c9f90c178d1ec7f38b7836b70de0d1
+    mode: auto
+    provider: anthropic
+    model: claude-opus-5
+    response_schema_version: 5
+    response_schema_fingerprint: 3b9963cc313ede5b40a96328ecf57a5a87e6237200510c020225f70d15394382
+    system_prompt_fingerprint: 9c6a5c4fb11964fe7f5ab91c7538b692f2cd5b5449dc49f43eb17d00218b2127
+    style_guide_fingerprint: 220c73a9cdf9487bf74daf734d6b448b3029056855d3b8d72ab40faf27276f12
+    user_prompt_fingerprint: 6ab309b4b7cdb61601b40f85bef392dae47318b69fa3e975160ec3070d097703
+    request_fingerprint: 63f159d45340b8087c6356da16f6573914b0b485bf377462c4fb6a817fc00baf
+  review_run_id: 095c8696-4fea-4689-a3f1-3b9dc8d9c159
+coverage:
+  version: 2
+  status: unmeasured
+  blocking: true
+  source_fingerprint: 2b54834d5cd5f1061b013a238bcbf55de2c9f90c178d1ec7f38b7836b70de0d1
+  model_reported_unit_count: 91
+  observed_unit_count: 91
+  prose_candidate_count: 0
+  prose_coverage: not-applicable
+  source_units:
+  - page: 1
+    section: useful-structures
+    ordinal: 1
+    context_fingerprint: 33b8b0b66bdd2aa809acecce46cdceb362aff9f665d5a5d241237637bee5dd04
+    disposition: candidate
+    context: 1. I have a pain in my ______. ______ ga itai desu. が痛いです。
+    reason: Teaches 痛い with its English gloss inside the frame.
+  - page: 1
+    section: useful-structures
+    ordinal: 2
+    context_fingerprint: 7f30691cdad44564994f3dd631a2f723073a7d49215569786b5466c9991c6afb
+    disposition: candidate
+    context: 2. My ______ itches. ______ ga kayui desu. が痒いです。
+    reason: Teaches 痒い with its English gloss inside the frame.
+  - page: 1
+    section: body-parts
+    ordinal: 1
+    context_fingerprint: 0797f5f8c84319f6392bd5aef2fff3fa5cef641b17bec7ebfb4f6907b41b0512
+    disposition: candidate
+    context: 1. head atama あたま 頭
+  - page: 1
+    section: body-parts
+    ordinal: 2
+    context_fingerprint: 7d100cade42fc310812502c7f60d7f22974da61b6f8e056b84e9508244d2e84b
+    disposition: candidate
+    context: 2. eyes me め 目
+  - page: 1
+    section: body-parts
+    ordinal: 3
+    context_fingerprint: 70b8c4921aea891a842480776b6c60bc36bf252c502a525f474deae3e396bf40
+    disposition: candidate
+    context: 3. eyelid mabuta まぶた 瞼
+  - page: 1
+    section: body-parts
+    ordinal: 4
+    context_fingerprint: d74d7f8ec053f8d2e25da59df6bdc34a9b719692b06271ccd93624fadf027d85
+    disposition: candidate
+    context: 4. teeth ha は 歯
+  - page: 1
+    section: body-parts
+    ordinal: 5
+    context_fingerprint: 2bbed5fe49580e279fd03858ded71b6ffec02ae616bf7864d1815416fa891676
+    disposition: candidate
+    context: 5. ears mimi みみ 耳
+  - page: 1
+    section: body-parts
+    ordinal: 6
+    context_fingerprint: 07e261c3937b9133a0a026a7ec28015af0b2bae871afea0e3a78312785b1fd0d
+    disposition: candidate
+    context: 6. ear lobe mimitabu みみたぶ 耳たぶ
+  - page: 1
+    section: body-parts
+    ordinal: 7
+    context_fingerprint: c5c9112cf74d1d1a62c3d0c0a9d42d505929b12e37794817e4b50592ca15abc4
+    disposition: candidate
+    context: 7. nose hana はな 鼻
+  - page: 1
+    section: body-parts
+    ordinal: 8
+    context_fingerprint: e82784e69740bfbe14b4d5573dca729fdd85f3f561acba1ac7fb549d4ee57e8c
+    disposition: candidate
+    context: 8. chest・breast mune むね 胸
+  - page: 1
+    section: body-parts
+    ordinal: 9
+    context_fingerprint: be86881a60652c688fa229c039f0ca055549c1d12fac476c50c22797eda01119
+    disposition: candidate
+    context: 9. back senaka せなか 背中
+  - page: 1
+    section: body-parts
+    ordinal: 10
+    context_fingerprint: 83c0f2589482a9b0fd9d572defd7aee4ebd0867d7b0f8b7acea63b4453b0b13e
+    disposition: candidate
+    context: 10. bone hone ほね 骨
+  - page: 1
+    section: body-parts
+    ordinal: 11
+    context_fingerprint: 772526a283b07795ca977f7c94d2ef985b9258fee0208acdee7819e6b85565f5
+    disposition: candidate
+    context: 11. shoulder kata かた 肩
+  - page: 1
+    section: body-parts
+    ordinal: 12
+    context_fingerprint: 0bc74459ffa2768aaca77d60850e17858a4af7eba315193fe007c2c02f90b167
+    disposition: candidate
+    context: 12. neck kubi くび 首
+  - page: 1
+    section: body-parts
+    ordinal: 13
+    context_fingerprint: b53c78ccfdda0b9612e6fa43377c555220666ddf8b9eb7fd67d7b49777a49521
+    disposition: candidate
+    context: 13. stomach ｉ い 胃
+  - page: 1
+    section: body-parts
+    ordinal: 14
+    context_fingerprint: 4a44dc100d338a7496a8bc300a80e871382cc2ae475d6c57e447fdbd6dc6f475
+    disposition: candidate
+    context: 14. arm ude うで 腕
+  - page: 1
+    section: body-parts
+    ordinal: 15
+    context_fingerprint: 8c9dcbb85aa04e453c48f003558f0f11299a28fe0fc9485805e707fab23978f1
+    disposition: candidate
+    context: 15. hand te て 手
+  - page: 1
+    section: body-parts
+    ordinal: 16
+    context_fingerprint: 4c17895daf113c39c2c5b3dfc9f78f5ba27209518c2ddbf0b1a148f0db8635fe
+    disposition: candidate
+    context: 16. wrist tekubi てくび 手首
+  - page: 1
+    section: body-parts
+    ordinal: 17
+    context_fingerprint: 1064b4a6f6ac9ae54041d3ca9f6feca8debd926c50e3dc5fb2c724d688409c24
+    disposition: candidate
+    context: 17. fingers yubi ゆび 指
+  - page: 1
+    section: body-parts
+    ordinal: 18
+    context_fingerprint: 1d93f8d2f5464e2f9995cb08c8071ab76dba804f7945f31b413f914d4a4543ab
+    disposition: candidate
+    context: 18. nails tsume つめ 爪
+  - page: 1
+    section: body-parts
+    ordinal: 19
+    context_fingerprint: 42490a38f3ffa7c8f402b7f8a8e97caea2a1aa5cc13667cc000ff21c07d1aed0
+    disposition: candidate
+    context: 19. hip oshiri おしり 尻
+    reason: Reading given as おしり includes the お prefix; noted on the card.
+  - page: 1
+    section: body-parts
+    ordinal: 20
+    context_fingerprint: d5dda8888e0a4110e05a8749c134bd1fa67901fde22ed29e0567b28879ffd420
+    disposition: candidate
+    context: 20. leg・foot ashi あし 脚・足
+    reason: Two kanji spellings given for one word; card uses 足.
+  - page: 1
+    section: body-parts
+    ordinal: 21
+    context_fingerprint: 8fa574440e360593499ea7c34c554db68455142858ccf623de645abd9cec217f
+    disposition: candidate
+    context: 21. toes tsumasaki つまさき 爪先
+  - page: 1
+    section: common-expression
+    ordinal: 1
+    context_fingerprint: 059abd7d72762fdbebbc68568ffda6a37f237d01ff546c96e06e7a4d40daa812
+    disposition: candidate
+    context: (1) Onaka ga itai desu. お腹が痛いです。 have a pain / abdomen, stomach, bowel, (tummy)
+    reason: お腹 is glossed directly under the sentence.
+  - page: 1
+    section: common-expression
+    ordinal: 2
+    context_fingerprint: 75bac4d6abc5d1a3fb99e1e48e3a7262fb53ad05b26ed66f76f7f3d51f4f226f
+    disposition: candidate
+    context: (2) Koshi ga itai desu. 腰が痛いです。 I have a backache.
+    reason: 腰 is taught through the sentence and its translation.
+  - page: 2
+    section: name-of-disease
+    ordinal: 1
+    context_fingerprint: 95d36ce97b54bf4c124195992a1cccdb02a04f99af8bcb4a6a18f5cad9d8ccf7
+    disposition: candidate
+    context: 1. measles hashika はしか 麻疹
+  - page: 2
+    section: name-of-disease
+    ordinal: 2
+    context_fingerprint: 1895cc61fb7dbd6068a1f321ee879e3d62f0324013d3a78b2c01350e6dde00f0
+    disposition: candidate
+    context: 2. chicken pox mizuboso みずぼうそう 水疱瘡
+  - page: 2
+    section: name-of-disease
+    ordinal: 3
+    context_fingerprint: 6f3d3fcdf1e9193f6f781882178305d5ea2ac4f97322d1570e238161cbb0a2aa
+    disposition: candidate
+    context: 3. mumps otafuku おたふく
+  - page: 2
+    section: name-of-disease
+    ordinal: 4
+    context_fingerprint: c0a9128941210e73b1fb0dfa37402ff9aeb4933b9fcee6b00b9ece70c5867b00
+    disposition: candidate
+    context: 4. whooping cough hyakunichizeki ひゃくにちぜき 百日咳
+  - page: 2
+    section: name-of-disease
+    ordinal: 5
+    context_fingerprint: b1880f99bab47bdfd95900f5199a017ccb53cbd7a43724efdefb486c25e31831
+    disposition: candidate
+    context: 5. tetanus hashofu はしょうふう 破傷風
+  - page: 2
+    section: name-of-disease
+    ordinal: 6
+    context_fingerprint: 576fb6ea38349b86cab58a9c0000a80a0486f5b57450d37c3bab6b514a5f093e
+    disposition: candidate
+    context: 6. atopy atop i アトピー
+  - page: 2
+    section: name-of-disease
+    ordinal: 7
+    context_fingerprint: 32356a7b59100b07f79933711ac9b11a1bba4d131dbc216a08862c8c2e1e89e3
+    disposition: candidate
+    context: 7. ulcer kaiyo かいよう 潰瘍
+  - page: 2
+    section: name-of-disease
+    ordinal: 8
+    context_fingerprint: 8d2b53b10c969ff6a50827fe79449695601a00f57fc57f66a7a2a2b6a16e6604
+    disposition: candidate
+    context: 8. stomach ulcer ikaiyo いかいよう 胃潰瘍
+  - page: 2
+    section: name-of-disease
+    ordinal: 9
+    context_fingerprint: b12534dcba6cb41df70bde75b91e3b1958ed14e999a87532991bb256ab28db85
+    disposition: candidate
+    context: 9. influenza infuruenza インフルエンザ
+  - page: 2
+    section: name-of-disease
+    ordinal: 10
+    context_fingerprint: ecef5e6e496089c88bd50c2e284d319beb543b618642794aee112e7a1e218d2d
+    disposition: candidate
+    context: 10. melancholy utsubyo うつびょう うつ病
+  - page: 2
+    section: name-of-disease
+    ordinal: 11
+    context_fingerprint: f9b99a9c2dd979c361b9df13cf84629c09896eb3a158a16566228fe8affc349f
+    disposition: candidate
+    context: 11. stiff shoulder katakori かたこり 肩こり
+  - page: 2
+    section: name-of-disease
+    ordinal: 12
+    context_fingerprint: ed97bb15fb8446fcbdb7b5064e277074122fa7c7c6faf0d20b5ca5ff81c220ee
+    disposition: candidate
+    context: 12. backache yotsu ようつう 腰痛
+  - page: 2
+    section: name-of-disease
+    ordinal: 13
+    context_fingerprint: 7518668644f759fb40f76a6cf617fe9e785586e6dafa053bf998ecd169e6febc
+    disposition: candidate
+    context: 13. hepatitis kan’en かんえん 肝炎
+  - page: 2
+    section: name-of-disease
+    ordinal: 14
+    context_fingerprint: 66c97870f97625e0cfece0e72d3637ff81f9ead69d6e54a519a826da8f728da8
+    disposition: candidate
+    context: 14. liver cirrhosis kankohen かんこうへん 肝硬変
+  - page: 2
+    section: name-of-disease
+    ordinal: 15
+    context_fingerprint: fa608256dfac3c25b1c045c3924be0f3c5fa1a65b00275a9077ca42db9a218fa
+    disposition: candidate
+    context: 15. cancer gan がん 癌
+  - page: 2
+    section: name-of-disease
+    ordinal: 16
+    context_fingerprint: 6edcdc19ec3c50956c99bf32b519ce816dcea47035bd7f3a28c2f6793e841a0f
+    disposition: candidate
+    context: 16. eyestrain ganseihiro がんせいひろう 眼精疲労
+  - page: 2
+    section: name-of-disease
+    ordinal: 17
+    context_fingerprint: ab51cd0b815efe027d2db1175c3b699ada97b269c5e309714fe5ef49c248566b
+    disposition: candidate
+    context: 17. high blood pressure koketsuatsu こうけつあつ 高血圧
+  - page: 2
+    section: name-of-disease
+    ordinal: 18
+    context_fingerprint: 747590f93483843c999ed0fd9dfbede12dd37a6a97d704566cee0855556a5b0b
+    disposition: candidate
+    context: 18. cavity mushiba むしば 虫歯
+  - page: 2
+    section: name-of-disease
+    ordinal: 19
+    context_fingerprint: 5ff3e90d6923d810f9e6ed6940ef5a48d13a80a542face9a9a242d55fa3ba92e
+    disposition: candidate
+    context: 19. canker sore konaien こうないえん 口内炎
+  - page: 2
+    section: name-of-disease
+    ordinal: 20
+    context_fingerprint: 627d9862b5fdf822961d453ea11e291f3588eec96eb3dfde1da085c8f7eb77eb
+    disposition: candidate
+    context: 20. hemorrhoid ji じ 痔
+  - page: 2
+    section: name-of-disease
+    ordinal: 21
+    context_fingerprint: 733f717cd08e8811dcb58b6c6f83f4fe4837e15a9c9a979568f78fd3ccd3e4f3
+    disposition: candidate
+    context: 21. slipped disc tsuikamban herunia ついかんばんヘルニア 椎間板ヘルニア
+  - page: 2
+    section: name-of-disease
+    ordinal: 22
+    context_fingerprint: 7688e8d6f9f7d62ed6a4b8aeb44d959d7e7d2af00d6331f0c71d85de7e1f854a
+    disposition: candidate
+    context: 22. petit mal tenkan てんかん
+  - page: 2
+    section: name-of-disease
+    ordinal: 23
+    context_fingerprint: 8a45bd0622ee471ff299ab8418b7e4870a600240e9e4b313e1b6dade48a0f20f
+    disposition: candidate
+    context: 23. diabetes tonyobyo とうにょうびょう 糖尿病
+  - page: 2
+    section: name-of-disease
+    ordinal: 24
+    context_fingerprint: f2e21c2b663f9392bc1a9fa01886a61ccaf343406790a06dd0d959c6f238f380
+    disposition: candidate
+    context: 24. sunstroke nisshabyo にっしゃびょう 日射病
+  - page: 2
+    section: name-of-disease
+    ordinal: 25
+    context_fingerprint: e69dc0a5f49b1a12b7dff15065b41552654844ebd2b604259a21c0ba506ed827
+    disposition: candidate
+    context: 25. stroke no socchu のうそっちゅう 脳卒中
+  - page: 2
+    section: name-of-disease
+    ordinal: 26
+    context_fingerprint: 316e74759758c13b42ee2d22183c80266f469c8885316def896f97a7654dc014
+    disposition: candidate
+    context: 26. cataract hakunaisho はくないしょう 白内障
+  - page: 2
+    section: name-of-disease
+    ordinal: 27
+    context_fingerprint: 27175f13fc50746546117d1375586e1e1b6cad657177ac52ffc6e7c6d395818a
+    disposition: candidate
+    context: 27. glaucoma ryokunaisho りょくないしょう 緑内障
+  - page: 2
+    section: name-of-disease
+    ordinal: 28
+    context_fingerprint: d70af4dcf3733aa8ba5028a82f6ea8db85854a9bee64851a1e71e2256347ff5b
+    disposition: candidate
+    context: 28. leukemia hakketsubyo はっけつびょう 白血病
+  - page: 2
+    section: name-of-disease
+    ordinal: 29
+    context_fingerprint: cc826ae6156005c305b58a86e3fa88a2d56470e248dbd4eeba873925d357a05e
+    disposition: candidate
+    context: 29. asthma zensoku ぜんそく
+  - page: 2
+    section: name-of-disease
+    ordinal: 30
+    context_fingerprint: df9c5c8ca6e2aba9719009d4799d2568c6f42dda067b8466ccd5c86797f897d9
+    disposition: candidate
+    context: 30. constipation bempi べんぴ 便秘
+  - page: 2
+    section: name-of-disease
+    ordinal: 31
+    context_fingerprint: a55bed6f7ca5775ea818df4ffa27b9bfac5e43a22c26f2f61c531d2ef51fb9d7
+    disposition: candidate
+    context: 31. burn yakedo やけど 火傷
+  - page: 2
+    section: name-of-disease
+    ordinal: 32
+    context_fingerprint: 75b857cd978e03a10a402603ab9ab11cbbd24a3018e3828ceb7ba341746ea572
+    disposition: candidate
+    context: 32. athlete’s foot mizumushi みずむし 水虫
+  - page: 2
+    section: name-of-disease
+    ordinal: 33
+    context_fingerprint: 1643de2ba7eb16e43f9f7b2b4265a0fa2ccafb9eff55488e8ec080515138efb0
+    disposition: candidate
+    context: 33. anemia hinketsu ひんけつ 貧血
+  - page: 2
+    section: name-of-disease
+    ordinal: 34
+    context_fingerprint: 66101f27121d15edcb9e69538a4bde92facffd7de1766ab85ff30551d84d5207
+    disposition: candidate
+    context: 34. a menopausal disorder konenkishogai こうねんきしょうがい 更年期障害
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 1
+    context_fingerprint: 14390e8bd2cf095c01a27f52efe5006b761b28ef6bf6861cb5d601a86cb18158
+    disposition: candidate
+    context: 1. I have a fever. Netsu ga arimasu. 熱があります。
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 2
+    context_fingerprint: 526b91747bc14feeff87485175d26385078108238e6c78a602f1564af4254b90
+    disposition: non-vocabulary
+    context: 2. I have a fever of 38 degrees. 38 do desu. 38℃です。
+    reason: A number-plus-です statement; no reusable word or lexicalized phrase is taught beyond the temperature reading.
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 3
+    context_fingerprint: 0e1e87158d7c71caa1b25cd0eef9a17e66288becd54da1e4da46e65a1c4165aa
+    disposition: candidate
+    context: 3. I have an allergy. Arerug i ga arimasu. アレルギーがあります。
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 4
+    context_fingerprint: 04f42ab0a4c1c290f50f32a4b854b87c80360d4441d1050077fca68e0d7534e8
+    disposition: candidate
+    context: 4. I don’t have an appetite. Shokuyoku ga arimasen. 食欲がありません。
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 5
+    context_fingerprint: 855221cf60bf098d5ea943fc9ba5059a9164fbc4d30f6310ced1dd6893b3fd93
+    disposition: candidate
+    context: 5. I have a cough. Seki ga demasu. 咳がでます。
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 6
+    context_fingerprint: 7705f13797cc7bcfe06745e68e66f892170a4939625cb512b5caebfa1be28dee
+    disposition: candidate
+    context: 6. I have been sneezing. Kushami ga demasu. くしゃみが出ます。
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 7
+    context_fingerprint: 67466d391d05e1a4460b6f267eebef7a11eb8cfc112cb53eaa1859dae22f7402
+    disposition: candidate
+    context: 7. I have a runny nose. Hanamizu ga demasu. 鼻水が出ます。
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 8
+    context_fingerprint: 398dbad8188e4ebdaef3c9e55d2c16d5a34fef13d13ac14e12e363477b71cbae
+    disposition: candidate
+    context: 8. I feel nauseous. Hakike ga shimasu. 吐き気がします。
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 9
+    context_fingerprint: 973954560b029bfbd4e42193ee7647ff95a236e8797dc15f319719a5cf06d426
+    disposition: candidate
+    context: 9. I have been having chills. Samuke ga shimasu. 寒気がします。
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 10
+    context_fingerprint: 969f6b560dff93c49c1c1c267d7bc6869a5431e93c1ef6af94c142f5cdaf68ce
+    disposition: candidate
+    context: 10. I feel dizzy. Memai ga shimasu. めまいがします。
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 11
+    context_fingerprint: 659acffe1a6744efc6b9f07c07688bc7a9ad4821ac137d040fe03c167584a2c6
+    disposition: candidate
+    context: 11. I feel sluggish. Karada ga darui desu. 体がだるいです。
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 12
+    context_fingerprint: 0c1a2067aaedd16f6e8f9d2b7c1a01ce2d5d6ba6d924cc7c1f6d5a7f095b3f27
+    disposition: candidate
+    context: 12. I have diarrhea. Geri desu. 下痢です。
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 13
+    context_fingerprint: cd7b55ba8f98540e4d7f52e26b6d387b804d2d39d5c13e2b6a3bc276d141e0fe
+    disposition: duplicate
+    context: 13. I’m constipated. Bempi desu. 便秘です。
+    reason: 便秘 already carded from page 2, (2) Name of disease, row 30.
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 14
+    context_fingerprint: e79c0f8c95f3409e801a08aee4abd8d7fac926be8d66e758f4f9f03f3aba764c
+    disposition: duplicate
+    context: 14. I feel itchy. Kayui desu. 痒いです。
+    reason: 痒い already carded from page 1, (1) Useful structures, row 2.
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 15
+    context_fingerprint: 3a31daf5affff9081265ee690911c1be88dc69b7967b150532706b6a242a49c4
+    disposition: duplicate
+    context: 15. I have bad teeth. Mushiba desu. 虫歯です。
+    reason: 虫歯 already carded from page 2, (2) Name of disease, row 18.
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 16
+    context_fingerprint: 3a33548ac1d1541b9bd4063824420e226df6cabd08263cce147017044c137f77
+    disposition: candidate
+    context: 16. I have a cold. Kaze desu. 風邪です。
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 17
+    context_fingerprint: e2a0595e8f9850d84169a995b511a7edaddd7595e4b997aa281d7e3efde3f967
+    disposition: duplicate
+    context: 17. I have the flu. Infuruenza desu. インフルエンザです。
+    reason: インフルエンザ already carded from page 2, (2) Name of disease, row 9.
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 18
+    context_fingerprint: 5a9ac6139dd946c45230eeb39d1c2689d1249bdf074012f56e340d26e3aac8b0
+    disposition: candidate
+    context: 18. I have a hangover. Futsukayoi desu. 二日酔いです。
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 19
+    context_fingerprint: a0d13bd71abfad21c59d91003ace1e19c5851c420debff2eca749783acf47263
+    disposition: candidate
+    context: 19. I’m sick at my stomach. I ga mukamuka shimasu. 胃がむかむかします。
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 20
+    context_fingerprint: 53e569052f13222e32c7b898f2a1c7b68bd61382ec0556ea93dcee39bc52b9b7
+    disposition: candidate
+    context: 20. Sharp pain in his stomach. I ga kirikiri shimasu. 胃がきりきりします。
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 21
+    context_fingerprint: de01ec30efd1eac12392dba9ea00c3cfca73e25c871e9f720dd2f39f51448b40
+    disposition: candidate
+    context: 21. I feel dizzy. Atama ga kura kura shimasu. 頭がくらくらします。
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 22
+    context_fingerprint: 846dfdd06c5acf21d6272cca95d19214e5b0ca8af20a58621ac991896458dc9d
+    disposition: candidate
+    context: 22. My head is throbbing. Atama ga zukizuki shimasu. 頭がずきずきします。
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 23
+    context_fingerprint: ae19e4cb1c4190b007fc0ff5b20f00136ec39706d8fd331c1ba532328f03801e
+    disposition: candidate
+    context: 23. I have a prickly pain. Chikuchiku shimasu. ちくちくします。
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 24
+    context_fingerprint: fa4d3017efa479f3aa34e952438bd02c292328362c51a4ea2579c35c02f50f50
+    disposition: candidate
+    context: 24. I have a burning pain. Hirihiri shimasu. ひりひりします。
+  - page: 4
+    section: at-the-hospital-or-drugstore
+    ordinal: 1
+    context_fingerprint: 6649d350fe3f507772fc02e2dd883efcc642a44ac190695369f2633b4fcf169e
+    disposition: candidate
+    context: 1. headache specific zutsu yaku ずつうやく 頭痛薬
+  - page: 4
+    section: at-the-hospital-or-drugstore
+    ordinal: 2
+    context_fingerprint: 98a722f50ba26719a578b98b410a4ac13aecc125801cb145dda0a259bf6e2183
+    disposition: candidate
+    context: 2. painkiller chintsu zai ちんつうざい 鎮痛剤
+  - page: 4
+    section: at-the-hospital-or-drugstore
+    ordinal: 3
+    context_fingerprint: 60a963b32f618c1d464f8885992fac7b0b43332fd090b80b24c308157fee12a9
+    disposition: candidate
+    context: 3. sleeping pill suiminyaku すいみんやく 睡眠薬
+  - page: 4
+    section: at-the-hospital-or-drugstore
+    ordinal: 4
+    context_fingerprint: 3a41bddb87dfee252905a6a7288daa4ebb74f53612b8598857cd2f77fca8a592
+    disposition: candidate
+    context: 4. antipyretic genetsuzai げねつざい 解熱剤
+  - page: 4
+    section: at-the-hospital-or-drugstore
+    ordinal: 5
+    context_fingerprint: 50841ca8b8227f504710733308c71b395426f5b9bdc6bab982c2ce34a734cda7
+    disposition: candidate
+    context: 5. band aid bandoeido バンドエイド
+  - page: 4
+    section: at-the-hospital-or-drugstore
+    ordinal: 6
+    context_fingerprint: 205318e6fa292a383efd754072a288b2c4297ff343275a66bfa78588a9bb6209
+    disposition: candidate
+    context: 6. eye drops megusuri めぐすり 目薬
+  - page: 4
+    section: at-the-hospital-or-drugstore
+    ordinal: 7
+    context_fingerprint: e27e421099103835fe7d91ce61b817c7933ab2af52fe809dbbaca56585af6bf1
+    disposition: candidate
+    context: 7. compress shippu しっぷ 湿布
+  - page: 4
+    section: at-the-hospital-or-drugstore
+    ordinal: 8
+    context_fingerprint: 43bdeeb347ffcefc311f1b680f3cbd77b4d2afc7fe61b69b16b9452ae763321a
+    disposition: candidate
+    context: 8. mouth wash ugaigusuri うがいぐすり うがい薬
+  duplicate_keys: []
+  candidate_units:
+  - page: 1
+    section: body-parts
+    ordinal: 1
+    context_fingerprint: 0797f5f8c84319f6392bd5aef2fff3fa5cef641b17bec7ebfb4f6907b41b0512
+    disposition: candidate
+  - page: 1
+    section: body-parts
+    ordinal: 2
+    context_fingerprint: 7d100cade42fc310812502c7f60d7f22974da61b6f8e056b84e9508244d2e84b
+    disposition: candidate
+  - page: 1
+    section: body-parts
+    ordinal: 3
+    context_fingerprint: 70b8c4921aea891a842480776b6c60bc36bf252c502a525f474deae3e396bf40
+    disposition: candidate
+  - page: 1
+    section: body-parts
+    ordinal: 4
+    context_fingerprint: d74d7f8ec053f8d2e25da59df6bdc34a9b719692b06271ccd93624fadf027d85
+    disposition: candidate
+  - page: 1
+    section: body-parts
+    ordinal: 5
+    context_fingerprint: 2bbed5fe49580e279fd03858ded71b6ffec02ae616bf7864d1815416fa891676
+    disposition: candidate
+  - page: 1
+    section: body-parts
+    ordinal: 6
+    context_fingerprint: 07e261c3937b9133a0a026a7ec28015af0b2bae871afea0e3a78312785b1fd0d
+    disposition: candidate
+  - page: 1
+    section: body-parts
+    ordinal: 7
+    context_fingerprint: c5c9112cf74d1d1a62c3d0c0a9d42d505929b12e37794817e4b50592ca15abc4
+    disposition: candidate
+  - page: 1
+    section: body-parts
+    ordinal: 8
+    context_fingerprint: e82784e69740bfbe14b4d5573dca729fdd85f3f561acba1ac7fb549d4ee57e8c
+    disposition: candidate
+  - page: 1
+    section: body-parts
+    ordinal: 9
+    context_fingerprint: be86881a60652c688fa229c039f0ca055549c1d12fac476c50c22797eda01119
+    disposition: candidate
+  - page: 1
+    section: body-parts
+    ordinal: 10
+    context_fingerprint: 83c0f2589482a9b0fd9d572defd7aee4ebd0867d7b0f8b7acea63b4453b0b13e
+    disposition: candidate
+  - page: 1
+    section: body-parts
+    ordinal: 11
+    context_fingerprint: 772526a283b07795ca977f7c94d2ef985b9258fee0208acdee7819e6b85565f5
+    disposition: candidate
+  - page: 1
+    section: body-parts
+    ordinal: 12
+    context_fingerprint: 0bc74459ffa2768aaca77d60850e17858a4af7eba315193fe007c2c02f90b167
+    disposition: candidate
+  - page: 1
+    section: body-parts
+    ordinal: 13
+    context_fingerprint: b53c78ccfdda0b9612e6fa43377c555220666ddf8b9eb7fd67d7b49777a49521
+    disposition: candidate
+  - page: 1
+    section: body-parts
+    ordinal: 14
+    context_fingerprint: 4a44dc100d338a7496a8bc300a80e871382cc2ae475d6c57e447fdbd6dc6f475
+    disposition: candidate
+  - page: 1
+    section: body-parts
+    ordinal: 15
+    context_fingerprint: 8c9dcbb85aa04e453c48f003558f0f11299a28fe0fc9485805e707fab23978f1
+    disposition: candidate
+  - page: 1
+    section: body-parts
+    ordinal: 16
+    context_fingerprint: 4c17895daf113c39c2c5b3dfc9f78f5ba27209518c2ddbf0b1a148f0db8635fe
+    disposition: candidate
+  - page: 1
+    section: body-parts
+    ordinal: 17
+    context_fingerprint: 1064b4a6f6ac9ae54041d3ca9f6feca8debd926c50e3dc5fb2c724d688409c24
+    disposition: candidate
+  - page: 1
+    section: body-parts
+    ordinal: 18
+    context_fingerprint: 1d93f8d2f5464e2f9995cb08c8071ab76dba804f7945f31b413f914d4a4543ab
+    disposition: candidate
+  - page: 1
+    section: body-parts
+    ordinal: 19
+    context_fingerprint: 42490a38f3ffa7c8f402b7f8a8e97caea2a1aa5cc13667cc000ff21c07d1aed0
+    disposition: candidate
+  - page: 1
+    section: body-parts
+    ordinal: 20
+    context_fingerprint: d5dda8888e0a4110e05a8749c134bd1fa67901fde22ed29e0567b28879ffd420
+    disposition: candidate
+  - page: 1
+    section: body-parts
+    ordinal: 21
+    context_fingerprint: 8fa574440e360593499ea7c34c554db68455142858ccf623de645abd9cec217f
+    disposition: candidate
+  - page: 1
+    section: common-expression
+    ordinal: 1
+    context_fingerprint: 059abd7d72762fdbebbc68568ffda6a37f237d01ff546c96e06e7a4d40daa812
+    disposition: candidate
+  - page: 1
+    section: common-expression
+    ordinal: 2
+    context_fingerprint: 75bac4d6abc5d1a3fb99e1e48e3a7262fb53ad05b26ed66f76f7f3d51f4f226f
+    disposition: candidate
+  - page: 1
+    section: useful-structures
+    ordinal: 1
+    context_fingerprint: 33b8b0b66bdd2aa809acecce46cdceb362aff9f665d5a5d241237637bee5dd04
+    disposition: candidate
+  - page: 1
+    section: useful-structures
+    ordinal: 2
+    context_fingerprint: 7f30691cdad44564994f3dd631a2f723073a7d49215569786b5466c9991c6afb
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 1
+    context_fingerprint: 95d36ce97b54bf4c124195992a1cccdb02a04f99af8bcb4a6a18f5cad9d8ccf7
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 2
+    context_fingerprint: 1895cc61fb7dbd6068a1f321ee879e3d62f0324013d3a78b2c01350e6dde00f0
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 3
+    context_fingerprint: 6f3d3fcdf1e9193f6f781882178305d5ea2ac4f97322d1570e238161cbb0a2aa
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 4
+    context_fingerprint: c0a9128941210e73b1fb0dfa37402ff9aeb4933b9fcee6b00b9ece70c5867b00
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 5
+    context_fingerprint: b1880f99bab47bdfd95900f5199a017ccb53cbd7a43724efdefb486c25e31831
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 6
+    context_fingerprint: 576fb6ea38349b86cab58a9c0000a80a0486f5b57450d37c3bab6b514a5f093e
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 7
+    context_fingerprint: 32356a7b59100b07f79933711ac9b11a1bba4d131dbc216a08862c8c2e1e89e3
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 8
+    context_fingerprint: 8d2b53b10c969ff6a50827fe79449695601a00f57fc57f66a7a2a2b6a16e6604
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 9
+    context_fingerprint: b12534dcba6cb41df70bde75b91e3b1958ed14e999a87532991bb256ab28db85
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 10
+    context_fingerprint: ecef5e6e496089c88bd50c2e284d319beb543b618642794aee112e7a1e218d2d
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 11
+    context_fingerprint: f9b99a9c2dd979c361b9df13cf84629c09896eb3a158a16566228fe8affc349f
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 12
+    context_fingerprint: ed97bb15fb8446fcbdb7b5064e277074122fa7c7c6faf0d20b5ca5ff81c220ee
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 13
+    context_fingerprint: 7518668644f759fb40f76a6cf617fe9e785586e6dafa053bf998ecd169e6febc
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 14
+    context_fingerprint: 66c97870f97625e0cfece0e72d3637ff81f9ead69d6e54a519a826da8f728da8
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 15
+    context_fingerprint: fa608256dfac3c25b1c045c3924be0f3c5fa1a65b00275a9077ca42db9a218fa
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 16
+    context_fingerprint: 6edcdc19ec3c50956c99bf32b519ce816dcea47035bd7f3a28c2f6793e841a0f
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 17
+    context_fingerprint: ab51cd0b815efe027d2db1175c3b699ada97b269c5e309714fe5ef49c248566b
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 18
+    context_fingerprint: 747590f93483843c999ed0fd9dfbede12dd37a6a97d704566cee0855556a5b0b
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 19
+    context_fingerprint: 5ff3e90d6923d810f9e6ed6940ef5a48d13a80a542face9a9a242d55fa3ba92e
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 20
+    context_fingerprint: 627d9862b5fdf822961d453ea11e291f3588eec96eb3dfde1da085c8f7eb77eb
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 21
+    context_fingerprint: 733f717cd08e8811dcb58b6c6f83f4fe4837e15a9c9a979568f78fd3ccd3e4f3
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 22
+    context_fingerprint: 7688e8d6f9f7d62ed6a4b8aeb44d959d7e7d2af00d6331f0c71d85de7e1f854a
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 23
+    context_fingerprint: 8a45bd0622ee471ff299ab8418b7e4870a600240e9e4b313e1b6dade48a0f20f
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 24
+    context_fingerprint: f2e21c2b663f9392bc1a9fa01886a61ccaf343406790a06dd0d959c6f238f380
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 25
+    context_fingerprint: e69dc0a5f49b1a12b7dff15065b41552654844ebd2b604259a21c0ba506ed827
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 26
+    context_fingerprint: 316e74759758c13b42ee2d22183c80266f469c8885316def896f97a7654dc014
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 27
+    context_fingerprint: 27175f13fc50746546117d1375586e1e1b6cad657177ac52ffc6e7c6d395818a
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 28
+    context_fingerprint: d70af4dcf3733aa8ba5028a82f6ea8db85854a9bee64851a1e71e2256347ff5b
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 29
+    context_fingerprint: cc826ae6156005c305b58a86e3fa88a2d56470e248dbd4eeba873925d357a05e
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 30
+    context_fingerprint: df9c5c8ca6e2aba9719009d4799d2568c6f42dda067b8466ccd5c86797f897d9
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 31
+    context_fingerprint: a55bed6f7ca5775ea818df4ffa27b9bfac5e43a22c26f2f61c531d2ef51fb9d7
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 32
+    context_fingerprint: 75b857cd978e03a10a402603ab9ab11cbbd24a3018e3828ceb7ba341746ea572
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 33
+    context_fingerprint: 1643de2ba7eb16e43f9f7b2b4265a0fa2ccafb9eff55488e8ec080515138efb0
+    disposition: candidate
+  - page: 2
+    section: name-of-disease
+    ordinal: 34
+    context_fingerprint: 66101f27121d15edcb9e69538a4bde92facffd7de1766ab85ff30551d84d5207
+    disposition: candidate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 1
+    context_fingerprint: 14390e8bd2cf095c01a27f52efe5006b761b28ef6bf6861cb5d601a86cb18158
+    disposition: candidate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 3
+    context_fingerprint: 0e1e87158d7c71caa1b25cd0eef9a17e66288becd54da1e4da46e65a1c4165aa
+    disposition: candidate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 4
+    context_fingerprint: 04f42ab0a4c1c290f50f32a4b854b87c80360d4441d1050077fca68e0d7534e8
+    disposition: candidate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 5
+    context_fingerprint: 855221cf60bf098d5ea943fc9ba5059a9164fbc4d30f6310ced1dd6893b3fd93
+    disposition: candidate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 6
+    context_fingerprint: 7705f13797cc7bcfe06745e68e66f892170a4939625cb512b5caebfa1be28dee
+    disposition: candidate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 7
+    context_fingerprint: 67466d391d05e1a4460b6f267eebef7a11eb8cfc112cb53eaa1859dae22f7402
+    disposition: candidate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 8
+    context_fingerprint: 398dbad8188e4ebdaef3c9e55d2c16d5a34fef13d13ac14e12e363477b71cbae
+    disposition: candidate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 9
+    context_fingerprint: 973954560b029bfbd4e42193ee7647ff95a236e8797dc15f319719a5cf06d426
+    disposition: candidate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 10
+    context_fingerprint: 969f6b560dff93c49c1c1c267d7bc6869a5431e93c1ef6af94c142f5cdaf68ce
+    disposition: candidate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 11
+    context_fingerprint: 659acffe1a6744efc6b9f07c07688bc7a9ad4821ac137d040fe03c167584a2c6
+    disposition: candidate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 12
+    context_fingerprint: 0c1a2067aaedd16f6e8f9d2b7c1a01ce2d5d6ba6d924cc7c1f6d5a7f095b3f27
+    disposition: candidate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 16
+    context_fingerprint: 3a33548ac1d1541b9bd4063824420e226df6cabd08263cce147017044c137f77
+    disposition: candidate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 18
+    context_fingerprint: 5a9ac6139dd946c45230eeb39d1c2689d1249bdf074012f56e340d26e3aac8b0
+    disposition: candidate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 19
+    context_fingerprint: a0d13bd71abfad21c59d91003ace1e19c5851c420debff2eca749783acf47263
+    disposition: candidate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 20
+    context_fingerprint: 53e569052f13222e32c7b898f2a1c7b68bd61382ec0556ea93dcee39bc52b9b7
+    disposition: candidate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 21
+    context_fingerprint: de01ec30efd1eac12392dba9ea00c3cfca73e25c871e9f720dd2f39f51448b40
+    disposition: candidate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 22
+    context_fingerprint: 846dfdd06c5acf21d6272cca95d19214e5b0ca8af20a58621ac991896458dc9d
+    disposition: candidate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 23
+    context_fingerprint: ae19e4cb1c4190b007fc0ff5b20f00136ec39706d8fd331c1ba532328f03801e
+    disposition: candidate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 24
+    context_fingerprint: fa4d3017efa479f3aa34e952438bd02c292328362c51a4ea2579c35c02f50f50
+    disposition: candidate
+  - page: 4
+    section: at-the-hospital-or-drugstore
+    ordinal: 1
+    context_fingerprint: 6649d350fe3f507772fc02e2dd883efcc642a44ac190695369f2633b4fcf169e
+    disposition: candidate
+  - page: 4
+    section: at-the-hospital-or-drugstore
+    ordinal: 2
+    context_fingerprint: 98a722f50ba26719a578b98b410a4ac13aecc125801cb145dda0a259bf6e2183
+    disposition: candidate
+  - page: 4
+    section: at-the-hospital-or-drugstore
+    ordinal: 3
+    context_fingerprint: 60a963b32f618c1d464f8885992fac7b0b43332fd090b80b24c308157fee12a9
+    disposition: candidate
+  - page: 4
+    section: at-the-hospital-or-drugstore
+    ordinal: 4
+    context_fingerprint: 3a41bddb87dfee252905a6a7288daa4ebb74f53612b8598857cd2f77fca8a592
+    disposition: candidate
+  - page: 4
+    section: at-the-hospital-or-drugstore
+    ordinal: 5
+    context_fingerprint: 50841ca8b8227f504710733308c71b395426f5b9bdc6bab982c2ce34a734cda7
+    disposition: candidate
+  - page: 4
+    section: at-the-hospital-or-drugstore
+    ordinal: 6
+    context_fingerprint: 205318e6fa292a383efd754072a288b2c4297ff343275a66bfa78588a9bb6209
+    disposition: candidate
+  - page: 4
+    section: at-the-hospital-or-drugstore
+    ordinal: 7
+    context_fingerprint: e27e421099103835fe7d91ce61b817c7933ab2af52fe809dbbaca56585af6bf1
+    disposition: candidate
+  - page: 4
+    section: at-the-hospital-or-drugstore
+    ordinal: 8
+    context_fingerprint: 43bdeeb347ffcefc311f1b680f3cbd77b4d2afc7fe61b69b16b9452ae763321a
+    disposition: candidate
+  duplicate_units:
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 13
+    context_fingerprint: cd7b55ba8f98540e4d7f52e26b6d387b804d2d39d5c13e2b6a3bc276d141e0fe
+    disposition: duplicate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 14
+    context_fingerprint: e79c0f8c95f3409e801a08aee4abd8d7fac926be8d66e758f4f9f03f3aba764c
+    disposition: duplicate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 15
+    context_fingerprint: 3a31daf5affff9081265ee690911c1be88dc69b7967b150532706b6a242a49c4
+    disposition: duplicate
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 17
+    context_fingerprint: e2a0595e8f9850d84169a995b511a7edaddd7595e4b997aa281d7e3efde3f967
+    disposition: duplicate
+  non_vocabulary_units:
+  - page: 3
+    section: other-useful-expressions
+    ordinal: 2
+    context_fingerprint: 526b91747bc14feeff87485175d26385078108238e6c78a602f1564af4254b90
+    disposition: non-vocabulary
+  unreadable_units: []
+  parsed_candidate_count: 86
+  canonical_record_count: 86
+  unusable_candidate_count: 0
+  duplicate_candidate_count: 0
+  collision_group_count: 0
+  candidate_accounting_fingerprint: 5c7a4075b6e530c00fa497251cd9f13353bae1079c863f07c728c35c2273131f
+  coverage_block_fingerprint: 7845466ea28c5d17ed2aa209b8d89d545205be717d05be86941c89e64916e513
+  approval:
+    authority: model
+    model: claude-opus-5
+    prompt_fingerprint: 4ec74f4f1acc5a5ae122a8953b6adfdc6954d093a08b033b747a217fa4d2646f
+    source_fingerprint: 2b54834d5cd5f1061b013a238bcbf55de2c9f90c178d1ec7f38b7836b70de0d1
+    coverage_block_fingerprint: 7845466ea28c5d17ed2aa209b8d89d545205be717d05be86941c89e64916e513
+    accepted_dispositions:
+      candidate_units:
+      - page: 1
+        section: body-parts
+        ordinal: 1
+        context_fingerprint: 0797f5f8c84319f6392bd5aef2fff3fa5cef641b17bec7ebfb4f6907b41b0512
+        disposition: candidate
+      - page: 1
+        section: body-parts
+        ordinal: 2
+        context_fingerprint: 7d100cade42fc310812502c7f60d7f22974da61b6f8e056b84e9508244d2e84b
+        disposition: candidate
+      - page: 1
+        section: body-parts
+        ordinal: 3
+        context_fingerprint: 70b8c4921aea891a842480776b6c60bc36bf252c502a525f474deae3e396bf40
+        disposition: candidate
+      - page: 1
+        section: body-parts
+        ordinal: 4
+        context_fingerprint: d74d7f8ec053f8d2e25da59df6bdc34a9b719692b06271ccd93624fadf027d85
+        disposition: candidate
+      - page: 1
+        section: body-parts
+        ordinal: 5
+        context_fingerprint: 2bbed5fe49580e279fd03858ded71b6ffec02ae616bf7864d1815416fa891676
+        disposition: candidate
+      - page: 1
+        section: body-parts
+        ordinal: 6
+        context_fingerprint: 07e261c3937b9133a0a026a7ec28015af0b2bae871afea0e3a78312785b1fd0d
+        disposition: candidate
+      - page: 1
+        section: body-parts
+        ordinal: 7
+        context_fingerprint: c5c9112cf74d1d1a62c3d0c0a9d42d505929b12e37794817e4b50592ca15abc4
+        disposition: candidate
+      - page: 1
+        section: body-parts
+        ordinal: 8
+        context_fingerprint: e82784e69740bfbe14b4d5573dca729fdd85f3f561acba1ac7fb549d4ee57e8c
+        disposition: candidate
+      - page: 1
+        section: body-parts
+        ordinal: 9
+        context_fingerprint: be86881a60652c688fa229c039f0ca055549c1d12fac476c50c22797eda01119
+        disposition: candidate
+      - page: 1
+        section: body-parts
+        ordinal: 10
+        context_fingerprint: 83c0f2589482a9b0fd9d572defd7aee4ebd0867d7b0f8b7acea63b4453b0b13e
+        disposition: candidate
+      - page: 1
+        section: body-parts
+        ordinal: 11
+        context_fingerprint: 772526a283b07795ca977f7c94d2ef985b9258fee0208acdee7819e6b85565f5
+        disposition: candidate
+      - page: 1
+        section: body-parts
+        ordinal: 12
+        context_fingerprint: 0bc74459ffa2768aaca77d60850e17858a4af7eba315193fe007c2c02f90b167
+        disposition: candidate
+      - page: 1
+        section: body-parts
+        ordinal: 13
+        context_fingerprint: b53c78ccfdda0b9612e6fa43377c555220666ddf8b9eb7fd67d7b49777a49521
+        disposition: candidate
+      - page: 1
+        section: body-parts
+        ordinal: 14
+        context_fingerprint: 4a44dc100d338a7496a8bc300a80e871382cc2ae475d6c57e447fdbd6dc6f475
+        disposition: candidate
+      - page: 1
+        section: body-parts
+        ordinal: 15
+        context_fingerprint: 8c9dcbb85aa04e453c48f003558f0f11299a28fe0fc9485805e707fab23978f1
+        disposition: candidate
+      - page: 1
+        section: body-parts
+        ordinal: 16
+        context_fingerprint: 4c17895daf113c39c2c5b3dfc9f78f5ba27209518c2ddbf0b1a148f0db8635fe
+        disposition: candidate
+      - page: 1
+        section: body-parts
+        ordinal: 17
+        context_fingerprint: 1064b4a6f6ac9ae54041d3ca9f6feca8debd926c50e3dc5fb2c724d688409c24
+        disposition: candidate
+      - page: 1
+        section: body-parts
+        ordinal: 18
+        context_fingerprint: 1d93f8d2f5464e2f9995cb08c8071ab76dba804f7945f31b413f914d4a4543ab
+        disposition: candidate
+      - page: 1
+        section: body-parts
+        ordinal: 19
+        context_fingerprint: 42490a38f3ffa7c8f402b7f8a8e97caea2a1aa5cc13667cc000ff21c07d1aed0
+        disposition: candidate
+      - page: 1
+        section: body-parts
+        ordinal: 20
+        context_fingerprint: d5dda8888e0a4110e05a8749c134bd1fa67901fde22ed29e0567b28879ffd420
+        disposition: candidate
+      - page: 1
+        section: body-parts
+        ordinal: 21
+        context_fingerprint: 8fa574440e360593499ea7c34c554db68455142858ccf623de645abd9cec217f
+        disposition: candidate
+      - page: 1
+        section: common-expression
+        ordinal: 1
+        context_fingerprint: 059abd7d72762fdbebbc68568ffda6a37f237d01ff546c96e06e7a4d40daa812
+        disposition: candidate
+      - page: 1
+        section: common-expression
+        ordinal: 2
+        context_fingerprint: 75bac4d6abc5d1a3fb99e1e48e3a7262fb53ad05b26ed66f76f7f3d51f4f226f
+        disposition: candidate
+      - page: 1
+        section: useful-structures
+        ordinal: 1
+        context_fingerprint: 33b8b0b66bdd2aa809acecce46cdceb362aff9f665d5a5d241237637bee5dd04
+        disposition: candidate
+      - page: 1
+        section: useful-structures
+        ordinal: 2
+        context_fingerprint: 7f30691cdad44564994f3dd631a2f723073a7d49215569786b5466c9991c6afb
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 1
+        context_fingerprint: 95d36ce97b54bf4c124195992a1cccdb02a04f99af8bcb4a6a18f5cad9d8ccf7
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 2
+        context_fingerprint: 1895cc61fb7dbd6068a1f321ee879e3d62f0324013d3a78b2c01350e6dde00f0
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 3
+        context_fingerprint: 6f3d3fcdf1e9193f6f781882178305d5ea2ac4f97322d1570e238161cbb0a2aa
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 4
+        context_fingerprint: c0a9128941210e73b1fb0dfa37402ff9aeb4933b9fcee6b00b9ece70c5867b00
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 5
+        context_fingerprint: b1880f99bab47bdfd95900f5199a017ccb53cbd7a43724efdefb486c25e31831
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 6
+        context_fingerprint: 576fb6ea38349b86cab58a9c0000a80a0486f5b57450d37c3bab6b514a5f093e
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 7
+        context_fingerprint: 32356a7b59100b07f79933711ac9b11a1bba4d131dbc216a08862c8c2e1e89e3
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 8
+        context_fingerprint: 8d2b53b10c969ff6a50827fe79449695601a00f57fc57f66a7a2a2b6a16e6604
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 9
+        context_fingerprint: b12534dcba6cb41df70bde75b91e3b1958ed14e999a87532991bb256ab28db85
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 10
+        context_fingerprint: ecef5e6e496089c88bd50c2e284d319beb543b618642794aee112e7a1e218d2d
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 11
+        context_fingerprint: f9b99a9c2dd979c361b9df13cf84629c09896eb3a158a16566228fe8affc349f
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 12
+        context_fingerprint: ed97bb15fb8446fcbdb7b5064e277074122fa7c7c6faf0d20b5ca5ff81c220ee
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 13
+        context_fingerprint: 7518668644f759fb40f76a6cf617fe9e785586e6dafa053bf998ecd169e6febc
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 14
+        context_fingerprint: 66c97870f97625e0cfece0e72d3637ff81f9ead69d6e54a519a826da8f728da8
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 15
+        context_fingerprint: fa608256dfac3c25b1c045c3924be0f3c5fa1a65b00275a9077ca42db9a218fa
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 16
+        context_fingerprint: 6edcdc19ec3c50956c99bf32b519ce816dcea47035bd7f3a28c2f6793e841a0f
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 17
+        context_fingerprint: ab51cd0b815efe027d2db1175c3b699ada97b269c5e309714fe5ef49c248566b
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 18
+        context_fingerprint: 747590f93483843c999ed0fd9dfbede12dd37a6a97d704566cee0855556a5b0b
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 19
+        context_fingerprint: 5ff3e90d6923d810f9e6ed6940ef5a48d13a80a542face9a9a242d55fa3ba92e
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 20
+        context_fingerprint: 627d9862b5fdf822961d453ea11e291f3588eec96eb3dfde1da085c8f7eb77eb
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 21
+        context_fingerprint: 733f717cd08e8811dcb58b6c6f83f4fe4837e15a9c9a979568f78fd3ccd3e4f3
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 22
+        context_fingerprint: 7688e8d6f9f7d62ed6a4b8aeb44d959d7e7d2af00d6331f0c71d85de7e1f854a
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 23
+        context_fingerprint: 8a45bd0622ee471ff299ab8418b7e4870a600240e9e4b313e1b6dade48a0f20f
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 24
+        context_fingerprint: f2e21c2b663f9392bc1a9fa01886a61ccaf343406790a06dd0d959c6f238f380
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 25
+        context_fingerprint: e69dc0a5f49b1a12b7dff15065b41552654844ebd2b604259a21c0ba506ed827
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 26
+        context_fingerprint: 316e74759758c13b42ee2d22183c80266f469c8885316def896f97a7654dc014
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 27
+        context_fingerprint: 27175f13fc50746546117d1375586e1e1b6cad657177ac52ffc6e7c6d395818a
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 28
+        context_fingerprint: d70af4dcf3733aa8ba5028a82f6ea8db85854a9bee64851a1e71e2256347ff5b
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 29
+        context_fingerprint: cc826ae6156005c305b58a86e3fa88a2d56470e248dbd4eeba873925d357a05e
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 30
+        context_fingerprint: df9c5c8ca6e2aba9719009d4799d2568c6f42dda067b8466ccd5c86797f897d9
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 31
+        context_fingerprint: a55bed6f7ca5775ea818df4ffa27b9bfac5e43a22c26f2f61c531d2ef51fb9d7
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 32
+        context_fingerprint: 75b857cd978e03a10a402603ab9ab11cbbd24a3018e3828ceb7ba341746ea572
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 33
+        context_fingerprint: 1643de2ba7eb16e43f9f7b2b4265a0fa2ccafb9eff55488e8ec080515138efb0
+        disposition: candidate
+      - page: 2
+        section: name-of-disease
+        ordinal: 34
+        context_fingerprint: 66101f27121d15edcb9e69538a4bde92facffd7de1766ab85ff30551d84d5207
+        disposition: candidate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 1
+        context_fingerprint: 14390e8bd2cf095c01a27f52efe5006b761b28ef6bf6861cb5d601a86cb18158
+        disposition: candidate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 3
+        context_fingerprint: 0e1e87158d7c71caa1b25cd0eef9a17e66288becd54da1e4da46e65a1c4165aa
+        disposition: candidate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 4
+        context_fingerprint: 04f42ab0a4c1c290f50f32a4b854b87c80360d4441d1050077fca68e0d7534e8
+        disposition: candidate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 5
+        context_fingerprint: 855221cf60bf098d5ea943fc9ba5059a9164fbc4d30f6310ced1dd6893b3fd93
+        disposition: candidate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 6
+        context_fingerprint: 7705f13797cc7bcfe06745e68e66f892170a4939625cb512b5caebfa1be28dee
+        disposition: candidate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 7
+        context_fingerprint: 67466d391d05e1a4460b6f267eebef7a11eb8cfc112cb53eaa1859dae22f7402
+        disposition: candidate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 8
+        context_fingerprint: 398dbad8188e4ebdaef3c9e55d2c16d5a34fef13d13ac14e12e363477b71cbae
+        disposition: candidate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 9
+        context_fingerprint: 973954560b029bfbd4e42193ee7647ff95a236e8797dc15f319719a5cf06d426
+        disposition: candidate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 10
+        context_fingerprint: 969f6b560dff93c49c1c1c267d7bc6869a5431e93c1ef6af94c142f5cdaf68ce
+        disposition: candidate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 11
+        context_fingerprint: 659acffe1a6744efc6b9f07c07688bc7a9ad4821ac137d040fe03c167584a2c6
+        disposition: candidate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 12
+        context_fingerprint: 0c1a2067aaedd16f6e8f9d2b7c1a01ce2d5d6ba6d924cc7c1f6d5a7f095b3f27
+        disposition: candidate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 16
+        context_fingerprint: 3a33548ac1d1541b9bd4063824420e226df6cabd08263cce147017044c137f77
+        disposition: candidate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 18
+        context_fingerprint: 5a9ac6139dd946c45230eeb39d1c2689d1249bdf074012f56e340d26e3aac8b0
+        disposition: candidate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 19
+        context_fingerprint: a0d13bd71abfad21c59d91003ace1e19c5851c420debff2eca749783acf47263
+        disposition: candidate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 20
+        context_fingerprint: 53e569052f13222e32c7b898f2a1c7b68bd61382ec0556ea93dcee39bc52b9b7
+        disposition: candidate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 21
+        context_fingerprint: de01ec30efd1eac12392dba9ea00c3cfca73e25c871e9f720dd2f39f51448b40
+        disposition: candidate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 22
+        context_fingerprint: 846dfdd06c5acf21d6272cca95d19214e5b0ca8af20a58621ac991896458dc9d
+        disposition: candidate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 23
+        context_fingerprint: ae19e4cb1c4190b007fc0ff5b20f00136ec39706d8fd331c1ba532328f03801e
+        disposition: candidate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 24
+        context_fingerprint: fa4d3017efa479f3aa34e952438bd02c292328362c51a4ea2579c35c02f50f50
+        disposition: candidate
+      - page: 4
+        section: at-the-hospital-or-drugstore
+        ordinal: 1
+        context_fingerprint: 6649d350fe3f507772fc02e2dd883efcc642a44ac190695369f2633b4fcf169e
+        disposition: candidate
+      - page: 4
+        section: at-the-hospital-or-drugstore
+        ordinal: 2
+        context_fingerprint: 98a722f50ba26719a578b98b410a4ac13aecc125801cb145dda0a259bf6e2183
+        disposition: candidate
+      - page: 4
+        section: at-the-hospital-or-drugstore
+        ordinal: 3
+        context_fingerprint: 60a963b32f618c1d464f8885992fac7b0b43332fd090b80b24c308157fee12a9
+        disposition: candidate
+      - page: 4
+        section: at-the-hospital-or-drugstore
+        ordinal: 4
+        context_fingerprint: 3a41bddb87dfee252905a6a7288daa4ebb74f53612b8598857cd2f77fca8a592
+        disposition: candidate
+      - page: 4
+        section: at-the-hospital-or-drugstore
+        ordinal: 5
+        context_fingerprint: 50841ca8b8227f504710733308c71b395426f5b9bdc6bab982c2ce34a734cda7
+        disposition: candidate
+      - page: 4
+        section: at-the-hospital-or-drugstore
+        ordinal: 6
+        context_fingerprint: 205318e6fa292a383efd754072a288b2c4297ff343275a66bfa78588a9bb6209
+        disposition: candidate
+      - page: 4
+        section: at-the-hospital-or-drugstore
+        ordinal: 7
+        context_fingerprint: e27e421099103835fe7d91ce61b817c7933ab2af52fe809dbbaca56585af6bf1
+        disposition: candidate
+      - page: 4
+        section: at-the-hospital-or-drugstore
+        ordinal: 8
+        context_fingerprint: 43bdeeb347ffcefc311f1b680f3cbd77b4d2afc7fe61b69b16b9452ae763321a
+        disposition: candidate
+      duplicate_units:
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 13
+        context_fingerprint: cd7b55ba8f98540e4d7f52e26b6d387b804d2d39d5c13e2b6a3bc276d141e0fe
+        disposition: duplicate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 14
+        context_fingerprint: e79c0f8c95f3409e801a08aee4abd8d7fac926be8d66e758f4f9f03f3aba764c
+        disposition: duplicate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 15
+        context_fingerprint: 3a31daf5affff9081265ee690911c1be88dc69b7967b150532706b6a242a49c4
+        disposition: duplicate
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 17
+        context_fingerprint: e2a0595e8f9850d84169a995b511a7edaddd7595e4b997aa281d7e3efde3f967
+        disposition: duplicate
+      non_vocabulary_units:
+      - page: 3
+        section: other-useful-expressions
+        ordinal: 2
+        context_fingerprint: 526b91747bc14feeff87485175d26385078108238e6c78a602f1564af4254b90
+        disposition: non-vocabulary
+      unreadable_units: []
+    accepted_mismatches:
+      duplicate_keys: []
+    unmeasured: true
+    reason: 'All list/table rows are accounted for: page 1''s two structure frames plus Body Parts 1\u201321 and both [Common expression] sentences (25 entries), page 2''s Name of disease rows 1\u201334 in order, page 3''s Other useful expressions rows 1\u201324, and page 4''s drugstore rows 1\u20138 \u2014 91 entries total, matching the page count exactly with no gaps or shared ordinals. The four `duplicate` flags on page 3 (\u4fbf\u79d8 vs. p2 #30, \u75d2\u3044 vs. p1 structure #2, \u866b\u6b6f vs. p2 #18, \u30a4\u30f3\u30d5\u30eb\u30a8\u30f3\u30b6 vs. p2 #9) all point at genuine earlier occurrences, and the single `non-vocabulary` (p3 #2, \"38 do desu\") is a defensible call on a number-plus-\u3067\u3059 statement. Not recorded: the Fahrenheit/Celsius formula box on p3, the \"Please give me ___ / \u3092\u304f\u3060\u3055\u3044\" lead-in frame on p4, and the footer contact/credits \u2014 none of these are numbered list rows, so their absence is within the running-text standard.'
+    approved_at: '2026-08-23'
+candidate_accounting:
+  version: 1
+  parsed_candidate_count: 86
+  canonical_record_count: 86
+  unusable_candidate_count: 0
+  duplicate_candidate_count: 0
+  collision_group_count: 0
+  collision_groups: []
+  candidate_accounting_fingerprint: 5c7a4075b6e530c00fa497251cd9f13353bae1079c863f07c728c35c2273131f
+review_notes: Promoted 86 record(s) from this file.
+records:
+- id: word:痛い:いたい
+  expression: 痛い
+  reading: いたい
+  furigana: ''
+  romaji: itai
+  meanings:
+  - painful
+  - sore
+  - it hurts
+  part_of_speech: i-adjective
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: お腹が痛いです。
+    furigana: お 腹[なか]が 痛[いた]いです。
+    romaji: onaka ga itai desu.
+    english: I have a stomachache.
+    audio: ''
+    register: polite
+  - japanese: 頭が痛いから、今日は早く寝る。
+    furigana: 頭[あたま]が 痛[いた]いから、 今日[きょう]は 早[はや]く 寝[ね]る。
+    romaji: atama ga itai kara, kyou wa hayaku neru.
+    english: My head hurts, so I'm going to bed early today.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: 'The body part that hurts takes が: 〜が痛いです。To say you hurt a part yourself, use 〜を痛（いた）める.'
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: 1. I have a pain in my ______. ______ ga itai desu. が痛いです。
+      provisional_fields: meanings:bacf16615472,part_of_speech:e4ecca77b823
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: fa149869ca3e,db122a12e981
+- id: word:痒い:かゆい
+  expression: 痒い
+  reading: かゆい
+  furigana: ''
+  romaji: kayui
+  meanings:
+  - itchy
+  part_of_speech: i-adjective
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 背中が痒いです。
+    furigana: 背中[せなか]が 痒[かゆ]いです。
+    romaji: senaka ga kayui desu.
+    english: My back itches.
+    audio: ''
+    register: polite
+  - japanese: 虫に刺されて、腕が痒い。
+    furigana: 虫[むし]に 刺[さ]されて、 腕[うで]が 痒[かゆ]い。
+    romaji: mushi ni sasarete, ude ga kayui.
+    english: I got bitten by a bug and my arm itches.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Often written in kana as かゆい. The itchy part takes が.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: 2. My ______ itches. ______ ga kayui desu. が痒いです。
+      provisional_fields: meanings:a07f5e41ba76,part_of_speech:e4ecca77b823
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 65ab1fc378c9,10836943eddd
+- id: word:頭:あたま
+  expression: 頭
+  reading: あたま
+  furigana: ''
+  romaji: atama
+  meanings:
+  - head
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 頭が痛いです。
+    furigana: 頭[あたま]が 痛[いた]いです。
+    romaji: atama ga itai desu.
+    english: I have a headache.
+    audio: ''
+    register: polite
+  - japanese: 朝から頭が痛いんだ。
+    furigana: 朝[あさ]から 頭[あたま]が 痛[いた]いんだ。
+    romaji: asa kara atama ga itai n da.
+    english: My head has been hurting since this morning.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: 1. head atama あたま 頭
+      provisional_fields: meanings:1f13dd6b9809,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 7f4be773d699,0300206ea52b
+- id: word:目:め
+  expression: 目
+  reading: め
+  furigana: ''
+  romaji: me
+  meanings:
+  - eye
+  - eyes
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: パソコンの仕事で目が疲れます。
+    furigana: パソコンの 仕事[しごと]で 目[め]が 疲[つか]れます。
+    romaji: pasokon no shigoto de me ga tsukaremasu.
+    english: My eyes get tired from computer work.
+    audio: ''
+    register: polite
+  - japanese: 目が赤いよ、大丈夫?
+    furigana: 目[め]が 赤[あか]いよ、 大丈夫[だいじょうぶ]?
+    romaji: me ga akai yo, daijoubu?
+    english: Your eyes are red. Are you okay?
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: 2. eyes me め 目
+      provisional_fields: meanings:267c31f5533e,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: bf5ea73c04be,0ce1cfc2b3cd
+- id: word:瞼:まぶた
+  expression: 瞼
+  reading: まぶた
+  furigana: ''
+  romaji: mabuta
+  meanings:
+  - eyelid
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 瞼が腫れています。
+    furigana: 瞼[まぶた]が 腫[は]れています。
+    romaji: mabuta ga harete imasu.
+    english: My eyelid is swollen.
+    audio: ''
+    register: polite
+  - japanese: 眠くて瞼が重い。
+    furigana: 眠[ねむ]くて 瞼[まぶた]が 重[おも]い。
+    romaji: nemukute mabuta ga omoi.
+    english: I'm sleepy and my eyelids feel heavy.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Usually written in kana as まぶた in everyday text.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: 3. eyelid mabuta まぶた 瞼
+      provisional_fields: meanings:ddbc8faeb382,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 70c8e08716de,e07bf4a2ae76
+- id: word:歯:は
+  expression: 歯
+  reading: は
+  furigana: ''
+  romaji: ha
+  meanings:
+  - tooth
+  - teeth
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 歯が痛いので、歯医者に行きます。
+    furigana: 歯[は]が 痛[いた]いので、 歯医者[はいしゃ]に 行[い]きます。
+    romaji: ha ga itai node, haisha ni ikimasu.
+    english: My tooth hurts, so I'm going to the dentist.
+    audio: ''
+    register: polite
+  - japanese: 寝る前に歯を磨く。
+    furigana: 寝[ね]る 前[まえ]に 歯[は]を 磨[みが]く。
+    romaji: neru mae ni ha o migaku.
+    english: I brush my teeth before going to bed.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: 4. teeth ha は 歯
+      provisional_fields: meanings:09b3ed391fd7,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 6d3f577cb805,4a808b4fd01c
+- id: word:耳:みみ
+  expression: 耳
+  reading: みみ
+  furigana: ''
+  romaji: mimi
+  meanings:
+  - ear
+  - ears
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 風邪で耳が痛いです。
+    furigana: 風邪[かぜ]で 耳[みみ]が 痛[いた]いです。
+    romaji: kaze de mimi ga itai desu.
+    english: My ears hurt because of a cold.
+    audio: ''
+    register: polite
+  - japanese: ヘッドホンで耳が疲れた。
+    furigana: ヘッドホンで 耳[みみ]が 疲[つか]れた。
+    romaji: heddohon de mimi ga tsukareta.
+    english: My ears got tired from the headphones.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: 5. ears mimi みみ 耳
+      provisional_fields: meanings:6dbb4051163b,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 54c22b08b326,0581a5e1916a
+- id: word:耳たぶ:みみたぶ
+  expression: 耳たぶ
+  reading: みみたぶ
+  furigana: ''
+  romaji: mimitabu
+  meanings:
+  - earlobe
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 耳たぶにピアスの穴を開けました。
+    furigana: 耳[みみ]たぶに ピアスの 穴[あな]を 開[あ]けました。
+    romaji: mimitabu ni piasu no ana o akemashita.
+    english: I got my earlobes pierced.
+    audio: ''
+    register: polite
+  - japanese: 寒くて耳たぶが赤くなった。
+    furigana: 寒[さむ]くて 耳[みみ]たぶが 赤[あか]くなった。
+    romaji: samukute mimitabu ga akaku natta.
+    english: It was cold and my earlobes turned red.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: 6. ear lobe mimitabu みみたぶ 耳たぶ
+      provisional_fields: meanings:390f5944fcdb,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 4bf5454b7d02,a1caf3eca48b
+- id: word:鼻:はな
+  expression: 鼻
+  reading: はな
+  furigana: ''
+  romaji: hana
+  meanings:
+  - nose
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 鼻が詰まっています。
+    furigana: 鼻[はな]が 詰[つ]まっています。
+    romaji: hana ga tsumatte imasu.
+    english: My nose is stuffed up.
+    audio: ''
+    register: polite
+  - japanese: 寒いと鼻が赤くなる。
+    furigana: 寒[さむ]いと 鼻[はな]が 赤[あか]くなる。
+    romaji: samui to hana ga akaku naru.
+    english: My nose turns red when it's cold.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: 7. nose hana はな 鼻
+      provisional_fields: meanings:1e980fb4b31b,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: e6fc814af6f3,9d2595bcfca8
+- id: word:胸:むね
+  expression: 胸
+  reading: むね
+  furigana: ''
+  romaji: mune
+  meanings:
+  - chest
+  - breast
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 胸が苦しいです。
+    furigana: 胸[むね]が 苦[くる]しいです。
+    romaji: mune ga kurushii desu.
+    english: My chest feels tight.
+    audio: ''
+    register: polite
+  - japanese: 走ったあと、胸がどきどきした。
+    furigana: 走[はし]ったあと、 胸[むね]がどきどきした。
+    romaji: hashitta ato, mune ga dokidoki shita.
+    english: My heart was pounding after I ran.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: 8. chest・breast mune むね 胸
+      provisional_fields: meanings:b526ee146fdf,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: c165fd230873,11fa30cc4c72
+- id: word:背中:せなか
+  expression: 背中
+  reading: せなか
+  furigana: ''
+  romaji: senaka
+  meanings:
+  - back
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 背中が痛いです。
+    furigana: 背中[せなか]が 痛[いた]いです。
+    romaji: senaka ga itai desu.
+    english: My back hurts.
+    audio: ''
+    register: polite
+  - japanese: 山に登ったら背中が痛くなった。
+    furigana: 山[やま]に 登[のぼ]ったら 背中[せなか]が 痛[いた]くなった。
+    romaji: yama ni nobottara senaka ga itaku natta.
+    english: My back started hurting after I hiked up the mountain.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: 背中 is the upper back; the lower back is 腰（こし）.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: 9. back senaka せなか 背中
+      provisional_fields: meanings:d2aa69793b26,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 5b1fa98a749f,fa8e2f2a855b
+- id: word:骨:ほね
+  expression: 骨
+  reading: ほね
+  furigana: ''
+  romaji: hone
+  meanings:
+  - bone
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 転んで、腕の骨を折りました。
+    furigana: 転[ころ]んで、 腕[うで]の 骨[ほね]を 折[お]りました。
+    romaji: koronde, ude no hone o orimashita.
+    english: I fell and broke the bone in my arm.
+    audio: ''
+    register: polite
+  - japanese: 転んだけど、骨は折れてないよ。
+    furigana: 転[ころ]んだけど、 骨[ほね]は 折[お]れてないよ。
+    romaji: koronda kedo, hone wa oretenai yo.
+    english: I fell, but I didn't break any bones.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: 骨を折る is transitive (to break a bone); 骨が折れる is the intransitive pair.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: 10. bone hone ほね 骨
+      provisional_fields: meanings:817e77b1d7bd,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: d10512ea19c2,9dbb4f2adafe
+- id: word:肩:かた
+  expression: 肩
+  reading: かた
+  furigana: ''
+  romaji: kata
+  meanings:
+  - shoulder
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 肩が凝っています。
+    furigana: 肩[かた]が 凝[こ]っています。
+    romaji: kata ga kotte imasu.
+    english: My shoulders are stiff.
+    audio: ''
+    register: polite
+  - japanese: 仕事のあとは肩が痛い。
+    furigana: 仕事[しごと]のあとは 肩[かた]が 痛[いた]い。
+    romaji: shigoto no ato wa kata ga itai.
+    english: My shoulders hurt after work.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: 11. shoulder kata かた 肩
+      provisional_fields: meanings:b36fe498fe16,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: ccaa716fc097,f25ebb7e0cf9
+- id: word:首:くび
+  expression: 首
+  reading: くび
+  furigana: ''
+  romaji: kubi
+  meanings:
+  - neck
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 首が痛くて、上を見られません。
+    furigana: 首[くび]が 痛[いた]くて、 上[うえ]を 見[み]られません。
+    romaji: kubi ga itakute, ue o miraremasen.
+    english: My neck hurts and I can't look up.
+    audio: ''
+    register: polite
+  - japanese: 首をゆっくり回してみて。
+    furigana: 首[くび]をゆっくり 回[まわ]してみて。
+    romaji: kubi o yukkuri mawashite mite.
+    english: Try turning your neck slowly.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: 12. neck kubi くび 首
+      provisional_fields: meanings:ef227368ce60,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 026872b2745d,b01d8cc8b926
+- id: word:胃:い
+  expression: 胃
+  reading: い
+  furigana: ''
+  romaji: i
+  meanings:
+  - stomach
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 胃が痛いです。
+    furigana: 胃[い]が 痛[いた]いです。
+    romaji: i ga itai desu.
+    english: My stomach hurts.
+    audio: ''
+    register: polite
+  - japanese: 飲みすぎて胃が重い。
+    furigana: 飲[の]みすぎて 胃[い]が 重[おも]い。
+    romaji: nomisugite i ga omoi.
+    english: I drank too much and my stomach feels heavy.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: 胃 is the stomach organ; お腹 is the belly area in general.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: 13. stomach ｉ い 胃
+      provisional_fields: meanings:1eecca56f028,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 20e8c1f71175,ac373a6c0761
+- id: word:腕:うで
+  expression: 腕
+  reading: うで
+  furigana: ''
+  romaji: ude
+  meanings:
+  - arm
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 重い荷物で腕が痛いです。
+    furigana: 重[おも]い 荷物[にもつ]で 腕[うで]が 痛[いた]いです。
+    romaji: omoi nimotsu de ude ga itai desu.
+    english: My arm hurts from the heavy luggage.
+    audio: ''
+    register: polite
+  - japanese: 腕を怪我しちゃった。
+    furigana: 腕[うで]を 怪我[けが]しちゃった。
+    romaji: ude o kega shichatta.
+    english: I hurt my arm.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: 14. arm ude うで 腕
+      provisional_fields: meanings:275c320f3ee0,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: b28eae92ae9d,5fba53ba94c9
+- id: word:手首:てくび
+  expression: 手首
+  reading: てくび
+  furigana: ''
+  romaji: tekubi
+  meanings:
+  - wrist
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 手首をひねりました。
+    furigana: 手首[てくび]をひねりました。
+    romaji: tekubi o hinerimashita.
+    english: I twisted my wrist.
+    audio: ''
+    register: polite
+  - japanese: マウスの使いすぎで手首が痛い。
+    furigana: マウスの 使[つか]いすぎで 手首[てくび]が 痛[いた]い。
+    romaji: mausu no tsukaisugi de tekubi ga itai.
+    english: My wrist hurts from using the mouse too much.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: 16. wrist tekubi てくび 手首
+      provisional_fields: meanings:42169b93aff7,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 5caece5f30d1,0cddb5660eee
+- id: word:指:ゆび
+  expression: 指
+  reading: ゆび
+  furigana: ''
+  romaji: yubi
+  meanings:
+  - finger
+  - fingers
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 指を切ってしまいました。
+    furigana: 指[ゆび]を 切[き]ってしまいました。
+    romaji: yubi o kitte shimaimashita.
+    english: I cut my finger.
+    audio: ''
+    register: polite
+  - japanese: 指が痛くて、ギターが弾けない。
+    furigana: 指[ゆび]が 痛[いた]くて、 ギターが 弾[ひ]けない。
+    romaji: yubi ga itakute, gitaa ga hikenai.
+    english: My fingers hurt and I can't play the guitar.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: 指 covers both fingers and toes; toes can be 足の指.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: 17. fingers yubi ゆび 指
+      provisional_fields: meanings:ecc6e5859383,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 98a6eb5996e6,0a8013cb0210
+- id: word:爪:つめ
+  expression: 爪
+  reading: つめ
+  furigana: ''
+  romaji: tsume
+  meanings:
+  - nail
+  - nails
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 爪が割れてしまいました。
+    furigana: 爪[つめ]が 割[わ]れてしまいました。
+    romaji: tsume ga warete shimaimashita.
+    english: My nail cracked.
+    audio: ''
+    register: polite
+  - japanese: 爪を切らないと。
+    furigana: 爪[つめ]を 切[き]らないと。
+    romaji: tsume o kiranai to.
+    english: I need to cut my nails.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: 18. nails tsume つめ 爪
+      provisional_fields: meanings:7754433adb54,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: a67fde3d0681,68e81c5eebad
+- id: word:足:あし
+  expression: 足
+  reading: あし
+  furigana: ''
+  romaji: ashi
+  meanings:
+  - leg
+  - foot
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 歩きすぎて足が痛いです。
+    furigana: 歩[ある]きすぎて 足[あし]が 痛[いた]いです。
+    romaji: arukisugite ashi ga itai desu.
+    english: I walked too much and my feet hurt.
+    audio: ''
+    register: polite
+  - japanese: 足が疲れたから、少し休もう。
+    furigana: 足[あし]が 疲[つか]れたから、 少[すこ]し 休[やす]もう。
+    romaji: ashi ga tsukareta kara, sukoshi yasumou.
+    english: My legs are tired, so let's rest a bit.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: The same word あし is written 足 (foot, or leg generally) or 脚 (leg) as the source shows.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: medium
+      page: '1'
+      context: 20. leg・foot ashi あし 脚・足
+      provisional_fields: meanings:cf7f5c71b6e6,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 8fd24600bb24,f584da535a6b
+- id: word:爪先:つまさき
+  expression: 爪先
+  reading: つまさき
+  furigana: ''
+  romaji: tsumasaki
+  meanings:
+  - toes
+  - tiptoe
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 靴が小さくて、爪先が痛いです。
+    furigana: 靴[くつ]が 小[ちい]さくて、 爪先[つまさき]が 痛[いた]いです。
+    romaji: kutsu ga chiisakute, tsumasaki ga itai desu.
+    english: My shoes are small and my toes hurt.
+    audio: ''
+    register: polite
+  - japanese: 爪先で立ってみて。
+    furigana: 爪先[つまさき]で 立[た]ってみて。
+    romaji: tsumasaki de tatte mite.
+    english: Try standing on your toes.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Often written つま先.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: 21. toes tsumasaki つまさき 爪先
+      provisional_fields: meanings:e6769a123b6e,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: d11fdd798662,af388a711bac
+- id: word:お腹:おなか
+  expression: お腹
+  reading: おなか
+  furigana: ''
+  romaji: onaka
+  meanings:
+  - stomach
+  - belly
+  - abdomen
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: お腹が痛いです。
+    furigana: お 腹[なか]が 痛[いた]いです。
+    romaji: onaka ga itai desu.
+    english: I have a stomachache.
+    audio: ''
+    register: polite
+  - japanese: 食べすぎてお腹が苦しい。
+    furigana: 食[た]べすぎて お 腹[なか]が 苦[くる]しい。
+    romaji: tabesugite onaka ga kurushii.
+    english: I ate too much and my stomach feels uncomfortable.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Always used with the お prefix; often written おなか. お腹がすく means to get hungry.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: (1) Onaka ga itai desu. お腹が痛いです。 have a pain / abdomen, stomach, bowel, (tummy)
+      provisional_fields: meanings:ca3ad774f651,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: fa149869ca3e,964d62b80ae8
+- id: word:腰:こし
+  expression: 腰
+  reading: こし
+  furigana: ''
+  romaji: koshi
+  meanings:
+  - lower back
+  - waist
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 腰が痛いです。
+    furigana: 腰[こし]が 痛[いた]いです。
+    romaji: koshi ga itai desu.
+    english: I have a backache.
+    audio: ''
+    register: polite
+  - japanese: 重い荷物を持って、腰を痛めた。
+    furigana: 重[おも]い 荷物[にもつ]を 持[も]って、 腰[こし]を 痛[いた]めた。
+    romaji: omoi nimotsu o motte, koshi o itameta.
+    english: I hurt my lower back carrying heavy luggage.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: 腰 means the lower back and hip area, not the whole back.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: (2) Koshi ga itai desu. 腰が痛いです。 I have a backache.
+      provisional_fields: meanings:5ba5fd88e554,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 60c737a95064,92fbed5bbaa0
+- id: word:麻疹:はしか
+  expression: 麻疹
+  reading: はしか
+  furigana: ''
+  romaji: hashika
+  meanings:
+  - measles
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 子供の時に麻疹にかかりました。
+    furigana: 子供[こども]の 時[とき]に 麻疹[はしか]にかかりました。
+    romaji: kodomo no toki ni hashika ni kakarimashita.
+    english: I had measles as a child.
+    audio: ''
+    register: polite
+  - japanese: 妹が麻疹にかかったらしい。
+    furigana: 妹[いもうと]が 麻疹[はしか]にかかったらしい。
+    romaji: imouto ga hashika ni kakatta rashii.
+    english: I hear my little sister caught the measles.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Normally written in kana as はしか. Illnesses take 〜にかかる.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 1. measles hashika はしか 麻疹
+      provisional_fields: meanings:93b9293752cf,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 0ebf9e9a17e4,15fbafae067e
+- id: word:水疱瘡:みずぼうそう
+  expression: 水疱瘡
+  reading: みずぼうそう
+  furigana: ''
+  romaji: mizubousou
+  meanings:
+  - chicken pox
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 息子が水疱瘡になりました。
+    furigana: 息子[むすこ]が 水疱瘡[みずぼうそう]になりました。
+    romaji: musuko ga mizubousou ni narimashita.
+    english: My son came down with chicken pox.
+    audio: ''
+    register: polite
+  - japanese: 水疱瘡は一回かかれば、もう大丈夫だよ。
+    furigana: 水疱瘡[みずぼうそう]は 一回[いっかい]かかれば、もう 大丈夫[だいじょうぶ]だよ。
+    romaji: mizubousou wa ikkai kakareba, mou daijoubu da yo.
+    english: Once you've had chicken pox, you're fine.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Often written みずぼうそう in kana.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 2. chicken pox mizuboso みずぼうそう 水疱瘡
+      provisional_fields: meanings:9d0d21931d0d,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: bf8124430046,d32e282a49fb
+- id: word:おたふく:おたふく
+  expression: おたふく
+  reading: おたふく
+  furigana: ''
+  romaji: otafuku
+  meanings:
+  - mumps
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 子供がおたふくにかかりました。
+    furigana: 子供[こども]がおたふくにかかりました。
+    romaji: kodomo ga otafuku ni kakarimashita.
+    english: My child came down with the mumps.
+    audio: ''
+    register: polite
+  - japanese: おたふくで一週間休んだ。
+    furigana: おたふくで 一週間[いっしゅうかん] 休[やす]んだ。
+    romaji: otafuku de isshuukan yasunda.
+    english: I was out for a week with the mumps.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Commonly said in full as おたふく風邪（かぜ）.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: medium
+      page: '2'
+      context: 3. mumps otafuku おたふく
+      provisional_fields: meanings:cef21d3ff67b,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: ba33fa1c8040,c107a4dd8aa8
+- id: word:百日咳:ひゃくにちぜき
+  expression: 百日咳
+  reading: ひゃくにちぜき
+  furigana: ''
+  romaji: hyakunichizeki
+  meanings:
+  - whooping cough
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 百日咳の予防接種を受けました。
+    furigana: 百日咳[ひゃくにちぜき]の 予防[よぼう] 接種[せっしゅ]を 受[う]けました。
+    romaji: hyakunichizeki no yobou sesshu o ukemashita.
+    english: I got the whooping cough vaccination.
+    audio: ''
+    register: polite
+  - japanese: この咳、百日咳かもしれない。
+    furigana: この 咳[せき]、 百日咳[ひゃくにちぜき]かもしれない。
+    romaji: kono seki, hyakunichizeki kamoshirenai.
+    english: This cough might be whooping cough.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 4. whooping cough hyakunichizeki ひゃくにちぜき 百日咳
+      provisional_fields: meanings:d37cc4159f71,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 36944ebed26d,be7c6dc9a899
+- id: word:破傷風:はしょうふう
+  expression: 破傷風
+  reading: はしょうふう
+  furigana: ''
+  romaji: hashoufuu
+  meanings:
+  - tetanus
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 破傷風の注射をしてもらいました。
+    furigana: 破傷風[はしょうふう]の 注射[ちゅうしゃ]をしてもらいました。
+    romaji: hashoufuu no chuusha o shite moraimashita.
+    english: I got a tetanus shot.
+    audio: ''
+    register: polite
+  - japanese: 錆びた釘は破傷風が怖いよ。
+    furigana: 錆[さ]びた 釘[くぎ]は 破傷風[はしょうふう]が 怖[こわ]いよ。
+    romaji: sabita kugi wa hashoufuu ga kowai yo.
+    english: Rusty nails are scary because of tetanus.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 5. tetanus hashofu はしょうふう 破傷風
+      provisional_fields: meanings:b8bf55ad08c1,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 47affe38ebda,53a0cd2f86e4
+- id: word:アトピー:アトピー
+  expression: アトピー
+  reading: アトピー
+  furigana: ''
+  romaji: atopii
+  meanings:
+  - atopy
+  - atopic dermatitis
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 子供の頃からアトピーがあります。
+    furigana: 子供[こども]の 頃[ころ]からアトピーがあります。
+    romaji: kodomo no koro kara atopii ga arimasu.
+    english: I've had atopic dermatitis since I was a child.
+    audio: ''
+    register: polite
+  - japanese: アトピーで肌がかゆい。
+    furigana: アトピーで 肌[はだ]がかゆい。
+    romaji: atopii de hada ga kayui.
+    english: My skin itches because of my atopic dermatitis.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: In everyday Japanese アトピー refers to atopic eczema of the skin.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 6. atopy atop i アトピー
+      provisional_fields: meanings:2f05078f0fa0,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: d5f7bb6394a0,0415e6e664d7
+- id: word:潰瘍:かいよう
+  expression: 潰瘍
+  reading: かいよう
+  furigana: ''
+  romaji: kaiyou
+  meanings:
+  - ulcer
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 検査で潰瘍が見つかりました。
+    furigana: 検査[けんさ]で 潰瘍[かいよう]が 見[み]つかりました。
+    romaji: kensa de kaiyou ga mitsukarimashita.
+    english: They found an ulcer in the examination.
+    audio: ''
+    register: polite
+  - japanese: ストレスで潰瘍ができたみたい。
+    furigana: ストレスで 潰瘍[かいよう]ができたみたい。
+    romaji: sutoresu de kaiyou ga dekita mitai.
+    english: It seems I got an ulcer from stress.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 7. ulcer kaiyo かいよう 潰瘍
+      provisional_fields: meanings:c51d04f030c2,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: cd61e7396079,a5b06e513954
+- id: word:胃潰瘍:いかいよう
+  expression: 胃潰瘍
+  reading: いかいよう
+  furigana: ''
+  romaji: ikaiyou
+  meanings:
+  - stomach ulcer
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 医者に胃潰瘍だと言われました。
+    furigana: 医者[いしゃ]に 胃潰瘍[いかいよう]だと 言[い]われました。
+    romaji: isha ni ikaiyou da to iwaremashita.
+    english: The doctor told me it is a stomach ulcer.
+    audio: ''
+    register: polite
+  - japanese: 父は胃潰瘍で入院してる。
+    furigana: 父[ちち]は 胃潰瘍[いかいよう]で 入院[にゅういん]してる。
+    romaji: chichi wa ikaiyou de nyuuin shiteru.
+    english: My dad is in the hospital with a stomach ulcer.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 8. stomach ulcer ikaiyo いかいよう 胃潰瘍
+      provisional_fields: meanings:722f499f1021,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 4250c34182f2,cc166da921ee
+- id: word:インフルエンザ:インフルエンザ
+  expression: インフルエンザ
+  reading: インフルエンザ
+  furigana: ''
+  romaji: infuruenza
+  meanings:
+  - influenza
+  - the flu
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: インフルエンザで会社を休みました。
+    furigana: インフルエンザで 会社[かいしゃ]を 休[やす]みました。
+    romaji: infuruenza de kaisha o yasumimashita.
+    english: I took the day off work with the flu.
+    audio: ''
+    register: polite
+  - japanese: インフルエンザかも。熱が高い。
+    furigana: インフルエンザかも。 熱[ねつ]が 高[たか]い。
+    romaji: infuruenza kamo. netsu ga takai.
+    english: It might be the flu. My fever is high.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Often shortened to インフル in casual speech.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 9. influenza infuruenza インフルエンザ
+      provisional_fields: meanings:339c3bdf205d,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 2247324e864c,2313eee2eda1
+- id: word:うつ病:うつびょう
+  expression: うつ病
+  reading: うつびょう
+  furigana: ''
+  romaji: utsubyou
+  meanings:
+  - depression
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: うつ病の治療を受けています。
+    furigana: うつ 病[びょう]の 治療[ちりょう]を 受[う]けています。
+    romaji: utsubyou no chiryou o ukete imasu.
+    english: I'm receiving treatment for depression.
+    audio: ''
+    register: polite
+  - japanese: 働きすぎてうつ病になった友達がいる。
+    furigana: 働[はたら]きすぎてうつ 病[びょう]になった 友達[ともだち]がいる。
+    romaji: hatarakisugite utsubyou ni natta tomodachi ga iru.
+    english: I have a friend who got depression from overworking.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Clinical depression as an illness; the source glosses it as melancholy.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 10. melancholy utsubyo うつびょう うつ病
+      provisional_fields: meanings:cadfff0e0230,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: ee1292cfe57e,406d3f15ceb3
+- id: word:肩こり:かたこり
+  expression: 肩こり
+  reading: かたこり
+  furigana: ''
+  romaji: katakori
+  meanings:
+  - stiff shoulders
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 最近、肩こりがひどいです。
+    furigana: 最近[さいきん]、 肩[かた]こりがひどいです。
+    romaji: saikin, katakori ga hidoi desu.
+    english: My shoulders have been terribly stiff lately.
+    audio: ''
+    register: polite
+  - japanese: パソコンの仕事は肩こりがつらい。
+    furigana: パソコンの 仕事[しごと]は 肩[かた]こりがつらい。
+    romaji: pasokon no shigoto wa katakori ga tsurai.
+    english: Computer work is rough on my shoulders.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: 'Related verb form: 肩が凝（こ）る.'
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 11. stiff shoulder katakori かたこり 肩こり
+      provisional_fields: meanings:79f4326dd7f3,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 1ee3ef81a02f,5777851d6db1
+- id: word:腰痛:ようつう
+  expression: 腰痛
+  reading: ようつう
+  furigana: ''
+  romaji: youtsuu
+  meanings:
+  - backache
+  - lower back pain
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 腰痛で病院に行きました。
+    furigana: 腰痛[ようつう]で 病院[びょういん]に 行[い]きました。
+    romaji: youtsuu de byouin ni ikimashita.
+    english: I went to the hospital for lower back pain.
+    audio: ''
+    register: polite
+  - japanese: また腰痛が出てきた。
+    furigana: また 腰痛[ようつう]が 出[で]てきた。
+    romaji: mata youtsuu ga dete kita.
+    english: My back pain is acting up again.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: 腰痛 is the noun; 腰が痛いです is the everyday way to say it.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 12. backache yotsu ようつう 腰痛
+      provisional_fields: meanings:407b8c570471,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 48897677619e,99386dc37096
+- id: word:肝炎:かんえん
+  expression: 肝炎
+  reading: かんえん
+  furigana: ''
+  romaji: kan'en
+  meanings:
+  - hepatitis
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 肝炎の検査を受けました。
+    furigana: 肝炎[かんえん]の 検査[けんさ]を 受[う]けました。
+    romaji: kan'en no kensa o ukemashita.
+    english: I got tested for hepatitis.
+    audio: ''
+    register: polite
+  - japanese: 肝炎のワクチンを打ったよ。
+    furigana: 肝炎[かんえん]のワクチンを 打[う]ったよ。
+    romaji: kan'en no wakuchin o utta yo.
+    english: I got the hepatitis vaccine.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 13. hepatitis kan’en かんえん 肝炎
+      provisional_fields: meanings:95ce3c296eed,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 46d49b2c8eb2,24fadfbb7d85
+- id: word:肝硬変:かんこうへん
+  expression: 肝硬変
+  reading: かんこうへん
+  furigana: ''
+  romaji: kankouhen
+  meanings:
+  - liver cirrhosis
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 祖父は肝硬変で入院しています。
+    furigana: 祖父[そふ]は 肝硬変[かんこうへん]で 入院[にゅういん]しています。
+    romaji: sofu wa kankouhen de nyuuin shite imasu.
+    english: My grandfather is hospitalized with liver cirrhosis.
+    audio: ''
+    register: polite
+  - japanese: お酒の飲みすぎは肝硬変になるよ。
+    furigana: お 酒[さけ]の 飲[の]みすぎは 肝硬変[かんこうへん]になるよ。
+    romaji: osake no nomisugi wa kankouhen ni naru yo.
+    english: Drinking too much leads to cirrhosis.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 14. liver cirrhosis kankohen かんこうへん 肝硬変
+      provisional_fields: meanings:1fffe0af22cc,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 6649b7a233c7,9f284f81b43d
+- id: word:癌:がん
+  expression: 癌
+  reading: がん
+  furigana: ''
+  romaji: gan
+  meanings:
+  - cancer
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 早く見つかれば、癌も治ります。
+    furigana: 早[はや]く 見[み]つかれば、 癌[がん]も 治[なお]ります。
+    romaji: hayaku mitsukareba, gan mo naorimasu.
+    english: If it is found early, cancer can be cured too.
+    audio: ''
+    register: polite
+  - japanese: 毎年、癌の検査を受けてる。
+    furigana: 毎年[まいとし]、 癌[がん]の 検査[けんさ]を 受[う]けてる。
+    romaji: maitoshi, gan no kensa o uketeru.
+    english: I get screened for cancer every year.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Usually written in kana as がん in newspapers and everyday text.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 15. cancer gan がん 癌
+      provisional_fields: meanings:ae19061a9411,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 7726a232f377,3458837468a6
+- id: word:眼精疲労:がんせいひろう
+  expression: 眼精疲労
+  reading: がんせいひろう
+  furigana: ''
+  romaji: ganseihirou
+  meanings:
+  - eyestrain
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 眼精疲労で目が痛いです。
+    furigana: 眼精疲労[がんせいひろう]で 目[め]が 痛[いた]いです。
+    romaji: ganseihirou de me ga itai desu.
+    english: My eyes hurt from eyestrain.
+    audio: ''
+    register: polite
+  - japanese: 一日中コードを書いて眼精疲労だ。
+    furigana: 一日中[いちにちじゅう]コードを 書[か]いて 眼精疲労[がんせいひろう]だ。
+    romaji: ichinichijuu koodo o kaite ganseihirou da.
+    english: I wrote code all day and now my eyes are strained.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Somewhat medical-sounding; 目が疲れる is the casual equivalent.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 16. eyestrain ganseihiro がんせいひろう 眼精疲労
+      provisional_fields: meanings:b34bea30d1ca,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 90d24459f55b,16e5749b22d7
+- id: word:高血圧:こうけつあつ
+  expression: 高血圧
+  reading: こうけつあつ
+  furigana: ''
+  romaji: kouketsuatsu
+  meanings:
+  - high blood pressure
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 父は高血圧の薬を飲んでいます。
+    furigana: 父[ちち]は 高血圧[こうけつあつ]の 薬[くすり]を 飲[の]んでいます。
+    romaji: chichi wa kouketsuatsu no kusuri o nonde imasu.
+    english: My father takes medicine for high blood pressure.
+    audio: ''
+    register: polite
+  - japanese: 塩分を取りすぎると高血圧になるよ。
+    furigana: 塩分[えんぶん]を 取[と]りすぎると 高血圧[こうけつあつ]になるよ。
+    romaji: enbun o torisugiru to kouketsuatsu ni naru yo.
+    english: Too much salt gives you high blood pressure.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 17. high blood pressure koketsuatsu こうけつあつ 高血圧
+      provisional_fields: meanings:4d297e8fe206,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 797b0114118f,b53539cb88d0
+- id: word:虫歯:むしば
+  expression: 虫歯
+  reading: むしば
+  furigana: ''
+  romaji: mushiba
+  meanings:
+  - cavity
+  - tooth decay
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 虫歯が一本あります。
+    furigana: 虫歯[むしば]が 一本[いっぽん]あります。
+    romaji: mushiba ga ippon arimasu.
+    english: I have one cavity.
+    audio: ''
+    register: polite
+  - japanese: 虫歯ができたから歯医者に行く。
+    furigana: 虫歯[むしば]ができたから 歯医者[はいしゃ]に 行[い]く。
+    romaji: mushiba ga dekita kara haisha ni iku.
+    english: I got a cavity, so I'm going to the dentist.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Cavities are counted with 〜本 and appear with できる.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 18. cavity mushiba むしば 虫歯
+      provisional_fields: meanings:8f33aec7f00e,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 54281dbb31dd,31e32cffc672
+- id: word:口内炎:こうないえん
+  expression: 口内炎
+  reading: こうないえん
+  furigana: ''
+  romaji: kounaien
+  meanings:
+  - canker sore
+  - mouth ulcer
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 口内炎が痛くて、食べにくいです。
+    furigana: 口内炎[こうないえん]が 痛[いた]くて、 食[た]べにくいです。
+    romaji: kounaien ga itakute, tabenikui desu.
+    english: My canker sore hurts and it's hard to eat.
+    audio: ''
+    register: polite
+  - japanese: 疲れると口内炎ができる。
+    furigana: 疲[つか]れると 口内炎[こうないえん]ができる。
+    romaji: tsukareru to kounaien ga dekiru.
+    english: I get canker sores when I'm tired.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 19. canker sore konaien こうないえん 口内炎
+      provisional_fields: meanings:aae153735f68,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 7156c09709db,c40c03f653c8
+- id: word:痔:じ
+  expression: 痔
+  reading: じ
+  furigana: ''
+  romaji: ji
+  meanings:
+  - hemorrhoid
+  - hemorrhoids
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 痔の薬をください。
+    furigana: 痔[じ]の 薬[くすり]をください。
+    romaji: ji no kusuri o kudasai.
+    english: Please give me some hemorrhoid medicine.
+    audio: ''
+    register: polite
+  - japanese: 座りっぱなしだと痔になるよ。
+    furigana: 座[すわ]りっぱなしだと 痔[じ]になるよ。
+    romaji: suwarippanashi da to ji ni naru yo.
+    english: You'll get hemorrhoids if you sit all the time.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 20. hemorrhoid ji じ 痔
+      provisional_fields: meanings:64a1d273499e,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 3a549145eb6c,e8a903d234cc
+- id: word:椎間板ヘルニア:ついかんばんヘルニア
+  expression: 椎間板ヘルニア
+  reading: ついかんばんヘルニア
+  furigana: ''
+  romaji: tsuikanbanherunia
+  meanings:
+  - slipped disc
+  - herniated disc
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 椎間板ヘルニアと診断されました。
+    furigana: 椎間板[ついかんばん]ヘルニアと 診断[しんだん]されました。
+    romaji: tsuikanban herunia to shindan saremashita.
+    english: I was diagnosed with a slipped disc.
+    audio: ''
+    register: polite
+  - japanese: 椎間板ヘルニアで運動できない。
+    furigana: 椎間板[ついかんばん]ヘルニアで 運動[うんどう]できない。
+    romaji: tsuikanban herunia de undou dekinai.
+    english: I can't exercise because of my slipped disc.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 21. slipped disc tsuikamban herunia ついかんばんヘルニア 椎間板ヘルニア
+      provisional_fields: meanings:d30f11169f5f,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 555f93fcaf43,e5fddc52144b
+- id: word:てんかん:てんかん
+  expression: てんかん
+  reading: てんかん
+  furigana: ''
+  romaji: tenkan
+  meanings:
+  - epilepsy
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: てんかんの発作が起きました。
+    furigana: てんかんの 発作[ほっさ]が 起[お]きました。
+    romaji: tenkan no hossa ga okimashita.
+    english: An epileptic seizure occurred.
+    audio: ''
+    register: polite
+  - japanese: 彼はてんかんの薬を飲んでる。
+    furigana: 彼[かれ]はてんかんの 薬[くすり]を 飲[の]んでる。
+    romaji: kare wa tenkan no kusuri o nonderu.
+    english: He takes medicine for epilepsy.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: The source glosses it as petit mal; てんかん is the general word for epilepsy and is written in kana.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: medium
+      page: '2'
+      context: 22. petit mal tenkan てんかん
+      provisional_fields: meanings:ebce3b90cfe4,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: ce1087fdd7f5,d7d5ee639a76
+- id: word:糖尿病:とうにょうびょう
+  expression: 糖尿病
+  reading: とうにょうびょう
+  furigana: ''
+  romaji: tounyoubyou
+  meanings:
+  - diabetes
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 糖尿病なので、甘い物は食べません。
+    furigana: 糖尿病[とうにょうびょう]なので、 甘[あま]い 物[もの]は 食[た]べません。
+    romaji: tounyoubyou na node, amai mono wa tabemasen.
+    english: I have diabetes, so I don't eat sweet things.
+    audio: ''
+    register: polite
+  - japanese: 祖母は糖尿病で毎日注射してる。
+    furigana: 祖母[そぼ]は 糖尿病[とうにょうびょう]で 毎日[まいにち] 注射[ちゅうしゃ]してる。
+    romaji: sobo wa tounyoubyou de mainichi chuusha shiteru.
+    english: My grandmother has diabetes and gives herself shots every day.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 23. diabetes tonyobyo とうにょうびょう 糖尿病
+      provisional_fields: meanings:476bd782aa92,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: a88487a7846e,a22e031dddd5
+- id: word:日射病:にっしゃびょう
+  expression: 日射病
+  reading: にっしゃびょう
+  furigana: ''
+  romaji: nisshabyou
+  meanings:
+  - sunstroke
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 帽子をかぶらないと日射病になります。
+    furigana: 帽子[ぼうし]をかぶらないと 日射病[にっしゃびょう]になります。
+    romaji: boushi o kaburanai to nisshabyou ni narimasu.
+    english: You'll get sunstroke if you don't wear a hat.
+    audio: ''
+    register: polite
+  - japanese: 暑いから日射病に気をつけて。
+    furigana: 暑[あつ]いから 日射病[にっしゃびょう]に 気[き]をつけて。
+    romaji: atsui kara nisshabyou ni ki o tsukete.
+    english: It's hot, so watch out for sunstroke.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: 熱中症（ねっちゅうしょう）is the more common modern term for heat illness.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 24. sunstroke nisshabyo にっしゃびょう 日射病
+      provisional_fields: meanings:029412dd5fe1,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 4cd211c93b40,1c017ff7d8a5
+- id: word:脳卒中:のうそっちゅう
+  expression: 脳卒中
+  reading: のうそっちゅう
+  furigana: ''
+  romaji: nousotchuu
+  meanings:
+  - stroke
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 祖父は脳卒中で倒れました。
+    furigana: 祖父[そふ]は 脳卒中[のうそっちゅう]で 倒[たお]れました。
+    romaji: sofuhanousotchuudetaoremashita.
+    english: My grandfather collapsed from a stroke.
+    audio: ''
+    register: polite
+  - japanese: 脳卒中は急に起こるから怖い。
+    furigana: 脳卒中[のうそっちゅう]は 急[きゅう]に 起[お]こるから 怖[こわ]い。
+    romaji: nousotchuuhakyuuniokorukarakowai.
+    english: Strokes are scary because they happen suddenly.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 25. stroke no socchu のうそっちゅう 脳卒中
+      ai_warnings: '["romaji ''sofu wa nousocchuu de taoremashita.'' does not transliterate ''そふはのうそっちゅうでたおれました。''; replaced with ''sofuhanousotchuudetaoremashita.''", "romaji ''nousocchuu wa kyuu ni okoru kara kowai.'' does not transliterate ''のうそっちゅうはきゅうにおこるからこわい。''; replaced with ''nousotchuuhakyuuniokorukarakowai.''"]'
+      provisional_fields: meanings:612e31276dea,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 18a4769dc411,799289d107ad
+- id: word:白内障:はくないしょう
+  expression: 白内障
+  reading: はくないしょう
+  furigana: ''
+  romaji: hakunaishou
+  meanings:
+  - cataract
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 母は白内障の手術を受けます。
+    furigana: 母[はは]は 白内障[はくないしょう]の 手術[しゅじゅつ]を 受[う]けます。
+    romaji: haha wa hakunaishou no shujutsu o ukemasu.
+    english: My mother is having cataract surgery.
+    audio: ''
+    register: polite
+  - japanese: 白内障だと、目が白く濁るらしい。
+    furigana: 白内障[はくないしょう]だと、 目[め]が 白[しろ]く 濁[にご]るらしい。
+    romaji: hakunaishou da to, me ga shiroku nigoru rashii.
+    english: With cataracts, the eye apparently clouds over white.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 26. cataract hakunaisho はくないしょう 白内障
+      provisional_fields: meanings:5e7345a0f2f6,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 1522726271cd,f56eff041df8
+- id: word:緑内障:りょくないしょう
+  expression: 緑内障
+  reading: りょくないしょう
+  furigana: ''
+  romaji: ryokunaishou
+  meanings:
+  - glaucoma
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 緑内障の検査をしてもらいました。
+    furigana: 緑内障[りょくないしょう]の 検査[けんさ]をしてもらいました。
+    romaji: ryokunaishou no kensa o shite moraimashita.
+    english: I had a glaucoma test done.
+    audio: ''
+    register: polite
+  - japanese: 緑内障は早く見つけたほうがいい。
+    furigana: 緑内障[りょくないしょう]は 早[はや]く 見[み]つけたほうがいい。
+    romaji: ryokunaishou wa hayaku mitsuketa hou ga ii.
+    english: It's better to catch glaucoma early.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 27. glaucoma ryokunaisho りょくないしょう 緑内障
+      provisional_fields: meanings:4c1fde16bb80,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 20b42bf9e66d,236bb24ca44c
+- id: word:白血病:はっけつびょう
+  expression: 白血病
+  reading: はっけつびょう
+  furigana: ''
+  romaji: hakketsubyou
+  meanings:
+  - leukemia
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 友人が白血病の治療をしています。
+    furigana: 友人[ゆうじん]が 白血病[はっけつびょう]の 治療[ちりょう]をしています。
+    romaji: yuujin ga hakketsubyou no chiryou o shite imasu.
+    english: A friend of mine is undergoing treatment for leukemia.
+    audio: ''
+    register: polite
+  - japanese: 白血病の子のために献血した。
+    furigana: 白血病[はっけつびょう]の 子[こ]のために 献血[けんけつ]した。
+    romaji: hakketsubyou no ko no tame ni kenketsu shita.
+    english: I donated blood for a child with leukemia.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 28. leukemia hakketsubyo はっけつびょう 白血病
+      provisional_fields: meanings:f7e124a71e07,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 069a50da057c,31ade4387752
+- id: word:ぜんそく:ぜんそく
+  expression: ぜんそく
+  reading: ぜんそく
+  furigana: ''
+  romaji: zensoku
+  meanings:
+  - asthma
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 子供の時からぜんそくがあります。
+    furigana: 子供[こども]の 時[とき]からぜんそくがあります。
+    romaji: kodomo no toki kara zensoku ga arimasu.
+    english: I've had asthma since I was a child.
+    audio: ''
+    register: polite
+  - japanese: ぜんそくだから、走ると苦しい。
+    furigana: ぜんそくだから、 走[はし]ると 苦[くる]しい。
+    romaji: zensoku da kara, hashiru to kurushii.
+    english: I have asthma, so running makes it hard to breathe.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Normally written in kana; the kanji 喘息 is rare in everyday text.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 29. asthma zensoku ぜんそく
+      provisional_fields: meanings:67cebd2a64e6,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 43aa1dce27a2,70cb94a90b49
+- id: word:便秘:べんぴ
+  expression: 便秘
+  reading: べんぴ
+  furigana: ''
+  romaji: benpi
+  meanings:
+  - constipation
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 便秘の薬をもらいました。
+    furigana: 便秘[べんぴ]の 薬[くすり]をもらいました。
+    romaji: benpi no kusuri o moraimashita.
+    english: I got some medicine for constipation.
+    audio: ''
+    register: polite
+  - japanese: 野菜を食べないと便秘になるよ。
+    furigana: 野菜[やさい]を 食[た]べないと 便秘[べんぴ]になるよ。
+    romaji: yasai o tabenai to benpi ni naru yo.
+    english: You'll get constipated if you don't eat vegetables.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Say 便秘です to tell a doctor you are constipated.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 30. constipation bempi べんぴ 便秘
+      provisional_fields: meanings:ca243f0bceee,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: fd68fa657ee6,3406d460a8bb
+- id: word:火傷:やけど
+  expression: 火傷
+  reading: やけど
+  furigana: ''
+  romaji: yakedo
+  meanings:
+  - burn
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 熱いお湯で火傷をしました。
+    furigana: 熱[あつ]いお 湯[ゆ]で 火傷[やけど]をしました。
+    romaji: atsui oyu de yakedo o shimashita.
+    english: I burned myself with hot water.
+    audio: ''
+    register: polite
+  - japanese: 料理中に火傷しちゃった。
+    furigana: 料理中[りょうりちゅう]に 火傷[やけど]しちゃった。
+    romaji: ryourichuu ni yakedo shichatta.
+    english: I burned myself while cooking.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: 火傷 is a special reading (やけど) for the whole compound; often written やけど.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 31. burn yakedo やけど 火傷
+      provisional_fields: meanings:f5f2d0b166ab,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: d5e3e01341d8,bf1f9c33e90a
+- id: word:水虫:みずむし
+  expression: 水虫
+  reading: みずむし
+  furigana: ''
+  romaji: mizumushi
+  meanings:
+  - athlete's foot
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 水虫の薬を買いました。
+    furigana: 水虫[みずむし]の 薬[くすり]を 買[か]いました。
+    romaji: mizumushi no kusuri o kaimashita.
+    english: I bought medicine for athlete's foot.
+    audio: ''
+    register: polite
+  - japanese: 足が痒い。水虫かな。
+    furigana: 足[あし]が 痒[かゆ]い。 水虫[みずむし]かな。
+    romaji: ashi ga kayui. mizumushi ka na.
+    english: My foot itches. Maybe it's athlete's foot.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 32. athlete’s foot mizumushi みずむし 水虫
+      provisional_fields: meanings:ff30308fc58e,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 40283ed37548,1cfe22928527
+- id: word:貧血:ひんけつ
+  expression: 貧血
+  reading: ひんけつ
+  furigana: ''
+  romaji: hinketsu
+  meanings:
+  - anemia
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 貧血なので、鉄分の薬を飲んでいます。
+    furigana: 貧血[ひんけつ]なので、 鉄分[てつぶん]の 薬[くすり]を 飲[の]んでいます。
+    romaji: hinketsu na node, tetsubun no kusuri o nonde imasu.
+    english: I'm anemic, so I take iron medicine.
+    audio: ''
+    register: polite
+  - japanese: 立ったら貧血でくらくらした。
+    furigana: 立[た]ったら 貧血[ひんけつ]でくらくらした。
+    romaji: tattara hinketsu de kurakura shita.
+    english: I stood up and got lightheaded from anemia.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 33. anemia hinketsu ひんけつ 貧血
+      provisional_fields: meanings:c32200515d14,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 1ae7c9aedcf8,e8ef314b5640
+- id: word:更年期障害:こうねんきしょうがい
+  expression: 更年期障害
+  reading: こうねんきしょうがい
+  furigana: ''
+  romaji: kounenkishougai
+  meanings:
+  - menopausal disorder
+  - menopausal symptoms
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 母は更年期障害で体調が悪いです。
+    furigana: 母[はは]は 更年期障害[こうねんきしょうがい]で 体調[たいちょう]が 悪[わる]いです。
+    romaji: haha wa kounenkishougai de taichou ga warui desu.
+    english: My mother is unwell because of menopausal symptoms.
+    audio: ''
+    register: polite
+  - japanese: 更年期障害はつらいらしいよ。
+    furigana: 更年期障害[こうねんきしょうがい]はつらいらしいよ。
+    romaji: kounenkishougai wa tsurai rashii yo.
+    english: I hear menopausal symptoms are rough.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '2'
+      context: 34. a menopausal disorder konenkishogai こうねんきしょうがい 更年期障害
+      provisional_fields: meanings:94ebd2c50091,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 7be22fee40ba,3d0171193682
+- id: word:熱:ねつ
+  expression: 熱
+  reading: ねつ
+  furigana: ''
+  romaji: netsu
+  meanings:
+  - fever
+  - temperature
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 熱があります。
+    furigana: 熱[ねつ]があります。
+    romaji: netsu ga arimasu.
+    english: I have a fever.
+    audio: ''
+    register: polite
+  - japanese: 熱があるから、今日は休むね。
+    furigana: 熱[ねつ]があるから、 今日[きょう]は 休[やす]むね。
+    romaji: netsu ga aru kara, kyou wa yasumu ne.
+    english: I have a fever, so I'm taking today off.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Use 熱があります, not 熱です. 熱が下（さ）がる means the fever goes down.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '3'
+      context: 1. I have a fever. Netsu ga arimasu. 熱があります。
+      provisional_fields: meanings:6a6073b9c4f7,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 8ccbb547cb28,895dbce8eb98
+- id: word:アレルギー:アレルギー
+  expression: アレルギー
+  reading: アレルギー
+  furigana: ''
+  romaji: arerugii
+  meanings:
+  - allergy
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: アレルギーがあります。
+    furigana: アレルギーがあります。
+    romaji: arerugii ga arimasu.
+    english: I have an allergy.
+    audio: ''
+    register: polite
+  - japanese: 卵のアレルギーがあるんだ。
+    furigana: 卵[たまご]のアレルギーがあるんだ。
+    romaji: tamago no arerugii ga aru n da.
+    english: I have an egg allergy.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: 'Name the allergen with の: 猫のアレルギー, 卵のアレルギー.'
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '3'
+      context: 3. I have an allergy. Arerug i ga arimasu. アレルギーがあります。
+      provisional_fields: meanings:27601119486b,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: d09d1e4c6741,c05dd66438b2
+- id: word:食欲:しょくよく
+  expression: 食欲
+  reading: しょくよく
+  furigana: ''
+  romaji: shokuyoku
+  meanings:
+  - appetite
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 食欲がありません。
+    furigana: 食欲[しょくよく]がありません。
+    romaji: shokuyoku ga arimasen.
+    english: I don't have an appetite.
+    audio: ''
+    register: polite
+  - japanese: 暑くて食欲がない。
+    furigana: 暑[あつ]くて 食欲[しょくよく]がない。
+    romaji: atsukute shokuyoku ga nai.
+    english: It's so hot I have no appetite.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '3'
+      context: 4. I don’t have an appetite. Shokuyoku ga arimasen. 食欲がありません。
+      provisional_fields: meanings:d7bdabd6bf5b,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 90da5709424b,951ec0233da3
+- id: word:咳:せき
+  expression: 咳
+  reading: せき
+  furigana: ''
+  romaji: seki
+  meanings:
+  - cough
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 咳がでます。
+    furigana: 咳[せき]がでます。
+    romaji: seki ga demasu.
+    english: I have a cough.
+    audio: ''
+    register: polite
+  - japanese: 夜になると咳が出る。
+    furigana: 夜[よる]になると 咳[せき]が 出[で]る。
+    romaji: yoru ni naru to seki ga deru.
+    english: I start coughing at night.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: 'Symptoms that come out take 出る: 咳が出る, くしゃみが出る, 鼻水が出る.'
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '3'
+      context: 5. I have a cough. Seki ga demasu. 咳がでます。
+      provisional_fields: meanings:5e2b3d2178fb,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: e69d37057552,098897afb573
+- id: word:くしゃみ:くしゃみ
+  expression: くしゃみ
+  reading: くしゃみ
+  furigana: ''
+  romaji: kushami
+  meanings:
+  - sneeze
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: くしゃみが出ます。
+    furigana: くしゃみが 出[で]ます。
+    romaji: kushami ga demasu.
+    english: I keep sneezing.
+    audio: ''
+    register: polite
+  - japanese: 花粉症でくしゃみが止まらない。
+    furigana: 花粉症[かふんしょう]でくしゃみが 止[と]まらない。
+    romaji: kafunshou de kushami ga tomaranai.
+    english: I can't stop sneezing because of hay fever.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: To sneeze is くしゃみをする or くしゃみが出る.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '3'
+      context: 6. I have been sneezing. Kushami ga demasu. くしゃみが出ます。
+      provisional_fields: meanings:1f5b1313231b,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 0f51d77850ff,5f2405cdd561
+- id: word:鼻水:はなみず
+  expression: 鼻水
+  reading: はなみず
+  furigana: ''
+  romaji: hanamizu
+  meanings:
+  - runny nose
+  - nasal mucus
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 鼻水が出ます。
+    furigana: 鼻水[はなみず]が 出[で]ます。
+    romaji: hanamizu ga demasu.
+    english: I have a runny nose.
+    audio: ''
+    register: polite
+  - japanese: 朝から鼻水が止まらない。
+    furigana: 朝[あさ]から 鼻水[はなみず]が 止[と]まらない。
+    romaji: asa kara hanamizu ga tomaranai.
+    english: My nose has been running since this morning.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '3'
+      context: 7. I have a runny nose. Hanamizu ga demasu. 鼻水が出ます。
+      provisional_fields: meanings:91f83f64fd80,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: fcf73d9a5a42,21ba179d0e66
+- id: word:吐き気:はきけ
+  expression: 吐き気
+  reading: はきけ
+  furigana: ''
+  romaji: hakike
+  meanings:
+  - nausea
+  - feeling sick
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 吐き気がします。
+    furigana: 吐[は]き 気[け]がします。
+    romaji: hakike ga shimasu.
+    english: I feel nauseous.
+    audio: ''
+    register: polite
+  - japanese: ちょっと吐き気がする。
+    furigana: ちょっと 吐[は]き 気[け]がする。
+    romaji: chotto hakike ga suru.
+    english: I feel a bit sick to my stomach.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Sensations like 吐き気, 寒気, めまい take がする.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '3'
+      context: 8. I feel nauseous. Hakike ga shimasu. 吐き気がします。
+      provisional_fields: meanings:f7433d9083c3,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 7dbfae2260f2,279060418258
+- id: word:寒気:さむけ
+  expression: 寒気
+  reading: さむけ
+  furigana: ''
+  romaji: samuke
+  meanings:
+  - chills
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 寒気がします。
+    furigana: 寒気[さむけ]がします。
+    romaji: samuke ga shimasu.
+    english: I have chills.
+    audio: ''
+    register: polite
+  - japanese: 寒気がするから、風邪かも。
+    furigana: 寒気[さむけ]がするから、 風邪[かぜ]かも。
+    romaji: samuke ga suru kara, kaze kamo.
+    english: I've got chills, so maybe it's a cold.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: 寒気（さむけ）is chills from illness; the same kanji read かんき means cold air.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '3'
+      context: 9. I have been having chills. Samuke ga shimasu. 寒気がします。
+      provisional_fields: meanings:7a8ed722e743,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 50d1115963cd,6d9c475d87fc
+- id: word:めまい:めまい
+  expression: めまい
+  reading: めまい
+  furigana: ''
+  romaji: memai
+  meanings:
+  - dizziness
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: めまいがします。
+    furigana: めまいがします。
+    romaji: memai ga shimasu.
+    english: I feel dizzy.
+    audio: ''
+    register: polite
+  - japanese: 立ち上がったらめまいがした。
+    furigana: 立[た]ち 上[あ]がったらめまいがした。
+    romaji: tachiagattara memai ga shita.
+    english: I got dizzy when I stood up.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Usually written in kana; the kanji 目眩 is rare.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '3'
+      context: 10. I feel dizzy. Memai ga shimasu. めまいがします。
+      provisional_fields: meanings:4221707806c3,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 42786b94c83c,085be079c165
+- id: word:だるい:だるい
+  expression: だるい
+  reading: だるい
+  furigana: ''
+  romaji: darui
+  meanings:
+  - sluggish
+  - listless
+  - worn out
+  part_of_speech: i-adjective
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 体がだるいです。
+    furigana: 体[からだ]がだるいです。
+    romaji: karada ga darui desu.
+    english: I feel sluggish.
+    audio: ''
+    register: polite
+  - japanese: 熱はないけど、体がだるい。
+    furigana: 熱[ねつ]はないけど、 体[からだ]がだるい。
+    romaji: netsu wa nai kedo, karada ga darui.
+    english: I don't have a fever, but my body feels heavy and tired.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Describes the heavy, worn-out feeling of being ill or exhausted.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '3'
+      context: 11. I feel sluggish. Karada ga darui desu. 体がだるいです。
+      provisional_fields: meanings:3517db499330,part_of_speech:e4ecca77b823
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 9f33ec3fbaec,768bedf9b175
+- id: word:下痢:げり
+  expression: 下痢
+  reading: げり
+  furigana: ''
+  romaji: geri
+  meanings:
+  - diarrhea
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 下痢です。
+    furigana: 下痢[げり]です。
+    romaji: geri desu.
+    english: I have diarrhea.
+    audio: ''
+    register: polite
+  - japanese: 昨日から下痢が続いてる。
+    furigana: 昨日[きのう]から 下痢[げり]が 続[つづ]いてる。
+    romaji: kinou kara geri ga tsuzuiteru.
+    english: I've had diarrhea since yesterday.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: 下痢をする is also used for having diarrhea.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '3'
+      context: 12. I have diarrhea. Geri desu. 下痢です。
+      provisional_fields: meanings:23a5ab4bb4e8,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 448c2c7e04fe,bfe0fedf8817
+- id: word:風邪:かぜ
+  expression: 風邪
+  reading: かぜ
+  furigana: ''
+  romaji: kaze
+  meanings:
+  - cold (illness)
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 風邪です。
+    furigana: 風邪[かぜ]です。
+    romaji: kaze desu.
+    english: I have a cold.
+    audio: ''
+    register: polite
+  - japanese: 風邪を引いたみたい。
+    furigana: 風邪[かぜ]を 引[ひ]いたみたい。
+    romaji: kaze o hiita mitai.
+    english: I think I've caught a cold.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: 風邪 is a special reading (かぜ) for the compound; the verb is 風邪を引く.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '3'
+      context: 16. I have a cold. Kaze desu. 風邪です。
+      provisional_fields: meanings:adb47f5f0216,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 37f7718de55c,2daf5584b0fa
+- id: word:二日酔い:ふつかよい
+  expression: 二日酔い
+  reading: ふつかよい
+  furigana: ''
+  romaji: futsukayoi
+  meanings:
+  - hangover
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 二日酔いです。
+    furigana: 二日酔[ふつかよ]いです。
+    romaji: futsukayoi desu.
+    english: I have a hangover.
+    audio: ''
+    register: polite
+  - japanese: 飲みすぎて、今日は二日酔いだ。
+    furigana: 飲[の]みすぎて、 今日[きょう]は 二日酔[ふつかよ]いだ。
+    romaji: nomisugite, kyou wa futsukayoi da.
+    english: I drank too much, so I'm hungover today.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '3'
+      context: 18. I have a hangover. Futsukayoi desu. 二日酔いです。
+      provisional_fields: meanings:3da27463d407,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 789b851b4f0a,00f9b2444d36
+- id: word:むかむか:むかむか
+  expression: むかむか
+  reading: むかむか
+  furigana: ''
+  romaji: mukamuka
+  meanings:
+  - queasy
+  - nauseated
+  part_of_speech: adverb (mimetic, with する)
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 胃がむかむかします。
+    furigana: 胃[い]がむかむかします。
+    romaji: i ga mukamuka shimasu.
+    english: My stomach feels queasy.
+    audio: ''
+    register: polite
+  - japanese: 食べすぎて胃がむかむかする。
+    furigana: 食[た]べすぎて 胃[い]がむかむかする。
+    romaji: tabesugite i ga mukamuka suru.
+    english: I ate too much and my stomach is queasy.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: A mimetic word used with する. It can also describe being irritated.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '3'
+      context: 19. I’m sick at my stomach. I ga mukamuka shimasu. 胃がむかむかします。
+      provisional_fields: meanings:3e047c314617,part_of_speech:1a977b1d2577
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 4ba08d96ed3e,a7991b55f428
+- id: word:きりきり:きりきり
+  expression: きりきり
+  reading: きりきり
+  furigana: ''
+  romaji: kirikiri
+  meanings:
+  - sharp stabbing pain
+  part_of_speech: adverb (mimetic, with する)
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 胃がきりきりします。
+    furigana: 胃[い]がきりきりします。
+    romaji: i ga kirikiri shimasu.
+    english: I have a sharp pain in my stomach.
+    audio: ''
+    register: polite
+  - japanese: 朝から胃がきりきりする。
+    furigana: 朝[あさ]から 胃[い]がきりきりする。
+    romaji: asa kara i ga kirikiri suru.
+    english: I've had a stabbing pain in my stomach since this morning.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Mimetic word used with する for a sharp, drilling pain, typically in the stomach.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '3'
+      context: 20. Sharp pain in his stomach. I ga kirikiri shimasu. 胃がきりきりします。
+      provisional_fields: meanings:949e33ff917e,part_of_speech:1a977b1d2577
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 4a6684c3f377,a9b9c4a587e1
+- id: word:くらくら:くらくら
+  expression: くらくら
+  reading: くらくら
+  furigana: ''
+  romaji: kurakura
+  meanings:
+  - dizzy
+  - lightheaded
+  part_of_speech: adverb (mimetic, with する)
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 頭がくらくらします。
+    furigana: 頭[あたま]がくらくらします。
+    romaji: atama ga kurakura shimasu.
+    english: My head feels dizzy.
+    audio: ''
+    register: polite
+  - japanese: 熱で頭がくらくらする。
+    furigana: 熱[ねつ]で 頭[あたま]がくらくらする。
+    romaji: netsu de atama ga kurakura suru.
+    english: My head is spinning from the fever.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Mimetic word used with する.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '3'
+      context: 21. I feel dizzy. Atama ga kura kura shimasu. 頭がくらくらします。
+      provisional_fields: meanings:74089a969c77,part_of_speech:1a977b1d2577
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: cd0bd9126600,564bb4e0f0f8
+- id: word:ずきずき:ずきずき
+  expression: ずきずき
+  reading: ずきずき
+  furigana: ''
+  romaji: zukizuki
+  meanings:
+  - throbbing
+  part_of_speech: adverb (mimetic, with する)
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 頭がずきずきします。
+    furigana: 頭[あたま]がずきずきします。
+    romaji: atama ga zukizuki shimasu.
+    english: My head is throbbing.
+    audio: ''
+    register: polite
+  - japanese: 歯がずきずきして眠れない。
+    furigana: 歯[は]がずきずきして 眠[ねむ]れない。
+    romaji: ha ga zukizuki shite nemurenai.
+    english: My tooth is throbbing and I can't sleep.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Mimetic word used with する for pulsing pain.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '3'
+      context: 22. My head is throbbing. Atama ga zukizuki shimasu. 頭がずきずきします。
+      provisional_fields: meanings:fb0c37a1c519,part_of_speech:1a977b1d2577
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: fc2e614e31fa,458f4a2020bd
+- id: word:ちくちく:ちくちく
+  expression: ちくちく
+  reading: ちくちく
+  furigana: ''
+  romaji: chikuchiku
+  meanings:
+  - prickly
+  - tingling
+  part_of_speech: adverb (mimetic, with する)
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: ちくちくします。
+    furigana: ちくちくします。
+    romaji: chikuchiku shimasu.
+    english: I have a prickly pain.
+    audio: ''
+    register: polite
+  - japanese: セーターが首にちくちくする。
+    furigana: セーターが 首[くび]にちくちくする。
+    romaji: seetaa ga kubi ni chikuchiku suru.
+    english: The sweater feels prickly on my neck.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Mimetic word used with する for a pricking, needle-like feeling.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '3'
+      context: 23. I have a prickly pain. Chikuchiku shimasu. ちくちくします。
+      provisional_fields: meanings:8a68eb5a8d81,part_of_speech:1a977b1d2577
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: e1b44fd9c18c,165d7f0ed726
+- id: word:ひりひり:ひりひり
+  expression: ひりひり
+  reading: ひりひり
+  furigana: ''
+  romaji: hirihiri
+  meanings:
+  - burning
+  - stinging
+  part_of_speech: adverb (mimetic, with する)
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: ひりひりします。
+    furigana: ひりひりします。
+    romaji: hirihiri shimasu.
+    english: I have a burning pain.
+    audio: ''
+    register: polite
+  - japanese: 日焼けで背中がひりひりする。
+    furigana: 日[ひ] 焼[や]けで 背中[せなか]がひりひりする。
+    romaji: hiyake de senaka ga hirihiri suru.
+    english: My back stings from the sunburn.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Mimetic word used with する for a burning, stinging pain on the skin or in the throat.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '3'
+      context: 24. I have a burning pain. Hirihiri shimasu. ひりひりします。
+      provisional_fields: meanings:b765445ca923,part_of_speech:1a977b1d2577
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: a61c4d809e4f,b26bd3618a8e
+- id: word:頭痛薬:ずつうやく
+  expression: 頭痛薬
+  reading: ずつうやく
+  furigana: ''
+  romaji: zutsuuyaku
+  meanings:
+  - headache medicine
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 頭痛薬をください。
+    furigana: 頭痛薬[ずつうやく]をください。
+    romaji: zutsuuyaku o kudasai.
+    english: Please give me some headache medicine.
+    audio: ''
+    register: polite
+  - japanese: 頭痛薬、持ってる?
+    furigana: 頭痛薬[ずつうやく]、 持[も]ってる?
+    romaji: zutsuuyaku, motteru?
+    english: Do you have any headache medicine?
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: 薬 is read やく in this compound; medicine is taken with 飲む.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '4'
+      context: 1. headache specific zutsu yaku ずつうやく 頭痛薬
+      provisional_fields: meanings:e11f9295d393,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: c60f2d448cc8,f87ab051d3ac
+- id: word:鎮痛剤:ちんつうざい
+  expression: 鎮痛剤
+  reading: ちんつうざい
+  furigana: ''
+  romaji: chintsuuzai
+  meanings:
+  - painkiller
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 鎮痛剤を飲みました。
+    furigana: 鎮痛剤[ちんつうざい]を 飲[の]みました。
+    romaji: chintsuuzai o nomimashita.
+    english: I took a painkiller.
+    audio: ''
+    register: polite
+  - japanese: 鎮痛剤が効いてきた。
+    furigana: 鎮痛剤[ちんつうざい]が 効[き]いてきた。
+    romaji: chintsuuzai ga kiite kita.
+    english: The painkiller is starting to work.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '4'
+      context: 2. painkiller chintsu zai ちんつうざい 鎮痛剤
+      provisional_fields: meanings:a9765f76f7f6,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: bfd168bb8a7a,531e3cf1ce01
+- id: word:睡眠薬:すいみんやく
+  expression: 睡眠薬
+  reading: すいみんやく
+  furigana: ''
+  romaji: suimin'yaku
+  meanings:
+  - sleeping pill
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 医者に睡眠薬をもらいました。
+    furigana: 医者[いしゃ]に 睡眠薬[すいみんやく]をもらいました。
+    romaji: isha ni suiminyaku o moraimashita.
+    english: I got sleeping pills from the doctor.
+    audio: ''
+    register: polite
+  - japanese: 睡眠薬なしでは眠れない。
+    furigana: 睡眠薬[すいみんやく]なしでは 眠[ねむ]れない。
+    romaji: suiminyaku nashi de wa nemurenai.
+    english: I can't sleep without sleeping pills.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '4'
+      context: 3. sleeping pill suiminyaku すいみんやく 睡眠薬
+      provisional_fields: meanings:061ac34d8de1,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 6139c0e45610,a4fb99b58f2a
+- id: word:解熱剤:げねつざい
+  expression: 解熱剤
+  reading: げねつざい
+  furigana: ''
+  romaji: genetsuzai
+  meanings:
+  - fever reducer
+  - antipyretic
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 熱が高いので、解熱剤を飲みます。
+    furigana: 熱[ねつ]が 高[たか]いので、 解熱剤[げねつざい]を 飲[の]みます。
+    romaji: netsu ga takai node, genetsuzai o nomimasu.
+    english: My fever is high, so I'll take a fever reducer.
+    audio: ''
+    register: polite
+  - japanese: 解熱剤を飲んだら、熱が下がった。
+    furigana: 解熱剤[げねつざい]を 飲[の]んだら、 熱[ねつ]が 下[さ]がった。
+    romaji: genetsuzai o nondara, netsu ga sagatta.
+    english: My fever went down after I took the fever reducer.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '4'
+      context: 4. antipyretic genetsuzai げねつざい 解熱剤
+      provisional_fields: meanings:82f2e5e69c6b,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 47fd7bfda868,0e89d48afe18
+- id: word:バンドエイド:バンドエイド
+  expression: バンドエイド
+  reading: バンドエイド
+  furigana: ''
+  romaji: bandoeido
+  meanings:
+  - band-aid
+  - adhesive bandage
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: バンドエイドをください。
+    furigana: バンドエイドをください。
+    romaji: bandoeido o kudasai.
+    english: Please give me a band-aid.
+    audio: ''
+    register: polite
+  - japanese: 指を切ったから、バンドエイドちょうだい。
+    furigana: 指[ゆび]を 切[き]ったから、バンドエイドちょうだい。
+    romaji: yubi o kitta kara, bandoeido choudai.
+    english: I cut my finger, so give me a band-aid.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: A brand name used as the general word; 絆創膏（ばんそうこう）is the formal term.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '4'
+      context: 5. band aid bandoeido バンドエイド
+      provisional_fields: meanings:0252ec092135,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 27466ab757f1,54f6c03e7b72
+- id: word:目薬:めぐすり
+  expression: 目薬
+  reading: めぐすり
+  furigana: ''
+  romaji: megusuri
+  meanings:
+  - eye drops
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 一日三回、目薬をさします。
+    furigana: 一日[いちにち] 三回[さんかい]、 目薬[めぐすり]をさします。
+    romaji: ichinichi sankai, megusuri o sashimasu.
+    english: I put in eye drops three times a day.
+    audio: ''
+    register: polite
+  - japanese: 目が疲れたから目薬をさす。
+    furigana: 目[め]が 疲[つか]れたから 目薬[めぐすり]をさす。
+    romaji: me ga tsukareta kara megusuri o sasu.
+    english: My eyes are tired, so I'll put in eye drops.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Eye drops are used with さす, not 飲む.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '4'
+      context: 6. eye drops megusuri めぐすり 目薬
+      provisional_fields: meanings:275574a2036a,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: 99f85eeee37d,97d447a320e5
+- id: word:湿布:しっぷ
+  expression: 湿布
+  reading: しっぷ
+  furigana: ''
+  romaji: shippu
+  meanings:
+  - compress
+  - medicated patch
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 肩に湿布を貼りました。
+    furigana: 肩[かた]に 湿布[しっぷ]を 貼[は]りました。
+    romaji: kata ni shippu o harimashita.
+    english: I put a medicated patch on my shoulder.
+    audio: ''
+    register: polite
+  - japanese: 腰に湿布を貼ってくれる?
+    furigana: 腰[こし]に 湿布[しっぷ]を 貼[は]ってくれる?
+    romaji: koshi ni shippu o hatte kureru?
+    english: Could you put a patch on my lower back?
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: Used with 貼る (to stick on).
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '4'
+      context: 7. compress shippu しっぷ 湿布
+      provisional_fields: meanings:a448411bcd60,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: fa605c18f49c,aee7f1816315
+- id: word:うがい薬:うがいぐすり
+  expression: うがい薬
+  reading: うがいぐすり
+  furigana: ''
+  romaji: ugaigusuri
+  meanings:
+  - mouthwash
+  - gargle medicine
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: うがい薬でうがいをします。
+    furigana: うがい 薬[ぐすり]でうがいをします。
+    romaji: ugaigusuri de ugai o shimasu.
+    english: I gargle with mouthwash.
+    audio: ''
+    register: polite
+  - japanese: 帰ったら、うがい薬でうがいして。
+    furigana: 帰[かえ]ったら、うがい 薬[ぐすり]でうがいして。
+    romaji: kaettara, ugaigusuri de ugai shite.
+    english: Gargle with the mouthwash when you get home.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: 薬 becomes ぐすり in this compound; うがいをする means to gargle.
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '4'
+      context: 8. mouth wash ugaigusuri うがいぐすり うがい薬
+      provisional_fields: meanings:309f5b00c6b0,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: fb1302cd3261,9f8a16fb1aab
+- id: word:手:て
+  expression: 手
+  reading: て
+  furigana: ''
+  romaji: te
+  meanings:
+  - hand
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 食事の前に手を洗います。
+    furigana: 食事[しょくじ]の 前[まえ]に 手[て]を 洗[あら]います。
+    romaji: shokuji no mae ni te o araimasu.
+    english: I wash my hands before meals.
+    audio: ''
+    register: polite
+  - japanese: 手が冷たいね。
+    furigana: 手[て]が 冷[つめ]たいね。
+    romaji: te ga tsumetai ne.
+    english: Your hands are cold.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: ''
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: high
+      page: '1'
+      context: 15. hand te て 手
+      provisional_fields: meanings:bbb5ebbf8021,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: b8b7b57dda62,b2923a27cdf2
+- id: word:お尻:おしり
+  expression: お尻
+  reading: おしり
+  furigana: ''
+  romaji: oshiri
+  meanings:
+  - bottom
+  - buttocks
+  - hip
+  part_of_speech: noun
+  verb_group: ''
+  transitivity: ''
+  examples:
+  - japanese: 長く座っていて、お尻が痛いです。
+    furigana: 長[なが]く 座[すわ]っていて、 お 尻[しり]が 痛[いた]いです。
+    romaji: nagaku suwatte ite, oshiri ga itai desu.
+    english: I've been sitting a long time and my bottom hurts.
+    audio: ''
+    register: polite
+  - japanese: 自転車に乗ったら、お尻が痛くなった。
+    furigana: 自転車[じてんしゃ]に 乗[の]ったら、 お 尻[しり]が 痛[いた]くなった。
+    romaji: jitensha ni nottara, oshiri ga itaku natta.
+    english: My bottom started hurting after riding the bike.
+    audio: ''
+    register: casual
+  conjugations: {}
+  tags: []
+  usage_notes: 'In everyday speech the polite prefix お is kept: お尻（おしり）. Bare 尻（しり）sounds blunt.'
+  audio: ''
+  image: ''
+  pitch_accent: []
+  audio_accent: ''
+  frequency_rank: null
+  source:
+    type: extract
+    imported_from: medical-conditions-vocab.pdf
+    row: null
+    raw_fields:
+      extracted_from: medical-conditions-vocab.pdf
+      confidence: medium
+      page: '1'
+      context: 19. hip oshiri おしり 尻
+      provisional_fields: meanings:ef6658bdca57,part_of_speech:ee6cded62768
+      janki_repairs: '[{"code":"record-romaji-from-reading","evidence":{"algorithm":"japanese_anki.romaji.kana_to_romaji"},"fields":["romaji"],"provenance":"Derived Hepburn romaji from the stored kana reading.","version":"1.0.0"}]'
+      example_authority: c17e51d48fe1,eebc1411ac8a

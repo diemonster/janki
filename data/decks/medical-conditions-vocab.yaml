@@ -1,0 +1,14 @@
+deck:
+  name: "Brandon Japanese::Medical Vocabulary and Phrases"
+  deck_id: 2059400130
+  description: "Body parts, illnesses, symptoms and drugstore phrases from the Meguro Language Center sheet (BP1-21)."
+  output: "medical-conditions-vocab.apkg"
+  cards:
+    recognition: true
+    production: true
+    reading: false
+  source: ../normalized/vocabulary.json
+  # One deck per handout, the convention every other word deck here follows:
+  # the records were tagged with this source's slug at promote time, and no
+  # record belongs to more than one word deck.
+  include_tags: [medical-conditions-vocab]

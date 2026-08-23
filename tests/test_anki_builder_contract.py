@@ -102,6 +102,7 @@ def test_word_decks_are_nonempty_and_do_not_share_stable_ids() -> None:
         "data/decks/104-week-8.yaml",
         "data/decks/104-week-11.yaml",
         "data/decks/kanji-practice-112-123.yaml",
+        "data/decks/medical-conditions-vocab.yaml",
         "data/decks/m7-camera-vertical-dialogue.yaml",
         "data/decks/m7-mixed-tsumori.yaml",
         "data/decks/m7-native-teform-table.yaml",

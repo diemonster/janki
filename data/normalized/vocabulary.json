@@ -307,6 +307,63 @@
     }
   },
   {
+    "id": "word:うがい薬:うがいぐすり",
+    "expression": "うがい薬",
+    "reading": "うがいぐすり",
+    "furigana": "うがい 薬[ぐすり]",
+    "romaji": "ugaigusuri",
+    "meanings": [
+      "mouthwash"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "うがい薬でうがいをします。",
+        "furigana": "うがい 薬[ぐすり]でうがいをします。",
+        "romaji": "ugaigusuri de ugai o shimasu.",
+        "english": "I gargle with mouthwash.",
+        "audio": "audio/janki-3fa53aeab365.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "帰ったら、うがい薬でうがいして。",
+        "furigana": "帰[かえ]ったら、うがい 薬[ぐすり]でうがいして。",
+        "romaji": "kaettara, ugaigusuri de ugai shite.",
+        "english": "Gargle with the mouthwash when you get home.",
+        "audio": "audio/janki-d6b10a67e1fc.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "薬 becomes ぐすり in this compound; うがいをする means to gargle.",
+    "audio": "audio/janki-4952dd68215a.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 114900,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "4",
+        "context": "8. mouth wash ugaigusuri うがいぐすり うがい薬",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "fb1302cd3261,9f8a16fb1aab",
+        "janki_pitch_accent_source": "jpdb:51d992449fd5685c3e1a7317a4e17cc5d2915a270d41c64a39dca56dce707e71"
+      }
+    }
+  },
+  {
     "id": "word:うじ:うじ",
     "expression": "うじ",
     "reading": "うじ",
@@ -403,6 +460,63 @@
         "anki_Back": "<div>うす</div><div>Very casual greeting</div>",
         "anki_Add Reverse": "",
         "janki_pitch_accent_source": "jpdb:c2e2536dbceb2e0bf9c5cf70f2bd6cddfebb3340e574a22ac44a37d9c0187730"
+      }
+    }
+  },
+  {
+    "id": "word:うつ病:うつびょう",
+    "expression": "うつ病",
+    "reading": "うつびょう",
+    "furigana": "うつ 病[びょう]",
+    "romaji": "utsubyou",
+    "meanings": [
+      "depression"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "うつ病の治療を受けています。",
+        "furigana": "うつ 病[びょう]の 治療[ちりょう]を 受[う]けています。",
+        "romaji": "utsubyou no chiryou o ukete imasu.",
+        "english": "I'm receiving treatment for depression.",
+        "audio": "audio/janki-f9b74e1fbf88.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "働きすぎてうつ病になった友達がいる。",
+        "furigana": "働[はたら]きすぎてうつ 病[びょう]になった 友達[ともだち]がいる。",
+        "romaji": "hatarakisugite utsubyou ni natta tomodachi ga iru.",
+        "english": "I have a friend who got depression from overworking.",
+        "audio": "audio/janki-57b6af172233.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Clinical depression as an illness; the source glosses it as melancholy.",
+    "audio": "audio/janki-a94726eb1ad3.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 60700,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "10. melancholy utsubyo うつびょう うつ病",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "ee1292cfe57e,406d3f15ceb3",
+        "janki_pitch_accent_source": "jpdb:d81272b700d2071ea4797942336ad3a918866eecf0efb797ca176f18f584cb63"
       }
     }
   },
@@ -622,6 +736,63 @@
         "example": "よくおさけ(を)飲む？",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:6a2b94089c62aa1e7869d8c00221be10d635f03139ed081da474f495b5a3795a"
+      }
+    }
+  },
+  {
+    "id": "word:おたふく:おたふく",
+    "expression": "おたふく",
+    "reading": "おたふく",
+    "furigana": "",
+    "romaji": "otafuku",
+    "meanings": [
+      "homely woman (esp. one with a small low nose, high flat forehead, and bulging cheeks), plain woman"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "子供がおたふくにかかりました。",
+        "furigana": "子供[こども]がおたふくにかかりました。",
+        "romaji": "kodomo ga otafuku ni kakarimashita.",
+        "english": "My child came down with the mumps.",
+        "audio": "audio/janki-dba1a83a4550.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "おたふくで一週間休んだ。",
+        "furigana": "おたふくで 一週間[いっしゅうかん] 休[やす]んだ。",
+        "romaji": "otafuku de isshuukan yasunda.",
+        "english": "I was out for a week with the mumps.",
+        "audio": "audio/janki-d9ab3d399999.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Commonly said in full as おたふく風邪（かぜ）.",
+    "audio": "audio/janki-ec429a9eeca0.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 92300,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "medium",
+        "page": "2",
+        "context": "3. mumps otafuku おたふく",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "ba33fa1c8040,c107a4dd8aa8",
+        "janki_pitch_accent_source": "jpdb:f306e5743fc39b78249c22fc1b6a02dcac760cd818b402241e93fc654f387eb8"
       }
     }
   },
@@ -893,6 +1064,63 @@
     }
   },
   {
+    "id": "word:お尻:おしり",
+    "expression": "お尻",
+    "reading": "おしり",
+    "furigana": "お 尻[しり]",
+    "romaji": "oshiri",
+    "meanings": [
+      "bottom, buttocks"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "長く座っていて、お尻が痛いです。",
+        "furigana": "長[なが]く 座[すわ]っていて、 お 尻[しり]が 痛[いた]いです。",
+        "romaji": "nagaku suwatte ite, oshiri ga itai desu.",
+        "english": "I've been sitting a long time and my bottom hurts.",
+        "audio": "audio/janki-e4626001deb3.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "自転車に乗ったら、お尻が痛くなった。",
+        "furigana": "自転車[じてんしゃ]に 乗[の]ったら、 お 尻[しり]が 痛[いた]くなった。",
+        "romaji": "jitensha ni nottara, oshiri ga itaku natta.",
+        "english": "My bottom started hurting after riding the bike.",
+        "audio": "audio/janki-4cee0d4e2282.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "In everyday speech the polite prefix お is kept: お尻（おしり）. Bare 尻（しり）sounds blunt.",
+    "audio": "audio/janki-36134bd0be78.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 3500,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "medium",
+        "page": "1",
+        "context": "19. hip oshiri おしり 尻",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "c17e51d48fe1,eebc1411ac8a",
+        "janki_pitch_accent_source": "jpdb:699638d5cbcc768784ce57c50ebc7c6800157867738ed1a6fa476da29036f62b"
+      }
+    }
+  },
+  {
     "id": "word:お父さん:おとうさん",
     "expression": "お父さん",
     "reading": "おとうさん",
@@ -946,6 +1174,63 @@
         "anki_Front": "<div>お父さん</div>",
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>おとうさん　「とーちゃん」</div><div>Dad, father</div></span>",
         "anki_Add Reverse": "y"
+      }
+    }
+  },
+  {
+    "id": "word:お腹:おなか",
+    "expression": "お腹",
+    "reading": "おなか",
+    "furigana": "お 腹[なか]",
+    "romaji": "onaka",
+    "meanings": [
+      "belly, abdomen, stomach"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "お腹が痛いです。",
+        "furigana": "お 腹[なか]が 痛[いた]いです。",
+        "romaji": "onaka ga itai desu.",
+        "english": "I have a stomachache.",
+        "audio": "audio/janki-188319474e1f.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "食べすぎてお腹が苦しい。",
+        "furigana": "食[た]べすぎて お 腹[なか]が 苦[くる]しい。",
+        "romaji": "tabesugite onaka ga kurushii.",
+        "english": "I ate too much and my stomach feels uncomfortable.",
+        "audio": "audio/janki-8e9415a0b880.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Always used with the お prefix; often written おなか. お腹がすく means to get hungry.",
+    "audio": "audio/janki-444a01095c81.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 3100,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "(1) Onaka ga itai desu. お腹が痛いです。 have a pain / abdomen, stomach, bowel, (tummy)",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "fa149869ca3e,964d62b80ae8",
+        "janki_pitch_accent_source": "jpdb:42cf47bf61b095ee5be31bd1f90117f6fe24063c38e369ab04605531b3238cb5"
       }
     }
   },
@@ -1164,6 +1449,124 @@
     }
   },
   {
+    "id": "word:きりきり:きりきり",
+    "expression": "きりきり",
+    "reading": "きりきり",
+    "furigana": "",
+    "romaji": "kirikiri",
+    "meanings": [
+      "chafing, grinding (e.g. teeth)",
+      "binding tightly, pulling tight (e.g. a bow)",
+      "rotating quickly",
+      "hurting sharply",
+      "briskly, quickly, promptly, at once, right away"
+    ],
+    "part_of_speech": "adverb",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "胃がきりきりします。",
+        "furigana": "胃[い]がきりきりします。",
+        "romaji": "i ga kirikiri shimasu.",
+        "english": "I have a sharp pain in my stomach.",
+        "audio": "audio/janki-94cfcf7a26ea.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "朝から胃がきりきりする。",
+        "furigana": "朝[あさ]から 胃[い]がきりきりする。",
+        "romaji": "asa kara i ga kirikiri suru.",
+        "english": "I've had a stabbing pain in my stomach since this morning.",
+        "audio": "audio/janki-f467a7dd5d33.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Mimetic word used with する for a sharp, drilling pain, typically in the stomach.",
+    "audio": "audio/janki-59d098aa825b.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 26400,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "20. Sharp pain in his stomach. I ga kirikiri shimasu. 胃がきりきりします。",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "4a6684c3f377,a9b9c4a587e1",
+        "janki_pitch_accent_source": "jpdb:f252611513c7b13e7b26e0e386f82e75a769c5be5a630bbb28b81ff5bb8eaf92"
+      }
+    }
+  },
+  {
+    "id": "word:くしゃみ:くしゃみ",
+    "expression": "くしゃみ",
+    "reading": "くしゃみ",
+    "furigana": "",
+    "romaji": "kushami",
+    "meanings": [
+      "sneeze"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "くしゃみが出ます。",
+        "furigana": "くしゃみが 出[で]ます。",
+        "romaji": "kushami ga demasu.",
+        "english": "I keep sneezing.",
+        "audio": "audio/janki-72dbc0033295.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "花粉症でくしゃみが止まらない。",
+        "furigana": "花粉症[かふんしょう]でくしゃみが 止[と]まらない。",
+        "romaji": "kafunshou de kushami ga tomaranai.",
+        "english": "I can't stop sneezing because of hay fever.",
+        "audio": "audio/janki-587afdb7515c.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "To sneeze is くしゃみをする or くしゃみが出る.",
+    "audio": "audio/janki-aa0bd930e796.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 11500,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "6. I have been sneezing. Kushami ga demasu. くしゃみが出ます。",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "0f51d77850ff,5f2405cdd561",
+        "janki_pitch_accent_source": "jpdb:30743826334826c01234dfe6742cac2855206274e74fa336aad765efe2dfffd1"
+      }
+    }
+  },
+  {
     "id": "word:くつ:くつ",
     "expression": "くつ",
     "reading": "くつ",
@@ -1218,6 +1621,63 @@
         "example": "だれが白いくつをはいていますか。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:638db35202017790a94ee49225cb4cf026eae25110c82e61071fb27dfcf30126"
+      }
+    }
+  },
+  {
+    "id": "word:くらくら:くらくら",
+    "expression": "くらくら",
+    "reading": "くらくら",
+    "furigana": "",
+    "romaji": "kurakura",
+    "meanings": [
+      "dizzy, giddy"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "suru",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "頭がくらくらします。",
+        "furigana": "頭[あたま]がくらくらします。",
+        "romaji": "atama ga kurakura shimasu.",
+        "english": "My head feels dizzy.",
+        "audio": "audio/janki-664d760cfe57.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "熱で頭がくらくらする。",
+        "furigana": "熱[ねつ]で 頭[あたま]がくらくらする。",
+        "romaji": "netsu de atama ga kurakura suru.",
+        "english": "My head is spinning from the fever.",
+        "audio": "audio/janki-76dc9a354bdf.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Mimetic word used with する.",
+    "audio": "audio/janki-1d9dab8f1a46.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 13000,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "21. I feel dizzy. Atama ga kura kura shimasu. 頭がくらくらします。",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "cd0bd9126600,564bb4e0f0f8",
+        "janki_pitch_accent_source": "jpdb:13dae70a3f9bc8ee2e8d5cf71c9137643ec07d4964ed72b50229efd25ab812ef"
       }
     }
   },
@@ -1875,6 +2335,120 @@
     }
   },
   {
+    "id": "word:ずきずき:ずきずき",
+    "expression": "ずきずき",
+    "reading": "ずきずき",
+    "furigana": "",
+    "romaji": "zukizuki",
+    "meanings": [
+      "throbbing with pain"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "suru",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "頭がずきずきします。",
+        "furigana": "頭[あたま]がずきずきします。",
+        "romaji": "atama ga zukizuki shimasu.",
+        "english": "My head is throbbing.",
+        "audio": "audio/janki-06c35d442a65.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "歯がずきずきして眠れない。",
+        "furigana": "歯[は]がずきずきして 眠[ねむ]れない。",
+        "romaji": "ha ga zukizuki shite nemurenai.",
+        "english": "My tooth is throbbing and I can't sleep.",
+        "audio": "audio/janki-3b3010a11af0.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Mimetic word used with する for pulsing pain.",
+    "audio": "audio/janki-2fd6314b5741.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 28000,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "22. My head is throbbing. Atama ga zukizuki shimasu. 頭がずきずきします。",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "fc2e614e31fa,458f4a2020bd",
+        "janki_pitch_accent_source": "jpdb:9ff6f46f4724b33f97406c3f81958db64ff28d31138abe37973af009e28d669d"
+      }
+    }
+  },
+  {
+    "id": "word:ぜんそく:ぜんそく",
+    "expression": "ぜんそく",
+    "reading": "ぜんそく",
+    "furigana": "",
+    "romaji": "zensoku",
+    "meanings": [
+      "asthma"
+    ],
+    "part_of_speech": "no-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "子供の時からぜんそくがあります。",
+        "furigana": "子供[こども]の 時[とき]からぜんそくがあります。",
+        "romaji": "kodomo no toki kara zensoku ga arimasu.",
+        "english": "I've had asthma since I was a child.",
+        "audio": "audio/janki-314dc0f900a6.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "ぜんそくだから、走ると苦しい。",
+        "furigana": "ぜんそくだから、 走[はし]ると 苦[くる]しい。",
+        "romaji": "zensoku da kara, hashiru to kurushii.",
+        "english": "I have asthma, so running makes it hard to breathe.",
+        "audio": "audio/janki-6245a7ade28b.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Normally written in kana; the kanji 喘息 is rare in everyday text.",
+    "audio": "audio/janki-2615d55d6b9f.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 60700,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "29. asthma zensoku ぜんそく",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "43aa1dce27a2,70cb94a90b49",
+        "janki_pitch_accent_source": "jpdb:ca9da3417b89e63f542f785ba91e517e04f0ae95f92cabd83327effe69f4a399"
+      }
+    }
+  },
+  {
     "id": "word:そう言えば:そういえば",
     "expression": "そう言えば",
     "reading": "そういえば",
@@ -1989,6 +2563,71 @@
     }
   },
   {
+    "id": "word:だるい:だるい",
+    "expression": "だるい",
+    "reading": "だるい",
+    "furigana": "",
+    "romaji": "darui",
+    "meanings": [
+      "sluggish, languid, listless, heavy (heart, legs, etc.), dull",
+      "bothersome, tiresome, pain-in-the-ass"
+    ],
+    "part_of_speech": "i-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "体がだるいです。",
+        "furigana": "体[からだ]がだるいです。",
+        "romaji": "karada ga darui desu.",
+        "english": "I feel sluggish.",
+        "audio": "audio/janki-b6061081b821.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "熱はないけど、体がだるい。",
+        "furigana": "熱[ねつ]はないけど、 体[からだ]がだるい。",
+        "romaji": "netsu wa nai kedo, karada ga darui.",
+        "english": "I don't have a fever, but my body feels heavy and tired.",
+        "audio": "audio/janki-e36c73c0480c.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "だるい",
+      "negative": "だるくない",
+      "past": "だるかった",
+      "past_negative": "だるくなかった",
+      "te_form": "だるくて"
+    },
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Describes the heavy, worn-out feeling of being ill or exhausted.",
+    "audio": "audio/janki-0ef9e25d7e28.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHLL",
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 7900,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "11. I feel sluggish. Karada ga darui desu. 体がだるいです。",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "9f33ec3fbaec,768bedf9b175",
+        "janki_pitch_accent_source": "jpdb:b1ea88f34d6c13b9d2964deeaf0e4fbcc44f4b9d39280d09e22cd8728a54b321"
+      }
+    }
+  },
+  {
     "id": "word:だれ:だれ",
     "expression": "だれ",
     "reading": "だれ",
@@ -2043,6 +2682,122 @@
         "example": "だれがめがねをかけていますか。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:db5141c51bd4e82745d477aa747c5371ed99f6957c418793629d65afeb49d1d1"
+      }
+    }
+  },
+  {
+    "id": "word:ちくちく:ちくちく",
+    "expression": "ちくちく",
+    "reading": "ちくちく",
+    "furigana": "",
+    "romaji": "chikuchiku",
+    "meanings": [
+      "prickling, stinging, tingling"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "suru",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "ちくちくします。",
+        "furigana": "ちくちくします。",
+        "romaji": "chikuchiku shimasu.",
+        "english": "I have a prickly pain.",
+        "audio": "audio/janki-d23c0da3e6d1.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "セーターが首にちくちくする。",
+        "furigana": "セーターが 首[くび]にちくちくする。",
+        "romaji": "seetaa ga kubi ni chikuchiku suru.",
+        "english": "The sweater feels prickly on my neck.",
+        "audio": "audio/janki-4582b09d8a17.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Mimetic word used with する for a pricking, needle-like feeling.",
+    "audio": "audio/janki-3910db5b08ea.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLLLL",
+      "LHLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 23900,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "23. I have a prickly pain. Chikuchiku shimasu. ちくちくします。",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "e1b44fd9c18c,165d7f0ed726",
+        "janki_pitch_accent_source": "jpdb:3f96c8d631704e26f3ab87d2c61edb30e119df758879fb00c77f97f84ab459a6"
+      }
+    }
+  },
+  {
+    "id": "word:てんかん:てんかん",
+    "expression": "てんかん",
+    "reading": "てんかん",
+    "furigana": "",
+    "romaji": "tenkan",
+    "meanings": [
+      "epilepsy, epileptic fit"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "てんかんの発作が起きました。",
+        "furigana": "てんかんの 発作[ほっさ]が 起[お]きました。",
+        "romaji": "tenkan no hossa ga okimashita.",
+        "english": "An epileptic seizure occurred.",
+        "audio": "audio/janki-1d4573a9fbde.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "彼はてんかんの薬を飲んでる。",
+        "furigana": "彼[かれ]はてんかんの 薬[くすり]を 飲[の]んでる。",
+        "romaji": "kare wa tenkan no kusuri o nonderu.",
+        "english": "He takes medicine for epilepsy.",
+        "audio": "audio/janki-ca001c779430.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "The source glosses it as petit mal; てんかん is the general word for epilepsy and is written in kana.",
+    "audio": "audio/janki-380ff7ce662c.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHH",
+      "LHHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 70000,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "medium",
+        "page": "2",
+        "context": "22. petit mal tenkan てんかん",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "ce1087fdd7f5,d7d5ee639a76",
+        "janki_pitch_accent_source": "jpdb:201bb0fdfe8459e702b8788c9530dc38a800f624b566f5848d2513aeb180b2ee"
       }
     }
   },
@@ -2530,6 +3285,63 @@
     }
   },
   {
+    "id": "word:ひりひり:ひりひり",
+    "expression": "ひりひり",
+    "reading": "ひりひり",
+    "furigana": "",
+    "romaji": "hirihiri",
+    "meanings": [
+      "stinging (pain), smarting, tingling"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "suru",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "ひりひりします。",
+        "furigana": "ひりひりします。",
+        "romaji": "hirihiri shimasu.",
+        "english": "I have a burning pain.",
+        "audio": "audio/janki-29d3ed3a75ec.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "日焼けで背中がひりひりする。",
+        "furigana": "日[ひ] 焼[や]けで 背中[せなか]がひりひりする。",
+        "romaji": "hiyake de senaka ga hirihiri suru.",
+        "english": "My back stings from the sunburn.",
+        "audio": "audio/janki-2076621317f7.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Mimetic word used with する for a burning, stinging pain on the skin or in the throat.",
+    "audio": "audio/janki-2690308796bf.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 26900,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "24. I have a burning pain. Hirihiri shimasu. ひりひりします。",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "a61c4d809e4f,b26bd3618a8e",
+        "janki_pitch_accent_source": "jpdb:9fa683bfff94232c49f2f213eb0af291e4bb435550cfcc0a31c82cd5fea5cada"
+      }
+    }
+  },
+  {
     "id": "word:ほら:ほら",
     "expression": "ほら",
     "reading": "ほら",
@@ -2693,6 +3505,64 @@
     }
   },
   {
+    "id": "word:むかむか:むかむか",
+    "expression": "むかむか",
+    "reading": "むかむか",
+    "furigana": "",
+    "romaji": "mukamuka",
+    "meanings": [
+      "feeling sick, feeling queasy, feeling nauseated",
+      "being angry, being offended, being disgusted"
+    ],
+    "part_of_speech": "verb",
+    "verb_group": "suru",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "胃がむかむかします。",
+        "furigana": "胃[い]がむかむかします。",
+        "romaji": "i ga mukamuka shimasu.",
+        "english": "My stomach feels queasy.",
+        "audio": "audio/janki-ae52a58f92d9.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "食べすぎて胃がむかむかする。",
+        "furigana": "食[た]べすぎて 胃[い]がむかむかする。",
+        "romaji": "tabesugite i ga mukamuka suru.",
+        "english": "I ate too much and my stomach is queasy.",
+        "audio": "audio/janki-0a8956d64938.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "A mimetic word used with する. It can also describe being irritated.",
+    "audio": "audio/janki-28bcc76d13e7.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 33200,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "19. I’m sick at my stomach. I ga mukamuka shimasu. 胃がむかむかします。",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "4ba08d96ed3e,a7991b55f428",
+        "janki_pitch_accent_source": "jpdb:0fe6f3b4560ea6ed06b76167e96337e553f381bd8cb0d7c937494a4ed88fd1e9"
+      }
+    }
+  },
+  {
     "id": "word:めがね:めがね",
     "expression": "めがね",
     "reading": "めがね",
@@ -2748,6 +3618,63 @@
         "example": "だれがめがねをかけていますか。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:f694867ef647c4ab954a500eddcec0693190380363b24fc68ed5f1908d805555"
+      }
+    }
+  },
+  {
+    "id": "word:めまい:めまい",
+    "expression": "めまい",
+    "reading": "めまい",
+    "furigana": "",
+    "romaji": "memai",
+    "meanings": [
+      "dizziness, giddiness, vertigo"
+    ],
+    "part_of_speech": "no-adjective",
+    "verb_group": "suru",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "めまいがします。",
+        "furigana": "めまいがします。",
+        "romaji": "memai ga shimasu.",
+        "english": "I feel dizzy.",
+        "audio": "audio/janki-e3b47e23dc23.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "立ち上がったらめまいがした。",
+        "furigana": "立[た]ち 上[あ]がったらめまいがした。",
+        "romaji": "tachiagattara memai ga shita.",
+        "english": "I got dizzy when I stood up.",
+        "audio": "audio/janki-324d77906a2f.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Usually written in kana; the kanji 目眩 is rare.",
+    "audio": "audio/janki-f2052fc62eeb.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 13900,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "10. I feel dizzy. Memai ga shimasu. めまいがします。",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "42786b94c83c,085be079c165",
+        "janki_pitch_accent_source": "jpdb:b996c2a13465ab2c0f8663cdbf30efff507330a28c206b7388b01cf75a4bafcb"
       }
     }
   },
@@ -2913,6 +3840,122 @@
     }
   },
   {
+    "id": "word:アトピー:アトピー",
+    "expression": "アトピー",
+    "reading": "アトピー",
+    "furigana": "",
+    "romaji": "atopii",
+    "meanings": [
+      "atopic, predisposition toward allergies",
+      "atopic dermatitis"
+    ],
+    "part_of_speech": "no-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "子供の頃からアトピーがあります。",
+        "furigana": "子供[こども]の 頃[ころ]からアトピーがあります。",
+        "romaji": "kodomo no koro kara atopii ga arimasu.",
+        "english": "I've had atopic dermatitis since I was a child.",
+        "audio": "audio/janki-5d215ebedf73.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "アトピーで肌がかゆい。",
+        "furigana": "アトピーで 肌[はだ]がかゆい。",
+        "romaji": "atopii de hada ga kayui.",
+        "english": "My skin itches because of my atopic dermatitis.",
+        "audio": "audio/janki-2257136cea72.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "In everyday Japanese アトピー refers to atopic eczema of the skin.",
+    "audio": "audio/janki-517ac9b36ce8.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 143500,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "6. atopy atop i アトピー",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "d5f7bb6394a0,0415e6e664d7",
+        "janki_pitch_accent_source": "jpdb:edae35d6987911e18426ee5c0cb9d21fa2708687c8194c5a39f70882356ccd8f"
+      }
+    }
+  },
+  {
+    "id": "word:アレルギー:アレルギー",
+    "expression": "アレルギー",
+    "reading": "アレルギー",
+    "furigana": "",
+    "romaji": "arerugii",
+    "meanings": [
+      "allergy"
+    ],
+    "part_of_speech": "no-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "アレルギーがあります。",
+        "furigana": "アレルギーがあります。",
+        "romaji": "arerugii ga arimasu.",
+        "english": "I have an allergy.",
+        "audio": "audio/janki-e0d80ad4a823.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "卵のアレルギーがあるんだ。",
+        "furigana": "卵[たまご]のアレルギーがあるんだ。",
+        "romaji": "tamago no arerugii ga aru n da.",
+        "english": "I have an egg allergy.",
+        "audio": "audio/janki-365710fc3c1b.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Name the allergen with の: 猫のアレルギー, 卵のアレルギー.",
+    "audio": "audio/janki-63f221c20fed.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHLLLL",
+      "LHHLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 22300,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "3. I have an allergy. Arerug i ga arimasu. アレルギーがあります。",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "d09d1e4c6741,c05dd66438b2",
+        "janki_pitch_accent_source": "jpdb:1ecf0cf4bf500a6cb387b47fa6634700275302293af16d837f90838659a24fcd"
+      }
+    }
+  },
+  {
     "id": "word:イベント:イベント",
     "expression": "イベント",
     "reading": "イベント",
@@ -2966,6 +4009,63 @@
         "inclusion_reason": "Common loanword used in the exercise sentence.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:ca038ffbbcd132272a9bf87d4c1950e1f43489fcb1f653b32f6623f7aa1f5ce7"
+      }
+    }
+  },
+  {
+    "id": "word:インフルエンザ:インフルエンザ",
+    "expression": "インフルエンザ",
+    "reading": "インフルエンザ",
+    "furigana": "",
+    "romaji": "infuruenza",
+    "meanings": [
+      "influenza, flu"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "インフルエンザで会社を休みました。",
+        "furigana": "インフルエンザで 会社[かいしゃ]を 休[やす]みました。",
+        "romaji": "infuruenza de kaisha o yasumimashita.",
+        "english": "I took the day off work with the flu.",
+        "audio": "audio/janki-ac49abd79921.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "インフルエンザかも。熱が高い。",
+        "furigana": "インフルエンザかも。 熱[ねつ]が 高[たか]い。",
+        "romaji": "infuruenza kamo. netsu ga takai.",
+        "english": "It might be the flu. My fever is high.",
+        "audio": "audio/janki-e31e4bb7c845.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Often shortened to インフル in casual speech.",
+    "audio": "audio/janki-8406c54b7619.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHHLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 30100,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "9. influenza infuruenza インフルエンザ",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "2247324e864c,2313eee2eda1",
+        "janki_pitch_accent_source": "jpdb:334c5b90f94fb82fb650156838fe0c29779b8aa94dcd553db526d7f82e3b2ab3"
       }
     }
   },
@@ -3082,6 +4182,63 @@
         "anki_Add Reverse": "",
         "janki_pitch_accent_source": "jpdb:b899a3cb574e8547112a02b4540d8eae50adc481e5164095d910afc863f5d323",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.settle_example_romaji\"},\"fields\":[\"examples[0].romaji\",\"examples[1].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:バンドエイド:バンドエイド",
+    "expression": "バンドエイド",
+    "reading": "バンドエイド",
+    "furigana": "",
+    "romaji": "bandoeido",
+    "meanings": [
+      "band aid, adhesive bandage"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "バンドエイドをください。",
+        "furigana": "バンドエイドをください。",
+        "romaji": "bandoeido o kudasai.",
+        "english": "Please give me a band-aid.",
+        "audio": "audio/janki-46a524a53013.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "指を切ったから、バンドエイドちょうだい。",
+        "furigana": "指[ゆび]を 切[き]ったから、バンドエイドちょうだい。",
+        "romaji": "yubi o kitta kara, bandoeido choudai.",
+        "english": "I cut my finger, so give me a band-aid.",
+        "audio": "audio/janki-10457db9b8eb.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "A brand name used as the general word; 絆創膏（ばんそうこう）is the formal term.",
+    "audio": "audio/janki-74feeff9273a.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 99000,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "4",
+        "context": "5. band aid bandoeido バンドエイド",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "27466ab757f1,54f6c03e7b72",
+        "janki_pitch_accent_source": "jpdb:9b921da9a5aa88f14fb8aa35a4e9c6802b4721de0dbcc4ff530cf6b94999aa1f"
       }
     }
   },
@@ -3380,6 +4537,63 @@
     }
   },
   {
+    "id": "word:下痢:げり",
+    "expression": "下痢",
+    "reading": "げり",
+    "furigana": "下[げ] 痢[り]",
+    "romaji": "geri",
+    "meanings": [
+      "diarrhea, diarrhoea"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "suru",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "下痢です。",
+        "furigana": "下痢[げり]です。",
+        "romaji": "geri desu.",
+        "english": "I have diarrhea.",
+        "audio": "audio/janki-106c3013c735.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "昨日から下痢が続いてる。",
+        "furigana": "昨日[きのう]から 下痢[げり]が 続[つづ]いてる。",
+        "romaji": "kinou kara geri ga tsuzuiteru.",
+        "english": "I've had diarrhea since yesterday.",
+        "audio": "audio/janki-9eb7ba68455f.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "下痢をする is also used for having diarrhea.",
+    "audio": "audio/janki-9e99cb2b2142.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 30500,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "12. I have diarrhea. Geri desu. 下痢です。",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "448c2c7e04fe,bfe0fedf8817",
+        "janki_pitch_accent_source": "jpdb:5b777831a6e9e1438ba7c81f08c01c641c404050982ea4a5b25a08af486d5162"
+      }
+    }
+  },
+  {
     "id": "word:久しぶり:ひさしぶり",
     "expression": "久しぶり",
     "reading": "ひさしぶり",
@@ -3563,6 +4777,63 @@
         "inclusion_reason": "Irregular counter reading tested in the hotel guide.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:bf16b732c24c410b5ae4ef0b03dd896639b2a57cd149f7f36c418ae5bd88f070"
+      }
+    }
+  },
+  {
+    "id": "word:二日酔い:ふつかよい",
+    "expression": "二日酔い",
+    "reading": "ふつかよい",
+    "furigana": "二日酔い[ふつかよい]",
+    "romaji": "futsukayoi",
+    "meanings": [
+      "hangover"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "suru",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "二日酔いです。",
+        "furigana": "二日酔[ふつかよ]いです。",
+        "romaji": "futsukayoi desu.",
+        "english": "I have a hangover.",
+        "audio": "audio/janki-b7360e5f544a.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "飲みすぎて、今日は二日酔いだ。",
+        "furigana": "飲[の]みすぎて、 今日[きょう]は 二日酔[ふつかよ]いだ。",
+        "romaji": "nomisugite, kyou wa futsukayoi da.",
+        "english": "I drank too much, so I'm hungover today.",
+        "audio": "audio/janki-a0f30c786e5b.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-2ebc6fb88b4f.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 16700,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "18. I have a hangover. Futsukayoi desu. 二日酔いです。",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "789b851b4f0a,00f9b2444d36",
+        "janki_pitch_accent_source": "jpdb:1110e8902e85540864c7b847c414b3fc1d247e163cab1be52742cc3dd0c72348"
       }
     }
   },
@@ -4274,6 +5545,64 @@
         "sid": "44399515",
         "deck": "Anki Test - Top 20 Verbs",
         "card_state": "locked,new"
+      }
+    }
+  },
+  {
+    "id": "word:便秘:べんぴ",
+    "expression": "便秘",
+    "reading": "べんぴ",
+    "furigana": "便[べん] 秘[ぴ]",
+    "romaji": "benpi",
+    "meanings": [
+      "constipation"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "suru",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "便秘の薬をもらいました。",
+        "furigana": "便秘[べんぴ]の 薬[くすり]をもらいました。",
+        "romaji": "benpi no kusuri o moraimashita.",
+        "english": "I got some medicine for constipation.",
+        "audio": "audio/janki-f53422d01407.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "野菜を食べないと便秘になるよ。",
+        "furigana": "野菜[やさい]を 食[た]べないと 便秘[べんぴ]になるよ。",
+        "romaji": "yasai o tabenai to benpi ni naru yo.",
+        "english": "You'll get constipated if you don't eat vegetables.",
+        "audio": "audio/janki-995b6af54c5e.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Say 便秘です to tell a doctor you are constipated.",
+    "audio": "audio/janki-6908807f1734.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHH",
+      "HLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 42200,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "30. constipation bempi べんぴ 便秘",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "fd68fa657ee6,3406d460a8bb",
+        "janki_pitch_accent_source": "jpdb:59cb7bf6bfb7201e70cde2c74c20c089aa2837d49a5509649dd4632f465e35e5"
       }
     }
   },
@@ -5538,6 +6867,64 @@
     }
   },
   {
+    "id": "word:口内炎:こうないえん",
+    "expression": "口内炎",
+    "reading": "こうないえん",
+    "furigana": "口[こう] 内[ない] 炎[えん]",
+    "romaji": "kounaien",
+    "meanings": [
+      "mouth ulcer, stomatitis"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "口内炎が痛くて、食べにくいです。",
+        "furigana": "口内炎[こうないえん]が 痛[いた]くて、 食[た]べにくいです。",
+        "romaji": "kounaien ga itakute, tabenikui desu.",
+        "english": "My canker sore hurts and it's hard to eat.",
+        "audio": "audio/janki-4f4f136dbc2c.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "疲れると口内炎ができる。",
+        "furigana": "疲[つか]れると 口内炎[こうないえん]ができる。",
+        "romaji": "tsukareru to kounaien ga dekiru.",
+        "english": "I get canker sores when I'm tired.",
+        "audio": "audio/janki-cb86c137fe60.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-c411f8daad41.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHLLLL",
+      "LHHHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 74500,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "19. canker sore konaien こうないえん 口内炎",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "7156c09709db,c40c03f653c8",
+        "janki_pitch_accent_source": "jpdb:d39f52b509f1691253b7b7ed0b47181700c3fe02b3e9ae1e191926638c370883"
+      }
+    }
+  },
+  {
     "id": "word:名古屋市:なごやし",
     "expression": "名古屋市",
     "reading": "なごやし",
@@ -5591,6 +6978,120 @@
         "provisional_fields": "part_of_speech:1e6a32319743",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:6bdfc4fd0bfe1e60c7125e305cc77a1c9ff3caf288eff5f442d5dda762244fd2"
+      }
+    }
+  },
+  {
+    "id": "word:吐き気:はきけ",
+    "expression": "吐き気",
+    "reading": "はきけ",
+    "furigana": "吐[は]き 気[け]",
+    "romaji": "hakike",
+    "meanings": [
+      "nausea, sickness in the stomach"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "吐き気がします。",
+        "furigana": "吐[は]き 気[け]がします。",
+        "romaji": "hakike ga shimasu.",
+        "english": "I feel nauseous.",
+        "audio": "audio/janki-edc4652aa588.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "ちょっと吐き気がする。",
+        "furigana": "ちょっと 吐[は]き 気[け]がする。",
+        "romaji": "chotto hakike ga suru.",
+        "english": "I feel a bit sick to my stomach.",
+        "audio": "audio/janki-f1b471d7bc3c.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Sensations like 吐き気, 寒気, めまい take がする.",
+    "audio": "audio/janki-57a962753429.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 9500,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "8. I feel nauseous. Hakike ga shimasu. 吐き気がします。",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "7dbfae2260f2,279060418258",
+        "janki_pitch_accent_source": "jpdb:d3185c9cb68dff4a60d5c89efc0a3295557cfd1f80b8bc9939ea81291088262b"
+      }
+    }
+  },
+  {
+    "id": "word:咳:せき",
+    "expression": "咳",
+    "reading": "せき",
+    "furigana": "咳[せき]",
+    "romaji": "seki",
+    "meanings": [
+      "cough, coughing, tussis"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "咳がでます。",
+        "furigana": "咳[せき]がでます。",
+        "romaji": "seki ga demasu.",
+        "english": "I have a cough.",
+        "audio": "audio/janki-035db0f6fc9d.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "夜になると咳が出る。",
+        "furigana": "夜[よる]になると 咳[せき]が 出[で]る。",
+        "romaji": "yoru ni naru to seki ga deru.",
+        "english": "I start coughing at night.",
+        "audio": "audio/janki-5854ab52b8d7.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Symptoms that come out take 出る: 咳が出る, くしゃみが出る, 鼻水が出る.",
+    "audio": "audio/janki-46882166c538.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 9500,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "5. I have a cough. Seki ga demasu. 咳がでます。",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "e69d37057552,098897afb573",
+        "janki_pitch_accent_source": "jpdb:8d47cbdc91c544d47d6d2f4f37ae2cebc9099c6677ad834e75f20d878c973b90"
       }
     }
   },
@@ -6288,6 +7789,64 @@
     }
   },
   {
+    "id": "word:寒気:さむけ",
+    "expression": "寒気",
+    "reading": "さむけ",
+    "furigana": "寒[さむ] 気[け]",
+    "romaji": "samuke",
+    "meanings": [
+      "chill, the shivers, shivering fit",
+      "cold, coldness, cold air"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "寒気がします。",
+        "furigana": "寒気[さむけ]がします。",
+        "romaji": "samuke ga shimasu.",
+        "english": "I have chills.",
+        "audio": "audio/janki-2fd881d8e664.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "寒気がするから、風邪かも。",
+        "furigana": "寒気[さむけ]がするから、 風邪[かぜ]かも。",
+        "romaji": "samuke ga suru kara, kaze kamo.",
+        "english": "I've got chills, so maybe it's a cold.",
+        "audio": "audio/janki-23bb745aa538.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "寒気（さむけ）is chills from illness; the same kanji read かんき means cold air.",
+    "audio": "audio/janki-a256c4f58315.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 6700,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "9. I have been having chills. Samuke ga shimasu. 寒気がします。",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "50d1115963cd,6d9c475d87fc",
+        "janki_pitch_accent_source": "jpdb:7bb21f918e3c2b9cc408e40ead9a4210eb23944c4e753432143b0aad3f5933e7"
+      }
+    }
+  },
+  {
     "id": "word:導き:みちびき",
     "expression": "導き",
     "reading": "みちびき",
@@ -6876,7 +8435,122 @@
         "anki_tags": "Yotsubato1",
         "anki_Front": "<div>手</div>",
         "anki_Back": "<span style=\" font-style: normal; font-weight: normal;\"><div>て</div><div>Hand</div></span>",
-        "anki_Add Reverse": "y"
+        "anki_Add Reverse": "y",
+        "example_authority": "b8b7b57dda62,b2923a27cdf2"
+      }
+    }
+  },
+  {
+    "id": "word:手首:てくび",
+    "expression": "手首",
+    "reading": "てくび",
+    "furigana": "手[て] 首[くび]",
+    "romaji": "tekubi",
+    "meanings": [
+      "wrist"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "手首をひねりました。",
+        "furigana": "手首[てくび]をひねりました。",
+        "romaji": "tekubi o hinerimashita.",
+        "english": "I twisted my wrist.",
+        "audio": "audio/janki-67db9e2d0bfe.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "マウスの使いすぎで手首が痛い。",
+        "furigana": "マウスの 使[つか]いすぎで 手首[てくび]が 痛[いた]い。",
+        "romaji": "mausu no tsukaisugi de tekubi ga itai.",
+        "english": "My wrist hurts from using the mouse too much.",
+        "audio": "audio/janki-9adc4d7b1d2f.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-367b8ce4d182.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 3500,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "16. wrist tekubi てくび 手首",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "5caece5f30d1,0cddb5660eee",
+        "janki_pitch_accent_source": "jpdb:4c23221ada0be85ee0df1d6b9a2d920b816a173b722e07c0e6dec8db2f97de8e"
+      }
+    }
+  },
+  {
+    "id": "word:指:ゆび",
+    "expression": "指",
+    "reading": "ゆび",
+    "furigana": "指[ゆび]",
+    "romaji": "yubi",
+    "meanings": [
+      "finger, toe, digit"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "指を切ってしまいました。",
+        "furigana": "指[ゆび]を 切[き]ってしまいました。",
+        "romaji": "yubi o kitte shimaimashita.",
+        "english": "I cut my finger.",
+        "audio": "audio/janki-03c8dc5d85e9.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "指が痛くて、ギターが弾けない。",
+        "furigana": "指[ゆび]が 痛[いた]くて、 ギターが 弾[ひ]けない。",
+        "romaji": "yubi ga itakute, gitaa ga hikenai.",
+        "english": "My fingers hurt and I can't play the guitar.",
+        "audio": "audio/janki-ec966a8cc573.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "指 covers both fingers and toes; toes can be 足の指.",
+    "audio": "audio/janki-18563c7d6ad5.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 700,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "17. fingers yubi ゆび 指",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "98a6eb5996e6,0a8013cb0210",
+        "janki_pitch_accent_source": "jpdb:5ac566d7787130dd7c10d5e265974ce627d455ba6771e58aa530e02592430021"
       }
     }
   },
@@ -7108,10 +8782,15 @@
     "id": "word:方:かた",
     "expression": "方",
     "reading": "かた",
-    "furigana": "",
+    "furigana": "方[かた]",
     "romaji": "kata",
     "meanings": [
-      "person (polite)"
+      "direction, way",
+      "person, lady, gentleman",
+      "method of, manner of, way of",
+      "care of ...",
+      "person in charge of ...",
+      "side (e.g. \"on my mother's side\")"
     ],
     "part_of_speech": "noun",
     "verb_group": "",
@@ -7141,9 +8820,11 @@
     "usage_notes": "方(かた) is the polite word for 人(ひと); use it for customers, teachers, elders, or strangers you want to show respect to — never about yourself or your own family to outsiders. Common in あの方 / この方 / どちらの方, and 方々(かたがた) for the plural. Note the reading: the same kanji is ほう when it means \"direction\" or the \"〜のほうが\" comparison, so context decides かた vs ほう.",
     "audio": "audio/janki-817f49c9923a.wav",
     "image": "",
-    "pitch_accent": [],
+    "pitch_accent": [
+      "LHL"
+    ],
     "audio_accent": "",
-    "frequency_rank": null,
+    "frequency_rank": 400,
     "source": {
       "type": "extract",
       "imported_from": "Kanji Review 104 Week11.pdf",
@@ -7155,8 +8836,65 @@
         "context": "体温が38度以上の方は病院に来る前にお電話ください。",
         "inclusion_reason": "Underlined for reading practice; polite reading かた contrasts with ほう.",
         "example": "体温が38度以上の方は病院に来る前にお電話ください。",
-        "provisional_fields": "meanings:a5bb33e47a8d,part_of_speech:ee6cded62768",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "janki_pitch_accent_source": "jpdb:66fb69ee92cd20d1119b0fc01d759e9acc6ab698885cb696e1ece8cc2c4b7252"
+      }
+    }
+  },
+  {
+    "id": "word:日射病:にっしゃびょう",
+    "expression": "日射病",
+    "reading": "にっしゃびょう",
+    "furigana": "日[にっ] 射[しゃ] 病[びょう]",
+    "romaji": "nisshabyou",
+    "meanings": [
+      "heatstroke, sunstroke"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "帽子をかぶらないと日射病になります。",
+        "furigana": "帽子[ぼうし]をかぶらないと 日射病[にっしゃびょう]になります。",
+        "romaji": "boushi o kaburanai to nisshabyou ni narimasu.",
+        "english": "You'll get sunstroke if you don't wear a hat.",
+        "audio": "audio/janki-e5cd3f6f4958.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "暑いから日射病に気をつけて。",
+        "furigana": "暑[あつ]いから 日射病[にっしゃびょう]に 気[き]をつけて。",
+        "romaji": "atsui kara nisshabyou ni ki o tsukete.",
+        "english": "It's hot, so watch out for sunstroke.",
+        "audio": "audio/janki-f832861ff7ed.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "熱中症（ねっちゅうしょう）is the more common modern term for heat illness.",
+    "audio": "audio/janki-6f8e7d4a703f.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 60400,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "24. sunstroke nisshabyo にっしゃびょう 日射病",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "4cd211c93b40,1c017ff7d8a5",
+        "janki_pitch_accent_source": "jpdb:5c4a50c153c58431812592e37263d3739da9913fa6e0ea495270f98bff8b70d5"
       }
     }
   },
@@ -7526,6 +9264,63 @@
         "context": "火曜日 友達と晩ご飯を食べるつもりです。",
         "inclusion_reason": "Common meal noun written in kanji in the source.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]"
+      }
+    }
+  },
+  {
+    "id": "word:更年期障害:こうねんきしょうがい",
+    "expression": "更年期障害",
+    "reading": "こうねんきしょうがい",
+    "furigana": "更[こう] 年[ねん] 期[き] 障[しょう] 害[がい]",
+    "romaji": "kounenkishougai",
+    "meanings": [
+      "menopausal disorders"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "母は更年期障害で体調が悪いです。",
+        "furigana": "母[はは]は 更年期障害[こうねんきしょうがい]で 体調[たいちょう]が 悪[わる]いです。",
+        "romaji": "haha wa kounenkishougai de taichou ga warui desu.",
+        "english": "My mother is unwell because of menopausal symptoms.",
+        "audio": "audio/janki-fece710a8e82.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "更年期障害はつらいらしいよ。",
+        "furigana": "更年期障害[こうねんきしょうがい]はつらいらしいよ。",
+        "romaji": "kounenkishougai wa tsurai rashii yo.",
+        "english": "I hear menopausal symptoms are rough.",
+        "audio": "audio/janki-d043ef909fc4.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-ec21c585800a.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHHHHLLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 86500,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "34. a menopausal disorder konenkishogai こうねんきしょうがい 更年期障害",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "7be22fee40ba,3d0171193682",
+        "janki_pitch_accent_source": "jpdb:75eb6226fa1041a0528fa2b7c1c83ef7d688e476dc426afa258992aada79ba00"
       }
     }
   },
@@ -8002,6 +9797,63 @@
     }
   },
   {
+    "id": "word:椎間板ヘルニア:ついかんばんヘルニア",
+    "expression": "椎間板ヘルニア",
+    "reading": "ついかんばんヘルニア",
+    "furigana": "椎[つい] 間[かん] 板[ばん]ヘルニア",
+    "romaji": "tsuikanbanherunia",
+    "meanings": [
+      "disk herniation, herniated disk, hernia of intervertebral disk, slipped disk"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "椎間板ヘルニアと診断されました。",
+        "furigana": "椎間板[ついかんばん]ヘルニアと 診断[しんだん]されました。",
+        "romaji": "tsuikanban herunia to shindan saremashita.",
+        "english": "I was diagnosed with a slipped disc.",
+        "audio": "audio/janki-3a06ee96b7e5.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "椎間板ヘルニアで運動できない。",
+        "furigana": "椎間板[ついかんばん]ヘルニアで 運動[うんどう]できない。",
+        "romaji": "tsuikanban herunia de undou dekinai.",
+        "english": "I can't exercise because of my slipped disc.",
+        "audio": "audio/janki-1ae118fa7688.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-5b8d869bc993.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHHHHHLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 168100,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "21. slipped disc tsuikamban herunia ついかんばんヘルニア 椎間板ヘルニア",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "555f93fcaf43,e5fddc52144b",
+        "janki_pitch_accent_source": "jpdb:0183ed431d585996e9ea5edd760182d9829ec1d189d1c3ba558592dc8da1e703"
+      }
+    }
+  },
+  {
     "id": "word:歌手:かしゅ",
     "expression": "歌手",
     "reading": "かしゅ",
@@ -8190,6 +10042,63 @@
     }
   },
   {
+    "id": "word:歯:は",
+    "expression": "歯",
+    "reading": "は",
+    "furigana": "歯[は]",
+    "romaji": "ha",
+    "meanings": [
+      "tooth"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "歯が痛いので、歯医者に行きます。",
+        "furigana": "歯[は]が 痛[いた]いので、 歯医者[はいしゃ]に 行[い]きます。",
+        "romaji": "ha ga itai node, haisha ni ikimasu.",
+        "english": "My tooth hurts, so I'm going to the dentist.",
+        "audio": "audio/janki-f40734e96388.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "寝る前に歯を磨く。",
+        "furigana": "寝[ね]る 前[まえ]に 歯[は]を 磨[みが]く。",
+        "romaji": "neru mae ni ha o migaku.",
+        "english": "I brush my teeth before going to bed.",
+        "audio": "audio/janki-25acf94d4c1f.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-d7945f0d4c48.wav",
+    "image": "",
+    "pitch_accent": [
+      "HL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 2400,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "4. teeth ha は 歯",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "6d3f577cb805,4a808b4fd01c",
+        "janki_pitch_accent_source": "jpdb:9534a9fc829b917db6338dc1077e4fb7035fc74a02f8bfa28e863384ffbabaae"
+      }
+    }
+  },
+  {
     "id": "word:水曜日:すいようび",
     "expression": "水曜日",
     "reading": "すいようび",
@@ -8242,6 +10151,293 @@
         "context": "水曜日",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:1d3d40b0e6ed66cc531c1447cedef5c492cf4bafc46732eebf24a1ee6042762b"
+      }
+    }
+  },
+  {
+    "id": "word:水疱瘡:みずぼうそう",
+    "expression": "水疱瘡",
+    "reading": "みずぼうそう",
+    "furigana": "水[みず] 疱[ぼう] 瘡[そう]",
+    "romaji": "mizubousou",
+    "meanings": [
+      "chickenpox, chicken pox"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "息子が水疱瘡になりました。",
+        "furigana": "息子[むすこ]が 水疱瘡[みずぼうそう]になりました。",
+        "romaji": "musuko ga mizubousou ni narimashita.",
+        "english": "My son came down with chicken pox.",
+        "audio": "audio/janki-c1b2d6700374.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "水疱瘡は一回かかれば、もう大丈夫だよ。",
+        "furigana": "水疱瘡[みずぼうそう]は 一回[いっかい]かかれば、もう 大丈夫[だいじょうぶ]だよ。",
+        "romaji": "mizubousou wa ikkai kakareba, mou daijoubu da yo.",
+        "english": "Once you've had chicken pox, you're fine.",
+        "audio": "audio/janki-741b0f5b4e54.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Often written みずぼうそう in kana.",
+    "audio": "audio/janki-5913c3788c2e.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHLLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 111300,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "2. chicken pox mizuboso みずぼうそう 水疱瘡",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "bf8124430046,d32e282a49fb",
+        "janki_pitch_accent_source": "jpdb:6414a1b3366411fffbccf2acc9f7c52dcd4286e65c32c25479b266269c5a6236"
+      }
+    }
+  },
+  {
+    "id": "word:水虫:みずむし",
+    "expression": "水虫",
+    "reading": "みずむし",
+    "furigana": "水[みず] 虫[むし]",
+    "romaji": "mizumushi",
+    "meanings": [
+      "athlete's foot",
+      "water boatman (esp. species Hesperocorixa distanti)",
+      "Asellus hilgendorfi (species of aquatic sowbug)"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "水虫の薬を買いました。",
+        "furigana": "水虫[みずむし]の 薬[くすり]を 買[か]いました。",
+        "romaji": "mizumushi no kusuri o kaimashita.",
+        "english": "I bought medicine for athlete's foot.",
+        "audio": "audio/janki-1e96788af012.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "足が痒い。水虫かな。",
+        "furigana": "足[あし]が 痒[かゆ]い。 水虫[みずむし]かな。",
+        "romaji": "ashi ga kayui. mizumushi ka na.",
+        "english": "My foot itches. Maybe it's athlete's foot.",
+        "audio": "audio/janki-461dd16db6c5.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-6f67c21868de.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 57600,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "32. athlete’s foot mizumushi みずむし 水虫",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "40283ed37548,1cfe22928527",
+        "janki_pitch_accent_source": "jpdb:e94cee67bfe06e96284c4c97b50e5ee9747f501aab5e5fba5a4705083af467cb"
+      }
+    }
+  },
+  {
+    "id": "word:湿布:しっぷ",
+    "expression": "湿布",
+    "reading": "しっぷ",
+    "furigana": "湿[しっ] 布[ぷ]",
+    "romaji": "shippu",
+    "meanings": [
+      "(wet) compress, poultice, fomentation"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "suru",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "肩に湿布を貼りました。",
+        "furigana": "肩[かた]に 湿布[しっぷ]を 貼[は]りました。",
+        "romaji": "kata ni shippu o harimashita.",
+        "english": "I put a medicated patch on my shoulder.",
+        "audio": "audio/janki-58e504dea6e8.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "腰に湿布を貼ってくれる?",
+        "furigana": "腰[こし]に 湿布[しっぷ]を 貼[は]ってくれる?",
+        "romaji": "koshi ni shippu o hatte kureru?",
+        "english": "Could you put a patch on my lower back?",
+        "audio": "audio/janki-c5750d3bdc25.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Used with 貼る (to stick on).",
+    "audio": "audio/janki-fd9b72379195.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 30000,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "4",
+        "context": "7. compress shippu しっぷ 湿布",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "fa605c18f49c,aee7f1816315",
+        "janki_pitch_accent_source": "jpdb:10c40d7c3f8f8aa8df4bf74a268dbc5ed57268ded496eff2f005e6bd705f2204"
+      }
+    }
+  },
+  {
+    "id": "word:潰瘍:かいよう",
+    "expression": "潰瘍",
+    "reading": "かいよう",
+    "furigana": "潰[かい] 瘍[よう]",
+    "romaji": "kaiyou",
+    "meanings": [
+      "ulcer"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "検査で潰瘍が見つかりました。",
+        "furigana": "検査[けんさ]で 潰瘍[かいよう]が 見[み]つかりました。",
+        "romaji": "kensa de kaiyou ga mitsukarimashita.",
+        "english": "They found an ulcer in the examination.",
+        "audio": "audio/janki-a828c4670416.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "ストレスで潰瘍ができたみたい。",
+        "furigana": "ストレスで 潰瘍[かいよう]ができたみたい。",
+        "romaji": "sutoresu de kaiyou ga dekita mitai.",
+        "english": "It seems I got an ulcer from stress.",
+        "audio": "audio/janki-51eb879e2c43.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-d52fda23ca27.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 66600,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "7. ulcer kaiyo かいよう 潰瘍",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "cd61e7396079,a5b06e513954",
+        "janki_pitch_accent_source": "jpdb:a704110ccb9f8a7eadcf835bb3e16c982dddcea51609f5fabaf5b81abdc1105e"
+      }
+    }
+  },
+  {
+    "id": "word:火傷:やけど",
+    "expression": "火傷",
+    "reading": "やけど",
+    "furigana": "火傷[やけど]",
+    "romaji": "yakedo",
+    "meanings": [
+      "burn, scald"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "suru",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "熱いお湯で火傷をしました。",
+        "furigana": "熱[あつ]いお 湯[ゆ]で 火傷[やけど]をしました。",
+        "romaji": "atsui oyu de yakedo o shimashita.",
+        "english": "I burned myself with hot water.",
+        "audio": "audio/janki-238c7d29c35e.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "料理中に火傷しちゃった。",
+        "furigana": "料理中[りょうりちゅう]に 火傷[やけど]しちゃった。",
+        "romaji": "ryourichuu ni yakedo shichatta.",
+        "english": "I burned myself while cooking.",
+        "audio": "audio/janki-7a49a7f5c9b5.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "火傷 is a special reading (やけど) for the whole compound; often written やけど.",
+    "audio": "audio/janki-ce0d83b0f3b5.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 8600,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "31. burn yakedo やけど 火傷",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "d5e3e01341d8,bf1f9c33e90a",
+        "janki_pitch_accent_source": "jpdb:2edc8321def4edabb9b47bf20fee932d275c18cc5146780395de4db8e7d8b840"
       }
     }
   },
@@ -8302,6 +10498,181 @@
     }
   },
   {
+    "id": "word:熱:ねつ",
+    "expression": "熱",
+    "reading": "ねつ",
+    "furigana": "熱[ねつ]",
+    "romaji": "netsu",
+    "meanings": [
+      "heat",
+      "fever, temperature",
+      "zeal, passion, enthusiasm, mania, craze, rage"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "熱があります。",
+        "furigana": "熱[ねつ]があります。",
+        "romaji": "netsu ga arimasu.",
+        "english": "I have a fever.",
+        "audio": "audio/janki-c335ce919f13.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "熱があるから、今日は休むね。",
+        "furigana": "熱[ねつ]があるから、 今日[きょう]は 休[やす]むね。",
+        "romaji": "netsu ga aru kara, kyou wa yasumu ne.",
+        "english": "I have a fever, so I'm taking today off.",
+        "audio": "audio/janki-70c96932dc1f.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Use 熱があります, not 熱です. 熱が下（さ）がる means the fever goes down.",
+    "audio": "audio/janki-09b201d65b42.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 1000,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "1. I have a fever. Netsu ga arimasu. 熱があります。",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "8ccbb547cb28,895dbce8eb98",
+        "janki_pitch_accent_source": "jpdb:c524ac0695b883d7f29507aec07cd276bf58dcf28199237c37ae57aea316cde7"
+      }
+    }
+  },
+  {
+    "id": "word:爪:つめ",
+    "expression": "爪",
+    "reading": "つめ",
+    "furigana": "爪[つめ]",
+    "romaji": "tsume",
+    "meanings": [
+      "nail (e.g. fingernail, toenail), claw, talon, hoof",
+      "plectrum, pick",
+      "hook, clasp"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "爪が割れてしまいました。",
+        "furigana": "爪[つめ]が 割[わ]れてしまいました。",
+        "romaji": "tsume ga warete shimaimashita.",
+        "english": "My nail cracked.",
+        "audio": "audio/janki-caa66eb89d91.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "爪を切らないと。",
+        "furigana": "爪[つめ]を 切[き]らないと。",
+        "romaji": "tsume o kiranai to.",
+        "english": "I need to cut my nails.",
+        "audio": "audio/janki-47d167bfaf89.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-7d479aa8bc81.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 2200,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "18. nails tsume つめ 爪",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "a67fde3d0681,68e81c5eebad",
+        "janki_pitch_accent_source": "jpdb:0e39492a341cef5b6103f1e6228142a2170966ca3719a69ef78243c6f46b3587"
+      }
+    }
+  },
+  {
+    "id": "word:爪先:つまさき",
+    "expression": "爪先",
+    "reading": "つまさき",
+    "furigana": "爪[つま] 先[さき]",
+    "romaji": "tsumasaki",
+    "meanings": [
+      "toes, tips of the toes, toe of a shoe, sock, etc."
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "靴が小さくて、爪先が痛いです。",
+        "furigana": "靴[くつ]が 小[ちい]さくて、 爪先[つまさき]が 痛[いた]いです。",
+        "romaji": "kutsu ga chiisakute, tsumasaki ga itai desu.",
+        "english": "My shoes are small and my toes hurt.",
+        "audio": "audio/janki-55d5a50e29a0.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "爪先で立ってみて。",
+        "furigana": "爪先[つまさき]で 立[た]ってみて。",
+        "romaji": "tsumasaki de tatte mite.",
+        "english": "Try standing on your toes.",
+        "audio": "audio/janki-e2b85c48beb2.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Often written つま先.",
+    "audio": "audio/janki-14f693916fae.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 10700,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "21. toes tsumasaki つまさき 爪先",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "d11fdd798662,af388a711bac",
+        "janki_pitch_accent_source": "jpdb:50e85c00b9d4f3e8d6a4ba16f9b050054f8035c0f388201610586d2511a803ca"
+      }
+    }
+  },
+  {
     "id": "word:病院:びょういん",
     "expression": "病院",
     "reading": "びょういん",
@@ -8356,6 +10727,248 @@
         "example": "体温が38度以上の方は病院に来る前にお電話ください。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:66dd7e457f1543f7fd3ad496487c2df6aadbeee73c77e0c3f4df2c26e79e4223"
+      }
+    }
+  },
+  {
+    "id": "word:痒い:かゆい",
+    "expression": "痒い",
+    "reading": "かゆい",
+    "furigana": "痒[かゆ]い",
+    "romaji": "kayui",
+    "meanings": [
+      "itchy"
+    ],
+    "part_of_speech": "i-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "背中が痒いです。",
+        "furigana": "背中[せなか]が 痒[かゆ]いです。",
+        "romaji": "senaka ga kayui desu.",
+        "english": "My back itches.",
+        "audio": "audio/janki-ff85209e77d2.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "虫に刺されて、腕が痒い。",
+        "furigana": "虫[むし]に 刺[さ]されて、 腕[うで]が 痒[かゆ]い。",
+        "romaji": "mushi ni sasarete, ude ga kayui.",
+        "english": "I got bitten by a bug and my arm itches.",
+        "audio": "audio/janki-7367a4bec059.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "痒い",
+      "negative": "痒くない",
+      "past": "痒かった",
+      "past_negative": "痒くなかった",
+      "te_form": "痒くて"
+    },
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Often written in kana as かゆい. The itchy part takes が.",
+    "audio": "audio/janki-bce1cf7c0ef4.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 18500,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "2. My ______ itches. ______ ga kayui desu. が痒いです。",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "65ab1fc378c9,10836943eddd",
+        "janki_pitch_accent_source": "jpdb:6885f311293fc26ea81c6aa497ee8d759c18a90753fbdd05dc8231c44143d7d1"
+      }
+    }
+  },
+  {
+    "id": "word:痔:じ",
+    "expression": "痔",
+    "reading": "じ",
+    "furigana": "痔[じ]",
+    "romaji": "ji",
+    "meanings": [
+      "hemorrhoids, piles"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "痔の薬をください。",
+        "furigana": "痔[じ]の 薬[くすり]をください。",
+        "romaji": "ji no kusuri o kudasai.",
+        "english": "Please give me some hemorrhoid medicine.",
+        "audio": "audio/janki-e9cb69480a11.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "座りっぱなしだと痔になるよ。",
+        "furigana": "座[すわ]りっぱなしだと 痔[じ]になるよ。",
+        "romaji": "suwarippanashi da to ji ni naru yo.",
+        "english": "You'll get hemorrhoids if you sit all the time.",
+        "audio": "audio/janki-f60c083bbfbf.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-f402cc738649.wav",
+    "image": "",
+    "pitch_accent": [
+      "LH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 48700,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "20. hemorrhoid ji じ 痔",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "3a549145eb6c,e8a903d234cc",
+        "janki_pitch_accent_source": "jpdb:b7177da8b3e1a21c032b5ea7b544f735a3fd52e8f19614786082e17bce080d60"
+      }
+    }
+  },
+  {
+    "id": "word:痛い:いたい",
+    "expression": "痛い",
+    "reading": "いたい",
+    "furigana": "痛[いた]い",
+    "romaji": "itai",
+    "meanings": [
+      "painful, sore",
+      "cringy, embarrassing",
+      "exceeding"
+    ],
+    "part_of_speech": "i-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "お腹が痛いです。",
+        "furigana": "お 腹[なか]が 痛[いた]いです。",
+        "romaji": "onaka ga itai desu.",
+        "english": "I have a stomachache.",
+        "audio": "audio/janki-17ad051e5d9b.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "頭が痛いから、今日は早く寝る。",
+        "furigana": "頭[あたま]が 痛[いた]いから、 今日[きょう]は 早[はや]く 寝[ね]る。",
+        "romaji": "atama ga itai kara, kyou wa hayaku neru.",
+        "english": "My head hurts, so I'm going to bed early today.",
+        "audio": "audio/janki-9a965149d4db.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {
+      "plain": "痛い",
+      "negative": "痛くない",
+      "past": "痛かった",
+      "past_negative": "痛くなかった",
+      "te_form": "痛くて"
+    },
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "The body part that hurts takes が: 〜が痛いです。To say you hurt a part yourself, use 〜を痛（いた）める.",
+    "audio": "audio/janki-d0b4ef497b2c.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 600,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "1. I have a pain in my ______. ______ ga itai desu. が痛いです。",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "fa149869ca3e,db122a12e981",
+        "janki_pitch_accent_source": "jpdb:429b4e671a7e65ec0d47581c96aec54f588aaef5802a60145b18f895237308b6"
+      }
+    }
+  },
+  {
+    "id": "word:癌:がん",
+    "expression": "癌",
+    "reading": "がん",
+    "furigana": "癌[がん]",
+    "romaji": "gan",
+    "meanings": [
+      "cancer"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "早く見つかれば、癌も治ります。",
+        "furigana": "早[はや]く 見[み]つかれば、 癌[がん]も 治[なお]ります。",
+        "romaji": "hayaku mitsukareba, gan mo naorimasu.",
+        "english": "If it is found early, cancer can be cured too.",
+        "audio": "audio/janki-74a0ee2c108a.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "毎年、癌の検査を受けてる。",
+        "furigana": "毎年[まいとし]、 癌[がん]の 検査[けんさ]を 受[う]けてる。",
+        "romaji": "maitoshi, gan no kensa o uketeru.",
+        "english": "I get screened for cancer every year.",
+        "audio": "audio/janki-7b3a29cff8fa.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Usually written in kana as がん in newspapers and everyday text.",
+    "audio": "audio/janki-f7d522f90aa4.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 28600,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "15. cancer gan がん 癌",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "7726a232f377,3458837468a6",
+        "janki_pitch_accent_source": "jpdb:b2b00facf242f44fd74fbd4018c671dadbb9d6458b216181f2c2a20907fcc818"
       }
     }
   },
@@ -8420,6 +11033,367 @@
         "example": "だれが白いくつをはいていますか。",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:6e60e52abb8dfe521b8a443ae10bcf99bf8e24b70a08fde605eb542628f1ac7b"
+      }
+    }
+  },
+  {
+    "id": "word:白内障:はくないしょう",
+    "expression": "白内障",
+    "reading": "はくないしょう",
+    "furigana": "白[はく] 内[ない] 障[しょう]",
+    "romaji": "hakunaishou",
+    "meanings": [
+      "cataract"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "母は白内障の手術を受けます。",
+        "furigana": "母[はは]は 白内障[はくないしょう]の 手術[しゅじゅつ]を 受[う]けます。",
+        "romaji": "haha wa hakunaishou no shujutsu o ukemasu.",
+        "english": "My mother is having cataract surgery.",
+        "audio": "audio/janki-5d4ddec3fe7e.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "白内障だと、目が白く濁るらしい。",
+        "furigana": "白内障[はくないしょう]だと、 目[め]が 白[しろ]く 濁[にご]るらしい。",
+        "romaji": "hakunaishou da to, me ga shiroku nigoru rashii.",
+        "english": "With cataracts, the eye apparently clouds over white.",
+        "audio": "audio/janki-359a2b6cb9ef.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-158f8f90cda6.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHHHHH",
+      "LHHLLLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 83400,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "26. cataract hakunaisho はくないしょう 白内障",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "1522726271cd,f56eff041df8",
+        "janki_pitch_accent_source": "jpdb:089a8b324adca51fd9adf86f6b96868991f42bc79eec0a7ad37e48830971877d"
+      }
+    }
+  },
+  {
+    "id": "word:白血病:はっけつびょう",
+    "expression": "白血病",
+    "reading": "はっけつびょう",
+    "furigana": "白[はっ] 血[けつ] 病[びょう]",
+    "romaji": "hakketsubyou",
+    "meanings": [
+      "leukemia"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "友人が白血病の治療をしています。",
+        "furigana": "友人[ゆうじん]が 白血病[はっけつびょう]の 治療[ちりょう]をしています。",
+        "romaji": "yuujin ga hakketsubyou no chiryou o shite imasu.",
+        "english": "A friend of mine is undergoing treatment for leukemia.",
+        "audio": "audio/janki-f0a3d7cdbaf1.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "白血病の子のために献血した。",
+        "furigana": "白血病[はっけつびょう]の 子[こ]のために 献血[けんけつ]した。",
+        "romaji": "hakketsubyou no ko no tame ni kenketsu shita.",
+        "english": "I donated blood for a child with leukemia.",
+        "audio": "audio/janki-3b34095074d1.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-a1871af2bf71.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 49700,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "28. leukemia hakketsubyo はっけつびょう 白血病",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "069a50da057c,31ade4387752",
+        "janki_pitch_accent_source": "jpdb:6e7e61e022fac9d8e2c34ab4c0be4fd133d16222dcaed99dd1398ca519b72e54"
+      }
+    }
+  },
+  {
+    "id": "word:百日咳:ひゃくにちぜき",
+    "expression": "百日咳",
+    "reading": "ひゃくにちぜき",
+    "furigana": "百[ひゃく] 日[にち] 咳[せき]",
+    "romaji": "hyakunichizeki",
+    "meanings": [
+      "whooping cough, pertussis"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "百日咳の予防接種を受けました。",
+        "furigana": "百日咳[ひゃくにちぜき]の 予防[よぼう] 接種[せっしゅ]を 受[う]けました。",
+        "romaji": "hyakunichizeki no yobou sesshu o ukemashita.",
+        "english": "I got the whooping cough vaccination.",
+        "audio": "audio/janki-1c21a21d59fd.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "この咳、百日咳かもしれない。",
+        "furigana": "この 咳[せき]、 百日咳[ひゃくにちぜき]かもしれない。",
+        "romaji": "kono seki, hyakunichizeki kamoshirenai.",
+        "english": "This cough might be whooping cough.",
+        "audio": "audio/janki-737b2c8af2f2.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-8ebdad5e0ccb.wav",
+    "image": "",
+    "pitch_accent": [
+      "LLHHHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 126000,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "4. whooping cough hyakunichizeki ひゃくにちぜき 百日咳",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "36944ebed26d,be7c6dc9a899",
+        "janki_pitch_accent_source": "jpdb:4b70273a82fc8207f6f773333e3a0ef87954fa881ff4185fe68784fafb542c49"
+      }
+    }
+  },
+  {
+    "id": "word:目:め",
+    "expression": "目",
+    "reading": "め",
+    "furigana": "目[め]",
+    "romaji": "me",
+    "meanings": [
+      "eye, eyeball",
+      "eyesight, sight, vision",
+      "look, stare, gaze, glance",
+      "notice, attention, observation, eyes (of the world, public, etc.)",
+      "an experience",
+      "viewpoint",
+      "discrimination, discernment, judgement, eye (e.g. for quality)",
+      "appearance",
+      "chance to succeed, possibility",
+      "spacing (between crossed strands of a net, mesh, etc.), opening, stitch, texture, weave",
+      "grain (of wood)",
+      "eye (of a storm, needle, etc.)",
+      "intersection (on a go board), square (on a chess board)",
+      "dot (on a dice), pip, rolled number",
+      "graduation, division (of a scale)",
+      "tooth (of a saw, comb, etc.)",
+      "ordinal number suffix",
+      "somewhat, -ish",
+      "point (e.g. of change)"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "パソコンの仕事で目が疲れます。",
+        "furigana": "パソコンの 仕事[しごと]で 目[め]が 疲[つか]れます。",
+        "romaji": "pasokon no shigoto de me ga tsukaremasu.",
+        "english": "My eyes get tired from computer work.",
+        "audio": "audio/janki-41a547e175ac.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "目が赤いよ、大丈夫?",
+        "furigana": "目[め]が 赤[あか]いよ、 大丈夫[だいじょうぶ]?",
+        "romaji": "me ga akai yo, daijoubu?",
+        "english": "Your eyes are red. Are you okay?",
+        "audio": "audio/janki-64b0642f3ead.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-b4599278ed2a.wav",
+    "image": "",
+    "pitch_accent": [
+      "HL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 200,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "2. eyes me め 目",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "bf5ea73c04be,0ce1cfc2b3cd",
+        "janki_pitch_accent_source": "jpdb:f5aa71f52c4d15ec772c4c96e912ca76b95d5248b01a8256ec14b3113ce5a9d8"
+      }
+    }
+  },
+  {
+    "id": "word:目薬:めぐすり",
+    "expression": "目薬",
+    "reading": "めぐすり",
+    "furigana": "目[め] 薬[ぐすり]",
+    "romaji": "megusuri",
+    "meanings": [
+      "eye drops, eyewash"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "一日三回、目薬をさします。",
+        "furigana": "一日[いちにち] 三回[さんかい]、 目薬[めぐすり]をさします。",
+        "romaji": "ichinichi sankai, megusuri o sashimasu.",
+        "english": "I put in eye drops three times a day.",
+        "audio": "audio/janki-783e8651015d.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "目が疲れたから目薬をさす。",
+        "furigana": "目[め]が 疲[つか]れたから 目薬[めぐすり]をさす。",
+        "romaji": "me ga tsukareta kara megusuri o sasu.",
+        "english": "My eyes are tired, so I'll put in eye drops.",
+        "audio": "audio/janki-7166af9a1d80.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Eye drops are used with さす, not 飲む.",
+    "audio": "audio/janki-57c9333149a5.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 42600,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "4",
+        "context": "6. eye drops megusuri めぐすり 目薬",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "99f85eeee37d,97d447a320e5",
+        "janki_pitch_accent_source": "jpdb:12117c424999d68254cbcbf83802ac12b019c4edf29c69aa23287579449c4873"
+      }
+    }
+  },
+  {
+    "id": "word:眼精疲労:がんせいひろう",
+    "expression": "眼精疲労",
+    "reading": "がんせいひろう",
+    "furigana": "眼[がん] 精[せい] 疲[ひ] 労[ろう]",
+    "romaji": "ganseihirou",
+    "meanings": [
+      "eyestrain"
+    ],
+    "part_of_speech": "no-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "眼精疲労で目が痛いです。",
+        "furigana": "眼精疲労[がんせいひろう]で 目[め]が 痛[いた]いです。",
+        "romaji": "ganseihirou de me ga itai desu.",
+        "english": "My eyes hurt from eyestrain.",
+        "audio": "audio/janki-040107c50f22.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "一日中コードを書いて眼精疲労だ。",
+        "furigana": "一日中[いちにちじゅう]コードを 書[か]いて 眼精疲労[がんせいひろう]だ。",
+        "romaji": "ichinichijuu koodo o kaite ganseihirou da.",
+        "english": "I wrote code all day and now my eyes are strained.",
+        "audio": "audio/janki-f4c1f44256fb.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Somewhat medical-sounding; 目が疲れる is the casual equivalent.",
+    "audio": "audio/janki-844dcf2cf614.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHHLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 91500,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "16. eyestrain ganseihiro がんせいひろう 眼精疲労",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "90d24459f55b,16e5749b22d7",
+        "janki_pitch_accent_source": "jpdb:9f7ef37725dd6653d009888c6160b80fff2f728e252f3a44860a03ae27a1044b"
       }
     }
   },
@@ -8491,6 +11465,120 @@
     }
   },
   {
+    "id": "word:睡眠薬:すいみんやく",
+    "expression": "睡眠薬",
+    "reading": "すいみんやく",
+    "furigana": "睡[すい] 眠[みん] 薬[やく]",
+    "romaji": "suimin'yaku",
+    "meanings": [
+      "sleeping pill, sleep medication"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "医者に睡眠薬をもらいました。",
+        "furigana": "医者[いしゃ]に 睡眠薬[すいみんやく]をもらいました。",
+        "romaji": "isha ni suiminyaku o moraimashita.",
+        "english": "I got sleeping pills from the doctor.",
+        "audio": "audio/janki-8d947080cf9e.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "睡眠薬なしでは眠れない。",
+        "furigana": "睡眠薬[すいみんやく]なしでは 眠[ねむ]れない。",
+        "romaji": "suiminyaku nashi de wa nemurenai.",
+        "english": "I can't sleep without sleeping pills.",
+        "audio": "audio/janki-518269dab743.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-64b50d1d9dac.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHLLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 20200,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "4",
+        "context": "3. sleeping pill suiminyaku すいみんやく 睡眠薬",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "6139c0e45610,a4fb99b58f2a",
+        "janki_pitch_accent_source": "jpdb:3ea02e02b4260443ef51d16492445715f10adc58ebead7d7052e4664d3547331"
+      }
+    }
+  },
+  {
+    "id": "word:瞼:まぶた",
+    "expression": "瞼",
+    "reading": "まぶた",
+    "furigana": "瞼[まぶた]",
+    "romaji": "mabuta",
+    "meanings": [
+      "eyelid"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "瞼が腫れています。",
+        "furigana": "瞼[まぶた]が 腫[は]れています。",
+        "romaji": "mabuta ga harete imasu.",
+        "english": "My eyelid is swollen.",
+        "audio": "audio/janki-670647092c17.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "眠くて瞼が重い。",
+        "furigana": "眠[ねむ]くて 瞼[まぶた]が 重[おも]い。",
+        "romaji": "nemukute mabuta ga omoi.",
+        "english": "I'm sleepy and my eyelids feel heavy.",
+        "audio": "audio/janki-ebf18a76b181.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Usually written in kana as まぶた in everyday text.",
+    "audio": "audio/janki-d95639ca5257.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 4700,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "3. eyelid mabuta まぶた 瞼",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "70c8e08716de,e07bf4a2ae76",
+        "janki_pitch_accent_source": "jpdb:b8bd5780bcf6b925f821245ac6473f194856d847282b7653f822bd2b3c8696b0"
+      }
+    }
+  },
+  {
     "id": "word:知る:しる",
     "expression": "知る",
     "reading": "しる",
@@ -8555,6 +11643,63 @@
         "sid": "2987388496",
         "deck": "Anki Test - Top 20 Verbs",
         "card_state": "locked,new"
+      }
+    }
+  },
+  {
+    "id": "word:破傷風:はしょうふう",
+    "expression": "破傷風",
+    "reading": "はしょうふう",
+    "furigana": "破[は] 傷[しょう] 風[ふう]",
+    "romaji": "hashoufuu",
+    "meanings": [
+      "tetanus, lockjaw"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "破傷風の注射をしてもらいました。",
+        "furigana": "破傷風[はしょうふう]の 注射[ちゅうしゃ]をしてもらいました。",
+        "romaji": "hashoufuu no chuusha o shite moraimashita.",
+        "english": "I got a tetanus shot.",
+        "audio": "audio/janki-4998a57f0625.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "錆びた釘は破傷風が怖いよ。",
+        "furigana": "錆[さ]びた 釘[くぎ]は 破傷風[はしょうふう]が 怖[こわ]いよ。",
+        "romaji": "sabita kugi wa hashoufuu ga kowai yo.",
+        "english": "Rusty nails are scary because of tetanus.",
+        "audio": "audio/janki-9d59d2d3a5a4.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-24effc5719ed.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 72100,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "5. tetanus hashofu はしょうふう 破傷風",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "47affe38ebda,53a0cd2f86e4",
+        "janki_pitch_accent_source": "jpdb:77b644ba40a5920ac4b5b060375c606ffe7b564dd5ebaa6c5a23dbac2c79d4e9"
       }
     }
   },
@@ -9000,6 +12145,239 @@
     }
   },
   {
+    "id": "word:糖尿病:とうにょうびょう",
+    "expression": "糖尿病",
+    "reading": "とうにょうびょう",
+    "furigana": "糖[とう] 尿[にょう] 病[びょう]",
+    "romaji": "tounyoubyou",
+    "meanings": [
+      "diabetes, diabetes mellitus"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "糖尿病なので、甘い物は食べません。",
+        "furigana": "糖尿病[とうにょうびょう]なので、 甘[あま]い 物[もの]は 食[た]べません。",
+        "romaji": "tounyoubyou na node, amai mono wa tabemasen.",
+        "english": "I have diabetes, so I don't eat sweet things.",
+        "audio": "audio/janki-6db8d7cdf8a6.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "祖母は糖尿病で毎日注射してる。",
+        "furigana": "祖母[そぼ]は 糖尿病[とうにょうびょう]で 毎日[まいにち] 注射[ちゅうしゃ]してる。",
+        "romaji": "sobo wa tounyoubyou de mainichi chuusha shiteru.",
+        "english": "My grandmother has diabetes and gives herself shots every day.",
+        "audio": "audio/janki-6468d3d87793.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-88be867a09d4.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHHHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 43600,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "23. diabetes tonyobyo とうにょうびょう 糖尿病",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "a88487a7846e,a22e031dddd5",
+        "janki_pitch_accent_source": "jpdb:d871ba6ed946a959a835f1bbad7837ee46289c237df84975dbdb991e10046acb"
+      }
+    }
+  },
+  {
+    "id": "word:緑内障:りょくないしょう",
+    "expression": "緑内障",
+    "reading": "りょくないしょう",
+    "furigana": "緑[りょく] 内[ない] 障[しょう]",
+    "romaji": "ryokunaishou",
+    "meanings": [
+      "glaucoma"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "緑内障の検査をしてもらいました。",
+        "furigana": "緑内障[りょくないしょう]の 検査[けんさ]をしてもらいました。",
+        "romaji": "ryokunaishou no kensa o shite moraimashita.",
+        "english": "I had a glaucoma test done.",
+        "audio": "audio/janki-afa986bea6c8.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "緑内障は早く見つけたほうがいい。",
+        "furigana": "緑内障[りょくないしょう]は 早[はや]く 見[み]つけたほうがいい。",
+        "romaji": "ryokunaishou wa hayaku mitsuketa hou ga ii.",
+        "english": "It's better to catch glaucoma early.",
+        "audio": "audio/janki-4a127698d0c7.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-12d9541f45f7.wav",
+    "image": "",
+    "pitch_accent": [
+      "LLHHLLLLL",
+      "LLHHHHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 104500,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "27. glaucoma ryokunaisho りょくないしょう 緑内障",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "20b42bf9e66d,236bb24ca44c",
+        "janki_pitch_accent_source": "jpdb:e7594ee9a50371f230dd6339eb363ffd4c3560652a139d9b0e91b55db9d9e735"
+      }
+    }
+  },
+  {
+    "id": "word:耳:みみ",
+    "expression": "耳",
+    "reading": "みみ",
+    "furigana": "耳[みみ]",
+    "romaji": "mimi",
+    "meanings": [
+      "ear",
+      "hearing",
+      "edge, crust",
+      "selvedge (non-fray machined edge of fabrics), selvage"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "風邪で耳が痛いです。",
+        "furigana": "風邪[かぜ]で 耳[みみ]が 痛[いた]いです。",
+        "romaji": "kaze de mimi ga itai desu.",
+        "english": "My ears hurt because of a cold.",
+        "audio": "audio/janki-608140ba016a.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "ヘッドホンで耳が疲れた。",
+        "furigana": "ヘッドホンで 耳[みみ]が 疲[つか]れた。",
+        "romaji": "heddohon de mimi ga tsukareta.",
+        "english": "My ears got tired from the headphones.",
+        "audio": "audio/janki-d91276535b79.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-e068070dcb51.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 700,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "5. ears mimi みみ 耳",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "54c22b08b326,0581a5e1916a",
+        "janki_pitch_accent_source": "jpdb:5221227ea194e44520abe6cfd298b538bcde971d9e23ffd7f4ecad9e44768096"
+      }
+    }
+  },
+  {
+    "id": "word:耳たぶ:みみたぶ",
+    "expression": "耳たぶ",
+    "reading": "みみたぶ",
+    "furigana": "耳[みみ]たぶ",
+    "romaji": "mimitabu",
+    "meanings": [
+      "earlobe"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "耳たぶにピアスの穴を開けました。",
+        "furigana": "耳[みみ]たぶに ピアスの 穴[あな]を 開[あ]けました。",
+        "romaji": "mimitabu ni piasu no ana o akemashita.",
+        "english": "I got my earlobes pierced.",
+        "audio": "audio/janki-432f61e1cb4d.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "寒くて耳たぶが赤くなった。",
+        "furigana": "寒[さむ]くて 耳[みみ]たぶが 赤[あか]くなった。",
+        "romaji": "samukute mimitabu ga akaku natta.",
+        "english": "It was cold and my earlobes turned red.",
+        "audio": "audio/janki-d6348d11dcb0.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-b22b53837436.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHH",
+      "LHHLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 18700,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "6. ear lobe mimitabu みみたぶ 耳たぶ",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "4bf5454b7d02,a1caf3eca48b",
+        "janki_pitch_accent_source": "jpdb:06060b9832b45f9ebe23c69c60a0a45fe5adfc959264e0a0a397f4a4ab516b46"
+      }
+    }
+  },
+  {
     "id": "word:聖職者:せいしょくしゃ",
     "expression": "聖職者",
     "reading": "せいしょくしゃ",
@@ -9117,6 +12495,699 @@
         "sid": "3865890281",
         "deck": "Anki Test - Top 20 Verbs",
         "card_state": "locked,new"
+      }
+    }
+  },
+  {
+    "id": "word:肝炎:かんえん",
+    "expression": "肝炎",
+    "reading": "かんえん",
+    "furigana": "肝[かん] 炎[えん]",
+    "romaji": "kan'en",
+    "meanings": [
+      "hepatitis"
+    ],
+    "part_of_speech": "no-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "肝炎の検査を受けました。",
+        "furigana": "肝炎[かんえん]の 検査[けんさ]を 受[う]けました。",
+        "romaji": "kan'en no kensa o ukemashita.",
+        "english": "I got tested for hepatitis.",
+        "audio": "audio/janki-1df13dff63b1.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "肝炎のワクチンを打ったよ。",
+        "furigana": "肝炎[かんえん]のワクチンを 打[う]ったよ。",
+        "romaji": "kan'en no wakuchin o utta yo.",
+        "english": "I got the hepatitis vaccine.",
+        "audio": "audio/janki-d57d1bb94700.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-33eb0697c6b2.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 79400,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "13. hepatitis kan’en かんえん 肝炎",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "46d49b2c8eb2,24fadfbb7d85",
+        "janki_pitch_accent_source": "jpdb:4954bb906af4e5ab0c7b2e8337be6d79e4daa12e3a9102113d41c872950ebac8"
+      }
+    }
+  },
+  {
+    "id": "word:肝硬変:かんこうへん",
+    "expression": "肝硬変",
+    "reading": "かんこうへん",
+    "furigana": "肝[かん] 硬[こう] 変[へん]",
+    "romaji": "kankouhen",
+    "meanings": [
+      "cirrhosis (of the liver)"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "祖父は肝硬変で入院しています。",
+        "furigana": "祖父[そふ]は 肝硬変[かんこうへん]で 入院[にゅういん]しています。",
+        "romaji": "sofu wa kankouhen de nyuuin shite imasu.",
+        "english": "My grandfather is hospitalized with liver cirrhosis.",
+        "audio": "audio/janki-f93cfbc54010.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "お酒の飲みすぎは肝硬変になるよ。",
+        "furigana": "お 酒[さけ]の 飲[の]みすぎは 肝硬変[かんこうへん]になるよ。",
+        "romaji": "osake no nomisugi wa kankouhen ni naru yo.",
+        "english": "Drinking too much leads to cirrhosis.",
+        "audio": "audio/janki-ae0197ee2b16.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-1378158b5829.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHLLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 71700,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "14. liver cirrhosis kankohen かんこうへん 肝硬変",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "6649b7a233c7,9f284f81b43d",
+        "janki_pitch_accent_source": "jpdb:2102cfe28b01b9ce9574c41242201cf8efbc498c72324a0df66eee730414ca5e"
+      }
+    }
+  },
+  {
+    "id": "word:肩:かた",
+    "expression": "肩",
+    "reading": "かた",
+    "furigana": "肩[かた]",
+    "romaji": "kata",
+    "meanings": [
+      "shoulder"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "肩が凝っています。",
+        "furigana": "肩[かた]が 凝[こ]っています。",
+        "romaji": "kata ga kotte imasu.",
+        "english": "My shoulders are stiff.",
+        "audio": "audio/janki-d38585ed6fc9.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "仕事のあとは肩が痛い。",
+        "furigana": "仕事[しごと]のあとは 肩[かた]が 痛[いた]い。",
+        "romaji": "shigoto no ato wa kata ga itai.",
+        "english": "My shoulders hurt after work.",
+        "audio": "audio/janki-4af96c3f986b.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-db91fbc9ba21.wav",
+    "image": "",
+    "pitch_accent": [
+      "HLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 700,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "11. shoulder kata かた 肩",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "ccaa716fc097,f25ebb7e0cf9",
+        "janki_pitch_accent_source": "jpdb:3c78f604ca1d88b3d258138f313266ceef0290d70351dbd1b0c660c73d8b4f80"
+      }
+    }
+  },
+  {
+    "id": "word:肩こり:かたこり",
+    "expression": "肩こり",
+    "reading": "かたこり",
+    "furigana": "肩[かた]こり",
+    "romaji": "katakori",
+    "meanings": [
+      "stiff neck, stiff shoulders"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "最近、肩こりがひどいです。",
+        "furigana": "最近[さいきん]、 肩[かた]こりがひどいです。",
+        "romaji": "saikin, katakori ga hidoi desu.",
+        "english": "My shoulders have been terribly stiff lately.",
+        "audio": "audio/janki-57e54909b9f4.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "パソコンの仕事は肩こりがつらい。",
+        "furigana": "パソコンの 仕事[しごと]は 肩[かた]こりがつらい。",
+        "romaji": "pasokon no shigoto wa katakori ga tsurai.",
+        "english": "Computer work is rough on my shoulders.",
+        "audio": "audio/janki-060b9b7e9bb6.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Related verb form: 肩が凝（こ）る.",
+    "audio": "audio/janki-01208125d6a0.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 41700,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "11. stiff shoulder katakori かたこり 肩こり",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "1ee3ef81a02f,5777851d6db1",
+        "janki_pitch_accent_source": "jpdb:33e3d4231d25823da8203e659fd90ce5863102212da27ace2a9e96b67bb918d0"
+      }
+    }
+  },
+  {
+    "id": "word:胃:い",
+    "expression": "胃",
+    "reading": "い",
+    "furigana": "胃[い]",
+    "romaji": "i",
+    "meanings": [
+      "stomach",
+      "Chinese \"stomach\" constellation (one of the 28 mansions)"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "胃が痛いです。",
+        "furigana": "胃[い]が 痛[いた]いです。",
+        "romaji": "i ga itai desu.",
+        "english": "My stomach hurts.",
+        "audio": "audio/janki-68521c15ad4a.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "飲みすぎて胃が重い。",
+        "furigana": "飲[の]みすぎて 胃[い]が 重[おも]い。",
+        "romaji": "nomisugite i ga omoi.",
+        "english": "I drank too much and my stomach feels heavy.",
+        "audio": "audio/janki-86cc88ec74bd.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "胃 is the stomach organ; お腹 is the belly area in general.",
+    "audio": "audio/janki-35d8aef3b78d.wav",
+    "image": "",
+    "pitch_accent": [
+      "LH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 4400,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "13. stomach ｉ い 胃",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "20e8c1f71175,ac373a6c0761",
+        "janki_pitch_accent_source": "jpdb:0e203ea6d79746367c77164977d96fd73b74ca775fe5a4f949e8b59d94533439"
+      }
+    }
+  },
+  {
+    "id": "word:胃潰瘍:いかいよう",
+    "expression": "胃潰瘍",
+    "reading": "いかいよう",
+    "furigana": "胃[い] 潰[かい] 瘍[よう]",
+    "romaji": "ikaiyou",
+    "meanings": [
+      "stomach ulcer"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "医者に胃潰瘍だと言われました。",
+        "furigana": "医者[いしゃ]に 胃潰瘍[いかいよう]だと 言[い]われました。",
+        "romaji": "isha ni ikaiyou da to iwaremashita.",
+        "english": "The doctor told me it is a stomach ulcer.",
+        "audio": "audio/janki-9a2dacab2f1e.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "父は胃潰瘍で入院してる。",
+        "furigana": "父[ちち]は 胃潰瘍[いかいよう]で 入院[にゅういん]してる。",
+        "romaji": "chichi wa ikaiyou de nyuuin shiteru.",
+        "english": "My dad is in the hospital with a stomach ulcer.",
+        "audio": "audio/janki-409e2b70cd05.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-6f1ba1a890b4.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHLLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 55100,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "8. stomach ulcer ikaiyo いかいよう 胃潰瘍",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "4250c34182f2,cc166da921ee",
+        "janki_pitch_accent_source": "jpdb:d403be5aa09b15d699f63a8220da9e717e905c15546bd5e8c5f4b55047dcf2ee"
+      }
+    }
+  },
+  {
+    "id": "word:背中:せなか",
+    "expression": "背中",
+    "reading": "せなか",
+    "furigana": "背[せ] 中[なか]",
+    "romaji": "senaka",
+    "meanings": [
+      "back (of body)"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "背中が痛いです。",
+        "furigana": "背中[せなか]が 痛[いた]いです。",
+        "romaji": "senaka ga itai desu.",
+        "english": "My back hurts.",
+        "audio": "audio/janki-ce7d1e303bce.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "山に登ったら背中が痛くなった。",
+        "furigana": "山[やま]に 登[のぼ]ったら 背中[せなか]が 痛[いた]くなった。",
+        "romaji": "yama ni nobottara senaka ga itaku natta.",
+        "english": "My back started hurting after I hiked up the mountain.",
+        "audio": "audio/janki-fc479d9069df.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "背中 is the upper back; the lower back is 腰（こし）.",
+    "audio": "audio/janki-f31d13e76ad2.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 700,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "9. back senaka せなか 背中",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "5b1fa98a749f,fa8e2f2a855b",
+        "janki_pitch_accent_source": "jpdb:3289766af353dc9ca108c2351ed288d465f27d91069fd1abef53618bd2f74ef5"
+      }
+    }
+  },
+  {
+    "id": "word:胸:むね",
+    "expression": "胸",
+    "reading": "むね",
+    "furigana": "胸[むね]",
+    "romaji": "mune",
+    "meanings": [
+      "chest, breast",
+      "breasts, bosom, bust",
+      "heart",
+      "lungs",
+      "stomach",
+      "heart, mind, feelings"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "胸が苦しいです。",
+        "furigana": "胸[むね]が 苦[くる]しいです。",
+        "romaji": "mune ga kurushii desu.",
+        "english": "My chest feels tight.",
+        "audio": "audio/janki-7776019b666c.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "走ったあと、胸がどきどきした。",
+        "furigana": "走[はし]ったあと、 胸[むね]がどきどきした。",
+        "romaji": "hashitta ato, mune ga dokidoki shita.",
+        "english": "My heart was pounding after I ran.",
+        "audio": "audio/janki-d1a15a8dc712.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-fee05cc4f456.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 500,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "8. chest・breast mune むね 胸",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "c165fd230873,11fa30cc4c72",
+        "janki_pitch_accent_source": "jpdb:7b12104ebf0fa437dc4affed9496daf4baa6db49ac6a9c7729f667170f98a050"
+      }
+    }
+  },
+  {
+    "id": "word:脳卒中:のうそっちゅう",
+    "expression": "脳卒中",
+    "reading": "のうそっちゅう",
+    "furigana": "脳[のう] 卒[そっ] 中[ちゅう]",
+    "romaji": "nousotchuu",
+    "meanings": [
+      "stroke, cerebral haemorrhage, cerebral hemorrhage"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "祖父は脳卒中で倒れました。",
+        "furigana": "祖父[そふ]は 脳卒中[のうそっちゅう]で 倒[たお]れました。",
+        "romaji": "sofuhanousotchuudetaoremashita.",
+        "english": "My grandfather collapsed from a stroke.",
+        "audio": "audio/janki-62f31b9f2528.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "脳卒中は急に起こるから怖い。",
+        "furigana": "脳卒中[のうそっちゅう]は 急[きゅう]に 起[お]こるから 怖[こわ]い。",
+        "romaji": "nousotchuuhakyuuniokorukarakowai.",
+        "english": "Strokes are scary because they happen suddenly.",
+        "audio": "audio/janki-303b73ddd105.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-040747fdf0f7.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHLLLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 63100,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "25. stroke no socchu のうそっちゅう 脳卒中",
+        "ai_warnings": "[\"romaji 'sofu wa nousocchuu de taoremashita.' does not transliterate 'そふはのうそっちゅうでたおれました。'; replaced with 'sofuhanousotchuudetaoremashita.'\", \"romaji 'nousocchuu wa kyuu ni okoru kara kowai.' does not transliterate 'のうそっちゅうはきゅうにおこるからこわい。'; replaced with 'nousotchuuhakyuuniokorukarakowai.'\"]",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "18a4769dc411,799289d107ad",
+        "janki_pitch_accent_source": "jpdb:0e3ea577ed93fabe205b848c54c598ea5509236cacc5d818c7639cf4f591f6cd"
+      }
+    }
+  },
+  {
+    "id": "word:腕:うで",
+    "expression": "腕",
+    "reading": "うで",
+    "furigana": "腕[うで]",
+    "romaji": "ude",
+    "meanings": [
+      "arm",
+      "skill, efforts, ability"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "重い荷物で腕が痛いです。",
+        "furigana": "重[おも]い 荷物[にもつ]で 腕[うで]が 痛[いた]いです。",
+        "romaji": "omoi nimotsu de ude ga itai desu.",
+        "english": "My arm hurts from the heavy luggage.",
+        "audio": "audio/janki-db9a643ac1e3.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "腕を怪我しちゃった。",
+        "furigana": "腕[うで]を 怪我[けが]しちゃった。",
+        "romaji": "ude o kega shichatta.",
+        "english": "I hurt my arm.",
+        "audio": "audio/janki-66a677e5d064.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-ac5452e65449.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 600,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "14. arm ude うで 腕",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "b28eae92ae9d,5fba53ba94c9",
+        "janki_pitch_accent_source": "jpdb:8515eb22002365f05de521f88dfb2491e6ddef288643922bc754bfa05ddeb235"
+      }
+    }
+  },
+  {
+    "id": "word:腰:こし",
+    "expression": "腰",
+    "reading": "こし",
+    "furigana": "腰[こし]",
+    "romaji": "koshi",
+    "meanings": [
+      "lower back, waist, hips, lumbar region",
+      "body (of hair, noodle, paper, etc.), resilience, spring"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "腰が痛いです。",
+        "furigana": "腰[こし]が 痛[いた]いです。",
+        "romaji": "koshi ga itai desu.",
+        "english": "I have a backache.",
+        "audio": "audio/janki-072461150f88.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "重い荷物を持って、腰を痛めた。",
+        "furigana": "重[おも]い 荷物[にもつ]を 持[も]って、 腰[こし]を 痛[いた]めた。",
+        "romaji": "omoi nimotsu o motte, koshi o itameta.",
+        "english": "I hurt my lower back carrying heavy luggage.",
+        "audio": "audio/janki-6edfa83b14a6.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "腰 means the lower back and hip area, not the whole back.",
+    "audio": "audio/janki-b328cb9808b6.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 800,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "(2) Koshi ga itai desu. 腰が痛いです。 I have a backache.",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "60c737a95064,92fbed5bbaa0",
+        "janki_pitch_accent_source": "jpdb:e2ea76bba0b48f749cef7e019ae12c5e5dbb3cce0a9809997cdeea72c248ed11"
+      }
+    }
+  },
+  {
+    "id": "word:腰痛:ようつう",
+    "expression": "腰痛",
+    "reading": "ようつう",
+    "furigana": "腰[よう] 痛[つう]",
+    "romaji": "youtsuu",
+    "meanings": [
+      "lower back (or hip) pain, lumbago"
+    ],
+    "part_of_speech": "no-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "腰痛で病院に行きました。",
+        "furigana": "腰痛[ようつう]で 病院[びょういん]に 行[い]きました。",
+        "romaji": "youtsuu de byouin ni ikimashita.",
+        "english": "I went to the hospital for lower back pain.",
+        "audio": "audio/janki-622d2623099e.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "また腰痛が出てきた。",
+        "furigana": "また 腰痛[ようつう]が 出[で]てきた。",
+        "romaji": "mata youtsuu ga dete kita.",
+        "english": "My back pain is acting up again.",
+        "audio": "audio/janki-863434fe70fa.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "腰痛 is the noun; 腰が痛いです is the everyday way to say it.",
+    "audio": "audio/janki-866895d69938.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 36600,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "12. backache yotsu ようつう 腰痛",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "48897677619e,99386dc37096",
+        "janki_pitch_accent_source": "jpdb:1553fcc429c57e2349d5b988cc1b2a2b305c0fdbbed4b98cb8c3e1c76140c913"
       }
     }
   },
@@ -9283,6 +13354,63 @@
         "context": "茶道　tea ceremony",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:01dcdcab031b7e385644afcb8e6754c4e5c6f17e458a24bbab1c4d1de4623743"
+      }
+    }
+  },
+  {
+    "id": "word:虫歯:むしば",
+    "expression": "虫歯",
+    "reading": "むしば",
+    "furigana": "虫[むし] 歯[ば]",
+    "romaji": "mushiba",
+    "meanings": [
+      "cavity, tooth decay, decayed tooth, dental caries"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "虫歯が一本あります。",
+        "furigana": "虫歯[むしば]が 一本[いっぽん]あります。",
+        "romaji": "mushiba ga ippon arimasu.",
+        "english": "I have one cavity.",
+        "audio": "audio/janki-7500059b8464.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "虫歯ができたから歯医者に行く。",
+        "furigana": "虫歯[むしば]ができたから 歯医者[はいしゃ]に 行[い]く。",
+        "romaji": "mushiba ga dekita kara haisha ni iku.",
+        "english": "I got a cavity, so I'm going to the dentist.",
+        "audio": "audio/janki-942f26d54b38.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Cavities are counted with 〜本 and appear with できる.",
+    "audio": "audio/janki-13ce8340ce60.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 27700,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "18. cavity mushiba むしば 虫歯",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "54281dbb31dd,31e32cffc672",
+        "janki_pitch_accent_source": "jpdb:e317c14750120c1c731c9667664c3192d9b18d006ceae2ddeb7ea7507615386e"
       }
     }
   },
@@ -9464,6 +13592,64 @@
         "inclusion_reason": "Formal noun for an opinion, common in written and polite speech.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]",
         "janki_pitch_accent_source": "jpdb:de86626de3568b2a9a4e44add06bf14417eb0cf7069621f8f136ca0140e081f5"
+      }
+    }
+  },
+  {
+    "id": "word:解熱剤:げねつざい",
+    "expression": "解熱剤",
+    "reading": "げねつざい",
+    "furigana": "解[げ] 熱[ねつ] 剤[ざい]",
+    "romaji": "genetsuzai",
+    "meanings": [
+      "fever medicine, antipyretic, antifebrile"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "熱が高いので、解熱剤を飲みます。",
+        "furigana": "熱[ねつ]が 高[たか]いので、 解熱剤[げねつざい]を 飲[の]みます。",
+        "romaji": "netsu ga takai node, genetsuzai o nomimasu.",
+        "english": "My fever is high, so I'll take a fever reducer.",
+        "audio": "audio/janki-c38ef24f8808.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "解熱剤を飲んだら、熱が下がった。",
+        "furigana": "解熱剤[げねつざい]を 飲[の]んだら、 熱[ねつ]が 下[さ]がった。",
+        "romaji": "genetsuzai o nondara, netsu ga sagatta.",
+        "english": "My fever went down after I took the fever reducer.",
+        "audio": "audio/janki-05c8b23e9b22.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-6e7c45879f65.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHLLL",
+      "LHHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 52400,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "4",
+        "context": "4. antipyretic genetsuzai げねつざい 解熱剤",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "47fd7bfda868,0e89d48afe18",
+        "janki_pitch_accent_source": "jpdb:e75baf80376285d20f509f7fc478e4603d804189a8bd5a5e744c505357e9e230"
       }
     }
   },
@@ -9834,6 +14020,63 @@
     }
   },
   {
+    "id": "word:貧血:ひんけつ",
+    "expression": "貧血",
+    "reading": "ひんけつ",
+    "furigana": "貧[ひん] 血[けつ]",
+    "romaji": "hinketsu",
+    "meanings": [
+      "anemia, anaemia"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "貧血なので、鉄分の薬を飲んでいます。",
+        "furigana": "貧血[ひんけつ]なので、 鉄分[てつぶん]の 薬[くすり]を 飲[の]んでいます。",
+        "romaji": "hinketsu na node, tetsubun no kusuri o nonde imasu.",
+        "english": "I'm anemic, so I take iron medicine.",
+        "audio": "audio/janki-f825ae775362.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "立ったら貧血でくらくらした。",
+        "furigana": "立[た]ったら 貧血[ひんけつ]でくらくらした。",
+        "romaji": "tattara hinketsu de kurakura shita.",
+        "english": "I stood up and got lightheaded from anemia.",
+        "audio": "audio/janki-26b233001804.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-8d99e6e0e597.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 15000,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "33. anemia hinketsu ひんけつ 貧血",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "1ae7c9aedcf8,e8ef314b5640",
+        "janki_pitch_accent_source": "jpdb:7b4dc934ffed95c278cdd27df4ae9c2efa0f2923eafa18fd4c2fa0be13c6ca67"
+      }
+    }
+  },
+  {
     "id": "word:貴方:あなた",
     "expression": "貴方",
     "reading": "あなた",
@@ -9862,9 +14105,11 @@
     "usage_notes": "貴方 is an uncommon kanji spelling of あなた, mostly seen in literary writing. あなた is not honorific and can sound rude when used for a superior. In ordinary conversation, use the person’s name or title, or omit “you” when the meaning is clear.",
     "audio": "audio/janki-193d3a009fdb.wav",
     "image": "",
-    "pitch_accent": [],
+    "pitch_accent": [
+      "LHLL"
+    ],
     "audio_accent": "",
-    "frequency_rank": null,
+    "frequency_rank": 3200,
     "source": {
       "type": "extract",
       "imported_from": "IMG_4563.jpg",
@@ -9875,7 +14120,8 @@
         "page": "1",
         "context": "その前に差し支えなければ黄金律の修復について貴方の見解を伺いたく",
         "inclusion_reason": "Kanji spelling of あなた, glossed with ruby here; worth recognizing in print.",
-        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]"
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"},{\"code\":\"example-romaji-from-furigana\",\"evidence\":{\"algorithm\":\"japanese_anki.qc.regenerate_example_romaji\"},\"fields\":[\"examples[0].romaji\"],\"provenance\":\"Derived example romaji from stored Japanese and furigana.\",\"version\":\"1.1.0\"}]",
+        "janki_pitch_accent_source": "jpdb:14f37be7e2a00a852334f4b7d4db63c44a9df77c3a79614f359c1a5538606f58"
       }
     }
   },
@@ -10064,6 +14310,69 @@
         "inclusion_reason": "Appears in the kanji phrase 早く起きる; core daily-routine verb.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:1137bd77ef6907dbf72e8210b8d456621673c6e798305f31137b5747b406d397"
+      }
+    }
+  },
+  {
+    "id": "word:足:あし",
+    "expression": "足",
+    "reading": "あし",
+    "furigana": "足[あし]",
+    "romaji": "ashi",
+    "meanings": [
+      "foot, paw, arm (of an octopus, squid, etc.)",
+      "leg",
+      "gait",
+      "pace",
+      "bottom structural component (i.e. radical) of a kanji",
+      "means of transportation",
+      "money, coin"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "歩きすぎて足が痛いです。",
+        "furigana": "歩[ある]きすぎて 足[あし]が 痛[いた]いです。",
+        "romaji": "arukisugite ashi ga itai desu.",
+        "english": "I walked too much and my feet hurt.",
+        "audio": "audio/janki-ce114bb88703.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "足が疲れたから、少し休もう。",
+        "furigana": "足[あし]が 疲[つか]れたから、 少[すこ]し 休[やす]もう。",
+        "romaji": "ashi ga tsukareta kara, sukoshi yasumou.",
+        "english": "My legs are tired, so let's rest a bit.",
+        "audio": "audio/janki-08d9daa75c1c.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "The same word あし is written 足 (foot, or leg generally) or 脚 (leg) as the source shows.",
+    "audio": "audio/janki-19171031ef29.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 400,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "medium",
+        "page": "1",
+        "context": "20. leg・foot ashi あし 脚・足",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "8fd24600bb24,f584da535a6b",
+        "janki_pitch_accent_source": "jpdb:a8059ffa7b1708d057d834e764ab0de55a4b84695e5ddf43a583c2c78a554c53"
       }
     }
   },
@@ -10352,6 +14661,64 @@
         "context": "都市　city",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:af207bd59c0b1cb537fa805d8b1f6df7fe3275402bce1376db993cec1d229952"
+      }
+    }
+  },
+  {
+    "id": "word:鎮痛剤:ちんつうざい",
+    "expression": "鎮痛剤",
+    "reading": "ちんつうざい",
+    "furigana": "鎮[ちん] 痛[つう] 剤[ざい]",
+    "romaji": "chintsuuzai",
+    "meanings": [
+      "analgesic, painkiller, sedative, tranquilizer, tranquiliser"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "鎮痛剤を飲みました。",
+        "furigana": "鎮痛剤[ちんつうざい]を 飲[の]みました。",
+        "romaji": "chintsuuzai o nomimashita.",
+        "english": "I took a painkiller.",
+        "audio": "audio/janki-58a58b9d1dc8.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "鎮痛剤が効いてきた。",
+        "furigana": "鎮痛剤[ちんつうざい]が 効[き]いてきた。",
+        "romaji": "chintsuuzai ga kiite kita.",
+        "english": "The painkiller is starting to work.",
+        "audio": "audio/janki-9fd9f5bc6740.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-5d404dabd6b9.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHLLLL",
+      "LHHHHHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 41200,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "4",
+        "context": "2. painkiller chintsu zai ちんつうざい 鎮痛剤",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "bfd168bb8a7a,531e3cf1ce01",
+        "janki_pitch_accent_source": "jpdb:ef0c565e7e57b83047561e70889de72caf308fd83623272bf851c4897591e86d"
       }
     }
   },
@@ -10838,6 +15205,185 @@
     }
   },
   {
+    "id": "word:頭:あたま",
+    "expression": "頭",
+    "reading": "あたま",
+    "furigana": "頭[あたま]",
+    "romaji": "atama",
+    "meanings": [
+      "head",
+      "hair (on one's head)",
+      "mind, brains, intellect",
+      "leader, chief, boss, captain",
+      "top, tip",
+      "beginning, start",
+      "head, person",
+      "down payment, deposit",
+      "top structural component of a kanji",
+      "pair"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "頭が痛いです。",
+        "furigana": "頭[あたま]が 痛[いた]いです。",
+        "romaji": "atama ga itai desu.",
+        "english": "I have a headache.",
+        "audio": "audio/janki-9256ac15d26d.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "朝から頭が痛いんだ。",
+        "furigana": "朝[あさ]から 頭[あたま]が 痛[いた]いんだ。",
+        "romaji": "asa kara atama ga itai n da.",
+        "english": "My head has been hurting since this morning.",
+        "audio": "audio/janki-e3ad0f8f8f5b.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-9c03a53266b9.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHLL",
+      "LHHL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 200,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "1. head atama あたま 頭",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "7f4be773d699,0300206ea52b",
+        "janki_pitch_accent_source": "jpdb:69aafb0216672c7d90bea55e9da4b8c91134659cab899a7714c299090a7dfaec"
+      }
+    }
+  },
+  {
+    "id": "word:頭痛薬:ずつうやく",
+    "expression": "頭痛薬",
+    "reading": "ずつうやく",
+    "furigana": "",
+    "romaji": "zutsuuyaku",
+    "meanings": [
+      "headache medicine"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "頭痛薬をください。",
+        "furigana": "頭痛薬[ずつうやく]をください。",
+        "romaji": "zutsuuyaku o kudasai.",
+        "english": "Please give me some headache medicine.",
+        "audio": "audio/janki-7b68e7019d79.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "頭痛薬、持ってる?",
+        "furigana": "頭痛薬[ずつうやく]、 持[も]ってる?",
+        "romaji": "zutsuuyaku, motteru?",
+        "english": "Do you have any headache medicine?",
+        "audio": "audio/janki-ec80b518b85d.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "薬 is read やく in this compound; medicine is taken with 飲む.",
+    "audio": "audio/janki-b97b1ab3d2bf.wav",
+    "image": "",
+    "pitch_accent": [],
+    "audio_accent": "",
+    "frequency_rank": null,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "4",
+        "context": "1. headache specific zutsu yaku ずつうやく 頭痛薬",
+        "provisional_fields": "meanings:e11f9295d393,part_of_speech:ee6cded62768",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "c60f2d448cc8,f87ab051d3ac"
+      }
+    }
+  },
+  {
+    "id": "word:風邪:かぜ",
+    "expression": "風邪",
+    "reading": "かぜ",
+    "furigana": "風[か] 邪[ぜ]",
+    "romaji": "kaze",
+    "meanings": [
+      "(common) cold, influenza, flu, ague, inflammatory respiratory system illness (in general)"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "風邪です。",
+        "furigana": "風邪[かぜ]です。",
+        "romaji": "kaze desu.",
+        "english": "I have a cold.",
+        "audio": "audio/janki-6bc3315f4239.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "風邪を引いたみたい。",
+        "furigana": "風邪[かぜ]を 引[ひ]いたみたい。",
+        "romaji": "kaze o hiita mitai.",
+        "english": "I think I've caught a cold.",
+        "audio": "audio/janki-3d46013afb0b.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "風邪 is a special reading (かぜ) for the compound; the verb is 風邪を引く.",
+    "audio": "audio/janki-3f014ab44e70.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 4500,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "16. I have a cold. Kaze desu. 風邪です。",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "37f7718de55c,2daf5584b0fa",
+        "janki_pitch_accent_source": "jpdb:ee7536dd8953974277744e94308864d134c15926dc796a5491e65e4af1157324"
+      }
+    }
+  },
+  {
     "id": "word:飛行機:ひこうき",
     "expression": "飛行機",
     "reading": "ひこうき",
@@ -10954,6 +15500,64 @@
       "imported_from": "data/decks/verbs.yaml (inline notes)",
       "row": null,
       "raw_fields": {}
+    }
+  },
+  {
+    "id": "word:食欲:しょくよく",
+    "expression": "食欲",
+    "reading": "しょくよく",
+    "furigana": "食[しょく] 欲[よく]",
+    "romaji": "shokuyoku",
+    "meanings": [
+      "appetite (for food)"
+    ],
+    "part_of_speech": "no-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "食欲がありません。",
+        "furigana": "食欲[しょくよく]がありません。",
+        "romaji": "shokuyoku ga arimasen.",
+        "english": "I don't have an appetite.",
+        "audio": "audio/janki-d1bbb15611b3.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "暑くて食欲がない。",
+        "furigana": "暑[あつ]くて 食欲[しょくよく]がない。",
+        "romaji": "atsukute shokuyoku ga nai.",
+        "english": "It's so hot I have no appetite.",
+        "audio": "audio/janki-e95b5a2b4c1f.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-61c7ddfb5050.wav",
+    "image": "",
+    "pitch_accent": [
+      "LLHHHH",
+      "LLHLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 5400,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "4. I don’t have an appetite. Shokuyoku ga arimasen. 食欲がありません。",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "90da5709424b,951ec0233da3",
+        "janki_pitch_accent_source": "jpdb:9321735c9eb1ba8f638b01dddee76eb25e7370dea67926cc77d8587e98d33d29"
+      }
     }
   },
   {
@@ -11091,6 +15695,184 @@
     }
   },
   {
+    "id": "word:首:くび",
+    "expression": "首",
+    "reading": "くび",
+    "furigana": "首[くび]",
+    "romaji": "kubi",
+    "meanings": [
+      "neck",
+      "head",
+      "dismissal, discharge, firing (from a job)"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "首が痛くて、上を見られません。",
+        "furigana": "首[くび]が 痛[いた]くて、 上[うえ]を 見[み]られません。",
+        "romaji": "kubi ga itakute, ue o miraremasen.",
+        "english": "My neck hurts and I can't look up.",
+        "audio": "audio/janki-64b0a391a663.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "首をゆっくり回してみて。",
+        "furigana": "首[くび]をゆっくり 回[まわ]してみて。",
+        "romaji": "kubi o yukkuri mawashite mite.",
+        "english": "Try turning your neck slowly.",
+        "audio": "audio/janki-3acb023e294f.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-1daa60199958.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 700,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "12. neck kubi くび 首",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "026872b2745d,b01d8cc8b926",
+        "janki_pitch_accent_source": "jpdb:463529a0af565fb55bf842c4e76f0b87629277cb1d4fd71c15daef250f82abac"
+      }
+    }
+  },
+  {
+    "id": "word:骨:ほね",
+    "expression": "骨",
+    "reading": "ほね",
+    "furigana": "骨[ほね]",
+    "romaji": "hone",
+    "meanings": [
+      "bone",
+      "frame",
+      "outline, core",
+      "backbone, spirit, fortitude",
+      "laborious, troublesome, difficult"
+    ],
+    "part_of_speech": "na-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "転んで、腕の骨を折りました。",
+        "furigana": "転[ころ]んで、 腕[うで]の 骨[ほね]を 折[お]りました。",
+        "romaji": "koronde, ude no hone o orimashita.",
+        "english": "I fell and broke the bone in my arm.",
+        "audio": "audio/janki-27bb298ccb1f.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "転んだけど、骨は折れてないよ。",
+        "furigana": "転[ころ]んだけど、 骨[ほね]は 折[お]れてないよ。",
+        "romaji": "koronda kedo, hone wa oretenai yo.",
+        "english": "I fell, but I didn't break any bones.",
+        "audio": "audio/janki-c2b5d7b626bd.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "骨を折る is transitive (to break a bone); 骨が折れる is the intransitive pair.",
+    "audio": "audio/janki-0d06a52d6c6f.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 2100,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "10. bone hone ほね 骨",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "d10512ea19c2,9dbb4f2adafe",
+        "janki_pitch_accent_source": "jpdb:bb0caefc6df99e1557d49e19aed1890a9c4c728920223487b519028e6d4c06f8"
+      }
+    }
+  },
+  {
+    "id": "word:高血圧:こうけつあつ",
+    "expression": "高血圧",
+    "reading": "こうけつあつ",
+    "furigana": "高[こう] 血[けつ] 圧[あつ]",
+    "romaji": "kouketsuatsu",
+    "meanings": [
+      "high blood pressure, hypertension"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "父は高血圧の薬を飲んでいます。",
+        "furigana": "父[ちち]は 高血圧[こうけつあつ]の 薬[くすり]を 飲[の]んでいます。",
+        "romaji": "chichi wa kouketsuatsu no kusuri o nonde imasu.",
+        "english": "My father takes medicine for high blood pressure.",
+        "audio": "audio/janki-458de2725bea.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "塩分を取りすぎると高血圧になるよ。",
+        "furigana": "塩分[えんぶん]を 取[と]りすぎると 高血圧[こうけつあつ]になるよ。",
+        "romaji": "enbun o torisugiru to kouketsuatsu ni naru yo.",
+        "english": "Too much salt gives you high blood pressure.",
+        "audio": "audio/janki-f7df33b8d01e.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-097e60e186c3.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHLLL",
+      "LHHLLLL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 53000,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "17. high blood pressure koketsuatsu こうけつあつ 高血圧",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "797b0114118f,b53539cb88d0",
+        "janki_pitch_accent_source": "jpdb:4dde8233b6763502e3042b3ecc4279cbf886709233a86d175b335691b44905e2"
+      }
+    }
+  },
+  {
     "id": "word:魚市場:うおいちば",
     "expression": "魚市場",
     "reading": "うおいちば",
@@ -11147,6 +15929,63 @@
     }
   },
   {
+    "id": "word:麻疹:はしか",
+    "expression": "麻疹",
+    "reading": "はしか",
+    "furigana": "麻疹[はしか]",
+    "romaji": "hashika",
+    "meanings": [
+      "measles"
+    ],
+    "part_of_speech": "no-adjective",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "子供の時に麻疹にかかりました。",
+        "furigana": "子供[こども]の 時[とき]に 麻疹[はしか]にかかりました。",
+        "romaji": "kodomo no toki ni hashika ni kakarimashita.",
+        "english": "I had measles as a child.",
+        "audio": "audio/janki-6e08bf32a8ec.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "妹が麻疹にかかったらしい。",
+        "furigana": "妹[いもうと]が 麻疹[はしか]にかかったらしい。",
+        "romaji": "imouto ga hashika ni kakatta rashii.",
+        "english": "I hear my little sister caught the measles.",
+        "audio": "audio/janki-618549945e73.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "Normally written in kana as はしか. Illnesses take 〜にかかる.",
+    "audio": "audio/janki-4eb0c9088f33.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 63000,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "2",
+        "context": "1. measles hashika はしか 麻疹",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "0ebf9e9a17e4,15fbafae067e",
+        "janki_pitch_accent_source": "jpdb:8dd9d54ca7881c151c1a73e85ea0e915182e74b5415f03b98b8c4e639dab56e2"
+      }
+    }
+  },
+  {
     "id": "word:黄金律:おうごんりつ",
     "expression": "黄金律",
     "reading": "おうごんりつ",
@@ -11193,6 +16032,122 @@
         "inclusion_reason": "Key setting term repeated on the page; teaches 黄金 plus 律.",
         "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
         "janki_pitch_accent_source": "jpdb:a9fd729e984f1e24776a64435e219806505f4bf0204e54ee9c15709ad21cbb8a"
+      }
+    }
+  },
+  {
+    "id": "word:鼻:はな",
+    "expression": "鼻",
+    "reading": "はな",
+    "furigana": "鼻[はな]",
+    "romaji": "hana",
+    "meanings": [
+      "nose"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "鼻が詰まっています。",
+        "furigana": "鼻[はな]が 詰[つ]まっています。",
+        "romaji": "hana ga tsumatte imasu.",
+        "english": "My nose is stuffed up.",
+        "audio": "audio/janki-f93ee6fa2a97.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "寒いと鼻が赤くなる。",
+        "furigana": "寒[さむ]いと 鼻[はな]が 赤[あか]くなる。",
+        "romaji": "samui to hana ga akaku naru.",
+        "english": "My nose turns red when it's cold.",
+        "audio": "audio/janki-819595c11344.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-70d1b86696c2.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHH"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 1800,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "1",
+        "context": "7. nose hana はな 鼻",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "e6fc814af6f3,9d2595bcfca8",
+        "janki_pitch_accent_source": "jpdb:dbbe7ae79bc1d3547527d26e3e6dc6c6da3ce65af54cca10a85ec69d5fc28e0a"
+      }
+    }
+  },
+  {
+    "id": "word:鼻水:はなみず",
+    "expression": "鼻水",
+    "reading": "はなみず",
+    "furigana": "鼻[はな] 水[みず]",
+    "romaji": "hanamizu",
+    "meanings": [
+      "nasal mucus, dripping nose, snot"
+    ],
+    "part_of_speech": "noun",
+    "verb_group": "",
+    "transitivity": "",
+    "examples": [
+      {
+        "japanese": "鼻水が出ます。",
+        "furigana": "鼻水[はなみず]が 出[で]ます。",
+        "romaji": "hanamizu ga demasu.",
+        "english": "I have a runny nose.",
+        "audio": "audio/janki-191846eb8ccc.mp3",
+        "register": "polite"
+      },
+      {
+        "japanese": "朝から鼻水が止まらない。",
+        "furigana": "朝[あさ]から 鼻水[はなみず]が 止[と]まらない。",
+        "romaji": "asa kara hanamizu ga tomaranai.",
+        "english": "My nose has been running since this morning.",
+        "audio": "audio/janki-f09b7c8b40cb.mp3",
+        "register": "casual"
+      }
+    ],
+    "conjugations": {},
+    "tags": [
+      "medical-conditions-vocab"
+    ],
+    "usage_notes": "",
+    "audio": "audio/janki-cbba04fc6afa.wav",
+    "image": "",
+    "pitch_accent": [
+      "LHHHH",
+      "LHHLL",
+      "LHHHL"
+    ],
+    "audio_accent": "",
+    "frequency_rank": 13600,
+    "source": {
+      "type": "extract",
+      "imported_from": "medical-conditions-vocab.pdf",
+      "row": null,
+      "raw_fields": {
+        "extracted_from": "medical-conditions-vocab.pdf",
+        "confidence": "high",
+        "page": "3",
+        "context": "7. I have a runny nose. Hanamizu ga demasu. 鼻水が出ます。",
+        "janki_repairs": "[{\"code\":\"record-romaji-from-reading\",\"evidence\":{\"algorithm\":\"japanese_anki.romaji.kana_to_romaji\"},\"fields\":[\"romaji\"],\"provenance\":\"Derived Hepburn romaji from the stored kana reading.\",\"version\":\"1.0.0\"}]",
+        "example_authority": "fcf73d9a5a42,21ba179d0e66",
+        "janki_pitch_accent_source": "jpdb:04a7ccf55a558be6569750984f92f9bfeabb8db748136b383ff32ade5680cc01"
       }
     }
   }

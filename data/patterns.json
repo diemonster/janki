@@ -172,23 +172,23 @@
     "reviewed": false,
     "patterns": [
       {
-        "template": "____ が痛いです。 (____ ga itai desu.)",
-        "gloss": "I have a pain in my ___ ; the body part is marked with が.",
+        "template": "＿＿＿が痛いです。",
+        "gloss": "I have a pain in my ___. The aching body part is marked with が.",
         "examples": [
           "お腹が痛いです。",
           "腰が痛いです。"
         ],
-        "where": "p.1 (1) Useful structures / [Common expression]"
+        "where": "p.1 (1) Useful structures 1; [Common expression] (1), (2)"
       },
       {
-        "template": "____ が痒いです。 (____ ga kayui desu.)",
-        "gloss": "My ___ itches; the body part is marked with が.",
+        "template": "＿＿＿が痒いです。",
+        "gloss": "My ___ itches. The itching body part is marked with が.",
         "examples": [],
-        "where": "p.1 (1) Useful structures"
+        "where": "p.1 (1) Useful structures 2"
       },
       {
-        "template": "____ をください。 (____ o kudasai.)",
-        "gloss": "Please give me ___ ; used when asking for an item at a hospital or drugstore.",
+        "template": "＿＿＿をください。",
+        "gloss": "Please give me ___ . Used to ask for an item at the hospital or drugstore.",
         "examples": [],
         "where": "p.4 (4) At the hospital or drugstore"
       }
@@ -200,12 +200,12 @@
       "model": "claude-opus-5",
       "response_schema_version": 5,
       "response_schema_fingerprint": "3b9963cc313ede5b40a96328ecf57a5a87e6237200510c020225f70d15394382",
-      "system_prompt_fingerprint": "c059138c1fcdad65ef676bf736b9671141b0cc3fc664fd4830753c02836362be",
+      "system_prompt_fingerprint": "9c6a5c4fb11964fe7f5ab91c7538b692f2cd5b5449dc49f43eb17d00218b2127",
       "style_guide_fingerprint": "220c73a9cdf9487bf74daf734d6b448b3029056855d3b8d72ab40faf27276f12",
       "user_prompt_fingerprint": "6ab309b4b7cdb61601b40f85bef392dae47318b69fa3e975160ec3070d097703",
-      "request_fingerprint": "27435645b16b0fef176c27a1a03c7458314a90aa5ac28a847fbe7e7f7dc59bd2"
+      "request_fingerprint": "63f159d45340b8087c6356da16f6573914b0b485bf377462c4fb6a817fc00baf"
     },
-    "review_run_id": "88b30910-53e1-4734-b0ab-07d5379df07e"
+    "review_run_id": "095c8696-4fea-4689-a3f1-3b9dc8d9c159"
   },
   "teform_song.pdf": {
     "kind": "pattern",
