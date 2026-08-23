@@ -501,6 +501,78 @@ def _deck_string_set(deck_config: dict[str, Any], key: str, deck_path: Path) -> 
     return {str(item) for item in value}
 
 
+@dataclass(frozen=True, slots=True)
+class DeckSelection:
+    """Which records a deck file claims, as a value you can ask about a record.
+
+    Its own type because two callers need the same answer from different
+    directions. `resolve_deck_records` asks "which of these records does the
+    deck take"; the workbench asks "would this *staged* record land in any
+    deck, once promoted" — a question that cannot be answered by filtering the
+    collection, because the record is not in it yet.
+
+    Answering the second with a second copy of the four filters is how a
+    preview starts disagreeing with the build it predicts, so both go through
+    :meth:`includes`.
+    """
+
+    include_ids: frozenset[str] = frozenset()
+    exclude_ids: frozenset[str] = frozenset()
+    include_tags: frozenset[str] = frozenset()
+    exclude_tags: frozenset[str] = frozenset()
+
+    @property
+    def takes_everything(self) -> bool:
+        """True when the deck names no filter at all and so claims the lot."""
+        return not (
+            self.include_ids
+            or self.exclude_ids
+            or self.include_tags
+            or self.exclude_tags
+        )
+
+    def includes(self, record: VocabularyRecord) -> bool:
+        """Whether this deck would ship ``record``."""
+        return self.refusal(record) is None
+
+    def refusal(self, record: VocabularyRecord) -> str | None:
+        """Why this deck would not ship ``record``, in a learner's words.
+
+        The reason, not just the verdict: "not in this deck" is useless to
+        someone deciding where a new lesson's words should go, and the four
+        filters fail for four different and fixable reasons.
+        """
+        tags = set(record.tags)
+        if self.include_ids and record.id not in self.include_ids:
+            return "this deck lists the exact cards it holds, and this is not one"
+        if self.include_tags and not (self.include_tags & tags):
+            return (
+                "this deck takes cards tagged "
+                + ", ".join(sorted(self.include_tags))
+                + ", and this card is tagged "
+                + (", ".join(sorted(tags)) if tags else "nothing")
+            )
+        if self.exclude_ids and record.id in self.exclude_ids:
+            return "this deck excludes this card by name"
+        if excluded := self.exclude_tags & tags:
+            return "this deck excludes cards tagged " + ", ".join(sorted(excluded))
+        return None
+
+
+def deck_selection(deck_config: dict[str, Any], deck_path: Path) -> DeckSelection:
+    """The four filters a deck declares, parsed and refused once."""
+    return DeckSelection(
+        include_ids=frozenset(_deck_string_set(deck_config, "include_ids", deck_path)),
+        exclude_ids=frozenset(_deck_string_set(deck_config, "exclude_ids", deck_path)),
+        include_tags=frozenset(
+            _deck_string_set(deck_config, "include_tags", deck_path)
+        ),
+        exclude_tags=frozenset(
+            _deck_string_set(deck_config, "exclude_tags", deck_path)
+        ),
+    )
+
+
 def deck_declared_ids(deck_path: Path) -> set[str]:
     """Every record id a deck *declares*, before any include/exclude filter.
 
@@ -644,20 +716,8 @@ def resolve_deck_records(deck_path: Path) -> tuple[dict[str, Any], list[Vocabula
             raise DataError(f"Could not read a note in {deck_path}: {exc}") from exc
         by_id[merged.id] = merged
 
-    records = list(by_id.values())
-    include_ids = _deck_string_set(deck_config, "include_ids", deck_path)
-    exclude_ids = _deck_string_set(deck_config, "exclude_ids", deck_path)
-    include_tags = _deck_string_set(deck_config, "include_tags", deck_path)
-    exclude_tags = _deck_string_set(deck_config, "exclude_tags", deck_path)
-
-    if include_ids:
-        records = [record for record in records if record.id in include_ids]
-    if include_tags:
-        records = [record for record in records if include_tags & set(record.tags)]
-    if exclude_ids:
-        records = [record for record in records if record.id not in exclude_ids]
-    if exclude_tags:
-        records = [record for record in records if not (exclude_tags & set(record.tags))]
+    selection = deck_selection(deck_config, deck_path)
+    records = [record for record in by_id.values() if selection.includes(record)]
 
     records.sort(key=lambda record: (record.expression, record.reading, record.id))
     return deck_config, records

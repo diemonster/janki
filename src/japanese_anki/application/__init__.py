@@ -15,6 +15,10 @@ from japanese_anki.application.authority import (
     example_authority_state,
     needs_example_review,
 )
+from japanese_anki.application.decks import (
+    DeckMembership,
+    deck_membership,
+)
 from japanese_anki.application.detail import (
     CardDetail,
     SourceDetail,
@@ -43,6 +47,7 @@ __all__ = [
     "ADDED",
     "AUTHORITY_STATES",
     "CardDetail",
+    "DeckMembership",
     "CARDS_NEED_EDITS",
     "COVERAGE_NEEDS_DECISION",
     "EXAMPLES_NEED_REVIEW",
@@ -58,6 +63,7 @@ __all__ = [
     "STAGING_UNREADABLE",
     "SourceDetail",
     "SourceJourney",
+    "deck_membership",
     "example_authority_state",
     "needs_example_review",
     "source_detail",
