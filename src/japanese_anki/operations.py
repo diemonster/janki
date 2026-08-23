@@ -36,7 +36,11 @@ from pathlib import Path
 from typing import Any
 
 from japanese_anki.errors import JankiError
-from japanese_anki.io import atomic_write_text, exclusive_path_lock
+from japanese_anki.io import (
+    atomic_write_bytes,
+    atomic_write_text,
+    exclusive_path_lock,
+)
 
 __all__ = [
     "LIVE_STATES",
@@ -45,6 +49,8 @@ __all__ = [
     "Operation",
     "OperationError",
     "OperationJournal",
+    "capture_artifact",
+    "serialize_response",
 ]
 
 
@@ -63,7 +69,12 @@ _TRANSITIONS: dict[str, frozenset[str]] = {
     "authorized": frozenset(
         {"dispatching", "canceled_before_send", "failed_before_send", "expired"}
     ),
-    "dispatching": frozenset({"running", "outcome_unknown", "failed_before_send"}),
+    # `result_captured` directly: a caller that cannot observe streaming
+    # never truthfully passes through `running`, and inventing the state
+    # would put a moment in the journal that nobody witnessed.
+    "dispatching": frozenset(
+        {"running", "result_captured", "outcome_unknown", "failed_before_send"}
+    ),
     "running": frozenset({"result_captured", "outcome_unknown", "failed_before_send"}),
     "result_captured": frozenset({"committed", "outcome_unknown"}),
     # Terminal. Nothing leaves these, and in particular nothing leaves
@@ -87,6 +98,49 @@ LIVE_STATES: frozenset[str] = frozenset(
 TERMINAL_STATES: frozenset[str] = frozenset(
     state for state, moves in _TRANSITIONS.items() if not moves
 )
+
+
+def serialize_response(response: Any) -> bytes:
+    """The provider's answer as bytes, whatever object the SDK handed back.
+
+    Deliberately forgiving. This runs at the one moment when losing the answer
+    is most expensive — it has just been paid for and not yet parsed — so a
+    serializer that raised on an unfamiliar object would turn "we have your
+    answer" into "we had your answer". Anything it cannot model as JSON is
+    written as its text, which is still the thing a person can read and a
+    later run can replay by hand.
+    """
+    for attribute in ("model_dump_json", "to_json", "json"):
+        method = getattr(response, attribute, None)
+        if callable(method):
+            try:
+                value = method()
+            except Exception:  # noqa: BLE001 - never lose a paid answer
+                continue
+            return value.encode("utf-8") if isinstance(value, str) else bytes(value)
+    try:
+        return json.dumps(response, ensure_ascii=False, default=str).encode("utf-8")
+    except (TypeError, ValueError):
+        return repr(response).encode("utf-8")
+
+
+def capture_artifact(journal_path: Path, operation_id: str, payload: bytes) -> str:
+    """Write the exact provider answer beside the journal, and name it.
+
+    Returns the path relative to the journal's directory, which is what the
+    entry stores: an absolute path is wrong on any other clone of a repository
+    whose whole point is being portable.
+
+    The bytes are written before the journal entry that references them moves
+    to `result_captured`. That ordering is the guarantee — a crash between the
+    two leaves an unreferenced file, which is litter, rather than an entry
+    pointing at an answer that was never written, which is a lie.
+    """
+    directory = Path(journal_path).parent / ".pending"
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / f"{operation_id}.json"
+    atomic_write_bytes(target, payload)
+    return f".pending/{target.name}"
 
 
 def _now() -> str:

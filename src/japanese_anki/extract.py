@@ -412,6 +412,7 @@ def extract_candidates(
     mode: str | None = None,
     known: Sequence[str] = (),
     client: Any | None = None,
+    capture: Any | None = None,
 ) -> ExtractionResult:
     """The normalized response one file yields, or a stable diagnostic.
 
@@ -436,6 +437,10 @@ def extract_candidates(
             candidate_schema(),
             client,
             effort=claude_client.effort_for(model),
+            # Called with the exact answer before it is validated, so a
+            # caller can persist what was paid for even when the schema
+            # then rejects it.
+            capture=capture,
         )
     except ExtractError:
         raise

@@ -31,7 +31,7 @@ installed it.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -406,6 +406,7 @@ def parse_call(
     *,
     max_tokens: int = DEFAULT_MAX_TOKENS,
     effort: str | None = None,
+    capture: Callable[[Any], None] | None = None,
 ) -> CallResult:
     """One structured-output call, returning a :class:`CallResult`.
 
@@ -473,6 +474,12 @@ def parse_call(
                 f"{model} request failed mid-response: {exc}"
             ) from exc
         raise
+    if capture is not None:
+        # Before `_result_of`, deliberately. The answer is paid for the
+        # moment it arrives; a schema that rejects it must not also be what
+        # loses it. `docs/DESIGN.md`: the exact response is persisted as a
+        # pending artifact *before* parsing.
+        capture(response)
     return _result_of(response, schema, model)
 
 

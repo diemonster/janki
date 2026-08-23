@@ -31,6 +31,7 @@ KNOWN_KEYS: dict[str, tuple[str, ...]] = {
         "staging_dir",
         "media_dir",
         "kanji_file",
+        "operations_file",
         "patterns_file",
         "scan_inbox",
     ),
@@ -287,6 +288,7 @@ class ProjectConfig:
     kanji_file: Path
     #: What documents teach, inferred and reviewed before anything uses it.
     patterns_file: Path
+    operations_file: Path
     scan_inbox: Path
     default_deck_name: str
     default_deck_id: int
@@ -386,6 +388,9 @@ class ProjectConfig:
             staging_dir=project_path(_str(data, "paths", "staging_dir", "data/staging")),
             media_dir=project_path(_str(data, "paths", "media_dir", "data/media")),
             kanji_file=project_path(_str(data, "paths", "kanji_file", "data/kanji.json")),
+            operations_file=project_path(
+                _str(data, "paths", "operations_file", "data/operations.json")
+            ),
             patterns_file=project_path(
                 _str(data, "paths", "patterns_file", "data/patterns.json")
             ),

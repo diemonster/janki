@@ -16,8 +16,9 @@ import pytest
 import yaml
 
 from conftest import seed_prompts
-from japanese_anki import cli, extract, patterns, prompts
+from japanese_anki import cli, extract, operations, patterns, prompts
 from japanese_anki.claude_client import CallResult, Refusal
+from japanese_anki.errors import JankiError
 from japanese_anki.extract import ExtractError, build_records, known_ids, prompt_name
 from japanese_anki.inputs import PreparedInput
 from japanese_anki.models import VocabularyRecord, provisional_fields
@@ -1272,6 +1273,17 @@ def test_extract_force_replaces_reviewed_patterns_as_unreviewed(
     assert meta["pattern_set"]["review_run_id"] == meta["review_run_id"]
 
 
+def _is_operation_record(relative: Path) -> bool:
+    """The paid-operation journal and its captured answers.
+
+    Held apart from "durable artifacts" in byte-for-byte comparisons: these
+    files exist precisely to change when a paid call happens, including —
+    especially — when it fails.
+    """
+    parts = relative.parts
+    return "operations.json" in parts or ".pending" in parts
+
+
 def test_schema_validation_failure_preserves_forced_targets_byte_for_byte(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1292,7 +1304,7 @@ def test_schema_validation_failure_preserves_forced_targets_byte_for_byte(
     before = {
         path.relative_to(root): path.read_bytes()
         for path in root.rglob("*")
-        if path.is_file()
+        if path.is_file() and not _is_operation_record(path.relative_to(root))
     }
     assert target.relative_to(root) in before
     assert pattern_path.relative_to(root) in before
@@ -1341,9 +1353,25 @@ def test_schema_validation_failure_preserves_forced_targets_byte_for_byte(
     after = {
         path.relative_to(root): path.read_bytes()
         for path in root.rglob("*")
-        if path.is_file()
+        if path.is_file() and not _is_operation_record(path.relative_to(root))
     }
     assert after == before
+
+    # The one thing a failed paid call *must* leave behind. Excluding it above
+    # is not a loosening of the guarantee but the point of it: the durable
+    # artifacts a reviewer reads are untouched, while the journal records that
+    # money was spent and what came back, so the next run can tell "never sent"
+    # from "sent and refused".
+    journal = operations.OperationJournal.load(root / "data" / "operations.json")
+    states = sorted(op.state for op in journal.operations.values())
+    # The first run committed; the second was paid for and refused, and says so
+    # rather than vanishing.
+    assert states == ["committed", "outcome_unknown"], journal.operations
+    failed = next(
+        op for op in journal.operations.values() if op.state == "outcome_unknown"
+    )
+    assert failed.money_may_have_been_spent is True
+    assert failed.detail
 
 
 def test_extract_force_help_names_the_reviewed_pattern_reset(
@@ -1831,3 +1859,83 @@ def test_a_held_back_row_whose_text_values_are_zero_is_still_recorded(
     assert "meanings: 0" in note
     assert "context: 0" in note
     assert "page: 1" in note
+
+
+def test_an_interrupted_call_is_journaled_before_it_is_made(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The interval the journal exists for: the request is sent, the answer
+    never arrives, and the process has to be able to say afterwards that money
+    may have been spent. Before the journal there was nothing on disk that
+    could tell "never sent" from "sent and lost"."""
+    root = project(tmp_path)
+    source = source_pdf(tmp_path)
+
+    def connection_dies(*_args: object, **_kwargs: object) -> None:
+        raise JankiError("connection reset while streaming the answer")
+
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", connection_dies)
+
+    assert cli.main(["--root", str(root), "extract", "--yes", str(source)]) == 1
+
+    journal = operations.OperationJournal.load(root / "data" / "operations.json")
+    assert len(journal.operations) == 1
+    operation = next(iter(journal.operations.values()))
+    assert operation.state == "outcome_unknown"
+    assert operation.money_may_have_been_spent is True
+    assert operation.source_file == "lesson.pdf"
+    assert operation.request_fp
+    assert "connection reset" in operation.detail
+    # ...and it is what a person is told to look at.
+    assert journal.needing_attention() == [operation]
+
+    stderr = capsys.readouterr().err
+    assert "may already have been billed" in stderr
+    assert "second charge" in stderr
+    assert not (root / "staging").exists()
+
+
+def test_a_completed_extraction_leaves_a_committed_operation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A finished call is not something a person has to look at. It stays in
+    the journal as history, and stops being a question."""
+    root = project(tmp_path)
+    source = source_pdf(tmp_path)
+    monkeypatch.setattr(
+        cli.extract.claude_client, "parse_call", FakeCall(ok(candidate()))
+    )
+
+    assert cli.main(["--root", str(root), "extract", "--yes", str(source)]) == 0
+
+    journal = operations.OperationJournal.load(root / "data" / "operations.json")
+    operation = next(iter(journal.operations.values()))
+    assert operation.state == "committed"
+    assert journal.needing_attention() == []
+    assert (root / "data" / operation.artifact).exists()
+
+
+def test_the_authority_is_recorded_before_the_request_is_built(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ordering is the whole guarantee. If the journal entry appeared only
+    after a successful call, the crash it protects against would take the
+    record with it."""
+    root = project(tmp_path)
+    source = source_pdf(tmp_path)
+    seen: list[str] = []
+
+    def observe(*_args: object, **_kwargs: object) -> None:
+        journal = operations.OperationJournal.load(
+            root / "data" / "operations.json"
+        )
+        seen.extend(op.state for op in journal.operations.values())
+        raise JankiError("stopped after the journal was written")
+
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", observe)
+    cli.main(["--root", str(root), "extract", "--yes", str(source)])
+
+    # At the moment the provider was called, the journal already said so.
+    assert seen == ["dispatching"]

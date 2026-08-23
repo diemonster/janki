@@ -5,6 +5,7 @@ import dataclasses
 import hashlib
 import json
 import sys
+import uuid
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import ExitStack
@@ -23,6 +24,7 @@ from japanese_anki import (
     kanji,
     ledger,
     migrate,
+    operations,
     patterns,
     promote,
     prompts,
@@ -1914,17 +1916,104 @@ def command_extract(args: argparse.Namespace) -> int:
         return 1
 
     written = 0
+    journal = operations.OperationJournal.load(config.operations_file)
     for index, (item, target) in enumerate(
         zip(prepared, targets, strict=True)
     ):
-        result = extract.extract_candidates(
+        # Authority is recorded before the request exists, not after it
+        # succeeds. The interval this protects is the one where the money is
+        # spent and nothing on disk remembers: a crash between the send and the
+        # parse used to leave no way to tell "never sent" from "sent and lost".
+        operation_id = str(uuid.uuid4())
+        provenance = extract.prompt_provenance(
             item,
             model=model,
             style_guide=style_guide,
             system=system,
             mode=args.mode,
             known=skip_list,
+            source_sha256=source_fingerprints[index],
         )
+        journal.authorize(
+            operation_id,
+            kind="extract",
+            source_file=item.origin_path.name,
+            source_sha256=source_fingerprints[index],
+            request_fp=str(provenance["request_fingerprint"]),
+            model=model,
+        )
+        journal.advance(operation_id, "dispatching")
+
+        def _capture(response: Any, _id: str = operation_id) -> None:
+            relative = operations.capture_artifact(
+                config.operations_file,
+                _id,
+                operations.serialize_response(response),
+            )
+            journal.advance(_id, "result_captured", artifact=relative)
+
+        try:
+            result = extract.extract_candidates(
+                item,
+                model=model,
+                style_guide=style_guide,
+                system=system,
+                mode=args.mode,
+                known=skip_list,
+                capture=_capture,
+            )
+        except JankiError as exc:
+            held = operations.OperationJournal.load(
+                config.operations_file
+            ).operations.get(operation_id)
+            if held is not None and held.state == "result_captured":
+                # The answer arrived and something after it refused — a
+                # refusal, a truncation, a schema mismatch. Leaving the entry
+                # at `result_captured` is the truthful state: the paid bytes
+                # are on disk and a person has to decide what to do with them.
+                # Calling that "unknown" would hide an answer already bought.
+                print(
+                    f"The answer for {item.origin_path.name} arrived and was "
+                    f"saved before it was refused: {held.artifact}\n"
+                    f"  It has been paid for. Operation {operation_id}.",
+                    file=sys.stderr,
+                )
+            else:
+                marked = journal.advance(
+                    operation_id, "outcome_unknown", detail=str(exc)
+                )
+                # "Nothing was written" is about staging and is true. It is not
+                # the whole answer, and the missing half is the expensive one:
+                # whether this call was billed.
+                if marked.money_may_have_been_spent:
+                    print(
+                        f"This call may already have been billed — it was sent "
+                        f"and no answer was captured. Operation {operation_id}.\n"
+                        f"  Nothing was staged. Run 'janki status' to see it, "
+                        f"and re-run extract only if you accept a second "
+                        f"charge.",
+                        file=sys.stderr,
+                    )
+            raise
+
+        # The hook fires inside the client, before validation, which is where
+        # an unparseable-but-paid-for answer has to be caught. It is not the
+        # only path here though: a provider wrapper that never calls it would
+        # otherwise leave the entry at `dispatching` forever. An answer did
+        # arrive — it is in `result` — so record that, using the normalized
+        # value as the artifact when the exact bytes were not captured.
+        if operations.OperationJournal.load(
+            config.operations_file
+        ).operations[operation_id].state == "dispatching":
+            journal.advance(
+                operation_id,
+                "result_captured",
+                artifact=operations.capture_artifact(
+                    config.operations_file,
+                    operation_id,
+                    operations.serialize_response(result),
+                ),
+            )
         candidates = result.candidates
         built = extract.build_records(candidates, item, known)
         records = built.records
@@ -1963,6 +2052,9 @@ def command_extract(args: argparse.Namespace) -> int:
             meta["review_notes"] = extract.unusable_note(held)
         meta[CANDIDATE_ACCOUNTING_KEY] = built.candidate_accounting
         write_staging(target, records, meta, force=args.force)
+        # The exact answer became staging, so the journal entry has done
+        # its job and stops being something a person must look at.
+        journal.advance(operation_id, "committed")
         kept_reviewed_patterns = False
         # Reload inside the lock after the paid call. `patterns --review` uses
         # the same lock, so either its complete decision wins first and is
