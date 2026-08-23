@@ -20,12 +20,24 @@ exhaustive.
 For every candidate with source_kind set to prose, populate a non-empty
 inclusion_reason explaining why the source teaches or foregrounds that item.
 
-When a structured exercise, dialogue, or sentence grid contains complete
-Japanese sentences and is not an explicit vocabulary list or vocabulary table,
-treat those sentences as prose even if they are laid out in rows or columns.
-Apply prose candidate selection to those sentences and set those candidates'
-source_kind to prose. Keep source_units and model_reported_unit_count for
-explicit vocabulary lists and tables, using the exhaustive accounting above.
+An enumerated list is a list whatever its rows hold. When a section presents
+one item per row under a running number or bullet, account for every row in
+source_units, in source order, even when each row is a complete Japanese
+sentence and even when the section is titled as expressions or phrases rather
+than vocabulary. Accounting for a row is not the same as making a card for it:
+a row that teaches no reusable word or lexicalized phrase is still a unit, with
+the disposition non-vocabulary and a reason. Never skip an enumerated row on
+the grounds that its content reads as prose.
+
+When a structured exercise, dialogue, or sentence grid is not enumerated in
+that way — running dialogue, a fill-in grid, parallel columns without one
+numbered item per row — treat its sentences as prose even if they are laid out
+in rows or columns. Apply prose candidate selection to those sentences and set
+those candidates' source_kind to prose. A candidate drawn from an enumerated
+row may still take source_kind prose when what it teaches is a phrase; the
+enumeration governs the accounting, not the candidate's kind. Keep source_units
+and model_reported_unit_count for every enumerated list and every vocabulary
+table, using the exhaustive accounting above.
 A document can teach a grammar pattern and also yield vocabulary candidates.
 
 The aligned-material rules below apply only outside explicit vocabulary lists

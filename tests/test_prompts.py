@@ -602,17 +602,21 @@ def test_auto_extraction_routes_sentence_grids_through_card_selection() -> None:
     """
     text = " ".join(prompts.load(REPO_ROOT, "extract-auto").split())
 
+    # Narrowed after this rule cost 24 rows on a real source: it now applies to
+    # grids that are *not* enumerated. An enumerated list is accounted for row
+    # by row whatever its rows hold — see
+    # `test_auto_accounts_for_enumerated_rows_even_when_they_are_sentences`.
     assert (
-        "When a structured exercise, dialogue, or sentence grid contains "
-        "complete Japanese sentences and is not an explicit vocabulary list or "
-        "vocabulary table, treat those sentences as prose even if they are laid "
-        "out in rows or columns."
+        "When a structured exercise, dialogue, or sentence grid is not "
+        "enumerated in that way — running dialogue, a fill-in grid, parallel "
+        "columns without one numbered item per row — treat its sentences as "
+        "prose even if they are laid out in rows or columns."
     ) in text
     assert "Apply prose candidate selection to those sentences" in text
     assert "set those candidates' source_kind to prose" in text
     assert (
-        "Keep source_units and model_reported_unit_count for explicit vocabulary "
-        "lists and tables, using the exhaustive accounting above."
+        "Keep source_units and model_reported_unit_count for every enumerated "
+        "list and every vocabulary table, using the exhaustive accounting above."
     ) in text
     assert "account for every row in source_units" in text
     assert "Link each candidate unit to exactly one candidate" in text
@@ -1082,3 +1086,36 @@ def test_the_recorded_provenance_names_the_guide_that_was_sent(
     assert provenance["system_prompt_fingerprint"] == prompts.fingerprint(
         prompts.load(REPO_ROOT, "extract-prose")
     )
+
+
+def test_auto_accounts_for_enumerated_rows_even_when_they_are_sentences() -> None:
+    """A real extraction lost 24 rows to the clause this pins.
+
+    `medical-conditions-vocab.pdf` page 3, section "(3) Other useful
+    expressions", is a numbered list — 1. 熱があります through 24. ひりひりします.
+    The auto template said to treat a structured thing containing complete
+    Japanese sentences as prose, and prose selection is not exhaustive, so the
+    whole section was skipped without appearing under any disposition. The
+    coverage gate caught it; nothing else would have.
+
+    The distinguishing feature is enumeration, not whether a row holds a word
+    or a sentence. Accounting for a row is also not the same as making a card
+    for it — a row that teaches no reusable item is still a unit, with a
+    disposition and a reason.
+    """
+    text = " ".join(prompts.load(REPO_ROOT, "extract-auto").split())
+
+    assert "An enumerated list is a list whatever its rows hold." in text
+    assert "even when each row is a complete Japanese sentence" in text
+    assert (
+        "Never skip an enumerated row on the grounds that its content reads "
+        "as prose."
+    ) in text
+    # The original intent survives: an unenumerated grid is still prose.
+    assert (
+        "running dialogue, a fill-in grid, parallel columns without one "
+        "numbered item per row"
+    ) in text
+    # Accounting for a row is not the same as making a card for it.
+    assert "Accounting for a row is not the same as making a card for it" in text
+    assert "the disposition non-vocabulary and a reason" in text

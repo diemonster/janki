@@ -166,6 +166,47 @@
     },
     "review_run_id": "23e4bfd9-6319-4795-84f1-a9a28feade89"
   },
+  "medical-conditions-vocab.pdf": {
+    "kind": "vocabulary",
+    "title": "Medical Vocabulary and Phrases (MLC BP1-21)",
+    "reviewed": false,
+    "patterns": [
+      {
+        "template": "____ が痛いです。 (____ ga itai desu.)",
+        "gloss": "I have a pain in my ___ ; the body part is marked with が.",
+        "examples": [
+          "お腹が痛いです。",
+          "腰が痛いです。"
+        ],
+        "where": "p.1 (1) Useful structures / [Common expression]"
+      },
+      {
+        "template": "____ が痒いです。 (____ ga kayui desu.)",
+        "gloss": "My ___ itches; the body part is marked with が.",
+        "examples": [],
+        "where": "p.1 (1) Useful structures"
+      },
+      {
+        "template": "____ をください。 (____ o kudasai.)",
+        "gloss": "Please give me ___ ; used when asking for an item at a hospital or drugstore.",
+        "examples": [],
+        "where": "p.4 (4) At the hospital or drugstore"
+      }
+    ],
+    "prompt_provenance": {
+      "source_sha256": "2b54834d5cd5f1061b013a238bcbf55de2c9f90c178d1ec7f38b7836b70de0d1",
+      "mode": "auto",
+      "provider": "anthropic",
+      "model": "claude-opus-5",
+      "response_schema_version": 5,
+      "response_schema_fingerprint": "3b9963cc313ede5b40a96328ecf57a5a87e6237200510c020225f70d15394382",
+      "system_prompt_fingerprint": "c059138c1fcdad65ef676bf736b9671141b0cc3fc664fd4830753c02836362be",
+      "style_guide_fingerprint": "220c73a9cdf9487bf74daf734d6b448b3029056855d3b8d72ab40faf27276f12",
+      "user_prompt_fingerprint": "6ab309b4b7cdb61601b40f85bef392dae47318b69fa3e975160ec3070d097703",
+      "request_fingerprint": "27435645b16b0fef176c27a1a03c7458314a90aa5ac28a847fbe7e7f7dc59bd2"
+    },
+    "review_run_id": "88b30910-53e1-4734-b0ab-07d5379df07e"
+  },
   "teform_song.pdf": {
     "kind": "pattern",
     "title": "Te-form Song / How to Conjugate Verbs into Te-form (NIHONGODEKITA)",
