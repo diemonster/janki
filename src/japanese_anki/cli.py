@@ -4340,6 +4340,19 @@ def command_status(args: argparse.Namespace) -> int:
     )
     groups = status.find_duplicates(universe.records) if args.duplicates else []
 
+    if ids_only and args.operations:
+        # An operation id is not a record id, and the two are pipeable into
+        # entirely different things. Printing the collection's record ids for
+        # an operations query — which is what the shared fallback did — looks
+        # like a valid answer and is wrong in a way nothing downstream would
+        # notice.
+        print(
+            "error: --operations has no --format ids form: an operation id is "
+            "not a record id. Use 'janki status --operations' to read them.",
+            file=sys.stderr,
+        )
+        return 1
+
     if ids_only:
         for record_id in status.selected_ids(
             report,
@@ -4348,7 +4361,8 @@ def command_status(args: argparse.Namespace) -> int:
             missing_audio=args.missing_audio,
             duplicates=args.duplicates,
             staged=args.staged,
-            provisional=args.unsettled,
+            provisional=args.unsettled is not None,
+            provisional_field=args.unsettled or "",
         ):
             print(record_id)
         return 0
@@ -4370,7 +4384,7 @@ def command_status(args: argparse.Namespace) -> int:
     if args.operations:
         for line in status.format_operations(report):
             print(line)
-    if args.unsettled:
+    if args.unsettled is not None:
         for line in status.format_provisional(report):
             print(line)
     if not (
@@ -4378,7 +4392,7 @@ def command_status(args: argparse.Namespace) -> int:
         or args.missing_audio
         or args.duplicates
         or args.staged
-        or args.unsettled
+        or args.unsettled is not None
         or args.operations
     ):
         print(
@@ -4920,11 +4934,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     status_parser.add_argument(
         "--unsettled",
-        action="store_true",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="FIELD",
         help=(
             "List the records still carrying a model's guess in a field nobody "
-            "has confirmed. Pipe with --format ids into "
-            "'enrich --ai --force-fields meanings' to settle them."
+            "has confirmed. Name a field (meanings, part_of_speech) to narrow "
+            "it: what settles them differs, so 'status --unsettled meanings "
+            "--format ids' is the list to pipe into "
+            "'enrich --ai --force-fields meanings'."
         ),
     )
     status_parser.add_argument(

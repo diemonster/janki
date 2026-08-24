@@ -61,7 +61,8 @@ owns:
   and a gloss list keyed on spelling cannot tell おたふく "mumps" from the
   identically-spelled お多福 "homely woman". Only a person or `enrich --ai`,
   both of which read the card, may settle a provisional meaning, and
-  `status --unsettled` is how you find the ones still waiting — a mark nobody
+  `status --unsettled [field]` is how you find the ones still waiting, and
+  what settles each — a mark nobody
   can see cannot do the job it exists for.
   The line is drawn at *sense*: everything still granted above is a property of
   the word rather than of the meaning taught, so an entry resolved on matching

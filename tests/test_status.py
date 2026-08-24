@@ -2283,3 +2283,126 @@ def test_a_saved_reply_is_named_so_it_can_be_looked_at(
     assert artifact in out
     # Not the retry warning: this one was answered, and the answer is on disk.
     assert "risks a second charge" not in out
+
+
+def test_the_pipe_can_be_narrowed_to_one_field(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """What settles each field differs, so one list piped into one pass is
+    wrong for half of it.
+
+    `enrich --ai` writes only `AI_FIELDS`, which excludes `part_of_speech` — a
+    pos-marked record piped there buys a call that cannot clear the mark. And
+    piping it with `--force-fields meanings` puts a *curated* meaning up for
+    replacement on a record that was only ever marked for its part of speech.
+    """
+    root = _project(
+        tmp_path,
+        [
+            _guessed("おたふく", "おたふく", meanings=["mumps"]),
+            # Marked for its part of speech alone: `mark_provisional` marks
+            # every non-empty semantic field, so a record with meanings would
+            # legitimately be in both lists and could not show the narrowing.
+            _guessed("話す", "はなす", meanings=[], part_of_speech="noun"),
+        ],
+        {"vocabulary": _sourced_deck()},
+    )
+
+    assert _status(root, "--unsettled", "meanings", "--format", "ids") == 0
+    meanings = capsys.readouterr().out.split()
+
+    assert _status(root, "--unsettled", "part_of_speech", "--format", "ids") == 0
+    parts = capsys.readouterr().out.split()
+
+    assert "word:おたふく:おたふく" in meanings
+    assert "word:話す:はなす" in parts
+    assert set(meanings) & set(parts) == set()
+
+    # And unnarrowed is still the union, for the person who wants to see them all.
+    assert _status(root, "--unsettled", "--format", "ids") == 0
+    assert set(capsys.readouterr().out.split()) == set(meanings) | set(parts)
+
+
+def test_the_detail_names_what_settles_each_field(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A count somebody cannot act on is barely better than silence, and the
+    action is not the same for both fields."""
+    root = _project(
+        tmp_path,
+        [
+            _guessed("おたふく", "おたふく", meanings=["mumps"]),
+            _guessed("話す", "はなす", part_of_speech="noun"),
+        ],
+        {"vocabulary": _sourced_deck()},
+    )
+
+    assert _status(root, "--unsettled") == 0
+
+    out = capsys.readouterr().out
+    assert "enrich --ai --force-fields meanings" in out
+    assert "enrich --jpdb" in out
+
+
+def test_operations_have_no_ids_form(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An operation id is not a record id, and the two pipe into entirely
+    different things. The shared fallback printed the whole collection's record
+    ids for an operations query — an answer that looks valid and is wrong in a
+    way nothing downstream would catch."""
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    _stranded(root)
+
+    assert _status(root, "--operations", "--format", "ids") == 1
+
+    captured = capsys.readouterr()
+    assert "word:話す:はなす" not in captured.out
+    assert "not a record id" in captured.err
+
+
+def test_the_detail_says_so_when_nothing_is_unsettled(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--unsettled` on a clean collection has to answer. Printing nothing is
+    indistinguishable from the flag not working, and this branch had never
+    been executed by a test."""
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+
+    assert _status(root, "--unsettled") == 0
+
+    # The detail formatter's own sentence, not the summary line's — those
+    # share an opening, and asserting the shared half passes when the detail
+    # returns nothing at all.
+    assert (
+        "every extracted field has been confirmed, edited, or settled"
+        in capsys.readouterr().out
+    )
+
+
+def test_the_fields_are_grouped_in_a_stable_order(tmp_path: Path) -> None:
+    """Grouped by sorted field name, not by whichever record happened to come
+    first. Left in encounter order the same collection prints its groups in a
+    different order after an unrelated edit, and every existing test happened
+    to have an encounter order that was already sorted."""
+    root = _project(
+        tmp_path,
+        [
+            # `collect_records` sorts by id, so file order proves nothing. To
+            # tell sorted-by-field from encounter order, the record that sorts
+            # *first* (おたふく < 話す) has to carry the field that sorts last.
+            _guessed("おたふく", "おたふく", meanings=[], part_of_speech="noun"),
+            _guessed("話す", "はなす", meanings=["to speak"]),
+        ],
+        {"vocabulary": _sourced_deck()},
+    )
+    config = ProjectConfig.load(root)
+    report = status_module.build_report(
+        config,
+        status_module.collect_records(config),
+        ledger.load(root / "ledger.json"),
+        word_provider=None,
+        example_provider=None,
+    )
+
+    assert list(report.provisional) == ["meanings", "part_of_speech"]

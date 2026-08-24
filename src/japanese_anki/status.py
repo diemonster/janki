@@ -739,7 +739,7 @@ def format_report(report: StatusReport) -> list[str]:
             + ", ".join(
                 f"{name} {len(ids)}" for name, ids in report.provisional.items()
             )
-            + " (a model's guess; settle by editing it or with 'enrich --ai')"
+            + " (a model's guess; see --unsettled for what settles each)"
         )
     else:
         lines.append("Unsettled model claims: none")
@@ -894,6 +894,20 @@ def format_unexported(report: StatusReport) -> list[str]:
     return lines
 
 
+#: What actually settles each provisional field, because they differ and the
+#: difference costs money to get wrong.
+#:
+#: `enrich --ai` can only settle a field it writes, and `AI_FIELDS` does not
+#: include `part_of_speech` — so piping a pos-marked record into it buys a
+#: call that cannot clear the mark. Worse, doing that with
+#: `--force-fields meanings` puts a *curated* meaning up for replacement on a
+#: record that was only ever marked for its part of speech.
+SETTLES = {
+    "meanings": "a person editing the card, or 'enrich --ai --force-fields meanings'",
+    "part_of_speech": "'enrich --jpdb', which reconciles it against the exact word",
+}
+
+
 def format_operations(report: StatusReport) -> list[str]:
     """Every paid call still waiting on a decision, and what it left behind.
 
@@ -941,6 +955,7 @@ def format_provisional(report: StatusReport) -> list[str]:
     lines: list[str] = []
     for name, ids in report.provisional.items():
         lines.append(f"Unsettled {name} ({len(ids)}):")
+        lines.append(f"  settled by: {SETTLES[name]}")
         lines.extend(f"  {record_id}" for record_id in ids)
     return lines
 
@@ -1380,6 +1395,7 @@ def selected_ids(
     duplicates: bool = False,
     staged: bool = False,
     provisional: bool = False,
+    provisional_field: str = "",
 ) -> list[str]:
     """The ids the chosen detail flags name, deduplicated, in report order.
 
@@ -1400,7 +1416,14 @@ def selected_ids(
         for item in report.staged:
             chosen.extend(item.ids)
     if provisional:
-        chosen.extend(report.provisional_ids)
+        # Narrowed to one field when asked, because the remedies differ: a
+        # single list piped into the meanings pass spends money on records
+        # that pass cannot settle.
+        chosen.extend(
+            report.provisional.get(provisional_field, [])
+            if provisional_field
+            else report.provisional_ids
+        )
     if not (unexported or missing_audio or duplicates or staged or provisional):
         chosen = list(report.record_ids)
     return list(dict.fromkeys(chosen))

@@ -1448,3 +1448,182 @@ def test_the_exact_bytes_reach_disk_before_the_journal_claims_they_did(
     ]
     assert entry.state == "dispatching"
     assert entry.artifact == ""
+
+
+# --- the preview must ask the rule the build asks ---------------------------
+#
+# Every one of these reproduces a case where a simplified copy of a deck rule
+# answered differently from the build. A membership answer that is confidently
+# wrong is worse than none: it tells somebody a card is in a package that will
+# never hold it, or leaves a package needing a rebuild unnamed.
+
+
+def _drill_deck(**overrides: object) -> dict[str, object]:
+    deck: dict[str, object] = {
+        "kind": "conjugation",
+        "form": "te_form",
+        "name": "Japanese::Te-form Practice",
+        "deck_id": 2059400114,
+        "model_id": 1607392351,
+        "model_name": "Japanese Pattern",
+        "output": "teform-drill.apkg",
+        "source": "../vocabulary.json",
+    }
+    deck.update(overrides)
+    return deck
+
+
+def test_a_drill_deck_honours_the_ids_it_excludes(tmp_path: Path) -> None:
+    """`shipping_records` applies `exclude_ids` before conjugating, and the
+    deck files in this repo carry hand-written ones. Asking `drill_cards`
+    alone said yes to a card the build drops."""
+    config = _project(
+        tmp_path, {"teform-drill": _drill_deck(exclude_ids=["word:話す:はなす"])}
+    )
+
+    [item] = deck_membership(config, _record())
+
+    assert item.takes is False
+    assert "excludes this card by name" in item.refusal
+
+
+def test_a_drill_deck_honours_the_exact_list_it_drills(tmp_path: Path) -> None:
+    config = _project(
+        tmp_path, {"teform-drill": _drill_deck(include_ids=["word:食べる:たべる"])}
+    )
+
+    [item] = deck_membership(config, _record())
+
+    assert item.takes is False
+    assert "exact list" in item.refusal
+
+
+def test_a_drill_deck_with_no_form_still_drills_the_default(tmp_path: Path) -> None:
+    """The build defaults a missing `form:` to te-form. Refusing every record
+    for a deck that in fact ships them is the blind spot this preview exists
+    to close, pointing the other way."""
+    deck = _drill_deck()
+    del deck["form"]
+    config = _project(tmp_path, {"teform-drill": deck})
+
+    [item] = deck_membership(config, _record())
+
+    assert item.takes is True
+
+
+@pytest.mark.parametrize("written", ["Conjugation", " conjugation ", "CONJUGATION"])
+def test_a_deck_kind_is_read_the_way_every_command_reads_it(
+    tmp_path: Path, written: str
+) -> None:
+    """`deck_kind` strips and lowercases. Comparing the raw string sent
+    `kind: Conjugation` down the vocabulary path, where a deck declaring no
+    tags claims *everything* — so a noun previewed as landing in a drill
+    deck."""
+    config = _project(tmp_path, {"teform-drill": _drill_deck(kind=written)})
+    noun = _record(
+        id="word:本:ほん", expression="本", reading="ほん", meanings=["book"],
+        part_of_speech="noun", verb_group="",
+    )
+
+    [item] = deck_membership(config, noun)
+
+    assert item.kind == "conjugation"
+    assert item.takes is False
+
+
+def test_a_kind_janki_cannot_dispatch_is_unknown_not_yes(tmp_path: Path) -> None:
+    """`kind: patern` is refused by `build`, `validate` and `status`. Reading
+    the raw string let it fall to the vocabulary path and answer *yes* — the
+    unknown/no distinction inverted in the worse direction."""
+    config = _project(tmp_path, {"typo": _drill_deck(kind="patern")})
+
+    [item] = deck_membership(config, _record())
+
+    assert item.unreadable
+    assert item.takes is False
+    assert item.refusal is None
+
+
+def test_a_drill_deck_is_not_judged_by_the_word_decks_validator(
+    tmp_path: Path,
+) -> None:
+    """`resolve_deck_records` validates a *vocabulary* deck. Running it over a
+    conjugation deck refuses shapes that deck builds from perfectly well, and
+    would report a package needing rebuild as unreadable."""
+    config = _project(tmp_path, {"teform-drill": _drill_deck(max_meanings="all")})
+
+    [item] = deck_membership(config, _record())
+
+    assert not item.unreadable, item.unreadable
+    assert item.takes is True
+
+
+def test_decks_in_subdirectories_are_not_missed(tmp_path: Path) -> None:
+    """`build --all` and `validate` walk the deck tree. Listing one level meant
+    a deck that ships the card was silently absent from an answer whose
+    docstring says "every deck"."""
+    config = _project(tmp_path, {"top": _word_deck(include_tags=["lesson-8"])})
+    nested = tmp_path / "decks" / "archive"
+    nested.mkdir()
+    # `source:` resolves against the deck file's own directory, so a deck one
+    # level down needs one more `..` to name the same collection.
+    (nested / "old.yaml").write_text(
+        yaml.safe_dump(
+            {"deck": _word_deck(include_tags=["lesson-8"],
+                                source="../../vocabulary.json")},
+            allow_unicode=True, sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    found = deck_membership(config, _record())
+
+    assert {item.stem for item in found} == {"top", "old"}
+    assert all(item.takes for item in found)
+
+
+def test_a_deck_that_takes_everything_is_distinguished_from_one_that_filters(
+    tmp_path: Path,
+) -> None:
+    """The negative half of `unfiltered`. Flagged on every deck, the warning
+    that "adding a word puts it here whether or not you meant it to" stops
+    meaning anything."""
+    config = _project(
+        tmp_path,
+        {
+            "everything": _word_deck(),
+            "filtered": _word_deck(include_tags=["lesson-8"]),
+            "by-exclusion": _word_deck(exclude_tags=["draft"]),
+        },
+    )
+
+    found = _by_stem(config, _record())
+
+    assert found["everything"].unfiltered is True
+    assert found["filtered"].unfiltered is False
+    # A deck that only *excludes* still declares a filter: it does not claim
+    # every record, it claims every record but some.
+    assert found["by-exclusion"].unfiltered is False
+
+
+def test_one_unreadable_deck_does_not_truncate_the_listing(
+    tmp_path: Path,
+) -> None:
+    """The listing continues past a broken file. Stopping there would answer
+    "every deck" with a prefix, and the decks after it are exactly the ones
+    nobody would then think to check."""
+    config = _project(
+        tmp_path,
+        {
+            "a-broken": _word_deck(),
+            "b-good": _word_deck(include_tags=["lesson-8"]),
+        },
+    )
+    (tmp_path / "decks" / "a-broken.yaml").write_text(
+        "deck: [1, 2, 3]\n", encoding="utf-8"
+    )
+
+    found = _by_stem(config, _record())
+
+    assert found["a-broken"].unreadable
+    assert found["b-good"].takes is True
