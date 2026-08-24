@@ -4507,3 +4507,102 @@ def test_a_row_the_second_accounting_call_flags_is_not_promoted(
     # Flagged as already archived, so nothing landed — and the live review was
     # pruned of it rather than left behind.
     assert load_records(root / "vocabulary.json") == []
+
+
+# --- saying what would happen, and doing none of it -------------------------
+
+
+def test_a_dry_run_writes_nothing_and_sends_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A question about what *would* happen must not spend and must not write.
+    The whole tree is compared, because a preview that pruned or annotated
+    would turn asking into a half-finished promote."""
+    monkeypatch.delenv("JPDB_API_KEY", raising=False)
+    root = project(tmp_path, [])
+    staged = root / "staging" / "in.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    write_staging(staged, [record()], {"source_file": "lesson.pdf"})
+    before = {
+        item: item.read_bytes() for item in sorted(root.rglob("*")) if item.is_file()
+    }
+
+    assert cli.main(["--root", str(root), "promote", str(staged), "--dry-run"]) == 0
+
+    after = {
+        item: item.read_bytes() for item in sorted(root.rglob("*")) if item.is_file()
+    }
+    assert after == before
+    assert "話す" in capsys.readouterr().out
+
+
+def test_a_dry_run_names_the_meanings_your_collection_keeps(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The existing-wins surprise is the reason to look before adding: promote
+    keeps the meaning already on the card, and this lesson's wording becomes
+    source evidence rather than card text. A count alone does not warn anybody
+    about that."""
+    root = project(tmp_path, [record(meanings=["the wording already on my card"])])
+    staged = root / "staging" / "in.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    write_staging(staged, [record(meanings=["what this lesson says"])],
+                  {"source_file": "lesson.pdf"})
+
+    assert cli.main(["--root", str(root), "promote", str(staged), "--dry-run"]) == 0
+
+    out = capsys.readouterr().out
+    assert "keeps your meaning: the wording already on my card" in out
+    assert "this source said:   what this lesson says" in out
+
+
+def test_a_dry_run_exits_non_zero_when_the_source_cannot_be_added(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The exit code answers "would this promote", so `--dry-run && promote`
+    means what it looks like."""
+    root = project(tmp_path, [])
+    staged = root / "staging" / "broken.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    staged.write_text("records: [oh dear\n", encoding="utf-8")
+
+    assert cli.main(["--root", str(root), "promote", str(staged), "--dry-run"]) == 1
+
+    assert "cannot be added yet" in capsys.readouterr().out
+
+
+def test_a_dry_run_admits_it_did_not_ask_the_dictionary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A row listed as landing may still be held when the source is really
+    added, because the reading check costs a lookup per row and a preview does
+    not spend one. Listing cards without saying so is the lie the flag exists
+    to prevent."""
+    monkeypatch.delenv("JPDB_API_KEY", raising=False)
+    root = project(tmp_path, [])
+    staged = root / "staging" / "in.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    write_staging(staged, [record()], {"source_file": "lesson.pdf"})
+
+    assert cli.main(["--root", str(root), "promote", str(staged), "--dry-run"]) == 0
+
+    assert "Readings were not checked" in capsys.readouterr().out
+
+
+def test_a_dry_run_reports_rows_an_earlier_run_already_added(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Otherwise a retry looks like it would add the same cards twice."""
+    root = project(tmp_path, [])
+    staged = root / "staging" / "in.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    incoming = record()
+    write_staging(staged, [incoming], {"source_file": "lesson.pdf"})
+    _records, meta = read_staging(staged)
+    done = staged.parent / "done"
+    done.mkdir(parents=True, exist_ok=True)
+    write_staging(done / staged.name, [incoming], promote.archive_meta(meta, 1))
+
+    assert cli.main(["--root", str(root), "promote", str(staged), "--dry-run"]) == 0
+
+    assert "Already added by an earlier run: 1" in capsys.readouterr().out

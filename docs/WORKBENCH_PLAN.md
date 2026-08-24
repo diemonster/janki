@@ -258,6 +258,14 @@ there is a second adapter to justify its shape. Do not design it speculatively.
   `tests/test_application_services.py` (new).
 - **Ships when:** `janki status` and every existing command still pass their
   tests unchanged.
+- **One knowing deviation from that bar**, recorded here rather than left in a
+  commit message. `command_promote` decides offline before asking whether to
+  spend, so five gates that used to refuse *after* `--accept-coverage` bought
+  its verdict — patterns, rewritable, collection, accounting, merge — now
+  refuse before it. The old order paid and then refused, and for the
+  rewritable gate it paid, refused, and lost the paid verdict when the
+  approval write failed. No file that promoted before is refused now; what
+  changed is only that a doomed run stops before spending.
 
 ### [x] W1.2 `janki workbench` — the read-only dashboard
 

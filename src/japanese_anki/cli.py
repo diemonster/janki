@@ -43,8 +43,10 @@ from japanese_anki.application.promotion import (
     POST_READING_GATES,
     AiLedgerHandoffIncomplete,
     PromotionDecision,
+    PromotionPlan,
     archive_for_run,
     decide_promotion,
+    project_promotion,
     staging_wire,
     unreadable_deck_warning,
     validate_record_archive,
@@ -3094,6 +3096,66 @@ def _finish_record_review(
                 return done, removed
 
 
+def _print_promotion_plan(plan: PromotionPlan) -> int:
+    """Say what adding this source would do, having done none of it.
+
+    The exit code answers "would this promote", so `promote --dry-run && ...`
+    means what it looks like.
+    """
+    if plan.is_blocked:
+        print(f"{plan.source} cannot be added yet.")
+        print(f"  {plan.blocked}")
+        return 1
+
+    for warning in plan.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+
+    if plan.already_archived:
+        print(
+            f"Already added by an earlier run: {len(plan.already_archived)} "
+            "card(s). Promoting removes them from the review rather than "
+            "adding them twice."
+        )
+    if not plan.landing and not plan.held:
+        print(f"Nothing to add from {plan.source}.")
+        return 0
+
+    if plan.adding:
+        print(f"New cards ({len(plan.adding)}):")
+        for card in plan.adding:
+            print(f"  {card.landing.expression} [{card.landing.reading}]")
+    if plan.merging:
+        print(f"Cards you already have ({len(plan.merging)}):")
+        for card in plan.merging:
+            print(f"  {card.landing.expression} [{card.landing.reading}]")
+            if card.keeps_existing_meanings:
+                # The surprise worth spending a line on: promote is
+                # existing-wins, so this lesson's wording becomes source
+                # evidence rather than card text.
+                print(f"      keeps your meaning: {'; '.join(card.landing.meanings)}")
+                print(f"      this source said:   {'; '.join(card.staged.meanings)}")
+    if plan.reminted:
+        print(f"Filed under a different word ({len(plan.reminted)}):")
+        for was, now in plan.reminted.items():
+            print(f"  {was}  ->  {now}")
+        print(
+            "  Anki matches on that name, so any card already studied under "
+            "the old one stays as it is and this becomes a new card."
+        )
+    if plan.held:
+        print(f"Held back ({len(plan.held)}):")
+        for card in plan.held:
+            reason = card.reason or "no reason recorded"
+            print(f"  {card.record.expression} [{card.record.reading}] — {reason}")
+
+    if plan.readings_unchecked and plan.landing:
+        print(
+            "Readings were not checked against jpdb, because a preview does "
+            "not spend. Adding for real may hold back a card listed above."
+        )
+    return 0
+
+
 def command_promote(args: argparse.Namespace) -> int:
     """Move a reviewed staging file's records into the normalized collection.
 
@@ -3121,6 +3183,12 @@ def command_promote(args: argparse.Namespace) -> int:
     # JPDB_API_KEY can mask it, and `--accept-coverage` is answered before any
     # dictionary lookup is worth paying for.
     decision = offline()
+
+    if args.dry_run:
+        # Offline on purpose: a question about what *would* happen must not
+        # spend, and `readings_unchecked` is how the answer admits what it
+        # therefore does not know.
+        return _print_promotion_plan(project_promotion(decision))
 
     if args.accept_coverage or args.reaccept_coverage:
         if decision.is_blocked and decision.gate != "coverage":
@@ -4766,6 +4834,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     promote_parser.add_argument(
         "file", type=_path, metavar="FILE", help="The staging file to promote."
+    )
+    promote_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "Say what adding this source would do — which cards are new, "
+            "which merge into cards you already have and keep their existing "
+            "meanings, which are held back and why — and do none of it. "
+            "Sends nothing and writes nothing. Exits non-zero if the source "
+            "could not be added."
+        ),
     )
     promote_parser.add_argument(
         "--accept-coverage",
