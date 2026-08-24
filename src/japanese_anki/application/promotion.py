@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from japanese_anki import enrich, ledger, patterns, promote, staging
+from japanese_anki import enrich, jpdb, ledger, patterns, promote, staging
 from japanese_anki import status as status_module
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
@@ -483,7 +483,12 @@ def _unrewritable(path: Path) -> str:
 
 
 def plan_promotion(
-    config: ProjectConfig, staging_path: Path, *, source: str = ""
+    config: ProjectConfig,
+    staging_path: Path,
+    *,
+    source: str = "",
+    client: jpdb.JpdbClient | None = None,
+    skip_reading_check: bool | None = None,
 ) -> PromotionPlan:
     """What `janki promote` would do to this staging file, without doing it.
 
@@ -496,7 +501,19 @@ def plan_promotion(
     refusal they should have seen.
 
     One gap, named rather than hidden: see `PromotionPlan.readings_unchecked`.
+    It is a gap only by default. Pass a `client` — as the command does, having
+    already decided to spend the lookups — and the dictionary witness runs
+    here too, `readings_unchecked` says so, and the plan becomes the whole
+    decision rather than most of it. A page refresh passes nothing and gets
+    the offline answer; there is one code path either way, which is the point.
     """
+    # Handing over a client and still getting the offline answer is the shape
+    # a caller would never intend, so it is not spellable by accident: the
+    # check follows the client unless someone says otherwise, which is what
+    # the command's own `--skip-reading-check` does.
+    if skip_reading_check is None:
+        skip_reading_check = client is None
+
     staging_path = staging_path.resolve()
     name = source or staging_path.name
 
@@ -599,13 +616,11 @@ def plan_promotion(
     except JankiError as exc:
         return blocked(exc)
 
-    # The one check this preview declines to make, and the flag that says so,
-    # travel together — the truth is this variable, not a default forty lines
-    # away that an online variant would have to remember to change.
-    skip_reading_check = True
+    # The check and the flag that reports it travel together, so a caller
+    # cannot get one without the other.
     result = promote.check_readings(
         work,
-        client=None,
+        client=client,
         skip_reading_check=skip_reading_check,
         already_stored=stored_ids,
         remint_blocked=bool(unreadable),

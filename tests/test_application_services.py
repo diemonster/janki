@@ -1627,3 +1627,45 @@ def test_one_unreadable_deck_does_not_truncate_the_listing(
 
     assert found["a-broken"].unreadable
     assert found["b-good"].takes is True
+
+
+def test_a_plan_holding_the_dictionary_decides_what_the_command_decides(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The plan is a preview only because it declines the paid lookup. Given
+    the same dictionary the command uses, it has to reach the same verdict on
+    every row — otherwise the browser's "add this source" and the terminal's
+    would disagree about which cards a reading holds back, which is the one
+    decision `promote` makes that a person cannot see coming.
+
+    A reading no entry lists is the case that separates them: offline it is
+    invisible, and with a dictionary it holds the row.
+    """
+    from test_promote import FakeJpdb, client_for
+
+    path = _staged(tmp_path, "reading_holds", filename="holds.pdf")
+    config = ProjectConfig.load(tmp_path)
+
+    # Nothing parses: every reading is one no entry lists.
+    silent = FakeJpdb({})
+
+    offline = plan_promotion(config, path)
+    consulted = plan_promotion(config, path, client=client_for(silent))
+
+    assert offline.readings_unchecked is True
+    assert consulted.readings_unchecked is False
+    # The dictionary holds back rows the offline plan was willing to land, and
+    # the flag is what warned that it might.
+    assert len(consulted.held) >= len(offline.held)
+    held_ids = {card.record.id for card in consulted.held}
+    assert held_ids >= {card.record.id for card in offline.held}
+
+    # And the command, given the same dictionary, lands exactly what the plan
+    # said it would.
+    monkeypatch.setattr(cli.jpdb, "JpdbClient", lambda *a, **kw: client_for(silent))
+    monkeypatch.setattr(cli.jpdb, "api_key_from_env", lambda: "test-key")
+    assert cli.main(["--root", str(tmp_path), "promote", str(path)]) == 0
+
+    stored = {record.id for record in load_records(tmp_path / "vocabulary.json")}
+    assert stored == {card.landing.id for card in consulted.landing}
+    assert not (stored & held_ids)
