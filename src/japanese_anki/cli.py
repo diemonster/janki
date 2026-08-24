@@ -43,7 +43,9 @@ from japanese_anki.application.promotion import (
     AiLedgerHandoffIncomplete,
     archive_for_run,
     inside_archive,
+    record_review_snapshot,
     staged_ai_enrichment,
+    staging_wire,
     unreadable_deck_warning,
     validate_record_archive,
 )
@@ -2807,17 +2809,6 @@ def _model_accepts_coverage(
     return True
 
 
-def _staging_wire(path: Path) -> bytes:
-    """Read the exact live-review bytes used by pattern-only promotion's CAS."""
-    try:
-        return path.read_bytes()
-    except OSError as exc:
-        raise PromoteError(
-            f"[staging-review-stale] could not snapshot {path}: "
-            f"{exc.strerror or exc}. Nothing was archived."
-        ) from exc
-
-
 def _pattern_only_archive_meta(
     meta: Mapping[str, Any], reviewed: patterns.PatternSet
 ) -> dict[str, Any]:
@@ -2840,7 +2831,7 @@ def _complete_pattern_only_review(
 ) -> int:
     """Archive one reviewed zero-record v3 run as a locked CAS transaction."""
     with exclusive_path_lock(path):
-        current_wire = _staging_wire(path)
+        current_wire = staging_wire(path)
         records, meta = read_staging(path)
         if current_wire != expected_wire or records or dict(meta) != dict(expected_meta):
             raise PromoteError(
@@ -2946,16 +2937,6 @@ def _complete_pattern_only_review(
     return 0
 
 
-def _record_review_snapshot(
-    path: Path,
-) -> tuple[bytes, list[VocabularyRecord], dict[str, Any]]:
-    """Read one exact live-review snapshot while its writer lock is held."""
-    with exclusive_path_lock(path):
-        wire = _staging_wire(path)
-        records, meta = read_staging(path)
-    return wire, records, meta
-
-
 def _finish_record_review(
     path: Path,
     archive_base: Path,
@@ -2984,7 +2965,7 @@ def _finish_record_review(
         )
 
     with exclusive_path_lock(path):
-        if _staging_wire(path) != expected_wire:
+        if staging_wire(path) != expected_wire:
             raise PromoteError(
                 "[staging-review-stale] the live staging file changed while "
                 "promotion was completing. The replacement was kept."
@@ -3093,7 +3074,7 @@ def command_promote(args: argparse.Namespace) -> int:
             "the collection; promoting the archive would only duplicate it."
         )
 
-    expected_wire, records, meta = _record_review_snapshot(path)
+    expected_wire, records, meta = record_review_snapshot(path)
     # Validate every offline extraction invariant before `--accept-coverage`
     # is allowed to spend a second model call. Coverage v2 binds the parsed
     # candidate account; the matching done archive completes its row count on
@@ -3116,7 +3097,7 @@ def command_promote(args: argparse.Namespace) -> int:
         # promote succeed leaving nothing behind that says why.
         if not _model_accepts_coverage(config, path, meta):
             return 1
-        expected_wire, records, meta = _record_review_snapshot(path)
+        expected_wire, records, meta = record_review_snapshot(path)
         validate_coverage_facts(meta)
         done, archived, archived_meta = archive_for_run(archive_base, meta)
         if records or archived:

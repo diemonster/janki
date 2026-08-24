@@ -28,7 +28,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +36,11 @@ from japanese_anki import enrich, jpdb, ledger, patterns, promote, staging
 from japanese_anki import status as status_module
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
-from japanese_anki.io import load_records
+from japanese_anki.io import (
+    exclusive_path_lock,
+    load_records,
+    records_revision,
+)
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.promote import PromoteError
 from japanese_anki.staging import (
@@ -52,12 +56,18 @@ __all__ = [
     "AiLedgerHandoffIncomplete",
     "HeldCard",
     "LandingCard",
+    "PromotionDecision",
     "PromotionPlan",
+    "DECISION_STATES",
     "archive_for_run",
     "archive_run_provenance",
     "check_pattern_review",
+    "record_review_snapshot",
+    "staging_wire",
     "inside_archive",
+    "decide_promotion",
     "plan_promotion",
+    "project_promotion",
     "unreadable_deck_warning",
     "staged_ai_enrichment",
     "validate_record_archive",
@@ -480,12 +490,376 @@ def check_pattern_review(
         )
 
 
+#: What a decide pass concluded, in one word.
+#:
+#: `blocked` — a gate refused; `error` carries it.
+#: `nothing` — a legacy file holding no records; promote says so and exits 0.
+#: `archive_retry` — an empty live file beside this run's own archive, or a
+#: file whose every row is already in it: completion, not a new review.
+#: `pattern_only` — a zero-record rich extraction whose grammar was reviewed.
+#: `nothing_lands` — rows exist and every one is held back.
+#: `lands` — rows would reach the collection.
+DECISION_STATES = (
+    "blocked",
+    "nothing",
+    "archive_retry",
+    "pattern_only",
+    "nothing_lands",
+    "lands",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class PromotionDecision:
+    """Everything `promote` works out before it writes a byte.
+
+    The shared middle of the command and the preview. `plan_promotion`
+    projects it into something safe to hand a browser; `command_promote`
+    consumes it and performs the transaction.
+
+    Why a projection rather than one public value: this carries the raw wire
+    snapshot, the resolved merge and the compare-and-swap token — which is
+    everything a caller would need to replay the write path *around* the gates
+    that produced them. `docs/DESIGN.md` says the workbench may not weaken an
+    authority gate the CLI enforces, so the boundary between this and
+    `PromotionPlan` is a safety boundary and not a matter of taste.
+
+    Nothing here is written. The staging snapshot — the bytes and the parse —
+    is taken under the writer lock, because the write path's compare-and-swap
+    trusts the two to describe each other. Nothing else is locked: the
+    compare-and-swap is the protection for the collection, and holding a lock
+    across the dictionary lookups would be worse than the race it closed.
+    """
+
+    source: str
+    staging_path: Path
+    state: str
+    #: The refusal itself, not its text. The command re-raises it, so stderr
+    #: and the exit code are what they always were, and its *type* survives —
+    #: different gates raise different classes, and flattening them changes
+    #: which handler catches a refusal.
+    error: JankiError | None = None
+    #: Which gate refused, when one did.
+    #:
+    #: Its own field because the type cannot answer this: `check_coverage`
+    #: re-wraps whatever it catches into a plain `PromoteError`, so a coverage
+    #: refusal, an accounting refusal and an archive-divergence refusal are
+    #: indistinguishable by class. The only other discriminator is the
+    #: `[coverage-unresolved]`-style tag in the message, and deciding whether
+    #: to spend a model call by matching strings is exactly the fragility
+    #: `--accept-coverage` must not rest on.
+    gate: str = ""
+    #: Whether the dictionary was actually consulted before this concluded.
+    consulted: bool = False
+
+    #: The staging file exactly as read, for the write path's compare-and-swap.
+    wire: bytes = b""
+    meta: Mapping[str, Any] = field(default_factory=dict)
+    records: tuple[VocabularyRecord, ...] = ()
+
+    #: This run's durable archive, its rows, and its metadata.
+    done: Path | None = None
+    archived: tuple[VocabularyRecord, ...] = ()
+    archived_meta: Mapping[str, Any] | None = None
+    #: One flag per input row: already in this run's archive.
+    retry_flags: tuple[bool, ...] = ()
+    #: The ids this run has already archived — computed once, here, because
+    #: two shapes reach `archive_retry` (an empty live file beside a full
+    #: archive, and a full file whose every row is already in it) and they
+    #: read it from different places. Deriving it in the projection *and*
+    #: again in the write path is two chances to disagree about what already
+    #: landed.
+    already_archived: tuple[str, ...] = ()
+
+    #: The rows this run may still act on, and what the readings pass decided.
+    work: tuple[VocabularyRecord, ...] = ()
+    readings: promote.PromoteResult | None = None
+
+    #: The collection as it was read, and the token proving it has not moved.
+    existing: tuple[VocabularyRecord, ...] = ()
+    output_path: Path | None = None
+    output_revision: Any = None
+    #: Decks whose ids could not be read, verbatim — the two warning streams
+    #: stay separate because the command prints these *before* the readings
+    #: warnings and the plan reports them after.
+    unreadable_decks: tuple[str, ...] = ()
+
+    ai_provenance: Any = None
+    merged: tuple[VocabularyRecord, ...] = ()
+    outcomes: Mapping[str, Any] = field(default_factory=dict)
+
+    @property
+    def is_blocked(self) -> bool:
+        return self.state == "blocked"
+
+    @property
+    def reading_warnings(self) -> tuple[str, ...]:
+        return tuple(self.readings.warnings) if self.readings else ()
+
+    @property
+    def deck_warnings(self) -> tuple[str, ...]:
+        return tuple(unreadable_deck_warning(one) for one in self.unreadable_decks)
+
+
+def staging_wire(path: Path) -> bytes:
+    """Read the exact live-review bytes used by pattern-only promotion's CAS."""
+    try:
+        return path.read_bytes()
+    except OSError as exc:
+        raise PromoteError(
+            f"[staging-review-stale] could not snapshot {path}: "
+            f"{exc.strerror or exc}. Nothing was archived."
+        ) from exc
+
+
+
+def record_review_snapshot(
+    path: Path,
+) -> tuple[bytes, list[VocabularyRecord], dict[str, Any]]:
+    """Read one exact live-review snapshot while its writer lock is held."""
+    with exclusive_path_lock(path):
+        wire = staging_wire(path)
+        records, meta = read_staging(path)
+    return wire, records, meta
+
+
+
 def _unrewritable(path: Path) -> str:
     return (
         f"{path} is not a staging file janki can rewrite: the promoted archive "
         f"is written under the same name, and that needs "
         f"{' or '.join(STAGING_SUFFIXES)}. Rename it and re-run."
     )
+
+
+def decide_promotion(
+    config: ProjectConfig,
+    staging_path: Path,
+    *,
+    source: str = "",
+    client: jpdb.JpdbClient | None = None,
+    skip_reading_check: bool | None = None,
+) -> PromotionDecision:
+    """Work out everything `janki promote` decides, and write nothing.
+
+    Every decision comes from a function promote itself calls, **in the order
+    promote calls it**. The order matters even though nothing is written: it
+    decides which refusal a person is shown first, and the structural gates go
+    ahead of coverage deliberately — sending someone to a coverage decision
+    (whose other route is a paid completeness check) for a file no acceptance
+    could make promotable is wasted work followed by the refusal they should
+    have seen.
+
+    **Gate refusals are returned, not raised** — `decision.error` holds the
+    exception and `decision.gate` names what refused. The command re-raises it
+    so its stderr and exit code are unchanged; a page reports it. A caller
+    contract violation still raises, because a bad call is not a fact about
+    the staging file and rendering it as "this source cannot be added" would
+    say the wrong thing about somebody's work.
+
+    `--accept-coverage` is deliberately outside this: it spends a model call
+    and writes an approval into the staging file, so the command runs it
+    between two decide passes rather than having a read-only function do it.
+    """
+    if skip_reading_check is None:
+        # Handing over a client and still getting the offline answer is the
+        # shape a caller would never intend, so it is not spellable by
+        # accident: the check follows the client unless someone says
+        # otherwise, which is what `--skip-reading-check` does.
+        skip_reading_check = client is None
+    if not skip_reading_check and client is None:
+        # Refused here, and unconditionally. `check_readings` refuses this too,
+        # but from inside its per-record loop after the structural holds — so a
+        # caller could decide a blocked or all-held file, see a decision come
+        # back, and crash on the first clean row in production instead.
+        raise PromoteError(
+            "A reading check needs a dictionary client. Pass one, or leave "
+            "skip_reading_check alone to get the offline plan."
+        )
+
+    staging_path = staging_path.resolve()
+    name = source or staging_path.name
+    consulted = False
+
+    def at(state: str, **fields: Any) -> PromotionDecision:
+        # Enforced, not documented: `at` took any string, so a mislabelled
+        # state was invisible until Step 2 dispatched on it.
+        assert state in DECISION_STATES, state
+        return PromotionDecision(
+            source=name, staging_path=staging_path, state=state,
+            consulted=consulted, **fields,
+        )
+
+    def blocked(reason: JankiError, gate: str) -> PromotionDecision:
+        return at("blocked", error=reason, gate=gate)
+
+    archive_base = (config.staging_dir / "done" / staging_path.name).resolve()
+    if inside_archive(staging_path, archive_base.parent):
+        return blocked(
+            PromoteError(
+                f"{staging_path} is inside the promoted archive. Those records "
+                "are already in the collection; promoting the archive would "
+                "only duplicate it."
+            ),
+            "archive",
+        )
+
+    try:
+        # Both reads under the writer lock, so the bytes the write path's
+        # compare-and-swap trusts provably describe the records the gates ran
+        # on. Two unlocked reads leave a window where a write lands between
+        # them: the benign direction fails safe at write time, but an
+        # A-then-back-to-A edit defeats the check entirely, and the secondary
+        # revalidation compares only metadata and a row count.
+        #
+        # It also wraps the read. `read_bytes` raises `OSError`, which is not
+        # a `JankiError` and sailed straight out of this function — so a
+        # staging file deleted between listing a page and previewing it
+        # produced a traceback where the old code returned a refusal.
+        wire, records, meta = record_review_snapshot(staging_path)
+        validate_coverage_facts(meta)
+        done, archived, archived_meta = archive_for_run(archive_base, meta)
+        if records or archived:
+            validate_record_archive(meta, archived, archived_meta)
+        retry_flags = promote.check_candidate_accounting(
+            meta, records, archived, archived_meta=archived_meta
+        )
+    except JankiError as exc:
+        return blocked(exc, "structure")
+    try:
+        promote.check_coverage(meta)
+    except JankiError as exc:
+        # Named separately because this is the one `--accept-coverage` can
+        # answer. Every other refusal above means the model call would be
+        # spent on a file no acceptance could make promotable.
+        return blocked(exc, "coverage")
+
+    common = {
+        "wire": wire, "meta": meta, "records": tuple(records),
+        "done": done, "archived": tuple(archived), "archived_meta": archived_meta,
+        "retry_flags": tuple(retry_flags),
+        "already_archived": (
+            tuple(record.id for record in archived)
+            if not records
+            else tuple(
+                record.id
+                for record, is_retry in zip(records, retry_flags, strict=True)
+                if is_retry
+            )
+        ),
+    }
+
+    if not records:
+        if archived:
+            # An empty live file beside this run's own archive is a completed
+            # partial promotion, not a new review.
+            return at("archive_retry", **common)
+        run_id = rich_extraction_review_run_id(meta)
+        if run_id is None:
+            return at("nothing", **common)
+        # A zero-record rich extraction proposed grammar and nothing else. Its
+        # completion contract is a different one, and it refuses a source
+        # nobody has reviewed.
+        try:
+            check_pattern_review(config, meta, run_id)
+            check_rewritable(staging_path)
+        except JankiError as exc:
+            return blocked(exc, "patterns")
+        if staging_path.suffix.lower() not in STAGING_SUFFIXES:
+            return blocked(PromoteError(_unrewritable(staging_path)), "rewritable")
+        return at("pattern_only", **common)
+
+    # After the zero-record branch, exactly as in the command: a legacy file
+    # holding no records is completed without either of these being asked, so
+    # checking them earlier refuses a file promote finishes cleanly.
+    try:
+        check_rewritable(staging_path)
+    except JankiError as exc:
+        return blocked(exc, "rewritable")
+    if staging_path.suffix.lower() not in STAGING_SUFFIXES:
+        return blocked(PromoteError(_unrewritable(staging_path)), "rewritable")
+
+    work = [
+        record
+        for record, is_retry in zip(records, retry_flags, strict=True)
+        if not is_retry
+    ]
+    if not work:
+        return at("archive_retry", **common)
+
+    try:
+        # Refuses a `field_replacements` block whose provenance does not line
+        # up with the rows it claims to have enriched. The merge's own binding
+        # check never reads `ai_enrichment`, so nothing downstream catches it.
+        ai_provenance = staged_ai_enrichment(
+            meta,
+            [record.id for record in work],
+            archived_ids=[record.id for record in archived],
+        )
+        output_path = config.normalized_file.resolve()
+        # Captured in the same pass that reads the records the decision is
+        # made from. Split apart, the token races the read it is meant to
+        # prove unchanged.
+        output_revision = records_revision(output_path)
+        existing = load_records(output_path) if output_path.exists() else []
+        stored_ids, unreadable = status_module.surviving_ids(config, existing)
+    except JankiError as exc:
+        return blocked(exc, "collection")
+
+    consulted = not skip_reading_check
+    readings = promote.check_readings(
+        work,
+        client=client,
+        skip_reading_check=skip_reading_check,
+        already_stored=stored_ids,
+        remint_blocked=bool(unreadable),
+    )
+    common |= {
+        "work": tuple(work), "readings": readings,
+        "existing": tuple(existing), "output_path": output_path,
+        "output_revision": output_revision,
+        "unreadable_decks": tuple(unreadable),
+        "ai_provenance": ai_provenance,
+    }
+
+    try:
+        # The *second* accounting call, the one made after `check_readings`.
+        # Not a repeat: its duplicate test is over the ids rows would land
+        # *under*, so two rows whose corrected readings mint the same id
+        # collide only here.
+        #
+        # Its return is deliberately discarded, and that is checked rather than
+        # assumed: the first call already probes each row's resolved id **and**
+        # its stable re-mint, and `remint` mints nothing else, so a row the
+        # second call would flag was excluded from `work` by the first.
+        promote.check_candidate_accounting(
+            meta, readings.promoted, archived, archived_meta=archived_meta
+        )
+    except JankiError as exc:
+        return blocked(exc, "accounting")
+
+    if not readings.promoted:
+        # Nothing would land, so promote returns before it reads the ledger.
+        # Reading it here would block a source on a corrupt ledger promote
+        # never opens — telling someone their work is unusable when it is not.
+        return at("nothing_lands", **common)
+
+    try:
+        ledger.load(config.ledger_file)
+        merged, outcomes = promote.merge_staged_records(
+            list(existing),
+            list(readings.promoted),
+            dict(meta),
+            # Every live non-retry row in the form it arrived in, held ones
+            # included. A reading hold narrows what may land, not what review
+            # an old-value binding covers, so a stale binding on a held row
+            # refuses the whole merge.
+            validate_incoming=work,
+        )
+    except JankiError as exc:
+        return blocked(exc, "merge")
+
+    return at("lands", **common, merged=tuple(merged), outcomes=outcomes)
 
 
 def plan_promotion(
@@ -498,225 +872,64 @@ def plan_promotion(
 ) -> PromotionPlan:
     """What `janki promote` would do to this staging file, without doing it.
 
-    Every decision comes from a function promote itself calls, **in the order
-    promote calls it**. The order matters even though nothing is written: it
-    decides which refusal a person is shown first, and the command puts the
-    structural gates ahead of coverage deliberately — sending someone to a
-    coverage decision (whose other route is a paid completeness check) for a
-    file no acceptance could make promotable is wasted work followed by the
-    refusal they should have seen.
+    The public projection of `decide_promotion` — the cards, the holds, the
+    refusal, and nothing a caller could replay the write path with.
 
     One gap, named rather than hidden: see `PromotionPlan.readings_unchecked`.
     It is a gap only by default. Pass a `client` — as the command does, having
     already decided to spend the lookups — and the dictionary witness runs
-    here too, `readings_unchecked` says so, and the plan becomes the whole
-    decision rather than most of it. A page refresh passes nothing and gets
-    the offline answer; there is one code path either way, which is the point.
+    here too, and this says so. A page refresh passes nothing and gets the
+    offline answer; one code path either way, which is the point.
+
+    Raises rather than reports for one thing only: asking for the dictionary
+    check without handing over a client. See `decide_promotion`.
     """
-    # Handing over a client and still getting the offline answer is the shape
-    # a caller would never intend, so it is not spellable by accident: the
-    # check follows the client unless someone says otherwise, which is what
-    # the command's own `--skip-reading-check` does.
-    if skip_reading_check is None:
-        skip_reading_check = client is None
-    if not skip_reading_check and client is None:
-        # Refused here, and unconditionally. `check_readings` raises for this
-        # too, but from inside its per-record loop after the structural holds
-        # — so a caller could plan a blocked or all-held file, see a plan come
-        # back, and crash on the first clean row in production instead.
-        raise PromoteError(
-            "A reading check needs a dictionary client. Pass one, or leave "
-            "skip_reading_check alone to get the offline plan."
-        )
-
-    staging_path = staging_path.resolve()
-    name = source or staging_path.name
-
-    # Mutable so the refusals reachable *after* the dictionary ran do not
-    # report it as skipped. Money was spent by then, and a caller keying "this
-    # preview may be incomplete" on the flag would say the wrong thing about a
-    # plan that is complete as far as it got.
-    consulted = False
-
-    def blocked(reason: object) -> PromotionPlan:
-        return PromotionPlan(
-            source=name,
-            staging_path=staging_path,
-            blocked=str(reason),
-            readings_unchecked=not consulted,
-        )
-
-    archive_base = (config.staging_dir / "done" / staging_path.name).resolve()
-    if inside_archive(staging_path, archive_base.parent):
-        return blocked(
-            f"{staging_path} is inside the promoted archive. Those records are "
-            "already in the collection; promoting the archive would only "
-            "duplicate it."
-        )
-
-    # Every refusal below is one `promote` reaches before it writes a byte, so
-    # each is reported rather than raised: "you cannot add this yet, and here
-    # is why" is the answer a page needs, and a traceback from a view that
-    # changes nothing is not.
-    try:
-        records, meta = read_staging(staging_path)
-        validate_coverage_facts(meta)
-        _done, archived, archived_meta = archive_for_run(archive_base, meta)
-        if records or archived:
-            validate_record_archive(meta, archived, archived_meta)
-        retry_flags = promote.check_candidate_accounting(
-            meta, records, archived, archived_meta=archived_meta
-        )
-        promote.check_coverage(meta)
-    except JankiError as exc:
-        return blocked(exc)
-
-    if not records:
-        # An empty live file beside this run's own archive is a completed
-        # partial promotion, not a new review: the rows are already in the
-        # collection, which is what `already_archived` says.
-        if archived:
-            return PromotionPlan(
-                source=name,
-                staging_path=staging_path,
-                already_archived=tuple(record.id for record in archived),
-            )
-        run_id = rich_extraction_review_run_id(meta)
-        if run_id is None:
-            return PromotionPlan(source=name, staging_path=staging_path)
-        # A zero-record rich extraction proposed grammar and nothing else. Its
-        # completion contract is a different one, and it refuses a source
-        # nobody has reviewed — without this the plan called such a file clean
-        # and an Add button keyed on it invoked a promote that refuses.
-        try:
-            check_pattern_review(config, meta, run_id)
-            check_rewritable(staging_path)
-        except JankiError as exc:
-            return blocked(exc)
-        if staging_path.suffix.lower() not in STAGING_SUFFIXES:
-            return blocked(_unrewritable(staging_path))
-        return PromotionPlan(source=name, staging_path=staging_path)
-
-    # After the zero-record branch, exactly as in the command: a legacy file
-    # holding no records is completed without either of these ever being asked,
-    # so checking them earlier refuses a file promote finishes cleanly.
-    try:
-        check_rewritable(staging_path)
-    except JankiError as exc:
-        return blocked(exc)
-    if staging_path.suffix.lower() not in STAGING_SUFFIXES:
-        return blocked(_unrewritable(staging_path))
-
-    already = tuple(
-        record.id
-        for record, is_retry in zip(records, retry_flags, strict=True)
-        if is_retry
-    )
-    work = [
-        record
-        for record, is_retry in zip(records, retry_flags, strict=True)
-        if not is_retry
-    ]
-    if not work:
-        return PromotionPlan(
-            source=name, staging_path=staging_path, already_archived=already
-        )
-
-    try:
-        # Refuses a `field_replacements` block whose provenance does not line
-        # up with the rows it claims to have enriched. The merge's own binding
-        # check never reads `ai_enrichment`, so nothing downstream catches it.
-        staged_ai_enrichment(
-            meta,
-            [record.id for record in work],
-            archived_ids=[record.id for record in archived],
-        )
-        existing = (
-            load_records(config.normalized_file)
-            if config.normalized_file.exists()
-            else []
-        )
-        stored_ids, unreadable = status_module.surviving_ids(config, existing)
-    except JankiError as exc:
-        return blocked(exc)
-
-    # The check and the flag that reports it travel together, so a caller
-    # cannot get one without the other.
-    consulted = not skip_reading_check
-    result = promote.check_readings(
-        work,
-        client=client,
+    decision = decide_promotion(
+        config, staging_path, source=source, client=client,
         skip_reading_check=skip_reading_check,
-        already_stored=stored_ids,
-        remint_blocked=bool(unreadable),
     )
-    warnings = tuple(result.warnings) + tuple(
-        unreadable_deck_warning(problem) for problem in unreadable
-    )
+    return project_promotion(decision)
+
+
+def project_promotion(decision: PromotionDecision) -> PromotionPlan:
+    """The safe view of a decision."""
+    base = {
+        "source": decision.source,
+        "staging_path": decision.staging_path,
+        "readings_unchecked": not decision.consulted,
+    }
+    if decision.is_blocked:
+        return PromotionPlan(**base, blocked=str(decision.error))
+
+    if decision.state in ("nothing", "pattern_only"):
+        return PromotionPlan(**base)
+    already = decision.already_archived
+
+    readings = decision.readings
+    if readings is None:
+        return PromotionPlan(**base, already_archived=already)
+
     held = tuple(
         HeldCard(
             record=record,
             reason=staging.annotations(record).get("hold_reason", ""),
         )
-        for record in result.held
+        for record in readings.held
     )
-
-    try:
-        # The *second* accounting call, the one the command makes after
-        # `check_readings`. Not a repeat, and not only a check: its duplicate
-        # test is over the ids rows would land *under*, so two rows whose
-        # corrected readings mint the same id collide only here — and its
-        # Its *return* is deliberately discarded, and that is checked rather
-        # than assumed: it flags rows matching this run's archive, but the
-        # first call already probes each row's resolved id **and** its stable
-        # re-mint (`promote.check_candidate_accounting`), and `remint` mints
-        # nothing else. So a row the second call would flag was excluded from
-        # `work` by the first. A review suggested the plan could disagree with
-        # the command here; building the state it named put the row in
-        # `already_archived` before the second call ran.
-        promote.check_candidate_accounting(
-            meta, result.promoted, archived, archived_meta=archived_meta
-        )
-    except JankiError as exc:
-        return blocked(exc)
-
-    if not result.promoted:
-        # Nothing would land, so the command returns before it reads the
-        # ledger. Reading it here would block a source on a corrupt ledger that
-        # promote never opens — telling someone their work is unusable when it
-        # is not.
+    warnings = decision.reading_warnings + decision.deck_warnings
+    if decision.state == "nothing_lands":
         return PromotionPlan(
-            source=name,
-            staging_path=staging_path,
-            held=held,
-            already_archived=already,
-            warnings=warnings,
-            readings_unchecked=skip_reading_check,
+            **base, held=held, already_archived=already, warnings=warnings
         )
 
-    try:
-        ledger.load(config.ledger_file)
-        merged, _outcomes = promote.merge_staged_records(
-            list(existing),
-            list(result.promoted),
-            dict(meta),
-            # Every live non-retry row in the form it arrived in, held ones
-            # included — the command passes the same. A reading hold narrows
-            # what may land, not what review an old-value binding covers, so a
-            # stale binding on a held row refuses the whole merge.
-            validate_incoming=work,
-        )
-    except JankiError as exc:
-        return blocked(exc)
-
-    merged_by_id = {record.id: record for record in merged}
-    by_id = {record.id: record for record in existing}
+    merged_by_id = {record.id: record for record in decision.merged}
+    by_id = {record.id: record for record in decision.existing}
     landing: list[LandingCard] = []
-    promoted_iter = iter(result.promoted)
-    for original, stays in zip(work, result.keep, strict=True):
+    promoted = iter(readings.promoted)
+    for original, stays in zip(decision.work, readings.keep, strict=True):
         if stays:
             continue
-        transformed = next(promoted_iter)
+        transformed = next(promoted)
         landing.append(
             LandingCard(
                 staged=original,
@@ -725,17 +938,14 @@ def plan_promotion(
                 # `check_readings` already decided this and says so; deriving
                 # it again from the ids is a second copy of the same rule.
                 reminted_from=(
-                    original.id if original.id in result.reminted else ""
+                    original.id if original.id in readings.reminted else ""
                 ),
             )
         )
-
     return PromotionPlan(
-        source=name,
-        staging_path=staging_path,
+        **base,
         landing=tuple(landing),
         held=held,
         already_archived=already,
         warnings=warnings,
-        readings_unchecked=skip_reading_check,
     )

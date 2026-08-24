@@ -62,6 +62,7 @@ from japanese_anki.application.promotion import (
     archive_for_run,
     archive_run_provenance,
     plan_promotion,
+    project_promotion,
 )
 
 __all__ = [
@@ -103,6 +104,7 @@ __all__ = [
     "plan_extraction",
     "settle_dispatch",
     "plan_promotion",
+    "project_promotion",
     "needs_example_review",
     "source_detail",
     "source_journeys",

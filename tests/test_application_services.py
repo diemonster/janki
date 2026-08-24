@@ -33,13 +33,19 @@ from japanese_anki.application import (
     deck_membership,
     plan_extraction,
     plan_promotion,
+    project_promotion,
     settle_dispatch,
+)
+from japanese_anki.application import promotion as promotion_module
+from japanese_anki.application.promotion import (
+    DECISION_STATES,
+    decide_promotion,
 )
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import resolve_deck_records
 from japanese_anki.inputs import PreparedInput
-from japanese_anki.io import load_records
+from japanese_anki.io import load_records, records_revision
 from japanese_anki.models import SourceReference, VocabularyRecord
 
 CONFIG = """
@@ -1801,3 +1807,319 @@ def test_a_reading_correction_onto_an_archived_id_is_caught_before_the_remint(
     assert records[0].id in plan.already_archived
     assert reminted.id not in {card.landing.id for card in plan.landing}
     assert records[0].id not in {card.staged.id for card in plan.landing}
+
+
+# --- the shared decide step -------------------------------------------------
+#
+# `decide_promotion` is the middle both the command and the preview stand on.
+# `plan_promotion` is its public projection, and the split is a safety
+# boundary rather than a tidy one: the decision carries the raw wire snapshot,
+# the resolved merge and the compare-and-swap token — everything a caller
+# would need to replay the write path *around* the gates that produced them,
+# which is what DESIGN.md forbids a second surface from doing.
+
+
+def test_the_decision_carries_what_only_a_writer_needs(tmp_path: Path) -> None:
+    path = _staged(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    config = ProjectConfig.load(tmp_path)
+
+    decision = decide_promotion(config, path)
+
+    assert decision.state == "lands"
+    # The compare-and-swap token, captured in the same pass that read the
+    # records the decision was made from.
+    assert decision.output_revision is not None
+    assert decision.output_path == (tmp_path / "vocabulary.json").resolve()
+    # The bytes the write path's own compare-and-swap checks.
+    assert decision.wire == path.read_bytes()
+    assert decision.merged and decision.outcomes
+    assert decision.readings is not None
+
+    # And none of it reaches the projection.
+    plan = project_promotion(decision)
+    for name in ("wire", "merged", "outcomes", "output_revision", "meta"):
+        assert not hasattr(plan, name), name
+
+
+def test_a_refusal_is_returned_as_the_exception_not_its_text(
+    tmp_path: Path,
+) -> None:
+    """The command re-raises it, so stderr and the exit code stay what they
+    were; the acceptance loop asks which gate refused instead of matching
+    strings; the plan stringifies it. All three need the object."""
+    path = _staged(tmp_path, "table_exhaustive", filename="table.pdf")
+    config = ProjectConfig.load(tmp_path)
+
+    decision = decide_promotion(config, path)
+
+    assert decision.state == "blocked"
+    assert "coverage" in str(decision.error)
+    assert project_promotion(decision).blocked == str(decision.error)
+
+    # The *original* object, not a re-wrap that happens to carry the same
+    # words. Different gates raise different types, and the command re-raises
+    # what it is given — flattening them all to one class changes which
+    # handler catches a refusal.
+    from japanese_anki.io import DataError
+
+    broken = tmp_path / "staging" / "broken.yaml"
+    broken.write_text("records: [oh dear\n", encoding="utf-8")
+    unreadable = decide_promotion(config, broken)
+
+    assert isinstance(unreadable.error, DataError)
+    assert not isinstance(decision.error, DataError)
+
+
+@pytest.mark.parametrize(
+    ("scenario", "filename", "state"),
+    [
+        ("lesson_with_grammar", "lesson-8.pdf", "lands"),
+        ("table_exhaustive", "table.pdf", "blocked"),
+        ("pattern_only_chart", "chart.pdf", "blocked"),
+    ],
+)
+def test_each_source_reaches_the_state_that_names_it(
+    tmp_path: Path, scenario: str, filename: str, state: str
+) -> None:
+    path = _staged(tmp_path, scenario, filename=filename)
+
+    decision = decide_promotion(ProjectConfig.load(tmp_path), path)
+
+    assert decision.state == state
+    assert decision.state in DECISION_STATES
+
+
+def test_every_row_held_is_its_own_state_not_a_refusal(tmp_path: Path) -> None:
+    """`nothing_lands` exists so the command can return 0 having written hold
+    reasons, and so the ledger is never opened for a run that writes no
+    records. Folding it into `blocked` would refuse a promote that succeeds."""
+    path = _staged(tmp_path, "reading_holds", filename="holds.pdf")
+    from japanese_anki.staging import read_staging, write_staging
+
+    records, meta = read_staging(path)
+    write_staging(
+        path, [replace(record, reading="") for record in records], meta, force=True
+    )
+
+    decision = decide_promotion(ProjectConfig.load(tmp_path), path)
+
+    assert decision.state == "nothing_lands"
+    assert decision.error is None
+    assert decision.readings is not None and decision.readings.held
+
+
+def test_the_two_warning_streams_stay_apart(tmp_path: Path) -> None:
+    """The command prints unreadable-deck warnings *before* the reading ones;
+    the plan reports them after. Concatenated in the decision, one consumer
+    would have to print them in the other's order — and the bar for this
+    refactor is that command output does not change."""
+    path = _staged(tmp_path, "shared_word_source_a", filename="a.pdf")
+    from japanese_anki.staging import read_staging, write_staging
+
+    records, meta = read_staging(path)
+    write_staging(
+        path, [replace(records[0], reading="ちがうよみ"), *records[1:]], meta,
+        force=True,
+    )
+    (tmp_path / "decks" / "broken.yaml").write_text(
+        "deck: [1, 2, 3]\n", encoding="utf-8"
+    )
+
+    decision = decide_promotion(ProjectConfig.load(tmp_path), path)
+
+    assert decision.deck_warnings
+    assert all("cannot be checked" in one for one in decision.deck_warnings)
+    assert not set(decision.deck_warnings) & set(decision.reading_warnings)
+    # The plan's own order is deck warnings last, and it stays that way.
+    plan = project_promotion(decision)
+    assert plan.warnings[-len(decision.deck_warnings):] == decision.deck_warnings
+
+
+def test_a_vanished_staging_file_is_reported_not_raised(tmp_path: Path) -> None:
+    """`read_bytes` raises `OSError`, which is not a `JankiError` — so a file
+    deleted between listing a page and previewing it produced a traceback
+    where the old code returned a refusal. That is the concurrent shape a
+    workbench page hits after a promote finishes elsewhere."""
+    (tmp_path / "janki.toml").write_text(CONFIG, encoding="utf-8")
+    (tmp_path / "vocabulary.json").write_text("[]", encoding="utf-8")
+    (tmp_path / "decks").mkdir(exist_ok=True)
+    (tmp_path / "staging").mkdir(exist_ok=True)
+    config = ProjectConfig.load(tmp_path)
+
+    plan = plan_promotion(config, tmp_path / "staging" / "vanished.yaml")
+
+    assert plan.is_blocked
+    assert plan.landing == ()
+
+
+def test_the_snapshot_bytes_describe_the_records_that_were_judged(
+    tmp_path: Path,
+) -> None:
+    """The write path's compare-and-swap trusts `wire` to describe the rows the
+    gates ran on. Two unlocked reads leave a window: the benign direction fails
+    safe at write time, but an edit that goes back to its earlier bytes defeats
+    the check outright, and the secondary revalidation compares only metadata
+    and a row count."""
+    path = _staged(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    from japanese_anki.staging import read_staging_text
+
+    decision = decide_promotion(ProjectConfig.load(tmp_path), path)
+
+    reparsed, meta = read_staging_text(decision.wire.decode("utf-8"))
+    assert [record.id for record in reparsed] == [
+        record.id for record in decision.records
+    ]
+    assert meta == dict(decision.meta)
+
+
+@pytest.mark.parametrize(
+    ("scenario", "filename", "gate"),
+    [
+        # The one `--accept-coverage` can answer.
+        ("table_exhaustive", "table.pdf", "coverage"),
+        # The one it cannot: no acceptance makes an unreviewed grammar file
+        # promotable, so spending the model call on it is money for nothing.
+        ("pattern_only_chart", "chart.pdf", "patterns"),
+    ],
+)
+def test_a_refusal_names_the_gate_that_made_it(
+    tmp_path: Path, scenario: str, filename: str, gate: str
+) -> None:
+    """The type cannot answer this: `check_coverage` re-wraps whatever it
+    catches into a plain `PromoteError`, so a coverage refusal and an
+    accounting refusal are the same class. Deciding whether to spend a model
+    call by matching message tags is the fragility this field removes."""
+    path = _staged(tmp_path, scenario, filename=filename)
+
+    decision = decide_promotion(ProjectConfig.load(tmp_path), path)
+
+    assert decision.state == "blocked"
+    assert decision.gate == gate
+
+
+def test_a_legacy_empty_file_is_not_a_reviewed_grammar_file(
+    tmp_path: Path,
+) -> None:
+    """Two states, two completion contracts. Mislabelled, a legacy empty file
+    is sent to the pattern-only archive path and a reviewed grammar file is
+    told there is nothing to promote — and nothing archived."""
+    (tmp_path / "janki.toml").write_text(CONFIG, encoding="utf-8")
+    (tmp_path / "vocabulary.json").write_text("[]", encoding="utf-8")
+    (tmp_path / "decks").mkdir(exist_ok=True)
+    (tmp_path / "staging").mkdir(exist_ok=True)
+    legacy = tmp_path / "staging" / "legacy.yaml"
+    legacy.write_text("records: []\nsource_file: legacy.pdf\n", encoding="utf-8")
+
+    decision = decide_promotion(ProjectConfig.load(tmp_path), legacy)
+
+    assert decision.state == "nothing"
+    assert decision.state in DECISION_STATES
+
+
+def test_the_decision_carries_the_archive_the_write_path_would_use(
+    tmp_path: Path,
+) -> None:
+    """`done` and `archived_meta` are only read by the write path, so nothing
+    fails today if they are dropped — and the failure when they are is
+    `_finish_record_review` refusing every archive-bearing promote."""
+    path = _staged(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    from japanese_anki.staging import read_staging, write_staging
+
+    records, meta = read_staging(path)
+    done_dir = tmp_path / "staging" / "done"
+    done_dir.mkdir(parents=True, exist_ok=True)
+    write_staging(done_dir / path.name, [records[0]], promote.archive_meta(meta, 1))
+
+    decision = decide_promotion(ProjectConfig.load(tmp_path), path)
+
+    assert decision.done == (done_dir / path.name).resolve()
+    assert decision.archived_meta is not None
+    assert decision.already_archived == (records[0].id,)
+
+
+def test_the_decision_carries_the_ai_attribution(tmp_path: Path) -> None:
+    """`ai_provenance` mints the AI ledger entry and arms the handoff-recovery
+    guard. Dropped, attribution is lost silently — the ledger simply never
+    learns which model wrote the fields.
+
+    Driven over a source that *has* an enrichment block: asserting `None` on
+    one that has none passes whether the value was carried or discarded.
+    """
+    (tmp_path / "janki.toml").write_text(CONFIG, encoding="utf-8")
+    (tmp_path / "decks").mkdir(exist_ok=True)
+    (tmp_path / "staging").mkdir(exist_ok=True)
+    from japanese_anki.staging import write_staging
+
+    stored = _record(id="word:話す:はなす")
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps([stored.to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+    changes = {stored.id: {"meanings": (["to speak"], ["to speak, to talk"])}}
+    path = tmp_path / "staging" / "ai.yaml"
+    write_staging(
+        path,
+        [replace(stored, meanings=["to speak, to talk"])],
+        {
+            "source_file": "vocabulary.json",
+            "model": "claude-opus-5",
+            "provider": "anthropic",
+            "ai_enrichment": {
+                "version": 1,
+                "model": "claude-opus-5",
+                "provider": "anthropic",
+                "request_fingerprints": {stored.id: "a" * 64},
+                "input_fingerprints": {stored.id: "b" * 64},
+                "fields": {stored.id: ["meanings"]},
+            },
+            "field_replacements": promote.field_replacement_block(
+                [stored], changes
+            ),
+        },
+    )
+
+    decision = decide_promotion(ProjectConfig.load(tmp_path), path)
+
+    assert decision.state == "lands"
+    provider, model, proven = decision.ai_provenance
+    assert (provider, model) == ("anthropic", "claude-opus-5")
+    assert stored.id in proven
+
+
+def test_the_swap_token_is_taken_before_the_records_it_guards(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Order, not adjacency — and the wrong order loses data silently.
+
+    Token first, then read: a write landing between them makes the token stale
+    against the collection the decision was built from, so the compare-and-swap
+    refuses and nothing is overwritten. Read first, then token: the records are
+    stale but the token is fresh, the swap passes, and the merge is written
+    over somebody's newer file.
+
+    Both orders pass every other test here, because they differ only when
+    something writes in the window. So the window is opened deliberately.
+    """
+    path = _staged(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    config = ProjectConfig.load(tmp_path)
+    collection = (tmp_path / "vocabulary.json").resolve()
+    real = promotion_module.load_records
+
+    def write_then_read(target: Path, *args: object, **kwargs: object):
+        if Path(target) == collection:
+            # Somebody else's save, landing in the window.
+            collection.write_text(
+                json.dumps([_record(id="word:割り込み:わりこみ",
+                                    expression="割り込み",
+                                    reading="わりこみ").to_dict()],
+                           ensure_ascii=False),
+                encoding="utf-8",
+            )
+        return real(target, *args, **kwargs)
+
+    monkeypatch.setattr(promotion_module, "load_records", write_then_read)
+
+    decision = decide_promotion(config, path)
+
+    assert decision.state == "lands"
+    # Stale against what is on disk now, which is what makes the write refuse.
+    assert decision.output_revision != records_revision(collection)
