@@ -142,9 +142,26 @@ def _absolute(path: Path) -> Path:
     return Path(os.path.abspath(os.fspath(path)))
 
 
-def _require_regular_non_symlink(path: Path, description: str) -> None:
+def _require_regular_non_symlink(
+    path: Path, description: str, *, absent_ok: bool = False
+) -> None:
+    """Refuse anything but a plain file at this exact path.
+
+    ``absent_ok`` for the pattern store, which a project that has never
+    extracted anything simply does not have yet. `patterns.load_store` reads a
+    missing store as an empty one, and this being stricter meant importing a
+    deck into a fresh project could not open a review at all — the same
+    over-broad refusal as demanding an extraction lineage from a file that
+    never had one. A path that *exists* is still held to the same rule.
+    """
     try:
         details = path.lstat()
+    except FileNotFoundError:
+        if absent_ok:
+            return
+        raise ReviewPanelError(
+            f"{description} must be a direct regular non-symlink file: {path}"
+        ) from None
     except OSError as exc:
         raise ReviewPanelError(
             f"{description} must be a direct regular non-symlink file: {path}"
@@ -232,8 +249,21 @@ def _sorted_path_locks(paths: Iterable[Path]):
 def _staged_lineage(
     records: Sequence[VocabularyRecord],
     meta: Mapping[str, Any],
-) -> tuple[str, str, dict[str, Any], patterns.PatternSet]:
-    """Validate the rich staging lineage and structurally parse its pattern answer."""
+) -> tuple[str, str, dict[str, Any], patterns.PatternSet | None]:
+    """The rich staging lineage, or the absence of one.
+
+    **Absent is not invalid.** A file `janki extract` wrote carries a review
+    run id, prompt provenance and a pattern answer, and every approval binds
+    to them: an example approval means "a person accepted the sentence *this
+    model proposed*", which is meaningless without the answer it proposed.
+
+    A file that arrived another way — an Anki import, a hand-written review —
+    has none of that, and it is not broken for lacking it. Refusing to open it
+    at all took the whole page down with the approvals: no editing a typo'd
+    reading, no re-identifying a row, on a file whose rows are perfectly
+    ordinary. So a missing lineage yields empty values and the caller offers
+    less, while a *malformed* one still raises.
+    """
     try:
         staging.validate_coverage_facts(meta)
         run_id = staging.rich_extraction_review_run_id(meta)
@@ -241,16 +271,33 @@ def _staged_lineage(
         raise ReviewPanelError(f"The active staging lineage is invalid: {exc}") from exc
     provenance = meta.get("prompt_provenance")
     source_value = meta.get("source_file")
-    if (
-        run_id is None
-        or not isinstance(provenance, Mapping)
-        or not isinstance(source_value, str)
-        or not source_value.strip()
-    ):
-        raise ReviewPanelError("The active staging file has no complete rich-extraction lineage")
+    if not isinstance(source_value, str) or not source_value.strip():
+        # The one part every staging file must have: without it nothing can
+        # say which source these rows belong to, and the pattern store, the
+        # archive name and the dashboard all key on it.
+        raise ReviewPanelError("The active staging file names no source")
     if source_value != Path(source_value).name or "/" in source_value or "\\" in source_value:
+        # Checked for every file, lineage or not: a path-shaped source name is
+        # a key that escapes the store, and that is true however the rows
+        # arrived.
         raise ReviewPanelError(
             "The staging source_file must be the exact basename-shaped pattern store key"
+        )
+    if run_id is None and not meta.get("ai_enrichment"):
+        # No run of any kind: an import, or a review somebody wrote by hand.
+        return source_value, "", {}, None
+    if not isinstance(provenance, Mapping):
+        # A run *without* extraction provenance is an `enrich --ai` review, and
+        # it is emphatically not "not from an extraction": it is a paid answer
+        # whose rows are named by provenance maps `promote` checks against the
+        # file. Removing or re-identifying one makes those maps disagree with
+        # the rows, and the next promote refuses the *whole* file — the paid
+        # answers with it. Until this page can keep those maps in step, such a
+        # file is refused rather than handed controls that strand it.
+        raise ReviewPanelError(
+            "This review came from a paid model pass rather than an "
+            "extraction, and editing its rows here would break the provenance "
+            "that promote checks. Review it with 'janki promote' instead."
         )
     source = source_value
     nested = meta.get("pattern_set")
@@ -284,6 +331,12 @@ def _pattern_warning(
     run_id: str,
     provenance: Mapping[str, Any],
 ) -> str | None:
+    if not run_id:
+        return (
+            "This source did not come from an extraction, so there is no model "
+            "answer to review. You can still edit its cards and correct a word "
+            "it identified wrongly."
+        )
     if current is None:
         return (
             f"The current pattern store has no entry for the exact key {source!r}. "
@@ -352,7 +405,9 @@ class ReviewPanel:
     source: str
     run_id: str
     provenance: dict[str, Any]
-    staged_pattern_set: patterns.PatternSet
+    #: The pattern answer this staging run was extracted with, or None
+    #: when the file did not come from an extraction at all.
+    staged_pattern_set: patterns.PatternSet | None
     pattern_set: patterns.PatternSet | None
     pattern_warning: str | None
     staging_bytes: bytes
@@ -372,14 +427,25 @@ class ReviewPanel:
     ) -> ReviewPanel:
         active_path = _active_staging_path(staging_path, staging_dir)
         pattern_path = _absolute(patterns_path)
-        _require_regular_non_symlink(pattern_path, "The pattern store")
+        _require_regular_non_symlink(
+            pattern_path, "The pattern store", absent_ok=True
+        )
         with _sorted_path_locks((active_path, pattern_path)):
             # Recheck after acquiring the lock: a cooperating writer may have
             # replaced the file while this process was waiting.
             _active_staging_path(active_path, staging_dir)
-            _require_regular_non_symlink(pattern_path, "The pattern store")
+            _require_regular_non_symlink(
+                pattern_path, "The pattern store", absent_ok=True
+            )
             staging_bytes = _capture_regular_bytes(active_path, "The active staging file")
-            patterns_bytes = _capture_regular_bytes(pattern_path, "The pattern store")
+            # An absent store captures as an empty document rather than
+            # refusing: there is nothing to compare-and-swap against, and
+            # pattern review is unavailable for such a project anyway.
+            patterns_bytes = (
+                _capture_regular_bytes(pattern_path, "The pattern store")
+                if pattern_path.exists()
+                else b"{}"
+            )
             try:
                 staging_text = staging_bytes.decode("utf-8", errors="strict")
                 patterns_text = patterns_bytes.decode("utf-8", errors="strict")
@@ -440,6 +506,18 @@ class ReviewPanel:
         )
 
     @property
+    def has_extraction_lineage(self) -> bool:
+        """Whether this file carries the run a model's answers can bind to.
+
+        False for a file that arrived some other way — an Anki import, a
+        hand-written review. Its rows are ordinary and perfectly editable; what
+        it cannot carry is an *approval*, because approving an example means
+        accepting the sentence a particular model proposed on a particular run,
+        and there is no such run here to name.
+        """
+        return bool(self.run_id) and self.staged_pattern_set is not None
+
+    @property
     def pattern_reviewable(self) -> bool:
         return (
             self.pattern_warning is None
@@ -458,6 +536,16 @@ class ReviewPanel:
             raise PanelRequestError(
                 "Record review action is not reviewable on this page: " + ", ".join(unavailable)
             )
+        if selected and not self.has_extraction_lineage:
+            # Approving an example means accepting the sentence a particular
+            # model proposed on a particular run. A file with no run cannot
+            # carry that, so the approval would bind to nothing — and a page
+            # that never offers the control still has to refuse the request,
+            # because the request is what writes.
+            raise PanelRequestError(
+                "This source did not come from an extraction, so its sentences "
+                "have no proposal to approve"
+            )
         if review_patterns and not self.pattern_reviewable:
             if self.pattern_warning is not None or self.pattern_set is None:
                 raise PanelRequestError(
@@ -474,13 +562,24 @@ class ReviewPanel:
         with self._submission_lock, _sorted_path_locks((self.staging_path, self.patterns_path)):
             try:
                 _active_staging_path(self.staging_path, self.staging_dir)
-                _require_regular_non_symlink(self.patterns_path, "The pattern store")
+                # Absent stays acceptable here, exactly as at open. Strict, a
+                # card approval on a project with no pattern store was refused
+                # with "a review target path changed" — nothing had changed,
+                # the store never existed, and the approval writes only the
+                # staging file.
+                _require_regular_non_symlink(
+                    self.patterns_path, "The pattern store", absent_ok=True
+                )
             except ReviewPanelError as exc:
                 raise StaleReviewError(
                     "A review target path changed after this page was rendered"
                 ) from exc
             live_staging = self.staging_path.read_bytes()
-            live_patterns = self.patterns_path.read_bytes()
+            live_patterns = (
+                self.patterns_path.read_bytes()
+                if self.patterns_path.exists()
+                else b"{}"
+            )
             if live_staging != self.staging_bytes:
                 raise StaleReviewError(
                     "The staging file changed after this review page was rendered"

@@ -262,6 +262,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                     patterns_snapshot=panel.patterns_fingerprint if panel else "",
                     saved=self._saved_banner(),
                     editing=self._wants_edit(),
+                    approvable=bool(panel and panel.has_extraction_lineage),
                 ),
             )
             return

@@ -18,6 +18,7 @@ import json
 import re
 import socket
 import threading
+import uuid
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -35,11 +36,19 @@ from japanese_anki.application import (
     SourceJourney,
 )
 from japanese_anki.config import ProjectConfig
+from japanese_anki.models import (
+    ExampleSentence,
+    SourceReference,
+    VocabularyRecord,
+)
+from japanese_anki.staging import read_staging, write_staging
 from japanese_anki.workbench import (
+    STYLE,
     WorkbenchSession,
     make_server,
     render_dashboard,
     render_source,
+    review,
 )
 
 
@@ -2320,3 +2329,389 @@ def test_a_sender_that_does_not_escape_its_filename_still_lands_safely(
     finally:
         server.shutdown()
         server.server_close()
+
+
+# --- sources that did not come from an extraction ----------------------------
+#
+# A staging file written by `janki extract` carries a review run id, prompt
+# provenance and the pattern answer that run proposed. Every *approval* binds
+# to those: accepting an example means accepting the sentence a particular
+# model proposed on a particular run.
+#
+# A file that arrived another way — an Anki import, a hand-written review — has
+# none of that, and is not broken for lacking it. Refusing to open it at all
+# took the whole page down with the approvals: no CSRF token, so no forms, so
+# not even a link to the editor. A reading typo in an imported deck was
+# unfixable in a tool whose whole job is fixing them.
+
+
+def _imported(tmp_path: Path, *, source: str = "Reading Pack Vocab") -> Path:
+    """A staging file with ordinary rows and no extraction lineage at all."""
+    _project(tmp_path)
+    path = tmp_path / "staging" / "reading-pack.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_staging(
+        path,
+        [
+            VocabularyRecord(
+                id="word:出来るだけ:だきるだけ",
+                expression="出来るだけ",
+                reading="だきるだけ",
+                meanings=["As much as possible"],
+            )
+        ],
+        {"source_file": source, "extracted_at": "2026-08-24"},
+    )
+    return path
+
+
+def test_a_source_with_no_extraction_lineage_still_opens(tmp_path: Path) -> None:
+    session = WorkbenchSession.open(ProjectConfig.load(_imported(tmp_path).parent.parent))
+
+    panel = session.panel("Reading Pack Vocab")
+
+    assert panel is not None
+    assert panel.has_extraction_lineage is False
+    assert [record.expression for record in panel.records] == ["出来るだけ"]
+
+
+def test_such_a_source_offers_the_controls_that_do_not_need_a_run(
+    tmp_path: Path,
+) -> None:
+    """Editing a gloss and correcting a misread word are about the rows, not
+    about which model proposed them. The page that refuses to open offers
+    neither, which is how a one-character reading typo became unfixable."""
+    _imported(tmp_path)
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+    panel = session.panel("Reading Pack Vocab")
+    assert panel is not None
+
+    html = render_source(
+        session.detail("Reading Pack Vocab"),
+        token=session.token,
+        csrf=session.csrf_token,
+        staging_snapshot=panel.staging_fingerprint,
+        patterns_snapshot=panel.patterns_fingerprint,
+        editing=True,
+    )
+
+    assert "<textarea" in html
+    assert "This is a different word than it says" in html
+    assert "from this review" in html
+
+
+def test_such_a_source_says_why_its_grammar_cannot_be_reviewed(
+    tmp_path: Path,
+) -> None:
+    """Not silence, and not a bare disabled control: the reason is the useful
+    part, because "no model answer" is a fact about the source rather than a
+    fault the reader should go looking for."""
+    _imported(tmp_path)
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+    panel = session.panel("Reading Pack Vocab")
+    assert panel is not None
+
+    assert panel.pattern_reviewable is False
+    assert "did not come from an extraction" in panel.pattern_warning
+
+
+def test_an_approval_is_refused_on_a_source_with_no_run_to_bind_it_to(
+    tmp_path: Path,
+) -> None:
+    """The page never offers the control — but the request is what writes, and
+    a request that arrives anyway must be refused rather than bound to a run
+    that does not exist.
+
+    The row has to be genuinely reviewable for this to test anything: an
+    ineligible one is stopped by the earlier check and raises the same class
+    for a different reason, which is how a missing guard would look guarded.
+    """
+    _project(tmp_path)
+    path = tmp_path / "staging" / "reading-pack.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    reviewable = VocabularyRecord(
+        id="word:出来るだけ:できるだけ",
+        expression="出来るだけ",
+        reading="できるだけ",
+        meanings=["As much as possible"],
+        # Extract-sourced with an unapproved example: exactly the shape whose
+        # sentences a person would normally be asked to accept.
+        source=SourceReference(type="extract", imported_from="pack.pdf"),
+        examples=[ExampleSentence(japanese="出来るだけ早く来て。")],
+    )
+    write_staging(path, [reviewable], {"source_file": "Reading Pack Vocab"})
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+    panel = session.panel("Reading Pack Vocab")
+    assert panel is not None
+    assert reviewable.id in panel.reviewable_record_ids, "the row must be approvable"
+
+    with pytest.raises(review.PanelRequestError, match="no proposal to approve"):
+        panel.submit(record_ids=[reviewable.id], review_patterns=False)
+
+
+def test_a_malformed_lineage_is_still_refused(tmp_path: Path) -> None:
+    """Absent is not invalid. A file that *claims* a coverage block and gets it
+    wrong is broken, and opening it would show a review bound to nonsense."""
+    path = _imported(tmp_path)
+    records, meta = read_staging(path)
+    meta["coverage"] = {"version": 2, "status": "not-a-status"}
+    write_staging(path, records, meta, force=True)
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+
+    assert session.panel("Reading Pack Vocab") is None
+
+
+def test_a_path_shaped_source_name_is_refused_without_lineage_too(
+    tmp_path: Path,
+) -> None:
+    """The source name is a pattern-store key. A path-shaped one escapes the
+    store, and that is true however the rows arrived — so the check cannot sit
+    behind the lineage branch."""
+    _imported(tmp_path, source="../elsewhere/vocab")
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+
+    assert session.panel("../elsewhere/vocab") is None
+
+
+def test_a_project_that_never_extracted_can_still_review(tmp_path: Path) -> None:
+    """A pattern store is created by extraction, so a project that has only
+    ever imported a deck has none — and requiring one refused every review on
+    exactly the projects most likely to need one. `patterns.load_store` already
+    reads a missing store as empty; this matches it."""
+    _imported(tmp_path)
+    store = tmp_path / "patterns.json"
+    if store.exists():
+        store.unlink()
+
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+    panel = session.panel("Reading Pack Vocab")
+
+    assert panel is not None
+    assert panel.pattern_set is None
+
+
+def test_a_pattern_store_that_exists_is_still_held_to_the_rule(
+    tmp_path: Path,
+) -> None:
+    """Absent is allowed; a directory or a symlink where the store should be is
+    not. Relaxing the missing case must not relax the rest."""
+    _imported(tmp_path)
+    store = tmp_path / "patterns.json"
+    if store.exists():
+        store.unlink()
+    store.mkdir()
+
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+
+    assert session.panel("Reading Pack Vocab") is None
+
+
+def test_both_card_actions_render_in_one_row(tmp_path: Path) -> None:
+    """They are siblings, and were laid out as unrelated blocks: a full-width
+    removal button that read as a disabled field, above a re-identify control
+    with no rule at all that wrapped into its own caption. The grouping is what
+    makes them read as two choices about the same card."""
+    session = _staged(tmp_path)
+    panel = session.panel("table.pdf")
+    assert panel is not None
+
+    html = render_source(
+        session.detail("table.pdf"),
+        token=session.token,
+        csrf=session.csrf_token,
+        staging_snapshot=panel.staging_fingerprint,
+        patterns_snapshot=panel.patterns_fingerprint,
+        editing=True,
+    )
+
+    assert '<div class="actions">' in html
+    # One container per card, holding both controls.
+    assert html.count('<div class="actions">') == len(session.detail("table.pdf").cards)
+    assert html.count('<div class="reidentify">') == html.count('<div class="remove">')
+
+
+def test_every_control_shows_that_it_is_a_control(tmp_path: Path) -> None:
+    """A button that looks identical whether or not the pointer is over it
+    reads as decoration — the removal control was reported as inert on that
+    basis alone, while being perfectly functional. The states are asserted
+    because losing them is invisible in every other test here."""
+    del tmp_path
+    # Rule *bodies*, not selectors. `cursor: pointer`, `:focus-visible` and
+    # `prefers-reduced-motion` all appear elsewhere in this stylesheet already,
+    # so asserting the bare substrings passed whether or not a button ever
+    # gained a state.
+    assert "button:hover { background: Highlight" in STYLE
+    assert "button:active { transform:" in STYLE
+    assert "cursor: pointer; border-radius:" in STYLE
+    assert "button { transition: none; }" in STYLE
+
+
+def test_a_paid_model_review_is_not_mistaken_for_an_import(tmp_path: Path) -> None:
+    """`enrich --ai` writes a review run id and an `ai_enrichment` block, and
+    never `prompt_provenance`. Treating "no prompt provenance" as "no model
+    run" swept every paid enrichment review into the editable path — and its
+    rows are named by provenance maps `promote` checks against the file, so
+    removing or re-identifying one makes them disagree and the next promote
+    refuses the whole file, paid answers included.
+
+    Two clicks, and the run is stranded. Refused until the page can keep those
+    maps in step.
+    """
+    _project(tmp_path)
+    path = tmp_path / "staging" / "ai-enrichment.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record = VocabularyRecord(
+        id="word:話す:はなす", expression="話す", reading="はなす",
+        meanings=["to speak"],
+    )
+    write_staging(
+        path,
+        [record],
+        {
+            "source_file": "vocabulary.json",
+            "model": "claude-opus-5",
+            "provider": "anthropic",
+            "review_run_id": str(uuid.uuid4()),
+            "ai_enrichment": {
+                "version": 1,
+                "model": "claude-opus-5",
+                "provider": "anthropic",
+                "request_fingerprints": {record.id: "a" * 64},
+                "input_fingerprints": {record.id: "b" * 64},
+                "fields": {record.id: ["meanings"]},
+            },
+        },
+    )
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+
+    assert session.panel("vocabulary.json") is None
+
+
+def test_a_page_that_cannot_approve_does_not_offer_approval(
+    tmp_path: Path,
+) -> None:
+    """The guard refusing the write is not the same as the page not asking for
+    it. An extract-typed row with an unapproved example renders a checkbox and
+    a save button on any source — and on one with no model run every such
+    submission is refused, which is the dead-end control this page already
+    forbids for grammar review.
+    """
+    _project(tmp_path)
+    path = tmp_path / "staging" / "reading-pack.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_staging(
+        path,
+        [
+            VocabularyRecord(
+                id="word:走る:はしる", expression="走る", reading="はしる",
+                meanings=["to run"],
+                source=SourceReference(type="extract", imported_from="pack.pdf"),
+                examples=[ExampleSentence(japanese="毎日走ります。")],
+            )
+        ],
+        {"source_file": "Reading Pack Vocab"},
+    )
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+    panel = session.panel("Reading Pack Vocab")
+    assert panel is not None
+    detail = session.detail("Reading Pack Vocab")
+    assert any(card.needs_example_review for card in detail.cards)
+
+    offered = render_source(
+        detail, token=session.token, csrf=session.csrf_token,
+        staging_snapshot=panel.staging_fingerprint,
+        patterns_snapshot=panel.patterns_fingerprint,
+        approvable=panel.has_extraction_lineage,
+    )
+
+    assert "Save the approvals" not in offered
+    assert 'type=checkbox' not in offered
+
+
+def test_an_approval_lands_on_a_project_with_no_pattern_store(
+    tmp_path: Path,
+) -> None:
+    """`open` accepts an absent store; `submit` used to refuse one, and said
+    "a review target path changed after this page was rendered" — about a file
+    that never existed and never changed. A card approval writes the staging
+    file alone, so the store's absence is nothing to do with it."""
+    _stage(tmp_path, "table_exhaustive", filename="table.pdf")
+    store = tmp_path / "patterns.json"
+    if store.exists():
+        store.unlink()
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+    panel = session.panel("table.pdf")
+    assert panel is not None
+    chosen = sorted(panel.reviewable_record_ids)[:1]
+    assert chosen
+
+    outcome = panel.submit(record_ids=chosen, review_patterns=False)
+
+    assert outcome.accepted_record_ids == tuple(chosen)
+
+
+def test_the_served_page_offers_controls_for_an_imported_source(
+    tmp_path: Path,
+) -> None:
+    """Through the server, not the renderer. The bug that started this was the
+    *wiring* — a refused panel meant an empty CSRF, and the renderer then
+    emitted nothing at all, including the link to the editor. Every other test
+    here calls `render_source` directly and would have passed throughout."""
+    _imported(tmp_path)
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+    server, _thread = _running(session)
+    try:
+        _status, _headers, read_view = _request(
+            server, "GET", f"/{session.token}/source/Reading%20Pack%20Vocab"
+        )
+        _status, _headers, edit_view = _request(
+            server, "GET", f"/{session.token}/source/Reading%20Pack%20Vocab?edit=1"
+        )
+        page = read_view.decode("utf-8")
+        editor = edit_view.decode("utf-8")
+    finally:
+        server.shutdown()
+
+    assert "edit=1" in page, "the read view must offer the way in"
+    assert "<textarea" in editor
+    assert "<form" in editor
+
+
+def test_the_served_page_omits_approvals_for_a_source_that_cannot_approve(
+    tmp_path: Path,
+) -> None:
+    """Through the server, with a row that *would* be offered for approval on
+    an extraction source. Without such a row the page omits the controls for
+    the ordinary reason and proves nothing about the wiring."""
+    _project(tmp_path)
+    path = tmp_path / "staging" / "reading-pack.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_staging(
+        path,
+        [
+            VocabularyRecord(
+                id="word:走る:はしる", expression="走る", reading="はしる",
+                meanings=["to run"],
+                source=SourceReference(type="extract", imported_from="pack.pdf"),
+                examples=[ExampleSentence(japanese="毎日走ります。")],
+            )
+        ],
+        {"source_file": "Reading Pack Vocab"},
+    )
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+    panel = session.panel("Reading Pack Vocab")
+    assert panel is not None
+    assert panel.reviewable_record_ids, "the row must be one approval would offer"
+    server, _thread = _running(session)
+    try:
+        _status, _headers, served = _request(
+            server, "GET", f"/{session.token}/source/Reading%20Pack%20Vocab"
+        )
+    finally:
+        server.shutdown()
+    page = served.decode("utf-8")
+
+    assert "Save the approvals" not in page
+    assert "type=checkbox" not in page
+    # ...but the page is still a working editor.
+    assert "edit=1" in page

@@ -53,7 +53,13 @@ h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
 .next b { font-weight: 700; }
 .counts { color: GrayText; font-size: .9rem; margin: .5rem 0 0; }
 details { margin-block-start: .75rem; }
-summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+summary {
+  cursor: pointer; min-height: 44px; display: flex; align-items: center;
+  gap: .4rem; font-size: .9rem; color: GrayText;
+  border-radius: .25rem;
+}
+summary:hover { color: CanvasText; text-decoration: underline; }
+.decision:hover { border-color: Highlight; }
 pre {
   white-space: pre-wrap; overflow-wrap: anywhere;
   background: Canvas; border: 1px solid GrayText;
@@ -66,9 +72,18 @@ pre {
   margin-block-end: 2rem; display: grid; gap: .5rem; }
 .add-source h2 { font-size: 1.1rem; margin: 0; }
 input[type=file] { font: inherit; padding: .4rem; }
-.remove { margin-top: .75rem; display: grid; gap: .35rem; }
-.remove button { border: 1px solid GrayText; background: Canvas; color: CanvasText; }
-.edit { display: grid; gap: .25rem; margin: .5rem 0; }
+.actions {
+  display: flex; flex-wrap: wrap; gap: 1rem;
+  margin-block-start: 1rem; padding-block-start: .75rem;
+  border-block-start: 1px solid ButtonBorder;
+}
+.actions > div { flex: 1 1 16rem; display: grid; gap: .35rem; align-content: start; }
+/* Content width, not column width: a button stretched across the card reads
+   as a disabled input, which is how the removal control came to look inert. */
+.actions button { justify-self: start; text-align: start; }
+.actions .counts { margin: 0; }
+.remove button { border-color: GrayText; background: Canvas; color: CanvasText; }
+.edit { display: grid; gap: .25rem; margin: .5rem 0 .75rem; }
 .edit label { font-size: .85rem; font-weight: 700; color: GrayText; }
 select { font: inherit; padding: .4rem; background: Canvas; color: CanvasText;
   border: 1px solid GrayText; border-radius: .25rem; min-height: 44px; }
@@ -78,14 +93,38 @@ textarea[lang=ja] { font-size: 1.15rem; line-height: 1.9; }
 .decision { display: flex; gap: .75rem; align-items: flex-start; cursor: pointer;
   padding: .75rem; border: 1px solid GrayText; border-radius: .35rem; margin-top: .75rem; }
 input[type=checkbox] { inline-size: 1.4rem; block-size: 1.4rem; flex: none; }
-button { min-height: 44px; padding: .65rem 1rem; font: inherit; font-weight: 700; }
+button {
+  min-height: 44px; padding: .65rem 1rem; font: inherit; font-weight: 700;
+  cursor: pointer; border-radius: .35rem;
+  background: ButtonFace; color: ButtonText; border: 1px solid ButtonBorder;
+  transition: background-color .12s ease, color .12s ease, border-color .12s ease;
+}
+/* A control that looks the same whether or not the pointer is on it reads as
+   decoration — the removal button was reported as inert on exactly that
+   basis. Hover inverts the surface, so "this will do something" needs no
+   explaining, and the pressed state moves so a click that has landed is
+   distinguishable from one that has not. */
+button:hover { background: Highlight; color: HighlightText; border-color: Highlight; }
+button:active { transform: translateY(1px); }
+button:disabled {
+  cursor: not-allowed; color: GrayText; border-color: GrayText;
+  background: ButtonFace; transform: none;
+}
+button:disabled:hover { background: ButtonFace; color: GrayText; }
+@media (prefers-reduced-motion: reduce) {
+  button { transition: none; }
+  button:active { transform: none; }
+}
 .submit { position: sticky; bottom: 0; padding: 1rem; background: Canvas;
   border-top: 1px solid GrayText; }
 .card, .pattern {
   border: 1px solid GrayText; border-radius: .5rem;
   padding: 1rem; margin-block-end: 1rem;
 }
-.card h3 { font-size: 1.35rem; margin: 0 0 .25rem; }
+.card h3 {
+  font-size: 1.35rem; margin: 0 0 .5rem;
+  padding-block-end: .5rem; border-block-end: 1px solid ButtonBorder;
+}
 .card h3 small { font-size: .85em; font-weight: 400; color: GrayText; }
 .card h4 { font-size: .95rem; margin: 1rem 0 .25rem; }
 /* Japanese wants room: generous size and leading so small kana and
@@ -430,10 +469,17 @@ def _card_html(
     else:
         parts.append(_approval_html(card))
     parts.append(_evidence_html(card))
-    if remove_action:
-        parts.append(remove_action)
-    if reidentify_action:
-        parts.append(reidentify_action)
+    if remove_action or reidentify_action:
+        # One row, so the two actions read as siblings. Stacked, the
+        # full-width removal button looked like a field rather than a
+        # control, and the re-identify one had no rule at all and wrapped
+        # into its own caption.
+        parts.append(
+            '<div class="actions">'
+            + reidentify_action
+            + remove_action
+            + "</div>"
+        )
     parts.append("</article>")
     return "".join(parts)
 
@@ -591,11 +637,17 @@ def render_source(
     patterns_snapshot: str = "",
     saved: tuple[int, bool, int, int, int] | None = None,
     editing: bool = False,
+    approvable: bool = True,
 ) -> str:
     """One source's cards and grammar.
 
     Without `csrf` this renders read-only — there is no form at all, so a page
     that cannot prove its session cannot show controls that would fail anyway.
+
+    `approvable` is the same rule one level up: a source with no model run has
+    nothing to approve, and the panel refuses such a submission. Offering the
+    checkbox anyway would be a control that only ever errors — which is the
+    thing this page already refuses to do for grammar review.
     """
     prefix = f"/{html.escape(token, quote=True)}" if token else ""
     journey = detail.journey
@@ -606,6 +658,7 @@ def render_source(
     editing = editing and bool(csrf) and bool(detail.cards)
     actionable = (
         bool(csrf)
+        and approvable
         and not editing
         and (waiting or (not detail.pattern_reviewed and detail.can_review_grammar))
     )
