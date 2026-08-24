@@ -17,10 +17,12 @@ import yaml
 
 from conftest import seed_prompts
 from japanese_anki import cli, extract, operations, patterns, prompts
+from japanese_anki.application import plan_extraction
 from japanese_anki.claude_client import CallResult, Refusal
+from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.extract import ExtractError, build_records, known_ids, prompt_name
-from japanese_anki.inputs import PreparedInput
+from japanese_anki.inputs import PreparedInput, prepare_inputs
 from japanese_anki.models import VocabularyRecord, provisional_fields
 from japanese_anki.staging import read_staging
 
@@ -1939,3 +1941,76 @@ def test_the_authority_is_recorded_before_the_request_is_built(
 
     # At the moment the provider was called, the journal already said so.
     assert seen == ["dispatching"]
+
+
+def test_the_journal_names_the_request_that_was_actually_sent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The journal's whole purpose is that a crash between sending and parsing
+    can still say which call was made. That is only true while the fingerprint
+    it recorded describes the request the dispatch went on to build.
+
+    Those are computed in two places — the plan journals one before dispatch,
+    and `extract_candidates` records another into the staging file from the
+    arguments it was actually handed — so they are independently derived and
+    must agree. Nothing else compares them: asserting the journalled
+    fingerprint is merely *present*, or merely *stable between two identical
+    plans*, passes just as happily when the plan fingerprints a prompt with the
+    known-words block and the dispatch sends one without it.
+
+    Prose mode over a non-empty collection, because that is the only shape
+    where the known list is non-empty and so the only shape where the two can
+    disagree.
+    """
+    root = project(
+        tmp_path,
+        [VocabularyRecord(id="word:話す:はなす", expression="話す", reading="はなす")],
+    )
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", FakeCall(ok(candidate())))
+
+    assert cli.main([
+        "--root", str(root), "extract", "--yes",
+        str(source_pdf(tmp_path)), "--mode", "prose",
+    ]) == 0
+
+    journal = operations.OperationJournal.load(root / "data" / "operations.json")
+    [operation] = journal.operations.values()
+    staged = sorted((root / "staging").glob("*.yaml"))
+    _records, meta = read_staging(staged[0])
+
+    assert operation.request_fp
+    assert operation.request_fp == meta["prompt_provenance"]["request_fingerprint"]
+
+
+def test_the_known_list_is_ordered_so_a_rerun_has_one_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The known words go into the prompt the request fingerprint is computed
+    over, so an unordered set gives the same corpus a different request
+    identity on every run — and that identity is what the journal records and
+    a retry compares.
+
+    Two separate processes would be needed to see it through hash
+    randomization, so this asserts the ordering directly instead.
+    """
+    root = project(
+        tmp_path,
+        [
+            VocabularyRecord(id="word:話す:はなす", expression="話す", reading="はなす"),
+            VocabularyRecord(id="word:食べる:たべる", expression="食べる", reading="たべる"),
+            VocabularyRecord(id="word:飲む:のむ", expression="飲む", reading="のむ"),
+        ],
+    )
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", FakeCall(ok(candidate())))
+
+    plan = plan_extraction(
+        ProjectConfig.load(root),
+        prepare_inputs([source_pdf(tmp_path)], root / "inbox"),
+        mode="prose",
+        model="claude-opus-5",
+        style_guide="style",
+        system="system",
+    )
+
+    assert plan.skip_list == tuple(sorted(plan.skip_list))
+    assert len(plan.skip_list) == 3

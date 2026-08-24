@@ -31,6 +31,7 @@ from japanese_anki import (
     status,
     workbench,
 )
+from japanese_anki.application.extraction import plan_extraction
 from japanese_anki.application.promotion import (
     AiLedgerHandoffIncomplete,
     archive_for_run,
@@ -1869,36 +1870,19 @@ def command_extract(args: argparse.Namespace) -> int:
         inbox_root=_durable_inbox_root(config),
     )
 
-    existing = (
-        load_records(config.normalized_file)
-        if config.normalized_file.exists()
-        else []
+    # Everything knowable without paying — targets, fingerprints, the request
+    # identity, and every refusal a provider is not needed for. The split is
+    # where the consent is, so the question below can be asked about a value
+    # rather than about a function that asks and dispatches in one breath.
+    plan = plan_extraction(
+        config,
+        prepared,
+        mode=args.mode,
+        model=model,
+        style_guide=style_guide,
+        system=system,
+        force=args.force,
     )
-    known = extract.known_ids(existing)
-    # Only prose mode is told what janki already has: a table is transcribed
-    # row by row, and telling the model to skip rows would put holes in a
-    # faithful transcription.
-    skip_list = (
-        sorted({record.expression for record in existing})
-        if args.mode == "prose"
-        else ()
-    )
-
-    # Every target resolved before the first API call: a batch that would write
-    # two inputs to one file is refused now rather than after paying for both.
-    targets = extract.staging_targets(
-        config.staging_dir, prepared, force=args.force
-    )
-    source_fingerprints = [
-        item.source_sha256 or extract.source_fingerprint(item.origin_path)
-        for item in prepared
-    ]
-    # Validate the complete store before a paid call. The mapping itself is not
-    # kept: a human can finish reviewing a source while that call is in flight,
-    # and the post-call decision must see that newer state under the writer
-    # lock rather than replacing it from this stale preflight snapshot.
-    patterns.load_store(config.patterns_file)
-
     if not _confirm_live_model(prepared, model, args.yes):
         # Says what was *kept*, not only what was not sent. `prepare_inputs`
         # ran above and copied any outside file into the durable inbox, which
@@ -1912,7 +1896,7 @@ def command_extract(args: argparse.Namespace) -> int:
         # `_copy_into_inbox` returns a path under the inbox, including the four
         # that copy nothing, so a containment test announces files this run
         # never touched.
-        copied = [item.origin_path for item in prepared if item.copied]
+        copied = list(plan.kept_in_inbox)
         # One stream, because these lines qualify the sentence above them.
         # Split across stdout and stderr, `2>/dev/null` prints exactly
         # "Nothing was sent." with its qualification dropped, and a pipe can
@@ -1926,28 +1910,20 @@ def command_extract(args: argparse.Namespace) -> int:
 
     written = 0
     journal = operations.OperationJournal.load(config.operations_file)
-    for index, (item, target) in enumerate(
-        zip(prepared, targets, strict=True)
-    ):
+    for planned in plan.targets:
+        item = planned.item
+        target = planned.staging_path
         # Authority is recorded before the request exists, not after it
         # succeeds. The interval this protects is the one where the money is
         # spent and nothing on disk remembers: a crash between the send and the
         # parse used to leave no way to tell "never sent" from "sent and lost".
         operation_id = str(uuid.uuid4())
-        provenance = extract.prompt_provenance(
-            item,
-            model=model,
-            style_guide=style_guide,
-            system=system,
-            mode=args.mode,
-            known=skip_list,
-            source_sha256=source_fingerprints[index],
-        )
+        provenance = planned.provenance
         journal.authorize(
             operation_id,
             kind="extract",
             source_file=item.origin_path.name,
-            source_sha256=source_fingerprints[index],
+            source_sha256=planned.source_sha256,
             request_fp=str(provenance["request_fingerprint"]),
             model=model,
         )
@@ -1962,13 +1938,18 @@ def command_extract(args: argparse.Namespace) -> int:
             journal.advance(_id, "result_captured", artifact=relative)
 
         try:
+            # From the plan, not from locals that happen to hold the same
+            # values. The journal entry above records *this* plan's request
+            # fingerprint, and it is only true that the journal names the call
+            # that was made while the call is built from what the journal
+            # described.
             result = extract.extract_candidates(
                 item,
-                model=model,
-                style_guide=style_guide,
-                system=system,
-                mode=args.mode,
-                known=skip_list,
+                model=plan.model,
+                style_guide=plan.style_guide,
+                system=plan.system,
+                mode=plan.mode,
+                known=plan.skip_list,
                 capture=_capture,
             )
         except JankiError as exc:
@@ -2045,11 +2026,11 @@ def command_extract(args: argparse.Namespace) -> int:
                 ),
             )
         candidates = result.candidates
-        built = extract.build_records(candidates, item, known)
+        built = extract.build_records(candidates, item, plan.known)
         records = built.records
         coverage = extract.coverage_block(
             result,
-            source_sha256=source_fingerprints[index],
+            source_sha256=planned.source_sha256,
             mode=args.mode,
             candidate_accounting=built.candidate_accounting,
         )

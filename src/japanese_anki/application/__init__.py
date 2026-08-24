@@ -24,6 +24,11 @@ from japanese_anki.application.detail import (
     SourceDetail,
     source_detail,
 )
+from japanese_anki.application.extraction import (
+    ExtractionPlan,
+    ExtractionTarget,
+    plan_extraction,
+)
 from japanese_anki.application.journey import (
     ADDED,
     CARDS_NEED_EDITS,
@@ -64,6 +69,8 @@ __all__ = [
     "GRAMMAR_ONLY",
     "GRAMMAR_REVIEWED",
     "GRAMMAR_UNKNOWN",
+    "ExtractionPlan",
+    "ExtractionTarget",
     "HeldCard",
     "LandingCard",
     "PromotionPlan",
@@ -78,6 +85,7 @@ __all__ = [
     "archive_run_provenance",
     "deck_membership",
     "example_authority_state",
+    "plan_extraction",
     "plan_promotion",
     "needs_example_review",
     "source_detail",

@@ -21,9 +21,16 @@ import yaml
 from test_workbench_fixtures import materialize
 
 from japanese_anki import cli, promote
-from japanese_anki.application import deck_membership, plan_promotion
+from japanese_anki.application import (
+    ExtractionPlan,
+    deck_membership,
+    plan_extraction,
+    plan_promotion,
+)
 from japanese_anki.config import ProjectConfig
+from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import resolve_deck_records
+from japanese_anki.inputs import PreparedInput
 from japanese_anki.io import load_records
 from japanese_anki.models import SourceReference, VocabularyRecord
 
@@ -1041,3 +1048,166 @@ def test_an_empty_file_beside_its_own_archive_says_the_rows_already_landed(
     assert not plan.is_blocked, plan.blocked
     assert plan.landing == ()
     assert plan.already_archived == tuple(record.id for record in records)
+
+
+# --- what a run would send, before anyone agrees to it ----------------------
+#
+# W3 needs this as a value: adding a file to the corpus and sending it to a
+# model are two separate actions, and the consent button has to name exactly
+# what leaves the computer. A dialog cannot render that from a function that
+# asks and dispatches in one breath.
+
+
+def _input(tmp_path: Path, name: str, *, copied: bool = False) -> PreparedInput:
+    path = tmp_path / "inbox" / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"%PDF-1.4 fake\n")
+    return PreparedInput(
+        kind="document",
+        media_type="application/pdf",
+        data_b64="ZmFrZQ==",
+        origin_path=path,
+        copied=copied,
+    )
+
+
+def _plan(tmp_path: Path, *inputs: PreparedInput, mode: str | None = None,
+          force: bool = False) -> ExtractionPlan:
+    (tmp_path / "janki.toml").write_text(CONFIG, encoding="utf-8")
+    if not (tmp_path / "vocabulary.json").exists():
+        (tmp_path / "vocabulary.json").write_text("[]", encoding="utf-8")
+    (tmp_path / "decks").mkdir(exist_ok=True)
+    (tmp_path / "staging").mkdir(exist_ok=True)
+    return plan_extraction(
+        ProjectConfig.load(tmp_path),
+        list(inputs),
+        mode=mode,
+        model="claude-opus-5",
+        style_guide="style",
+        system="system",
+        force=force,
+    )
+
+
+def test_the_plan_names_the_permanent_filename_and_the_model(
+    tmp_path: Path,
+) -> None:
+    """What the consent sentence is built from: this file, this model."""
+    plan = _plan(tmp_path, _input(tmp_path, "lesson-8.pdf"))
+
+    assert plan.names == ("lesson-8.pdf",)
+    assert plan.model == "claude-opus-5"
+    assert plan.targets[0].staging_path.name.startswith("lesson-8.pdf")
+
+
+def test_a_batch_that_would_collide_is_refused_before_anything_is_sent(
+    tmp_path: Path,
+) -> None:
+    """Refused now rather than after paying for both. Two inputs resolving to
+    one staging file means one answer overwrites the other, and finding that
+    out after the second call has already been billed.
+
+    Two *different* files sharing a basename, which is the case worth refusing
+    and the one a real batch hits — `lesson.pdf` from two folders. The same
+    file listed twice collides as well, but through a path anyone would guess.
+    """
+    first = _input(tmp_path, "lesson.pdf")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    other = elsewhere / "lesson.pdf"
+    other.write_bytes(b"%PDF-1.4 a different document\n")
+    second = PreparedInput(
+        kind="document", media_type="application/pdf", data_b64="b3RoZXI=",
+        origin_path=other,
+    )
+
+    with pytest.raises(JankiError, match="lesson.pdf"):
+        _plan(tmp_path, first, second)
+
+
+def test_prose_mode_is_told_what_the_collection_already_has(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "janki.toml").write_text(CONFIG, encoding="utf-8")
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps([_record().to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+
+    plan = _plan(tmp_path, _input(tmp_path, "lesson.pdf"), mode="prose")
+
+    assert plan.skip_list == ("話す",)
+
+
+def test_a_table_is_never_told_what_to_skip(tmp_path: Path) -> None:
+    """A table is transcribed row by row. Telling the model to skip rows would
+    put holes in a faithful transcription — so the skip list is prose-only, and
+    this is the half that is easy to lose in a refactor."""
+    (tmp_path / "janki.toml").write_text(CONFIG, encoding="utf-8")
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps([_record().to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+
+    for mode in ("table", None):
+        plan = _plan(tmp_path, _input(tmp_path, "sheet.pdf"), mode=mode)
+        assert plan.skip_list == (), mode
+
+
+def test_only_files_this_run_copied_are_reported_as_kept(tmp_path: Path) -> None:
+    """The half a refusal message forgets. The inbox copy happens before
+    consent, so "nothing was sent" alone reads as "nothing happened" while a
+    private document sits staged for the next `git add`.
+
+    Asked of `copied`, not of the path: every branch of the copy returns a path
+    under the inbox, including the ones that copy nothing, so a containment
+    test announces files the run never touched.
+    """
+    plan = _plan(
+        tmp_path,
+        _input(tmp_path, "brought-in.pdf", copied=True),
+        _input(tmp_path, "already-there.pdf", copied=False),
+    )
+
+    assert [path.name for path in plan.kept_in_inbox] == ["brought-in.pdf"]
+
+
+def test_an_unreadable_pattern_store_refuses_before_the_call(
+    tmp_path: Path,
+) -> None:
+    """A preflight that exists so a paid answer is never thrown away for a
+    reason that was knowable beforehand."""
+    (tmp_path / "janki.toml").write_text(CONFIG, encoding="utf-8")
+    (tmp_path / "patterns.json").write_text("{not json", encoding="utf-8")
+
+    with pytest.raises(JankiError):
+        _plan(tmp_path, _input(tmp_path, "lesson.pdf"))
+
+
+def test_every_target_carries_the_request_identity_it_will_be_journalled_under(
+    tmp_path: Path,
+) -> None:
+    """Journalled before dispatch, so a crash between sending and parsing can
+    still say which call was made. The plan resolves it, and the command
+    journals what the plan resolved rather than deriving its own."""
+    plan = _plan(tmp_path, _input(tmp_path, "lesson-8.pdf"))
+
+    fingerprint = plan.targets[0].provenance["request_fingerprint"]
+    assert isinstance(fingerprint, str) and fingerprint
+
+    # Same inputs, same identity: a fingerprint that moved between the plan and
+    # the dispatch would journal one call and make another.
+    again = _plan(tmp_path, _input(tmp_path, "lesson-8.pdf"))
+    assert again.targets[0].provenance["request_fingerprint"] == fingerprint
+
+
+def test_planning_contacts_no_provider(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Deciding what a run *would* send must never be able to send it."""
+    from japanese_anki import claude_client
+
+    def refuse(*args: object, **kwargs: object) -> None:
+        raise AssertionError("planning an extraction contacted the provider")
+
+    monkeypatch.setattr(claude_client, "parse_call", refuse)
+
+    _plan(tmp_path, _input(tmp_path, "lesson.pdf"))
