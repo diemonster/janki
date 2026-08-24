@@ -19,6 +19,7 @@ import yaml
 
 from japanese_anki import cli, enrich, extract, patterns, promote
 from japanese_anki import staging as staging_module
+from japanese_anki.io import load_records
 from japanese_anki.jpdb import JpdbClient
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
 from japanese_anki.promote import (
@@ -4303,3 +4304,206 @@ def test_a_typoed_sentinel_on_an_extract_row_is_named() -> None:
     result = check_readings([typoed], skip_reading_check=True)
 
     assert any("accepts nothing" in warning for warning in result.warnings)
+
+
+# --- what the shared decide step must not reorder ----------------------------
+
+
+def test_a_refused_file_says_why_before_it_asks_for_a_dictionary_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The gates decide without a dictionary, so a file they refuse must be
+    refused in their words — not in a complaint about a missing API key.
+
+    This is why the command decides offline first. Building the client up
+    front would be simpler and would tell somebody with a broken staging file
+    to go and find their jpdb key, which fixes nothing.
+    """
+    monkeypatch.delenv("JPDB_API_KEY", raising=False)
+    root = project(tmp_path)
+    staged = root / "staging" / "broken.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    staged.write_text("records: [oh dear\n", encoding="utf-8")
+
+    assert cli.main(["--root", str(root), "promote", str(staged)]) == 1
+
+    stderr = capsys.readouterr().err
+    assert "JPDB_API_KEY" not in stderr
+    assert "broken.yaml" in stderr
+
+
+def test_no_dictionary_key_is_needed_for_a_file_that_holds_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A legacy file with no records asks the dictionary nothing."""
+    monkeypatch.delenv("JPDB_API_KEY", raising=False)
+    root = project(tmp_path)
+    staged = root / "staging" / "empty.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    staged.write_text("records: []\nsource_file: legacy.pdf\n", encoding="utf-8")
+
+    assert cli.main(["--root", str(root), "promote", str(staged)]) == 0
+
+
+def test_no_dictionary_key_is_needed_to_finish_an_archive_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A completion writes no new record, so it asks the dictionary nothing.
+
+    The state matters, not just the exit code: this has to be a real
+    `archive_retry` — an emptied live review beside this run's own archive,
+    the shape a crash between the prune and the unlink leaves — and it has to
+    run *without* `--skip-reading-check`, or the condition under test is
+    short-circuited before it is reached.
+    """
+    monkeypatch.delenv("JPDB_API_KEY", raising=False)
+    root = project(tmp_path, [record()])
+    staged = root / "staging" / "in.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    incoming = record(meanings=["to speak"])
+    write_staging(staged, [incoming], {"source_file": "lesson.pdf"})
+    _records, meta = read_staging(staged)
+    done = staged.parent / "done"
+    done.mkdir(parents=True, exist_ok=True)
+    write_staging(done / staged.name, [incoming], promote.archive_meta(meta, 1))
+
+    assert cli.main(["--root", str(root), "promote", str(staged)]) == 0
+
+    out = capsys.readouterr().out
+    assert "Completed exact archive retry" in out
+    assert "already-archived row(s) were removed" in out
+
+
+def test_an_emptied_live_review_says_it_was_empty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The other archive-retry shape, and the other sentence.
+
+    Both run through one branch now, so the branch is the only thing keeping
+    the two messages apart — and neither message was asserted anywhere, which
+    made the split unproven exactly where it is easiest to get wrong.
+    """
+    monkeypatch.delenv("JPDB_API_KEY", raising=False)
+    root = project(tmp_path, [record()])
+    staged = root / "staging" / "in.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    incoming = record(meanings=["to speak"])
+    write_staging(staged, [incoming], {"source_file": "lesson.pdf"})
+    _records, meta = read_staging(staged)
+    done = staged.parent / "done"
+    done.mkdir(parents=True, exist_ok=True)
+    write_staging(done / staged.name, [incoming], promote.archive_meta(meta, 1))
+    # The crash shape: the archive is written, the live rows are pruned, and
+    # the file is never unlinked.
+    write_staging(staged, [], meta, force=True)
+
+    assert cli.main(["--root", str(root), "promote", str(staged)]) == 0
+
+    out = capsys.readouterr().out
+    assert "empty live review removed" in out
+    assert "already-archived row(s) were removed" not in out
+
+
+def test_accepting_coverage_is_refused_for_a_file_no_approval_could_save(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--accept-coverage` buys a model's verdict on whether a page is
+    accounted for. A file refused by a *structural* gate cannot be made
+    promotable by any verdict, so spending on it is money for nothing — and
+    the refusal a person needs is the structural one."""
+    sent: list[object] = []
+    monkeypatch.setattr(
+        cli.coverage, "review_coverage",
+        lambda *a, **k: sent.append(1) or None,
+    )
+    root = project(tmp_path)
+    staged = root / "staging" / "unreadable.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    staged.write_text("records: [oh dear\n", encoding="utf-8")
+
+    assert cli.main([
+        "--root", str(root), "promote", str(staged), "--accept-coverage",
+    ]) == 1
+
+    assert sent == [], "nothing should have been sent for a file this broken"
+    assert "unreadable.yaml" in capsys.readouterr().err
+
+
+def test_a_refusal_the_dictionary_could_change_is_not_settled_offline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Deciding offline first judges a *superset* of the rows a consulted run
+    promotes: without a dictionary, `check_readings` holds nothing for an
+    unlisted reading. So rows can converge on one landing id offline that a
+    consulted run never brings together — and believing that refusal exits 1
+    on a file the command used to promote cleanly.
+
+    Here the collection already holds `word:話す:はなし`, so that row keeps its
+    id while the second re-mints onto it. Offline both land and collide. Asked,
+    jpdb lists はなす and not はなし, so both are held, nothing converges, and
+    the run ends by recording why.
+    """
+    monkeypatch.setenv("JPDB_API_KEY", "test-key")
+    root = project(tmp_path, [record(id="word:話す:はなし", reading="はなし")])
+    staged = root / "staging" / "in.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    write_staging(
+        staged,
+        [
+            record(id="word:話す:はなし", reading="はなし", meanings=["kept"]),
+            record(id="word:話す:ふるい", reading="はなし", meanings=["reminted"]),
+        ],
+        {"source_file": "lesson.pdf"},
+    )
+    api = hanasu_jpdb()
+    monkeypatch.setattr(cli.jpdb, "JpdbClient", lambda *a, **kw: client_for(api))
+
+    assert cli.main(["--root", str(root), "promote", str(staged)]) == 0
+
+    # Held, not landed, and not refused: the collision existed only in the
+    # answer nobody had paid for yet.
+    assert api.bodies, "the dictionary was consulted"
+    remaining, _meta = read_staging(staged)
+    assert len(remaining) == 2
+    assert all(staging_module.annotations(row).get("hold_reason") for row in remaining)
+def test_a_row_the_second_accounting_call_flags_is_not_promoted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`promoted_retry_flags` drives the staging prune, and it exists so the
+    write path composes those flags rather than assuming they are all false.
+
+    The assumption is true for every input the real accounting function can
+    produce — the first call already probes each row's resolved id and its
+    stable re-mint. That is exactly why it cannot be tested without forcing a
+    flag: an invariant nothing can violate is indistinguishable from an
+    assumption nobody checked.
+    """
+    root = project(tmp_path, [])
+    staged = root / "staging" / "in.yaml"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    incoming = record(meanings=["to speak"])
+    write_staging(staged, [incoming], {"source_file": "lesson.pdf"})
+
+    from japanese_anki.application import promotion as promotion_module
+
+    real = promotion_module.promote.check_candidate_accounting
+    seen: list[int] = []
+
+    def flag_the_second(meta, live, archived, **kwargs):
+        answer = real(meta, live, archived, **kwargs)
+        seen.append(1)
+        # The first call partitions the live rows; the second judges what
+        # would land. Only the second is forced.
+        return [True] * len(answer) if len(seen) > 1 else answer
+
+    monkeypatch.setattr(
+        promotion_module.promote, "check_candidate_accounting", flag_the_second
+    )
+
+    assert cli.main([
+        "--root", str(root), "promote", str(staged), "--skip-reading-check",
+    ]) == 0
+
+    # Flagged as already archived, so nothing landed — and the live review was
+    # pruned of it rather than left behind.
+    assert load_records(root / "vocabulary.json") == []

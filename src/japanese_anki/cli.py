@@ -40,11 +40,11 @@ from japanese_anki.application.extraction import (
     settle_dispatch,
 )
 from japanese_anki.application.promotion import (
+    POST_READING_GATES,
     AiLedgerHandoffIncomplete,
+    PromotionDecision,
     archive_for_run,
-    inside_archive,
-    record_review_snapshot,
-    staged_ai_enrichment,
+    decide_promotion,
     staging_wire,
     unreadable_deck_warning,
     validate_record_archive,
@@ -3111,112 +3111,85 @@ def command_promote(args: argparse.Namespace) -> int:
     config = _load_config(args)
     path = args.file.resolve()
     archive_base = (config.staging_dir / "done" / path.name).resolve()
-    if inside_archive(path, archive_base.parent):
-        raise PromoteError(
-            f"{path} is inside the promoted archive. Those records are already in "
-            "the collection; promoting the archive would only duplicate it."
-        )
 
-    expected_wire, records, meta = record_review_snapshot(path)
-    # Validate every offline extraction invariant before `--accept-coverage`
-    # is allowed to spend a second model call. Coverage v2 binds the parsed
-    # candidate account; the matching done archive completes its row count on
-    # a partial promotion or an exact retry.
-    validate_coverage_facts(meta)
-    done, archived, archived_meta = archive_for_run(archive_base, meta)
-    # A zero-record extraction has a separate completion contract that checks
-    # its reviewed pattern snapshot byte for byte. Every record-bearing path,
-    # including one paired with an empty same-run archive, comes through the
-    # record validator.
-    if records or archived:
-        validate_record_archive(meta, archived, archived_meta)
-    promote.check_candidate_accounting(
-        meta, records, archived, archived_meta=archived_meta
-    )
+    def offline() -> PromotionDecision:
+        """Everything a dictionary cannot change, decided for free."""
+        return decide_promotion(config, path)
+
+    # An offline pass first, always. It costs nothing and it keeps two
+    # orderings the command has always had: a gate refuses before a missing
+    # JPDB_API_KEY can mask it, and `--accept-coverage` is answered before any
+    # dictionary lookup is worth paying for.
+    decision = offline()
+
     if args.accept_coverage or args.reaccept_coverage:
-        # Before `check_coverage`, because it is what makes that gate pass.
-        # Writes the approval into the staging file and re-reads, so the file
-        # on disk is the record — an approval held only in memory would let a
-        # promote succeed leaving nothing behind that says why.
+        if decision.is_blocked and decision.gate != "coverage":
+            # No approval can make this file promotable, so the model call
+            # would be money for nothing.
+            raise decision.error
+        # Writes the approval into the staging file, so the file on disk is
+        # the record — an approval held only in memory would let a promote
+        # succeed leaving nothing behind that says why. Called whatever the
+        # gate said, because it self-gates: a file with no coverage block, or
+        # one that needs no approval, is refused in its own words.
         if not _model_accepts_coverage(
-            config, path, meta, reaccept=args.reaccept_coverage
+            config, path, dict(decision.meta), reaccept=args.reaccept_coverage
         ):
             return 1
-        expected_wire, records, meta = record_review_snapshot(path)
-        validate_coverage_facts(meta)
-        done, archived, archived_meta = archive_for_run(archive_base, meta)
-        if records or archived:
-            validate_record_archive(meta, archived, archived_meta)
-        promote.check_candidate_accounting(
-            meta, records, archived, archived_meta=archived_meta
+        decision = offline()
+
+    if not args.skip_reading_check and (
+        decision.state in ("nothing_lands", "lands")
+        or (decision.is_blocked and decision.gate in POST_READING_GATES)
+    ):
+        # Only now, and only when a dictionary could change the answer: the
+        # key is not needed to refuse a broken file, and the offline pass has
+        # already decided everything a dictionary cannot.
+        #
+        # The blocked case matters as much as the landing one. Offline,
+        # `check_readings` promotes every row a dictionary would have held —
+        # so it judges a superset, and two rows can collide on one landing id
+        # that a consulted run would never have brought together. Believing
+        # that refusal would exit 1 on a file the old command promoted.
+        decision = decide_promotion(
+            config,
+            path,
+            client=jpdb.JpdbClient(jpdb.api_key_from_env()),
+            skip_reading_check=args.skip_reading_check,
         )
-    # Coverage is an owner-review gate. Check it before a reading client is
-    # created and before records, ledger, archive, or staging content can move.
-    # A file written before M7.4 has no block and remains valid.
-    promote.check_coverage(meta)
-    if not records:
-        if archived:
-            # The archive is written before the live review is pruned and
-            # deleted. A crash after the prune leaves an empty extraction file;
-            # it is completion evidence, not a new pattern-only review.
-            done, _removed = _finish_record_review(
-                path,
-                archive_base,
-                expected_wire=expected_wire,
-                expected_meta=meta,
-                expected_archived=archived,
-                expected_archived_meta=archived_meta,
-                promoted=(),
-                retry_records=(),
-                keep=(),
-                held=(),
-            )
-            print(f"Completed exact archive retry for {path}; empty live review removed.")
-            print(f"  Archived to {done} (unchanged).")
-            return 0
+
+    if decision.is_blocked:
+        # What the run learned before it refused, in the order the command has
+        # always printed it. A refusal reached after the readings pass used to
+        # come with these; raising bare would drop the one explanation of why
+        # a row was going to be held.
+        for problem in decision.unreadable_decks:
+            print(f"warning: {unreadable_deck_warning(problem)}", file=sys.stderr)
+        for warning in decision.reading_warnings:
+            print(f"warning: {warning}", file=sys.stderr)
+        raise decision.error
+
+    meta = decision.meta
+    archived = decision.archived
+    archived_meta = decision.archived_meta
+    expected_wire = decision.wire
+
+    if decision.state == "nothing":
+        print(f"{path} holds no records; nothing to promote.")
+        return 0
+
+    if decision.state == "pattern_only":
         run_id = rich_extraction_review_run_id(meta)
-        if run_id is None:
-            print(f"{path} holds no records; nothing to promote.")
-            return 0
+        assert run_id is not None
         return _complete_pattern_only_review(
             config, path, archive_base, meta, expected_wire, run_id
         )
 
-    # Everything that can refuse, before anything is written. read_staging goes
-    # through PyYAML, which accepts a duplicate key silently; the rewrite goes
-    # through ruamel, which does not. Finding that out *after* the records and
-    # the archive were written leaves the promoted rows still in the staging
-    # file, and the re-run then appends them to the archive a second time.
-    check_rewritable(path)
-    # The archive is written under the same name, and write_staging refuses a
-    # suffix read_staging could not parse back. read_staging accepts .json and
-    # JSON is valid YAML, so a hand-made .json staging file gets all the way to
-    # the archive write before failing — after the records and the ledger have
-    # landed, leaving a review that can never be finished however often it is
-    # retried.
-    if path.suffix.lower() not in STAGING_SUFFIXES:
-        raise PromoteError(
-            f"{path} is not a staging file janki can rewrite: the promoted archive "
-            f"is written under the same name, and that needs "
-            f"{' or '.join(STAGING_SUFFIXES)}. Rename it and re-run."
-        )
-    raw_archive_retry = promote.check_candidate_accounting(
-        meta,
-        records,
-        archived,
-        archived_meta=archived_meta,
-    )
-    retry_records: list[VocabularyRecord] = [
-        record
-        for record, is_retry in zip(records, raw_archive_retry, strict=True)
-        if is_retry
-    ]
-    work_records = [
-        record
-        for record, is_retry in zip(records, raw_archive_retry, strict=True)
-        if not is_retry
-    ]
-    if not work_records:
+    if decision.state == "archive_retry":
+        # The archive is written before the live review is pruned and deleted.
+        # A crash after the prune leaves an empty extraction file; it is
+        # completion evidence, not a new pattern-only review.
+        empty_live = not decision.records
         done, removed = _finish_record_review(
             path,
             archive_base,
@@ -3225,64 +3198,45 @@ def command_promote(args: argparse.Namespace) -> int:
             expected_archived=archived,
             expected_archived_meta=archived_meta,
             promoted=(),
-            retry_records=retry_records,
-            keep=[False] * len(records),
+            retry_records=() if empty_live else list(decision.records),
+            keep=() if empty_live else [False] * len(decision.records),
             held=(),
         )
-        print(
-            f"Completed exact archive retry for {path}; {removed} "
-            "already-archived row(s) were removed from the live review."
-        )
+        if empty_live:
+            print(
+                f"Completed exact archive retry for {path}; empty live review "
+                "removed."
+            )
+        else:
+            print(
+                f"Completed exact archive retry for {path}; {removed} "
+                "already-archived row(s) were removed from the live review."
+            )
         print(f"  Archived to {done} (unchanged).")
         return 0
 
-    ai_provenance = staged_ai_enrichment(
-        meta,
-        [record.id for record in work_records],
-        # `archive_for_run` returns rows only from an exact provenance match,
-        # never from a completed older run that happened to share the basename.
-        archived_ids=[record.id for record in archived],
-    )
-
-    client = None
-    if not args.skip_reading_check:
-        client = jpdb.JpdbClient(jpdb.api_key_from_env())
-    # Read before the ids are decided, not after: a staged id the collection
-    # already holds must keep it, or the re-mint adds a second record beside
-    # the curated one and leaves the original untouched.
-    #
-    # "The collection" here means what it means everywhere else in janki — the
-    # normalized file *plus every deck's inline notes* (`status.surviving_ids`).
-    # A record living only in a deck YAML has the same stale-id problem and the
-    # same exported GUID, and a narrower set would re-mint it just as happily.
-    # A deck that will not resolve leaves ids unknown, so nothing can be proved
-    # absent. Rows whose id would change are then held back rather than
-    # promoted: writing the id they arrived with would put it in the store
-    # permanently, since a stored id is exempt from the re-mint that repairs it.
-    # Held rows stay in data/staging/, which is committed.
-    output_path = config.normalized_file.resolve()
-    output_revision = records_revision(output_path)
-    existing = load_records(output_path) if output_path.exists() else []
-    stored_ids, unreadable = status.surviving_ids(config, existing)
-    for problem in unreadable:
+    for problem in decision.unreadable_decks:
         print(f"warning: {unreadable_deck_warning(problem)}", file=sys.stderr)
-    result = promote.check_readings(
-        work_records,
-        client=client,
-        skip_reading_check=args.skip_reading_check,
-        already_stored=stored_ids,
-        remint_blocked=bool(unreadable),
-    )
-
+    result = decision.readings
+    assert result is not None
     for warning in result.warnings:
         print(f"warning: {warning}", file=sys.stderr)
 
-    exact_promoted = promote.check_candidate_accounting(
-        meta,
-        result.promoted,
-        archived,
-        archived_meta=archived_meta,
-    )
+    records = decision.records
+    raw_archive_retry = decision.retry_flags
+    work_records = list(decision.work)
+    existing = list(decision.existing)
+    output_path = decision.output_path
+    output_revision = decision.output_revision
+    ai_provenance = decision.ai_provenance
+    assert output_path is not None
+
+    retry_records: list[VocabularyRecord] = [
+        record
+        for record, is_retry in zip(records, raw_archive_retry, strict=True)
+        if is_retry
+    ]
+    exact_promoted = decision.promoted_retry_flags
     pending_promoted = [
         record
         for record, is_retry in zip(result.promoted, exact_promoted, strict=True)
@@ -3351,8 +3305,10 @@ def command_promote(args: argparse.Namespace) -> int:
             )
         return 0
 
-    # `existing` and `output_path` were read above, before any id was decided.
-    # Read the ledger before anything is written, and only once.
+    # `existing` and `output_path` came from the decision, read before any id
+    # was decided. The ledger is loaded here for the object to write into;
+    # deciding validated that it *parses*, which is a different question and a
+    # cheaper one.
     book = ledger.load(config.ledger_file)
 
     merged, outcomes = promote.merge_staged_records(

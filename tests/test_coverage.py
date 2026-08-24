@@ -677,3 +677,67 @@ def test_reaccepting_a_file_with_no_approval_is_an_ordinary_acceptance(
 
     _records, meta = read_staging(staged)
     assert meta["coverage"]["approval"]["reason"] == "Accounted for."
+
+
+def test_a_structurally_refused_file_never_reaches_the_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--accept-coverage` buys a verdict on whether a page is accounted for.
+    A file its *structural* gates refuse cannot be made promotable by any
+    verdict, so the call is money for nothing — and the refusal a person needs
+    is the structural one, not one about coverage.
+
+    The file has to carry a real coverage block for this to mean anything: a
+    file too broken to parse is stopped by the acceptance helper's own
+    self-gating, which would make the guard look tested when it is not.
+    """
+    from japanese_anki import cli, promote
+    from japanese_anki.staging import read_staging, write_staging
+
+    root, staged = project_with_source(tmp_path)
+    records, meta = read_staging(staged)
+    # A same-run archive whose own note no longer records what it archived.
+    # Refused before coverage is ever asked about, and no verdict can mend it.
+    done = staged.parent / "done"
+    done.mkdir(parents=True, exist_ok=True)
+    archived_meta = promote.archive_meta(meta, 1)
+    archived_meta["review_notes"] = "no count here"
+    write_staging(done / staged.name, [records[0]], archived_meta)
+    sent: list[object] = []
+    monkeypatch.setattr(
+        cli.coverage, "review_coverage", lambda *a, **k: sent.append(1) or None
+    )
+
+    assert cli.main([
+        "--root", str(root), "promote", str(staged), "--accept-coverage",
+    ]) == 1
+
+    assert sent == [], "a structural refusal must not buy a coverage verdict"
+    assert capsys.readouterr().err.strip()
+
+
+def test_an_accepted_file_is_then_promoted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The point of the flag. The approval is written into the staging file,
+    and the promote that follows has to see it — which means deciding again
+    against the file as it now stands, not against the copy read before the
+    approval existed."""
+    from japanese_anki import cli
+    from japanese_anki.io import load_records
+
+    root, staged = project_with_source(tmp_path)
+    monkeypatch.setattr(
+        cli.coverage, "review_coverage",
+        lambda *a, **k: coverage.CoverageVerdict(True, "Accounted for.", "m", "f"),
+    )
+
+    assert cli.main([
+        "--root", str(root), "promote", str(staged),
+        "--accept-coverage", "--skip-reading-check",
+    ]) == 0
+
+    assert load_records(root / "vocabulary.json"), "the records should have landed"
+    assert "approval" in staged.parent.joinpath("done", staged.name).read_text(
+        encoding="utf-8"
+    )

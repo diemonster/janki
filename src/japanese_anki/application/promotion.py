@@ -59,6 +59,7 @@ __all__ = [
     "PromotionDecision",
     "PromotionPlan",
     "DECISION_STATES",
+    "POST_READING_GATES",
     "archive_for_run",
     "archive_run_provenance",
     "check_pattern_review",
@@ -499,6 +500,16 @@ def check_pattern_review(
 #: `pattern_only` — a zero-record rich extraction whose grammar was reviewed.
 #: `nothing_lands` — rows exist and every one is held back.
 #: `lands` — rows would reach the collection.
+#: Gates reached only *after* the readings pass, so what they refuse depends
+#: on which rows survived it.
+#:
+#: An offline decision cannot settle these: it promotes every row a dictionary
+#: would have held, so it judges a superset — and two rows can collide on one
+#: landing id offline that a consulted run would never have brought together.
+#: A caller that decides offline first has to come back with the client before
+#: believing a refusal from here.
+POST_READING_GATES = frozenset({"accounting", "merge", "ledger"})
+
 DECISION_STATES = (
     "blocked",
     "nothing",
@@ -574,6 +585,13 @@ class PromotionDecision:
     #: The rows this run may still act on, and what the readings pass decided.
     work: tuple[VocabularyRecord, ...] = ()
     readings: promote.PromoteResult | None = None
+    #: One flag per promoted row, from the accounting call made *after* the
+    #: readings pass. Carried rather than assumed: the first call already
+    #: probes each row's resolved id and its stable re-mint, so these are
+    #: provably all false by the time they exist — but the write path composes
+    #: its prune flags from them, and "provably" is not a thing to build a
+    #: staging prune on.
+    promoted_retry_flags: tuple[bool, ...] = ()
 
     #: The collection as it was read, and the token proving it has not moved.
     existing: tuple[VocabularyRecord, ...] = ()
@@ -680,6 +698,12 @@ def decide_promotion(
     staging_path = staging_path.resolve()
     name = source or staging_path.name
     consulted = False
+    # What has been read so far. A refusal carries it too: `--accept-coverage`
+    # has to show the model the coverage block of the very file the gate
+    # refused, and a blocked decision that dropped its snapshot left the
+    # acceptance step with nothing to read — reporting "carries no coverage
+    # block" about a file whose block is right there.
+    snapshot: dict[str, Any] = {}
 
     def at(state: str, **fields: Any) -> PromotionDecision:
         # Enforced, not documented: `at` took any string, so a mislabelled
@@ -691,7 +715,7 @@ def decide_promotion(
         )
 
     def blocked(reason: JankiError, gate: str) -> PromotionDecision:
-        return at("blocked", error=reason, gate=gate)
+        return at("blocked", error=reason, gate=gate, **snapshot)
 
     archive_base = (config.staging_dir / "done" / staging_path.name).resolve()
     if inside_archive(staging_path, archive_base.parent):
@@ -717,8 +741,12 @@ def decide_promotion(
         # staging file deleted between listing a page and previewing it
         # produced a traceback where the old code returned a refusal.
         wire, records, meta = record_review_snapshot(staging_path)
+        snapshot.update(wire=wire, records=tuple(records), meta=meta)
         validate_coverage_facts(meta)
         done, archived, archived_meta = archive_for_run(archive_base, meta)
+        snapshot.update(
+            done=done, archived=tuple(archived), archived_meta=archived_meta
+        )
         if records or archived:
             validate_record_archive(meta, archived, archived_meta)
         retry_flags = promote.check_candidate_accounting(
@@ -762,9 +790,12 @@ def decide_promotion(
         # nobody has reviewed.
         try:
             check_pattern_review(config, meta, run_id)
-            check_rewritable(staging_path)
         except JankiError as exc:
             return blocked(exc, "patterns")
+        try:
+            check_rewritable(staging_path)
+        except JankiError as exc:
+            return blocked(exc, "rewritable")
         if staging_path.suffix.lower() not in STAGING_SUFFIXES:
             return blocked(PromoteError(_unrewritable(staging_path)), "rewritable")
         return at("pattern_only", **common)
@@ -828,15 +859,19 @@ def decide_promotion(
         # *under*, so two rows whose corrected readings mint the same id
         # collide only here.
         #
-        # Its return is deliberately discarded, and that is checked rather than
-        # assumed: the first call already probes each row's resolved id **and**
-        # its stable re-mint, and `remint` mints nothing else, so a row the
-        # second call would flag was excluded from `work` by the first.
-        promote.check_candidate_accounting(
+        # Its answer is carried rather than discarded. The first call already
+        # probes each row's resolved id **and** its stable re-mint, and
+        # `remint` mints nothing else, so a row the second call would flag was
+        # excluded from `work` by the first — the plan has a test pinning
+        # exactly that. The write path still composes its prune flags from
+        # these, because a staging prune is not a place to spend an invariant.
+        promoted_retry = promote.check_candidate_accounting(
             meta, readings.promoted, archived, archived_meta=archived_meta
         )
     except JankiError as exc:
         return blocked(exc, "accounting")
+
+    common["promoted_retry_flags"] = tuple(promoted_retry)
 
     if not readings.promoted:
         # Nothing would land, so promote returns before it reads the ledger.
@@ -846,6 +881,9 @@ def decide_promotion(
 
     try:
         ledger.load(config.ledger_file)
+    except JankiError as exc:
+        return blocked(exc, "ledger")
+    try:
         merged, outcomes = promote.merge_staged_records(
             list(existing),
             list(readings.promoted),
