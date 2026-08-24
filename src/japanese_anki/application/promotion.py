@@ -392,11 +392,17 @@ class PromotionPlan:
     already_archived: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
     #: Whether the dictionary witness was skipped — load-bearing rather than
-    #: decorative. The check costs a paid lookup per row, so a preview never
-    #: makes it, and a row listed in `landing` may still be held when the real
-    #: promote asks jpdb whether its reading is one a dictionary lists. Passed
-    #: from the same variable that decides it, so an online variant cannot set
-    #: one without the other.
+    #: decorative.
+    #:
+    #: The check costs a paid lookup per row, so a plan asked without a client
+    #: declines it, and then a row listed in `landing` may still be held when
+    #: the real promote asks jpdb whether its reading is one a dictionary
+    #: lists. Handed a client, the plan makes the call and this says so, which
+    #: is how a caller tells a complete decision from a partial one.
+    #:
+    #: True on a plan that was blocked before the check could run, and on the
+    #: early returns that never reach it — in all of which the witness really
+    #: was not consulted.
     readings_unchecked: bool = True
 
     @property
@@ -513,13 +519,31 @@ def plan_promotion(
     # the command's own `--skip-reading-check` does.
     if skip_reading_check is None:
         skip_reading_check = client is None
+    if not skip_reading_check and client is None:
+        # Refused here, and unconditionally. `check_readings` raises for this
+        # too, but from inside its per-record loop after the structural holds
+        # — so a caller could plan a blocked or all-held file, see a plan come
+        # back, and crash on the first clean row in production instead.
+        raise PromoteError(
+            "A reading check needs a dictionary client. Pass one, or leave "
+            "skip_reading_check alone to get the offline plan."
+        )
 
     staging_path = staging_path.resolve()
     name = source or staging_path.name
 
+    # Mutable so the refusals reachable *after* the dictionary ran do not
+    # report it as skipped. Money was spent by then, and a caller keying "this
+    # preview may be incomplete" on the flag would say the wrong thing about a
+    # plan that is complete as far as it got.
+    consulted = False
+
     def blocked(reason: object) -> PromotionPlan:
         return PromotionPlan(
-            source=name, staging_path=staging_path, blocked=str(reason)
+            source=name,
+            staging_path=staging_path,
+            blocked=str(reason),
+            readings_unchecked=not consulted,
         )
 
     archive_base = (config.staging_dir / "done" / staging_path.name).resolve()
@@ -618,6 +642,7 @@ def plan_promotion(
 
     # The check and the flag that reports it travel together, so a caller
     # cannot get one without the other.
+    consulted = not skip_reading_check
     result = promote.check_readings(
         work,
         client=client,
@@ -638,9 +663,17 @@ def plan_promotion(
 
     try:
         # The *second* accounting call, the one the command makes after
-        # `check_readings`. Not a repeat: its duplicate check is over the ids
-        # rows would land under, and two rows whose corrected readings mint the
-        # same id collide only after the re-mint.
+        # `check_readings`. Not a repeat, and not only a check: its duplicate
+        # test is over the ids rows would land *under*, so two rows whose
+        # corrected readings mint the same id collide only here — and its
+        # Its *return* is deliberately discarded, and that is checked rather
+        # than assumed: it flags rows matching this run's archive, but the
+        # first call already probes each row's resolved id **and** its stable
+        # re-mint (`promote.check_candidate_accounting`), and `remint` mints
+        # nothing else. So a row the second call would flag was excluded from
+        # `work` by the first. A review suggested the plan could disagree with
+        # the command here; building the state it named put the row in
+        # `already_archived` before the second call ran.
         promote.check_candidate_accounting(
             meta, result.promoted, archived, archived_meta=archived_meta
         )

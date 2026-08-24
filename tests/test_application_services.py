@@ -469,14 +469,20 @@ def test_a_held_row_is_reported_with_the_reason_it_was_held(tmp_path: Path) -> N
 def test_the_preview_says_the_dictionary_has_not_been_asked(tmp_path: Path) -> None:
     """Load-bearing, not decorative. The real promote holds back a row whose
     reading no dictionary lists, and that check costs a paid lookup per row —
-    so this plan never makes it. A row listed as landing may still be held when
-    the source is actually added, and the flag is what stops the page claiming
-    otherwise."""
-    path = _staged(tmp_path, "table_exhaustive", filename="table.pdf")
+    so a plan asked without a client declines it, and a row listed as landing
+    may still be held when the source is actually added.
+
+    Driven over a source that reaches the check. `table_exhaustive` is
+    coverage-blocked, so a plan over it never gets near the flag logic and
+    asserting the value there pins the dataclass default and nothing else.
+    """
+    path = _staged(tmp_path, "reading_holds", filename="holds.pdf")
     config = ProjectConfig.load(tmp_path)
 
     plan = plan_promotion(config, path)
 
+    assert not plan.is_blocked, plan.blocked
+    assert plan.landing or plan.held, "a plan that decided nothing pins nothing"
     assert plan.readings_unchecked is True
 
 
@@ -1635,37 +1641,163 @@ def test_a_plan_holding_the_dictionary_decides_what_the_command_decides(
     """The plan is a preview only because it declines the paid lookup. Given
     the same dictionary the command uses, it has to reach the same verdict on
     every row — otherwise the browser's "add this source" and the terminal's
-    would disagree about which cards a reading holds back, which is the one
-    decision `promote` makes that a person cannot see coming.
+    disagree about which cards a reading holds back, which is the one refusal
+    a person cannot see coming.
 
-    A reading no entry lists is the case that separates them: offline it is
-    invisible, and with a dictionary it holds the row.
+    The dictionary has to *resolve* the word for that to happen. A fake that
+    parses nothing is not a strict dictionary, it is a silent one, and
+    `docs/DESIGN.md` is explicit that "silence passes; a dictionary is a
+    witness, not a gate" — so an unresolved spelling is promoted unchecked and
+    the two plans agree trivially. `走る` is resolved here, to an entry read
+    はしる, against a row the model transcribed わしる: that is the held case,
+    and it exists only when the dictionary has an opinion to disagree with.
     """
     from test_promote import FakeJpdb, client_for
 
     path = _staged(tmp_path, "reading_holds", filename="holds.pdf")
     config = ProjectConfig.load(tmp_path)
-
-    # Nothing parses: every reading is one no entry lists.
-    silent = FakeJpdb({})
+    hashiru = FakeJpdb(
+        {"走る": [1404410, 1, "走る", "はしる", ["LHH"], 700, ["vi", "v5r"]]},
+        {(1404410, 1): {"reading": "はしる", "alt_sids": []}},
+    )
 
     offline = plan_promotion(config, path)
-    consulted = plan_promotion(config, path, client=client_for(silent))
+    consulted = plan_promotion(config, path, client=client_for(hashiru))
 
     assert offline.readings_unchecked is True
     assert consulted.readings_unchecked is False
-    # The dictionary holds back rows the offline plan was willing to land, and
-    # the flag is what warned that it might.
-    assert len(consulted.held) >= len(offline.held)
-    held_ids = {card.record.id for card in consulted.held}
-    assert held_ids >= {card.record.id for card in offline.held}
+
+    # The row the offline plan was willing to land, held once a dictionary is
+    # asked. Strictly more held, not "at least as many" — a `>=` here passes
+    # for a dictionary that can never hold anything, which is exactly the
+    # mistake this test was first written with.
+    wrong_reading = "word:走る:わしる"
+    assert wrong_reading in {card.landing.id for card in offline.landing}
+    assert wrong_reading in {card.record.id for card in consulted.held}
+    assert wrong_reading not in {card.landing.id for card in consulted.landing}
+    assert len(consulted.held) > len(offline.held)
 
     # And the command, given the same dictionary, lands exactly what the plan
-    # said it would.
-    monkeypatch.setattr(cli.jpdb, "JpdbClient", lambda *a, **kw: client_for(silent))
+    # said it would — including holding back the row the plan held.
+    monkeypatch.setattr(cli.jpdb, "JpdbClient", lambda *a, **kw: client_for(hashiru))
     monkeypatch.setattr(cli.jpdb, "api_key_from_env", lambda: "test-key")
     assert cli.main(["--root", str(tmp_path), "promote", str(path)]) == 0
 
     stored = {record.id for record in load_records(tmp_path / "vocabulary.json")}
     assert stored == {card.landing.id for card in consulted.landing}
-    assert not (stored & held_ids)
+    assert wrong_reading not in stored
+
+
+def test_a_client_can_be_handed_over_and_told_not_to_spend(tmp_path: Path) -> None:
+    """`--skip-reading-check` with a client already built is the command's own
+    shape, so it has to keep working — and it is the line behind which a money
+    bug would hide. Deriving the flag *only* from the client, ignoring an
+    explicit answer, spends a lookup per row on a run that asked for none, and
+    nothing else in the suite would notice."""
+    from test_promote import FakeJpdb, client_for
+
+    path = _staged(tmp_path, "reading_holds", filename="holds.pdf")
+    config = ProjectConfig.load(tmp_path)
+    api = FakeJpdb({"走る": [1404410, 1, "走る", "はしる", ["LHH"], 700, ["vi", "v5r"]]},
+                   {(1404410, 1): {"reading": "はしる", "alt_sids": []}})
+
+    plan = plan_promotion(
+        config, path, client=client_for(api), skip_reading_check=True
+    )
+
+    assert plan.readings_unchecked is True
+    assert api.bodies == [], "told not to check, and it checked anyway"
+    # And the row a consulted plan would have held is landing, because nobody
+    # asked the dictionary about it.
+    assert "word:走る:わしる" in {card.landing.id for card in plan.landing}
+
+
+def test_asking_for_a_check_with_no_dictionary_is_refused_immediately(
+    tmp_path: Path,
+) -> None:
+    """A caller contract violation, refused deterministically.
+
+    `check_readings` refuses this too, but from inside its per-record loop
+    after the structural holds — so a caller could plan a blocked or
+    all-held file, watch a plan come back, and crash on the first clean row
+    in production. The refusal must not depend on the data.
+    """
+    path = _staged(tmp_path, "reading_holds", filename="holds.pdf")
+    config = ProjectConfig.load(tmp_path)
+
+    with pytest.raises(JankiError, match="needs a dictionary client"):
+        plan_promotion(config, path, client=None, skip_reading_check=False)
+
+    # Including for a file that would never reach the check at all.
+    (tmp_path / "staging" / "empty.yaml").write_text(
+        "records: []\nsource_file: empty.pdf\n", encoding="utf-8"
+    )
+    with pytest.raises(JankiError, match="needs a dictionary client"):
+        plan_promotion(
+            config, tmp_path / "staging" / "empty.yaml",
+            client=None, skip_reading_check=False,
+        )
+
+
+def test_a_plan_blocked_after_the_lookups_does_not_call_them_skipped(
+    tmp_path: Path,
+) -> None:
+    """The refusals after `check_readings` — a corrupt ledger, a merge the
+    binding refuses — follow lookups that have already been paid for. Reporting
+    them as skipped tells a caller the preview is the cheap one when the money
+    is gone."""
+    from test_promote import FakeJpdb, client_for
+
+    # A source with rows that land: the ledger is only read once something
+    # would be written, so an all-held file never reaches the refusal.
+    path = _staged(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    (tmp_path / "ledger.json").write_text("{not json", encoding="utf-8")
+    config = ProjectConfig.load(tmp_path)
+    # Silent, which passes every reading — the lookups still happen.
+    api = FakeJpdb({})
+
+    plan = plan_promotion(config, path, client=client_for(api))
+
+    assert plan.is_blocked
+    assert api.bodies, "the lookups did happen"
+    assert plan.readings_unchecked is False
+
+
+def test_a_reading_correction_onto_an_archived_id_is_caught_before_the_remint(
+    tmp_path: Path,
+) -> None:
+    """The crash-shaped retry a review thought the plan would get wrong.
+
+    A promote dies between the archive write and the live prune; the retry's
+    live row then has a corrected reading that mints the id already archived.
+    The worry was that only the *second* accounting call sees that, and the
+    plan discards its answer — so the plan would list the row as landing while
+    the command landed nothing.
+
+    It does not, because the first call already probes each row's resolved id
+    **and** its stable re-mint, and `remint` mints nothing else. This builds
+    exactly that state and pins where it is caught, so the discarded return
+    stays discarded on purpose rather than by luck.
+    """
+    path = _staged(tmp_path, "shared_word_source_a", filename="a.pdf")
+    from japanese_anki.identifiers import stable_record_id
+    from japanese_anki.staging import read_staging, write_staging
+
+    records, meta = read_staging(path)
+    corrected = replace(records[0], reading="ちがうよみ")
+    reminted = replace(
+        corrected, id=stable_record_id(corrected.expression, "ちがうよみ")
+    )
+    done = tmp_path / "staging" / "done"
+    done.mkdir(parents=True, exist_ok=True)
+    write_staging(done / path.name, [reminted], promote.archive_meta(meta, 1))
+    write_staging(path, [corrected, *records[1:]], meta, force=True)
+
+    plan = plan_promotion(ProjectConfig.load(tmp_path), path)
+
+    assert not plan.is_blocked, plan.blocked
+    # Caught by the first call: reported as already landed, never offered as a
+    # card to add.
+    assert records[0].id in plan.already_archived
+    assert reminted.id not in {card.landing.id for card in plan.landing}
+    assert records[0].id not in {card.staged.id for card in plan.landing}
