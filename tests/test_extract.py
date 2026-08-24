@@ -2014,3 +2014,71 @@ def test_the_known_list_is_ordered_so_a_rerun_has_one_identity(
 
     assert plan.skip_list == tuple(sorted(plan.skip_list))
     assert len(plan.skip_list) == 3
+
+
+def test_an_answer_refused_after_it_arrived_says_it_was_paid_for(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The reply arrived, was stored, and something after it refused — a
+    schema mismatch here. The bytes are on disk and have been billed, so the
+    message has to name the file: it is the only thing left to act on.
+
+    Untested until now, which is how the artifact path could have been dropped
+    from this branch without anything noticing.
+    """
+    root = project(tmp_path)
+    source = source_pdf(tmp_path)
+
+    def answer_then_refuse(*_args: object, capture: Any = None, **_kwargs: object) -> None:
+        if capture is not None:
+            capture({"content": [{"type": "text", "text": '{"candidates": []}'}]})
+        raise JankiError("the answer did not match the schema")
+
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", answer_then_refuse)
+
+    assert cli.main(["--root", str(root), "extract", "--yes", str(source)]) == 1
+
+    journal = operations.OperationJournal.load(root / "data" / "operations.json")
+    [operation] = journal.operations.values()
+    # Left where it is: calling a captured answer "unknown" hides one already
+    # bought.
+    assert operation.state == "result_captured"
+    assert operation.artifact
+
+    stderr = capsys.readouterr().err
+    assert "arrived and was saved before it was refused" in stderr
+    assert operation.artifact in stderr
+    assert "It has been paid for" in stderr
+
+
+def test_a_reply_of_pure_reasoning_says_there_is_nothing_to_recover(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A call that reaches `max_tokens` while still thinking returns a real,
+    billed reply holding no answer. Telling someone it was saved sends them
+    looking for cards in a file that has none — so this branch says the
+    opposite, and still names the file."""
+    root = project(tmp_path)
+    source = source_pdf(tmp_path)
+
+    def think_then_stop(*_args: object, capture: Any = None, **_kwargs: object) -> None:
+        if capture is not None:
+            capture({"content": [{"type": "thinking", "thinking": "reading the page"}]})
+        raise JankiError("max_tokens reached before an answer")
+
+    monkeypatch.setattr(cli.extract.claude_client, "parse_call", think_then_stop)
+
+    assert cli.main(["--root", str(root), "extract", "--yes", str(source)]) == 1
+
+    journal = operations.OperationJournal.load(root / "data" / "operations.json")
+    [operation] = journal.operations.values()
+    assert operation.state == "result_captured"
+
+    stderr = capsys.readouterr().err
+    assert "contains no answer — only the model's reasoning" in stderr
+    assert operation.artifact in stderr
+    assert "There is nothing in it to recover" in stderr

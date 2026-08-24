@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 import yaml
 
-from japanese_anki import cli, extract, ledger, patterns, staging
+from japanese_anki import cli, extract, ledger, operations, patterns, staging
 from japanese_anki import status as status_module
 from japanese_anki.config import ProjectConfig
 from japanese_anki.ledger import (
@@ -2185,3 +2185,101 @@ def test_provisional_ids_names_each_record_once(tmp_path: Path) -> None:
 
     assert sorted(report.provisional) == ["meanings", "part_of_speech"]
     assert report.provisional_ids == ["word:おたふく:おたふく"]
+
+
+# --- paid calls still waiting on a person -----------------------------------
+#
+# `janki extract` tells somebody to run this command after a call that may have
+# been billed — "Nothing was staged. Run 'janki status' to see it" — and until
+# these lines `status` did not read the operations journal at all. The
+# instruction was an unhonoured promise, which is the worst kind to make about
+# money.
+
+
+def _operations_path(root: Path) -> Path:
+    return ProjectConfig.load(root).operations_file
+
+
+def _stranded(root: Path, **overrides: Any) -> str:
+    """One dispatched call whose answer never came back."""
+    journal = operations.OperationJournal.load(_operations_path(root))
+    operation_id = "0192f232-0000-7000-8000-00000000abcd"
+    journal.authorize(
+        operation_id,
+        kind=overrides.get("kind", "extract"),
+        source_file=overrides.get("source_file", "lesson.pdf"),
+        source_sha256="a" * 64,
+        request_fp="b" * 64,
+        model="claude-opus-5",
+    )
+    journal.advance(operation_id, "dispatching")
+    journal.advance(operation_id, "outcome_unknown", detail="connection reset")
+    return operation_id
+
+
+def test_the_summary_counts_paid_calls_that_need_a_decision(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    _stranded(root)
+
+    assert _status(root) == 0
+
+    assert "Paid calls needing a person: 1" in capsys.readouterr().out
+
+
+def test_a_project_with_no_stranded_calls_says_nothing_about_them(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The line appears only when there is something to say. A permanent
+    "Paid calls needing a person: 0" trains people to skip the line that
+    matters."""
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+
+    assert _status(root) == 0
+
+    assert "Paid calls needing a person" not in capsys.readouterr().out
+
+
+def test_the_detail_says_which_call_and_whether_a_retry_costs_again(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The one thing a person needs from this screen: re-running a call that
+    was sent and never answered may pay for it twice."""
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    operation_id = _stranded(root)
+
+    assert _status(root, "--operations") == 0
+
+    out = capsys.readouterr().out
+    assert operation_id in out
+    assert "lesson.pdf" in out
+    assert "outcome_unknown" in out
+    assert "risks a second charge" in out
+    assert "connection reset" in out
+
+
+def test_a_saved_reply_is_named_so_it_can_be_looked_at(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An answer that arrived and was refused leaves bytes on disk. Those have
+    been paid for, so the file is the point of the entry."""
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    journal = operations.OperationJournal.load(_operations_path(root))
+    operation_id = "0192f232-0000-7000-8000-0000000000ff"
+    journal.authorize(
+        operation_id, kind="extract", source_file="chart.pdf",
+        source_sha256="a" * 64, request_fp="b" * 64, model="claude-opus-5",
+    )
+    journal.advance(operation_id, "dispatching")
+    artifact = operations.capture_artifact(
+        _operations_path(root), operation_id, b'{"content": []}'
+    )
+    journal.advance(operation_id, "result_captured", artifact=artifact)
+
+    assert _status(root, "--operations") == 0
+
+    out = capsys.readouterr().out
+    assert artifact in out
+    # Not the retry warning: this one was answered, and the answer is on disk.
+    assert "risks a second charge" not in out

@@ -4,7 +4,6 @@ import argparse
 import dataclasses
 import json
 import sys
-import uuid
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import ExitStack
@@ -31,7 +30,15 @@ from japanese_anki import (
     status,
     workbench,
 )
-from japanese_anki.application.extraction import plan_extraction
+from japanese_anki.application.extraction import (
+    ANSWER_EMPTY,
+    ANSWER_SAVED,
+    authorize_dispatch,
+    capture_hook,
+    classify_dispatch_failure,
+    plan_extraction,
+    settle_dispatch,
+)
 from japanese_anki.application.promotion import (
     AiLedgerHandoffIncomplete,
     archive_for_run,
@@ -1913,30 +1920,7 @@ def command_extract(args: argparse.Namespace) -> int:
     for planned in plan.targets:
         item = planned.item
         target = planned.staging_path
-        # Authority is recorded before the request exists, not after it
-        # succeeds. The interval this protects is the one where the money is
-        # spent and nothing on disk remembers: a crash between the send and the
-        # parse used to leave no way to tell "never sent" from "sent and lost".
-        operation_id = str(uuid.uuid4())
-        provenance = planned.provenance
-        journal.authorize(
-            operation_id,
-            kind="extract",
-            source_file=item.origin_path.name,
-            source_sha256=planned.source_sha256,
-            request_fp=str(provenance["request_fingerprint"]),
-            model=model,
-        )
-        journal.advance(operation_id, "dispatching")
-
-        def _capture(response: Any, _id: str = operation_id) -> None:
-            relative = operations.capture_artifact(
-                config.operations_file,
-                _id,
-                operations.serialize_response(response),
-            )
-            journal.advance(_id, "result_captured", artifact=relative)
-
+        operation_id = authorize_dispatch(journal, planned, model=plan.model)
         try:
             # From the plan, not from locals that happen to hold the same
             # values. The journal entry above records *this* plan's request
@@ -1950,81 +1934,44 @@ def command_extract(args: argparse.Namespace) -> int:
                 system=plan.system,
                 mode=plan.mode,
                 known=plan.skip_list,
-                capture=_capture,
+                capture=capture_hook(config, journal, operation_id),
             )
         except JankiError as exc:
-            held = operations.OperationJournal.load(
-                config.operations_file
-            ).operations.get(operation_id)
-            captured_answer = ""
-            if held is not None and held.artifact:
-                try:
-                    captured_answer = operations.answer_text(
-                        config.operations_file, held
-                    )
-                except JankiError:
-                    captured_answer = ""
-            if held is not None and held.state == "result_captured" and captured_answer:
-                # The answer arrived and something after it refused — a
-                # refusal, a truncation, a schema mismatch. Leaving the entry
-                # at `result_captured` is the truthful state: the paid bytes
-                # are on disk and a person has to decide what to do with them.
-                # Calling that "unknown" would hide an answer already bought.
+            # The journal is settled by the service; what is left here is
+            # saying what it decided, in the words that decide what a person
+            # does next.
+            failure = classify_dispatch_failure(config, journal, operation_id, exc)
+            if failure.outcome == ANSWER_SAVED:
                 print(
                     f"The answer for {item.origin_path.name} arrived and was "
-                    f"saved before it was refused: {held.artifact}\n"
+                    f"saved before it was refused: {failure.artifact}\n"
                     f"  It has been paid for. Operation {operation_id}.",
                     file=sys.stderr,
                 )
-            elif held is not None and held.state == "result_captured":
-                # A response arrived carrying no answer — the usual cause is
-                # `max_tokens` reached while still reasoning. Saying "the
-                # answer was saved" here would be false and would send someone
-                # looking for cards in a file that holds none.
+            elif failure.outcome == ANSWER_EMPTY:
                 print(
                     f"The reply for {item.origin_path.name} was saved, but it "
                     f"contains no answer — only the model's reasoning: "
-                    f"{held.artifact}\n"
+                    f"{failure.artifact}\n"
                     f"  It has still been paid for. Operation {operation_id}. "
                     f"There is nothing in it to recover.",
                     file=sys.stderr,
                 )
-            else:
-                marked = journal.advance(
-                    operation_id, "outcome_unknown", detail=str(exc)
-                )
+            elif failure.money_may_have_been_spent:
                 # "Nothing was written" is about staging and is true. It is not
                 # the whole answer, and the missing half is the expensive one:
                 # whether this call was billed.
-                if marked.money_may_have_been_spent:
-                    print(
-                        f"This call may already have been billed — it was sent "
-                        f"and no answer was captured. Operation {operation_id}.\n"
-                        f"  Nothing was staged. Run 'janki status' to see it, "
-                        f"and re-run extract only if you accept a second "
-                        f"charge.",
-                        file=sys.stderr,
-                    )
+                print(
+                    f"This call may already have been billed — it was sent "
+                    f"and no answer was captured. Operation {operation_id}.\n"
+                    f"  Nothing was staged. Run 'janki status' to see it, "
+                    f"and re-run extract only if you accept a second "
+                    f"charge.",
+                    file=sys.stderr,
+                )
             raise
 
-        # The hook fires inside the client, before validation, which is where
-        # an unparseable-but-paid-for answer has to be caught. It is not the
-        # only path here though: a provider wrapper that never calls it would
-        # otherwise leave the entry at `dispatching` forever. An answer did
-        # arrive — it is in `result` — so record that, using the normalized
-        # value as the artifact when the exact bytes were not captured.
-        if operations.OperationJournal.load(
-            config.operations_file
-        ).operations[operation_id].state == "dispatching":
-            journal.advance(
-                operation_id,
-                "result_captured",
-                artifact=operations.capture_artifact(
-                    config.operations_file,
-                    operation_id,
-                    operations.serialize_response(result),
-                ),
-            )
+        settle_dispatch(config, journal, operation_id, result)
         candidates = result.candidates
         built = extract.build_records(candidates, item, plan.known)
         records = built.records
@@ -4376,6 +4323,9 @@ def command_status(args: argparse.Namespace) -> int:
     if args.staged:
         for line in status.format_staged(report):
             print(line)
+    if args.operations:
+        for line in status.format_operations(report):
+            print(line)
     if args.unsettled:
         for line in status.format_provisional(report):
             print(line)
@@ -4385,10 +4335,11 @@ def command_status(args: argparse.Namespace) -> int:
         or args.duplicates
         or args.staged
         or args.unsettled
+        or args.operations
     ):
         print(
             "Details: --unexported, --missing-audio, --duplicates, --staged, "
-            "--unsettled (add --format ids to pipe them)."
+            "--unsettled, --operations (add --format ids to pipe them)."
         )
     return 0
 
@@ -4913,6 +4864,14 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "List the record ids waiting in data/staging for a human, with the "
             "reason each was held back."
+        ),
+    )
+    status_parser.add_argument(
+        "--operations",
+        action="store_true",
+        help=(
+            "List paid model calls that still need a decision — an answer that "
+            "arrived and was refused, or one that never came back."
         ),
     )
     status_parser.add_argument(

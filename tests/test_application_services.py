@@ -15,17 +15,25 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
 from test_workbench_fixtures import materialize
 
-from japanese_anki import cli, promote
+from japanese_anki import cli, operations, promote
 from japanese_anki.application import (
+    ANSWER_EMPTY,
+    ANSWER_SAVED,
+    OUTCOME_UNKNOWN,
     ExtractionPlan,
+    authorize_dispatch,
+    capture_hook,
+    classify_dispatch_failure,
     deck_membership,
     plan_extraction,
     plan_promotion,
+    settle_dispatch,
 )
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
@@ -1211,3 +1219,232 @@ def test_planning_contacts_no_provider(
     monkeypatch.setattr(claude_client, "parse_call", refuse)
 
     _plan(tmp_path, _input(tmp_path, "lesson.pdf"))
+
+
+# --- the paid call's journal ------------------------------------------------
+#
+# The journal exists so that a crash between sending and parsing can still say
+# whether money was spent. W3 dispatches from a browser and must not
+# reimplement any of this, so the lifecycle is pinned here directly rather than
+# only through the command that currently drives it.
+
+
+def _journal(tmp_path: Path) -> tuple[ProjectConfig, Any, Any]:
+    (tmp_path / "janki.toml").write_text(CONFIG, encoding="utf-8")
+    (tmp_path / "vocabulary.json").write_text("[]", encoding="utf-8")
+    (tmp_path / "decks").mkdir(exist_ok=True)
+    (tmp_path / "staging").mkdir(exist_ok=True)
+    config = ProjectConfig.load(tmp_path)
+    plan = plan_extraction(
+        config,
+        [_input(tmp_path, "lesson.pdf")],
+        mode=None,
+        model="claude-opus-5",
+        style_guide="style",
+        system="system",
+    )
+    return config, operations.OperationJournal.load(config.operations_file), plan
+
+
+def test_authority_is_recorded_before_the_request_exists(tmp_path: Path) -> None:
+    """Not after it succeeds. The interval this protects is the one where the
+    money is spent and nothing on disk remembers — a crash between the send and
+    the parse otherwise leaves no way to tell "never sent" from "sent and
+    lost"."""
+    config, journal, plan = _journal(tmp_path)
+
+    operation_id = authorize_dispatch(journal, plan.targets[0], model=plan.model)
+
+    entry = operations.OperationJournal.load(config.operations_file).operations[
+        operation_id
+    ]
+    assert entry.state == "dispatching"
+    assert entry.source_file == "lesson.pdf"
+    # The rest of the record, because W3's recovery surface reads it and an
+    # empty field in a durable record of money is not a small thing.
+    assert entry.kind == "extract"
+    assert entry.model == "claude-opus-5"
+    assert entry.source_sha256 == plan.targets[0].source_sha256
+    # The identity the plan resolved, so the journal names the call that will
+    # be made rather than one this frame derived for itself.
+    assert entry.request_fp == plan.targets[0].provenance["request_fingerprint"]
+
+
+def test_a_reply_that_carries_an_answer_is_reported_as_paid_for(
+    tmp_path: Path,
+) -> None:
+    config, journal, plan = _journal(tmp_path)
+    operation_id = authorize_dispatch(journal, plan.targets[0], model=plan.model)
+    capture_hook(config, journal, operation_id)({"content": [{"type": "text",
+                                                             "text": "cards"}]})
+
+    failure = classify_dispatch_failure(
+        config, journal, operation_id, JankiError("schema mismatch")
+    )
+
+    assert failure.outcome == ANSWER_SAVED
+    assert failure.was_paid_for
+    assert failure.artifact
+    # Left where it is. The paid bytes are on disk and a person has to decide
+    # what to do with them; calling that "unknown" would hide an answer already
+    # bought.
+    entry = operations.OperationJournal.load(config.operations_file).operations[
+        operation_id
+    ]
+    assert entry.state == "result_captured"
+
+
+def test_a_reply_holding_only_reasoning_is_not_called_an_answer(
+    tmp_path: Path,
+) -> None:
+    """A call that reaches `max_tokens` while still thinking returns a real,
+    billed reply containing nothing to recover. Saying "the answer was saved"
+    sends somebody hunting for cards in a file that holds none."""
+    config, journal, plan = _journal(tmp_path)
+    operation_id = authorize_dispatch(journal, plan.targets[0], model=plan.model)
+    capture_hook(config, journal, operation_id)(
+        {"content": [{"type": "thinking", "thinking": "considering the page"}]}
+    )
+
+    failure = classify_dispatch_failure(
+        config, journal, operation_id, JankiError("truncated")
+    )
+
+    assert failure.outcome == ANSWER_EMPTY
+    assert failure.was_paid_for
+    # The pointer to the billed file, which is the only thing a person can act
+    # on here — the message that carries it says there is nothing to recover,
+    # so without the path it says nothing useful at all.
+    assert failure.artifact
+
+
+def test_a_call_that_vanished_says_a_retry_risks_a_second_charge(
+    tmp_path: Path,
+) -> None:
+    """Sent, nothing captured. This is the only outcome where re-running costs
+    money that may already have been spent, so it is the one the journal has to
+    get right — and it is answered from the journal's own state rather than
+    guessed from the exception."""
+    config, journal, plan = _journal(tmp_path)
+    operation_id = authorize_dispatch(journal, plan.targets[0], model=plan.model)
+
+    failure = classify_dispatch_failure(
+        config, journal, operation_id, JankiError("connection reset")
+    )
+
+    assert failure.outcome == OUTCOME_UNKNOWN
+    assert failure.money_may_have_been_spent is True
+    assert not failure.was_paid_for
+    entry = operations.OperationJournal.load(config.operations_file).operations[
+        operation_id
+    ]
+    assert entry.state == "outcome_unknown"
+    assert "connection reset" in entry.detail
+
+
+def test_an_answer_the_capture_hook_never_saw_is_still_recorded(
+    tmp_path: Path,
+) -> None:
+    """The hook fires inside the client. A provider wrapper that never calls it
+    would leave the entry at `dispatching` for ever, describing a call still in
+    flight that in fact returned."""
+    config, journal, plan = _journal(tmp_path)
+    operation_id = authorize_dispatch(journal, plan.targets[0], model=plan.model)
+
+    settle_dispatch(config, journal, operation_id, {"candidates": []})
+
+    entry = operations.OperationJournal.load(config.operations_file).operations[
+        operation_id
+    ]
+    assert entry.state == "result_captured"
+    assert entry.artifact
+
+
+def test_settling_does_not_overwrite_the_exact_bytes_the_hook_captured(
+    tmp_path: Path,
+) -> None:
+    """The hook stores the provider's own reply; settling stores janki's
+    normalized value. Overwriting the first with the second would replace the
+    evidence with a rendering of it."""
+    config, journal, plan = _journal(tmp_path)
+    operation_id = authorize_dispatch(journal, plan.targets[0], model=plan.model)
+    capture_hook(config, journal, operation_id)({"content": [{"type": "text",
+                                                             "text": "exact"}]})
+    before = operations.OperationJournal.load(config.operations_file).operations[
+        operation_id
+    ]
+
+    settle_dispatch(config, journal, operation_id, {"candidates": []})
+
+    after = operations.OperationJournal.load(config.operations_file).operations[
+        operation_id
+    ]
+    assert after.artifact == before.artifact
+    assert (config.operations_file.parent / after.artifact).read_bytes() == (
+        config.operations_file.parent / before.artifact
+    ).read_bytes()
+
+
+def test_a_paid_reply_is_found_even_when_another_journal_captured_it(
+    tmp_path: Path,
+) -> None:
+    """The state of record is the file, not whichever object this frame holds.
+
+    `advance` updates the journal it is called on, so a run that captures
+    through the same object sees its own write either way. Nothing makes that
+    the only shape — a request handler holding one journal while the client
+    advances another is exactly how the browser will drive this — and asking a
+    copy that never saw the answer reports a reply already paid for as an
+    unknown outcome, which is the one classification that tells somebody a
+    retry is safe.
+    """
+    config, journal, plan = _journal(tmp_path)
+    operation_id = authorize_dispatch(journal, plan.targets[0], model=plan.model)
+    # A second, independently loaded journal captures the answer — the first
+    # one's in-memory copy still says `dispatching`.
+    elsewhere = operations.OperationJournal.load(config.operations_file)
+    capture_hook(config, elsewhere, operation_id)(
+        {"content": [{"type": "text", "text": "cards"}]}
+    )
+    assert journal.operations[operation_id].state == "dispatching"
+
+    failure = classify_dispatch_failure(
+        config, journal, operation_id, JankiError("schema mismatch")
+    )
+
+    assert failure.outcome == ANSWER_SAVED
+    assert failure.was_paid_for
+
+
+def test_the_exact_bytes_reach_disk_before_the_journal_claims_they_did(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The write-ahead order the journal's whole design rests on.
+
+    A crash between the two must leave an unreferenced file rather than an
+    entry pointing at an answer that was never written — the second is a lie,
+    and it is a lie about something that has been paid for. Every other test
+    here observes the settled end state, which is identical either way, so
+    this is the one that can tell the orders apart.
+    """
+    config, journal, plan = _journal(tmp_path)
+    operation_id = authorize_dispatch(journal, plan.targets[0], model=plan.model)
+
+    def explode(*args: object, **kwargs: object) -> str:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(
+        "japanese_anki.application.extraction.operations.capture_artifact", explode
+    )
+
+    with pytest.raises(OSError):
+        capture_hook(config, journal, operation_id)({"content": []})
+
+    # Still dispatching: nothing claims an answer arrived, because none was
+    # stored. Advancing first would have left an entry naming a file that does
+    # not exist.
+    entry = operations.OperationJournal.load(config.operations_file).operations[
+        operation_id
+    ]
+    assert entry.state == "dispatching"
+    assert entry.artifact == ""

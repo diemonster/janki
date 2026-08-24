@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from japanese_anki import patterns
+from japanese_anki import operations, patterns
 from japanese_anki.collection import (
     CollectionError,
     clone_suffix_of,
@@ -448,6 +448,14 @@ class StatusReport:
     # answer as "no record is missing one".
     missing_pitch_accent: list[str] | None
     staging_dir: Path
+    #: Paid calls a person has to look at before janki spends again.
+    #:
+    #: Here because the extract command tells them to be. When a call is sent
+    #: and no answer is captured, the message says "Run 'janki status' to see
+    #: it" — and until this line `status` did not read the journal at all, so
+    #: somebody following that instruction after a call that may have been
+    #: billed was shown nothing about it.
+    attention: tuple[Any, ...] = ()
     #: ``field name -> record ids`` whose value is still a model's claim: the
     #: mark extraction wrote and nobody who can read the card has settled.
     #:
@@ -545,6 +553,11 @@ def build_report(
         missing_enrichment=Ledger.missing_enrichment(records),
         missing_pitch_accent=missing_pitch,
         provisional=_provisional_by_field(records),
+        attention=tuple(
+            operations.OperationJournal.load(
+                config.operations_file
+            ).needing_attention()
+        ),
         staging_dir=config.staging_dir,
         staged=list(staged),
     )
@@ -715,6 +728,11 @@ def format_report(report: StatusReport) -> list[str]:
         f"Missing enrichment: {len(report.missing_enrichment)} "
         "(no meanings or example sentence)"
     )
+    if report.attention:
+        lines.append(
+            f"Paid calls needing a person: {len(report.attention)} "
+            "(run 'janki status --operations' for what each one cost)"
+        )
     if report.provisional:
         lines.append(
             "Unsettled model claims: "
@@ -873,6 +891,38 @@ def format_unexported(report: StatusReport) -> list[str]:
     for deck in pending:
         lines.append(f"Never exported by {deck.stem} ({len(deck.unexported_ids)}):")
         lines.extend(f"  {record_id}" for record_id in deck.unexported_ids)
+    return lines
+
+
+def format_operations(report: StatusReport) -> list[str]:
+    """Every paid call still waiting on a decision, and what it left behind.
+
+    The state first, because it is what decides the next move: an answer that
+    arrived and was refused has bytes to look at; one that vanished after
+    dispatch is the case where re-running risks paying twice.
+    """
+    if not report.attention:
+        return [
+            "Paid calls needing a person: none — every call janki made either "
+            "landed or is recorded as finished."
+        ]
+    lines = [f"Paid calls needing a person ({len(report.attention)}):"]
+    for op in report.attention:
+        lines.append(f"  {op.operation_id}  {op.kind} · {op.source_file}")
+        lines.append(f"    state: {op.state}, authorized {op.authorized_at}")
+        if op.artifact:
+            lines.append(f"    the reply is saved at {op.artifact}")
+        elif op.money_may_have_been_spent:
+            # Only when nothing came back. A captured reply was billed too, but
+            # its answer is on disk — telling someone a retry "risks a second
+            # charge" there points them at re-running instead of at the file
+            # they already paid for.
+            lines.append(
+                "    it was sent and no answer came back, so re-running it "
+                "risks a second charge"
+            )
+        if op.detail:
+            lines.append(f"    {op.detail}")
     return lines
 
 
