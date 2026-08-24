@@ -51,6 +51,7 @@ from japanese_anki.application.promotion import (
     unreadable_deck_warning,
     validate_record_archive,
 )
+from japanese_anki.application.validation import validate_project
 from japanese_anki.audio_cmd import AudioError
 from japanese_anki.collection import read_deck_notes
 from japanese_anki.config import ProjectConfig
@@ -114,7 +115,6 @@ from japanese_anki.tts import (
     voicevox,
 )
 from japanese_anki.validation import (
-    ValidationIssue,
     has_errors,
     refusal_text,
     validate_records,
@@ -3495,142 +3495,22 @@ def command_promote(args: argparse.Namespace) -> int:
     return 0
 
 
-def _validate_path(
-    path: Path,
-    store: Callable[[], Mapping[str, patterns.PatternSet]] | None = None,
-    config: ProjectConfig | None = None,
-) -> tuple[list, int]:
-    try:
-        raw = load_structured(path)
-    except JankiError as exc:
-        # A hand-edited deck file is the likeliest thing in `data/decks/` to be
-        # malformed — an unterminated quote, a tab, a merge marker — and its own
-        # unreadability used to cancel the sweep before a single deck was
-        # reported, with no "Validated N records" line at all.
-        return [
-            ValidationIssue(
-                "error",
-                str(exc),
-                source=str(path),
-                code="validation-input-unreadable",
-            )
-        ], 0
-    # `exporters.anki.deck_kind`, so this, the build and `status` cannot drift
-    # about what a kind is. On truthiness alone a typo — or a deliberate
-    # `kind: vocabulary` — sent an ordinary deck down the pattern path, which
-    # invented two errors that are false for it and skipped every record the
-    # file actually holds.
-    #
-    # Guarded on the shape first: `validate` also takes a records file, which is
-    # a list, and `deck_kind` refuses a non-mapping because for a *deck* that is
-    # a real error.
-    if isinstance(raw, dict):
-        try:
-            kind = deck_kind(path)
-        except DataError as exc:
-            # Reported as this file's error rather than raised, so a sweep still
-            # validates every other deck — the rule this command follows for a
-            # deck it cannot read.
-            return [
-                ValidationIssue(
-                    "error",
-                    str(exc),
-                    source=str(path),
-                    code="validation-deck-kind-invalid",
-                )
-            ], 0
-    else:
-        kind = ""
-    if kind in ("pattern", "conjugation"):
-        # A pattern or conjugation deck holds no records, so the ordinary path
-        # found none and called the file clean — leaving every defect the build
-        # refuses invisible to the command whose job is catching one first.
-        try:
-            problems = pattern_cards.deck_problems(
-                # `store()` is resolved *inside* the guard: `patterns.json` is
-                # machine-written and committed, so it can carry a merge marker,
-                # and `deck_problems` — careful about every other failure it can
-                # meet — never entered its own frame to catch that one.
-                path, store() if store else None, config
-            )
-        except JankiError as exc:
-            return [
-                ValidationIssue(
-                    "error",
-                    str(exc),
-                    source=str(path),
-                    code="validation-pattern-input-unreadable",
-                )
-            ], 0
-        return [
-            ValidationIssue(
-                "error",
-                problem,
-                source=str(path),
-                code="validation-pattern-deck-invalid",
-            )
-            for problem in problems
-        ], 0
-
-    try:
-        if isinstance(raw, dict) and "deck" in raw:
-            _, records = resolve_deck_records(path)
-        else:
-            records = load_records(path)
-    except JankiError as exc:
-        # This file's error, like the two branches above. A missing or
-        # unparseable collection used to escape to `main`, so the deck naming it
-        # — first by name in `data/decks/` — cancelled the sweep, and the one
-        # line printed named the collection but not the deck that pointed at it.
-        return [
-            ValidationIssue(
-                "error",
-                str(exc),
-                source=str(path),
-                code="validation-records-unreadable",
-            )
-        ], 0
-    issues = validate_records(records, path)
-    return issues, len(records)
-
-
 def command_validate(args: argparse.Namespace) -> int:
     config = _load_config(args)
-    # Read lazily. `patterns.json` is machine-written and committed, so it can
-    # carry a merge marker — and reading it up front made that failure cancel
-    # `janki validate data/staging/…yaml`, a command with nothing to do with it.
-    deck_store: dict[str, patterns.PatternSet] | None = None
+    if not args.path and not status.deck_files(config):
+        # Distinct from "swept and found nothing wrong": there was nothing to
+        # sweep, and reporting "0 errors" over no files reads as a pass.
+        print(f"No deck files found under {config.deck_dir}", file=sys.stderr)
+        return 1
 
-    def store() -> dict[str, patterns.PatternSet]:
-        nonlocal deck_store
-        if deck_store is None:
-            deck_store = patterns.load_store(config.patterns_file)
-        return deck_store
+    report = validate_project(config, args.path)
 
-    paths: list[Path]
-    if args.path:
-        paths = [args.path.resolve()]
-    else:
-        paths = status.deck_files(config)
-        if not paths:
-            print(f"No deck files found under {config.deck_dir}", file=sys.stderr)
-            return 1
-
-    all_issues = []
-    total_records = 0
-    for path in paths:
-        issues, count = _validate_path(path, store, config)
-        all_issues.extend(issues)
-        total_records += count
-
-    _print_issues(all_issues)
-    error_count = sum(issue.level == "error" for issue in all_issues)
-    warning_count = sum(issue.level == "warning" for issue in all_issues)
+    _print_issues(list(report.issues))
     print(
-        f"Validated {total_records} records across {len(paths)} file(s): "
-        f"{error_count} error(s), {warning_count} warning(s)"
+        f"Validated {report.records} records across {len(report.paths)} file(s): "
+        f"{report.errors} error(s), {report.warnings} warning(s)"
     )
-    return 1 if has_errors(all_issues) else 0
+    return 1 if report.failed else 0
 
 
 def resolve_deck_path(deck: Path, config: ProjectConfig) -> Path:

@@ -41,12 +41,17 @@ from japanese_anki.application.promotion import (
     DECISION_STATES,
     decide_promotion,
 )
+from japanese_anki.application.validation import (
+    ValidationReport,
+    validate_project,
+)
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.exporters.anki import resolve_deck_records
 from japanese_anki.inputs import PreparedInput
 from japanese_anki.io import load_records, records_revision
 from japanese_anki.models import SourceReference, VocabularyRecord
+from japanese_anki.validation import ValidationIssue
 
 CONFIG = """
 [paths]
@@ -2123,3 +2128,146 @@ def test_the_swap_token_is_taken_before_the_records_it_guards(
     assert decision.state == "lands"
     # Stale against what is on disk now, which is what makes the write refuse.
     assert decision.output_revision != records_revision(collection)
+
+
+# --- would this build? ------------------------------------------------------
+#
+# `japanese_anki.validation` holds the rules; the *sweep* — resolving what to
+# look at, reading each file, collecting what it found — lived inside
+# `command_validate` and was reachable only by typing the command. A page that
+# says a source is ready to add should not have to guess whether the deck it
+# lands in will then refuse to build.
+
+
+def _deck_project(tmp_path: Path, decks: dict[str, object]) -> ProjectConfig:
+    (tmp_path / "janki.toml").write_text(CONFIG, encoding="utf-8")
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps([_record().to_dict()], ensure_ascii=False), encoding="utf-8"
+    )
+    deck_dir = tmp_path / "decks"
+    deck_dir.mkdir(exist_ok=True)
+    for stem, body in decks.items():
+        target = deck_dir / f"{stem}.yaml"
+        if isinstance(body, str):
+            target.write_text(body, encoding="utf-8")
+        else:
+            target.write_text(
+                yaml.safe_dump({"deck": body}, allow_unicode=True, sort_keys=False),
+                encoding="utf-8",
+            )
+    return ProjectConfig.load(tmp_path)
+
+
+def test_a_sweep_reports_what_it_read_as_well_as_what_was_wrong(
+    tmp_path: Path,
+) -> None:
+    """"0 errors" over nothing read is a different answer from "0 errors" over
+    a collection, so the denominator travels with the verdict."""
+    config = _deck_project(tmp_path, {"lesson-8": _word_deck(include_tags=["lesson-8"])})
+
+    report = validate_project(config)
+
+    assert report.records == 1
+    assert [path.stem for path in report.paths] == ["lesson-8"]
+    assert report.failed is False
+
+
+@pytest.mark.parametrize(
+    ("broken", "code"),
+    [
+        # Two different failures, two different branches. YAML that will not
+        # parse never reaches the kind check, and a file that parses into the
+        # wrong shape never reaches the reader — testing one leaves the other
+        # free to start raising.
+        ("deck:\n  name: [unterminated\n", "validation-input-unreadable"),
+        ("deck: [1, 2, 3]\n", "validation-deck-kind-invalid"),
+    ],
+)
+def test_one_unreadable_deck_does_not_cancel_the_sweep(
+    tmp_path: Path, broken: str, code: str
+) -> None:
+    """A hand-edited deck is the likeliest file here to be malformed, and its
+    own unreadability used to cancel the run before a single other deck was
+    reported — with no count line at all."""
+    config = _deck_project(
+        tmp_path,
+        {"a-broken": broken, "b-good": _word_deck(include_tags=["lesson-8"])},
+    )
+
+    report = validate_project(config)
+
+    assert report.failed is True
+    assert len(report.paths) == 2
+    # The good deck was still read, which is what "did not cancel" means.
+    assert report.records == 1
+    assert any(issue.code == code for issue in report.issues), [
+        issue.code for issue in report.issues
+    ]
+
+
+def test_a_corrupt_pattern_store_does_not_cancel_an_unrelated_file(
+    tmp_path: Path,
+) -> None:
+    """`patterns.json` is machine-written and committed, so it can carry a
+    merge marker. Read up front, that failure cancelled
+    `janki validate data/staging/…yaml` — a command with nothing to do with
+    it. The store is read only when a deck actually needs it."""
+    config = _deck_project(tmp_path, {"lesson-8": _word_deck(include_tags=["lesson-8"])})
+    (tmp_path / "patterns.json").write_text("<<<<<<< HEAD\n", encoding="utf-8")
+    records = tmp_path / "vocabulary.json"
+
+    report = validate_project(config, records)
+
+    assert report.records == 1
+    assert report.failed is False
+
+
+def test_warnings_alone_are_not_a_failure(tmp_path: Path) -> None:
+    """The exit code answers "would this build", and a warning is by definition
+    something that would."""
+    config = _deck_project(tmp_path, {"lesson-8": _word_deck(include_tags=["lesson-8"])})
+
+    report = validate_project(config)
+    warned = ValidationReport(
+        issues=(ValidationIssue("warning", "cosmetic", source="x", code="c"),),
+        records=report.records,
+        paths=report.paths,
+    )
+
+    assert warned.warnings == 1
+    assert warned.errors == 0
+    assert warned.failed is False
+
+
+def test_the_record_count_sums_across_every_file(tmp_path: Path) -> None:
+    """Two decks over the same collection each contribute what they hold. A
+    single-deck fixture cannot tell a running total from the last file's
+    count, which is how "Validated N records" could quietly report one deck."""
+    config = _deck_project(
+        tmp_path,
+        {
+            "lesson-8": _word_deck(include_tags=["lesson-8"]),
+            "everything": _word_deck(),
+        },
+    )
+
+    report = validate_project(config)
+
+    assert len(report.paths) == 2
+    assert report.records == 2
+
+
+def test_a_project_with_no_decks_is_not_a_clean_pass(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Nothing to sweep is a different answer from swept-and-found-nothing.
+    Reporting "0 errors" over no files reads as a pass, and the exit code
+    would say so to whatever ran it."""
+    (tmp_path / "janki.toml").write_text(CONFIG, encoding="utf-8")
+    (tmp_path / "vocabulary.json").write_text("[]", encoding="utf-8")
+    (tmp_path / "decks").mkdir(exist_ok=True)
+
+    code = cli.main(["--root", str(tmp_path), "validate"])
+
+    assert code == 1
+    assert "No deck files found" in capsys.readouterr().err

@@ -64,6 +64,10 @@ from japanese_anki.application.promotion import (
     plan_promotion,
     project_promotion,
 )
+from japanese_anki.application.validation import (
+    ValidationReport,
+    validate_project,
+)
 
 __all__ = [
     "ADDED",
@@ -87,6 +91,7 @@ __all__ = [
     "HeldCard",
     "LandingCard",
     "PromotionPlan",
+    "ValidationReport",
     "JOURNEY_STATES",
     "NOT_EXTRACTED",
     "READING_HOLD",
@@ -104,6 +109,7 @@ __all__ = [
     "plan_extraction",
     "settle_dispatch",
     "plan_promotion",
+    "validate_project",
     "project_promotion",
     "needs_example_review",
     "source_detail",

@@ -234,7 +234,7 @@ needs a decision` — but it means no W0 fixture currently exercises the
 exhaustive-coverage path; W4 should add a `mode="table"` materialization if
 it needs one.
 
-### [~] W1.1b Factor the CLI orchestration into the shared services
+### [x] W1.1b Factor the CLI orchestration into the shared services
 
 Factor the orchestration currently inlined in the 5,153-line `cli.py` —
 extract, validate, pattern review, promote (`command_promote` alone is 379
