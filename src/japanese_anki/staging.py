@@ -1560,8 +1560,25 @@ def rewrite_staging_under_lock(
     return _rewrite_staging_unlocked(path, records)
 
 
+def coverage_already_resolved(meta: Mapping[str, Any]) -> bool:
+    """Whether this file's coverage question is already answered.
+
+    Answered, not merely *asked*: `validate_coverage_facts` reports what needs
+    acceptance whether or not an approval exists, so it cannot be used to
+    decide whether to spend. This runs the whole gate — fingerprints, repeated
+    facts, schema — and says only whether it passes.
+    """
+    try:
+        require_resolved_coverage(meta)
+    except JankiError:
+        return False
+    return True
+
+
 @_path_locked
-def record_coverage_approval(path: Path, approval: Mapping[str, Any]) -> Path:
+def record_coverage_approval(
+    path: Path, approval: Mapping[str, Any], *, replace_existing: bool = False
+) -> Path:
     """Write a coverage approval into a staging file, changing nothing else.
 
     Through the same round-trip :func:`rewrite_staging` uses, and for the same
@@ -1570,9 +1587,11 @@ def record_coverage_approval(path: Path, approval: Mapping[str, Any]) -> Path:
     reviewer's comments and any key janki has no field for. This sets exactly
     one key — ``coverage.approval`` — and leaves every byte around it alone.
 
-    Refuses a file that already carries one. An approval is a decision about a
-    specific coverage block, and quietly replacing it would let a second run
-    overwrite a person's recorded reasoning with a model's.
+    Refuses a file that already carries one unless ``replace_existing`` says
+    otherwise. An approval is a decision about a specific coverage block, and
+    quietly replacing it would let a second run overwrite a person's recorded
+    reasoning with a model's — so replacing it is something a caller has to
+    ask for in as many words.
     """
     path = Path(path)
     if not path.exists():
@@ -1581,7 +1600,7 @@ def record_coverage_approval(path: Path, approval: Mapping[str, Any]) -> Path:
     block = document.get(_COVERAGE_KEY)
     if not isinstance(block, MutableMapping):
         raise StagingError(f"{path} carries no coverage block to approve.")
-    if "approval" in block:
+    if "approval" in block and not replace_existing:
         raise StagingError(
             f"{path} already carries a coverage approval. Remove it first if you "
             "mean to replace the recorded decision."

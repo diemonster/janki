@@ -90,6 +90,7 @@ from japanese_anki.staging import (
     StagingError,
     check_rewritable,
     coverage_acceptance_requirements,
+    coverage_already_resolved,
     coverage_block_fingerprint,
     field_replacement_block,
     new_review_run_id,
@@ -2717,7 +2718,11 @@ def _durable_source(config: ProjectConfig, name: str) -> Path:
 
 
 def _model_accepts_coverage(
-    config: ProjectConfig, path: Path, meta: dict[str, Any]
+    config: ProjectConfig,
+    path: Path,
+    meta: dict[str, Any],
+    *,
+    reaccept: bool = False,
 ) -> bool:
     """Show a model the page and janki's account of it, and record the verdict.
 
@@ -2735,6 +2740,30 @@ def _model_accepts_coverage(
             file=sys.stderr,
         )
         return False
+    if (
+        block.get("approval") is not None
+        and coverage_already_resolved(meta)
+        and not reaccept
+    ):
+        # An approval that *exists and passes*. Both halves matter: a
+        # prose-only block needs no approval at all and also "resolves", and
+        # that is a different answer — nothing to accept, rather than already
+        # accepted — handled by the branch below.
+        #
+        # The question is answered, about these exact bytes: the approval is
+        # bound to the source and coverage-block fingerprints and repeats the
+        # accepted facts, so anything that could have changed the answer would
+        # have made it stale instead. Asking again buys the same verdict —
+        # and, since `record_coverage_approval` refuses to replace a standing
+        # decision, buys it and then fails to write it.
+        standing = block.get("approval") or {}
+        who = standing.get("model") or standing.get("authority") or "an owner"
+        print(
+            f"{path.name} is already approved by {who} on "
+            f"{standing.get('approved_at', 'an earlier date')}; nothing was "
+            "sent. Use --reaccept-coverage to ask again and replace it."
+        )
+        return True
     # Everything the gate can decide offline, decided before spending. A stale
     # block fingerprint or malformed provenance is free to detect and fatal
     # either way; finding out afterwards meant paying for a verdict, writing
@@ -2769,6 +2798,12 @@ def _model_accepts_coverage(
         )
 
     model = config.extract_model
+    replacing = bool(reaccept and (block.get("approval") is not None))
+    if replacing:
+        print(
+            f"{path.name} already carries a coverage approval; re-asking and "
+            "replacing it."
+        )
     print(f"Checking {source_name} against its coverage record with {model}...")
     verdict = coverage.review_coverage(
         prepared,
@@ -2802,9 +2837,17 @@ def _model_accepts_coverage(
             # a page it was never shown.
             "coverage_block_fingerprint": coverage_block_fingerprint(block),
             **coverage_acceptance_requirements(block),
-            "reason": verdict.reason,
+            # A deliberate re-ask says so in the file, because the record of a
+            # decision is the only place a later reader can see that an
+            # earlier one was set aside on purpose rather than lost.
+            "reason": (
+                f"Re-asked and replaced an earlier approval. {verdict.reason}"
+                if replacing
+                else verdict.reason
+            ),
             "approved_at": date.today().isoformat(),
         },
+        replace_existing=replacing,
     )
     return True
 
@@ -3090,12 +3133,14 @@ def command_promote(args: argparse.Namespace) -> int:
     promote.check_candidate_accounting(
         meta, records, archived, archived_meta=archived_meta
     )
-    if args.accept_coverage:
+    if args.accept_coverage or args.reaccept_coverage:
         # Before `check_coverage`, because it is what makes that gate pass.
         # Writes the approval into the staging file and re-reads, so the file
         # on disk is the record — an approval held only in memory would let a
         # promote succeed leaving nothing behind that says why.
-        if not _model_accepts_coverage(config, path, meta):
+        if not _model_accepts_coverage(
+            config, path, meta, reaccept=args.reaccept_coverage
+        ):
             return 1
         expected_wire, records, meta = record_review_snapshot(path)
         validate_coverage_facts(meta)
@@ -4772,7 +4817,20 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Let the extract model check this page's coverage record against "
             "the page itself and record its verdict, instead of approving the "
-            "block by hand. A paid call; a refusal stops the promote."
+            "block by hand. A paid call; a refusal stops the promote. A file "
+            "whose approval already stands is promoted without sending "
+            "anything."
+        ),
+    )
+    promote_parser.add_argument(
+        "--reaccept-coverage",
+        action="store_true",
+        help=(
+            "Ask again about a page whose coverage approval already stands, "
+            "and replace it. A paid call. Worth it to change the authority — "
+            "your own judgment over a model's, or a better model over a "
+            "weaker one — and pointless otherwise, since the approval is bound "
+            "to these exact bytes and any change would have made it stale."
         ),
     )
     promote_parser.add_argument(

@@ -579,3 +579,101 @@ def test_the_promote_command_sends_the_coverage_template(
         "enrich-bare-word",
     ):
         assert prompts.load(REPO_ROOT, other) not in sent[0], other
+
+
+# --- asking again, and not asking again -------------------------------------
+
+
+def _accept(root: Path, staged: Path, **kwargs: object) -> bool:
+    from japanese_anki import cli
+    from japanese_anki.staging import read_staging
+
+    _records, meta = read_staging(staged)
+    return cli._model_accepts_coverage(  # noqa: SLF001
+        cli._load_config(SimpleNamespace(root=root)), staged, meta, **kwargs
+    )
+
+
+def test_an_approval_that_already_stands_is_not_bought_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The approval is bound to the source and coverage-block fingerprints and
+    repeats the accepted facts, so anything that could change the answer makes
+    it *stale* rather than leaving it standing. A standing one therefore means
+    the same question about the same bytes — and asking again bought the same
+    verdict and then failed to write it, because replacing a recorded decision
+    is refused.
+    """
+    from japanese_anki import cli
+
+    root, staged = project_with_source(tmp_path)
+    calls: list[object] = []
+    monkeypatch.setattr(
+        cli.coverage, "review_coverage",
+        lambda *a, **k: calls.append(1)
+        or coverage.CoverageVerdict(True, "Accounted for.", "m", "f"),
+    )
+    assert _accept(root, staged) is True
+    assert calls == [1]
+    before = staged.read_text(encoding="utf-8")
+
+    # Same file, same question, asked again.
+    assert _accept(root, staged) is True
+
+    assert calls == [1], "the second run must send nothing"
+    assert staged.read_text(encoding="utf-8") == before
+    assert "already approved" in capsys.readouterr().out
+
+
+def test_reaccepting_asks_again_and_says_it_meant_to(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The case worth paying for: changing the authority, or asking a better
+    model than the one that answered before. The replacement records that it
+    replaced something, because the file is the only place a later reader can
+    see an earlier decision was set aside on purpose rather than lost.
+    """
+    from japanese_anki import cli
+    from japanese_anki.staging import read_staging
+
+    root, staged = project_with_source(tmp_path)
+    verdicts = iter([
+        coverage.CoverageVerdict(True, "First look.", "weak-model", "f1"),
+        coverage.CoverageVerdict(True, "Second look.", "opus-5", "f2"),
+    ])
+    monkeypatch.setattr(
+        cli.coverage, "review_coverage", lambda *a, **k: next(verdicts)
+    )
+
+    assert _accept(root, staged) is True
+    _records, first = read_staging(staged)
+    assert first["coverage"]["approval"]["model"] == "weak-model"
+
+    assert _accept(root, staged, reaccept=True) is True
+
+    _records, second = read_staging(staged)
+    approval = second["coverage"]["approval"]
+    assert approval["model"] == "opus-5"
+    assert "Second look." in approval["reason"]
+    assert "replaced an earlier approval" in approval["reason"]
+
+
+def test_reaccepting_a_file_with_no_approval_is_an_ordinary_acceptance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nothing to replace, so nothing claims to have replaced anything — a
+    reason that says it set aside an earlier decision would be a false record
+    of one having existed."""
+    from japanese_anki import cli
+    from japanese_anki.staging import read_staging
+
+    root, staged = project_with_source(tmp_path)
+    monkeypatch.setattr(
+        cli.coverage, "review_coverage",
+        lambda *a, **k: coverage.CoverageVerdict(True, "Accounted for.", "m", "f"),
+    )
+
+    assert _accept(root, staged, reaccept=True) is True
+
+    _records, meta = read_staging(staged)
+    assert meta["coverage"]["approval"]["reason"] == "Accounted for."
