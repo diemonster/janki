@@ -1904,14 +1904,21 @@ def test_a_confirming_answer_is_written_to_disk_not_reported_as_nothing(
     assert "Nothing written" not in capsys.readouterr().out
 
 
-def test_the_staging_route_carries_a_settle_with_no_field_change(
+def test_the_staging_route_settles_marks_itself_and_stages_only_proposals(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The staging route writes only the records it thinks the run touched, and
-    it is the *only* write that run makes — the normalized file is left for
-    `promote`. So a record whose sole outcome is a settled mark has to be in
-    that file or the settle is not deferred, it is lost, and the record comes
-    back marked with another paid call behind it.
+    """A settled mark is not a proposal, and the staging file cannot carry one.
+
+    promote demands `ai_enrichment` provenance for every row a staging file
+    holds, and a row with no changed field has no fields to name — so staging
+    one refuses the *whole* file, stranding the answers that did change
+    alongside it. On the batch route the batch id is forgotten first, and the
+    paid answers then exist only in a file nothing can land.
+
+    So the halves part: content changes go to staging for review, settled
+    marks are written straight to the collection. This drives the whole way to
+    `promote`, because stopping at `read_staging` is what let the earlier
+    version look right while producing a file no command would accept.
     """
     marked = mark_provisional(
         record(
@@ -1925,8 +1932,6 @@ def test_the_staging_route_carries_a_settle_with_no_field_change(
             ],
         )
     )
-    # The AI staging route is chosen by run size, not by a flag, so the settle
-    # rides in a run big enough to take it.
     filler = [
         record(id=f"word:話す{index}:はなす", expression=f"話す{index}")
         for index in range(enrich.STAGING_THRESHOLD - 1)
@@ -1935,6 +1940,7 @@ def test_the_staging_route_carries_a_settle_with_no_field_change(
     patch_all(
         monkeypatch,
         FakeCall(
+            # Restates the stored meaning: settles the mark, changes no field.
             CallResult(answer(meanings=["mumps"]), "end_turn", None),
             *[
                 CallResult(
@@ -1948,9 +1954,6 @@ def test_the_staging_route_carries_a_settle_with_no_field_change(
         FakeJpdb(),
     )
 
-    # Named explicitly, as `status --unsettled --format ids` would: a complete
-    # record is not a content-defined target, so without the ids the run is one
-    # short of the threshold and takes the diff route instead.
     code = cli.main([
         "--root", str(root), "enrich", "--ai", "--yes",
         "--force-fields", "meanings",
@@ -1958,7 +1961,61 @@ def test_the_staging_route_carries_a_settle_with_no_field_change(
     ])
 
     assert code == 0
+    # Settled in the collection, not deferred into a file that cannot hold it.
+    assert "provisional_fields" not in stored(root)[marked.id]["source"]["raw_fields"]
     staged, _meta = read_staging(root / "staging" / "ai-enrichment.yaml")
-    settled = [item for item in staged if item.id == marked.id]
-    assert settled, "the settle-only record was dropped from the staging file"
-    assert provisional_fields(settled[0]) == []
+    assert marked.id not in {item.id for item in staged}
+    assert staged
+
+    # And the file it did write is one promote accepts.
+    assert cli.main([
+        "--root", str(root), "promote",
+        str(root / "staging" / "ai-enrichment.yaml"), "--skip-reading-check",
+    ]) == 0
+
+
+
+
+def test_the_consent_prompt_counts_every_record_the_save_rewrites(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A settle rewrites the store, so it has to be in the number consented to.
+
+    Counted from `changes` alone, a run whose answers all confirmed what was
+    already there asked "Write these changes to 0 record(s)?" — and declining,
+    which is what an empty prompt invites, discarded an answer already paid
+    for. The jpdb pass counts both; this is the same prompt in the same file.
+    """
+    marked = mark_provisional(
+        record(
+            source=SourceReference(type="extract", imported_from="medical.pdf"),
+            meanings=["mumps"],
+            usage_notes="Commonly said in full as おたふく風邪.",
+            examples=[
+                ExampleSentence(japanese="子供がおたふくにかかりました。",
+                                register="polite"),
+                ExampleSentence(japanese="おたふくで一週間休んだ。", register="casual"),
+            ],
+        )
+    )
+    root = project(tmp_path, [marked])
+    patch_all(
+        monkeypatch,
+        FakeCall(CallResult(answer(meanings=["mumps"]), "end_turn", None)),
+        FakeJpdb({}),
+    )
+    asked: list[str] = []
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(
+        "builtins.input", lambda prompt: asked.append(prompt) or "y"
+    )
+
+    code = cli.main([
+        "--root", str(root), "enrich", "--ai",
+        "--force-fields", "meanings", marked.id,
+    ])
+
+    assert code == 0
+    assert asked, "the run must ask before rewriting the store"
+    assert "1 record(s)" in asked[0], asked[0]
+    assert "provisional_fields" not in stored(root)[marked.id]["source"]["raw_fields"]

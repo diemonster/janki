@@ -1261,12 +1261,41 @@ def _write_ai_result(
     ``janki promote``: a batch is what janki reaches for at a thousand records,
     which is not a number of sentences anyone reviews in a terminal.
     """
+    # A settled mark is not a proposal, so it does not belong in a review
+    # queue — and the staging file cannot carry one anyway: promote demands
+    # `ai_enrichment` provenance for every row it holds, and a row with no
+    # changed field has no fields to name. Staging one refuses the *whole*
+    # file, stranding the answers that did change alongside it.
+    #
+    # So the two halves part here. Content changes go to staging for review;
+    # settled marks are written straight to the collection, exactly as the
+    # jpdb pass writes its own marks-only save.
     if staging_target is not None:
+        # Only on this route. The diff route saves `result.records` below,
+        # after one confirmation covering everything it writes — marks
+        # included — so a separate save there would write without asking.
+        settle_only = [
+            record_id
+            for record_id in result.cleared
+            if record_id not in result.changes
+        ]
+        if settle_only:
+            save_records_json(output_path, result.records, expected=expected)
+            marks = sum(len(result.cleared[record_id]) for record_id in settle_only)
+            print(
+                f"Recorded {marks} settled model claim(s) on {len(settle_only)} "
+                f"record(s) in {output_path}."
+            )
+        if not result.changes:
+            # Nothing left to review. "0 record(s) is too many to review as one
+            # diff" over an empty staging file is a refusal wearing the words
+            # of a success.
+            return 0
         staging_target.parent.mkdir(parents=True, exist_ok=True)
         written = [
             result.records[index]
             for index, record in enumerate(records)
-            if record.id in result.changes or record.id in result.cleared
+            if record.id in result.changes
         ]
         write_staging(
             staging_target,
@@ -1314,7 +1343,13 @@ def _write_ai_result(
 
     for line in enrich.format_field_diff(result.changes):
         print(line)
-    if not _confirm_enrich(len(result.changes), assume_yes):
+    # Both, because both are written. Asked about `changes` alone, a run whose
+    # answers all confirmed what was already there prompted "write these
+    # changes to 0 record(s)?" — and declining, which is what an empty prompt
+    # invites, discarded a settle that had been paid for.
+    if not _confirm_enrich(
+        len(result.changes.keys() | result.cleared.keys()), assume_yes
+    ):
         print("Aborted: nothing was written.", file=sys.stderr)
         return 1
 
@@ -1330,6 +1365,15 @@ def _write_ai_result(
         )
     ledger_error = _save_ledger(book)
 
+    if result.cleared:
+        # After the write it describes, like the jpdb pass: a save can refuse,
+        # and a past-tense claim above the error would say the marks were
+        # recorded when nothing was.
+        marks = sum(len(names) for names in result.cleared.values())
+        print(
+            f"Recorded {marks} settled model claim(s) on "
+            f"{len(result.cleared)} record(s) in {output_path}."
+        )
     print(f"Enriched {len(result.changes)} record(s) in {output_path}.")
     if ledger_error is None:
         print(f"Ledger: recorded an AI pass over {len(result.changes)} record(s).")
