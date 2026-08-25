@@ -67,6 +67,18 @@ finished. Card content stays in `vocabulary.json` and never appears here;
 timestamps and provenance history stay here and never appear in the records.
 Imports and `migrate-inline` write it — you do not edit it by hand.
 
+`data/operations.json` is the same idea for paid *model* calls, and
+`janki operations` is how you read it. A call is journalled before it is sent
+and its exact reply is written to disk before anything tries to parse it, so a
+crash cannot lose an answer you already paid for. janki will not start a
+second paid call while one is unaccounted for — a call still in flight, a
+reply nobody turned into staging, or an outcome nothing could determine. That
+block never lifts on its own, because only you can say a vanished process is
+gone: `janki operations --end ID` records that, and `--forget ID` drops the
+entry once you have dealt with what it cost. If a run is interrupted and the
+next one refuses, that is this, and `janki operations` names the call and what
+to do about it.
+
 `janki status` reads both and summarizes them:
 
 ```text

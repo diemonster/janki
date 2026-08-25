@@ -254,6 +254,7 @@ own collection is the newer side. Details and the measurements behind them:
 | `janki build [DECK]` | Build one deck, or `--all` |
 | `janki preview DECK` | A browser preview, no Anki needed |
 | `janki status` | Records, ledger, what is missing |
+| `janki operations` | Paid model calls janki is still tracking. `--end ID` retires one that will never finish; `--forget ID` drops a finished one so the next call can start |
 | `janki refresh` | enrich → audio → build, in order. The jpdb-backed
 stage needs `JPDB_API_KEY`; without it that stage is skipped and the run exits
 non-zero rather than reporting a refresh that enriched nothing |
@@ -264,7 +265,9 @@ bare deck name as well as a path — `janki build verbs` finds
 
 `refresh` runs four of these. Everything else — the importers, `extract`,
 `patterns`, `promote`, `kanji`, `validate`, `preview` and `status` — is yours to
-run when it applies. Run `janki kanji` after words with new characters arrive:
+run when it applies. `janki operations` is the one you should not need: it
+exists for the day a paid call is interrupted, because janki refuses to start
+a second one until somebody says what happened to the first. Run `janki kanji` after words with new characters arrive:
 a character nobody looked up simply has no stroke-order block on the card.
 
 ## Configuration

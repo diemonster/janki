@@ -546,7 +546,43 @@ re-identifies staged rows only; migrating a canonical identity has to move
 review history and rewrite what the ledger says shipped, and remains out of
 scope.
 
-### [ ] W3 Intake and the extraction job
+### [~] W3 claimed workbench-w0-w2a 2026-08-25 — Intake and the extraction job
+
+*Progress 2026-08-25: everything except the dispatch itself. **Intake** ships —
+upload into the durable inbox, a conflicting basename refused in plain
+language, and "this copies the file and sends it nowhere" on the control.
+**The consent page** (`GET /<token>/extract/<name>`, no POST behind it) plans
+the real run so the request identity it describes is the one that would be
+journalled, and carries every disclosure this task names, plus a sixth the
+plan did not: prose mode also sends the collection's known expressions as a
+skip list, so "only this one file is sent" was untrue there. Whole-document
+only, said rather than implied. Mode choice is a real GET form — the first
+version was radios with no form, a control that controlled nothing. A re-read
+names the review it would destroy ("3 cards, Examples need review — not
+recoverable"), which is the naming half of "separately confirmed"; the
+confirming half arrives with the POST.*
+
+*The paid-call machinery underneath is done and hardened: authority journalled
+before dispatch, the exact reply persisted before parsing, `outcome_unknown`
+inspectable and never auto-retried, and **one paid call at a time enforced in
+`OperationJournal.authorize` under its own lock** — not displayed by a
+surface, because a check read when a page renders and acted on when a button
+is clicked is one two callers can both pass. `authorized` counts toward that
+block: writing the authority and marking it dispatched are two writes, and
+excluding it left a window where two runs both passed. The cost is an orphaned
+authority when a process dies between them, which `janki operations --end`
+retires as `canceled_before_send`. A retrospective audit of the journal (three
+commits that had gone in unreviewed) found several paths where a paid answer
+stayed on disk while janki reported the call came back empty; those are fixed
+and pinned.*
+
+*Left: the POST that dispatches, and with it the bound action token and the
+replacement confirmation; the four progress states (**Preparing pages**,
+**Reading the source**, **Checking the answer's shape**, **Saving proposals**);
+page preview at intake. `busy_refusal` is a display of the gate, so the POST
+must still be refused by `authorize` under the lock rather than by that
+value — and an `OperationError` reaching the handler should render as a
+refusal, not a 500.*
 
 Drag or pick a file; preview its pages; see the permanent filename; save the
 immutable copy under `data/inbox/`. A conflicting basename refuses in plain
