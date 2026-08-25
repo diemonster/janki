@@ -482,7 +482,12 @@ def load_structured(path: Path) -> Any:
         raise DataError(f"File not found: {path}") from exc
     except OSError as exc:
         raise DataError(f"Could not read {path}: {exc.strerror or exc}") from exc
-    except (json.JSONDecodeError, yaml.YAMLError) as exc:
+    except (json.JSONDecodeError, yaml.YAMLError, UnicodeDecodeError) as exc:
+        # `UnicodeDecodeError` alongside the parse errors: it is raised by the
+        # *read*, before either parser sees anything, so a file that is not
+        # UTF-8 at all otherwise escapes every `except JankiError` above this
+        # and takes down whatever was reading it — a dashboard walking staging
+        # files, or a page asking whether a paid call is safe to start.
         raise DataError(f"Could not parse {path}: {exc}") from exc
     raise DataError(f"Unsupported file type for {path}; expected JSON or YAML")
 

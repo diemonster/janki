@@ -37,6 +37,7 @@ from japanese_anki.application.extraction import (
     capture_hook,
     classify_dispatch_failure,
     complete_extraction,
+    durable_inbox_root,
     plan_extraction,
 )
 from japanese_anki.application.promotion import (
@@ -127,19 +128,6 @@ def _path(value: str) -> Path:
 def _load_config(args: argparse.Namespace) -> ProjectConfig:
     root = args.root.resolve() if args.root else None
     return ProjectConfig.load(root)
-
-
-def _durable_inbox_root(config: ProjectConfig) -> Path:
-    """The full provenance root for the configured scan directory."""
-    standard = config.root / "data" / "inbox"
-    try:
-        if config.scan_inbox.resolve().is_relative_to(standard.resolve()):
-            return standard
-    except OSError:
-        pass
-    # A project can configure one standalone inbox instead of the standard
-    # data/inbox/scans subtree. In that shape the scan directory is the root.
-    return config.scan_inbox
 
 
 def _print_issues(issues: list) -> None:
@@ -1922,7 +1910,7 @@ def command_extract(args: argparse.Namespace) -> int:
     prepared = prepare_inputs(
         [path for path in args.files],
         config.scan_inbox,
-        inbox_root=_durable_inbox_root(config),
+        inbox_root=durable_inbox_root(config),
     )
 
     # Everything knowable without paying — targets, fingerprints, the request
@@ -2647,7 +2635,7 @@ def _durable_source(config: ProjectConfig, name: str) -> Path:
     choosing silently would mean a later edit to one of them changed which page
     a coverage check read, with nothing recording the choice.
     """
-    root = _durable_inbox_root(config)
+    root = durable_inbox_root(config)
     matches = [
         path
         for path in root.rglob("*")
@@ -2733,7 +2721,7 @@ def _model_accepts_coverage(
         raise PromoteError(f"{path.name} does not say which source it was read from.")
     origin = _durable_source(config, source_name)
     [prepared] = prepare_inputs(
-        [origin], config.scan_inbox, inbox_root=_durable_inbox_root(config)
+        [origin], config.scan_inbox, inbox_root=durable_inbox_root(config)
     )
     recorded = str(block.get("source_fingerprint") or "")
     if prepared.source_sha256 != recorded:

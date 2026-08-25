@@ -33,8 +33,10 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from japanese_anki import extract, operations, patterns
+from japanese_anki import claude_client, extract, inputs, operations, patterns, prompts
+from japanese_anki.application.journey import source_journeys
 from japanese_anki.config import ProjectConfig
+from japanese_anki.errors import JankiError
 from japanese_anki.inputs import PreparedInput
 from japanese_anki.io import exclusive_path_lock, load_records
 from japanese_anki.models import VocabularyRecord
@@ -49,13 +51,17 @@ __all__ = [
     "ANSWER_SAVED",
     "OUTCOME_UNKNOWN",
     "DispatchFailure",
+    "ExtractionConsent",
     "ExtractionOutcome",
     "ExtractionPlan",
     "ExtractionTarget",
     "authorize_dispatch",
+    "busy_refusal",
     "capture_hook",
     "classify_dispatch_failure",
     "complete_extraction",
+    "describe_extraction",
+    "durable_inbox_root",
     "plan_extraction",
     "settle_dispatch",
 ]
@@ -128,6 +134,24 @@ class ExtractionPlan:
         return tuple(
             target.item.origin_path for target in self.targets if target.item.copied
         )
+
+
+def durable_inbox_root(config: ProjectConfig) -> Path:
+    """The full provenance root for the configured scan directory.
+
+    Shared rather than private to the CLI: the workbench asks the same
+    question — is this file already in the corpus — and a second answer to it
+    would be a second definition of where the corpus is.
+    """
+    standard = config.root / "data" / "inbox"
+    try:
+        if config.scan_inbox.resolve().is_relative_to(standard.resolve()):
+            return standard
+    except OSError:
+        pass
+    # A project can configure one standalone inbox instead of the standard
+    # data/inbox/scans subtree. In that shape the scan directory is the root.
+    return config.scan_inbox
 
 
 def plan_extraction(
@@ -235,6 +259,223 @@ class DispatchFailure:
     @property
     def was_paid_for(self) -> bool:
         return self.outcome in (ANSWER_SAVED, ANSWER_EMPTY)
+
+
+#: States that mean a paid call is in flight right now. `authorized` is not
+#: one of them: it says the authority was written and nothing was sent, which
+#: is where a process that died before dispatching leaves an entry — and a
+#: guard that counted it would wedge every later run behind a call that never
+#: happened.
+IN_FLIGHT: frozenset[str] = frozenset({"dispatching", "running"})
+
+
+def busy_refusal(config: ProjectConfig) -> str:
+    """Why janki will not start a paid run right now, in a person's words.
+
+    W3: *"One mutating job at a time."* The answer comes from the journal
+    rather than from a flag this process keeps, because a run started in a
+    terminal is exactly as real as one started in a browser tab, and a guard
+    that only knew about its own process would let the two overlap and bill
+    twice.
+
+    Two different refusals, deliberately. A call in flight is a *wait*. An
+    answer that may already have been billed is a *decision*, and starting a
+    second call would bury it.
+
+    **This is a display, not the enforcement point.** It is read when a page
+    renders and acted on when a button is clicked, so two callers can both
+    pass it and both authorize. Whatever actually spends money has to refuse
+    under the journal's own lock.
+    """
+    journal = operations.OperationJournal.load(config.operations_file)
+    flying = [op for op in journal.unfinished() if op.state in IN_FLIGHT]
+    if flying:
+        first = flying[0]
+        return (
+            f"A call about {first.source_file} is still marked as running, so "
+            "janki will not start another — that would risk a second charge. "
+            "If nothing is actually running, that call was interrupted; "
+            "'janki status --operations' shows it."
+        )
+    waiting = journal.needing_attention()
+    if waiting:
+        first = waiting[0]
+        # "may have been billed", not "has been paid for": `outcome_unknown`
+        # is in this list precisely because nobody knows, and a page that
+        # asserted the charge would be guessing about someone's money in the
+        # one place it must not.
+        return (
+            f"A call about {first.source_file} may have been billed and has "
+            "not been dealt with. 'janki status --operations' shows what is "
+            "known about it."
+        )
+    return ""
+
+
+@dataclass(frozen=True, slots=True)
+class ExtractionConsent:
+    """One source, and exactly what sending it would mean, before anyone agrees.
+
+    W3: *"the consent button names exactly what leaves the computer"*. That
+    sentence cannot be written from a function that asks and dispatches in one
+    breath, and it cannot be written from `plan_extraction` alone either —
+    planning *raises* on the staging collision a consent page has to **show**,
+    because replacing an extraction is a decision someone makes, not an error
+    they hit. So this plans as though forced, and hands the collision back as
+    something to confirm.
+
+    Nothing here contacts a provider or journals anything.
+
+    **A dispatch must re-plan rather than send what this describes.** Every
+    field here is a snapshot taken when a page was rendered: staging can
+    appear between the render and the click, and `replaces` is populated only
+    because planning was forced, so deriving `force` from it would force a run
+    nobody confirmed. This value is what a person is shown and what their
+    confirmation is checked against — not what is sent.
+    """
+
+    #: The permanent filename, which is what a person recognizes.
+    name: str
+    model: str
+    mode: str | None
+    #: The single target this run would write, or None when it cannot be
+    #: planned at all. Deliberately *not* the whole `ExtractionPlan`: that
+    #: value carries the forced planning this page needs and a dispatch must
+    #: not inherit, and a field nobody can reach is a better guarantee than a
+    #: docstring asking them not to.
+    target: ExtractionTarget | None = None
+    #: A staging file this run would overwrite. When set, the page must
+    #: confirm the replacement separately and name what it invalidates.
+    replaces: Path | None = None
+    #: That file's review, in the words the dashboard already uses for it —
+    #: "Ready to add", "Cards need edits". A path and a row count do not tell
+    #: somebody what they are about to throw away; its state does.
+    replaces_state: str = ""
+    replaces_cards: int = 0
+    #: Why this cannot be sent at all, in a learner's words. Empty when it can.
+    refusal: str = ""
+    #: True when this run also sends the expressions already in the
+    #: collection. Prose mode does; a table is transcribed row by row, so
+    #: telling the model to skip rows would put holes in it.
+    sends_known_words: bool = False
+    #: Why janki will not start *any* paid run right now. Separate from
+    #: `refusal`: this source is fine, the moment is not, and a page that
+    #: merged them would tell somebody their lesson was the problem.
+    busy: str = ""
+
+    @property
+    def sendable(self) -> bool:
+        return self.target is not None and not self.refusal and not self.busy
+
+
+def describe_extraction(
+    config: ProjectConfig,
+    source: Path,
+    *,
+    mode: str | None = None,
+    model: str | None = None,
+) -> ExtractionConsent:
+    """What sending one corpus source to a model would mean, before agreeing.
+
+    Reads the same style guide and system prompt the dispatch sends, so the
+    plan behind the consent *is* the plan that would be dispatched rather than
+    a description resembling one. A page that showed a different request
+    identity from the one journalled would make the journal's whole promise —
+    that it names the call that was made — untrue at the only moment anybody
+    reads it.
+
+    Refuses a source that is not already in the corpus. Adding a file and
+    sending it are two separate actions, always; a consent page that copied
+    its own subject in would have quietly done the first while asking about
+    the second.
+    """
+    chosen = model or config.extract_model
+    root = durable_inbox_root(config)
+    if not inputs.inside(source, root):
+        return ExtractionConsent(
+            name=source.name,
+            model=chosen,
+            mode=mode,
+            refusal=(
+                f"{source.name} is not in your corpus yet. Add it first — "
+                "adding a file and sending it to a model are separate steps."
+            ),
+        )
+
+    try:
+        prepared = inputs.prepare_inputs(
+            [source], config.scan_inbox, inbox_root=root
+        )
+        # A consent page must not be the thing that puts a file in the corpus.
+        # The root check above says it is already there; this says the prepare
+        # agreed — closing the sliver where the file is removed in between and
+        # `_copy_into_inbox` helpfully writes it back.
+        if prepared[0].copied:
+            return ExtractionConsent(
+                name=source.name,
+                model=chosen,
+                mode=mode,
+                refusal=(
+                    f"{source.name} moved while this page was loading. "
+                    "Reload to see where it is now."
+                ),
+            )
+        plan = plan_extraction(
+            config,
+            prepared,
+            mode=mode,
+            model=chosen,
+            style_guide=claude_client.read_style_guide(config.root),
+            system=prompts.load(config.root, extract.prompt_name(mode)),
+            # Planned as though forced so a staging collision comes back as a
+            # replacement to confirm rather than an exception. Consenting to
+            # the replacement is what supplies `force` to the dispatch; this
+            # value never sends anything.
+            force=True,
+        )
+        replaces = plan.targets[0].replaces if plan.targets else None
+        state, cards = "", 0
+        if replaces is not None:
+            found = next(
+                (
+                    journey
+                    for journey in source_journeys(config)[0]
+                    if journey.staging_path == replaces
+                ),
+                None,
+            )
+            if found is not None:
+                state, cards = found.state, found.card_count
+        # `data/operations.json` is exactly the file a killed paid call
+        # leaves in interesting shapes, and the one page that manages
+        # paid-call state must not be the one that dies when it cannot be
+        # parsed. It lands in `busy` rather than `refusal` on purpose: not
+        # knowing whether a call is already running is a fact about the
+        # moment, and reporting it under "Send this file?" would tell
+        # somebody their lesson was the problem.
+        try:
+            busy = busy_refusal(config)
+        except JankiError as exc:
+            busy = (
+                "janki cannot tell whether a paid call is already running, so "
+                f"it will not start one: {exc}"
+            )
+    except JankiError as exc:
+        return ExtractionConsent(
+            name=source.name, model=chosen, mode=mode, refusal=str(exc)
+        )
+
+    return ExtractionConsent(
+        name=source.name,
+        model=chosen,
+        mode=mode,
+        target=plan.targets[0] if plan.targets else None,
+        replaces=replaces,
+        replaces_state=state,
+        replaces_cards=cards,
+        sends_known_words=bool(plan.skip_list),
+        busy=busy,
+    )
 
 
 def authorize_dispatch(

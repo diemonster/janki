@@ -35,10 +35,16 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from email import policy as email_policy
 from email.parser import BytesParser
+from pathlib import Path
 from urllib.parse import parse_qsl, quote, unquote
 
-from japanese_anki import inputs, ledger, staging
-from japanese_anki.application import SourceJourney, source_detail, source_journeys
+from japanese_anki import extract, inputs, ledger, staging
+from japanese_anki.application import (
+    SourceJourney,
+    describe_extraction,
+    source_detail,
+    source_journeys,
+)
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.io import load_records
@@ -52,6 +58,7 @@ from japanese_anki.models import VocabularyRecord
 from japanese_anki.workbench import edit, reidentify, review
 from japanese_anki.workbench.render import (
     STYLE,
+    render_consent,
     render_dashboard,
     render_reidentify,
     render_source,
@@ -60,6 +67,7 @@ from japanese_anki.workbench.render import (
 __all__ = ["WorkbenchSession", "make_server", "serve"]
 
 _SOURCE_PREFIX = "/source/"
+_EXTRACT_PREFIX = "/extract/"
 
 #: An uploaded source is orders of magnitude larger than a form. It is
 #: still bounded: this is a localhost tool reading a scan or a lesson PDF,
@@ -120,6 +128,31 @@ class WorkbenchSession:
             return frozenset()
         return book.ever_exported(record.id for record in records)
 
+    def source_path(self, name: str) -> Path | None:
+        """The corpus file called `name`, or None.
+
+        Walked and matched, never joined: `scan_inbox / name` with a name from
+        a request is a path traversal waiting for the one caller that forgets
+        to check it. The same discipline the source route follows.
+        """
+        inbox = self.config.scan_inbox
+        if not inbox.is_dir():
+            return None
+        for path in sorted(inbox.iterdir()):
+            # `startswith(".")` like the journey walk: a route that rendered a
+            # source the dashboard deliberately hides is a second, quieter
+            # answer to "what is in my corpus".
+            if path.is_file() and not path.name.startswith(".") and path.name == name:
+                return path
+        return None
+
+    def consent(self, name: str, mode: str | None = None):
+        """What sending this source would mean, or None if it is not a source."""
+        path = self.source_path(name)
+        if path is None:
+            return None
+        return describe_extraction(self.config, path, mode=mode)
+
     def panel(self, source: str) -> review.ReviewPanel | None:
         """A freshly opened review panel for one source, or None.
 
@@ -174,6 +207,19 @@ class _WorkbenchHandler(LocalOnlyHandler):
         if "added" not in fields or "name" not in fields:
             return None
         return fields["name"], fields["added"] == "1"
+
+    def _wants_mode(self) -> str | None:
+        """The page kind a person chose on the consent form, if any.
+
+        Only janki's two real modes are honoured; anything else is the
+        default, because a mode this code does not recognise must not reach
+        `prompt_name` and pick a prompt by accident.
+        """
+        query = self.path.split("?", 1)
+        if len(query) != 2:
+            return None
+        asked = dict(parse_qsl(query[1])).get("mode", "")
+        return asked if asked in extract.MODES else None
 
     def _wants_edit(self) -> bool:
         query = self.path.split("?", 1)
@@ -237,6 +283,21 @@ class _WorkbenchHandler(LocalOnlyHandler):
             return
         if route == "/style.css":
             self._send(200, STYLE, content_type="text/css; charset=utf-8")
+            return
+        if route.startswith(_EXTRACT_PREFIX):
+            # Same discipline as the source route: the name is matched against
+            # janki's own view of the corpus, and the path comes from that
+            # match rather than from the request.
+            name = unquote(route[len(_EXTRACT_PREFIX) :])
+            asked = self._wants_mode()
+            consent = self.server.session.consent(name, asked)
+            if consent is None:
+                self._error(404, "No such source.")
+                return
+            self._send(
+                200,
+                render_consent(consent, token=self.server.session.token),
+            )
             return
         if route.startswith(_SOURCE_PREFIX):
             # The name is matched against the dashboard's own computed list and

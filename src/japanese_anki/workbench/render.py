@@ -19,9 +19,15 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from japanese_anki.application import SourceJourney
+from japanese_anki.application import NOT_EXTRACTED, SourceJourney
 
-__all__ = ["STYLE", "render_dashboard", "render_reidentify", "render_source"]
+__all__ = [
+    "STYLE",
+    "render_consent",
+    "render_dashboard",
+    "render_reidentify",
+    "render_source",
+]
 
 STYLE = """
 :root { color-scheme: light dark; }
@@ -111,10 +117,35 @@ button:disabled {
   background: ButtonFace; transform: none;
 }
 button:disabled:hover { background: ButtonFace; color: GrayText; }
-@media (prefers-reduced-motion: reduce) {
-  button { transition: none; }
-  button:active { transform: none; }
+/* A link that leads to a decision is a control, so it carries the same
+   affordances as one — including the hover state, without which it reads as
+   decoration exactly like the removal button did. `inline-block` because an
+   inline anchor ignores the padding that makes it a 44px target. */
+a.button {
+  display: inline-block; text-decoration: none;
+  min-height: 44px; padding: .65rem 1rem; font-weight: 700;
+  border-radius: .35rem;
+  background: ButtonFace; color: ButtonText; border: 1px solid ButtonBorder;
+  transition: background-color .12s ease, color .12s ease, border-color .12s ease;
 }
+a.button:hover, a.button:focus-visible {
+  background: Highlight; color: HighlightText; border-color: Highlight;
+}
+a.button:active { transform: translateY(1px); }
+@media (prefers-reduced-motion: reduce) {
+  button, a.button { transition: none; }
+  button:active, a.button:active { transform: none; }
+}
+/* The consent disclosures. Wide line spacing and no bullet crowding: every
+   item is a separate thing somebody has to actually read before agreeing,
+   and a dense list is one people skip. */
+.lead { font-size: 1.1rem; }
+/* The irreversible ones. Without this they render in the same neutral grey as
+   every other status box, which is the wrong weight for "not recoverable". */
+.status.held { border-inline-start: .35rem solid Highlight; padding-inline-start: .6rem; }
+.disclosure { margin-block: 1rem; padding-inline-start: 1.25rem; }
+.disclosure li { margin-block: .5rem; }
+.advanced { border: 1px solid GrayText; border-radius: .35rem; padding: .75rem; }
 .submit { position: sticky; bottom: 0; padding: 1rem; background: Canvas;
   border-top: 1px solid GrayText; }
 .card, .pattern {
@@ -190,6 +221,15 @@ def _source_html(journey: SourceJourney, prefix: str = "") -> str:
     parts.append(
         f'<p class=next><b>Next:</b> {_escaped(journey.next_action)}</p>'
     )
+    if prefix and journey.state == NOT_EXTRACTED:
+        # Goes to the page that *describes* the paid call, never straight at
+        # one. Adding a file and sending it are two separate actions, and a
+        # link that spent money would collapse them into one click.
+        target = f"{prefix}/extract/{quote(journey.source, safe='')}"
+        parts.append(
+            f'<p class=next><a class=button href="{html.escape(target, quote=True)}">'
+            "See what reading this would send</a></p>"
+        )
     detail = " ".join(filter(None, (journey.detail, journey.grammar_detail)))
     if detail:
         parts.append(
@@ -922,5 +962,155 @@ def render_reidentify(
             "is</a></div>"
         )
     body.append("</form>")
+    body.append("</main></body></html>")
+    return "".join(body)
+
+# --- what one paid call would send -------------------------------------------
+
+
+#: The mode choice, in what a person would recognise about their own handout
+#: rather than in `table` and `prose`, which are janki's words for prompts.
+_MODES: tuple[tuple[str, str, str], ...] = (
+    ("", "Choose automatically", "janki decides from the page. Start here."),
+    (
+        "table",
+        "A vocabulary list",
+        "Columns of words with readings and meanings — every row is copied.",
+    ),
+    (
+        "prose",
+        "A lesson, dialogue or exercise",
+        "Running text — janki picks out the words worth a card.",
+    ),
+)
+
+
+def _mode_choice(prefix: str, name: str, selected: str | None) -> str:
+    """Advanced, and collapsed: the default is right for almost every page.
+
+    A real GET form with its own submit, not bare radios. Radios that reorder
+    nothing and submit nothing are a control that does not control anything —
+    and on *this* page the cost of that is specific: somebody selects "A
+    vocabulary list", reads the plan beside it, and consents to a run
+    described under different instructions from the ones they picked.
+
+    GET because choosing how to *describe* a page changes nothing on disk.
+    """
+    chosen = selected or ""
+    action = html.escape(f"{prefix}/extract/{quote(name, safe='')}", quote=True)
+    rows = []
+    for value, label, hint in _MODES:
+        mark = " checked" if value == chosen else ""
+        rows.append(
+            "<p class=edit><label>"
+            f'<input type=radio name=mode value="{html.escape(value, quote=True)}"'
+            f"{mark}> {_escaped(label)}</label>"
+            f"<span class=counts>{_escaped(hint)}</span></p>"
+        )
+    opened = " open" if chosen else ""
+    return (
+        f"<details class=advanced{opened}><summary>What kind of page is this?"
+        f'</summary><form method=get action="{action}">'
+        + "".join(rows)
+        + "<button type=submit>Describe it as this kind</button>"
+        "<span class=counts>This only changes what the plan above says. "
+        "Nothing is sent.</span>"
+        "</form></details>"
+    )
+
+
+def render_consent(consent: Any, *, token: str = "") -> str:
+    """The page that asks whether to spend money, and says what on.
+
+    Every sentence here is load-bearing (WORKBENCH_PLAN.md W3). It names the
+    one file leaving the computer, who answers, and that the call is billed —
+    and it says the copy in the corpus stays put, because "sending" and
+    "uploading my library" are the same words to someone who has not thought
+    about it. Claude Max gets its own sentence: it is the single most likely
+    wrong belief a person arrives with, and the one that turns an informed
+    consent into a surprise invoice.
+    """
+    prefix = f"/{html.escape(token, quote=True)}" if token else ""
+    name = _escaped(consent.name)
+    body = [
+        "<!doctype html><html lang=en><head><meta charset=utf-8>",
+        '<meta name="viewport" content="width=device-width, initial-scale=1">',
+        f"<title>Send {name} to a model</title>",
+        f'<link rel=stylesheet href="{prefix}/style.css">',
+        "</head><body><main>",
+        f'<p class=saved><a href="{prefix}/">Back to your sources</a></p>',
+        f"<h1>Send {name} to a model?</h1>",
+    ]
+
+    if consent.refusal:
+        body.append(
+            f'<p class="status held">{_escaped(consent.refusal)}</p>'
+            "</main></body></html>"
+        )
+        return "".join(body)
+
+    body.append(
+        '<p class=lead>Send <strong>' + name + "</strong> to "
+        f"<strong>{_escaped(consent.model)}</strong> to propose vocabulary "
+        "cards and grammar — <strong>a paid API call</strong>.</p>"
+    )
+    # Four separate sentences rather than one paragraph: each answers a
+    # different wrong belief, and a reader skimming one block absorbs none.
+    body.append(
+        "<ul class=disclosure>"
+        "<li>Only this one file is sent. Nothing else in your corpus leaves "
+        "this computer.</li>"
+        "<li>Your copy stays where it is. Sending does not move or delete "
+        "it.</li>"
+        "<li>The whole document is sent — janki cannot yet send only some "
+        "pages.</li>"
+        "<li>This spends <strong>Anthropic API credits</strong>, billed to "
+        "your API account.</li>"
+        "<li>A Claude Pro or Max subscription is a different thing and does "
+        "not pay for this.</li>"
+        + (
+            # Prose mode puts every expression already in the collection into
+            # the prompt so the model can skip them. "Only this one file"
+            # would otherwise be read as covering that too, and a learner has
+            # no reason to distinguish their corpus from their collection.
+            "<li>Because you chose a lesson or dialogue, the list of words "
+            "you already have is sent too, so the model can skip them.</li>"
+            if consent.sends_known_words
+            else ""
+        )
+        + "</ul>"
+    )
+
+    if consent.replaces is not None:
+        # Named, not merely flagged: "this will replace your review" is not a
+        # decision anybody can make without knowing which review.
+        held = (
+            f"{consent.replaces_cards} cards, {_escaped(consent.replaces_state)}"
+            if consent.replaces_state
+            else "a review already on disk"
+        )
+        body.append(
+            '<p class="status held">Reading this again replaces what you '
+            f"already have for it — {held}. That work is not recoverable "
+            "afterwards.</p>"
+        )
+
+    if consent.busy:
+        body.append(f'<p class="status held">{_escaped(consent.busy)}</p>')
+
+    body.append(_mode_choice(prefix, consent.name, consent.mode))
+    body.append(
+        '<p class=counts>Nothing has been sent. This page only describes what '
+        "sending would do.</p>"
+    )
+    if consent.sendable:
+        # The page that asks the question must not be the only one without an
+        # answer to it. Sending from here arrives in the next step; until it
+        # does, the way that exists gets named rather than left to be guessed.
+        body.append(
+            "<p class=counts>Sending from this page is not built yet. To go "
+            f"ahead now, run <code>janki extract {_escaped(consent.name)}"
+            "</code> in a terminal.</p>"
+        )
     body.append("</main></body></html>")
     return "".join(body)

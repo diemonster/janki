@@ -312,3 +312,25 @@ def test_main_reports_any_janki_error_without_registration(
 
     assert exit_code == 1
     assert "the new feature failed" in capsys.readouterr().err
+
+
+def test_a_file_that_is_not_utf8_is_a_data_error_not_a_crash(
+    tmp_path: Path,
+) -> None:
+    """`UnicodeDecodeError` comes from the *read*, before either parser sees
+    anything, so it is not caught by the parse clause it sits beside — and
+    being a `ValueError` rather than a `JankiError` it escapes every caller
+    that guards for janki's own errors.
+
+    That is not theoretical: the workbench walks staging files and reads the
+    collection to answer whether a paid call is safe to start, and a single
+    non-UTF-8 byte took the whole page down with no error at all.
+    """
+    for name, blob in (("bad.json", b"[\xff]"), ("bad.yaml", b"a: \xff")):
+        path = tmp_path / name
+        path.write_bytes(blob)
+
+        with pytest.raises(DataError) as caught:
+            io.load_structured(path)
+
+        assert name in str(caught.value)
