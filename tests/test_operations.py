@@ -24,6 +24,7 @@ from japanese_anki.operations import (
     Operation,
     OperationError,
     OperationJournal,
+    advance_refusal,
     answer_text,
     capture_artifact,
 )
@@ -400,3 +401,20 @@ def test_an_unfinished_operation_keeps_its_artifact(tmp_path: Path) -> None:
         journal.forget(["op-1"])
 
     assert (tmp_path / artifact).exists()
+
+
+def test_a_state_the_journal_does_not_know_is_refused_rather_than_raising(
+    tmp_path: Path,
+) -> None:
+    """`advance_refusal` is exported for callers about to do something they
+    cannot take back, which means it is asked about states it has not
+    validated. The answer to "may this move?" is no — a traceback instead
+    would send a caller holding a paid answer down its own error path."""
+    assert advance_refusal("op-1", "not-a-state", "committed", "a.json")
+    assert advance_refusal("op-1", "result_captured", "not-a-state", "a.json")
+    # And the two it exists to answer, so the refusals above are not merely
+    # this function refusing everything.
+    assert advance_refusal("op-1", "result_captured", "committed", "a.json") == ""
+    assert "captured provider answer" in advance_refusal(
+        "op-1", "result_captured", "committed", ""
+    )

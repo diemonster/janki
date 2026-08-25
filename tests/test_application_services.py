@@ -1390,6 +1390,11 @@ def test_settling_does_not_overwrite_the_exact_bytes_the_hook_captured(
     before = operations.OperationJournal.load(config.operations_file).operations[
         operation_id
     ]
+    # Held as a value, not re-read afterwards from the path the entry names.
+    # `capture_artifact` names artifacts from the operation id, so both sides
+    # of a path comparison — and both sides of a re-read — are the same file
+    # by construction, and a settle that clobbered it in place would pass.
+    captured = (config.operations_file.parent / before.artifact).read_bytes()
 
     settle_dispatch(config, journal, operation_id, {"candidates": []})
 
@@ -1397,9 +1402,9 @@ def test_settling_does_not_overwrite_the_exact_bytes_the_hook_captured(
         operation_id
     ]
     assert after.artifact == before.artifact
-    assert (config.operations_file.parent / after.artifact).read_bytes() == (
-        config.operations_file.parent / before.artifact
-    ).read_bytes()
+    assert (
+        config.operations_file.parent / after.artifact
+    ).read_bytes() == captured
 
 
 def test_a_paid_reply_is_found_even_when_another_journal_captured_it(

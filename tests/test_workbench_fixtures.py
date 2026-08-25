@@ -21,13 +21,22 @@ from pathlib import Path
 
 import pytest
 
-from japanese_anki import extract, patterns, promote
+from japanese_anki import extract, operations, patterns, promote
+from japanese_anki.application.extraction import (
+    ExtractionTarget,
+    authorize_dispatch,
+    complete_extraction,
+)
+from japanese_anki.config import ProjectConfig
 from japanese_anki.exporters.anki import resolve_deck_records
 from japanese_anki.identifiers import stable_record_id
 from japanese_anki.inputs import PreparedInput
 from japanese_anki.jpdb import JpdbClient
 from japanese_anki.promote import HOLD_MISSING_READING, HOLD_UNKNOWN_READING
-from japanese_anki.staging import CANDIDATE_ACCOUNTING_KEY, new_review_run_id, write_staging
+from japanese_anki.staging import (
+    CANDIDATE_ACCOUNTING_KEY,
+    read_staging,
+)
 from japanese_anki.workbench.review import ReviewPanel
 
 FIXTURES = Path(__file__).parent / "fixtures" / "workbench"
@@ -56,7 +65,7 @@ def _load(scenario: str) -> object:
 
 
 def materialize(tmp_path: Path, scenario: str, *, filename: str | None = None) -> dict:
-    """Replicate ``cli.command_extract``'s write sequence for one fixture answer.
+    """Run ``cli.command_extract``'s write sequence over one fixture answer.
 
     Returns the staging path, pattern-store path, built records, and meta —
     the "staging, pattern, record ... state" W0 asks each fixture to produce.
@@ -77,43 +86,66 @@ def materialize(tmp_path: Path, scenario: str, *, filename: str | None = None) -
         pattern_set=patterns.with_prompt_provenance(normalized.pattern_set, provenance),
     )
 
-    built = extract.build_records(result.candidates, item, known_ids=set())
-    coverage = extract.coverage_block(
+    # The layout this helper has always assumed — `staging/` and
+    # `patterns.json` beside the inbox — written down so a real `ProjectConfig`
+    # can name them. Callers that already made a project keep theirs.
+    if not (tmp_path / "janki.toml").exists():
+        (tmp_path / "janki.toml").write_text(
+            '[paths]\nnormalized_file = "vocabulary.json"\n'
+            'deck_dir = "decks"\nledger_file = "ledger.json"\n'
+            'media_dir = "media"\nstaging_dir = "staging"\n'
+            'patterns_file = "patterns.json"\nscan_inbox = "inbox"\n'
+            'operations_file = "operations.json"\n',
+            encoding="utf-8",
+        )
+
+    # Through the real writer, not a copy of it. This helper exists so the
+    # fixtures cannot drift from what `extract` actually produces, and a second
+    # implementation of the write sequence is exactly that drift waiting to
+    # happen — it went unnoticed until `complete_extraction` was factored out
+    # and turned out to be this function's twin.
+    config = ProjectConfig.load(tmp_path)
+    journal = operations.OperationJournal.load(config.operations_file)
+    target = ExtractionTarget(
+        item=item,
+        staging_path=config.staging_dir / f"{item.origin_path.name}.yaml",
+        source_sha256=str(provenance["source_sha256"]),
+        provenance=provenance,
+    )
+    operation_id = authorize_dispatch(journal, target, model="claude-opus-5")
+    # Through the real capture path too, so the entry names an artifact that
+    # exists. The fixture JSON *is* this run's provider answer, and a journal
+    # pointing at a file nobody wrote is the state the journal exists to
+    # prevent.
+    journal.advance(
+        operation_id,
+        "result_captured",
+        artifact=operations.capture_artifact(
+            config.operations_file,
+            operation_id,
+            (RESPONSES / f"{scenario}.json").read_bytes(),
+        ),
+    )
+    complete_extraction(
+        config,
+        journal,
+        target,
         result,
-        source_sha256=provenance["source_sha256"],
+        operation_id=operation_id,
+        known=set(),
         mode=None,
-        candidate_accounting=built.candidate_accounting,
+        model="claude-opus-5",
     )
 
-    run_id = new_review_run_id()
-    run_patterns = replace(result.pattern_set, review_run_id=run_id)
-    meta: dict[str, object] = {
-        "source_file": item.origin_path.name,
-        "extracted_at": "2026-08-20",
-        "model": "claude-opus-5",
-        "review_run_id": run_id,
-        "prompt_provenance": provenance,
-        "pattern_set": run_patterns.to_dict(),
-        "coverage": coverage,
-    }
-    held = list(built.unusable_candidates)
-    if held:
-        meta["review_notes"] = extract.unusable_note(held)
-    meta[CANDIDATE_ACCOUNTING_KEY] = built.candidate_accounting
-
-    staging_dir = tmp_path / "staging"
-    staging_dir.mkdir(parents=True, exist_ok=True)
-    staging_path = staging_dir / f"{item.origin_path.name}.yaml"
-    write_staging(staging_path, built.records, meta)
-
-    patterns_path = tmp_path / "patterns.json"
-    store = {run_patterns.source: run_patterns}
-    patterns_path.parent.mkdir(parents=True, exist_ok=True)
-    patterns.save_store(patterns_path, store)
+    staging_path = target.staging_path
+    records, meta = read_staging(staging_path)
+    patterns_path = config.patterns_file
+    store = patterns.load_store(patterns_path)
+    run_patterns = store[result.pattern_set.source]
 
     return {
         "item": item,
-        "records": built.records,
+        "records": records,
         "meta": meta,
         "staging_path": staging_path,
         "patterns_path": patterns_path,
@@ -163,7 +195,7 @@ def test_lesson_with_grammar_has_records_and_an_unreviewed_pattern_set(
 def test_pattern_only_chart_writes_patterns_and_no_records(tmp_path: Path) -> None:
     state = materialize(tmp_path, "pattern_only_chart")
 
-    assert state["records"] == ()
+    assert state["records"] == []
     run_patterns = state["run_patterns"]
     assert len(run_patterns.patterns) == 2
     assert run_patterns.kind == "pattern"

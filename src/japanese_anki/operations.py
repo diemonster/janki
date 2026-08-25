@@ -50,6 +50,7 @@ __all__ = [
     "Operation",
     "OperationError",
     "OperationJournal",
+    "advance_refusal",
     "answer_text",
     "capture_artifact",
     "serialize_response",
@@ -100,6 +101,35 @@ LIVE_STATES: frozenset[str] = frozenset(
 TERMINAL_STATES: frozenset[str] = frozenset(
     state for state, moves in _TRANSITIONS.items() if not moves
 )
+
+
+def advance_refusal(
+    operation_id: str, state: str, to: str, artifact: str = ""
+) -> str:
+    """Why moving `operation_id` from `state` to `to` would be refused, or "".
+
+    One function so a caller about to do something it cannot take back — write
+    a staging file, spend money — can ask *first* and get the same answer
+    :meth:`OperationJournal.advance` would give it afterwards. `advance` is
+    still the authority and re-asks under the lock; this only lets a caller
+    fail before it has made a mess rather than after.
+    """
+    if to not in _TRANSITIONS:
+        return f"Unknown operation state {to!r}"
+    # `.get`, because this is exported for callers holding a state they have
+    # not validated. An unknown one is refused rather than raising KeyError:
+    # the answer to "may this move?" is no, and a caller asking before it
+    # spends or writes deserves that answer rather than a traceback.
+    if to not in _TRANSITIONS.get(state, frozenset()):
+        return f"Operation {operation_id!r} cannot move from {state!r} to {to!r}"
+    if to == "committed" and not artifact:
+        # Committing means "the exact answer became staging". Without a
+        # captured artifact there is nothing that could have.
+        return (
+            f"Operation {operation_id!r} cannot be committed without a "
+            "captured provider answer"
+        )
+    return ""
 
 
 def serialize_response(response: Any) -> bytes:
@@ -370,18 +400,11 @@ class OperationJournal:
             held = current.operations.get(operation_id)
             if held is None:
                 raise OperationError(f"No operation {operation_id!r} to advance")
-            if state not in _TRANSITIONS[held.state]:
-                raise OperationError(
-                    f"Operation {operation_id!r} cannot move from {held.state!r} "
-                    f"to {state!r}"
-                )
-            if state == "committed" and not held.artifact and not artifact:
-                # Committing means "the exact answer became staging". Without a
-                # captured artifact there is nothing that could have.
-                raise OperationError(
-                    f"Operation {operation_id!r} cannot be committed without a "
-                    "captured provider answer"
-                )
+            refusal = advance_refusal(
+                operation_id, held.state, state, artifact or held.artifact
+            )
+            if refusal:
+                raise OperationError(refusal)
             moved = Operation(
                 operation_id=held.operation_id,
                 kind=held.kind,

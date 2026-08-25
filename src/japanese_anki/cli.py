@@ -36,8 +36,8 @@ from japanese_anki.application.extraction import (
     authorize_dispatch,
     capture_hook,
     classify_dispatch_failure,
+    complete_extraction,
     plan_extraction,
-    settle_dispatch,
 )
 from japanese_anki.application.promotion import (
     POST_READING_GATES,
@@ -88,7 +88,6 @@ from japanese_anki.models import VocabularyRecord
 from japanese_anki.preview import build_preview
 from japanese_anki.promote import PromoteError
 from japanese_anki.staging import (
-    CANDIDATE_ACCOUNTING_KEY,
     STAGING_SUFFIXES,
     StagingError,
     check_rewritable,
@@ -1968,7 +1967,6 @@ def command_extract(args: argparse.Namespace) -> int:
     journal = operations.OperationJournal.load(config.operations_file)
     for planned in plan.targets:
         item = planned.item
-        target = planned.staging_path
         operation_id = authorize_dispatch(journal, planned, model=plan.model)
         try:
             # From the plan, not from locals that happen to hold the same
@@ -2020,85 +2018,32 @@ def command_extract(args: argparse.Namespace) -> int:
                 )
             raise
 
-        settle_dispatch(config, journal, operation_id, result)
-        candidates = result.candidates
-        built = extract.build_records(candidates, item, plan.known)
-        records = built.records
-        coverage = extract.coverage_block(
+        outcome = complete_extraction(
+            config,
+            journal,
+            planned,
             result,
-            source_sha256=planned.source_sha256,
-            mode=args.mode,
-            candidate_accounting=built.candidate_accounting,
+            operation_id=operation_id,
+            known=plan.known,
+            mode=plan.mode,
+            model=plan.model,
+            force=args.force,
         )
-        target.parent.mkdir(parents=True, exist_ok=True)
-        provenance = dict(result.pattern_set.prompt_provenance)
-        run_id = new_review_run_id()
-        run_patterns = dataclasses.replace(
-            result.pattern_set,
-            review_run_id=run_id,
-        )
-        meta = {
-            # The basename, like every other writer of this key. An absolute
-            # path is stale on any other clone, and this file is committed.
-            "source_file": item.origin_path.name,
-            "extracted_at": date.today().isoformat(),
-            "model": model,
-            "review_run_id": run_id,
-            "prompt_provenance": provenance,
-            # The same paid answer also inferred the document patterns. Keep a
-            # complete copy beside the cards so a pattern-store write failure
-            # cannot make that half of the answer unrecoverable.
-            "pattern_set": run_patterns.to_dict(),
-            "coverage": coverage,
-        }
-        # Held back into the file, not just onto the terminal: the staging file
-        # is what a reviewer reads later, and a count that lives only in
-        # scrollback is the same silent discard with an extra step.
-        held = list(built.unusable_candidates)
-        if held:
-            meta["review_notes"] = extract.unusable_note(held)
-        meta[CANDIDATE_ACCOUNTING_KEY] = built.candidate_accounting
-        write_staging(target, records, meta, force=args.force)
-        # The exact answer became staging, so the journal entry has done
-        # its job and stops being something a person must look at.
-        journal.advance(operation_id, "committed")
-        kept_reviewed_patterns = False
-        # Reload inside the lock after the paid call. `patterns --review` uses
-        # the same lock, so either its complete decision wins first and is
-        # preserved here, or this fresh unreviewed answer lands first and the
-        # reviewer sees that answer. Neither transition can silently erase the
-        # other or an unrelated source added while the model was answering.
-        with exclusive_path_lock(config.patterns_file):
-            pattern_store = patterns.load_store(config.patterns_file)
-            previous_patterns = pattern_store.get(run_patterns.source)
-            if (
-                previous_patterns is not None
-                and previous_patterns.reviewed
-                and not args.force
-            ):
-                kept_reviewed_patterns = True
-            else:
-                pattern_store[run_patterns.source] = run_patterns
-                patterns.save_store_under_lock(config.patterns_file, pattern_store)
-        if kept_reviewed_patterns:
+        if outcome.kept_reviewed_patterns:
             print(
                 f"note: kept the reviewed patterns already stored for "
-                f"{run_patterns.source}; pass extract --force to replace "
+                f"{outcome.source}; pass extract --force to replace "
                 "them with this answer and review them again"
             )
         written += 1
-        already = sum(
-            1 for record in records if "already_known" in record.source.raw_fields
-        )
-        note = f", {len(held)} unusable" if held else ""
-        duplicate_count = built.candidate_accounting["duplicate_candidate_count"]
-        if duplicate_count:
-            noun = "proposal" if duplicate_count == 1 else "proposals"
-            note += f", {duplicate_count} duplicate {noun} preserved"
-        coverage_note = f", coverage {coverage['status']}"
+        note = f", {outcome.unusable} unusable" if outcome.unusable else ""
+        if outcome.duplicates:
+            noun = "proposal" if outcome.duplicates == 1 else "proposals"
+            note += f", {outcome.duplicates} duplicate {noun} preserved"
         print(
-            f"{item.origin_path.name}: {len(records)} candidate(s) "
-            f"({already} already known{note}{coverage_note}) -> {target}"
+            f"{item.origin_path.name}: {outcome.records} candidate(s) "
+            f"({outcome.already_known} already known{note}, coverage "
+            f"{outcome.coverage_status}) -> {outcome.target}"
         )
 
     if not written:

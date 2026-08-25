@@ -27,27 +27,35 @@ somebody who then declines.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass, replace
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 from japanese_anki import extract, operations, patterns
 from japanese_anki.config import ProjectConfig
 from japanese_anki.inputs import PreparedInput
-from japanese_anki.io import load_records
+from japanese_anki.io import exclusive_path_lock, load_records
 from japanese_anki.models import VocabularyRecord
+from japanese_anki.staging import (
+    CANDIDATE_ACCOUNTING_KEY,
+    new_review_run_id,
+    write_staging,
+)
 
 __all__ = [
     "ANSWER_EMPTY",
     "ANSWER_SAVED",
     "OUTCOME_UNKNOWN",
     "DispatchFailure",
+    "ExtractionOutcome",
     "ExtractionPlan",
     "ExtractionTarget",
     "authorize_dispatch",
     "capture_hook",
     "classify_dispatch_failure",
+    "complete_extraction",
     "plan_extraction",
     "settle_dispatch",
 ]
@@ -291,9 +299,23 @@ def settle_dispatch(
     `dispatching` for ever. An answer did arrive — it is in `result` — so
     record that, using the normalized value as the artifact when the exact
     bytes were not captured.
+
+    Both states a call can still be in, not just `dispatching`: a caller that
+    reports streaming moves through `running`, and an answer that arrives
+    there is exactly as paid for.
+
+    Does nothing to an entry that already recorded an answer, so a caller may
+    settle without first knowing whether the hook fired.
+
+    The artifact this writes is janki's normalized value, not the provider's
+    own reply, so `operations.answer_text` — which reads provider-shaped
+    content blocks — finds nothing in it and reports no answer. What it holds
+    is still readable by a person, which is the promise; a surface that grades
+    artifacts through `answer_text` must not call one of these empty.
     """
     reloaded = operations.OperationJournal.load(config.operations_file)
-    if reloaded.operations[operation_id].state != "dispatching":
+    held = reloaded.operations.get(operation_id)
+    if held is None or held.state not in ("dispatching", "running"):
         return
     journal.advance(
         operation_id,
@@ -345,4 +367,159 @@ def classify_dispatch_failure(
         operation_id=operation_id,
         outcome=OUTCOME_UNKNOWN,
         money_may_have_been_spent=marked.money_may_have_been_spent,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ExtractionOutcome:
+    """What one answer became: a staging file, and what is in it."""
+
+    target: Path
+    records: int
+    already_known: int
+    unusable: int
+    duplicates: int
+    coverage_status: str
+    #: True when a *reviewed* pattern answer for this source was already
+    #: stored and kept, so this run's grammar half is in the staging file
+    #: only. Worth reporting: the reviewer's decision won, deliberately.
+    kept_reviewed_patterns: bool
+    source: str
+
+
+def complete_extraction(
+    config: ProjectConfig,
+    journal: operations.OperationJournal,
+    target: ExtractionTarget,
+    result: extract.ExtractionResult,
+    *,
+    operation_id: str,
+    known: Iterable[str],
+    mode: str | None,
+    model: str,
+    force: bool = False,
+) -> ExtractionOutcome:
+    """Turn one paid answer into a staging file, and close its journal entry.
+
+    The half after the money. It runs in the caller's thread with the answer
+    already in hand, so a browser and the command reach a staging file by the
+    same route — which is the only way the two can agree about what an
+    extraction produced.
+
+    Ordering is load-bearing twice over. The journal is committed only once
+    the staging file exists, because "committed" means *the exact answer
+    became staging* and nothing else. And the pattern store is re-read inside
+    its own lock after the call: `patterns --review` takes the same lock, so
+    either a reviewer's complete decision wins and is preserved here, or this
+    fresh unreviewed answer lands first and the reviewer sees it — neither can
+    silently erase the other, nor an unrelated source added while the model
+    was still answering.
+    """
+    # Identity before anything else, because everything after it records this
+    # answer against this entry. A caller running two extractions at once and
+    # pairing one's operation with the other's target is the same variable
+    # swap as a skipped settle, and it would otherwise commit entry A saying
+    # its exact answer became B's staging file — silently, with both files
+    # written and neither wrong on its face.
+    #
+    # Refusing does lose an in-memory answer, which this function otherwise
+    # never does. The difference is that here there is no truthful entry to
+    # record it against: the pairing itself is what cannot be believed.
+    held = operations.OperationJournal.load(config.operations_file).operations.get(
+        operation_id
+    )
+    if held is not None and held.request_fp != str(
+        target.provenance["request_fingerprint"]
+    ):
+        raise operations.OperationError(
+            f"Operation {operation_id!r} authorized a different request than "
+            f"{target.name!r} describes; refusing to record this answer "
+            "against it."
+        )
+
+    # This function is holding an answer somebody paid for, so a refusal here
+    # must never be how that answer is lost. A caller that skipped
+    # `settle_dispatch` — a browser handler with a missing branch — arrives
+    # with the entry still saying the call is in flight; settling closes that
+    # seam rather than guarding it, and puts the bytes on disk where
+    # `janki status --operations` can find them either way.
+    settle_dispatch(config, journal, operation_id, result)
+
+    # Then asked before the staging write, though `advance` asks again after
+    # it. The commit stays last on purpose — "committed" has to mean the file
+    # exists — but a refusal after the write would leave a staging file under
+    # an entry that never accounted for it. Read from the file: a caller may
+    # hold a journal that never saw the capture.
+    entry = operations.OperationJournal.load(config.operations_file).operations.get(
+        operation_id
+    )
+    refusal = (
+        f"No operation {operation_id!r} to complete"
+        if entry is None
+        else operations.advance_refusal(
+            operation_id, entry.state, "committed", entry.artifact
+        )
+    )
+    if refusal:
+        raise operations.OperationError(refusal)
+
+    item = target.item
+    built = extract.build_records(result.candidates, item, known)
+    records = built.records
+    coverage = extract.coverage_block(
+        result,
+        source_sha256=target.source_sha256,
+        mode=mode,
+        candidate_accounting=built.candidate_accounting,
+    )
+    target.staging_path.parent.mkdir(parents=True, exist_ok=True)
+    run_id = new_review_run_id()
+    run_patterns = replace(result.pattern_set, review_run_id=run_id)
+    meta: dict[str, Any] = {
+        # The basename, like every other writer of this key. An absolute path
+        # is stale on any other clone, and this file is committed.
+        "source_file": item.origin_path.name,
+        "extracted_at": date.today().isoformat(),
+        "model": model,
+        "review_run_id": run_id,
+        "prompt_provenance": dict(result.pattern_set.prompt_provenance),
+        # The same paid answer also inferred the document patterns. Keep a
+        # complete copy beside the cards so a pattern-store write failure
+        # cannot make that half of the answer unrecoverable.
+        "pattern_set": run_patterns.to_dict(),
+        "coverage": coverage,
+    }
+    # Held back into the file, not just onto the terminal: the staging file is
+    # what a reviewer reads later, and a count that lives only in scrollback is
+    # the same silent discard with an extra step.
+    held = list(built.unusable_candidates)
+    if held:
+        meta["review_notes"] = extract.unusable_note(held)
+    meta[CANDIDATE_ACCOUNTING_KEY] = built.candidate_accounting
+    write_staging(target.staging_path, records, meta, force=force)
+    # The exact answer became staging, so the journal entry has done its job
+    # and stops being something a person must look at.
+    journal.advance(operation_id, "committed")
+
+    kept_reviewed_patterns = False
+    with exclusive_path_lock(config.patterns_file):
+        store = patterns.load_store(config.patterns_file)
+        previous = store.get(run_patterns.source)
+        if previous is not None and previous.reviewed and not force:
+            kept_reviewed_patterns = True
+        else:
+            store[run_patterns.source] = run_patterns
+            patterns.save_store_under_lock(config.patterns_file, store)
+
+    return ExtractionOutcome(
+        target=target.staging_path,
+        records=len(records),
+        already_known=sum(
+            1 for record in records if "already_known" in record.source.raw_fields
+        ),
+        unusable=len(held),
+        duplicates=built.candidate_accounting["duplicate_candidate_count"],
+        coverage_status=coverage["status"],
+        kept_reviewed_patterns=kept_reviewed_patterns,
+        source=run_patterns.source,
     )

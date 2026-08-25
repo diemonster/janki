@@ -7,6 +7,7 @@ annotation, the staging shape — rather than the SDK's.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -14,10 +15,17 @@ from typing import Any
 
 import pytest
 import yaml
+from test_workbench_fixtures import _load, _prepared
 
 from conftest import seed_prompts
 from japanese_anki import cli, extract, operations, patterns, prompts
 from japanese_anki.application import plan_extraction
+from japanese_anki.application.extraction import (
+    ExtractionTarget,
+    authorize_dispatch,
+    capture_hook,
+    complete_extraction,
+)
 from japanese_anki.claude_client import CallResult, Refusal
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
@@ -2082,3 +2090,512 @@ def test_a_reply_of_pure_reasoning_says_there_is_nothing_to_recover(
     assert "contains no answer — only the model's reasoning" in stderr
     assert operation.artifact in stderr
     assert "There is nothing in it to recover" in stderr
+
+
+# --- what a paid answer becomes ---------------------------------------------
+
+
+def _fixture_result(
+    root: Path, scenario: str, name: str, extra: tuple = (), settle: bool = True
+):
+    """One W0 fixture answer, parsed exactly as a live call would deliver it.
+
+    `extra` appends candidates to the model's answer *before* normalization,
+    which is where a real one would arrive — the fixtures are deliberately
+    well-formed, so a malformed row has to be asked for.
+
+    `settle=False` stops after `authorize_dispatch`, which is exactly where a
+    caller whose provider wrapper never fired the capture hook ends up: the
+    entry says the call is in flight and the answer is in hand anyway. Reached
+    by leaving a step out rather than by winding the journal backwards, so the
+    state under test is one the public API actually produces.
+    """
+    item = _prepared(root, name)
+    parsed = _load(scenario)
+    if extra:
+        parsed = parsed.model_copy(
+            update={"candidates": [*parsed.candidates, *extra]}
+        )
+    normalized = extract.normalize_response(parsed, None, item.origin_path.name)
+    provenance = extract.prompt_provenance(
+        item, model="claude-opus-5", style_guide="s", system="y", mode=None,
+        source_sha256=extract.source_fingerprint(item.origin_path),
+    )
+    result = dataclasses.replace(
+        normalized,
+        pattern_set=patterns.with_prompt_provenance(normalized.pattern_set, provenance),
+    )
+    config = ProjectConfig.load(root)
+    journal = operations.OperationJournal.load(config.operations_file)
+    target = ExtractionTarget(
+        item=item,
+        staging_path=config.staging_dir / f"{item.origin_path.name}.yaml",
+        source_sha256=str(provenance["source_sha256"]),
+        provenance=provenance,
+    )
+    operation_id = authorize_dispatch(journal, target, model="claude-opus-5")
+    if settle:
+        journal.advance(
+            operation_id,
+            "result_captured",
+            artifact=operations.capture_artifact(
+                config.operations_file, operation_id, b'{"fixture": true}'
+            ),
+        )
+    return config, journal, target, result, operation_id
+
+
+def test_the_journal_commits_only_once_the_answer_is_on_disk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """"Committed" means the exact answer became staging, and nothing else. A
+    write that fails must leave the entry saying a paid reply is still waiting
+    for somebody — not that it was already dealt with."""
+    root = project(tmp_path)
+    config, journal, target, result, operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf"
+    )
+
+    def refuse(*args: object, **kwargs: object) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(
+        "japanese_anki.application.extraction.write_staging", refuse
+    )
+    with pytest.raises(OSError):
+        complete_extraction(
+            config, journal, target, result, operation_id=operation_id,
+            known=set(), mode=None, model="claude-opus-5",
+        )
+
+    entry = operations.OperationJournal.load(config.operations_file).operations[
+        operation_id
+    ]
+    assert entry.state == "result_captured"
+
+
+def test_a_reviewed_pattern_answer_is_not_replaced_by_a_rerun(
+    tmp_path: Path,
+) -> None:
+    """A person's grammar review outranks a fresh unreviewed answer. The new
+    answer is not lost — the staging file carries a complete copy — but the
+    store keeps the reviewed one until somebody asks otherwise."""
+    root = project(tmp_path)
+    config, journal, target, result, operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf"
+    )
+    complete_extraction(
+        config, journal, target, result, operation_id=operation_id,
+        known=set(), mode=None, model="claude-opus-5",
+    )
+    store = patterns.load_store(config.patterns_file)
+    source = result.pattern_set.source
+    store[source] = dataclasses.replace(store[source], reviewed=True)
+    patterns.save_store(config.patterns_file, store)
+
+    # The review has been promoted and archived, so the second run has a clear
+    # path to write — which is the ordinary way a source gets re-read.
+    target.staging_path.unlink()
+
+    config, journal, target, result, operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf"
+    )
+    outcome = complete_extraction(
+        config, journal, target, result, operation_id=operation_id,
+        known=set(), mode=None, model="claude-opus-5",
+    )
+
+    assert outcome.kept_reviewed_patterns is True
+    assert patterns.load_store(config.patterns_file)[source].reviewed is True
+    # The new answer is not lost: the staging file carries a complete copy of
+    # the grammar this run proposed, whatever the store decided to keep.
+    _records, meta = read_staging(outcome.target)
+    assert meta["pattern_set"]["patterns"]
+
+
+def test_forcing_a_rerun_replaces_a_reviewed_pattern_answer(
+    tmp_path: Path,
+) -> None:
+    """The other half, and the reason the keep is not simply a refusal:
+    `--force` is how somebody says they want this answer instead, and it must
+    actually land."""
+    root = project(tmp_path)
+    config, journal, target, result, operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf"
+    )
+    complete_extraction(
+        config, journal, target, result, operation_id=operation_id,
+        known=set(), mode=None, model="claude-opus-5",
+    )
+    store = patterns.load_store(config.patterns_file)
+    source = result.pattern_set.source
+    store[source] = dataclasses.replace(store[source], reviewed=True)
+    patterns.save_store(config.patterns_file, store)
+
+    config, journal, target, result, operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf"
+    )
+    outcome = complete_extraction(
+        config, journal, target, result, operation_id=operation_id,
+        known=set(), mode=None, model="claude-opus-5", force=True,
+    )
+
+    assert outcome.kept_reviewed_patterns is False
+    assert patterns.load_store(config.patterns_file)[source].reviewed is False
+
+
+def test_unusable_candidates_are_written_into_the_file_a_reviewer_reads(
+    tmp_path: Path,
+) -> None:
+    """A count that lives only in scrollback is a silent discard with an extra
+    step: the staging file is what somebody opens later."""
+    root = project(tmp_path)
+    config, journal, target, result, operation_id = _fixture_result(
+        root,
+        "reading_holds",
+        "holds.pdf",
+        # A row the model read but could mint no ID from: a record's ID comes
+        # from its expression, and this one has none.
+        extra=(candidate(expression="  ", page=12, reading="およぐ",
+                         meanings=["to swim"]),),
+    )
+
+    outcome = complete_extraction(
+        config, journal, target, result, operation_id=operation_id,
+        known=set(), mode=None, model="claude-opus-5",
+    )
+
+    assert outcome.unusable == 1
+    _records, meta = read_staging(outcome.target)
+    note = meta["review_notes"]
+    assert "1 candidate(s) could not be stored" in note
+    # Everything the model did read about the row, so the page can be
+    # re-checked rather than merely known to be incomplete.
+    assert "page: 12" in note
+    assert "およぐ" in note
+    assert "to swim" in note
+
+
+def test_the_model_that_answered_is_the_one_written_down(tmp_path: Path) -> None:
+    """`--model` picks who answers, and the staging file has to say who did.
+    Every caller happens to pass the default, so nothing noticed that the
+    parameter was threaded through but never read."""
+    root = project(tmp_path)
+    config, journal, target, result, operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf"
+    )
+
+    outcome = complete_extraction(
+        config, journal, target, result, operation_id=operation_id,
+        known=set(), mode=None, model="claude-haiku-4-5-20251001",
+    )
+
+    _records, meta = read_staging(outcome.target)
+    assert meta["model"] == "claude-haiku-4-5-20251001"
+
+
+def test_the_mode_a_run_was_read_under_reaches_its_coverage_verdict(
+    tmp_path: Path,
+) -> None:
+    """`--mode table` is a claim about the source — it has rows to be
+    exhaustive about — so an answer reporting no units is a hole that blocks
+    rather than a selection nobody promised was complete. Drop the parameter
+    on the way to `coverage_block` and that verdict silently goes lenient."""
+    root = project(tmp_path)
+    config, journal, target, result, operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf"
+    )
+
+    outcome = complete_extraction(
+        config, journal, target, result, operation_id=operation_id,
+        known=set(), mode="table", model="claude-opus-5",
+    )
+
+    _records, meta = read_staging(outcome.target)
+    assert meta["coverage"]["status"] == "unmeasured"
+    assert meta["coverage"]["blocking"] is True
+
+
+def test_a_staging_file_is_not_overwritten_by_a_completion_without_force(
+    tmp_path: Path,
+) -> None:
+    """The plan's collision check is stale by the time the answer arrives: the
+    file can appear during the call — another dispatch, or somebody's hand
+    edit. This is the last gate before a paid answer overwrites one."""
+    root = project(tmp_path)
+    config, journal, target, result, operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf"
+    )
+    complete_extraction(
+        config, journal, target, result, operation_id=operation_id,
+        known=set(), mode=None, model="claude-opus-5",
+    )
+    kept = target.staging_path.read_bytes()
+
+    config, journal, target, result, operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf"
+    )
+    with pytest.raises(JankiError) as caught:
+        complete_extraction(
+            config, journal, target, result, operation_id=operation_id,
+            known=set(), mode=None, model="claude-opus-5",
+        )
+
+    assert "force" in str(caught.value)
+    assert target.staging_path.read_bytes() == kept
+    # And the entry still says a paid answer is waiting for somebody, which is
+    # true: it was never turned into staging.
+    entry = operations.OperationJournal.load(config.operations_file).operations[
+        operation_id
+    ]
+    assert entry.state == "result_captured"
+
+
+def test_a_dispatch_that_was_never_settled_is_completed_not_discarded(
+    tmp_path: Path,
+) -> None:
+    """A caller that skipped `settle_dispatch` — a browser handler with a
+    missing branch — arrives holding an answer somebody paid for, under an
+    entry still claiming the call is in flight.
+
+    Refusing there would be the worst of both: the journal made truthful by
+    throwing away the very answer it exists to protect. The answer is recorded
+    and the run completes."""
+    root = project(tmp_path)
+    config, journal, target, result, operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf", settle=False
+    )
+    assert journal.operations[operation_id].state == "dispatching"
+
+    outcome = complete_extraction(
+        config, journal, target, result, operation_id=operation_id,
+        known=set(), mode=None, model="claude-opus-5",
+    )
+
+    assert outcome.records == 2
+    entry = operations.OperationJournal.load(config.operations_file).operations[
+        operation_id
+    ]
+    assert entry.state == "committed"
+    # And the answer is on disk under that entry, not merely counted. The
+    # exact provider bytes were never captured — the hook is what captures
+    # those — so this is `settle_dispatch`'s normalized fallback, which is
+    # still what a person can read and re-enter by hand.
+    artifact = config.operations_file.parent / entry.artifact
+    assert "あげる" in artifact.read_text(encoding="utf-8")
+
+
+def test_a_journal_that_never_saw_the_capture_still_completes(
+    tmp_path: Path,
+) -> None:
+    """W3's shape: a request handler holds one journal while the client's
+    capture hook advances another over the same file. The handler's copy is
+    stale the moment the answer lands, so a pre-flight that asked it would
+    refuse a run whose answer is captured and on disk — and refuse it while
+    holding that answer."""
+    root = project(tmp_path)
+    config, journal, target, result, operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf", settle=False
+    )
+    client_journal = operations.OperationJournal.load(config.operations_file)
+    capture_hook(config, client_journal, operation_id)(
+        {"content": [{"type": "text", "text": "the exact provider bytes"}]}
+    )
+    captured = (
+        config.operations_file.parent
+        / client_journal.operations[operation_id].artifact
+    ).read_bytes()
+
+    # The handler's journal still says the call is in flight. Only the file
+    # knows otherwise.
+    assert journal.operations[operation_id].state == "dispatching"
+    assert (
+        operations.OperationJournal.load(config.operations_file)
+        .operations[operation_id]
+        .state
+        == "result_captured"
+    )
+
+    outcome = complete_extraction(
+        config, journal, target, result, operation_id=operation_id,
+        known=set(), mode=None, model="claude-opus-5",
+    )
+
+    assert outcome.records == 2
+    entry = operations.OperationJournal.load(config.operations_file).operations[
+        operation_id
+    ]
+    assert entry.state == "committed"
+    # The hook's own bytes, not the normalized fallback settling would have
+    # written. Compared against a value read *before* the run: artifacts are
+    # named from the operation id, so re-reading the path the entry names
+    # would compare the file to itself and pass however it was clobbered.
+    assert (config.operations_file.parent / entry.artifact).read_bytes() == captured
+
+
+def test_an_answer_that_arrives_while_the_call_reads_as_running_is_kept(
+    tmp_path: Path,
+) -> None:
+    """`running` is where a caller that reports streaming sits, and an answer
+    arriving there is exactly as paid for as one arriving from `dispatching`.
+    Settling only the latter would refuse this run at the pre-flight while
+    holding the answer — the inversion this whole path exists to avoid."""
+    root = project(tmp_path)
+    config, journal, target, result, operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf", settle=False
+    )
+    journal.advance(operation_id, "running")
+
+    outcome = complete_extraction(
+        config, journal, target, result, operation_id=operation_id,
+        known=set(), mode=None, model="claude-opus-5",
+    )
+
+    assert outcome.records == 2
+    entry = operations.OperationJournal.load(config.operations_file).operations[
+        operation_id
+    ]
+    assert entry.state == "committed"
+    assert "あげる" in (config.operations_file.parent / entry.artifact).read_text(
+        encoding="utf-8"
+    )
+
+
+def test_an_answer_is_not_recorded_against_another_run_s_operation(
+    tmp_path: Path,
+) -> None:
+    """Two extractions in flight and a caller that pairs one's operation with
+    the other's target. Nothing about the states is wrong, so the pre-flight
+    passes them both — and the entry would end up saying its exact answer
+    became a staging file it never described."""
+    root = project(tmp_path)
+    config, journal, _target, _result, other_operation = _fixture_result(
+        root, "table_exhaustive", "table.pdf"
+    )
+    config, journal, target, result, _own = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf"
+    )
+
+    with pytest.raises(operations.OperationError) as caught:
+        complete_extraction(
+            config, journal, target, result, operation_id=other_operation,
+            known=set(), mode=None, model="claude-opus-5",
+        )
+
+    assert "different request" in str(caught.value)
+    assert not target.staging_path.exists()
+    # And the mismatched entry is untouched: it still holds its own answer.
+    entry = operations.OperationJournal.load(config.operations_file).operations[
+        other_operation
+    ]
+    assert entry.state == "result_captured"
+
+
+def test_completing_an_operation_that_is_already_over_is_refused(
+    tmp_path: Path,
+) -> None:
+    """The other half. A terminal entry cannot account for a new staging file,
+    and the refusal has to land before the write rather than after it."""
+    root = project(tmp_path)
+    config, journal, target, result, operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf"
+    )
+    journal.advance(operation_id, "outcome_unknown", detail="provider timed out")
+
+    with pytest.raises(operations.OperationError):
+        complete_extraction(
+            config, journal, target, result, operation_id=operation_id,
+            known=set(), mode=None, model="claude-opus-5",
+        )
+
+    assert not target.staging_path.exists()
+
+
+def test_completing_an_operation_the_journal_never_authorized_is_refused(
+    tmp_path: Path,
+) -> None:
+    """Nothing to account against, so nothing is written."""
+    root = project(tmp_path)
+    config, journal, target, result, _operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf"
+    )
+
+    with pytest.raises(operations.OperationError) as caught:
+        complete_extraction(
+            config, journal, target, result, operation_id="op-that-never-was",
+            known=set(), mode=None, model="claude-opus-5",
+        )
+
+    assert "op-that-never-was" in str(caught.value)
+    assert not target.staging_path.exists()
+
+
+def test_an_answer_recorded_without_its_bytes_is_refused_before_the_write(
+    tmp_path: Path,
+) -> None:
+    """`result_captured` with no artifact: committing means "the exact answer
+    became staging", and there is nothing on disk that could have been it. The
+    refusal is the artifact branch of the pre-flight, and it must fire before
+    the staging write like every other one."""
+    root = project(tmp_path)
+    config, journal, target, result, operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf", settle=False
+    )
+    # Legal, and reachable by any caller that advances without naming what it
+    # captured — `settle_dispatch` then has nothing left to record.
+    journal.advance(operation_id, "result_captured")
+
+    with pytest.raises(operations.OperationError) as caught:
+        complete_extraction(
+            config, journal, target, result, operation_id=operation_id,
+            known=set(), mode=None, model="claude-opus-5",
+        )
+
+    assert "captured provider answer" in str(caught.value)
+    assert not target.staging_path.exists()
+
+
+def test_the_outcome_describes_the_file_it_wrote(tmp_path: Path) -> None:
+    """Every field a caller renders. The CLI prints these and W3 puts them on a
+    page; a count that does not match the file is a wrong answer in both."""
+    root = project(tmp_path)
+    config, journal, target, result, operation_id = _fixture_result(
+        root,
+        "lesson_with_grammar",
+        "lesson.pdf",
+        # Every count is a different number on purpose: equal ones could be
+        # swapped, or hardcoded, without a test noticing.
+        extra=(
+            # Two more rows for a word already in this answer — same
+            # expression, same reading, so the same minted ID both times.
+            candidate(expression="あげる", reading="あげる", meanings=["to give"]),
+            candidate(expression="あげる", reading="あげる", meanings=["to hand"]),
+            candidate(expression="あげる", reading="あげる", meanings=["to raise"]),
+            # And four the model read no expression for, so no ID can be
+            # minted from them at all.
+            candidate(expression="", reading="", meanings=["unreadable"]),
+            candidate(expression="  ", reading="", meanings=["unreadable"]),
+            candidate(expression="", reading="およぐ", meanings=["to swim"]),
+            candidate(expression=" ", reading="", meanings=["unreadable"]),
+        ),
+    )
+
+    outcome = complete_extraction(
+        config, journal, target, result, operation_id=operation_id,
+        known={"word:もらう:もらう"}, mode=None, model="claude-opus-5",
+    )
+
+    records, meta = read_staging(target.staging_path)
+    assert outcome.target == target.staging_path
+    assert outcome.records == len(records) == 2
+    # The concrete verdict, and that it is the one the file carries: a lesson
+    # teaches a selection, so it is not judged against a unit count the way an
+    # exhaustive table is.
+    assert outcome.coverage_status == "selection"
+    assert outcome.coverage_status == meta["coverage"]["status"]
+    # Deliberately four different numbers, records included: equal ones could
+    # be swapped between fields, or hardcoded, without a test noticing.
+    assert outcome.already_known == 1
+    assert outcome.duplicates == 3
+    assert outcome.unusable == 4
+    assert outcome.source == result.pattern_set.source
