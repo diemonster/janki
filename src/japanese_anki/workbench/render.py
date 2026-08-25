@@ -638,6 +638,7 @@ def render_source(
     saved: tuple[int, bool, int, int, int] | None = None,
     editing: bool = False,
     approvable: bool = True,
+    reidentifiable: bool = True,
 ) -> str:
     """One source's cards and grammar.
 
@@ -722,7 +723,7 @@ def render_source(
             ),
             reidentify_action=(
                 _reidentify_form(index)
-                if editing
+                if editing and reidentifiable
                 else ""
             ),
         )

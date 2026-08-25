@@ -263,6 +263,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
                     saved=self._saved_banner(),
                     editing=self._wants_edit(),
                     approvable=bool(panel and panel.has_extraction_lineage),
+                    reidentifiable=bool(panel and panel.reidentifiable),
                 ),
             )
             return
@@ -656,6 +657,18 @@ class _WorkbenchHandler(LocalOnlyHandler):
         panel = session.panel(source)
         if panel is None:
             self._error(404, "No such source.")
+            return
+        if not panel.reidentifiable:
+            # The page does not offer this control here, but the page is not
+            # what writes. A model pass answered about the word it was asked
+            # about, and moving that answer to another identity would record
+            # it saying something it never said.
+            self._error(
+                400,
+                "These proposals came from a paid model pass about words your "
+                "collection already holds, so they cannot be moved to a "
+                "different word. Remove the card instead.",
+            )
             return
         if fields["staging_snapshot"][0] != panel.staging_fingerprint:
             self._error(

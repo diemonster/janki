@@ -28,6 +28,7 @@ import pytest
 import yaml
 from test_application_journey import _approve_examples, _project, _stage
 
+from japanese_anki import promote, staging
 from japanese_anki.application import (
     ADDED,
     EXAMPLES_NEED_REVIEW,
@@ -35,6 +36,7 @@ from japanese_anki.application import (
     NOT_EXTRACTED,
     SourceJourney,
 )
+from japanese_anki.application.promotion import staged_ai_enrichment
 from japanese_anki.config import ProjectConfig
 from japanese_anki.models import (
     ExampleSentence,
@@ -2546,27 +2548,15 @@ def test_every_control_shows_that_it_is_a_control(tmp_path: Path) -> None:
     assert "button { transition: none; }" in STYLE
 
 
-def test_a_paid_model_review_is_not_mistaken_for_an_import(tmp_path: Path) -> None:
-    """`enrich --ai` writes a review run id and an `ai_enrichment` block, and
-    never `prompt_provenance`. Treating "no prompt provenance" as "no model
-    run" swept every paid enrichment review into the editable path — and its
-    rows are named by provenance maps `promote` checks against the file, so
-    removing or re-identifying one makes them disagree and the next promote
-    refuses the whole file, paid answers included.
-
-    Two clicks, and the run is stranded. Refused until the page can keep those
-    maps in step.
-    """
+def _enrich_review(tmp_path: Path, records: list[VocabularyRecord]) -> Path:
+    """A staging file shaped like one `enrich --ai` writes."""
     _project(tmp_path)
     path = tmp_path / "staging" / "ai-enrichment.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
-    record = VocabularyRecord(
-        id="word:話す:はなす", expression="話す", reading="はなす",
-        meanings=["to speak"],
-    )
+    ids = [record.id for record in records]
     write_staging(
         path,
-        [record],
+        records,
         {
             "source_file": "vocabulary.json",
             "model": "claude-opus-5",
@@ -2576,17 +2566,126 @@ def test_a_paid_model_review_is_not_mistaken_for_an_import(tmp_path: Path) -> No
                 "version": 1,
                 "model": "claude-opus-5",
                 "provider": "anthropic",
-                "request_fingerprints": {record.id: "a" * 64},
-                "input_fingerprints": {record.id: "b" * 64},
-                "fields": {record.id: ["meanings"]},
+                "request_fingerprints": {one: "a" * 64 for one in ids},
+                "input_fingerprints": {one: "b" * 64 for one in ids},
+                "fields": {one: ["meanings"] for one in ids},
             },
+            # An `ai_enrichment` block is incomplete without this, and it is
+            # keyed on record id too — so it is one of the maps a departing
+            # row has to take with it.
+            "field_replacements": promote.field_replacement_block(
+                records,
+                {
+                    record.id: {
+                        "meanings": (list(record.meanings), ["a new gloss"])
+                    }
+                    for record in records
+                },
+            ),
         },
+    )
+    return path
+
+
+def test_a_paid_model_review_is_its_own_kind_of_source(tmp_path: Path) -> None:
+    """`enrich --ai` writes a run id and an `ai_enrichment` block and never
+    prompt provenance, so it is neither an extraction nor an import. Its rows
+    are ordinary enough to edit and discard; what it cannot do is approve
+    examples it never proposed, or claim the model spoke about a word it was
+    never shown."""
+    _enrich_review(
+        tmp_path,
+        [VocabularyRecord(id="word:話す:はなす", expression="話す", reading="はなす",
+                          meanings=["to speak"])],
     )
     session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
 
-    assert session.panel("vocabulary.json") is None
+    panel = session.panel("vocabulary.json")
+
+    assert panel is not None
+    assert panel.provenance_kind == "model-pass"
+    assert panel.has_extraction_lineage is False
+    assert panel.reidentifiable is False
 
 
+def test_removing_a_row_takes_its_provenance_with_it(tmp_path: Path) -> None:
+    """The reason this file kind was unopenable at all.
+
+    promote demands the provenance maps name exactly the rows the file holds
+    plus the rows its archive holds. A row that leaves on its own becomes an
+    *unknown* entry, and the next promote refuses the whole file — every other
+    paid answer in it included. So the maps go where the row goes.
+    """
+    kept = VocabularyRecord(id="word:話す:はなす", expression="話す", reading="はなす",
+                            meanings=["to speak"])
+    doomed = VocabularyRecord(id="word:走る:はしる", expression="走る", reading="はしる",
+                              meanings=["to run"])
+    path = _enrich_review(tmp_path, [kept, doomed])
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+    panel = session.panel("vocabulary.json")
+    assert panel is not None
+
+    text = staging.render_staging_prune(path, [True, False])
+    assert text is not None
+    path.write_text(text, encoding="utf-8")
+
+    _records, meta = read_staging(path)
+    block = meta["ai_enrichment"]
+    for name in ("request_fingerprints", "input_fingerprints", "fields"):
+        assert list(block[name]) == [kept.id], name
+
+    # And promote's own gate agrees, which is the claim that matters.
+    staged_ai_enrichment(meta, [kept.id])
+
+
+def test_a_model_pass_row_cannot_be_told_it_is_a_different_word(
+    tmp_path: Path,
+) -> None:
+    """The answer was produced for the word it was asked about, and its input
+    fingerprint binds that turn. Re-keying it would record a model saying
+    something it never said about a word it never saw — so the page does not
+    offer it, and the request is refused because the page is not what writes.
+    """
+    path = _enrich_review(
+        tmp_path,
+        [VocabularyRecord(id="word:話す:はなす", expression="話す", reading="はなす",
+                          meanings=["to speak"])],
+    )
+    del path
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+    panel = session.panel("vocabulary.json")
+    assert panel is not None
+    detail = session.detail("vocabulary.json")
+
+    offered = render_source(
+        detail, token=session.token, csrf=session.csrf_token,
+        staging_snapshot=panel.staging_fingerprint,
+        patterns_snapshot=panel.patterns_fingerprint,
+        editing=True,
+        approvable=panel.has_extraction_lineage,
+        reidentifiable=panel.reidentifiable,
+    )
+    assert "This is a different word than it says" not in offered
+    # ...but it is still editable, which is the point of opening it at all.
+    assert "<textarea" in offered
+    assert "from this review" in offered
+
+    server, _thread = _running(session)
+    try:
+        status, _headers, payload = _request(
+            server, "POST", f"/{session.token}/source/vocabulary.json/reidentify",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            body=urlencode({
+                "action": "reidentify", "csrf": session.csrf_token,
+                "staging_snapshot": panel.staging_fingerprint, "card": "0",
+                "expression": "話す", "reading": "はなす",
+            }).encode("utf-8"),
+        )
+    finally:
+        server.shutdown()
+
+    assert status == 400
+    assert b"cannot be moved to a different word" in payload
 def test_a_page_that_cannot_approve_does_not_offer_approval(
     tmp_path: Path,
 ) -> None:
@@ -2715,3 +2814,35 @@ def test_the_served_page_omits_approvals_for_a_source_that_cannot_approve(
     assert "type=checkbox" not in page
     # ...but the page is still a working editor.
     assert "edit=1" in page
+
+
+def test_promoting_a_row_leaves_its_provenance_where_the_archive_can_use_it(
+    tmp_path: Path,
+) -> None:
+    """The other prune, pruning for the opposite reason.
+
+    `prune_staging` drops rows promote has just *archived*. Their provenance
+    must stay: the archive still holds those rows, promote's gate accepts
+    archive-only ids, and `already_landed_staged_fields` reads the replacement
+    entries to tell a field that already landed from one that did not. Only
+    the workbench's prune — which throws a row away — takes the provenance
+    with it.
+    """
+    kept = VocabularyRecord(id="word:話す:はなす", expression="話す", reading="はなす",
+                            meanings=["to speak"])
+    landed = VocabularyRecord(id="word:走る:はしる", expression="走る", reading="はしる",
+                              meanings=["to run"])
+    path = _enrich_review(tmp_path, [kept, landed])
+
+    removed = staging.prune_staging(path, [True, False])
+
+    assert removed == 1
+    _records, meta = read_staging(path)
+    block = meta["ai_enrichment"]
+    for name in ("request_fingerprints", "input_fingerprints", "fields"):
+        assert sorted(block[name]) == sorted([kept.id, landed.id]), name
+    assert sorted(meta["field_replacements"]["records"]) == sorted(
+        [kept.id, landed.id]
+    )
+    # And the gate accepts it, naming the landed row as archived.
+    staged_ai_enrichment(meta, [kept.id], archived_ids=[landed.id])

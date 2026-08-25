@@ -283,22 +283,13 @@ def _staged_lineage(
         raise ReviewPanelError(
             "The staging source_file must be the exact basename-shaped pattern store key"
         )
-    if run_id is None and not meta.get("ai_enrichment"):
-        # No run of any kind: an import, or a review somebody wrote by hand.
-        return source_value, "", {}, None
     if not isinstance(provenance, Mapping):
-        # A run *without* extraction provenance is an `enrich --ai` review, and
-        # it is emphatically not "not from an extraction": it is a paid answer
-        # whose rows are named by provenance maps `promote` checks against the
-        # file. Removing or re-identifying one makes those maps disagree with
-        # the rows, and the next promote refuses the *whole* file — the paid
-        # answers with it. Until this page can keep those maps in step, such a
-        # file is refused rather than handed controls that strand it.
-        raise ReviewPanelError(
-            "This review came from a paid model pass rather than an "
-            "extraction, and editing its rows here would break the provenance "
-            "that promote checks. Review it with 'janki promote' instead."
-        )
+        # Either no run at all — an import, or a review somebody wrote by hand
+        # — or an `enrich --ai` pass, which carries a run id and an
+        # `ai_enrichment` block and never extraction provenance. Both open;
+        # what they may *do* differs, and `ReviewPanel.provenance_kind` is
+        # where that is decided.
+        return source_value, "", {}, None
     source = source_value
     nested = meta.get("pattern_set")
     if not isinstance(nested, dict):
@@ -506,16 +497,43 @@ class ReviewPanel:
         )
 
     @property
-    def has_extraction_lineage(self) -> bool:
-        """Whether this file carries the run a model's answers can bind to.
+    def provenance_kind(self) -> str:
+        """Where this review's rows came from, which decides what may be done.
 
-        False for a file that arrived some other way — an Anki import, a
-        hand-written review. Its rows are ordinary and perfectly editable; what
-        it cannot carry is an *approval*, because approving an example means
-        accepting the sentence a particular model proposed on a particular run,
-        and there is no such run here to name.
+        ``extraction`` — a `janki extract` run: a review run id, prompt
+        provenance and the pattern answer that run proposed. Everything is
+        available, because every approval has something to bind to.
+
+        ``model-pass`` — an `enrich --ai` review. A paid answer about words the
+        collection already holds, whose rows are named by provenance maps
+        `promote` checks against the file. Editable and removable; **not**
+        re-identifiable, because the answer was produced for the word it was
+        asked about and re-keying it would claim the model spoke about a
+        different one.
+
+        ``none`` — an import, or a review written by hand. Ordinary rows and no
+        model claims: edit, remove and re-identify freely, approve nothing.
         """
-        return bool(self.run_id) and self.staged_pattern_set is not None
+        if bool(self.run_id) and self.staged_pattern_set is not None:
+            return "extraction"
+        if self.meta.get("ai_enrichment"):
+            return "model-pass"
+        return "none"
+
+    @property
+    def has_extraction_lineage(self) -> bool:
+        return self.provenance_kind == "extraction"
+
+    @property
+    def reidentifiable(self) -> bool:
+        """Whether a row here may be told it is a different word.
+
+        Not on a model pass. The request that produced these answers named a
+        specific record, and its input fingerprint binds that turn — so moving
+        the answer to another identity records that a model said something it
+        never said about a word it never saw.
+        """
+        return self.provenance_kind != "model-pass"
 
     @property
     def pattern_reviewable(self) -> bool:

@@ -1681,12 +1681,54 @@ def _prune_staging_unlocked(path: Path, keep: Sequence[bool]) -> int:
     return removed
 
 
+#: The maps an `enrich --ai` review keys on record id.
+#:
+#: `promote` demands they name exactly the rows the file holds plus the rows
+#: its archive holds — no more, no less. So a row cannot leave the file on its
+#: own: dropping the record and keeping its provenance makes the entry
+#: *unknown*, and the next promote refuses the whole file with every other
+#: paid answer still in it.
+_AI_PROVENANCE_MAPS = (
+    ("ai_enrichment", "request_fingerprints"),
+    ("ai_enrichment", "input_fingerprints"),
+    ("ai_enrichment", "fields"),
+    ("field_replacements", "records"),
+)
+
+
+def _drop_provenance(document: Any, gone: Iterable[str]) -> None:
+    """Remove departing record ids from every provenance map in place.
+
+    Edited on the loaded document rather than rebuilt, so the review's own
+    comments and key order survive — the same reason pruning assigns rows by
+    slice.
+    """
+    departing = {str(record_id) for record_id in gone}
+    if not departing:
+        return
+    for block_key, map_key in _AI_PROVENANCE_MAPS:
+        block = document.get(block_key)
+        if not isinstance(block, MutableMapping):
+            continue
+        values = block.get(map_key)
+        if not isinstance(values, MutableMapping):
+            continue
+        for record_id in [key for key in values if str(key) in departing]:
+            del values[record_id]
+
+
 def render_staging_prune(path: Path, keep: Sequence[bool]) -> str | None:
     """The text :func:`prune_staging` would write, or None if nothing goes.
 
     The workbench needs the same pruning bound to a compare-and-swap, for the
     same reason the edit path does: the browser rendered a specific set of
     rows, and a removal aimed at that set must not land on a different one.
+
+    Unlike :func:`prune_staging`, this also drops the departing rows from any
+    AI provenance maps. The two are pruning for opposite reasons: promote
+    prunes rows it has just *archived*, whose provenance must stay because the
+    archive still holds them, while the workbench prunes a row somebody threw
+    away, whose provenance would otherwise name a record nothing holds.
     """
     path = Path(path)
     document = _load_document(path)
@@ -1699,10 +1741,16 @@ def render_staging_prune(path: Path, keep: Sequence[bool]) -> str | None:
     survivors = [raw for raw, wanted in zip(raw_records, keep, strict=True) if wanted]
     if len(survivors) == len(raw_records):
         return None
+    gone = [
+        str(raw.get("id", ""))
+        for raw, wanted in zip(raw_records, keep, strict=True)
+        if not wanted
+    ]
     # Assigned by slice so ruamel keeps the sequence object — and with it the
     # comments attached to the rows that stay.
     raw_records[:] = survivors
     document[_RECORDS_KEY] = raw_records
+    _drop_provenance(document, gone)
     buffer = io.StringIO()
     _parser().dump(document, buffer)
     return buffer.getvalue()
