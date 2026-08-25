@@ -908,20 +908,29 @@ SETTLES = {
 }
 
 
-def format_operations(report: StatusReport) -> list[str]:
-    """Every paid call still waiting on a decision, and what it left behind.
+def format_operations(
+    attention: Sequence[operations.Operation],
+    *,
+    noun: str = "needing a person",
+) -> list[str]:
+    """Every paid call in the given set, and what it left behind.
 
     The state first, because it is what decides the next move: an answer that
     arrived and was refused has bytes to look at; one that vanished after
     dispatch is the case where re-running risks paying twice.
+
+    `noun` names what the caller asked for. The two callers ask different
+    questions — "what needs me?" and "what is stopping the next call?" — and a
+    heading that answered the other one would be a list somebody cannot act
+    on.
     """
-    if not report.attention:
+    if not attention:
         return [
-            "Paid calls needing a person: none — every call janki made either "
+            f"Paid calls {noun}: none — every call janki made either "
             "landed or is recorded as finished."
         ]
-    lines = [f"Paid calls needing a person ({len(report.attention)}):"]
-    for op in report.attention:
+    lines = [f"Paid calls {noun} ({len(attention)}):"]
+    for op in attention:
         lines.append(f"  {op.operation_id}  {op.kind} · {op.source_file}")
         lines.append(f"    state: {op.state}, authorized {op.authorized_at}")
         if op.artifact:
@@ -934,6 +943,14 @@ def format_operations(report: StatusReport) -> list[str]:
             lines.append(
                 "    it was sent and no answer came back, so re-running it "
                 "risks a second charge"
+            )
+        if op.state in operations.IN_FLIGHT:
+            # The one state whose next move depends on something janki cannot
+            # see. A live call finishes on its own; a killed one never will,
+            # and only the person at the keyboard knows which this is.
+            lines.append(
+                "    if nothing is actually running, that process is gone: "
+                f"'janki operations --end {op.operation_id}'"
             )
         if op.detail:
             lines.append(f"    {op.detail}")

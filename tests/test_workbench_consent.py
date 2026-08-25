@@ -298,6 +298,7 @@ def test_a_call_in_flight_stops_another_from_starting(tmp_path: Path) -> None:
     # And it says what to do when nothing is actually running, because a
     # killed process leaves this state and "wait" would be advice forever.
     assert "interrupted" in body
+    assert "janki operations" in body
 
 
 def test_a_call_reported_as_running_stops_another_from_starting(
@@ -345,18 +346,19 @@ def test_a_paid_answer_nobody_has_dealt_with_stops_another(tmp_path: Path) -> No
     assert "still marked as running" not in body
 
 
-def test_an_authority_that_never_sent_anything_blocks_nothing(
+def test_an_authority_that_never_sent_anything_is_named_as_that(
     tmp_path: Path,
 ) -> None:
-    """`authorized` means the authority was written and nothing left the
-    computer — where a process that died before dispatching leaves an entry.
-    Counting it would wedge every later run behind a call that never
-    happened."""
+    """It blocks — the gate has to count it, or two runs racing both pass —
+    but it must not be described as a charge. Nothing was sent, and telling
+    somebody their money may be gone when it demonstrably is not is the same
+    class of lie as the reverse."""
     _corpus(tmp_path)
     _authorize(tmp_path, "authorized")
 
-    assert busy_refusal(ProjectConfig.load(tmp_path)) == ""
+    assert busy_refusal(ProjectConfig.load(tmp_path))
     body = _page(tmp_path)
+    assert "never sent anything" in body
     assert "still marked as running" not in body
     assert "may have been billed" not in body
 

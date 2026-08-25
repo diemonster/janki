@@ -44,6 +44,8 @@ from japanese_anki.io import (
 )
 
 __all__ = [
+    "BLOCKS_SPENDING",
+    "IN_FLIGHT",
     "LIVE_STATES",
     "STATES",
     "TERMINAL_STATES",
@@ -101,6 +103,30 @@ LIVE_STATES: frozenset[str] = frozenset(
 TERMINAL_STATES: frozenset[str] = frozenset(
     state for state, moves in _TRANSITIONS.items() if not moves
 )
+
+#: States that mean a paid call is in flight right now. `authorized` is not
+#: one of them: it says the authority was written and nothing was sent, which
+#: is where a process that died before dispatching leaves an entry — and
+#: counting it would wedge every later run behind a call that never happened.
+IN_FLIGHT: frozenset[str] = frozenset({"dispatching", "running"})
+
+#: States that stop janki starting another paid call: every live one, plus the
+#: outcome nobody could determine. Either money is moving, or some already
+#: moved and nobody has decided what it bought.
+#:
+#: This is the rule, not a warning about it: `authorize` refuses under the
+#: journal's own lock. A surface that only *displayed* the condition would be
+#: read when a page renders and acted on when a button is clicked, and two
+#: callers could pass it and both spend.
+#:
+#: `authorized` is in the set even though nothing has been sent from it. It
+#: has to be: authorizing and marking dispatched are two writes, so excluding
+#: it leaves a window where two runs both authorize, both see the other
+#: resting in a state that does not block, and both dispatch. That window is
+#: exactly what this set exists to close, and the cost — an orphaned authority
+#: from a process killed between the two writes — is paid by `end`, which
+#: retires it as `canceled_before_send` because nothing was sent.
+BLOCKS_SPENDING: frozenset[str] = LIVE_STATES | frozenset({"outcome_unknown"})
 
 
 def advance_refusal(
@@ -366,6 +392,23 @@ class OperationJournal:
                     f"Operation {operation_id!r} is already authorized and is "
                     f"{held.state!r}; authority is one-use."
                 )
+            blocking = sorted(
+                (
+                    op
+                    for op in current.operations.values()
+                    if op.state in BLOCKS_SPENDING
+                ),
+                key=lambda op: (op.authorized_at, op.operation_id),
+            )
+            if blocking:
+                first = blocking[0]
+                raise OperationError(
+                    f"Operation {first.operation_id!r} for {first.source_file} "
+                    f"is {first.state!r} and janki will not start another paid "
+                    "call until it is settled. 'janki operations' shows it; "
+                    "'janki operations --end' ends a call that will never "
+                    "finish."
+                )
             now = _now()
             operation = Operation(
                 operation_id=operation_id,
@@ -424,9 +467,65 @@ class OperationJournal:
             self.operations = current.operations
             return moved
 
-    def forget(self, operation_ids: Iterable[str]) -> int:
-        """Drop committed operations. Only committed ones: everything else is
-        either live or a record of money whose outcome someone still needs."""
+    def end(self, operation_id: str, *, detail: str = "") -> Operation:
+        """Say a call that will never finish is over, without inventing what it
+        bought.
+
+        The way out of a wedge that was otherwise permanent: a killed process
+        leaves an entry saying a call is live, and janki will not spend again
+        until something settles it. Nothing can settle it automatically — only
+        a person can say the process is gone — so this is that statement.
+
+        Where it lands depends on what is actually known, because a single
+        destination would have to lie about one case or the other:
+
+        * `authorized` — nothing was ever sent, so `canceled_before_send`.
+          Calling this one an unknown outcome would invent a charge.
+        * `dispatching` / `running` — the request left and no answer came
+          back, so `outcome_unknown`. It never says the call failed and never
+          says it succeeded.
+
+        A captured answer is refused: nothing about it is unknown. It is on
+        disk, and the choice there is to read it or to discard it deliberately.
+        """
+        with exclusive_path_lock(self.path):
+            held = OperationJournal.load(self.path).operations.get(operation_id)
+            if held is None:
+                raise OperationError(f"No operation {operation_id!r} to end")
+            if held.state in TERMINAL_STATES:
+                raise OperationError(
+                    f"Operation {operation_id!r} is already {held.state!r} and "
+                    "has nothing left to end"
+                )
+            if held.state == "result_captured":
+                raise OperationError(
+                    f"Operation {operation_id!r} is not unfinished — its reply "
+                    f"arrived and is saved at {held.artifact}. Read it, then "
+                    "'janki operations --forget --force' to drop it."
+                )
+            sent = held.state != "authorized"
+        return self.advance(
+            operation_id,
+            "outcome_unknown" if sent else "canceled_before_send",
+            detail=detail
+            or (
+                "ended by hand; the process was gone"
+                if sent
+                else "ended by hand; nothing had been sent"
+            ),
+        )
+
+    def forget(self, operation_ids: Iterable[str], *, force: bool = False) -> int:
+        """Drop finished operations, and only finished ones.
+
+        Any terminal state, not just `committed`: an `outcome_unknown` a person
+        has looked at and accepted is finished too, and refusing to drop it was
+        how one lost call blocked every later one for ever.
+
+        An entry still holding an answer nobody turned into staging is refused
+        without `force`. That artifact is a reply somebody paid for, and this
+        deletes it.
+        """
         with exclusive_path_lock(self.path):
             current = OperationJournal.load(self.path)
             removed = 0
@@ -434,10 +533,21 @@ class OperationJournal:
                 held = current.operations.get(operation_id)
                 if held is None:
                     continue
-                if held.state != "committed":
+                # `result_captured` too: its answer is on disk, so it is not
+                # "unfinished" in the sense `end` means, and refusing it here
+                # would leave the only entry holding a real reply with no way
+                # out at all.
+                if held.state not in TERMINAL_STATES | {"result_captured"}:
                     raise OperationError(
-                        f"Operation {operation_id!r} is {held.state!r}, not "
-                        "committed; only a committed operation may be forgotten"
+                        f"Operation {operation_id!r} is {held.state!r}, which "
+                        "is not finished; 'janki operations --end' ends a call "
+                        "that will never finish"
+                    )
+                if held.artifact and held.state != "committed" and not force:
+                    raise OperationError(
+                        f"Operation {operation_id!r} still holds the reply at "
+                        f"{held.artifact}, which was paid for and never became "
+                        "staging. Read it first, then pass --force to drop it."
                     )
                 # The artifact goes with the entry. It is a recovery buffer,
                 # and once the answer has become staging the archive under
@@ -462,6 +572,20 @@ class OperationJournal:
         """Live operations, oldest first — what a resumed run has to deal with."""
         return sorted(
             (op for op in self.operations.values() if op.state in LIVE_STATES),
+            key=lambda op: (op.authorized_at, op.operation_id),
+        )
+
+    def blocking(self) -> list[Operation]:
+        """Every operation stopping janki from starting another paid call.
+
+        Wider than `needing_attention`, and it has to be: a call still marked
+        in flight needs nobody's attention while it is genuinely running, but
+        it is exactly what a person sees "janki will not start another" about.
+        Listing only the ones that need a decision answered "why is this
+        blocked?" with "nothing is blocked".
+        """
+        return sorted(
+            (op for op in self.operations.values() if op.state in BLOCKS_SPENDING),
             key=lambda op: (op.authorized_at, op.operation_id),
         )
 

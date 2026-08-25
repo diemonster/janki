@@ -2464,13 +2464,21 @@ def test_an_answer_that_arrives_while_the_call_reads_as_running_is_kept(
 def test_an_answer_is_not_recorded_against_another_run_s_operation(
     tmp_path: Path,
 ) -> None:
-    """Two extractions in flight and a caller that pairs one's operation with
-    the other's target. Nothing about the states is wrong, so the pre-flight
-    passes them both — and the entry would end up saying its exact answer
-    became a staging file it never described."""
+    """A caller that pairs one run's operation with another run's target.
+    Nothing about the *states* is wrong, so a pre-flight checking only those
+    passes both — and the entry ends up saying its exact answer became a
+    staging file it never described.
+
+    The two operations are sequential because the journal will not authorize a
+    second paid call while one is unsettled; the confusion this guards against
+    is a variable, not a race."""
     root = project(tmp_path)
-    config, journal, _target, _result, other_operation = _fixture_result(
+    config, journal, first, first_result, other_operation = _fixture_result(
         root, "table_exhaustive", "table.pdf"
+    )
+    complete_extraction(
+        config, journal, first, first_result, operation_id=other_operation,
+        known=set(), mode=None, model="claude-opus-5",
     )
     config, journal, target, result, _own = _fixture_result(
         root, "lesson_with_grammar", "lesson.pdf"
@@ -2482,13 +2490,16 @@ def test_an_answer_is_not_recorded_against_another_run_s_operation(
             known=set(), mode=None, model="claude-opus-5",
         )
 
+    # Identity, not state: the mismatch is caught before the pre-flight would
+    # have refused it for being committed.
     assert "different request" in str(caught.value)
     assert not target.staging_path.exists()
-    # And the mismatched entry is untouched: it still holds its own answer.
+    # And the mismatched entry still describes its own run.
     entry = operations.OperationJournal.load(config.operations_file).operations[
         other_operation
     ]
-    assert entry.state == "result_captured"
+    assert entry.state == "committed"
+    assert entry.source_file == "table.pdf"
 
 
 def test_completing_an_operation_that_is_already_over_is_refused(

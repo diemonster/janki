@@ -182,6 +182,7 @@ def test_a_second_reader_sees_what_the_first_wrote(tmp_path: Path) -> None:
     first = _journal(tmp_path)
     second = _journal(tmp_path)
     _authorize(first, "op-1")
+    first.advance("op-1", "canceled_before_send")
 
     _authorize(second, "op-2")
 
@@ -189,21 +190,33 @@ def test_a_second_reader_sees_what_the_first_wrote(tmp_path: Path) -> None:
     assert sorted(both.operations) == ["op-1", "op-2"]
 
 
-def test_concurrent_authorizations_all_survive(tmp_path: Path) -> None:
-    """The lock is what makes the file additive under real concurrency."""
+def test_exactly_one_of_four_racing_authorizations_wins(tmp_path: Path) -> None:
+    """The double-spend window, closed under real threads.
+
+    Four processes deciding to spend at the same instant is the case a display
+    cannot cover: each would render "nothing is running" and each would then
+    authorize. Only the lock can arbitrate, and this is the proof that it
+    does — one entry on disk, three callers told why.
+    """
     path = tmp_path / "operations.json"
     barrier = threading.Barrier(4)
+    refused: list[str] = []
+    lock = threading.Lock()
 
     def authorize(index: int) -> None:
         barrier.wait()
-        OperationJournal.load(path).authorize(
-            f"op-{index}",
-            kind="extract",
-            source_file=f"{index}.pdf",
-            source_sha256="a" * 64,
-            request_fp="f" * 64,
-            model="claude-opus-5",
-        )
+        try:
+            OperationJournal.load(path).authorize(
+                f"op-{index}",
+                kind="extract",
+                source_file=f"{index}.pdf",
+                source_sha256="a" * 64,
+                request_fp="f" * 64,
+                model="claude-opus-5",
+            )
+        except OperationError as exc:
+            with lock:
+                refused.append(str(exc))
 
     threads = [threading.Thread(target=authorize, args=(i,)) for i in range(4)]
     for thread in threads:
@@ -211,12 +224,9 @@ def test_concurrent_authorizations_all_survive(tmp_path: Path) -> None:
     for thread in threads:
         thread.join(timeout=10)
 
-    assert sorted(OperationJournal.load(path).operations) == [
-        "op-0",
-        "op-1",
-        "op-2",
-        "op-3",
-    ]
+    assert len(OperationJournal.load(path).operations) == 1
+    assert len(refused) == 3
+    assert all("will not start another paid call" in message for message in refused)
 
 
 # --- what a resumed run has to deal with ------------------------------------
@@ -224,9 +234,9 @@ def test_concurrent_authorizations_all_survive(tmp_path: Path) -> None:
 
 def test_unfinished_lists_only_live_operations(tmp_path: Path) -> None:
     journal = _journal(tmp_path)
-    _authorize(journal, "live")
     _authorize(journal, "done")
     journal.advance("done", "canceled_before_send")
+    _authorize(journal, "live")
 
     assert [op.operation_id for op in journal.unfinished()] == ["live"]
     assert all(op.state in LIVE_STATES for op in journal.unfinished())
@@ -237,23 +247,36 @@ def test_an_unknown_outcome_is_what_a_person_must_look_at(tmp_path: Path) -> Non
     _authorize(journal, "lost")
     journal.advance("lost", "dispatching")
     journal.advance("lost", "outcome_unknown", detail="no response")
-    _authorize(journal, "fine")
 
     assert [op.operation_id for op in journal.needing_attention()] == ["lost"]
 
 
-def test_only_a_committed_operation_can_be_forgotten(tmp_path: Path) -> None:
-    """Everything else is either live or a record of money whose outcome
-    someone still needs to see."""
+def test_an_unfinished_operation_cannot_be_forgotten(tmp_path: Path) -> None:
+    """A call still in flight is not something anybody has decided about, and
+    dropping the entry would delete the only record that money may be moving.
+    Ending it is a separate, deliberate statement."""
     journal = _journal(tmp_path)
     _authorize(journal, "lost")
     journal.advance("lost", "dispatching")
-    journal.advance("lost", "outcome_unknown")
 
-    with pytest.raises(OperationError, match="not\n?\\s*committed|not committed"):
+    with pytest.raises(OperationError, match="not finished"):
         journal.forget(["lost"])
 
     assert "lost" in OperationJournal.load(tmp_path / "operations.json").operations
+
+
+def test_an_accepted_unknown_outcome_can_be_forgotten(tmp_path: Path) -> None:
+    """The other half, and the reason the refusal above is not the whole rule.
+    An `outcome_unknown` a person has looked at and accepted is finished — and
+    refusing to drop it was how one lost call blocked every later one for
+    ever."""
+    journal = _journal(tmp_path)
+    _authorize(journal, "lost")
+    journal.advance("lost", "dispatching")
+    journal.advance("lost", "outcome_unknown", detail="no response")
+
+    assert journal.forget(["lost"]) == 1
+    assert not OperationJournal.load(tmp_path / "operations.json").operations
 
 
 def test_forgetting_a_committed_operation_removes_it(tmp_path: Path) -> None:
@@ -387,8 +410,8 @@ def test_forgetting_an_operation_takes_its_artifact_with_it(tmp_path: Path) -> N
 
 
 def test_an_unfinished_operation_keeps_its_artifact(tmp_path: Path) -> None:
-    """`forget` refuses anything but a committed operation, so the buffer for
-    work someone still has to decide about cannot be swept away."""
+    """The buffer for work someone still has to decide about cannot be swept
+    away: this reply was paid for and never became staging."""
     journal = _journal(tmp_path)
     _authorize(journal)
     journal.advance("op-1", "dispatching")
@@ -397,10 +420,54 @@ def test_an_unfinished_operation_keeps_its_artifact(tmp_path: Path) -> None:
     )
     journal.advance("op-1", "result_captured", artifact=artifact)
 
-    with pytest.raises(OperationError, match="not committed"):
+    with pytest.raises(OperationError, match="paid for and never became"):
         journal.forget(["op-1"])
 
     assert (tmp_path / artifact).exists()
+
+
+def test_a_captured_answer_is_not_something_to_end(tmp_path: Path) -> None:
+    """"End this" means "stop waiting on a call that will never finish".
+    Nothing about a captured answer is unknown — it is on disk — and recording
+    it as an unknown outcome would unwrite the one fact that matters about
+    it."""
+    journal = _journal(tmp_path)
+    _authorize(journal)
+    journal.advance("op-1", "dispatching")
+    artifact = capture_artifact(
+        tmp_path / "operations.json", "op-1", b'{"content": []}'
+    )
+    journal.advance("op-1", "result_captured", artifact=artifact)
+
+    with pytest.raises(OperationError, match="its reply arrived"):
+        journal.end("op-1")
+
+    assert (
+        OperationJournal.load(tmp_path / "operations.json")
+        .operations["op-1"]
+        .state
+        == "result_captured"
+    )
+
+
+def test_a_paid_reply_is_not_dropped_by_accident(tmp_path: Path) -> None:
+    """Discarding a captured answer is one deliberate step, not a laundering
+    of it through "unknown outcome" first. It still takes saying so twice: the
+    reply was paid for and nobody read it."""
+    journal = _journal(tmp_path)
+    _authorize(journal)
+    journal.advance("op-1", "dispatching")
+    artifact = capture_artifact(
+        tmp_path / "operations.json", "op-1", b'{"content": []}'
+    )
+    journal.advance("op-1", "result_captured", artifact=artifact)
+
+    with pytest.raises(OperationError, match="paid for and never became"):
+        journal.forget(["op-1"])
+    assert (tmp_path / artifact).exists()
+
+    assert journal.forget(["op-1"], force=True) == 1
+    assert not (tmp_path / artifact).exists()
 
 
 def test_a_state_the_journal_does_not_know_is_refused_rather_than_raising(
@@ -418,3 +485,138 @@ def test_a_state_the_journal_does_not_know_is_refused_rather_than_raising(
     assert "captured provider answer" in advance_refusal(
         "op-1", "result_captured", "committed", ""
     )
+
+
+# --- one paid call at a time ------------------------------------------------
+
+
+def test_a_call_in_flight_refuses_a_second_authorization(tmp_path: Path) -> None:
+    """The rule, not a warning about it. A page that only displayed this would
+    be read when it rendered and acted on when a button was clicked; two
+    callers could pass that and both spend. This refuses under the lock."""
+    journal = _journal(tmp_path)
+    _authorize(journal, "first")
+    journal.advance("first", "dispatching")
+
+    with pytest.raises(OperationError, match="will not start another paid call"):
+        _authorize(journal, "second")
+
+    assert "second" not in OperationJournal.load(
+        tmp_path / "operations.json"
+    ).operations
+
+
+def test_a_paid_answer_nobody_settled_refuses_a_second_authorization(
+    tmp_path: Path,
+) -> None:
+    """Money already moved and nobody has decided what it bought. Starting
+    another call would bury the answer under a second charge."""
+    journal = _journal(tmp_path)
+    _authorize(journal, "first")
+    journal.advance("first", "dispatching")
+    journal.advance("first", "result_captured", artifact=".pending/first.json")
+
+    with pytest.raises(OperationError, match="will not start another paid call"):
+        _authorize(journal, "second")
+
+
+def test_an_unknown_outcome_refuses_a_second_authorization(
+    tmp_path: Path,
+) -> None:
+    """The case the whole journal exists for: janki does not know whether that
+    call was billed, so it will not make another until a person says so."""
+    journal = _journal(tmp_path)
+    _authorize(journal, "first")
+    journal.advance("first", "dispatching")
+    journal.advance("first", "outcome_unknown", detail="connection lost")
+
+    with pytest.raises(OperationError, match="will not start another paid call"):
+        _authorize(journal, "second")
+
+
+def test_a_committed_call_does_not_block_the_next_one(tmp_path: Path) -> None:
+    """The ordinary case, and the one that must not regress: a finished run is
+    history, and a batch of three files is three sequential calls."""
+    journal = _journal(tmp_path)
+    _authorize(journal, "first")
+    journal.advance("first", "dispatching")
+    journal.advance("first", "result_captured", artifact=".pending/first.json")
+    journal.advance("first", "committed")
+
+    _authorize(journal, "second")
+
+    assert "second" in OperationJournal.load(
+        tmp_path / "operations.json"
+    ).operations
+
+
+def test_an_authority_that_never_sent_anything_still_blocks(
+    tmp_path: Path,
+) -> None:
+    """It has to. Writing the authority and marking it dispatched are two
+    writes, so letting `authorized` through leaves a window where two runs both
+    authorize, each sees the other resting in a state that does not block, and
+    both dispatch — the exact double-spend this set exists to close."""
+    journal = _journal(tmp_path)
+    _authorize(journal, "first")
+
+    with pytest.raises(OperationError, match="will not start another paid call"):
+        _authorize(journal, "second")
+
+
+def test_an_orphaned_authority_is_retired_as_never_sent(tmp_path: Path) -> None:
+    """The cost of blocking it, and the reason that cost is affordable: a
+    process killed between the two writes leaves an authority nobody used.
+    Calling that an unknown outcome would invent a charge — nothing was
+    sent — so it retires as cancelled, and the next call can start."""
+    journal = _journal(tmp_path)
+    _authorize(journal, "orphan")
+
+    ended = journal.end("orphan")
+
+    assert ended.state == "canceled_before_send"
+    assert "nothing had been sent" in ended.detail
+    journal.forget(["orphan"])
+    _authorize(journal, "next")
+
+
+def test_ending_a_stuck_call_lets_the_next_one_start(tmp_path: Path) -> None:
+    """The way out of a wedge that used to be permanent. Nothing can settle a
+    killed process automatically — only a person can say it is gone — so this
+    is that statement, and it lands on `outcome_unknown` because that is what
+    is true about the money."""
+    journal = _journal(tmp_path)
+    _authorize(journal, "first")
+    journal.advance("first", "dispatching")
+
+    ended = journal.end("first")
+
+    assert ended.state == "outcome_unknown"
+    assert "the process was gone" in ended.detail
+    # Still blocking, because the record of possible spending survives being
+    # ended. Forgetting it is the separate, deliberate second step.
+    with pytest.raises(OperationError, match="will not start another paid call"):
+        _authorize(journal, "second")
+
+    journal.forget(["first"])
+    _authorize(journal, "second")
+
+
+def test_a_finished_call_cannot_be_ended(tmp_path: Path) -> None:
+    """"End this" means "stop waiting on it". A committed call is not being
+    waited on, and moving it anywhere would unwrite a fact."""
+    journal = _journal(tmp_path)
+    _authorize(journal)
+    journal.advance("op-1", "dispatching")
+    journal.advance("op-1", "result_captured", artifact=".pending/op-1.json")
+    journal.advance("op-1", "committed")
+
+    with pytest.raises(OperationError, match="nothing left to end"):
+        journal.end("op-1")
+
+
+def test_ending_a_call_the_journal_never_had_is_refused(tmp_path: Path) -> None:
+    journal = _journal(tmp_path)
+
+    with pytest.raises(OperationError, match="No operation"):
+        journal.end("never-existed")

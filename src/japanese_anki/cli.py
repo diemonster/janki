@@ -4038,6 +4038,58 @@ def command_kanji(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
+def command_operations(args: argparse.Namespace) -> int:
+    """Show paid calls that still need a decision, and end ones that will not.
+
+    The half `status --operations` could never do. A killed process leaves an
+    entry saying a call is in flight, and janki will not spend again until
+    something settles it — but nothing can settle it automatically, because
+    only a person can say the process is gone. Without this the wedge was
+    permanent.
+    """
+    if args.end and args.forget:
+        raise JankiError(
+            "janki operations takes --end or --forget, not both: ending a call "
+            "and dropping its record are separate decisions."
+        )
+    if args.reason and not args.end:
+        raise JankiError("janki operations --reason only means anything with --end")
+    if args.force and not args.forget:
+        raise JankiError("janki operations --force only means anything with --forget")
+
+    config = _load_config(args)
+    journal = operations.OperationJournal.load(config.operations_file)
+
+    if args.end:
+        ended = journal.end(args.end, detail=args.reason)
+        print(
+            f"Ended {ended.operation_id}: recorded as {ended.state}, because "
+            "janki cannot know whether that call was billed."
+        )
+        if ended.artifact:
+            print(f"  Its reply is still on disk at {ended.artifact}.")
+        print(
+            "  It still counts as needing a person. Once you have dealt with "
+            f"it, 'janki operations --forget {ended.operation_id}' drops it "
+            "and lets the next call start."
+        )
+        return 0
+
+    if args.forget:
+        removed = journal.forget([args.forget], force=args.force)
+        if not removed:
+            print(f"No operation {args.forget!r} to forget.")
+            return 1
+        print(f"Forgot {args.forget}.")
+        return 0
+
+    for line in status.format_operations(
+        journal.blocking(), noun="janki is still tracking"
+    ):
+        print(line)
+    return 0
+
+
 def command_status(args: argparse.Namespace) -> int:
     config = _load_config(args)
     # --rebuild is the one command asking to *fix* the ledger, so it is the one
@@ -4245,7 +4297,7 @@ def command_status(args: argparse.Namespace) -> int:
         for line in status.format_staged(report):
             print(line)
     if args.operations:
-        for line in status.format_operations(report):
+        for line in status.format_operations(report.attention):
             print(line)
     if args.unsettled is not None:
         for line in status.format_provisional(report):
@@ -4848,6 +4900,41 @@ def build_parser() -> argparse.ArgumentParser:
         help="'ids' prints bare record ids, one per line, for piping into other commands.",
     )
     status_parser.set_defaults(handler=command_status)
+
+    operations_parser = subparsers.add_parser(
+        "operations",
+        help="Show paid model calls needing a decision, and end stuck ones",
+    )
+    operations_parser.add_argument(
+        "--end",
+        metavar="ID",
+        help=(
+            "Say a call that will never finish is over. It is recorded as an "
+            "unknown outcome, because janki cannot know whether it was billed."
+        ),
+    )
+    operations_parser.add_argument(
+        "--reason",
+        default="",
+        help="Why it was ended, kept with the entry.",
+    )
+    operations_parser.add_argument(
+        "--forget",
+        metavar="ID",
+        help=(
+            "Drop a finished call from the journal, so the next one can start. "
+            "Refuses a call still in flight."
+        ),
+    )
+    operations_parser.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "With --forget, drop an entry that still holds a reply nobody "
+            "turned into staging. That reply was paid for and this deletes it."
+        ),
+    )
+    operations_parser.set_defaults(handler=command_operations)
 
     migrate_parser = subparsers.add_parser(
         "migrate-inline",

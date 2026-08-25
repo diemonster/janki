@@ -114,15 +114,30 @@ Staging completion similarly holds the live review and selected archive locks
 through one byte-checked archive/prune transaction, so an exact interrupted
 retry cannot duplicate rows or delete a concurrently replaced review.
 
-Every paid model call — currently `extract`, `enrich --ai`, and
-`promote --accept-coverage` — follows the same write-ahead shape as that paid
-audio staging: journaled durably before dispatch, its exact response persisted
-as a pending artifact before parsing, so neither a crash nor a parse failure
-can lose an answer already paid for. The journal moves
+A paid model call follows the same write-ahead shape as that paid audio
+staging: journaled durably before dispatch, its exact response persisted as a
+pending artifact before parsing, so neither a crash nor a parse failure can
+lose an answer already paid for. `extract` does this today. `enrich --ai` and
+`promote --accept-coverage` spend money and do **not** yet journal, which is a
+gap to close rather than a design choice — until they do, nothing below
+applies to them. The journal moves
 `authorized → dispatching → running → result_captured → committed`, with
 `outcome_unknown`, `failed_before_send`, `canceled_before_send`, and `expired`
 as terminal or holding states. A dispatched call whose outcome is unknown is
 never retried automatically — a fresh charge requires fresh authority.
+
+**One journaled call at a time.** The journal refuses to authorize a new one
+while any entry is live or holds money nobody has accounted for — every state
+except the terminal ones, plus `outcome_unknown`. `authorized` counts, because
+writing the authority and marking it dispatched are two writes and excluding
+it leaves a window where two runs both pass. This is enforced under the
+journal's own lock at authorization, never merely displayed by a surface: a
+check read when a page renders and acted on when a button is clicked is one
+two callers can both pass. Nothing lifts the block automatically, because only
+a person can say a vanished process is gone. `janki operations --end` records
+that — as `canceled_before_send` when nothing was sent, as `outcome_unknown`
+when a request left and no answer came back — and `--forget` drops an entry
+once they have dealt with what it cost.
 
 ## Surfaces
 

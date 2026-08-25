@@ -2406,3 +2406,212 @@ def test_the_fields_are_grouped_in_a_stable_order(tmp_path: Path) -> None:
     )
 
     assert list(report.provisional) == ["meanings", "part_of_speech"]
+
+
+# --- ending a call that will never finish -----------------------------------
+
+
+def _operations(root: Path, *flags: str) -> int:
+    return cli.main(["--root", str(root), "operations", *flags])
+
+
+def test_a_stuck_call_is_listed_with_the_way_out_of_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A killed process leaves a call marked in flight, and janki will not
+    spend again until it is settled. Listing only calls that *need a decision*
+    answered "why is this blocked?" with "nothing is blocked"."""
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    journal = operations.OperationJournal.load(_operations_path(root))
+    journal.authorize(
+        "op-stuck", kind="extract", source_file="lesson.pdf",
+        source_sha256="a" * 64, request_fp="b" * 64, model="claude-opus-5",
+    )
+    journal.advance("op-stuck", "dispatching")
+
+    assert _operations(root) == 0
+
+    out = capsys.readouterr().out
+    assert "op-stuck" in out
+    assert "state: dispatching" in out
+    assert "janki operations --end op-stuck" in out
+
+
+def test_ending_a_call_then_forgetting_it_unblocks_the_next(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Two steps on purpose. Ending says the process is gone; forgetting says
+    the money question has been dealt with. Collapsing them would drop the
+    record of possible spending in the same breath as noticing it."""
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    journal = operations.OperationJournal.load(_operations_path(root))
+    journal.authorize(
+        "op-stuck", kind="extract", source_file="lesson.pdf",
+        source_sha256="a" * 64, request_fp="b" * 64, model="claude-opus-5",
+    )
+    journal.advance("op-stuck", "dispatching")
+
+    assert _operations(root, "--end", "op-stuck") == 0
+    ended = capsys.readouterr().out
+    assert "outcome_unknown" in ended
+    assert "cannot know whether that call was billed" in ended
+    # Ended is not gone: it still counts, and the message says so.
+    assert "still counts as needing a person" in ended
+
+    assert _operations(root, "--forget", "op-stuck") == 0
+    assert "Forgot op-stuck" in capsys.readouterr().out
+    assert not operations.OperationJournal.load(
+        _operations_path(root)
+    ).operations
+
+
+def test_forgetting_a_call_still_in_flight_is_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Dropping the entry would delete the only record that money may be
+    moving right now."""
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    journal = operations.OperationJournal.load(_operations_path(root))
+    journal.authorize(
+        "op-live", kind="extract", source_file="lesson.pdf",
+        source_sha256="a" * 64, request_fp="b" * 64, model="claude-opus-5",
+    )
+    journal.advance("op-live", "dispatching")
+
+    assert _operations(root, "--forget", "op-live") == 1
+
+    assert "not finished" in capsys.readouterr().err
+    assert "op-live" in operations.OperationJournal.load(
+        _operations_path(root)
+    ).operations
+
+
+def test_forgetting_a_call_holding_an_unread_reply_needs_saying_twice(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """That reply was paid for and never became staging, and this deletes
+    it."""
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    path = _operations_path(root)
+    journal = operations.OperationJournal.load(path)
+    journal.authorize(
+        "op-paid", kind="extract", source_file="lesson.pdf",
+        source_sha256="a" * 64, request_fp="b" * 64, model="claude-opus-5",
+    )
+    journal.advance("op-paid", "dispatching")
+    artifact = operations.capture_artifact(path, "op-paid", b'{"content": []}')
+    journal.advance("op-paid", "result_captured", artifact=artifact)
+
+    assert _operations(root, "--forget", "op-paid") == 1
+    assert "paid for and never became staging" in capsys.readouterr().err
+    assert (path.parent / artifact).exists()
+
+    assert _operations(root, "--forget", "op-paid", "--force") == 0
+    assert not (path.parent / artifact).exists()
+
+
+def test_a_reason_given_for_ending_a_call_is_kept_with_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Why a call was ended by hand is the one thing the journal cannot work
+    out for itself, and it is what a person reading this months later has to
+    go on."""
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    journal = operations.OperationJournal.load(_operations_path(root))
+    journal.authorize(
+        "op-stuck", kind="extract", source_file="lesson.pdf",
+        source_sha256="a" * 64, request_fp="b" * 64, model="claude-opus-5",
+    )
+    journal.advance("op-stuck", "dispatching")
+
+    assert _operations(
+        root, "--end", "op-stuck", "--reason", "laptop lid closed mid-call"
+    ) == 0
+    capsys.readouterr()
+
+    assert _operations(root) == 0
+    assert "laptop lid closed mid-call" in capsys.readouterr().out
+
+
+def test_an_orphaned_authority_is_listed_and_can_be_cleared(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A process killed between writing the authority and marking it sent
+    leaves an entry that blocks everything. It has to be visible, and it has
+    to be described as what it is — nothing was sent."""
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    journal = operations.OperationJournal.load(_operations_path(root))
+    journal.authorize(
+        "op-orphan", kind="extract", source_file="lesson.pdf",
+        source_sha256="a" * 64, request_fp="b" * 64, model="claude-opus-5",
+    )
+
+    assert _operations(root) == 0
+    listed = capsys.readouterr().out
+    assert "op-orphan" in listed
+    assert "state: authorized" in listed
+    # Never "risks a second charge": nothing left the computer.
+    assert "second charge" not in listed
+
+    assert _operations(root, "--end", "op-orphan") == 0
+    assert "canceled_before_send" in capsys.readouterr().out
+
+
+def test_the_oldest_blocking_call_is_the_one_named(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Two entries can pile up — a call ends as an unknown outcome, and an
+    orphaned authority survives beside it. The refusal names one, and it must
+    be the one that has been waiting longest rather than whichever the
+    dictionary happened to yield."""
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    path = _operations_path(root)
+    journal = operations.OperationJournal.load(path)
+    journal.authorize(
+        "op-older", kind="extract", source_file="first.pdf",
+        source_sha256="a" * 64, request_fp="b" * 64, model="claude-opus-5",
+    )
+    journal.advance("op-older", "dispatching")
+    journal.advance("op-older", "outcome_unknown", detail="lost")
+    # Authorized *after*, and the journal is a dict — insertion order alone
+    # would name whichever was written last.
+    reloaded = operations.OperationJournal.load(path)
+    reloaded.operations["op-newer"] = operations.Operation(
+        operation_id="op-newer", kind="extract", state="authorized",
+        source_file="second.pdf", source_sha256="c" * 64, request_fp="d" * 64,
+        model="claude-opus-5", authorized_at="2099-01-01T00:00:00+00:00",
+        updated_at="2099-01-01T00:00:00+00:00",
+    )
+    reloaded._write()
+
+    assert _operations(root) == 0
+    listed = capsys.readouterr().out
+    assert listed.index("op-older") < listed.index("op-newer")
+
+
+def test_operations_refuses_flags_that_would_be_ignored(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A flag that is silently dropped is a flag that lied about what ran."""
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+
+    assert _operations(root, "--end", "a", "--forget", "b") == 1
+    assert "not both" in capsys.readouterr().err
+
+    assert _operations(root, "--reason", "because") == 1
+    assert "only means anything with --end" in capsys.readouterr().err
+
+    assert _operations(root, "--force") == 1
+    assert "only means anything with --forget" in capsys.readouterr().err
+
+
+def test_operations_on_a_project_that_never_paid_for_anything(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """No journal file at all is the ordinary state of a new project."""
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    assert not _operations_path(root).exists()
+
+    assert _operations(root) == 0
+
+    assert "none" in capsys.readouterr().out

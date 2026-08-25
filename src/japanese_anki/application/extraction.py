@@ -261,14 +261,6 @@ class DispatchFailure:
         return self.outcome in (ANSWER_SAVED, ANSWER_EMPTY)
 
 
-#: States that mean a paid call is in flight right now. `authorized` is not
-#: one of them: it says the authority was written and nothing was sent, which
-#: is where a process that died before dispatching leaves an entry — and a
-#: guard that counted it would wedge every later run behind a call that never
-#: happened.
-IN_FLIGHT: frozenset[str] = frozenset({"dispatching", "running"})
-
-
 def busy_refusal(config: ProjectConfig) -> str:
     """Why janki will not start a paid run right now, in a person's words.
 
@@ -278,38 +270,41 @@ def busy_refusal(config: ProjectConfig) -> str:
     that only knew about its own process would let the two overlap and bill
     twice.
 
-    Two different refusals, deliberately. A call in flight is a *wait*. An
-    answer that may already have been billed is a *decision*, and starting a
-    second call would bury it.
-
     **This is a display, not the enforcement point.** It is read when a page
     renders and acted on when a button is clicked, so two callers can both
-    pass it and both authorize. Whatever actually spends money has to refuse
-    under the journal's own lock.
+    pass it and both reach the writer. The rule itself lives in
+    `OperationJournal.authorize`, which refuses under the journal's own lock;
+    this exists so a page can say so in advance rather than let somebody click
+    a button that was never going to work. It therefore reads the same set the
+    gate does — a display that disagreed with the rule would be worse than no
+    display at all.
     """
     journal = operations.OperationJournal.load(config.operations_file)
-    flying = [op for op in journal.unfinished() if op.state in IN_FLIGHT]
-    if flying:
-        first = flying[0]
+    blocking = journal.blocking()
+    if not blocking:
+        return ""
+    first = blocking[0]
+    where = "'janki operations' shows it"
+    if first.state in operations.IN_FLIGHT:
         return (
             f"A call about {first.source_file} is still marked as running, so "
             "janki will not start another — that would risk a second charge. "
-            "If nothing is actually running, that call was interrupted; "
-            "'janki status --operations' shows it."
+            f"If nothing is actually running, that call was interrupted; "
+            f"{where}."
         )
-    waiting = journal.needing_attention()
-    if waiting:
-        first = waiting[0]
-        # "may have been billed", not "has been paid for": `outcome_unknown`
-        # is in this list precisely because nobody knows, and a page that
-        # asserted the charge would be guessing about someone's money in the
-        # one place it must not.
+    if first.state == "authorized":
         return (
-            f"A call about {first.source_file} may have been billed and has "
-            "not been dealt with. 'janki status --operations' shows what is "
-            "known about it."
+            f"An earlier run wrote authority to read {first.source_file} and "
+            f"never sent anything. janki will not start another until that is "
+            f"cleared; {where}."
         )
-    return ""
+    # `result_captured` and `outcome_unknown`. "may have been billed", not
+    # "has been paid for": the second of those is in this list precisely
+    # because nobody knows.
+    return (
+        f"A call about {first.source_file} may have been billed and has not "
+        f"been dealt with. {where}."
+    )
 
 
 @dataclass(frozen=True, slots=True)
