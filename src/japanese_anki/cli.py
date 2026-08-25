@@ -89,6 +89,7 @@ from japanese_anki.models import VocabularyRecord
 from japanese_anki.preview import build_preview
 from japanese_anki.promote import PromoteError
 from japanese_anki.staging import (
+    AI_ENRICHMENT_KEY,
     STAGING_SUFFIXES,
     StagingError,
     check_rewritable,
@@ -1298,7 +1299,7 @@ def _write_ai_result(
                 "model": model,
                 "provider": provider,
                 "review_run_id": new_review_run_id(),
-                "ai_enrichment": {
+                AI_ENRICHMENT_KEY: {
                     "version": 1,
                     "model": model,
                     "provider": provider,

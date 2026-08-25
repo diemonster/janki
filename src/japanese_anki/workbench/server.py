@@ -169,6 +169,7 @@ class WorkbenchSession:
                 detail.journey.staging_path,
                 staging_dir=self.config.staging_dir,
                 patterns_path=self.config.patterns_file,
+                collection_name=self.config.normalized_file.name,
             )
         except JankiError:
             return None

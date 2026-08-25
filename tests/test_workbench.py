@@ -2846,3 +2846,37 @@ def test_promoting_a_row_leaves_its_provenance_where_the_archive_can_use_it(
     )
     # And the gate accepts it, naming the landed row as archived.
     staged_ai_enrichment(meta, [kept.id], archived_ids=[landed.id])
+
+
+def test_the_workbench_knows_what_its_collection_is_called(tmp_path: Path) -> None:
+    """An `enrich --ai` review written before those files carried a marker
+    names the collection as its source, and that is the only thing telling it
+    apart from an import.
+
+    The session has to hand that name to the panel. Without it the page offers
+    "This is a different word than it says" over a model's answer, and moving
+    it records that the model spoke about a word it was never shown.
+    """
+    _project(tmp_path)
+    path = tmp_path / "staging" / "ai-enrichment.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_staging(
+        path,
+        [
+            VocabularyRecord(
+                id="word:走る:はしる",
+                expression="走る",
+                reading="はしる",
+                meanings=["to run"],
+                source=SourceReference(type="ai", imported_from="vocabulary.json"),
+            )
+        ],
+        {"source_file": "vocabulary.json", "model": "claude-opus-5"},
+    )
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+
+    panel = session.panel("vocabulary.json")
+
+    assert panel is not None
+    assert panel.provenance_kind == "model-pass"
+    assert panel.reidentifiable is False

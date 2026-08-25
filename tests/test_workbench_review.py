@@ -727,3 +727,31 @@ def test_submit_rejects_actions_the_rendered_page_did_not_offer(tmp_path: Path) 
 
     with pytest.raises(PanelRequestError, match="not reviewable"):
         panel.submit(record_ids=[existing.id], review_patterns=False)
+
+
+def test_an_enrichment_review_written_before_the_marker_is_still_a_model_pass(
+    tmp_path: Path,
+) -> None:
+    """`enrich --ai` files written before the `ai_enrichment` block existed
+    name the collection as their source and carry nothing else. Reading them
+    as an ordinary import would offer re-identification — telling a row it is
+    a different word, when the model's answer was produced for the word it was
+    actually asked about."""
+    staging_dir = tmp_path / "staging"
+    staging_dir.mkdir(parents=True, exist_ok=True)
+    path = staging_dir / "ai-enrichment.yaml"
+    staging.write_staging(
+        path,
+        [_record("走る", "はしる")],
+        {"source_file": "vocabulary.json", "model": "claude-opus-5"},
+    )
+
+    panel = ReviewPanel.open(
+        path,
+        staging_dir=staging_dir,
+        patterns_path=tmp_path / "patterns.json",
+        collection_name="vocabulary.json",
+    )
+
+    assert panel.provenance_kind == "model-pass"
+    assert panel.reidentifiable is False

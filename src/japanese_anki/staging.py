@@ -101,6 +101,12 @@ NON_READING_HOLDS: frozenset[str] = frozenset({HOLD_UNVERIFIABLE_ID})
 # inventing a key nothing downstream reads.
 CANDIDATE_ACCOUNTING_KEY = "candidate_accounting"
 
+#: The block an `enrich --ai` review writes beside its rows. Named once: three
+#: modules ask whether a staging file carries it, and the question decides
+#: whether its rows may be re-identified and whether they are evidence about
+#: any source.
+AI_ENRICHMENT_KEY = "ai_enrichment"
+
 META_KEYS: tuple[str, ...] = (
     "source_file",
     "extracted_at",
@@ -112,13 +118,61 @@ META_KEYS: tuple[str, ...] = (
     "prompt_provenance",
     "pattern_set",
     "reviewed_pattern_set",
-    "ai_enrichment",
+    AI_ENRICHMENT_KEY,
     "field_replacements",
     CANDIDATE_ACCOUNTING_KEY,
 )
 
 _RECORDS_KEY = "records"
 _COVERAGE_KEY = "coverage"
+
+#: Whether a staging file's rows are a model's answer about words janki
+#: already held, rather than a reading of some page.
+#:
+#: `data/staging/done/` looks like one uniform record of what janki has read,
+#: and it is not. Most archives are a model reading a source document, and
+#: their rows are the best surviving statement of what that page taught. An
+#: `enrich --ai` pass is not: it answers about the collection's own words, so
+#: its rows are model output about janki's data with no page behind them.
+#:
+#: The distinction has already cost something. When `enrich --jpdb` overwrote
+#: taught meanings with dictionary glosses, the repair read the archives to
+#: recover what each source said — the right instinct, and it worked. But
+#: `data/staging/done/ai-enrichment.yaml` snapshots ninety records *as they
+#: stood while damaged*, and sixty-eight of its rows still carry the bad
+#: glosses. A sweep that treated every archive alike would have restored the
+#: damage it was written to undo.
+#:
+#: `tests/test_source_evidence.py` pins that file's classification against the
+#: shipped corpus, so this stays a fact about the data rather than a warning
+#: somebody has to read.
+def is_model_pass(meta: Mapping[str, Any], *, collection_name: str = "") -> bool:
+    """Whether these rows are a model's answer about words janki already held.
+
+    Two signals, because the marker arrived later than the files. A modern
+    `enrich --ai` review carries an `ai_enrichment` block. An older one
+    carries nothing but its `source_file`, which names the collection rather
+    than any document — and naming the collection as your source is what it
+    means to be a pass over what janki already had.
+
+    That second signal is narrowed by `model`, and the narrowing matters: a
+    review somebody wrote *by hand* against the collection names it the same
+    way, and calling that a paid model pass would refuse re-identification —
+    the one repair its rows are most likely to need — with a sentence that is
+    not true of it. No importer writes `model`, and no hand edit does either.
+
+    `collection_name` is the configured normalized file's name, not a literal:
+    a project may call its collection anything, and a rule that only knew
+    `vocabulary.json` would be right about this repository and wrong about the
+    next one.
+    """
+    # Presence, not truthiness: a pass that recorded an empty block is still a
+    # pass, and `promote`'s own gate already reads the key this way.
+    if AI_ENRICHMENT_KEY in meta:
+        return True
+    named = str(meta.get("source_file") or "").strip()
+    return bool(collection_name) and named == collection_name and bool(meta.get("model"))
+
 
 #: Metadata written beside a large AI-enrichment review.  Ordinary extraction
 #: staging has no such block: those rows fill holes and keep existing curation.
@@ -1689,9 +1743,9 @@ def _prune_staging_unlocked(path: Path, keep: Sequence[bool]) -> int:
 #: *unknown*, and the next promote refuses the whole file with every other
 #: paid answer still in it.
 _AI_PROVENANCE_MAPS = (
-    ("ai_enrichment", "request_fingerprints"),
-    ("ai_enrichment", "input_fingerprints"),
-    ("ai_enrichment", "fields"),
+    (AI_ENRICHMENT_KEY, "request_fingerprints"),
+    (AI_ENRICHMENT_KEY, "input_fingerprints"),
+    (AI_ENRICHMENT_KEY, "fields"),
     ("field_replacements", "records"),
 )
 

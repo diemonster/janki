@@ -403,6 +403,10 @@ class ReviewPanel:
     pattern_warning: str | None
     staging_bytes: bytes
     patterns_bytes: bytes
+    #: The configured collection's filename. Needed to recognise an
+    #: `enrich --ai` review written before those files carried a marker: what
+    #: they name as their source is the collection itself.
+    collection_name: str = ""
     _submission_lock: threading.RLock = field(
         default_factory=threading.RLock,
         repr=False,
@@ -415,6 +419,7 @@ class ReviewPanel:
         *,
         staging_dir: Path,
         patterns_path: Path,
+        collection_name: str = "",
     ) -> ReviewPanel:
         active_path = _active_staging_path(staging_path, staging_dir)
         pattern_path = _absolute(patterns_path)
@@ -478,6 +483,7 @@ class ReviewPanel:
             pattern_warning=pattern_warning,
             staging_bytes=staging_bytes,
             patterns_bytes=patterns_bytes,
+            collection_name=collection_name,
         )
 
     @property
@@ -504,19 +510,21 @@ class ReviewPanel:
         provenance and the pattern answer that run proposed. Everything is
         available, because every approval has something to bind to.
 
-        ``model-pass`` — an `enrich --ai` review. A paid answer about words the
-        collection already holds, whose rows are named by provenance maps
-        `promote` checks against the file. Editable and removable; **not**
-        re-identifiable, because the answer was produced for the word it was
-        asked about and re-keying it would claim the model spoke about a
-        different one.
+        ``model-pass`` — an `enrich --ai` review, recognised by
+        `staging.is_model_pass`. A paid answer about words the collection
+        already holds. A modern one carries provenance maps `promote` checks
+        against the file; one written before those existed carries only its
+        `source_file` and a model name, and promotes as an ordinary file.
+        Either way: editable and removable, and **not** re-identifiable,
+        because the answer was produced for the word it was asked about and
+        re-keying it would claim the model spoke about a different one.
 
         ``none`` — an import, or a review written by hand. Ordinary rows and no
         model claims: edit, remove and re-identify freely, approve nothing.
         """
         if bool(self.run_id) and self.staged_pattern_set is not None:
             return "extraction"
-        if self.meta.get("ai_enrichment"):
+        if staging.is_model_pass(self.meta, collection_name=self.collection_name):
             return "model-pass"
         return "none"
 

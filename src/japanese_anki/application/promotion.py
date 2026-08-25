@@ -90,10 +90,10 @@ def archive_run_provenance(meta: Mapping[str, Any]) -> dict[str, Any]:
     retry behavior through the explicit ``legacy`` identity.
     """
     run_id = review_run_id(meta)
-    if "ai_enrichment" in meta:
+    if staging.AI_ENRICHMENT_KEY in meta:
         identity = {
             "kind": "ai",
-            "ai_enrichment": meta.get("ai_enrichment"),
+            staging.AI_ENRICHMENT_KEY: meta.get(staging.AI_ENRICHMENT_KEY),
             "field_replacements": meta.get("field_replacements"),
         }
     elif "prompt_provenance" in meta:
@@ -241,7 +241,7 @@ def staged_ai_enrichment(
     already in the archive.  An older, completed run under the same basename is
     the opposite shape: archive-only ids need not appear in this run's maps.
     """
-    raw = meta.get("ai_enrichment")
+    raw = meta.get(staging.AI_ENRICHMENT_KEY)
     if raw is None:
         if "field_replacements" in meta:
             raise PromoteError(
