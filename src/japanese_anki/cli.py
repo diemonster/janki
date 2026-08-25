@@ -4062,12 +4062,25 @@ def command_operations(args: argparse.Namespace) -> int:
 
     if args.end:
         ended = journal.end(args.end, detail=args.reason)
+        if ended.state == "canceled_before_send":
+            # Nothing was sent, and this state says exactly that. Repeating
+            # the "cannot know whether it was billed" line here would invent a
+            # charge, and telling someone it still needs them would be wrong
+            # twice over: a cancelled authority blocks nothing.
+            print(
+                f"Ended {ended.operation_id}: recorded as {ended.state}. That "
+                "call never left the computer, so nothing was billed."
+            )
+            print(
+                "  The next call can start now. "
+                f"'janki operations --forget {ended.operation_id}' drops the "
+                "record when you want it gone."
+            )
+            return 0
         print(
             f"Ended {ended.operation_id}: recorded as {ended.state}, because "
             "janki cannot know whether that call was billed."
         )
-        if ended.artifact:
-            print(f"  Its reply is still on disk at {ended.artifact}.")
         print(
             "  It still counts as needing a person. Once you have dealt with "
             f"it, 'janki operations --forget {ended.operation_id}' drops it "
@@ -4297,7 +4310,9 @@ def command_status(args: argparse.Namespace) -> int:
         for line in status.format_staged(report):
             print(line)
     if args.operations:
-        for line in status.format_operations(report.attention):
+        for line in status.format_operations(
+            report.attention, noun="not accounted for"
+        ):
             print(line)
     if args.unsettled is not None:
         for line in status.format_provisional(report):

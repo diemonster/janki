@@ -46,6 +46,7 @@ from japanese_anki.io import (
 __all__ = [
     "BLOCKS_SPENDING",
     "IN_FLIGHT",
+    "PENDING_DIR",
     "LIVE_STATES",
     "STATES",
     "TERMINAL_STATES",
@@ -53,8 +54,10 @@ __all__ = [
     "OperationError",
     "OperationJournal",
     "advance_refusal",
+    "artifact_path",
     "answer_text",
     "capture_artifact",
+    "pending_artifact",
     "serialize_response",
 ]
 
@@ -81,7 +84,13 @@ _TRANSITIONS: dict[str, frozenset[str]] = {
         {"running", "result_captured", "outcome_unknown", "failed_before_send"}
     ),
     "running": frozenset({"result_captured", "outcome_unknown", "failed_before_send"}),
-    "result_captured": frozenset({"committed", "outcome_unknown"}),
+    # Only `committed`. There is deliberately no move to `outcome_unknown`:
+    # once the exact answer is on disk nothing about the outcome is unknown,
+    # and the move existed only as a hole for a reply that landed while
+    # somebody was declaring the call dead. `advance` re-checks this table
+    # under the lock, so a state that must never be reachable has to be
+    # unreachable *here* — a caller-side guard cannot close it.
+    "result_captured": frozenset({"committed"}),
     # Terminal. Nothing leaves these, and in particular nothing leaves
     # `outcome_unknown` back into a live state: re-dispatching an operation
     # whose provider outcome is unknown is how one authorization becomes two
@@ -95,7 +104,9 @@ _TRANSITIONS: dict[str, frozenset[str]] = {
 
 STATES: tuple[str, ...] = tuple(_TRANSITIONS)
 
-#: States where no provider call has happened yet, so nothing has been spent.
+#: States an operation is still moving through — authorized but not finished.
+#: Not a statement about money: three of these four mean a request may already
+#: have reached the provider. `money_may_have_been_spent` is that question.
 LIVE_STATES: frozenset[str] = frozenset(
     {"authorized", "dispatching", "running", "result_captured"}
 )
@@ -109,6 +120,10 @@ TERMINAL_STATES: frozenset[str] = frozenset(
 #: is where a process that died before dispatching leaves an entry — and
 #: counting it would wedge every later run behind a call that never happened.
 IN_FLIGHT: frozenset[str] = frozenset({"dispatching", "running"})
+
+#: Where a captured reply is written, relative to the journal. One name so the
+#: writer, the reader and the containment check cannot drift.
+PENDING_DIR = ".pending"
 
 #: States that stop janki starting another paid call: every live one, plus the
 #: outcome nobody could determine. Either money is moving, or some already
@@ -170,12 +185,22 @@ def serialize_response(response: Any) -> bytes:
     """
     for attribute in ("model_dump_json", "to_json", "json"):
         method = getattr(response, attribute, None)
-        if callable(method):
-            try:
-                value = method()
-            except Exception:  # noqa: BLE001 - never lose a paid answer
-                continue
-            return value.encode("utf-8") if isinstance(value, str) else bytes(value)
+        if not callable(method):
+            continue
+        try:
+            value = method()
+            # Converted inside the guard, not after it. `.json()` returning
+            # parsed data rather than text is the ordinary convention in half
+            # the HTTP clients in existence, and `bytes(7)` does not raise —
+            # it fabricates seven NUL bytes and stores them as somebody's
+            # paid answer.
+            if isinstance(value, str):
+                return value.encode("utf-8")
+            if isinstance(value, bytes | bytearray):
+                return bytes(value)
+            return json.dumps(value, ensure_ascii=False, default=str).encode("utf-8")
+        except Exception:  # noqa: BLE001 - never lose a paid answer
+            continue
     try:
         return json.dumps(response, ensure_ascii=False, default=str).encode("utf-8")
     except (TypeError, ValueError):
@@ -191,9 +216,9 @@ def answer_text(journal_path: Path, operation: Operation) -> str:
     to recover. Telling someone their answer was saved in that case sends them
     looking for cards in a file that has none.
     """
-    if not operation.artifact:
+    path = artifact_path(journal_path, operation.artifact)
+    if path is None:
         return ""
-    path = Path(journal_path).parent / operation.artifact
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -210,6 +235,38 @@ def answer_text(journal_path: Path, operation: Operation) -> str:
     )
 
 
+def artifact_path(journal_path: Path, artifact: str) -> Path | None:
+    """Where an entry's artifact actually lives, or None if it names nothing.
+
+    Containment is checked, not assumed. `data/operations.json` is a committed
+    data file, so it reaches this code after merges and hand edits, and both
+    readers of this path either open it or *delete* it — an `artifact` of
+    `../normalized/vocabulary.json` would otherwise make `--forget --force` a
+    way to remove the collection.
+    """
+    if not artifact:
+        return None
+    root = (Path(journal_path).parent / PENDING_DIR).resolve()
+    candidate = (Path(journal_path).parent / artifact).resolve()
+    if candidate.parent != root:
+        return None
+    return candidate
+
+
+def pending_artifact(journal_path: Path, operation_id: str) -> str:
+    """A captured reply sitting under this operation's name, unreferenced.
+
+    `capture_artifact` writes the bytes and *then* the journal records them,
+    which is the right order — a crash between the two leaves litter rather
+    than an entry pointing at an answer that was never written. But litter
+    named after the operation that paid for it is not litter: it is the answer,
+    and nothing looked for it. An entry with no artifact and a blob under its
+    own id means the process died in that gap.
+    """
+    blob = Path(journal_path).parent / PENDING_DIR / f"{operation_id}.json"
+    return f"{PENDING_DIR}/{blob.name}" if blob.is_file() else ""
+
+
 def capture_artifact(journal_path: Path, operation_id: str, payload: bytes) -> str:
     """Write the exact provider answer beside the journal, and name it.
 
@@ -222,11 +279,11 @@ def capture_artifact(journal_path: Path, operation_id: str, payload: bytes) -> s
     two leaves an unreferenced file, which is litter, rather than an entry
     pointing at an answer that was never written, which is a lie.
     """
-    directory = Path(journal_path).parent / ".pending"
+    directory = Path(journal_path).parent / PENDING_DIR
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / f"{operation_id}.json"
     atomic_write_bytes(target, payload)
-    return f".pending/{target.name}"
+    return f"{PENDING_DIR}/{target.name}"
 
 
 def _now() -> str:
@@ -440,32 +497,52 @@ class OperationJournal:
             raise OperationError(f"Unknown operation state {state!r}")
         with exclusive_path_lock(self.path):
             current = OperationJournal.load(self.path)
-            held = current.operations.get(operation_id)
-            if held is None:
-                raise OperationError(f"No operation {operation_id!r} to advance")
-            refusal = advance_refusal(
-                operation_id, held.state, state, artifact or held.artifact
+            return self._move_under_lock(
+                current, operation_id, state, artifact=artifact, detail=detail
             )
-            if refusal:
-                raise OperationError(refusal)
-            moved = Operation(
-                operation_id=held.operation_id,
-                kind=held.kind,
-                state=state,
-                source_file=held.source_file,
-                source_sha256=held.source_sha256,
-                request_fp=held.request_fp,
-                model=held.model,
-                authorized_at=held.authorized_at,
-                updated_at=_now(),
-                artifact=artifact or held.artifact,
-                detail=detail or held.detail,
-            )
-            current.operations[operation_id] = moved
-            current.path = self.path
-            current._write()
-            self.operations = current.operations
-            return moved
+
+    def _move_under_lock(
+        self,
+        current: OperationJournal,
+        operation_id: str,
+        state: str,
+        *,
+        artifact: str = "",
+        detail: str = "",
+    ) -> Operation:
+        """The move itself, for a caller already holding this journal's lock.
+
+        Separate from `advance` because the lock is not reentrant and `end`
+        has to decide *and* write without letting go: it reads a state, picks
+        a destination from it, and a reply landing in between would otherwise
+        be recorded under a decision made about a different state.
+        """
+        held = current.operations.get(operation_id)
+        if held is None:
+            raise OperationError(f"No operation {operation_id!r} to advance")
+        refusal = advance_refusal(
+            operation_id, held.state, state, artifact or held.artifact
+        )
+        if refusal:
+            raise OperationError(refusal)
+        moved = Operation(
+            operation_id=held.operation_id,
+            kind=held.kind,
+            state=state,
+            source_file=held.source_file,
+            source_sha256=held.source_sha256,
+            request_fp=held.request_fp,
+            model=held.model,
+            authorized_at=held.authorized_at,
+            updated_at=_now(),
+            artifact=artifact or held.artifact,
+            detail=detail or held.detail,
+        )
+        current.operations[operation_id] = moved
+        current.path = self.path
+        current._write()
+        self.operations = current.operations
+        return moved
 
     def end(self, operation_id: str, *, detail: str = "") -> Operation:
         """Say a call that will never finish is over, without inventing what it
@@ -489,7 +566,8 @@ class OperationJournal:
         disk, and the choice there is to read it or to discard it deliberately.
         """
         with exclusive_path_lock(self.path):
-            held = OperationJournal.load(self.path).operations.get(operation_id)
+            current = OperationJournal.load(self.path)
+            held = current.operations.get(operation_id)
             if held is None:
                 raise OperationError(f"No operation {operation_id!r} to end")
             if held.state in TERMINAL_STATES:
@@ -497,23 +575,30 @@ class OperationJournal:
                     f"Operation {operation_id!r} is already {held.state!r} and "
                     "has nothing left to end"
                 )
-            if held.state == "result_captured":
+            # Either the entry names a reply, or one is sitting under this
+            # operation's own name because the process died between writing it
+            # and recording it. Both mean the same thing: the answer arrived,
+            # nothing about it is unknown, and calling this call dead would
+            # send somebody to buy an answer they already have.
+            reply = held.artifact or pending_artifact(self.path, operation_id)
+            if reply:
                 raise OperationError(
                     f"Operation {operation_id!r} is not unfinished — its reply "
-                    f"arrived and is saved at {held.artifact}. Read it, then "
+                    f"arrived and is saved at {reply}. Read it, then "
                     "'janki operations --forget --force' to drop it."
                 )
             sent = held.state != "authorized"
-        return self.advance(
-            operation_id,
-            "outcome_unknown" if sent else "canceled_before_send",
-            detail=detail
-            or (
-                "ended by hand; the process was gone"
-                if sent
-                else "ended by hand; nothing had been sent"
-            ),
-        )
+            return self._move_under_lock(
+                current,
+                operation_id,
+                "outcome_unknown" if sent else "canceled_before_send",
+                detail=detail
+                or (
+                    "ended by hand; the process was gone"
+                    if sent
+                    else "ended by hand; nothing had been sent"
+                ),
+            )
 
     def forget(self, operation_ids: Iterable[str], *, force: bool = False) -> int:
         """Drop finished operations, and only finished ones.
@@ -529,6 +614,7 @@ class OperationJournal:
         with exclusive_path_lock(self.path):
             current = OperationJournal.load(self.path)
             removed = 0
+            doomed: list[Path] = []
             for operation_id in {str(value) for value in operation_ids}:
                 held = current.operations.get(operation_id)
                 if held is None:
@@ -543,10 +629,13 @@ class OperationJournal:
                         "is not finished; 'janki operations --end' ends a call "
                         "that will never finish"
                     )
-                if held.artifact and held.state != "committed" and not force:
+                # Either name: a blob under this operation's own id is its
+                # reply too, whether or not the entry ever got to record it.
+                reply = held.artifact or pending_artifact(self.path, operation_id)
+                if reply and held.state != "committed" and not force:
                     raise OperationError(
                         f"Operation {operation_id!r} still holds the reply at "
-                        f"{held.artifact}, which was paid for and never became "
+                        f"{reply}, which was paid for and never became "
                         "staging. Read it first, then pass --force to drop it."
                     )
                 # The artifact goes with the entry. It is a recovery buffer,
@@ -554,16 +643,23 @@ class OperationJournal:
                 # `data/staging/done/` is the durable copy — leaving the blob
                 # behind would accumulate an unreferenced megabyte per paid
                 # call in a repository whose whole point is being portable.
-                if held.artifact:
-                    blob = Path(self.path).parent / held.artifact
-                    with contextlib.suppress(OSError):
-                        blob.unlink()
+                blob = artifact_path(self.path, reply)
+                if blob is not None:
+                    doomed.append(blob)
                 del current.operations[operation_id]
                 removed += 1
             if removed:
                 current.path = self.path
                 current._write()
                 self.operations = current.operations
+            # Unlinked *after* the journal no longer references them, which is
+            # the same ordering `capture_artifact` uses in reverse and for the
+            # same reason: an unreferenced file is litter, and an entry
+            # pointing at an answer that is gone is a lie. A raise partway
+            # through the loop above therefore deletes nothing.
+            for blob in doomed:
+                with contextlib.suppress(OSError):
+                    blob.unlink()
             return removed
 
     # --- reads --------------------------------------------------------------

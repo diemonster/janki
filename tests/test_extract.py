@@ -21,9 +21,12 @@ from conftest import seed_prompts
 from japanese_anki import cli, extract, operations, patterns, prompts
 from japanese_anki.application import plan_extraction
 from japanese_anki.application.extraction import (
+    ANSWER_SAVED,
+    OUTCOME_UNKNOWN,
     ExtractionTarget,
     authorize_dispatch,
     capture_hook,
+    classify_dispatch_failure,
     complete_extraction,
 )
 from japanese_anki.claude_client import CallResult, Refusal
@@ -2506,12 +2509,20 @@ def test_completing_an_operation_that_is_already_over_is_refused(
     tmp_path: Path,
 ) -> None:
     """The other half. A terminal entry cannot account for a new staging file,
-    and the refusal has to land before the write rather than after it."""
+    and the refusal has to land before the write rather than after it.
+
+    Terminal by having finished, because that is the only way `result_captured`
+    leaves: an answer on disk is never an unknown outcome, so the journal has
+    no move from one to the other."""
     root = project(tmp_path)
     config, journal, target, result, operation_id = _fixture_result(
         root, "lesson_with_grammar", "lesson.pdf"
     )
-    journal.advance(operation_id, "outcome_unknown", detail="provider timed out")
+    complete_extraction(
+        config, journal, target, result, operation_id=operation_id,
+        known=set(), mode=None, model="claude-opus-5",
+    )
+    target.staging_path.unlink()
 
     with pytest.raises(operations.OperationError):
         complete_extraction(
@@ -2610,3 +2621,55 @@ def test_the_outcome_describes_the_file_it_wrote(tmp_path: Path) -> None:
     assert outcome.duplicates == 3
     assert outcome.unusable == 4
     assert outcome.source == result.pattern_set.source
+
+
+def test_the_failure_handler_does_not_add_a_failure_of_its_own(
+    tmp_path: Path,
+) -> None:
+    """Somebody ending a call by hand while it is still in flight is exactly
+    when this runs. Advancing an already-terminal entry would refuse, replacing
+    the provider's error with a journal error and telling the person nothing
+    about either."""
+    root = project(tmp_path)
+    config, journal, _target, _result, operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf", settle=False
+    )
+    journal.end(operation_id)
+
+    failure = classify_dispatch_failure(
+        config, journal, operation_id, JankiError("the provider timed out")
+    )
+
+    assert failure.outcome == OUTCOME_UNKNOWN
+    assert failure.operation_id == operation_id
+
+
+def test_a_reply_captured_but_never_recorded_is_reported_as_saved(
+    tmp_path: Path,
+) -> None:
+    """The blob is written before the journal names it. A crash in that gap —
+    or an advance refused because the call was ended meanwhile — leaves the
+    answer on disk under the operation's own id, and telling somebody it never
+    came back sends them to buy it a second time."""
+    root = project(tmp_path)
+    config, journal, _target, _result, operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf", settle=False
+    )
+    operations.capture_artifact(
+        config.operations_file,
+        operation_id,
+        b'{"content": [{"type": "text", "text": "the paid answer"}]}',
+    )
+    assert (
+        operations.OperationJournal.load(config.operations_file)
+        .operations[operation_id]
+        .artifact
+        == ""
+    )
+
+    failure = classify_dispatch_failure(
+        config, journal, operation_id, JankiError("connection reset")
+    )
+
+    assert failure.outcome == ANSWER_SAVED
+    assert failure.artifact.endswith(f"{operation_id}.json")

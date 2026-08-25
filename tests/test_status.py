@@ -2225,7 +2225,33 @@ def test_the_summary_counts_paid_calls_that_need_a_decision(
 
     assert _status(root) == 0
 
-    assert "Paid calls needing a person: 1" in capsys.readouterr().out
+    assert "Paid calls not accounted for: 1" in capsys.readouterr().out
+
+
+def test_the_summary_counts_a_call_killed_while_it_was_in_flight(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Money that may already be gone. Counting only the calls that need a
+    *decision* let this print nothing at all — and `--operations` then said
+    every call janki made either landed or is recorded as finished."""
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    journal = operations.OperationJournal.load(_operations_path(root))
+    journal.authorize(
+        "op-killed", kind="extract", source_file="lesson.pdf",
+        source_sha256="a" * 64, request_fp="b" * 64, model="claude-opus-5",
+    )
+    journal.advance("op-killed", "dispatching")
+
+    assert _status(root) == 0
+    assert "Paid calls not accounted for: 1" in capsys.readouterr().out
+
+    assert _status(root, "--operations") == 0
+    listed = capsys.readouterr().out
+    assert "op-killed" in listed
+    assert "state: dispatching" in listed
+    # The exact sentence this used to print over a call that may have been
+    # billed. "none" alone would match "Unsettled model claims: none".
+    assert "not accounted for: none" not in listed
 
 
 def test_a_project_with_no_stranded_calls_says_nothing_about_them(

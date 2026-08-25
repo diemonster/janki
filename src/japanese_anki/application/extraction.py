@@ -583,20 +583,43 @@ def classify_dispatch_failure(
     truthful state — the paid bytes are on disk and a person has to decide what
     to do with them — and calling it "unknown" would hide an answer already
     bought.
+
+    This runs on the error path, so it does not add a failure of its own. An
+    entry already in a terminal state is reported rather than moved: somebody
+    ending the call by hand while it was still in flight is exactly when this
+    function runs, and refusing `outcome_unknown → outcome_unknown` there would
+    replace the provider's error with a journal error and tell the person
+    nothing about either.
     """
     held = operations.OperationJournal.load(config.operations_file).operations.get(
         operation_id
     )
+    # The blob under this operation's own id counts as its reply even when the
+    # entry never recorded one. `capture_artifact` writes the bytes before the
+    # journal names them, so a crash — or an `advance` refused because somebody
+    # ended the call meanwhile — leaves the answer on disk under that name and
+    # nothing else looking for it.
+    artifact = (held.artifact if held is not None else "") or operations.pending_artifact(
+        config.operations_file, operation_id
+    )
     answer = (
-        operations.answer_text(config.operations_file, held)
-        if held is not None and held.artifact
+        operations.answer_text(
+            config.operations_file, replace(held, artifact=artifact)
+        )
+        if held is not None and artifact
         else ""
     )
-    if held is not None and held.state == "result_captured":
+    if held is not None and (held.state == "result_captured" or artifact):
         return DispatchFailure(
             operation_id=operation_id,
             outcome=ANSWER_SAVED if answer else ANSWER_EMPTY,
-            artifact=held.artifact,
+            artifact=artifact,
+        )
+    if held is not None and held.state in operations.TERMINAL_STATES:
+        return DispatchFailure(
+            operation_id=operation_id,
+            outcome=OUTCOME_UNKNOWN,
+            money_may_have_been_spent=held.money_may_have_been_spent,
         )
     marked = journal.advance(operation_id, "outcome_unknown", detail=str(exc))
     return DispatchFailure(

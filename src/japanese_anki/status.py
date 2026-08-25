@@ -553,10 +553,12 @@ def build_report(
         missing_enrichment=Ledger.missing_enrichment(records),
         missing_pitch_accent=missing_pitch,
         provisional=_provisional_by_field(records),
+        # `blocking`, not `needing_attention`: a call killed mid-dispatch is
+        # money that may already be gone, and reporting only the states that
+        # need a *decision* let `status` print "every call janki made either
+        # landed or is recorded as finished" over exactly that entry.
         attention=tuple(
-            operations.OperationJournal.load(
-                config.operations_file
-            ).needing_attention()
+            operations.OperationJournal.load(config.operations_file).blocking()
         ),
         staging_dir=config.staging_dir,
         staged=list(staged),
@@ -730,8 +732,8 @@ def format_report(report: StatusReport) -> list[str]:
     )
     if report.attention:
         lines.append(
-            f"Paid calls needing a person: {len(report.attention)} "
-            "(run 'janki status --operations' for what each one cost)"
+            f"Paid calls not accounted for: {len(report.attention)} "
+            "(run 'janki operations' for what each one cost)"
         )
     if report.provisional:
         lines.append(

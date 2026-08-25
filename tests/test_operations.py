@@ -27,6 +27,7 @@ from japanese_anki.operations import (
     advance_refusal,
     answer_text,
     capture_artifact,
+    serialize_response,
 )
 
 
@@ -620,3 +621,135 @@ def test_ending_a_call_the_journal_never_had_is_refused(tmp_path: Path) -> None:
 
     with pytest.raises(OperationError, match="No operation"):
         journal.end("never-existed")
+
+
+# --- the edges where a paid answer could be forgotten ------------------------
+
+
+def test_a_captured_answer_has_nowhere_to_go_but_committed(tmp_path: Path) -> None:
+    """The table is the enforcement, not the caller. `end` refuses a captured
+    answer, but `advance` re-checks only this table under the lock — so a
+    reply landing between end's read and its write would be recorded as an
+    unknown outcome while its bytes sat on disk. A state that must never be
+    reachable has to be unreachable here."""
+    journal = _journal(tmp_path)
+    _authorize(journal)
+    journal.advance("op-1", "dispatching")
+    journal.advance("op-1", "result_captured", artifact=".pending/op-1.json")
+
+    with pytest.raises(OperationError, match="cannot move"):
+        journal.advance("op-1", "outcome_unknown", detail="giving up")
+
+
+def test_a_reply_that_arrived_unrecorded_is_not_declared_lost(
+    tmp_path: Path,
+) -> None:
+    """`capture_artifact` writes the bytes and *then* the journal names them.
+    A process dying in that gap leaves the answer on disk under the operation's
+    own id with the entry still saying the call is in flight — and ending the
+    call there would send somebody to buy an answer they already have."""
+    path = tmp_path / "operations.json"
+    journal = _journal(tmp_path)
+    _authorize(journal)
+    journal.advance("op-1", "dispatching")
+    # The write landed; the advance that would have recorded it did not.
+    capture_artifact(path, "op-1", b'{"content": [{"type": "text", "text": "hi"}]}')
+    assert OperationJournal.load(path).operations["op-1"].artifact == ""
+
+    with pytest.raises(OperationError, match="its reply arrived"):
+        journal.end("op-1")
+
+
+def test_an_unrecorded_reply_is_not_dropped_without_saying_so(
+    tmp_path: Path,
+) -> None:
+    """And `forget` sees it under the same name, so the answer cannot be swept
+    away by someone tidying up an entry that looks empty."""
+    path = tmp_path / "operations.json"
+    journal = _journal(tmp_path)
+    _authorize(journal)
+    journal.advance("op-1", "dispatching")
+    capture_artifact(path, "op-1", b'{"content": []}')
+    journal.advance("op-1", "outcome_unknown", detail="gave up waiting")
+
+    with pytest.raises(OperationError, match="paid for and never became"):
+        journal.forget(["op-1"], force=False)
+
+
+def test_a_journal_naming_a_file_outside_the_pending_store_is_ignored(
+    tmp_path: Path,
+) -> None:
+    """`data/operations.json` is committed, so it arrives here after merges and
+    hand edits. Both readers of this path either open it or *delete* it, and an
+    artifact of `../normalized/vocabulary.json` would make forgetting a call a
+    way to remove the collection."""
+    path = tmp_path / "operations.json"
+    # The real shape, and it needs no `..` to be dangerous: the journal lives
+    # at `data/operations.json`, so the collection at
+    # `data/normalized/vocabulary.json` is already outside `.pending/` and one
+    # ordinary relative path away.
+    outside = tmp_path / "normalized" / "vocabulary.json"
+    outside.parent.mkdir(parents=True, exist_ok=True)
+    outside.write_text('["do not delete me"]', encoding="utf-8")
+    escapes = tmp_path.parent / "escaped.json"
+    escapes.write_text("also not yours", encoding="utf-8")
+    journal = _journal(tmp_path)
+
+    for index, artifact in enumerate(
+        ("normalized/vocabulary.json", "../escaped.json"), start=1
+    ):
+        operation = f"op-{index}"
+        _authorize(journal, operation)
+        journal.advance(operation, "dispatching")
+        journal.advance(operation, "result_captured", artifact=artifact)
+        journal.advance(operation, "committed")
+
+        held = OperationJournal.load(path).operations[operation]
+        assert answer_text(path, held) == ""
+        journal.forget([operation], force=True)
+
+    assert outside.read_text(encoding="utf-8") == '["do not delete me"]'
+    assert escapes.exists()
+
+
+def test_a_forget_that_refuses_partway_deletes_nothing(tmp_path: Path) -> None:
+    """The journal is written before any blob is unlinked. Deleting first
+    leaves an entry naming an answer that is gone, which is the one thing
+    `capture_artifact`'s ordering exists to prevent — in reverse."""
+    path = tmp_path / "operations.json"
+    journal = _journal(tmp_path)
+    _authorize(journal, "done")
+    journal.advance("done", "dispatching")
+    kept = capture_artifact(path, "done", b'{"content": []}')
+    journal.advance("done", "result_captured", artifact=kept)
+    journal.advance("done", "committed")
+    _authorize(journal, "live")
+    journal.advance("live", "dispatching")
+
+    with pytest.raises(OperationError):
+        journal.forget(["done", "live"], force=True)
+
+    # Neither the entry nor its blob went anywhere.
+    assert (tmp_path / kept).exists()
+    assert "done" in OperationJournal.load(path).operations
+
+
+def test_a_reply_object_that_hands_back_parsed_data_is_still_saved(
+    tmp_path: Path,
+) -> None:
+    """Half the HTTP clients in existence return parsed data from `.json()`.
+    Converting outside the guard made that either raise — at the one moment
+    losing the answer is most expensive — or, for a number, fabricate NUL
+    bytes and store them as somebody's paid answer."""
+
+    class ParsedJson:
+        def json(self) -> dict:
+            return {"content": [{"type": "text", "text": "the answer"}]}
+
+    class NumericJson:
+        def to_json(self) -> int:
+            return 7
+
+    assert b"the answer" in serialize_response(ParsedJson())
+    assert serialize_response(NumericJson()) != b"\x00" * 7
+    assert b"7" in serialize_response(NumericJson())
