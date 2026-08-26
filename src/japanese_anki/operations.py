@@ -28,9 +28,11 @@ enforced by refusing the transition rather than documented as a convention.
 
 from __future__ import annotations
 
-import contextlib
+import hashlib
 import json
-from collections.abc import Iterable, Mapping
+import os
+import stat
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -38,9 +40,25 @@ from typing import Any
 
 from japanese_anki.errors import JankiError
 from japanese_anki.io import (
-    atomic_write_bytes,
-    atomic_write_text,
+    DataError,
+    _bound_capture_evidence,
+    _bound_write_evidence,
+    _BoundFileReceipt,
+    _BoundWriteEvidence,
+    _capture_bytes_bound,
+    _cleanup_bound_snapshot,
+    _finalize_bound_capture,
+    _open_bound_directory,
+    _open_cleanup_directory,
+    _read_bound_write_evidence,
+    _retire_bound_write_evidence,
+    _retire_detached_entry,
+    _retire_exact_entry,
+    _validate_bound_directory,
+    atomic_write_text_bound,
     exclusive_path_lock,
+    prepare_bound_directory,
+    read_bytes_bound,
 )
 
 __all__ = [
@@ -50,14 +68,16 @@ __all__ = [
     "LIVE_STATES",
     "STATES",
     "TERMINAL_STATES",
+    "ArtifactReceipt",
     "Operation",
     "OperationError",
     "OperationJournal",
+    "ReplyObservation",
     "advance_refusal",
-    "artifact_path",
-    "answer_text",
     "capture_artifact",
-    "pending_artifact",
+    "prepare_artifact_store",
+    "reply_observation",
+    "response_answer_text",
     "serialize_response",
 ]
 
@@ -145,7 +165,10 @@ BLOCKS_SPENDING: frozenset[str] = LIVE_STATES | frozenset({"outcome_unknown"})
 
 
 def advance_refusal(
-    operation_id: str, state: str, to: str, artifact: str = ""
+    operation_id: str,
+    state: str,
+    to: str,
+    artifact: ArtifactReceipt | None = None,
 ) -> str:
     """Why moving `operation_id` from `state` to `to` would be refused, or "".
 
@@ -207,21 +230,13 @@ def serialize_response(response: Any) -> bytes:
         return repr(response).encode("utf-8")
 
 
-def answer_text(journal_path: Path, operation: Operation) -> str:
-    """The answer inside a captured artifact, or empty when it holds none.
-
-    A captured response is not the same thing as a captured *answer*. A call
-    that reaches `max_tokens` while still reasoning returns a thinking block
-    and no text at all — the reply is real, and paid for, and contains nothing
-    to recover. Telling someone their answer was saved in that case sends them
-    looking for cards in a file that has none.
-    """
-    path = artifact_path(journal_path, operation.artifact)
-    if path is None:
+def response_answer_text(payload_bytes: bytes | None) -> str:
+    """Concatenate provider text blocks from already-bound response bytes."""
+    if payload_bytes is None:
         return ""
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        payload = json.loads(payload_bytes)
+    except (UnicodeError, ValueError):
         return ""
     if not isinstance(payload, Mapping):
         return ""
@@ -235,55 +250,705 @@ def answer_text(journal_path: Path, operation: Operation) -> str:
     )
 
 
-def artifact_path(journal_path: Path, artifact: str) -> Path | None:
-    """Where an entry's artifact actually lives, or None if it names nothing.
+_ArtifactState = tuple[int, int, int, int, int]
 
-    Containment is checked, not assumed. `data/operations.json` is a committed
-    data file, so it reaches this code after merges and hand edits, and both
-    readers of this path either open it or *delete* it — an `artifact` of
-    `../normalized/vocabulary.json` would otherwise make `--forget --force` a
-    way to remove the collection.
-    """
-    if not artifact:
+
+def _artifact_state(details: os.stat_result) -> _ArtifactState:
+    return (
+        details.st_dev,
+        details.st_ino,
+        details.st_size,
+        details.st_mtime_ns,
+        details.st_ctime_ns,
+    )
+
+
+def _digest_descriptor(descriptor: int) -> str:
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    digest = hashlib.sha256()
+    while chunk := os.read(descriptor, 1024 * 1024):
+        digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _read_artifact_entry(
+    directory_fd: int, name: str
+) -> tuple[_ArtifactState, str]:
+    """Bind one direct regular name to its inode and exact current bytes."""
+    descriptor = os.open(
+        name,
+        os.O_RDONLY
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0),
+        dir_fd=directory_fd,
+    )
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise OSError("Artifact is not a regular file")
+        digest = _digest_descriptor(descriptor)
+        after = os.fstat(descriptor)
+        named = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        if (
+            not stat.S_ISREG(named.st_mode)
+            or _artifact_state(before) != _artifact_state(after)
+            or _artifact_state(before) != _artifact_state(named)
+        ):
+            raise OSError("Artifact changed while it was being bound")
+        return _artifact_state(before), digest
+    finally:
+        os.close(descriptor)
+
+
+@dataclass(frozen=True, slots=True)
+class _TerminalMarkerReceipt:
+    """Exact terminal WAL entry bound by a durable artifact receipt."""
+
+    name: str
+    entry_state: _ArtifactState
+    content_sha256: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "entry_state": list(self.entry_state),
+            "sha256": self.content_sha256,
+        }
+
+
+def _terminal_marker_owned_identity(
+    operation_id: str,
+    name: Any,
+) -> tuple[int, int] | None:
+    """Return the temp identity encoded by one exact validated marker name."""
+    if not isinstance(name, str):
         return None
-    root = (Path(journal_path).parent / PENDING_DIR).resolve()
-    candidate = (Path(journal_path).parent / artifact).resolve()
-    if candidate.parent != root:
+    try:
+        encoded = os.fsencode(name)
+    except (TypeError, UnicodeError, ValueError):
         return None
-    return candidate
+    target_name = f"{operation_id}.json"
+    prefix = f".{target_name}."
+    suffix = ".janki-cas.validated"
+    if (
+        not encoded
+        or b"\0" in encoded
+        or Path(name).name != name
+        or "/" in name
+        or "\\" in name
+        or not name.startswith(prefix)
+        or not name.endswith(suffix)
+    ):
+        return None
+    body = name[len(prefix) : -len(suffix)]
+    try:
+        token, identity = body.split(".", 1)
+        device, inode = identity.split("-", 1)
+    except ValueError:
+        return None
+    if (
+        len(token) != 16
+        or any(character not in "0123456789abcdef" for character in token)
+        or not device
+        or not inode
+        or any(character not in "0123456789abcdef" for character in device)
+        or any(character not in "0123456789abcdef" for character in inode)
+    ):
+        return None
+    return int(device, 16), int(inode, 16)
 
 
-def pending_artifact(journal_path: Path, operation_id: str) -> str:
-    """A captured reply sitting under this operation's name, unreferenced.
+@dataclass(frozen=True, slots=True)
+class ArtifactReceipt:
+    """Durable proof of one exact published provider reply.
 
-    `capture_artifact` writes the bytes and *then* the journal records them,
-    which is the right order — a crash between the two leaves litter rather
-    than an entry pointing at an answer that was never written. But litter
-    named after the operation that paid for it is not litter: it is the answer,
-    and nothing looked for it. An entry with no artifact and a blob under its
-    own id means the process died in that gap.
+    A relative name keeps the committed repository portable; the directory
+    identity, five-field entry state, and digest make that name evidence rather
+    than a locator that could silently adopt a later occupant.
     """
-    blob = Path(journal_path).parent / PENDING_DIR / f"{operation_id}.json"
-    return f"{PENDING_DIR}/{blob.name}" if blob.is_file() else ""
+
+    relative_name: str
+    directory_identity: tuple[int, int]
+    entry_state: _ArtifactState
+    content_sha256: str
+    terminal_marker: _TerminalMarkerReceipt | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "relative_name": self.relative_name,
+            "directory_identity": list(self.directory_identity),
+            "entry_state": list(self.entry_state),
+            "sha256": self.content_sha256,
+            "terminal_marker": (
+                self.terminal_marker.to_dict()
+                if self.terminal_marker is not None
+                else None
+            ),
+        }
+
+    @classmethod
+    def from_dict(
+        cls,
+        operation_id: str,
+        raw: Mapping[str, Any],
+    ) -> ArtifactReceipt:
+        if not isinstance(raw, Mapping) or set(raw) != {
+            "relative_name",
+            "directory_identity",
+            "entry_state",
+            "sha256",
+            "terminal_marker",
+        }:
+            raise OperationError(
+                f"Operation {operation_id!r} holds an invalid artifact receipt"
+            )
+
+        def integers(value: Any, length: int) -> tuple[int, ...]:
+            if (
+                not isinstance(value, list)
+                or len(value) != length
+                or any(
+                    not isinstance(item, int) or isinstance(item, bool) or item < 0
+                    for item in value
+                )
+            ):
+                raise OperationError(
+                    f"Operation {operation_id!r} holds an invalid artifact receipt"
+                )
+            return tuple(value)
+
+        relative_name = raw["relative_name"]
+        expected_name = f"{PENDING_DIR}/{operation_id}.json"
+        if (
+            not isinstance(relative_name, str)
+            or relative_name != expected_name
+            or not _valid_pending_operation_id(operation_id)
+        ):
+            raise OperationError(
+                f"Operation {operation_id!r} holds an invalid artifact receipt"
+            )
+        directory_identity = integers(raw["directory_identity"], 2)
+        entry_state = integers(raw["entry_state"], 5)
+        digest = raw["sha256"]
+        if (
+            entry_state[0] != directory_identity[0]
+            or not isinstance(digest, str)
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+        ):
+            raise OperationError(
+                f"Operation {operation_id!r} holds an invalid artifact receipt"
+            )
+        terminal_marker_raw = raw["terminal_marker"]
+        terminal_marker = None
+        if terminal_marker_raw is not None:
+            if not isinstance(terminal_marker_raw, Mapping) or set(
+                terminal_marker_raw
+            ) != {"name", "entry_state", "sha256"}:
+                raise OperationError(
+                    f"Operation {operation_id!r} holds an invalid artifact receipt"
+                )
+            marker_name = terminal_marker_raw["name"]
+            marker_state = integers(terminal_marker_raw["entry_state"], 5)
+            marker_digest = terminal_marker_raw["sha256"]
+            marker_identity = _terminal_marker_owned_identity(
+                operation_id, marker_name
+            )
+            if (
+                marker_identity != (entry_state[0], entry_state[1])
+                or marker_state[0] != directory_identity[0]
+                or not isinstance(marker_digest, str)
+                or len(marker_digest) != 64
+                or any(
+                    character not in "0123456789abcdef"
+                    for character in marker_digest
+                )
+            ):
+                raise OperationError(
+                    f"Operation {operation_id!r} holds an invalid artifact receipt"
+                )
+            terminal_marker = _TerminalMarkerReceipt(
+                name=marker_name,
+                entry_state=(
+                    marker_state[0],
+                    marker_state[1],
+                    marker_state[2],
+                    marker_state[3],
+                    marker_state[4],
+                ),
+                content_sha256=marker_digest,
+            )
+        return cls(
+            relative_name=relative_name,
+            directory_identity=(directory_identity[0], directory_identity[1]),
+            entry_state=(
+                entry_state[0],
+                entry_state[1],
+                entry_state[2],
+                entry_state[3],
+                entry_state[4],
+            ),
+            content_sha256=digest,
+            terminal_marker=terminal_marker,
+        )
 
 
-def capture_artifact(journal_path: Path, operation_id: str, payload: bytes) -> str:
-    """Write the exact provider answer beside the journal, and name it.
+@dataclass(frozen=True, slots=True)
+class _ArtifactBinding:
+    path: Path
+    directory_identity: tuple[int, int]
+    entry_state: _ArtifactState
+    content_sha256: str
 
-    Returns the path relative to the journal's directory, which is what the
-    entry stores: an absolute path is wrong on any other clone of a repository
-    whose whole point is being portable.
 
-    The bytes are written before the journal entry that references them moves
-    to `result_captured`. That ordering is the guarantee — a crash between the
-    two leaves an unreferenced file, which is litter, rather than an entry
-    pointing at an answer that was never written, which is a lie.
+@dataclass(frozen=True, slots=True)
+class _CleanupIntent:
+    """Exact deletion authority made durable before any evidence is retired."""
+
+    artifact: _ArtifactBinding | None
+    write_ahead: _BoundWriteEvidence | None
+    forced: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        artifact = None
+        if self.artifact is not None:
+            artifact = {
+                "directory_identity": list(self.artifact.directory_identity),
+                "entry_state": list(self.artifact.entry_state),
+                "sha256": self.artifact.content_sha256,
+            }
+        return {
+            "artifact": artifact,
+            "write_ahead": (
+                self.write_ahead.to_cleanup_dict()
+                if self.write_ahead is not None
+                else None
+            ),
+            "forced": self.forced,
+        }
+
+    @classmethod
+    def from_dict(
+        cls,
+        journal_path: Path,
+        operation_id: str,
+        raw: Mapping[str, Any],
+    ) -> _CleanupIntent:
+        if not isinstance(raw, Mapping) or set(raw) != {
+            "artifact",
+            "write_ahead",
+            "forced",
+        }:
+            raise OperationError(
+                f"Operation {operation_id!r} holds an invalid cleanup intent"
+            )
+        if not _valid_pending_operation_id(operation_id):
+            raise OperationError(
+                f"Operation {operation_id!r} cannot hold a cleanup intent"
+            )
+
+        def integers(value: Any, length: int) -> tuple[int, ...]:
+            if (
+                not isinstance(value, list)
+                or len(value) != length
+                or any(
+                    not isinstance(item, int) or isinstance(item, bool) or item < 0
+                    for item in value
+                )
+            ):
+                raise OperationError(
+                    f"Operation {operation_id!r} holds an invalid cleanup binding"
+                )
+            return tuple(value)
+
+        def digest(value: Any) -> str:
+            if (
+                not isinstance(value, str)
+                or len(value) != 64
+                or any(character not in "0123456789abcdef" for character in value)
+            ):
+                raise OperationError(
+                    f"Operation {operation_id!r} holds an invalid cleanup digest"
+                )
+            return value
+
+        target = (
+            Path(journal_path).parent / PENDING_DIR / f"{operation_id}.json"
+        ).absolute()
+        artifact_raw = raw["artifact"]
+        artifact = None
+        if artifact_raw is not None:
+            if not isinstance(artifact_raw, Mapping) or set(artifact_raw) != {
+                "directory_identity",
+                "entry_state",
+                "sha256",
+            }:
+                raise OperationError(
+                    f"Operation {operation_id!r} holds an invalid artifact cleanup"
+                )
+            directory_identity = integers(
+                artifact_raw["directory_identity"], 2
+            )
+            entry_state = integers(artifact_raw["entry_state"], 5)
+            if entry_state[0] != directory_identity[0]:
+                raise OperationError(
+                    f"Operation {operation_id!r} holds an invalid artifact "
+                    "directory binding"
+                )
+            artifact = _ArtifactBinding(
+                path=target,
+                directory_identity=(
+                    directory_identity[0],
+                    directory_identity[1],
+                ),
+                entry_state=(
+                    entry_state[0],
+                    entry_state[1],
+                    entry_state[2],
+                    entry_state[3],
+                    entry_state[4],
+                ),
+                content_sha256=digest(artifact_raw["sha256"]),
+            )
+
+        write_ahead_raw = raw["write_ahead"]
+        write_ahead = None
+        if write_ahead_raw is not None:
+            try:
+                write_ahead = _BoundWriteEvidence.from_cleanup_dict(
+                    target, write_ahead_raw
+                )
+            except DataError as exc:
+                raise OperationError(
+                    f"Operation {operation_id!r} holds an invalid write-ahead "
+                    f"cleanup: {exc}"
+                ) from exc
+        forced = raw["forced"]
+        if not isinstance(forced, bool):
+            raise OperationError(
+                f"Operation {operation_id!r} holds an invalid cleanup decision"
+            )
+        return cls(artifact=artifact, write_ahead=write_ahead, forced=forced)
+
+
+@dataclass(frozen=True, slots=True)
+class _PendingAnswerEvidence:
+    artifact: _ArtifactBinding | None
+    write_ahead: _BoundWriteEvidence | None
+
+    @property
+    def reply_complete(self) -> bool:
+        return self.artifact is not None or (
+            self.write_ahead is not None
+            and self.write_ahead.reply_complete
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ReplyObservation:
+    """What exact recovery bytes are readable for one journal operation now.
+
+    ``artifact`` in the committed journal is a historical pointer, not proof
+    that its lexical path still contains the paid reply.  Conversely, a
+    complete write-ahead transaction may retain that reply only under its
+    private bound name.  Keeping these facts separate prevents a status page
+    from advertising a missing or replaced public file while still allowing a
+    safe reader to recover the exact private answer.
     """
+
+    #: Exact bytes read through their bound public or write-ahead evidence.
+    payload: bytes | None = field(repr=False)
+    #: The journal says a reply was captured, even if its bytes are unavailable.
+    recorded: bool
+    #: A write-ahead transaction exists but does not prove a complete reply.
+    interrupted: bool
+
+    @property
+    def readable(self) -> bool:
+        return self.payload is not None
+
+
+def _valid_pending_operation_id(operation_id: str) -> bool:
+    try:
+        encoded = os.fsencode(operation_id)
+    except (TypeError, UnicodeError, ValueError):
+        return False
+    return bool(
+        operation_id
+        and encoded
+        and b"\0" not in encoded
+        and Path(operation_id).name == operation_id
+        and "/" not in operation_id
+        and "\\" not in operation_id
+    )
+
+
+def _pending_answer_evidence(
+    journal_path: Path,
+    operation_id: str,
+    receipt: ArtifactReceipt | None = None,
+) -> _PendingAnswerEvidence:
+    """Bind every exact on-disk form of one operation's pending answer."""
+    if not _valid_pending_operation_id(operation_id):
+        return _PendingAnswerEvidence(None, None)
+    relative = f"{PENDING_DIR}/{operation_id}.json"
+    target = Path(journal_path).parent / relative
+    try:
+        if receipt is None:
+            write_ahead = _bound_write_evidence(target)
+        elif receipt.terminal_marker is None:
+            write_ahead = None
+        else:
+            write_ahead = _bound_capture_evidence(
+                _receipt_bound_file(journal_path, receipt)
+            )
+    except DataError as exc:
+        raise OperationError(
+            f"Could not inspect recovery evidence for operation "
+            f"{operation_id!r}: {exc}"
+        ) from exc
+    # A public name has authority only through a receipt already persisted in
+    # the operation.  In particular, the absence of a WAL is never permission
+    # to fresh-bind whatever now occupies the lexical operation-id name.
+    binding = (
+        _receipt_binding(journal_path, receipt, operation_id)
+        if receipt is not None
+        else None
+    )
+    return _PendingAnswerEvidence(binding, write_ahead)
+
+
+def _receipt_binding(
+    journal_path: Path,
+    receipt: ArtifactReceipt,
+    operation_id: str,
+) -> _ArtifactBinding | None:
+    """Translate a validated journal receipt without inspecting a live name."""
+    expected = f"{PENDING_DIR}/{operation_id}.json"
+    if receipt.relative_name != expected:
+        return None
+    return _ArtifactBinding(
+        path=(Path(journal_path).parent / receipt.relative_name).absolute(),
+        directory_identity=receipt.directory_identity,
+        entry_state=receipt.entry_state,
+        content_sha256=receipt.content_sha256,
+    )
+
+
+def _receipt_bound_file(
+    journal_path: Path,
+    receipt: ArtifactReceipt,
+) -> _BoundFileReceipt:
+    marker = receipt.terminal_marker
+    if marker is None:
+        raise DataError("Captured answer receipt holds no terminal WAL binding")
+    return _BoundFileReceipt(
+        target=(Path(journal_path).parent / receipt.relative_name).absolute(),
+        directory_identity=receipt.directory_identity,
+        entry_state=receipt.entry_state,
+        content_sha256=receipt.content_sha256,
+        marker_name=marker.name,
+        marker_state=marker.entry_state,
+        marker_revision=marker.content_sha256,
+    )
+
+
+def _read_artifact_binding(expected: _ArtifactBinding) -> bytes | None:
+    """Read only the exact direct entry already bound by an observation."""
+    try:
+        with _open_bound_directory(expected.path.parent, create=False) as directory:
+            parent = os.fstat(directory.descriptor)
+            if (parent.st_dev, parent.st_ino) != expected.directory_identity:
+                return None
+            file_fd = os.open(
+                expected.path.name,
+                os.O_RDONLY
+                | getattr(os, "O_NOFOLLOW", 0)
+                | getattr(os, "O_NONBLOCK", 0),
+                dir_fd=directory.descriptor,
+            )
+            with os.fdopen(file_fd, "rb") as handle:
+                opened = os.fstat(handle.fileno())
+                if (
+                    not stat.S_ISREG(opened.st_mode)
+                    or _artifact_state(opened) != expected.entry_state
+                ):
+                    return None
+                payload = handle.read()
+                after = os.fstat(handle.fileno())
+                entry = os.stat(
+                    expected.path.name,
+                    dir_fd=directory.descriptor,
+                    follow_symlinks=False,
+                )
+                if (
+                    _artifact_state(after) != expected.entry_state
+                    or _artifact_state(entry) != expected.entry_state
+                    or hashlib.sha256(payload).hexdigest()
+                    != expected.content_sha256
+                ):
+                    return None
+            _validate_bound_directory(directory)
+            return payload
+    except (DataError, OSError):
+        return None
+
+
+def _retire_artifact(expected: _ArtifactBinding) -> None:
+    """Retire the exact answer through the private same-filesystem store.
+
+    Moving first closes the public-name race; the exact private link is then
+    removed without truncating its inode, so a legitimate hard-link backup
+    remains intact. The public ``.pending`` name disappears only when the
+    no-clobber move proves it is still the file ``forget`` bound.
+    """
+    try:
+        with _open_cleanup_directory(
+            expected.path.parent, expected.directory_identity
+        ) as directory:
+            if directory is None:
+                _retire_detached_entry(
+                    expected.directory_identity,
+                    expected.path.name,
+                    expected.entry_state[:4],
+                    expected.content_sha256,
+                    expected_ctime_ns=expected.entry_state[4],
+                )
+                return
+            retired = _retire_exact_entry(
+                directory,
+                expected.path.name,
+                expected.entry_state[:4],
+                expected.content_sha256,
+                expected_ctime_ns=expected.entry_state[4],
+            )
+            if not retired:
+                current = _cleanup_bound_snapshot(
+                    directory.descriptor, expected.path.name
+                )
+                if current == (expected.entry_state, expected.content_sha256):
+                    raise DataError(
+                        f"Exact artifact remained after cleanup: {expected.path}"
+                    )
+            _validate_bound_directory(directory)
+    except (DataError, OSError) as exc:
+        raise OperationError(
+            "The operation's durable cleanup intent remains because its "
+            f"artifact could not be retired safely: {exc}"
+        ) from exc
+
+
+def _retire_write_ahead(expected: _BoundWriteEvidence) -> None:
+    """Retire exact operation-bound WAL evidence after its journal entry."""
+    try:
+        _retire_bound_write_evidence(expected)
+    except (DataError, OSError) as exc:
+        raise OperationError(
+            "The operation's durable cleanup intent remains because its "
+            f"write-ahead evidence could not be retired safely: {exc}"
+        ) from exc
+
+
+def _observe_reply(
+    journal_path: Path,
+    operation: Operation,
+) -> tuple[ReplyObservation, _PendingAnswerEvidence]:
+    """Bind and read one operation's exact reply without trusting a path string."""
+    recorded = operation.artifact is not None or operation.state in {
+        "result_captured",
+        "committed",
+    }
+    if operation.cleanup is not None:
+        # A durable discard decision won. Its evidence remains solely so exact
+        # cleanup can finish; no stale status/error frame may expose it again.
+        return ReplyObservation(None, recorded=recorded, interrupted=False), (
+            _PendingAnswerEvidence(None, None)
+        )
+    evidence = _pending_answer_evidence(
+        journal_path, operation.operation_id, operation.artifact
+    )
+    payload: bytes | None = None
+    if (
+        evidence.write_ahead is not None
+        and evidence.write_ahead.reply_complete
+    ):
+        payload = _read_bound_write_evidence(evidence.write_ahead)
+    if payload is None and evidence.artifact is not None:
+        payload = _read_artifact_binding(evidence.artifact)
+    recorded = recorded or evidence.reply_complete
+    return (
+        ReplyObservation(
+            payload,
+            recorded=recorded,
+            interrupted=(
+                operation.artifact is None
+                and evidence.write_ahead is not None
+                and not evidence.write_ahead.reply_complete
+            ),
+        ),
+        evidence,
+    )
+
+
+def reply_observation(
+    journal_path: Path,
+    operation: Operation,
+) -> ReplyObservation:
+    """Observe readable reply bytes without making a lexical path into proof."""
+    return _observe_reply(journal_path, operation)[0]
+
+
+def prepare_artifact_store(journal_path: Path) -> Path:
+    """Create and validate the direct recovery directory before dispatch."""
     directory = Path(journal_path).parent / PENDING_DIR
-    directory.mkdir(parents=True, exist_ok=True)
-    target = directory / f"{operation_id}.json"
-    atomic_write_bytes(target, payload)
-    return f"{PENDING_DIR}/{target.name}"
+    try:
+        return prepare_bound_directory(directory)
+    except DataError as exc:
+        raise OperationError(
+            f"Could not prepare pending answer store {directory}: {exc}"
+        ) from exc
+
+
+def capture_artifact(
+    journal_path: Path, operation_id: str, payload: bytes
+) -> ArtifactReceipt:
+    """Publish a paid reply and return exact proof for the journal.
+
+    The operation-bound terminal WAL intentionally remains after this function
+    returns.  :meth:`OperationJournal.capture_result` persists the receipt
+    first and finalizes that WAL second, closing both sides of the crash seam.
+    """
+    if not _valid_pending_operation_id(operation_id):
+        raise OperationError(f"Invalid operation ID for a pending answer: {operation_id!r}")
+    target = Path(journal_path).parent / PENDING_DIR / f"{operation_id}.json"
+    bound = _capture_bytes_bound(target, payload)
+    return ArtifactReceipt(
+        relative_name=f"{PENDING_DIR}/{target.name}",
+        directory_identity=bound.directory_identity,
+        entry_state=bound.entry_state,
+        content_sha256=bound.content_sha256,
+        terminal_marker=_TerminalMarkerReceipt(
+            name=bound.marker_name,
+            entry_state=bound.marker_state,
+            content_sha256=bound.marker_revision,
+        ),
+    )
+
+
+def _finalize_artifact(
+    journal_path: Path,
+    receipt: ArtifactReceipt,
+) -> None:
+    if receipt.terminal_marker is None:
+        return
+    bound = _receipt_bound_file(journal_path, receipt)
+    try:
+        _finalize_bound_capture(bound)
+    except DataError as exc:
+        raise OperationError(
+            "The captured reply is journalled, but its write-ahead marker "
+            f"could not be finalized safely: {exc}"
+        ) from exc
 
 
 def _now() -> str:
@@ -303,10 +968,12 @@ class Operation:
     model: str
     authorized_at: str
     updated_at: str
-    #: Relative path of the exact provider answer, once captured.
-    artifact: str = ""
+    #: Exact public-answer proof, once capture is journalled.
+    artifact: ArtifactReceipt | None = None
     #: Why it stopped, for a terminal state.
     detail: str = ""
+    #: Durable exact deletion authority while ``forget`` retires recovery data.
+    cleanup: _CleanupIntent | None = None
 
     @property
     def money_may_have_been_spent(self) -> bool:
@@ -326,7 +993,15 @@ class Operation:
 
     @property
     def needs_a_person(self) -> bool:
-        return self.state in {"outcome_unknown", "result_captured"}
+        return self.cleanup is None and self.state in {
+            "outcome_unknown",
+            "result_captured",
+        }
+
+    @property
+    def blocks_spending(self) -> bool:
+        """Whether this entry still holds an unsettled money decision."""
+        return self.cleanup is None and self.state in BLOCKS_SPENDING
 
     def to_dict(self) -> dict[str, Any]:
         value = {
@@ -339,14 +1014,21 @@ class Operation:
             "authorized_at": self.authorized_at,
             "updated_at": self.updated_at,
         }
-        if self.artifact:
-            value["artifact"] = self.artifact
+        if self.artifact is not None:
+            value["artifact"] = self.artifact.to_dict()
         if self.detail:
             value["detail"] = self.detail
+        if self.cleanup is not None:
+            value["cleanup"] = self.cleanup.to_dict()
         return value
 
     @classmethod
-    def from_dict(cls, operation_id: str, raw: Mapping[str, Any]) -> Operation:
+    def from_dict(
+        cls,
+        journal_path: Path,
+        operation_id: str,
+        raw: Mapping[str, Any],
+    ) -> Operation:
         if not isinstance(raw, Mapping):
             raise OperationError(
                 f"Operation {operation_id!r} must be an object, got "
@@ -356,6 +1038,34 @@ class Operation:
         if state not in _TRANSITIONS:
             raise OperationError(
                 f"Operation {operation_id!r} holds unknown state {state!r}"
+            )
+        cleanup = None
+        if "cleanup" in raw:
+            cleanup_raw = raw["cleanup"]
+            if cleanup_raw is None:
+                raise OperationError(
+                    f"Operation {operation_id!r} holds an invalid cleanup intent"
+                )
+            cleanup = _CleanupIntent.from_dict(
+                journal_path, operation_id, cleanup_raw
+            )
+        artifact = None
+        if "artifact" in raw:
+            artifact_raw = raw["artifact"]
+            if artifact_raw is None:
+                raise OperationError(
+                    f"Operation {operation_id!r} holds an invalid artifact receipt"
+                )
+            artifact = ArtifactReceipt.from_dict(operation_id, artifact_raw)
+        receipt_states = {"result_captured", "committed"}
+        if (state in receipt_states) != (artifact is not None):
+            requirement = (
+                "requires an artifact receipt"
+                if state in receipt_states
+                else "cannot hold an artifact receipt"
+            )
+            raise OperationError(
+                f"Operation {operation_id!r} in state {state!r} {requirement}"
             )
         return cls(
             operation_id=operation_id,
@@ -367,8 +1077,9 @@ class Operation:
             model=str(raw.get("model", "")),
             authorized_at=str(raw.get("authorized_at", "")),
             updated_at=str(raw.get("updated_at", "")),
-            artifact=str(raw.get("artifact", "")),
+            artifact=artifact,
             detail=str(raw.get("detail", "")),
+            cleanup=cleanup,
         )
 
 
@@ -385,15 +1096,26 @@ class OperationJournal:
 
     path: Path
     operations: dict[str, Operation] = field(default_factory=dict)
+    _wire_revision: str | None = field(default=None, repr=False)
+    _expected_absent: bool = field(default=True, repr=False)
 
     @classmethod
     def load(cls, path: Path) -> OperationJournal:
         path = Path(path)
-        if not path.exists():
-            return cls(path=path)
+        if path.is_symlink():
+            raise OperationError(f"Refusing a symlinked operation journal: {path}")
+        if path.parent.exists() and (
+            path.parent.is_symlink() or not path.parent.is_dir()
+        ):
+            raise OperationError(
+                f"Refusing non-directory operation journal parent: {path.parent}"
+            )
         try:
-            raw = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
+            wire = read_bytes_bound(path)
+            raw = json.loads(wire.decode("utf-8", errors="strict"))
+        except FileNotFoundError:
+            return cls(path=path)
+        except (JankiError, OSError, UnicodeError, ValueError) as exc:
             raise OperationError(f"Could not read {path}: {exc}") from exc
         if not isinstance(raw, Mapping):
             raise OperationError(f"{path} must hold an object")
@@ -405,9 +1127,11 @@ class OperationJournal:
         return cls(
             path=path,
             operations={
-                str(key): Operation.from_dict(str(key), value)
+                str(key): Operation.from_dict(path, str(key), value)
                 for key, value in entries.items()
             },
+            _wire_revision=hashlib.sha256(wire).hexdigest(),
+            _expected_absent=False,
         )
 
     def _write(self) -> None:
@@ -417,11 +1141,22 @@ class OperationJournal:
                 key: self.operations[key].to_dict() for key in sorted(self.operations)
             },
         }
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_text(
-            self.path,
-            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=False) + "\n",
-        )
+        rendered = json.dumps(
+            payload, ensure_ascii=False, indent=2, sort_keys=False
+        ) + "\n"
+        try:
+            atomic_write_text_bound(
+                self.path,
+                rendered,
+                expected_revision=self._wire_revision,
+                expected_absent=self._expected_absent,
+            )
+        except DataError as exc:
+            raise OperationError(
+                f"Could not write operation journal {self.path}: {exc}"
+            ) from exc
+        self._wire_revision = hashlib.sha256(rendered.encode("utf-8")).hexdigest()
+        self._expected_absent = False
 
     # --- transitions --------------------------------------------------------
 
@@ -449,22 +1184,14 @@ class OperationJournal:
                     f"Operation {operation_id!r} is already authorized and is "
                     f"{held.state!r}; authority is one-use."
                 )
-            blocking = sorted(
-                (
-                    op
-                    for op in current.operations.values()
-                    if op.state in BLOCKS_SPENDING
-                ),
-                key=lambda op: (op.authorized_at, op.operation_id),
-            )
+            blocking = current.blocking()
             if blocking:
                 first = blocking[0]
                 raise OperationError(
                     f"Operation {first.operation_id!r} for {first.source_file} "
                     f"is {first.state!r} and janki will not start another paid "
-                    "call until it is settled. 'janki operations' shows it; "
-                    "'janki operations --end' ends a call that will never "
-                    "finish."
+                    "call until it is settled. 'janki operations' shows it "
+                    "and the action that settles it."
                 )
             now = _now()
             operation = Operation(
@@ -489,16 +1216,20 @@ class OperationJournal:
         operation_id: str,
         state: str,
         *,
-        artifact: str = "",
         detail: str = "",
     ) -> Operation:
         """Move one operation to `state`, or refuse if that move is not legal."""
         if state not in _TRANSITIONS:
             raise OperationError(f"Unknown operation state {state!r}")
+        if state == "result_captured":
+            raise OperationError(
+                f"Operation {operation_id!r} cannot move to 'result_captured' "
+                "through advance; capture_result must bind its exact receipt"
+            )
         with exclusive_path_lock(self.path):
             current = OperationJournal.load(self.path)
             return self._move_under_lock(
-                current, operation_id, state, artifact=artifact, detail=detail
+                current, operation_id, state, detail=detail
             )
 
     def _move_under_lock(
@@ -507,7 +1238,7 @@ class OperationJournal:
         operation_id: str,
         state: str,
         *,
-        artifact: str = "",
+        artifact: ArtifactReceipt | None = None,
         detail: str = "",
     ) -> Operation:
         """The move itself, for a caller already holding this journal's lock.
@@ -517,14 +1248,17 @@ class OperationJournal:
         a destination from it, and a reply landing in between would otherwise
         be recorded under a decision made about a different state.
         """
-        held = current.operations.get(operation_id)
-        if held is None:
-            raise OperationError(f"No operation {operation_id!r} to advance")
-        refusal = advance_refusal(
-            operation_id, held.state, state, artifact or held.artifact
+        if (state == "result_captured") != (artifact is not None):
+            raise OperationError(
+                f"Operation {operation_id!r} cannot attach or replace an "
+                "artifact receipt in state {state!r}"
+            )
+        held = self._require_move_under_lock(
+            current,
+            operation_id,
+            state,
+            artifact=artifact,
         )
-        if refusal:
-            raise OperationError(refusal)
         moved = Operation(
             operation_id=held.operation_id,
             kind=held.kind,
@@ -535,7 +1269,7 @@ class OperationJournal:
             model=held.model,
             authorized_at=held.authorized_at,
             updated_at=_now(),
-            artifact=artifact or held.artifact,
+            artifact=artifact if artifact is not None else held.artifact,
             detail=detail or held.detail,
         )
         current.operations[operation_id] = moved
@@ -543,6 +1277,155 @@ class OperationJournal:
         current._write()
         self.operations = current.operations
         return moved
+
+    def _require_move_under_lock(
+        self,
+        current: OperationJournal,
+        operation_id: str,
+        state: str,
+        *,
+        artifact: ArtifactReceipt | None = None,
+    ) -> Operation:
+        """Validate one transition against the locked journal snapshot."""
+        held = current.operations.get(operation_id)
+        if held is None:
+            raise OperationError(f"No operation {operation_id!r} to advance")
+        if held.cleanup is not None:
+            raise OperationError(
+                f"Operation {operation_id!r} is being forgotten; rerun "
+                f"'janki operations --forget {operation_id}' to finish cleanup"
+            )
+        refusal = advance_refusal(
+            operation_id,
+            held.state,
+            state,
+            artifact if artifact is not None else held.artifact,
+        )
+        if refusal:
+            raise OperationError(refusal)
+        return held
+
+    def capture_result(
+        self,
+        operation_id: str,
+        capture: Callable[[], ArtifactReceipt],
+    ) -> Operation:
+        """Capture one arrived result and journal it under the same lock.
+
+        The callback publishes the operation-bound recovery artifact. Running
+        it only after the locked cleanup/state check prevents a durable forget
+        decision from being followed by a newly recreated, unbound artifact.
+        An already captured result never invokes the callback, but it retries
+        terminal-WAL finalization in case the previous process died after the
+        receipt became durable.
+        """
+        with exclusive_path_lock(self.path):
+            current = OperationJournal.load(self.path)
+            held = current.operations.get(operation_id)
+            if held is None or held.cleanup is not None:
+                self._require_move_under_lock(
+                    current, operation_id, "result_captured"
+                )
+            assert held is not None
+            if held.state == "result_captured":
+                self.operations = current.operations
+                assert held.artifact is not None
+                _finalize_artifact(self.path, held.artifact)
+                return held
+            self._require_move_under_lock(
+                current, operation_id, "result_captured"
+            )
+            artifact = capture()
+            if not isinstance(artifact, ArtifactReceipt):
+                raise OperationError(
+                    f"Operation {operation_id!r} capture returned no artifact receipt"
+                )
+            # Re-validate even an in-memory receipt and prove it against the
+            # still-terminal operation-bound WAL before making it durable.
+            artifact = ArtifactReceipt.from_dict(
+                operation_id, artifact.to_dict()
+            )
+            capture_evidence = _pending_answer_evidence(
+                self.path, operation_id
+            ).write_ahead
+            marker = artifact.terminal_marker
+            if (
+                marker is None
+                or capture_evidence is None
+                or capture_evidence.directory_identity
+                != artifact.directory_identity
+                or capture_evidence.public_answer_snapshot
+                != (artifact.entry_state, artifact.content_sha256)
+                or capture_evidence.marker_name != marker.name
+                or capture_evidence.marker_state != marker.entry_state
+                or capture_evidence.marker_revision != marker.content_sha256
+            ):
+                raise OperationError(
+                    f"Operation {operation_id!r} capture returned a receipt "
+                    "that is not proven by its terminal write-ahead record"
+                )
+            moved = self._move_under_lock(
+                current,
+                operation_id,
+                "result_captured",
+                artifact=artifact,
+            )
+            _finalize_artifact(self.path, artifact)
+            return moved
+
+    def commit_result(
+        self,
+        operation_id: str,
+        persist: Callable[[], None],
+    ) -> Operation:
+        """Persist staging and mark its exact answer committed under one lock.
+
+        The caller must acquire every output-path lock before entering this
+        method. The callback then runs after the authoritative cleanup/state
+        check but before the committed journal write, so cleanup cannot become
+        durable in the seam and make staging change under a refused entry.
+        """
+        with exclusive_path_lock(self.path):
+            current = OperationJournal.load(self.path)
+            self._require_move_under_lock(current, operation_id, "committed")
+            persist()
+            return self._move_under_lock(current, operation_id, "committed")
+
+    def read_reply(self, operation_id: str) -> bytes:
+        """Return the exact currently bound provider reply without settling it.
+
+        The journal lock makes a durable forget decision and this read order
+        themselves wholly before or after one another. The evidence reader may
+        use a private WAL name when publication was safely refused; it never
+        substitutes or exposes the lexical public occupant.
+        """
+        with exclusive_path_lock(self.path):
+            current = OperationJournal.load(self.path)
+            held = current.operations.get(operation_id)
+            if held is None:
+                raise OperationError(f"No operation {operation_id!r} to read")
+            if held.cleanup is not None:
+                raise OperationError(
+                    f"Operation {operation_id!r} is being forgotten; its "
+                    "recovery reply is no longer available to read"
+                )
+            observation = reply_observation(self.path, held)
+            if observation.payload is not None:
+                self.operations = current.operations
+                return observation.payload
+            if observation.recorded:
+                raise OperationError(
+                    f"Operation {operation_id!r} records a captured reply, but "
+                    "its exact recovery bytes are unavailable"
+                )
+            if observation.interrupted:
+                raise OperationError(
+                    f"Operation {operation_id!r} has an interrupted answer "
+                    "capture, not a complete reply"
+                )
+            raise OperationError(
+                f"Operation {operation_id!r} has no recoverable reply"
+            )
 
     def end(self, operation_id: str, *, detail: str = "") -> Operation:
         """Say a call that will never finish is over, without inventing what it
@@ -570,34 +1453,54 @@ class OperationJournal:
             held = current.operations.get(operation_id)
             if held is None:
                 raise OperationError(f"No operation {operation_id!r} to end")
+            if held.cleanup is not None:
+                raise OperationError(
+                    f"Operation {operation_id!r} is being forgotten; rerun "
+                    f"'janki operations --forget {operation_id}' to finish cleanup"
+                )
             if held.state in TERMINAL_STATES:
                 raise OperationError(
                     f"Operation {operation_id!r} is already {held.state!r} and "
                     "has nothing left to end"
                 )
-            # Either the entry names a reply, or one is sitting under this
-            # operation's own name because the process died between writing it
-            # and recording it. Both mean the same thing: the answer arrived,
-            # nothing about it is unknown, and calling this call dead would
-            # send somebody to buy an answer they already have.
-            reply = held.artifact or pending_artifact(self.path, operation_id)
-            if reply:
+            # A path string is only history. Read through current bound
+            # evidence so a private WAL answer remains recoverable without
+            # advertising or adopting a missing/replaced public occupant.
+            observation, evidence = _observe_reply(self.path, held)
+            if observation.readable:
                 raise OperationError(
                     f"Operation {operation_id!r} is not unfinished — its reply "
-                    f"arrived and is saved at {reply}. Read it, then "
-                    "'janki operations --forget --force' to drop it."
+                    "arrived and is recoverable with "
+                    f"'janki operations --show-reply {operation_id}'. Read it, then "
+                    f"'janki operations --forget {operation_id} --force' to "
+                    "drop it."
+                )
+            if observation.recorded:
+                raise OperationError(
+                    f"Operation {operation_id!r} records a captured reply, but "
+                    "its exact recovery bytes are unavailable. If you accept "
+                    "that loss, explicitly discard the record with "
+                    f"'janki operations --forget {operation_id} --force'."
                 )
             sent = held.state != "authorized"
+            settlement_detail = detail or (
+                "ended by hand; the process was gone"
+                if sent
+                else "ended by hand; nothing had been sent"
+            )
+            if (
+                evidence.write_ahead is not None
+                and not evidence.reply_complete
+            ):
+                settlement_detail += (
+                    "; answer capture was interrupted; operation-bound "
+                    "recovery evidence remains until this entry is forgotten"
+                )
             return self._move_under_lock(
                 current,
                 operation_id,
                 "outcome_unknown" if sent else "canceled_before_send",
-                detail=detail
-                or (
-                    "ended by hand; the process was gone"
-                    if sent
-                    else "ended by hand; nothing had been sent"
-                ),
+                detail=settlement_detail,
             )
 
     def forget(self, operation_ids: Iterable[str], *, force: bool = False) -> int:
@@ -609,21 +1512,45 @@ class OperationJournal:
 
         An entry still holding an answer nobody turned into staging is refused
         without `force`. That artifact is a reply somebody paid for, and this
-        deletes it.
+        deletes it. The exact cleanup decision is journalled before deletion;
+        an interrupted retry resumes those bindings without fresh force.
         """
         with exclusive_path_lock(self.path):
             current = OperationJournal.load(self.path)
-            removed = 0
-            doomed: list[Path] = []
-            for operation_id in {str(value) for value in operation_ids}:
+            cleanup: dict[str, _CleanupIntent] = {}
+            newly_bound: set[str] = set()
+            for operation_id in sorted({str(value) for value in operation_ids}):
                 held = current.operations.get(operation_id)
                 if held is None:
                     continue
+                if held.cleanup is not None:
+                    # The first call made its exact deletion decision durable.
+                    # A retry resumes that decision without asking for force
+                    # again and without rebinding a same-name replacement.
+                    cleanup[operation_id] = held.cleanup
+                    continue
+                observation, evidence = _observe_reply(self.path, held)
+                actual_reply = observation.readable
                 # `result_captured` too: its answer is on disk, so it is not
                 # "unfinished" in the sense `end` means, and refusing it here
                 # would leave the only entry holding a real reply with no way
                 # out at all.
-                if held.state not in TERMINAL_STATES | {"result_captured"}:
+                if held.state not in TERMINAL_STATES | {"result_captured"} and not (
+                    force and (actual_reply or observation.recorded)
+                ):
+                    if actual_reply:
+                        raise OperationError(
+                            f"Operation {operation_id!r} still holds a reply, "
+                            "which was paid for and never became staging. Read it with "
+                            f"'janki operations --show-reply {operation_id}', "
+                            "then pass --force to drop it."
+                        )
+                    if observation.recorded:
+                        raise OperationError(
+                            f"Operation {operation_id!r} records a captured reply, "
+                            "but its exact recovery bytes are unavailable. Pass "
+                            "--force only if you accept losing that reply record."
+                        )
                     raise OperationError(
                         f"Operation {operation_id!r} is {held.state!r}, which "
                         "is not finished; 'janki operations --end' ends a call "
@@ -631,43 +1558,114 @@ class OperationJournal:
                     )
                 # Either name: a blob under this operation's own id is its
                 # reply too, whether or not the entry ever got to record it.
-                reply = held.artifact or pending_artifact(self.path, operation_id)
-                if reply and held.state != "committed" and not force:
-                    raise OperationError(
-                        f"Operation {operation_id!r} still holds the reply at "
-                        f"{reply}, which was paid for and never became "
-                        "staging. Read it first, then pass --force to drop it."
+                # Bind that recovery name exactly once. The same identity
+                # decides whether a reply exists and is the only deletion
+                # authority retained after the journal entry is removed.
+                binding = evidence.artifact
+                if held.state != "committed" and not force:
+                    if actual_reply:
+                        raise OperationError(
+                            f"Operation {operation_id!r} still holds a reply, "
+                            "which was paid for and never became staging. Read it with "
+                            f"'janki operations --show-reply {operation_id}', "
+                            "then pass --force to drop it."
+                        )
+                    if observation.recorded:
+                        raise OperationError(
+                            f"Operation {operation_id!r} records a captured reply, "
+                            "but its exact recovery bytes are unavailable. Pass "
+                            "--force only if you accept losing that reply record."
+                        )
+                # Persist the exact bindings before deleting anything.  This
+                # is the cleanup tombstone: a crash may leave the entry here,
+                # but the retry neither needs fresh force nor gains authority
+                # over whatever later occupies one of these names.
+                intent = _CleanupIntent(
+                    artifact=binding,
+                    write_ahead=evidence.write_ahead,
+                    forced=force,
+                )
+                cleanup[operation_id] = intent
+                newly_bound.add(operation_id)
+
+            if newly_bound:
+                now = _now()
+                for operation_id in newly_bound:
+                    held = current.operations[operation_id]
+                    current.operations[operation_id] = Operation(
+                        operation_id=held.operation_id,
+                        kind=held.kind,
+                        state=held.state,
+                        source_file=held.source_file,
+                        source_sha256=held.source_sha256,
+                        request_fp=held.request_fp,
+                        model=held.model,
+                        authorized_at=held.authorized_at,
+                        updated_at=now,
+                        artifact=held.artifact,
+                        detail=held.detail,
+                        cleanup=cleanup[operation_id],
                     )
-                # The artifact goes with the entry. It is a recovery buffer,
-                # and once the answer has become staging the archive under
-                # `data/staging/done/` is the durable copy — leaving the blob
-                # behind would accumulate an unreferenced megabyte per paid
-                # call in a repository whose whole point is being portable.
-                blob = artifact_path(self.path, reply)
-                if blob is not None:
-                    doomed.append(blob)
-                del current.operations[operation_id]
-                removed += 1
-            if removed:
                 current.path = self.path
                 current._write()
                 self.operations = current.operations
-            # Unlinked *after* the journal no longer references them, which is
-            # the same ordering `capture_artifact` uses in reverse and for the
-            # same reason: an unreferenced file is litter, and an entry
-            # pointing at an answer that is gone is a lie. A raise partway
-            # through the loop above therefore deletes nothing.
-            for blob in doomed:
-                with contextlib.suppress(OSError):
-                    blob.unlink()
-            return removed
+
+            failures: dict[str, list[str]] = {}
+            retired: list[str] = []
+            for operation_id, intent in cleanup.items():
+                errors: list[str] = []
+                if intent.artifact is not None:
+                    try:
+                        _retire_artifact(intent.artifact)
+                    except OperationError as exc:
+                        errors.append(str(exc))
+                if intent.write_ahead is not None:
+                    try:
+                        _retire_write_ahead(intent.write_ahead)
+                    except OperationError as exc:
+                        errors.append(str(exc))
+                if errors:
+                    failures[operation_id] = errors
+                else:
+                    retired.append(operation_id)
+
+            # Only successful tombstones disappear. A process death before
+            # this write leaves all of them durable; cleanup is idempotent, so
+            # the same ordinary forget resumes and proves missing exact names
+            # as already retired.
+            if retired:
+                for operation_id in retired:
+                    del current.operations[operation_id]
+                current.path = self.path
+                current._write()
+                self.operations = current.operations
+
+            if failures:
+                detail = "; ".join(
+                    f"{operation_id!r}: {'; '.join(errors)}"
+                    for operation_id, errors in failures.items()
+                )
+                retries = "; ".join(
+                    f"janki operations --forget {operation_id}"
+                    for operation_id in failures
+                )
+                raise OperationError(
+                    "Operation cleanup remains recorded in the journal; "
+                    f"no fresh force decision is needed. {detail}. Retry: "
+                    f"{retries}"
+                )
+            return len(retired)
 
     # --- reads --------------------------------------------------------------
 
     def unfinished(self) -> list[Operation]:
         """Live operations, oldest first — what a resumed run has to deal with."""
         return sorted(
-            (op for op in self.operations.values() if op.state in LIVE_STATES),
+            (
+                op
+                for op in self.operations.values()
+                if op.cleanup is None and op.state in LIVE_STATES
+            ),
             key=lambda op: (op.authorized_at, op.operation_id),
         )
 
@@ -681,7 +1679,25 @@ class OperationJournal:
         blocked?" with "nothing is blocked".
         """
         return sorted(
-            (op for op in self.operations.values() if op.state in BLOCKS_SPENDING),
+            (op for op in self.operations.values() if op.blocks_spending),
+            key=lambda op: (op.authorized_at, op.operation_id),
+        )
+
+    def tracked(self) -> list[Operation]:
+        """Blocking calls and incomplete cleanup, oldest first.
+
+        A durable cleanup intent means the money decision is settled, so it
+        does not belong in :meth:`blocking`. It still needs one exact ordinary
+        forget retry and must remain visible until that retirement succeeds.
+        Reply recovery is observed separately at render time. A journal path
+        string is historical state, not proof that the bytes are accessible.
+        """
+        return sorted(
+            (
+                op
+                for op in self.operations.values()
+                if op.blocks_spending or op.cleanup is not None
+            ),
             key=lambda op: (op.authorized_at, op.operation_id),
         )
 

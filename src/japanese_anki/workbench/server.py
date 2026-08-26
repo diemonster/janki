@@ -28,20 +28,34 @@ that leaves the file untouched rather than half-applied.
 
 from __future__ import annotations
 
+import os
 import secrets
+import stat
 import sys
 import webbrowser
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from email import policy as email_policy
 from email.parser import BytesParser
 from pathlib import Path
 from urllib.parse import parse_qsl, quote, unquote
 
-from japanese_anki import extract, inputs, ledger, staging
+from japanese_anki import extract, inputs, ledger, operations, staging
 from japanese_anki.application import (
+    ANSWER_EMPTY,
+    ANSWER_SAVED,
+    ANSWER_UNAVAILABLE,
+    FORGOTTEN,
+    ExtractionCompletionError,
+    ExtractionConsent,
     SourceJourney,
+    authorize_dispatch,
+    capture_hook,
+    classify_dispatch_failure,
+    complete_extraction,
     describe_extraction,
+    extraction_replacement_revision,
+    plan_corpus_extraction,
     source_detail,
     source_journeys,
 )
@@ -56,10 +70,20 @@ from japanese_anki.localhttp import (
 )
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.workbench import edit, reidentify, review
+from japanese_anki.workbench.dispatch import (
+    DispatchFormError,
+    ExtractionAction,
+    ExtractionActions,
+    parse_dispatch_form,
+)
 from japanese_anki.workbench.render import (
     STYLE,
     render_consent,
     render_dashboard,
+    render_extraction_failure,
+    render_extraction_progress_start,
+    render_extraction_progress_step,
+    render_extraction_success,
     render_reidentify,
     render_source,
 )
@@ -78,7 +102,7 @@ MAX_UPLOAD_BYTES = 64 * 1024 * 1024
 
 @dataclass(frozen=True, slots=True)
 class WorkbenchSession:
-    """One run of the workbench: its config, its secret, and nothing else.
+    """One run: config, session secrets, and unspent paid-action capabilities.
 
     Deliberately holds no cached journey. The dashboard is recomputed from the
     repository on every request, so a `promote` run in another terminal shows
@@ -95,6 +119,12 @@ class WorkbenchSession:
     #: was tricked into submitting. Unlike the one-shot panel's, this one
     #: survives the request — a dashboard approves many sources in a row.
     csrf_token: str
+    #: Paid consent is narrower than session CSRF: each value is bound to one
+    #: rendered call and consumed once. It is ephemeral authority, never a
+    #: second record of whether the operation happened.
+    extraction_actions: ExtractionActions = field(
+        default_factory=ExtractionActions, repr=False, compare=False
+    )
 
     @classmethod
     def open(cls, config: ProjectConfig) -> WorkbenchSession:
@@ -136,13 +166,29 @@ class WorkbenchSession:
         to check it. The same discipline the source route follows.
         """
         inbox = self.config.scan_inbox
-        if not inbox.is_dir():
+        try:
+            root_details = os.lstat(inbox)
+        except OSError:
             return None
-        for path in sorted(inbox.iterdir()):
+        if not stat.S_ISDIR(root_details.st_mode):
+            return None
+        try:
+            paths = sorted(inbox.iterdir())
+        except OSError:
+            return None
+        for path in paths:
             # `startswith(".")` like the journey walk: a route that rendered a
             # source the dashboard deliberately hides is a second, quieter
             # answer to "what is in my corpus".
-            if path.is_file() and not path.name.startswith(".") and path.name == name:
+            try:
+                details = os.lstat(path)
+            except OSError:
+                continue
+            if (
+                stat.S_ISREG(details.st_mode)
+                and not path.name.startswith(".")
+                and path.name == name
+            ):
                 return path
         return None
 
@@ -152,6 +198,12 @@ class WorkbenchSession:
         if path is None:
             return None
         return describe_extraction(self.config, path, mode=mode)
+
+    def issue_extraction_action(self, consent: ExtractionConsent) -> str:
+        return self.extraction_actions.issue(consent)
+
+    def consume_extraction_action(self, token: str) -> ExtractionAction | None:
+        return self.extraction_actions.consume(token)
 
     def panel(self, source: str) -> review.ReviewPanel | None:
         """A freshly opened review panel for one source, or None.
@@ -177,6 +229,104 @@ class WorkbenchSession:
 
 class _WorkbenchServer(LocalOnlyServer):
     session: WorkbenchSession
+
+
+class _ExtractionProgress:
+    """A streamed page whose client may leave without canceling paid work."""
+
+    def __init__(self, handler: _WorkbenchHandler, name: str, token: str) -> None:
+        self.handler = handler
+        self.name = name
+        self.token = token
+        self.writable = True
+
+    def _write(self, chunk: str) -> None:
+        if not self.writable:
+            return
+        try:
+            self.handler.wfile.write(chunk.encode("utf-8"))
+            self.handler.wfile.flush()
+        except OSError:
+            # Authority was already journaled. Closing a tab cannot be allowed
+            # to strand a provider answer the process can still finish saving.
+            self.writable = False
+
+    def start(self) -> None:
+        try:
+            self.handler._start_response(200)
+        except OSError:
+            self.writable = False
+            return
+        self._write(render_extraction_progress_start(self.name, token=self.token))
+
+    def step(self, label: str) -> None:
+        self._write(render_extraction_progress_step(label))
+
+    def success(self, outcome: object) -> None:
+        self._write(render_extraction_success(self.name, outcome, token=self.token))
+
+    def failure(self, message: str, note: str) -> None:
+        self._write(render_extraction_failure(message, note))
+
+
+def _completion_refusal_note(config: ProjectConfig, operation_id: str) -> str:
+    """Describe the authoritative state after a final journal refusal."""
+    try:
+        held = operations.OperationJournal.load(config.operations_file).operations.get(
+            operation_id
+        )
+    except JankiError as exc:
+        return (
+            "Saving was refused, and janki could not re-read the operation "
+            f"journal to describe recovery safely: {exc}"
+        )
+    if held is None:
+        return (
+            "Saving was refused after the operation was already forgotten; "
+            "no recovery answer remains in janki operations. Reload the source "
+            "before deciding whether to make a new paid call."
+        )
+    if held.cleanup is not None:
+        return (
+            "Saving was refused after the operation's forget decision won. "
+            "Finish its exact recovery-data cleanup with "
+            f"'janki operations --forget {operation_id}'."
+        )
+    return (
+        "Saving was refused. The answer remains in janki operations; reload "
+        "the source and inspect what is on disk before trying again."
+    )
+
+
+def _completion_error_note(
+    config: ProjectConfig,
+    operation_id: str,
+) -> str:
+    """Describe recovery after an untyped completion failure."""
+    try:
+        held = operations.OperationJournal.load(config.operations_file).operations.get(
+            operation_id
+        )
+    except JankiError as exc:
+        return (
+            "The answer arrived, but janki could not re-read the operation "
+            f"journal to prove where it landed: {exc}"
+        )
+    if held is None:
+        return (
+            "The answer arrived, but the operation was already forgotten and "
+            "no recovery answer remains in janki operations."
+        )
+    if held.cleanup is not None:
+        return (
+            "The answer arrived, but the operation's forget decision won. "
+            "Finish its exact recovery-data cleanup with "
+            f"'janki operations --forget {operation_id}'."
+        )
+    return (
+        "The answer arrived, but janki could not prove that every proposal "
+        "was saved. Reload the source and inspect janki operations."
+    )
 
 
 class _WorkbenchHandler(LocalOnlyHandler):
@@ -295,9 +445,15 @@ class _WorkbenchHandler(LocalOnlyHandler):
             if consent is None:
                 self._error(404, "No such source.")
                 return
+            dispatch = self.server.session.issue_extraction_action(consent)
             self._send(
                 200,
-                render_consent(consent, token=self.server.session.token),
+                render_consent(
+                    consent,
+                    token=self.server.session.token,
+                    csrf=self.server.session.csrf_token,
+                    dispatch=dispatch,
+                ),
             )
             return
         if route.startswith(_SOURCE_PREFIX):
@@ -438,7 +594,11 @@ class _WorkbenchHandler(LocalOnlyHandler):
         if route is None:
             self._error(404, "No such workbench action.")
             return
-        if route != "/add-source" and not route.startswith(_SOURCE_PREFIX):
+        if (
+            route != "/add-source"
+            and not route.startswith(_SOURCE_PREFIX)
+            and not route.startswith(_EXTRACT_PREFIX)
+        ):
             self._error(404, "No such workbench action.")
             return
         if route == "/add-source":
@@ -446,6 +606,16 @@ class _WorkbenchHandler(LocalOnlyHandler):
             if read is None:
                 return
             self._upload(*read)
+            return
+        if route.startswith(_EXTRACT_PREFIX):
+            name = unquote(route[len(_EXTRACT_PREFIX) :])
+            if not name:
+                self._error(404, "No such workbench action.")
+                return
+            body = self._read_body()
+            if body is None:
+                return
+            self._extract(name, body)
             return
         rest = route[len(_SOURCE_PREFIX) :]
         name, _, action = rest.rpartition("/")
@@ -463,6 +633,234 @@ class _WorkbenchHandler(LocalOnlyHandler):
             self._remove(unquote(name), body)
         else:
             self._reidentify(unquote(name), body)
+
+    def _extract(self, name: str, body: bytes) -> None:
+        """Spend one bound browser consent through the shared extraction path."""
+        session = self.server.session
+        try:
+            submission = parse_dispatch_form(body)
+        except DispatchFormError as exc:
+            self._error(400, str(exc))
+            return
+        if not secrets.compare_digest(
+            submission.csrf.encode("utf-8"), session.csrf_token.encode("utf-8")
+        ):
+            self._error(403, "That form did not come from this workbench session.")
+            return
+
+        action = session.consume_extraction_action(submission.token)
+        if action is None:
+            self._error(
+                409,
+                "This paid action has already been used or is no longer available. "
+                "Nothing was sent. Reload the consent page before trying again.",
+            )
+            return
+        if (
+            action.name != name
+            or action.model != submission.model
+            or action.mode != submission.mode
+            or action.request_fingerprint != submission.request_fingerprint
+            or action.replacement_offered != submission.replacement_offered
+        ):
+            self._error(
+                409,
+                "This paid action does not match the call the page described. "
+                "Nothing was sent. Reload the consent page before trying again.",
+            )
+            return
+        if action.replacement_offered and not submission.replacement_confirmed:
+            self._error(
+                409,
+                "Confirm that this re-read replaces the review named on the "
+                "page. Nothing was sent.",
+            )
+            return
+
+        source = session.source_path(name)
+        if source is None:
+            self._error(404, "No such source. Nothing was sent.")
+            return
+        force = submission.replacement_confirmed
+        try:
+            # Fresh at click time. GET planned with force solely to describe a
+            # collision; no object from that forced snapshot reaches here.
+            plan = plan_corpus_extraction(
+                session.config,
+                source,
+                mode=action.mode,
+                model=action.model,
+                force=force,
+            )
+        except JankiError as exc:
+            self._error(409, f"{exc} Nothing was sent.")
+            return
+        if len(plan.targets) != 1:
+            self._error(409, "That source no longer makes one extraction request.")
+            return
+        target = plan.targets[0]
+        fresh_fingerprint = str(target.provenance["request_fingerprint"])
+        if (
+            fresh_fingerprint != action.request_fingerprint
+            or target.source_sha256 != action.source_sha256
+        ):
+            self._error(
+                409,
+                "The extraction request changed after this page was rendered. "
+                "Nothing was sent. Reload and review the current call.",
+            )
+            return
+
+        try:
+            fresh_revision = extraction_replacement_revision(session.config, target)
+        except JankiError as exc:
+            self._error(409, f"{exc} Nothing was sent.")
+            return
+        expected_revision = action.replacement_revision
+        if fresh_revision is None or expected_revision is None:
+            if fresh_revision != expected_revision:
+                self._error(
+                    409,
+                    "The review changed after this page was rendered. Nothing was "
+                    "sent. Reload and review the current replacement.",
+                )
+                return
+        elif fresh_revision.staging_sha256 != expected_revision.staging_sha256:
+            self._error(
+                409,
+                "The review changed after this page was rendered. Nothing was sent. "
+                "Reload and review the current replacement.",
+            )
+            return
+        elif (
+            fresh_revision.pattern_entry_sha256
+            != expected_revision.pattern_entry_sha256
+        ):
+            self._error(
+                409,
+                "The grammar review changed after this page was rendered. Nothing "
+                "was sent. Reload and review the current replacement.",
+            )
+            return
+
+        try:
+            journal = operations.OperationJournal.load(session.config.operations_file)
+            # The gate, under its own lock. `busy_refusal` was only what the
+            # GET happened to display; two old pages can both have seen clear.
+            operation_id = authorize_dispatch(journal, target, model=plan.model)
+        except JankiError as exc:
+            self._error(409, f"{exc} Nothing was sent by this attempt.")
+            return
+
+        progress = _ExtractionProgress(self, name, session.token)
+        progress.start()
+        progress.step("Preparing pages")
+        progress.step("Reading the source")
+        captured = capture_hook(session.config, journal, operation_id)
+
+        def capture(response: object) -> None:
+            captured(response)
+            progress.step("Checking the answer's shape")
+
+        try:
+            result = extract.extract_candidates(
+                target.item,
+                model=plan.model,
+                style_guide=plan.style_guide,
+                system=plan.system,
+                mode=plan.mode,
+                known=plan.skip_list,
+                capture=capture,
+            )
+        except Exception as exc:  # noqa: BLE001 - settle any dispatched call
+            try:
+                failure = classify_dispatch_failure(
+                    session.config, journal, operation_id, exc
+                )
+                if failure.outcome == ANSWER_SAVED:
+                    note = (
+                        "Nothing was staged. The paid answer is recoverable with "
+                        f"'janki operations --show-reply {operation_id}'; "
+                        f"operation {operation_id}."
+                    )
+                elif failure.outcome == ANSWER_EMPTY:
+                    note = (
+                        "Nothing was staged. The paid reply was saved, but it "
+                        f"contains no answer; inspect its exact bytes with "
+                        f"'janki operations --show-reply {operation_id}'."
+                    )
+                elif failure.outcome == ANSWER_UNAVAILABLE:
+                    note = (
+                        "Nothing was staged. The reply was recorded as captured, "
+                        "but its exact recovery bytes are unavailable; "
+                        f"operation {operation_id}. Inspect janki operations "
+                        "before accepting that loss."
+                    )
+                elif failure.outcome == FORGOTTEN:
+                    if failure.cleanup_pending:
+                        note = (
+                            "Nothing was staged. The operation's forget decision "
+                            "is recorded; finish exact cleanup with "
+                            f"'janki operations --forget {operation_id}'."
+                        )
+                    else:
+                        note = (
+                            "Nothing was staged. The operation was already "
+                            "forgotten, so no recovery answer remains in janki "
+                            "operations."
+                        )
+                else:
+                    note = (
+                        "Nothing was staged. This call may already have been "
+                        f"billed; operation {operation_id}. Do not retry until "
+                        "you inspect janki operations."
+                    )
+            except JankiError as journal_error:
+                note = (
+                    "Nothing was proven staged, and janki could not settle the "
+                    f"operation journal: {journal_error}"
+                )
+            progress.failure(str(exc), note)
+            return
+
+        progress.step("Saving proposals")
+        try:
+            outcome = complete_extraction(
+                session.config,
+                journal,
+                target,
+                result,
+                operation_id=operation_id,
+                known=plan.known,
+                mode=plan.mode,
+                model=plan.model,
+                force=force,
+                expected_revision=expected_revision,
+            )
+        except ExtractionCompletionError as exc:
+            progress.failure(
+                exc.detail,
+                f"The proposals are saved at {exc.staging_path}, including the "
+                "embedded pattern set. The separate pattern store was not "
+                "updated; reload the source and review that staging file.",
+            )
+            return
+        except operations.OperationError as exc:
+            progress.failure(
+                str(exc),
+                _completion_refusal_note(session.config, operation_id),
+            )
+            return
+        except JankiError as exc:
+            progress.failure(
+                str(exc),
+                _completion_error_note(
+                    session.config,
+                    operation_id,
+                ),
+            )
+            return
+        progress.success(outcome)
 
     def _approve(self, source: str, body: bytes) -> None:
         session = self.server.session

@@ -43,6 +43,8 @@ from japanese_anki.identifiers import contains_kanji
 from japanese_anki.io import (
     atomic_write_text_bound,
     exclusive_path_lock,
+    read_bytes_bound,
+    read_bytes_bound_snapshot,
 )
 from japanese_anki.models import ExampleSentence, VocabularyRecord
 from japanese_anki.romaji import kana_to_romaji
@@ -245,7 +247,7 @@ class SafeDocument:
     relative_path: str
     text: str
     revision: str
-    identity: tuple[int, int, int, int, int]
+    identity: tuple[int, int, int, int]
     raw: Any
     records: tuple[VocabularyRecord, ...]
     records_container: str
@@ -925,41 +927,11 @@ def read_safe_document(
             f"Repair input must be under data/normalized or active staging: {path}"
         )
     try:
-        initial_details = os.lstat(candidate)
-    except OSError as exc:
-        raise RepairError(f"Could not inspect repair input {path}: {exc}") from exc
-    if not stat.S_ISREG(initial_details.st_mode):
-        raise RepairError(f"Repair input is not a regular file: {path}")
-    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
-    try:
-        descriptor = os.open(candidate, flags)
-    except OSError as exc:
-        raise RepairError(f"Could not open repair input {path}: {exc.strerror or exc}") from exc
-    try:
-        before = os.fstat(descriptor)
-        if not stat.S_ISREG(before.st_mode):
-            raise RepairError(f"Repair input is not a regular file: {path}")
-        chunks: list[bytes] = []
-        while chunk := os.read(descriptor, 1024 * 1024):
-            chunks.append(chunk)
-        after = os.fstat(descriptor)
-    finally:
-        os.close(descriptor)
-    identity = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, before.st_mode)
-    after_identity = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_mode)
-    try:
-        path_details = os.lstat(candidate)
-    except OSError as exc:
-        raise RepairError(f"Repair input changed while it was read: {path}") from exc
-    if (
-        (initial_details.st_dev, initial_details.st_ino)
-        != (before.st_dev, before.st_ino)
-        or identity != after_identity
-        or (path_details.st_dev, path_details.st_ino)
-        != (before.st_dev, before.st_ino)
-    ):
-        raise RepairError(f"Repair input changed identity while it was read: {path}")
-    raw_bytes = b"".join(chunks)
+        identity, revision, raw_bytes = read_bytes_bound_snapshot(candidate)
+    except (JankiError, OSError) as exc:
+        if "non-regular" in str(exc):
+            raise RepairError(f"Repair input is not a regular file: {path}") from exc
+        raise RepairError(f"Could not safely read repair input {path}: {exc}") from exc
     try:
         text = raw_bytes.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -992,7 +964,7 @@ def read_safe_document(
         resolved,
         resolved.relative_to(root).as_posix(),
         text,
-        bytes_fingerprint(raw_bytes),
+        revision,
         identity,
         raw,
         tuple(records),
@@ -1084,7 +1056,7 @@ def write_safe_document(document: SafeDocument, text: str) -> None:
             expected_revision=document.revision,
             expected_identity=document.identity[:2],
         )
-        if bytes_fingerprint(document.path.read_bytes()) != bytes_fingerprint(text):
+        if bytes_fingerprint(read_bytes_bound(document.path)) != bytes_fingerprint(text):
             raise RepairError(f"Could not verify repaired output {document.relative_path}")
 
 

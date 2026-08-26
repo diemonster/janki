@@ -1,9 +1,9 @@
 """W3: the page that asks whether to spend money, and says what on.
 
-The consent surface is read-only by construction. Adding a file to the corpus
-and sending it to a model are two separate actions, always — so this page
-*describes* a paid call and cannot start one, and the tests here are mostly
-about what it says rather than what it computes. The wording is the feature:
+The consent GET is read-only by construction. Adding a file to the corpus and
+sending it to a model are two separate actions, always — so arriving at this
+page only *describes* a paid call, and the tests here are mostly about what it
+says rather than what it computes. The wording is the feature:
 somebody who believes a Claude Max subscription pays for this has not
 consented to anything.
 
@@ -17,16 +17,16 @@ import http.client
 import threading
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
 from urllib.parse import quote
 
 import pytest
 from test_application_journey import _project, _stage
 
 from conftest import seed_prompts
-from japanese_anki import inputs, operations
+from japanese_anki import inputs, operations, patterns
 from japanese_anki.application import busy_refusal, describe_extraction
 from japanese_anki.config import ProjectConfig
+from japanese_anki.staging import read_staging, write_staging
 from japanese_anki.workbench import WorkbenchSession, make_server
 
 PDF = b"%PDF-1.7 fake"
@@ -232,19 +232,120 @@ def test_replacing_a_review_names_what_it_would_destroy(tmp_path: Path) -> None:
     """"This will replace your review" is not a decision anybody can make.
     Which review, how much of it, and what state it had reached are the whole
     of the question."""
-    _stage(tmp_path, "table_exhaustive", filename="genki-8.pdf")
+    _stage(tmp_path, "lesson_with_grammar", filename="genki-8.pdf")
     seed_prompts(tmp_path)
     (tmp_path / "inbox" / "genki-8.pdf").write_bytes(PDF)
 
     body = _page(tmp_path)
 
     assert "replaces what you already have" in body
-    assert "3 cards" in body
-    # The *state*, not only a count. "You will lose 3 cards" and "you will
-    # lose 3 cards you have already reviewed the sentences for" are different
+    assert "2 cards" in body
+    # The *state*, not only a count. "You will lose 2 cards" and "you will
+    # lose 2 cards you have already reviewed the sentences for" are different
     # decisions, and the count alone cannot tell them apart.
     assert "Examples need review" in body
+    assert "Grammar needs review" in body
     assert "not recoverable" in body
+
+
+def test_replacing_reviewed_grammar_names_that_review_too(tmp_path: Path) -> None:
+    """The replacement force applies to cards and patterns. Naming only the
+    card track asks for less authority than completion exercises."""
+    _stage(tmp_path, "lesson_with_grammar", filename="genki-8.pdf")
+    seed_prompts(tmp_path)
+    config = ProjectConfig.load(tmp_path)
+    store = patterns.load_store(config.patterns_file)
+    store["genki-8.pdf"] = replace(store["genki-8.pdf"], reviewed=True)
+    patterns.save_store(config.patterns_file, store)
+
+    body = _page(tmp_path)
+
+    assert "2 cards" in body
+    assert "Examples need review" in body
+    assert "Grammar reviewed" in body
+    assert "not recoverable" in body
+
+
+def test_an_unreviewed_empty_table_does_not_invent_a_grammar_review(
+    tmp_path: Path,
+) -> None:
+    _stage(tmp_path, "table_exhaustive", filename="genki-8.pdf")
+    seed_prompts(tmp_path)
+
+    body = _page(tmp_path)
+
+    assert "Grammar needs review" not in body
+    assert "card and grammar reviews named above" not in body
+    assert "the card review named above" in body
+
+
+def test_stored_unreviewed_grammar_is_named_when_staging_does_not_badge_it(
+    tmp_path: Path,
+) -> None:
+    """A nonempty store entry is still replacement scope even when the older
+    staging copy no longer carries enough metadata for the dashboard badge."""
+    _stage(tmp_path, "lesson_with_grammar", filename="genki-8.pdf")
+    seed_prompts(tmp_path)
+    config = ProjectConfig.load(tmp_path)
+    target = config.staging_dir / "genki-8.pdf.yaml"
+    records, meta = read_staging(target)
+    meta.pop("pattern_set")
+    write_staging(target, records, meta, force=True)
+
+    body = _page(tmp_path)
+
+    assert "Grammar needs review" in body
+    assert "card and grammar reviews named above" in body
+
+
+@pytest.mark.parametrize("embedded_patterns", ["empty", "missing"])
+def test_replacement_names_stored_grammar_even_when_staging_does_not_badge_it(
+    tmp_path: Path,
+    embedded_patterns: str,
+) -> None:
+    """Force replaces the source's store entry regardless of whether this
+    staging generation has enough embedded pattern metadata for a badge."""
+    _stage(tmp_path, "lesson_with_grammar", filename="genki-8.pdf")
+    seed_prompts(tmp_path)
+    config = ProjectConfig.load(tmp_path)
+    target = config.staging_dir / "genki-8.pdf.yaml"
+    records, meta = read_staging(target)
+    if embedded_patterns == "empty":
+        pattern_meta = dict(meta["pattern_set"])
+        pattern_meta["patterns"] = []
+        meta["pattern_set"] = pattern_meta
+    else:
+        meta.pop("pattern_set")
+    write_staging(target, records, meta, force=True)
+    store = patterns.load_store(config.patterns_file)
+    store["genki-8.pdf"] = replace(
+        store["genki-8.pdf"],
+        patterns=(),
+        reviewed=True,
+    )
+    patterns.save_store(config.patterns_file, store)
+
+    body = _page(tmp_path)
+
+    assert "Grammar reviewed" in body
+    assert "card and grammar reviews named above" in body
+
+
+def test_a_broken_symlink_cannot_be_offered_as_a_new_staging_target(
+    tmp_path: Path,
+) -> None:
+    _corpus(tmp_path)
+    target = tmp_path / "staging" / "genki-8.pdf.yaml"
+    outside = tmp_path / "outside-review.yaml"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.symlink_to(outside)
+
+    body = _page(tmp_path)
+
+    assert "non-regular staging target" in body
+    assert "<form method=post" not in body
+    assert target.is_symlink()
+    assert not outside.exists()
 
 
 def test_a_first_reading_does_not_warn_about_a_replacement(tmp_path: Path) -> None:
@@ -275,9 +376,9 @@ def _authorize(tmp_path: Path, state: str, source: str = "other.pdf") -> None:
     }[state]:
         journal.advance("op-1", step)
     if state == "result_captured":
-        journal.advance(
-            "op-1", "result_captured",
-            artifact=operations.capture_artifact(
+        journal.capture_result(
+            "op-1",
+            lambda: operations.capture_artifact(
                 config.operations_file, "op-1", b'{"content": []}'
             ),
         )
@@ -373,9 +474,9 @@ def test_a_finished_run_blocks_nothing(tmp_path: Path) -> None:
         request_fp="b" * 64, model="claude-opus-5",
     )
     journal.advance("op-1", "dispatching")
-    journal.advance(
-        "op-1", "result_captured",
-        artifact=operations.capture_artifact(
+    journal.capture_result(
+        "op-1",
+        lambda: operations.capture_artifact(
             config.operations_file, "op-1", b'{"content": []}'
         ),
     )
@@ -510,11 +611,14 @@ def test_the_mode_choice_is_a_form_that_can_be_submitted(tmp_path: Path) -> None
 
     body = _page(tmp_path)
 
-    assert "<form method=get" in body
-    assert f"/extract/{quote('genki-8.pdf', safe='')}" in body
-    assert "Describe it as this kind" in body
+    start = body.index("<details class=advanced")
+    end = body.index("</details>", start)
+    mode_form = body[start:end]
+    assert "<form method=get" in mode_form
+    assert f"/extract/{quote('genki-8.pdf', safe='')}" in mode_form
+    assert "Describe it as this kind" in mode_form
     # GET, because choosing how to describe a page changes nothing on disk.
-    assert "method=post" not in body.lower()
+    assert "method=post" not in mode_form.lower()
 
 
 # --- what actually leaves the computer ---------------------------------------
@@ -578,27 +682,48 @@ def test_an_unreadable_journal_refuses_rather_than_killing_the_page(
     assert "cannot tell whether a paid call is already running" in body
 
 
-def test_a_sendable_page_names_the_way_to_actually_send(tmp_path: Path) -> None:
-    """The page that asks the question must not be the only one without an
-    answer to it. Sending from here arrives in the next step; until it does,
-    the route that exists is named rather than left to be guessed."""
+def test_a_sendable_page_offers_one_named_paid_action(tmp_path: Path) -> None:
+    """The button is the consent: it repeats the file, model, purpose and
+    charge rather than reducing the decision to an uninformative "Continue"."""
     _corpus(tmp_path)
 
     body = _page(tmp_path)
 
-    assert "not built yet" in body
-    assert "janki extract genki-8.pdf" in body
+    assert "<form method=post" in body
+    assert '<button type=submit name="dispatch"' in body
+    assert '<input type=hidden name=dispatch' not in body
+    assert "Send genki-8.pdf to claude-opus-5" in body
+    assert "paid API call" in body
+    assert "not built yet" not in body
 
 
-def test_a_page_that_cannot_send_does_not_offer_a_way_to(tmp_path: Path) -> None:
-    """A busy janki must not hand out a terminal command that walks straight
-    past the guard the page just applied."""
+def test_implicit_enter_targets_a_disabled_default_not_the_paid_action(
+    tmp_path: Path,
+) -> None:
+    """Browser implicit submission clicks the first submit button. It must be
+    disabled; intentional keyboard focus on the later paid button still works."""
+    _corpus(tmp_path)
+
+    body = _page(tmp_path)
+    start = body.index("<form method=post")
+    paid_form = body[start : body.index("</form>", start)]
+    first = paid_form.index("<button")
+
+    assert paid_form[first:].startswith(
+        '<button type=submit disabled class="implicit-submit-guard"'
+    )
+    assert paid_form.index('name="dispatch"') > first
+
+
+def test_a_page_that_cannot_send_does_not_offer_a_paid_action(tmp_path: Path) -> None:
+    """A busy janki still explains the call but offers no POST capability."""
     _corpus(tmp_path)
     _authorize(tmp_path, "dispatching")
 
     body = _page(tmp_path)
 
-    assert "janki extract genki-8.pdf" not in body
+    assert "<form method=post" not in body
+    assert 'name="dispatch"' not in body
 
 
 # --- a source the corpus hides ----------------------------------------------
@@ -616,29 +741,66 @@ def test_a_dotfile_has_no_consent_page(tmp_path: Path) -> None:
     assert status == 404
 
 
-def test_a_prepare_that_copied_the_file_refuses_instead_of_describing_it(
+def test_a_scan_root_replaced_by_a_symlink_exposes_no_external_source(
+    tmp_path: Path,
+) -> None:
+    _corpus(tmp_path)
+    session = _session(tmp_path)
+    inbox = tmp_path / "inbox"
+    inbox.rename(tmp_path / "original-inbox")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.pdf").write_bytes(b"private outside bytes")
+    inbox.symlink_to(outside, target_is_directory=True)
+
+    status, body = _get(session, f"/{session.token}/extract/secret.pdf")
+
+    assert status == 404
+    assert "paid API call" not in body
+
+
+def test_a_symlinked_source_entry_has_no_consent_page(tmp_path: Path) -> None:
+    source = _corpus(tmp_path)
+    session = _session(tmp_path)
+    source.rename(tmp_path / "original.pdf")
+    outside = tmp_path / "outside.pdf"
+    outside.write_bytes(b"private outside bytes")
+    source.symlink_to(outside)
+
+    status, body = _get(session, f"/{session.token}/extract/genki-8.pdf")
+
+    assert status == 404
+    assert "paid API call" not in body
+
+
+def test_a_source_swap_during_capture_cannot_change_the_rendered_request(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """This page's whole premise is that it never puts a file in the corpus.
-    The root check says the file is already there; this says the prepare
-    agreed — closing the sliver where the file is removed between the two and
-    `_copy_into_inbox` helpfully writes it back.
+    source = _corpus(tmp_path)
+    outside = tmp_path / "outside.pdf"
+    outside.write_bytes(b"private outside bytes")
+    original = tmp_path / "original.pdf"
+    real_read = inputs._read_fd_bytes
+    swapped = False
 
-    Faked because the real window is a file deleted mid-request, but `copied`
-    is a real return value of the real function, and what the guard does with
-    it is the part that has to hold.
-    """
-    path = _corpus(tmp_path)
-    real = inputs.prepare_inputs
+    def swap_while_reading(descriptor: int) -> bytes:
+        nonlocal swapped
+        captured = real_read(descriptor)
+        source.rename(original)
+        source.symlink_to(outside)
+        swapped = True
+        return captured
 
-    def copying(*args: Any, **kwargs: Any) -> Any:
-        return [replace(item, copied=True) for item in real(*args, **kwargs)]
+    monkeypatch.setattr(inputs, "_read_fd_bytes", swap_while_reading)
 
-    monkeypatch.setattr(
-        "japanese_anki.application.extraction.inputs.prepare_inputs", copying
-    )
+    try:
+        consent = describe_extraction(ProjectConfig.load(tmp_path), source)
+    finally:
+        if source.is_symlink():
+            source.unlink()
+        if original.exists():
+            original.rename(source)
 
-    consent = describe_extraction(ProjectConfig.load(tmp_path), path)
-
+    assert swapped
     assert not consent.sendable
-    assert "moved while this page was loading" in consent.refusal
+    assert "changed while it was being read" in consent.refusal

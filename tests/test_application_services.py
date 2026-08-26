@@ -12,7 +12,9 @@ Everything here is offline.
 
 from __future__ import annotations
 
+import contextlib
 import json
+import threading
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -25,6 +27,7 @@ from japanese_anki import cli, operations, promote
 from japanese_anki.application import (
     ANSWER_EMPTY,
     ANSWER_SAVED,
+    ANSWER_UNAVAILABLE,
     OUTCOME_UNKNOWN,
     ExtractionPlan,
     authorize_dispatch,
@@ -1301,7 +1304,7 @@ def test_a_reply_that_carries_an_answer_is_reported_as_paid_for(
 
     assert failure.outcome == ANSWER_SAVED
     assert failure.was_paid_for
-    assert failure.artifact
+    assert operations.response_answer_text(journal.read_reply(operation_id)) == "cards"
     # Left where it is. The paid bytes are on disk and a person has to decide
     # what to do with them; calling that "unknown" would hide an answer already
     # bought.
@@ -1329,10 +1332,178 @@ def test_a_reply_holding_only_reasoning_is_not_called_an_answer(
 
     assert failure.outcome == ANSWER_EMPTY
     assert failure.was_paid_for
-    # The pointer to the billed file, which is the only thing a person can act
-    # on here — the message that carries it says there is nothing to recover,
-    # so without the path it says nothing useful at all.
-    assert failure.artifact
+    # The exact raw reply remains available through the bound reader even
+    # though its provider-shaped content carries no answer block.
+    assert journal.read_reply(operation_id)
+
+
+def test_a_recorded_reply_whose_bytes_are_missing_is_not_called_saved_or_empty(
+    tmp_path: Path,
+) -> None:
+    """`result_captured` records that the reply arrived; it does not prove the
+    recovery file is still readable. Missing bytes are neither a saved answer
+    nor a reasoning-only reply, and each lie sends a person to a file that is
+    not there.
+    """
+    config, journal, plan = _journal(tmp_path)
+    operation_id = authorize_dispatch(journal, plan.targets[0], model=plan.model)
+    capture_hook(config, journal, operation_id)(
+        {"content": [{"type": "text", "text": "cards"}]}
+    )
+    held = operations.OperationJournal.load(config.operations_file).operations[
+        operation_id
+    ]
+    assert held.artifact is not None
+    (config.operations_file.parent / held.artifact.relative_name).unlink()
+
+    failure = classify_dispatch_failure(
+        config, journal, operation_id, JankiError("schema mismatch")
+    )
+
+    assert failure.outcome == ANSWER_UNAVAILABLE
+    assert failure.was_paid_for
+
+
+def test_failure_classification_short_circuits_a_cleanup_tombstone(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A validation frame may outlive the force-forget decision made about
+    its captured answer. Classification must not recover or advertise bytes
+    that cleanup is already authorized to retire."""
+    config, journal, plan = _journal(tmp_path)
+    operation_id = authorize_dispatch(journal, plan.targets[0], model=plan.model)
+    capture_hook(config, journal, operation_id)(
+        {"content": [{"type": "text", "text": "cards"}]}
+    )
+
+    def leave_cleanup_pending(_binding: Any) -> None:
+        raise operations.OperationError("injected cleanup pause")
+
+    with monkeypatch.context() as cleanup_patch:
+        cleanup_patch.setattr(
+            operations, "_retire_artifact", leave_cleanup_pending
+        )
+        with pytest.raises(operations.OperationError, match="cleanup pause"):
+            journal.forget([operation_id], force=True)
+
+    def stale_evidence_probe(*_args: Any, **_kwargs: Any) -> None:
+        pytest.fail("cleanup must short-circuit before reading discarded evidence")
+
+    monkeypatch.setattr(operations, "reply_observation", stale_evidence_probe)
+
+    failure = classify_dispatch_failure(
+        config, journal, operation_id, JankiError("schema mismatch")
+    )
+
+    assert failure.outcome == "forgotten"
+    assert failure.cleanup_pending is True
+    assert not hasattr(failure, "artifact")
+
+
+def test_failure_classification_accepts_an_operation_already_forgotten(
+    tmp_path: Path,
+) -> None:
+    """The user's force-forget may finish before validation reports its own
+    error. Missing is then authoritative, not a reason to mask that error by
+    trying to advance an operation that no longer exists."""
+    config, journal, plan = _journal(tmp_path)
+    operation_id = authorize_dispatch(journal, plan.targets[0], model=plan.model)
+    capture_hook(config, journal, operation_id)(
+        {"content": [{"type": "text", "text": "cards"}]}
+    )
+    assert journal.forget([operation_id], force=True) == 1
+
+    failure = classify_dispatch_failure(
+        config, journal, operation_id, JankiError("schema mismatch")
+    )
+
+    assert failure.outcome == "forgotten"
+    assert failure.cleanup_pending is False
+    assert not hasattr(failure, "artifact")
+
+
+def test_failure_classification_holds_the_journal_lock_while_reading_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Force-forget must linearize wholly before or after failure
+    classification. It may not make discard durable while a stale frame is
+    paused between validating the entry and advertising its saved reply."""
+    config, journal, plan = _journal(tmp_path)
+    operation_id = authorize_dispatch(journal, plan.targets[0], model=plan.model)
+    capture_hook(config, journal, operation_id)(
+        {"content": [{"type": "text", "text": "cards"}]}
+    )
+
+    real_reply_observation = operations.reply_observation
+    real_operation_lock = operations.exclusive_path_lock
+    evidence_entered = threading.Event()
+    release_evidence = threading.Event()
+    forget_attempted = threading.Event()
+    forget_acquired = threading.Event()
+    failures: list[BaseException] = []
+    classified: list[Any] = []
+
+    def paused_reply_observation(*args: Any, **kwargs: Any) -> Any:
+        evidence_entered.set()
+        if not release_evidence.wait(5):
+            raise AssertionError("classification evidence read was never released")
+        return real_reply_observation(*args, **kwargs)
+
+    @contextlib.contextmanager
+    def observed_operation_lock(lock_path: Path):
+        forgetting = threading.current_thread().name == "forget-operation"
+        if forgetting:
+            forget_attempted.set()
+        with real_operation_lock(lock_path):
+            if forgetting:
+                forget_acquired.set()
+            yield
+
+    monkeypatch.setattr(operations, "reply_observation", paused_reply_observation)
+    monkeypatch.setattr(operations, "exclusive_path_lock", observed_operation_lock)
+
+    def classify() -> None:
+        try:
+            classified.append(
+                classify_dispatch_failure(
+                    config,
+                    journal,
+                    operation_id,
+                    JankiError("schema mismatch"),
+                )
+            )
+        except BaseException as exc:  # noqa: BLE001 - asserted across thread
+            failures.append(exc)
+
+    def forget() -> None:
+        try:
+            operations.OperationJournal.load(config.operations_file).forget(
+                [operation_id], force=True
+            )
+        except BaseException as exc:  # noqa: BLE001 - asserted across thread
+            failures.append(exc)
+
+    classifying = threading.Thread(target=classify, name="classify-operation")
+    classifying.start()
+    assert evidence_entered.wait(5)
+
+    forgetting = threading.Thread(target=forget, name="forget-operation")
+    forgetting.start()
+    assert forget_attempted.wait(5)
+    assert not forget_acquired.wait(0.5)
+
+    release_evidence.set()
+    classifying.join(5)
+    forgetting.join(5)
+
+    assert not classifying.is_alive()
+    assert not forgetting.is_alive()
+    assert forget_acquired.is_set()
+    assert failures == []
+    assert [failure.outcome for failure in classified] == [ANSWER_SAVED]
+    assert not operations.OperationJournal.load(config.operations_file).operations
 
 
 def test_a_call_that_vanished_says_a_retry_risks_a_second_charge(
@@ -1390,11 +1561,14 @@ def test_settling_does_not_overwrite_the_exact_bytes_the_hook_captured(
     before = operations.OperationJournal.load(config.operations_file).operations[
         operation_id
     ]
+    assert before.artifact is not None
     # Held as a value, not re-read afterwards from the path the entry names.
     # `capture_artifact` names artifacts from the operation id, so both sides
     # of a path comparison — and both sides of a re-read — are the same file
     # by construction, and a settle that clobbered it in place would pass.
-    captured = (config.operations_file.parent / before.artifact).read_bytes()
+    captured = (
+        config.operations_file.parent / before.artifact.relative_name
+    ).read_bytes()
 
     settle_dispatch(config, journal, operation_id, {"candidates": []})
 
@@ -1402,9 +1576,56 @@ def test_settling_does_not_overwrite_the_exact_bytes_the_hook_captured(
         operation_id
     ]
     assert after.artifact == before.artifact
+    assert after.artifact is not None
     assert (
-        config.operations_file.parent / after.artifact
+        config.operations_file.parent / after.artifact.relative_name
     ).read_bytes() == captured
+
+
+def test_settling_cannot_recreate_an_artifact_after_cleanup_is_durable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A normalized fallback is still a result write. Once forget has bound
+    and retired the old reply, settling must not publish a new unbound file
+    before the journal refuses its cleanup tombstone."""
+    config, journal, plan = _journal(tmp_path)
+    operation_id = authorize_dispatch(journal, plan.targets[0], model=plan.model)
+    receipt = operations.capture_artifact(
+        config.operations_file, operation_id, b"old captured answer"
+    )
+    artifact = config.operations_file.parent / receipt.relative_name
+
+    real_write = operations.OperationJournal._write
+    writes = 0
+
+    def fail_final_journal_write(current: operations.OperationJournal) -> None:
+        nonlocal writes
+        writes += 1
+        if writes == 2:
+            raise operations.OperationError("injected final journal write failure")
+        real_write(current)
+
+    with monkeypatch.context() as cleanup_patch:
+        cleanup_patch.setattr(
+            operations.OperationJournal, "_write", fail_final_journal_write
+        )
+        with pytest.raises(
+            operations.OperationError, match="final journal write failure"
+        ):
+            journal.forget([operation_id], force=True)
+
+    held = operations.OperationJournal.load(config.operations_file).operations[
+        operation_id
+    ]
+    assert held.state == "dispatching"
+    assert held.cleanup is not None
+    assert not artifact.exists()
+
+    with pytest.raises(operations.OperationError, match="being forgotten"):
+        settle_dispatch(config, journal, operation_id, {"candidates": []})
+
+    assert not artifact.exists()
 
 
 def test_a_paid_reply_is_found_even_when_another_journal_captured_it(
@@ -1469,7 +1690,7 @@ def test_the_exact_bytes_reach_disk_before_the_journal_claims_they_did(
         operation_id
     ]
     assert entry.state == "dispatching"
-    assert entry.artifact == ""
+    assert entry.artifact is None
 
 
 # --- the preview must ask the rule the build asks ---------------------------
@@ -1964,6 +2185,7 @@ def test_a_vanished_staging_file_is_reported_not_raised(tmp_path: Path) -> None:
 
 def test_the_snapshot_bytes_describe_the_records_that_were_judged(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The write path's compare-and-swap trusts `wire` to describe the rows the
     gates ran on. Two unlocked reads leave a window: the benign direction fails
@@ -1971,15 +2193,31 @@ def test_the_snapshot_bytes_describe_the_records_that_were_judged(
     the check outright, and the secondary revalidation compares only metadata
     and a row count."""
     path = _staged(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
-    from japanese_anki.staging import read_staging_text
+    from japanese_anki.staging import read_staging, read_staging_text, write_staging
+
+    records, initial_meta = read_staging(path)
+    alternate = tmp_path / "alternate.yaml"
+    write_staging(
+        alternate,
+        [replace(records[0], meanings=["a later edit"]), *records[1:]],
+        initial_meta,
+    )
+    later = alternate.read_bytes()
+    real_staging_wire = promotion_module.staging_wire
+
+    def edit_after_capture(target: Path) -> bytes:
+        wire = real_staging_wire(target)
+        path.write_bytes(later)
+        return wire
+
+    monkeypatch.setattr(promotion_module, "staging_wire", edit_after_capture)
 
     decision = decide_promotion(ProjectConfig.load(tmp_path), path)
 
     reparsed, meta = read_staging_text(decision.wire.decode("utf-8"))
-    assert [record.id for record in reparsed] == [
-        record.id for record in decision.records
-    ]
+    assert reparsed == list(decision.records)
     assert meta == dict(decision.meta)
+    assert path.read_bytes() == later
 
 
 @pytest.mark.parametrize(

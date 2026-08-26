@@ -39,7 +39,11 @@ from japanese_anki.application.authority import (
     needs_example_review,
 )
 from japanese_anki.errors import JankiError
-from japanese_anki.io import atomic_write_text_bound, exclusive_path_lock
+from japanese_anki.io import (
+    atomic_write_text_bound,
+    exclusive_path_lock,
+    read_bytes_bound,
+)
 from japanese_anki.models import (
     EXAMPLE_AUTHORITY_KEY,
     VocabularyRecord,
@@ -115,8 +119,8 @@ def bound_replace(path: Path, text: str, snapshot: bytes, *, label: str) -> None
     except Exception as exc:
         try:
             is_link = path.is_symlink()
-            live = None if is_link else path.read_bytes()
-        except OSError:
+            live = None if is_link else read_bytes_bound(path)
+        except (JankiError, OSError):
             is_link = False
             live = None
         message = str(exc).lower()
@@ -170,56 +174,22 @@ def _require_regular_non_symlink(
         raise ReviewPanelError(f"{description} must be a direct regular non-symlink file: {path}")
 
 
-def _open_no_follow(path: Path) -> int:
-    """Open one exact path without following a swapped final symlink."""
-    no_follow = getattr(os, "O_NOFOLLOW", None)
-    if no_follow is None:
-        raise ReviewPanelError("This platform cannot safely capture review files")
-    return os.open(path, os.O_RDONLY | no_follow | getattr(os, "O_CLOEXEC", 0))
-
-
-def _read_open_fd(descriptor: int) -> bytes:
-    chunks: list[bytes] = []
-    while chunk := os.read(descriptor, 64 * 1024):
-        chunks.append(chunk)
-    return b"".join(chunks)
-
-
-def _capture_regular_bytes(path: Path, description: str) -> bytes:
-    """Capture bytes from a no-follow fd still bound to this exact path."""
+def _capture_regular_bytes(
+    path: Path, description: str, *, absent_ok: bool = False
+) -> bytes:
+    """Capture bytes after recovering any interrupted guarded publication."""
     try:
-        descriptor = _open_no_follow(path)
-    except (OSError, ReviewPanelError) as exc:
+        return read_bytes_bound(path)
+    except FileNotFoundError:
+        if absent_ok:
+            return b"{}"
+        raise ReviewPanelError(
+            f"{description} must remain a direct regular non-symlink file during capture: {path}"
+        ) from None
+    except (JankiError, OSError) as exc:
         raise ReviewPanelError(
             f"{description} must remain a direct regular non-symlink file during capture: {path}"
         ) from exc
-    try:
-        opened = os.fstat(descriptor)
-        if not stat.S_ISREG(opened.st_mode):
-            raise ReviewPanelError(
-                f"{description} must remain a direct regular non-symlink file during capture: "
-                f"{path}"
-            )
-        captured = _read_open_fd(descriptor)
-        finished = os.fstat(descriptor)
-        try:
-            bound = path.lstat()
-        except OSError as exc:
-            raise ReviewPanelError(f"{description} path changed during capture: {path}") from exc
-        fd_identity = (finished.st_dev, finished.st_ino)
-        path_identity = (bound.st_dev, bound.st_ino)
-        stable_fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
-        if (
-            not stat.S_ISREG(bound.st_mode)
-            or stat.S_ISLNK(bound.st_mode)
-            or fd_identity != path_identity
-            or any(getattr(opened, field) != getattr(finished, field) for field in stable_fields)
-            or len(captured) != finished.st_size
-        ):
-            raise ReviewPanelError(f"{description} path changed during capture: {path}")
-        return captured
-    finally:
-        os.close(descriptor)
 
 
 def _active_staging_path(path: Path, staging_dir: Path) -> Path:
@@ -437,10 +407,10 @@ class ReviewPanel:
             # An absent store captures as an empty document rather than
             # refusing: there is nothing to compare-and-swap against, and
             # pattern review is unavailable for such a project anyway.
-            patterns_bytes = (
-                _capture_regular_bytes(pattern_path, "The pattern store")
-                if pattern_path.exists()
-                else b"{}"
+            patterns_bytes = _capture_regular_bytes(
+                pattern_path,
+                "The pattern store",
+                absent_ok=True,
             )
             try:
                 staging_text = staging_bytes.decode("utf-8", errors="strict")
@@ -600,11 +570,11 @@ class ReviewPanel:
                 raise StaleReviewError(
                     "A review target path changed after this page was rendered"
                 ) from exc
-            live_staging = self.staging_path.read_bytes()
-            live_patterns = (
-                self.patterns_path.read_bytes()
-                if self.patterns_path.exists()
-                else b"{}"
+            live_staging = read_bytes_bound(self.staging_path)
+            live_patterns = _capture_regular_bytes(
+                self.patterns_path,
+                "The pattern store",
+                absent_ok=True,
             )
             if live_staging != self.staging_bytes:
                 raise StaleReviewError(

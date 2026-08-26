@@ -145,13 +145,13 @@ def test_two_review_commands_cannot_clobber_each_others_decisions(
     first = pattern_set("week11.pdf")
     second = pattern_set("week12.pdf")
     root = project(tmp_path, {first.source: first, second.source: second})
-    real_atomic_write = patterns_module.atomic_write_text
+    real_atomic_write = patterns_module.atomic_write_text_bound
     first_in_writer = threading.Event()
     release_first = threading.Event()
     second_done = threading.Event()
     results: dict[str, int] = {}
 
-    def held_write(path: Path, text: str) -> None:
+    def held_write(path: Path, text: str, **kwargs: object) -> None:
         payload = json.loads(text)
         if (
             payload[first.source]["reviewed"] is True
@@ -160,7 +160,7 @@ def test_two_review_commands_cannot_clobber_each_others_decisions(
         ):
             first_in_writer.set()
             release_first.wait(timeout=2)
-        real_atomic_write(path, text)
+        real_atomic_write(path, text, **kwargs)
 
     def review(source: str, label: str) -> None:
         try:
@@ -171,7 +171,7 @@ def test_two_review_commands_cannot_clobber_each_others_decisions(
             if label == "second":
                 second_done.set()
 
-    monkeypatch.setattr(patterns_module, "atomic_write_text", held_write)
+    monkeypatch.setattr(patterns_module, "atomic_write_text_bound", held_write)
     first_thread = threading.Thread(target=review, args=(first.source, "first"))
     second_thread = threading.Thread(target=review, args=(second.source, "second"))
     first_thread.start()

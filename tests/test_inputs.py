@@ -14,7 +14,13 @@ from typing import Any
 
 import pytest
 
-from japanese_anki.inputs import InputError, PreparedInput, prepare_inputs
+from japanese_anki import inputs as inputs_module
+from japanese_anki.inputs import (
+    InputError,
+    PreparedInput,
+    prepare_corpus_input,
+    prepare_inputs,
+)
 
 PNG = b"\x89PNG\r\n\x1a\n fake png bytes"
 PDF = b"%PDF-1.7 fake pdf bytes"
@@ -60,6 +66,70 @@ def test_a_pdf_becomes_a_document_block(tmp_path: Path) -> None:
     assert item.media_type == "application/pdf"
     assert decoded(item) == PDF
     assert item.source_sha256 == hashlib.sha256(PDF).hexdigest()
+
+
+def test_a_corpus_pdf_is_captured_without_copying_or_reopening_it(
+    tmp_path: Path,
+) -> None:
+    corpus = tmp_path / "inbox"
+    source = write(corpus / "lesson.pdf", PDF)
+
+    item = prepare_corpus_input(source, corpus)
+
+    assert item.kind == "document"
+    assert item.media_type == "application/pdf"
+    assert decoded(item) == PDF
+    assert item.origin_path == source
+    assert item.source_sha256 == hashlib.sha256(PDF).hexdigest()
+    assert item.copied is False
+    assert list(corpus.iterdir()) == [source]
+
+
+def test_a_corpus_source_is_opened_nonblocking(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A regular-file stat followed by a FIFO swap must refuse, not hang."""
+    corpus = tmp_path / "inbox"
+    source = write(corpus / "lesson.pdf", PDF)
+    real_open = inputs_module.os.open
+    observed = 0
+
+    def require_nonblocking(
+        name: object, flags: int, *args: object, **kwargs: object
+    ) -> int:
+        nonlocal observed
+        if name == source.name and kwargs.get("dir_fd") is not None:
+            observed += 1
+            assert flags & inputs_module.os.O_NONBLOCK
+        return real_open(name, flags, *args, **kwargs)
+
+    monkeypatch.setattr(inputs_module.os, "open", require_nonblocking)
+
+    item = prepare_corpus_input(source, corpus)
+
+    assert decoded(item) == PDF
+    assert observed == 1
+
+
+def test_a_corpus_reader_refuses_a_symlinked_root(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    source = write(outside / "lesson.pdf", b"private outside bytes")
+    corpus = tmp_path / "inbox"
+    corpus.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(InputError, match="safely read corpus source"):
+        prepare_corpus_input(corpus / source.name, corpus)
+
+
+def test_a_corpus_reader_refuses_a_symlinked_source_entry(tmp_path: Path) -> None:
+    corpus = tmp_path / "inbox"
+    corpus.mkdir()
+    outside = write(tmp_path / "outside.pdf", b"private outside bytes")
+    source = corpus / "lesson.pdf"
+    source.symlink_to(outside)
+
+    with pytest.raises(InputError, match="corpus source"):
+        prepare_corpus_input(source, corpus)
 
 
 @pytest.mark.parametrize(
@@ -465,6 +535,58 @@ def test_a_heic_is_converted_and_sent_as_jpeg(tmp_path: Path) -> None:
     assert decoded(item) == JPEG
     argv = sips.calls[0]
     assert argv[:4] == ["sips", "-s", "format", "jpeg"]
+
+
+def test_a_corpus_heic_converts_the_captured_bytes_not_the_live_path(
+    tmp_path: Path,
+) -> None:
+    corpus = tmp_path / "inbox"
+    source = write(corpus / "IMG_0001.HEIC", HEIC)
+    seen: list[bytes] = []
+
+    def sips(argv: list[str], **kwargs: Any) -> Any:
+        del kwargs
+        input_path = Path(argv[4])
+        seen.append(input_path.read_bytes())
+        Path(argv[argv.index("--out") + 1]).write_bytes(JPEG)
+        return SimpleNamespace(returncode=0, stderr="", stdout="")
+
+    item = prepare_corpus_input(source, corpus, run=sips, platform="darwin")
+
+    assert seen == [HEIC]
+    assert decoded(item) == JPEG
+    assert item.source_sha256 == hashlib.sha256(HEIC).hexdigest()
+    assert item.origin_path == source
+    assert source.read_bytes() == HEIC
+
+
+def test_a_corpus_heic_source_swap_during_conversion_is_refused(
+    tmp_path: Path,
+) -> None:
+    corpus = tmp_path / "inbox"
+    source = write(corpus / "IMG_0001.HEIC", HEIC)
+    held = tmp_path / "held.HEIC"
+    outside = write(tmp_path / "outside.HEIC", b"private outside bytes")
+    seen: list[bytes] = []
+
+    def sips(argv: list[str], **kwargs: Any) -> Any:
+        del kwargs
+        seen.append(Path(argv[4]).read_bytes())
+        source.rename(held)
+        source.symlink_to(outside)
+        Path(argv[argv.index("--out") + 1]).write_bytes(JPEG)
+        return SimpleNamespace(returncode=0, stderr="", stdout="")
+
+    try:
+        with pytest.raises(InputError, match="changed while it was being read"):
+            prepare_corpus_input(source, corpus, run=sips, platform="darwin")
+    finally:
+        if source.is_symlink():
+            source.unlink()
+        if held.exists():
+            held.rename(source)
+
+    assert seen == [HEIC]
 
 
 def test_the_heic_original_is_what_the_inbox_keeps(tmp_path: Path) -> None:

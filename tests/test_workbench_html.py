@@ -27,6 +27,7 @@ from pathlib import Path
 import pytest
 from test_application_journey import _project, _stage
 
+from conftest import seed_prompts
 from japanese_anki.config import ProjectConfig
 from japanese_anki.workbench import (
     WorkbenchSession,
@@ -35,6 +36,7 @@ from japanese_anki.workbench import (
     render_source,
 )
 from japanese_anki.workbench.reidentify import plan_reidentification
+from japanese_anki.workbench.render import render_consent
 
 #: Elements with no closing tag. A parser that does not know these reports
 #: every page as catastrophically unbalanced.
@@ -256,6 +258,31 @@ def test_the_reidentify_preview_is_structurally_sound(tmp_path: Path) -> None:
             token=session.token,
             csrf=session.csrf_token,
             staging_snapshot=panel.staging_fingerprint,
+        )
+    )
+
+
+@pytest.mark.parametrize("replacement", [False, True])
+def test_the_paid_consent_form_is_structurally_sound(
+    tmp_path: Path, replacement: bool
+) -> None:
+    if replacement:
+        _stage(tmp_path, "table_exhaustive", filename="source.pdf")
+    else:
+        _project(tmp_path)
+        (tmp_path / "inbox" / "source.pdf").write_bytes(b"%PDF-1.7 fake")
+    seed_prompts(tmp_path)
+    session = WorkbenchSession.open(ProjectConfig.load(tmp_path))
+    consent = session.consent("source.pdf")
+    assert consent is not None and consent.sendable
+    dispatch = session.issue_extraction_action(consent)
+
+    _check(
+        render_consent(
+            consent,
+            token=session.token,
+            csrf=session.csrf_token,
+            dispatch=dispatch,
         )
     )
 

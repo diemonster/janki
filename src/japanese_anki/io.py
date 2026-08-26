@@ -2,17 +2,20 @@ from __future__ import annotations
 
 import contextlib
 import copy
+import ctypes
 import dataclasses
+import errno
 import hashlib
 import json
 import os
 import secrets
 import stat
+import sys
 import tempfile
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 import yaml
 
@@ -82,6 +85,8 @@ def exclusive_path_lock(path: Path) -> Iterable[None]:
                 "private directory owned by the current user"
             )
         handle = lock_path.open("a+b")
+    except FileNotFoundError:
+        raise
     except DataError:
         raise
     except OSError as exc:
@@ -130,14 +135,15 @@ class RecordsRevision:
 
 def records_revision(path: Path) -> RecordsRevision:
     """Capture ``path`` for a later stale-writer check, including absence."""
-    target = Path(os.path.realpath(path))
+    target = Path(path).absolute()
     try:
-        text = target.read_text(encoding="utf-8")
+        text = read_text_bound(target)
     except FileNotFoundError:
         text = None
-    except OSError as exc:
+    except (DataError, OSError) as exc:
         raise DataError(
-            f"Could not read records file {target}: {exc.strerror or exc}"
+            f"Could not read records file {target}: "
+            f"{getattr(exc, 'strerror', None) or exc}"
         ) from exc
     return RecordsRevision(target, text)
 
@@ -231,101 +237,3519 @@ def atomic_write_bytes(path: Path, data: bytes) -> None:
         raise DataError(f"Could not write {path}: {exc.strerror or exc}") from exc
 
 
-def atomic_write_bytes_bound(path: Path, data: bytes) -> None:
+_EntryState = tuple[int, int, int, int]
+_CleanupEntryState = tuple[int, int, int, int, int]
+_BoundEntryState = TypeVar(
+    "_BoundEntryState", _EntryState, _CleanupEntryState
+)
+
+
+def _entry_state(details: os.stat_result) -> _EntryState:
+    return (
+        details.st_dev,
+        details.st_ino,
+        details.st_size,
+        details.st_mtime_ns,
+    )
+
+
+def _cleanup_entry_state(details: os.stat_result) -> _CleanupEntryState:
+    """Identity persisted before deletion, including inode-reuse evidence.
+
+    Live CAS state deliberately excludes ctime: link, rename, and exchange
+    change it as part of a legitimate transaction. Cleanup binds an already
+    observed entry and therefore can use ctime to distinguish a later inode
+    reuse that recreates the same dev/inode/size/mtime/content tuple.
+    """
+    return (*_entry_state(details), details.st_ctime_ns)
+
+
+@dataclass(frozen=True, slots=True)
+class _DirectoryBinding:
+    path: Path
+    descriptor: int
+    steps: tuple[tuple[int, str, tuple[int, int]], ...]
+
+
+def _directory_identity(details: os.stat_result) -> tuple[int, int]:
+    return details.st_dev, details.st_ino
+
+
+def _validate_bound_directory(binding: _DirectoryBinding) -> None:
+    """Prove every lexical directory entry still names the opened chain."""
+    try:
+        for parent_fd, component, identity in binding.steps:
+            current = os.stat(component, dir_fd=parent_fd, follow_symlinks=False)
+            if not stat.S_ISDIR(current.st_mode) or (
+                _directory_identity(current) != identity
+            ):
+                raise DataError(
+                    f"Bound target directory changed: {binding.path}"
+                )
+    except DataError:
+        raise
+    except OSError as exc:
+        raise DataError(f"Bound target directory changed: {binding.path}: {exc}") from exc
+
+
+@contextlib.contextmanager
+def _open_bound_directory(
+    path: Path,
+    *,
+    create: bool,
+) -> Iterator[_DirectoryBinding]:
+    """Open a lexical directory one no-follow component at a time."""
+    directory = Path(path).absolute()
+    if os.name != "posix" or not hasattr(os, "O_NOFOLLOW"):
+        raise DataError(
+            f"This platform cannot safely bind target directory {directory}"
+        )
+    if directory.anchor != "/":  # pragma: no cover - non-POSIX path shape
+        raise DataError(f"Refusing unsupported target directory {directory}")
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW
+    try:
+        with contextlib.ExitStack() as stack:
+            current_fd = os.open("/", flags)
+            stack.callback(os.close, current_fd)
+            steps: list[tuple[int, str, tuple[int, int]]] = []
+            for component in directory.parts[1:]:
+                try:
+                    child_fd = os.open(component, flags, dir_fd=current_fd)
+                except FileNotFoundError:
+                    if not create:
+                        raise
+                    with contextlib.suppress(FileExistsError):
+                        os.mkdir(component, dir_fd=current_fd)
+                    child_fd = os.open(component, flags, dir_fd=current_fd)
+                stack.callback(os.close, child_fd)
+                opened = os.fstat(child_fd)
+                entry = os.stat(
+                    component,
+                    dir_fd=current_fd,
+                    follow_symlinks=False,
+                )
+                if not stat.S_ISDIR(opened.st_mode) or (
+                    _directory_identity(opened) != _directory_identity(entry)
+                ):
+                    raise DataError(
+                        f"Refusing replaced target directory {directory}"
+                    )
+                steps.append(
+                    (current_fd, component, _directory_identity(opened))
+                )
+                current_fd = child_fd
+            binding = _DirectoryBinding(directory, current_fd, tuple(steps))
+            _validate_bound_directory(binding)
+            yield binding
+    except FileNotFoundError:
+        raise
+    except DataError:
+        raise
+    except (NotImplementedError, OSError) as exc:
+        raise DataError(
+            f"Could not safely open target directory {directory}: "
+            f"{getattr(exc, 'strerror', None) or exc}"
+        ) from exc
+
+
+@contextlib.contextmanager
+def _open_cleanup_directory(
+    path: Path,
+    expected_identity: tuple[int, int],
+) -> Iterator[_DirectoryBinding | None]:
+    """Open the one directory a durable cleanup decision actually bound.
+
+    A committed journal can be checked out on another filesystem, where the
+    lexical ``.pending`` path is recreated with a different inode. Missing,
+    symlinked, non-directory, and stably opened replacement namespaces cannot
+    contain the old bound entries under this authority: preserve them, inspect
+    no child names, and report the old namespace as unreachable. Other probe
+    failures remain errors because they do not prove replacement.
+    """
+    directory = Path(path).absolute()
+    try:
+        observed = os.lstat(directory)
+    except FileNotFoundError:
+        yield None
+        return
+    except OSError as exc:
+        raise DataError(
+            f"Could not inspect cleanup directory {directory}: "
+            f"{exc.strerror or exc}"
+        ) from exc
+    if not stat.S_ISDIR(observed.st_mode):
+        # No-follow inspection makes a symlink a replacement too. Never open
+        # it and therefore never touch the directory it names.
+        yield None
+        return
+    try:
+        with _open_bound_directory(directory, create=False) as binding:
+            parent = os.fstat(binding.descriptor)
+            if _directory_identity(parent) != expected_identity:
+                # The opened chain is stable, but it is not the namespace the
+                # journal bound. Do not enumerate it or adopt copied names.
+                _validate_bound_directory(binding)
+                yield None
+                return
+            yield binding
+    except FileNotFoundError as exc:
+        # It existed at the no-follow probe and vanished while binding. That
+        # is a race, not a stable proof that the old namespace is unreachable.
+        raise DataError(
+            f"Cleanup directory changed while it was being bound: {directory}"
+        ) from exc
+
+
+def _link_entry_exclusive(directory_fd: int, source: str, target: str) -> None:
+    """Publish one same-directory hard link without replacing ``target``."""
+    os.link(
+        source,
+        target,
+        src_dir_fd=directory_fd,
+        dst_dir_fd=directory_fd,
+        follow_symlinks=False,
+    )
+
+
+def prepare_bound_directory(path: Path) -> Path:
+    """Create, bind, and exercise the publication used by bound writers."""
+    probe_cache = Path(os.path.realpath(_path_lock_root())) / "write-probes"
+    try:
+        probe_cache.mkdir(mode=0o700, parents=True, exist_ok=True)
+    except OSError as exc:
+        raise DataError(
+            f"Could not prepare private write-probe store {probe_cache}: {exc}"
+        ) from exc
+    if not _owned_private_directory(probe_cache):
+        raise DataError(
+            f"Write-probe store is not private to this user: {probe_cache}"
+        )
+    with (
+        _open_bound_directory(path, create=True) as binding,
+        _open_bound_directory(probe_cache, create=False) as quarantine,
+    ):
+        if os.fstat(binding.descriptor).st_dev != os.fstat(
+            quarantine.descriptor
+        ).st_dev:
+            raise DataError(
+                f"Could not safely retire write probes from {binding.path}: "
+                "the private probe store is on another filesystem"
+            )
+        probe_name = ""
+        published_name = ""
+        probe_state: _EntryState | None = None
+        descriptor = -1
+
+        def retire_probe(name: str) -> bool:
+            if not name or probe_state is None:
+                return False
+            for _attempt in range(20):
+                retired = f"probe-{secrets.token_hex(16)}.retired"
+                try:
+                    _rename_entry_exclusive_between(
+                        binding.descriptor,
+                        name,
+                        quarantine.descriptor,
+                        retired,
+                    )
+                except FileExistsError:
+                    continue
+                except OSError:
+                    return False
+                try:
+                    moved = os.stat(
+                        retired,
+                        dir_fd=quarantine.descriptor,
+                        follow_symlinks=False,
+                    )
+                except FileNotFoundError:
+                    os.fsync(quarantine.descriptor)
+                    _validate_bound_directory(quarantine)
+                    return True
+                except OSError:
+                    return False
+                if stat.S_ISREG(moved.st_mode) and _entry_state(moved) == probe_state:
+                    try:
+                        os.unlink(retired, dir_fd=quarantine.descriptor)
+                        os.fsync(quarantine.descriptor)
+                        _validate_bound_directory(quarantine)
+                        os.stat(
+                            retired,
+                            dir_fd=quarantine.descriptor,
+                            follow_symlinks=False,
+                        )
+                    except FileNotFoundError:
+                        return True
+                    except (DataError, OSError):
+                        return False
+                    return False
+                # A raced-in entry was moved, not our probe. Restore it only
+                # while its original name is still absent; otherwise retain
+                # both names rather than overwrite either one.
+                with contextlib.suppress(OSError):
+                    _rename_entry_exclusive_between(
+                        quarantine.descriptor,
+                        retired,
+                        binding.descriptor,
+                        name,
+                    )
+                return False
+            return False
+
+        try:
+            for _attempt in range(20):
+                probe_name = f".janki-write-probe.{secrets.token_hex(8)}.tmp"
+                try:
+                    descriptor = os.open(
+                        probe_name,
+                        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                        0o600,
+                        dir_fd=binding.descriptor,
+                    )
+                    break
+                except FileExistsError:
+                    continue
+            if descriptor < 0:
+                raise DataError(
+                    f"Could not allocate a write probe in {binding.path}"
+                )
+            try:
+                opened = os.fstat(descriptor)
+                if not stat.S_ISREG(opened.st_mode):
+                    raise DataError(
+                        f"Write probe is not regular in {binding.path}"
+                    )
+                # Capture an identity immediately, so even a write or fsync
+                # failure leaves enough authority to remove only our probe.
+                probe_state = _entry_state(opened)
+                if os.write(descriptor, b"\0") != 1:
+                    raise OSError("Could not write the complete directory probe")
+                probe_state = _entry_state(os.fstat(descriptor))
+                os.fsync(descriptor)
+                probe_state = _entry_state(os.fstat(descriptor))
+            except BaseException:
+                raise
+            named = os.stat(
+                probe_name,
+                dir_fd=binding.descriptor,
+                follow_symlinks=False,
+            )
+            if (
+                not stat.S_ISREG(named.st_mode)
+                or _entry_state(named) != probe_state
+            ):
+                raise DataError(
+                    f"Write probe changed in bound directory {binding.path}"
+                )
+            # Recovery answers use hard-link publication so an existing
+            # operation artifact can never be overwritten. Exercise that
+            # exact filesystem capability before a provider may be called.
+            for _attempt in range(20):
+                published_name = (
+                    f".janki-write-probe.{secrets.token_hex(8)}.publish"
+                )
+                try:
+                    _link_entry_exclusive(
+                        binding.descriptor, probe_name, published_name
+                    )
+                    break
+                except FileExistsError:
+                    continue
+            else:
+                raise DataError(
+                    f"Could not allocate a publication probe in {binding.path}"
+                )
+            original = os.stat(
+                probe_name,
+                dir_fd=binding.descriptor,
+                follow_symlinks=False,
+            )
+            published = os.stat(
+                published_name,
+                dir_fd=binding.descriptor,
+                follow_symlinks=False,
+            )
+            if (
+                not stat.S_ISREG(original.st_mode)
+                or not stat.S_ISREG(published.st_mode)
+                or _entry_state(original) != probe_state
+                or _entry_state(published) != probe_state
+            ):
+                raise DataError(
+                    f"Publication probe changed in bound directory {binding.path}"
+                )
+            os.fsync(binding.descriptor)
+            _validate_bound_directory(binding)
+            if not retire_probe(published_name):
+                raise DataError(
+                    f"Could not safely retire publication probe in {binding.path}"
+                )
+            published_name = ""
+            if not retire_probe(probe_name):
+                raise DataError(
+                    f"Could not safely retire write probe in {binding.path}"
+                )
+            probe_name = ""
+            os.ftruncate(descriptor, 0)
+            os.fsync(descriptor)
+            os.fsync(binding.descriptor)
+            _validate_bound_directory(binding)
+            _validate_bound_directory(quarantine)
+            return binding.path
+        finally:
+            for leftover in (published_name, probe_name):
+                with contextlib.suppress(OSError):
+                    retire_probe(leftover)
+            if descriptor >= 0:
+                with contextlib.suppress(OSError):
+                    os.ftruncate(descriptor, 0)
+                    os.fsync(descriptor)
+                os.close(descriptor)
+
+
+def _rename_entries_with_flags(
+    source_directory_fd: int,
+    left: str,
+    destination_directory_fd: int,
+    right: str,
+    *,
+    darwin_flags: int,
+    linux_flags: int,
+) -> None:
+    """Run one flagged descriptor-bound rename, or fail closed."""
+    library = ctypes.CDLL(None, use_errno=True)
+    if sys.platform == "darwin":
+        function = getattr(library, "renameatx_np", None)
+        if function is None:  # pragma: no cover - supported Darwin exports it
+            raise OSError(errno.ENOTSUP, "renameatx_np is unavailable")
+        function.argtypes = [
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        ]
+        function.restype = ctypes.c_int
+        result = function(
+            source_directory_fd,
+            os.fsencode(left),
+            destination_directory_fd,
+            os.fsencode(right),
+            darwin_flags,
+        )
+    elif sys.platform.startswith("linux"):
+        function = getattr(library, "renameat2", None)
+        if function is None:  # pragma: no cover - libc/kernel dependent
+            raise OSError(errno.ENOTSUP, "renameat2 is unavailable")
+        function.argtypes = [
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        ]
+        function.restype = ctypes.c_int
+        result = function(
+            source_directory_fd,
+            os.fsencode(left),
+            destination_directory_fd,
+            os.fsencode(right),
+            linux_flags,
+        )
+    else:  # pragma: no cover - workbench deployment is macOS
+        raise OSError(errno.ENOTSUP, "flagged atomic rename is unavailable")
+    if result != 0:
+        number = ctypes.get_errno()
+        raise OSError(number, os.strerror(number))
+
+
+def _exchange_entries(directory_fd: int, left: str, right: str) -> None:
+    """Atomically exchange two names, or fail closed on an unsupported host."""
+    _rename_entries_with_flags(
+        directory_fd,
+        left,
+        directory_fd,
+        right,
+        darwin_flags=2,  # RENAME_SWAP
+        linux_flags=2,  # RENAME_EXCHANGE
+    )
+
+
+def _rename_entry_exclusive(directory_fd: int, left: str, right: str) -> None:
+    """Atomically move ``left`` only while ``right`` remains absent."""
+    _rename_entry_exclusive_between(
+        directory_fd,
+        left,
+        directory_fd,
+        right,
+    )
+
+
+def _rename_entry_exclusive_between(
+    source_directory_fd: int,
+    left: str,
+    destination_directory_fd: int,
+    right: str,
+) -> None:
+    """No-clobber move between two bound directories on one filesystem."""
+    _rename_entries_with_flags(
+        source_directory_fd,
+        left,
+        destination_directory_fd,
+        right,
+        darwin_flags=4,  # RENAME_EXCL
+        linux_flags=1,  # RENAME_NOREPLACE
+    )
+
+
+def _read_bound_entry_with_state(
+    directory_fd: int,
+    name: str,
+    state_of: Callable[[os.stat_result], _BoundEntryState],
+) -> tuple[_BoundEntryState, str]:
+    """Read one direct regular entry and prove its name stayed on that inode."""
+    initial = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+    if not stat.S_ISREG(initial.st_mode):
+        raise DataError(f"Refusing non-regular bound target {name}")
+    descriptor = os.open(
+        name,
+        os.O_RDONLY
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0),
+        dir_fd=directory_fd,
+    )
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise DataError(f"Refusing non-regular bound target {name}")
+        digest = hashlib.sha256()
+        while chunk := os.read(descriptor, 1024 * 1024):
+            digest.update(chunk)
+        after = os.fstat(descriptor)
+        entry = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        if (
+            not stat.S_ISREG(entry.st_mode)
+            or state_of(initial) != state_of(before)
+            or state_of(before) != state_of(after)
+            or state_of(before) != state_of(entry)
+        ):
+            raise DataError(f"Bound target changed content: {name}")
+        return state_of(before), digest.hexdigest()
+    finally:
+        os.close(descriptor)
+
+
+def _read_bound_entry(
+    directory_fd: int,
+    name: str,
+) -> tuple[_EntryState, str]:
+    return _read_bound_entry_with_state(directory_fd, name, _entry_state)
+
+
+def _read_cleanup_bound_entry(
+    directory_fd: int,
+    name: str,
+) -> tuple[_CleanupEntryState, str]:
+    return _read_bound_entry_with_state(
+        directory_fd, name, _cleanup_entry_state
+    )
+
+
+_CAS_PREPARED_SUFFIX = ".janki-cas.prepared"
+_CAS_VALIDATED_SUFFIX = ".janki-cas.validated"
+_CAS_RECOVERED_SUFFIX = ".janki-cas.recovered"
+_CAS_DRAFT_SUFFIX = ".janki-cas.draft"
+
+
+@dataclass(frozen=True, slots=True)
+class _BoundWriteEvidence:
+    """One exact write-once transaction that still needs a decision.
+
+    The marker binds the generated digest and the private name.  The entry
+    snapshots bind the names seen by a journal decision so a later cleanup can
+    remove only those exact entries, never replacements raced in afterward.
+    """
+
+    target: Path
+    directory_identity: tuple[int, int]
+    marker_name: str
+    marker_state: _CleanupEntryState
+    marker_revision: str
+    temporary_name: str
+    temporary_identity: tuple[int, int] | None
+    temporary_snapshot: tuple[_CleanupEntryState, str] | None
+    temporary_retirement_snapshot: tuple[_CleanupEntryState, str] | None
+    temporary_owned: bool
+    public_snapshot: tuple[_CleanupEntryState, str] | None
+    generated_revision: str
+
+    @property
+    def private_reply_complete(self) -> bool:
+        return (
+            self.temporary_owned
+            and self.temporary_identity is not None
+            and self.temporary_snapshot is not None
+            and self.temporary_snapshot[0][:2] == self.temporary_identity
+            and self.temporary_snapshot[1] == self.generated_revision
+        )
+
+    @property
+    def public_reply_complete(self) -> bool:
+        return (
+            self.marker_name.endswith(_CAS_VALIDATED_SUFFIX)
+            and self.temporary_identity is not None
+            and self.public_snapshot is not None
+            and self.public_snapshot[0][:2] == self.temporary_identity
+            and self.public_snapshot[1] == self.generated_revision
+        )
+
+    @property
+    def reply_complete(self) -> bool:
+        """Whether a marker-bound name holds the whole exact answer."""
+        return self.private_reply_complete or self.public_reply_complete
+
+    @property
+    def public_answer_snapshot(
+        self,
+    ) -> tuple[_CleanupEntryState, str] | None:
+        """The public hard link, only when the private answer proves it."""
+        if (
+            self.private_reply_complete
+            and self.public_snapshot == self.temporary_snapshot
+        ):
+            return self.public_snapshot
+        if self.public_reply_complete and self.temporary_snapshot is None:
+            return self.public_snapshot
+        return None
+
+    def to_cleanup_dict(self) -> dict[str, Any]:
+        """JSON-safe exact bindings for a durable journal cleanup intent."""
+
+        def snapshot(
+            value: tuple[_CleanupEntryState, str] | None,
+        ) -> dict[str, Any] | None:
+            if value is None:
+                return None
+            return {"state": list(value[0]), "sha256": value[1]}
+
+        return {
+            "directory_identity": list(self.directory_identity),
+            "marker_name": self.marker_name,
+            "marker_state": list(self.marker_state),
+            "marker_sha256": self.marker_revision,
+            "temporary_name": self.temporary_name,
+            "temporary_identity": (
+                list(self.temporary_identity)
+                if self.temporary_identity is not None
+                else None
+            ),
+            "temporary_snapshot": snapshot(self.temporary_snapshot),
+            "temporary_retirement_snapshot": snapshot(
+                self.temporary_retirement_snapshot
+            ),
+            "temporary_owned": self.temporary_owned,
+            "public_snapshot": snapshot(self.public_answer_snapshot),
+            "generated_sha256": self.generated_revision,
+        }
+
+    @classmethod
+    def from_cleanup_dict(
+        cls,
+        target: Path,
+        raw: Mapping[str, Any],
+    ) -> _BoundWriteEvidence:
+        """Rebuild only a strictly scoped binding written by ``to_cleanup_dict``.
+
+        The journal is committed data and can be hand-edited or merged.  A
+        cleanup record therefore grants authority only over the fixed target
+        supplied by its operation id and direct private names that prove they
+        belong to that target's bound-write namespace.
+        """
+        required = {
+            "directory_identity",
+            "marker_name",
+            "marker_state",
+            "marker_sha256",
+            "temporary_name",
+            "temporary_identity",
+            "temporary_snapshot",
+            "temporary_retirement_snapshot",
+            "temporary_owned",
+            "public_snapshot",
+            "generated_sha256",
+        }
+        if not isinstance(raw, Mapping) or set(raw) != required:
+            raise DataError("Bound-write cleanup intent is invalid")
+
+        def identity(value: Any, *, optional: bool = False) -> tuple[int, int] | None:
+            if optional and value is None:
+                return None
+            if (
+                not isinstance(value, list)
+                or len(value) != 2
+                or any(
+                    not isinstance(item, int) or isinstance(item, bool) or item < 0
+                    for item in value
+                )
+            ):
+                raise DataError("Bound-write cleanup identity is invalid")
+            return value[0], value[1]
+
+        def entry_state(value: Any) -> _CleanupEntryState:
+            if (
+                not isinstance(value, list)
+                or len(value) != 5
+                or any(
+                    not isinstance(item, int) or isinstance(item, bool) or item < 0
+                    for item in value
+                )
+            ):
+                raise DataError("Bound-write cleanup entry state is invalid")
+            return value[0], value[1], value[2], value[3], value[4]
+
+        def digest(value: Any, *, allow_empty: bool = False) -> str:
+            if allow_empty and value == "":
+                return ""
+            if (
+                not isinstance(value, str)
+                or len(value) != 64
+                or any(character not in "0123456789abcdef" for character in value)
+            ):
+                raise DataError("Bound-write cleanup digest is invalid")
+            return value
+
+        def snapshot(
+            value: Any,
+        ) -> tuple[_CleanupEntryState, str] | None:
+            if value is None:
+                return None
+            if not isinstance(value, Mapping) or set(value) != {"state", "sha256"}:
+                raise DataError("Bound-write cleanup snapshot is invalid")
+            return entry_state(value["state"]), digest(value["sha256"])
+
+        marker_name = raw["marker_name"]
+        temporary_name = raw["temporary_name"]
+        try:
+            encoded_marker = os.fsencode(marker_name)
+            encoded_temporary = os.fsencode(temporary_name)
+        except (TypeError, UnicodeError, ValueError) as exc:
+            raise DataError("Bound-write cleanup name is invalid") from exc
+        marker_suffixes = (
+            _CAS_DRAFT_SUFFIX,
+            _CAS_PREPARED_SUFFIX,
+            _CAS_VALIDATED_SUFFIX,
+            _CAS_RECOVERED_SUFFIX,
+        )
+        if (
+            not isinstance(marker_name, str)
+            or not encoded_marker
+            or b"\0" in encoded_marker
+            or Path(marker_name).name != marker_name
+            or "/" in marker_name
+            or "\\" in marker_name
+            or not marker_name.startswith(f".{target.name}.")
+            or not marker_name.endswith(marker_suffixes)
+            or not isinstance(temporary_name, str)
+            or b"\0" in encoded_temporary
+            or (temporary_name and Path(temporary_name).name != temporary_name)
+            or "/" in temporary_name
+            or "\\" in temporary_name
+        ):
+            raise DataError("Bound-write cleanup name is invalid")
+
+        temporary_identity = identity(raw["temporary_identity"], optional=True)
+        temporary_owned = raw["temporary_owned"]
+        temporary_snapshot = snapshot(raw["temporary_snapshot"])
+        temporary_retirement_snapshot = snapshot(
+            raw["temporary_retirement_snapshot"]
+        )
+        if not isinstance(temporary_owned, bool) or (
+            not temporary_owned and temporary_snapshot is not None
+        ):
+            raise DataError("Bound-write cleanup ownership is invalid")
+        marker_owned = _marker_owned_temporary(marker_name, target.name)
+        if not temporary_name and temporary_identity is None:
+            if (
+                temporary_snapshot is not None
+                or temporary_retirement_snapshot is not None
+                or temporary_owned
+            ):
+                raise DataError("Bound-write cleanup private binding is invalid")
+        elif marker_owned != (temporary_name, temporary_identity):
+            raise DataError("Bound-write cleanup private binding is invalid")
+        if temporary_owned and (
+            temporary_identity is None
+            or not temporary_name
+            or (
+                temporary_snapshot is not None
+                and temporary_snapshot[0][:2] != temporary_identity
+            )
+        ):
+            raise DataError("Bound-write cleanup ownership is invalid")
+        if temporary_retirement_snapshot is not None and (
+            temporary_identity is None
+            or not temporary_name
+            or temporary_retirement_snapshot[0][:2] != temporary_identity
+        ):
+            raise DataError("Bound-write cleanup retirement binding is invalid")
+
+        directory_identity = identity(raw["directory_identity"])
+        assert directory_identity is not None
+        marker_state = entry_state(raw["marker_state"])
+        marker_revision = digest(raw["marker_sha256"])
+        generated_revision = digest(
+            raw["generated_sha256"], allow_empty=True
+        )
+        public_snapshot = snapshot(raw["public_snapshot"])
+        if marker_state[0] != directory_identity[0]:
+            raise DataError("Bound-write cleanup directory binding is invalid")
+        for bound_snapshot in (
+            temporary_snapshot,
+            temporary_retirement_snapshot,
+            public_snapshot,
+        ):
+            if (
+                bound_snapshot is not None
+                and bound_snapshot[0][0] != directory_identity[0]
+            ):
+                raise DataError("Bound-write cleanup directory binding is invalid")
+        if temporary_name and not generated_revision:
+            raise DataError("Bound-write cleanup generated digest is invalid")
+        if (
+            temporary_retirement_snapshot is not None
+            and temporary_retirement_snapshot[1] != generated_revision
+        ):
+            raise DataError("Bound-write cleanup retirement binding is invalid")
+        if public_snapshot is not None and (
+            temporary_identity is None
+            or public_snapshot[0][:2] != temporary_identity
+            or public_snapshot[1] != generated_revision
+            or (
+                temporary_snapshot is not None
+                and public_snapshot != temporary_snapshot
+            )
+        ):
+            raise DataError("Bound-write cleanup public binding is invalid")
+        return cls(
+            target=Path(target).absolute(),
+            directory_identity=directory_identity,
+            marker_name=marker_name,
+            marker_state=marker_state,
+            marker_revision=marker_revision,
+            temporary_name=temporary_name,
+            temporary_identity=temporary_identity,
+            temporary_snapshot=temporary_snapshot,
+            temporary_retirement_snapshot=temporary_retirement_snapshot,
+            temporary_owned=temporary_owned,
+            public_snapshot=public_snapshot,
+            generated_revision=generated_revision,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class _BoundFileReceipt:
+    """Exact public-file and terminal-marker proof returned by a capture.
+
+    Unlike a path, this remains meaningful after the writer's WAL has been
+    finalized: both the directory and the direct entry have to retain their
+    captured identities and bytes.  The five-field state is taken only after
+    the private hard link is retired, because removing that link changes the
+    public inode's ctime.
+    """
+
+    target: Path
+    directory_identity: tuple[int, int]
+    entry_state: _CleanupEntryState
+    content_sha256: str
+    marker_name: str
+    marker_state: _CleanupEntryState
+    marker_revision: str
+
+
+def _bound_capture_evidence(
+    expected: _BoundFileReceipt,
+) -> _BoundWriteEvidence:
+    """Materialize marker-only cleanup authority from a validated receipt."""
+    temporary_name = (
+        expected.marker_name[: -len(_CAS_VALIDATED_SUFFIX)] + ".tmp"
+    )
+    return _BoundWriteEvidence(
+        target=expected.target,
+        directory_identity=expected.directory_identity,
+        marker_name=expected.marker_name,
+        marker_state=expected.marker_state,
+        marker_revision=expected.marker_revision,
+        temporary_name=temporary_name,
+        temporary_identity=expected.entry_state[:2],
+        temporary_snapshot=None,
+        temporary_retirement_snapshot=None,
+        temporary_owned=False,
+        public_snapshot=None,
+        generated_revision=expected.content_sha256,
+    )
+
+
+def _cas_lock_path(target: Path) -> Path:
+    return target.with_name(f".{target.name}.janki-cas-lock")
+
+
+def _has_active_cas_marker(
+    binding: _DirectoryBinding,
+    target_name: str,
+) -> bool:
+    """Whether recovery evidence may still refer to this target's temp."""
+    prefix = f".{target_name}."
+    suffixes = (
+        _CAS_PREPARED_SUFFIX,
+        _CAS_VALIDATED_SUFFIX,
+        _CAS_RECOVERED_SUFFIX,
+        _CAS_DRAFT_SUFFIX,
+    )
+    try:
+        return any(
+            name.startswith(prefix) and name.endswith(suffixes)
+            for name in os.listdir(binding.descriptor)
+        )
+    except OSError:
+        # Cleanup is the destructive branch. If the directory cannot be
+        # inspected, retain the temp rather than guessing that no WAL owns it.
+        return True
+
+
+def _read_bound_bytes_with_state(
+    directory_fd: int,
+    name: str,
+    state_of: Callable[[os.stat_result], _BoundEntryState],
+) -> tuple[_BoundEntryState, str, bytes]:
+    initial = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+    if not stat.S_ISREG(initial.st_mode):
+        raise DataError(f"Refusing non-regular bound target {name}")
+    descriptor = os.open(
+        name,
+        os.O_RDONLY
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0),
+        dir_fd=directory_fd,
+    )
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise DataError(f"Refusing non-regular bound target {name}")
+        chunks: list[bytes] = []
+        digest = hashlib.sha256()
+        while chunk := os.read(descriptor, 1024 * 1024):
+            chunks.append(chunk)
+            digest.update(chunk)
+        after = os.fstat(descriptor)
+        named = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        if (
+            not stat.S_ISREG(named.st_mode)
+            or state_of(initial) != state_of(before)
+            or state_of(before) != state_of(after)
+            or state_of(before) != state_of(named)
+        ):
+            raise DataError(f"Bound target changed content: {name}")
+        return state_of(before), digest.hexdigest(), b"".join(chunks)
+    finally:
+        os.close(descriptor)
+
+
+def _read_bound_bytes(
+    directory_fd: int, name: str
+) -> tuple[_EntryState, str, bytes]:
+    return _read_bound_bytes_with_state(directory_fd, name, _entry_state)
+
+
+def _read_cleanup_bound_bytes(
+    directory_fd: int, name: str
+) -> tuple[_CleanupEntryState, str, bytes]:
+    return _read_bound_bytes_with_state(
+        directory_fd, name, _cleanup_entry_state
+    )
+
+
+def _bound_snapshot(
+    directory_fd: int, name: str
+) -> tuple[_EntryState, str] | None:
+    try:
+        return _read_bound_entry(directory_fd, name)
+    except FileNotFoundError:
+        return None
+
+
+def _cleanup_bound_snapshot(
+    directory_fd: int, name: str
+) -> tuple[_CleanupEntryState, str] | None:
+    """Read a destructive binding, treating non-regular names as replacements.
+
+    Cleanup authority is always captured from a regular file.  A later
+    symlink, FIFO, socket, or directory at that lexical name cannot be that
+    entry and must neither be opened nor keep the old decision pending.  Other
+    failures against a still-regular name remain real cleanup failures.
+    """
+    try:
+        observed = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        if not stat.S_ISREG(observed.st_mode):
+            return None
+        return _read_cleanup_bound_entry(directory_fd, name)
+    except FileNotFoundError:
+        return None
+    except (DataError, OSError):
+        try:
+            current = os.stat(
+                name, dir_fd=directory_fd, follow_symlinks=False
+            )
+        except FileNotFoundError:
+            return None
+        if not stat.S_ISREG(current.st_mode):
+            return None
+        raise
+
+
+def _cleanup_bound_entry_state(
+    directory_fd: int,
+    name: str,
+) -> _CleanupEntryState | None:
+    """Lstat one regular cleanup name without opening or reading its bytes."""
+    try:
+        observed = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+    if not stat.S_ISREG(observed.st_mode):
+        return None
+    return _cleanup_entry_state(observed)
+
+
+def _owned_temporary_identity(
+    name: str,
+    target_name: str,
+) -> tuple[int, int] | None:
+    """Identity persisted in a janki-private temp name, if it is well formed."""
+    prefix = f".{target_name}."
+    suffix = ".tmp"
+    if not name.startswith(prefix) or not name.endswith(suffix):
+        return None
+    body = name[len(prefix) : -len(suffix)]
+    try:
+        token, identity = body.split(".", 1)
+        device, inode = identity.split("-", 1)
+    except ValueError:
+        return None
+    if (
+        len(token) != 16
+        or any(character not in "0123456789abcdef" for character in token)
+        or not device
+        or not inode
+        or any(character not in "0123456789abcdef" for character in device)
+        or any(character not in "0123456789abcdef" for character in inode)
+    ):
+        return None
+    return int(device, 16), int(inode, 16)
+
+
+def _marker_owned_temporary(
+    marker: str,
+    target_name: str,
+) -> tuple[str, tuple[int, int]] | None:
+    for suffix in (
+        _CAS_DRAFT_SUFFIX,
+        _CAS_PREPARED_SUFFIX,
+        _CAS_VALIDATED_SUFFIX,
+        _CAS_RECOVERED_SUFFIX,
+    ):
+        if marker.endswith(suffix):
+            temporary = marker[: -len(suffix)] + ".tmp"
+            identity = _owned_temporary_identity(temporary, target_name)
+            return (temporary, identity) if identity is not None else None
+    return None
+
+
+def _require_marker_owns_transaction(
+    marker: str,
+    target_name: str,
+    transaction: Mapping[str, Any],
+) -> None:
+    """Refuse a body copied under another identity-bearing marker name."""
+    owned = _marker_owned_temporary(marker, target_name)
+    declared = (
+        transaction["temporary"],
+        transaction["temporary_identity"],
+    )
+    if owned != declared:
+        raise DataError(
+            f"Incomplete bound-write marker disagrees with its bound name: {marker}"
+        )
+
+
+def _create_cas_marker(
+    binding: _DirectoryBinding,
+    target_name: str,
+    temporary_name: str,
+    *,
+    temporary_identity: tuple[int, int],
+    expected_absent: bool,
+    expected_state: _EntryState | None,
+    expected_revision: str | None,
+    generated_state: _EntryState | None,
+    generated_revision: str,
+    retirement_snapshot_required: bool = False,
+) -> tuple[str, _EntryState, str]:
+    payload = json.dumps(
+        {
+            "version": 3,
+            "target": target_name,
+            "temporary": temporary_name,
+            "temporary_identity": list(temporary_identity),
+            "expected_absent": expected_absent,
+            "expected_state": (
+                list(expected_state) if expected_state is not None else None
+            ),
+            "expected_sha256": expected_revision,
+            "generated_state": (
+                list(generated_state) if generated_state is not None else None
+            ),
+            "generated_sha256": generated_revision,
+            "retirement_snapshot_required": retirement_snapshot_required,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    payload_revision = hashlib.sha256(payload).hexdigest()
+    owned = _owned_temporary_identity(temporary_name, target_name)
+    if owned != temporary_identity:
+        raise DataError(
+            f"Bound-write temp name does not bind its identity: {temporary_name}"
+        )
+    draft = temporary_name[: -len(".tmp")] + _CAS_DRAFT_SUFFIX
+    marker = temporary_name[: -len(".tmp")] + _CAS_PREPARED_SUFFIX
+    try:
+        descriptor = os.open(
+            draft,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            0o600,
+            dir_fd=binding.descriptor,
+        )
+    except FileExistsError:
+        raise DataError(f"Could not allocate a CAS marker for {target_name}") from None
+    created = os.fstat(descriptor)
+    draft_identity = created.st_dev, created.st_ino
+    try:
+        try:
+            offset = 0
+            while offset < len(payload):
+                written = os.write(descriptor, payload[offset:])
+                if written <= 0:
+                    raise OSError("Could not write the complete CAS marker")
+                offset += written
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        draft_state, draft_revision = _read_bound_entry(
+            binding.descriptor, draft
+        )
+    except BaseException:
+        cleaned = _retire_created_entry(
+            binding,
+            draft,
+            draft_identity,
+        )
+        if not cleaned and _bound_snapshot(binding.descriptor, draft) is not None:
+            raise DataError(
+                f"A failed CAS marker draft could not be retired: {draft}"
+            ) from None
+        os.fsync(binding.descriptor)
+        _validate_bound_directory(binding)
+        raise
+    if draft_revision != payload_revision:
+        if not _retire_exact_entry(
+            binding, draft, draft_state, draft_revision
+        ):
+            raise DataError(
+                f"A damaged CAS marker draft could not be retired: {draft}"
+            )
+        os.fsync(binding.descriptor)
+        _validate_bound_directory(binding)
+        raise DataError(f"Could not verify a CAS marker for {target_name}")
+    # The complete draft is itself crash evidence.  Make its directory entry
+    # durable before the no-clobber rename so recovery can promote it.
+    os.fsync(binding.descriptor)
+    _validate_bound_directory(binding)
+    try:
+        _rename_entry_exclusive(binding.descriptor, draft, marker)
+    except OSError:
+        moved = _bound_snapshot(binding.descriptor, marker)
+        source = _bound_snapshot(binding.descriptor, draft)
+        if moved != (draft_state, draft_revision) or source is not None:
+            raise
+    os.fsync(binding.descriptor)
+    _validate_bound_directory(binding)
+    if _bound_snapshot(binding.descriptor, marker) != (
+        draft_state,
+        draft_revision,
+    ):
+        raise DataError(f"Could not verify a CAS marker for {target_name}")
+    return marker, draft_state, draft_revision
+
+
+def _append_cas_retirement_snapshot(
+    binding: _DirectoryBinding,
+    marker: str,
+    target_name: str,
+    *,
+    expected_state: _EntryState,
+    expected_revision: str,
+    temporary_snapshot: tuple[_CleanupEntryState, str],
+) -> tuple[_EntryState, str]:
+    """Durably bind a temp's destructive snapshot before retiring its name.
+
+    The base marker remains independently parseable if a process dies during
+    the append.  Each complete record ends with a newline; recovery can append
+    a later complete record after an unterminated fragment, but no terminal
+    marker is accepted unless its last record is complete.
+    """
+    current_state, current_revision, payload = _read_bound_bytes(
+        binding.descriptor, marker
+    )
+    if (current_state, current_revision) != (
+        expected_state,
+        expected_revision,
+    ):
+        raise DataError(
+            f"Bound-write marker changed before retirement binding: {marker}"
+        )
+    transaction = _parse_cas_marker(payload, target_name=target_name)
+    _require_marker_owns_transaction(marker, target_name, transaction)
+    if not transaction["retirement_snapshot_required"]:
+        raise DataError(
+            f"Bound-write marker does not require retirement binding: {marker}"
+        )
+    if (
+        transaction["temporary_retirement_snapshot"] == temporary_snapshot
+        and not transaction["retirement_record_incomplete"]
+    ):
+        return current_state, current_revision
+
+    base_payload = payload.partition(b"\n")[0]
+    record = json.dumps(
+        {
+            "base_sha256": hashlib.sha256(base_payload).hexdigest(),
+            "temporary_snapshot": {
+                "state": list(temporary_snapshot[0]),
+                "sha256": temporary_snapshot[1],
+            },
+            "version": 1,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    frame = b"\n" + record + b"\n"
+    descriptor = os.open(
+        marker,
+        os.O_WRONLY
+        | os.O_APPEND
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0),
+        dir_fd=binding.descriptor,
+    )
+    try:
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or _entry_state(before) != expected_state
+        ):
+            raise DataError(
+                f"Bound-write marker changed before retirement binding: {marker}"
+            )
+        offset = 0
+        while offset < len(frame):
+            written = os.write(descriptor, frame[offset:])
+            if written <= 0:
+                raise OSError("Could not append the complete retirement binding")
+            offset += written
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+    final_state, final_revision, final_payload = _read_bound_bytes(
+        binding.descriptor, marker
+    )
+    final_transaction = _parse_cas_marker(
+        final_payload, target_name=target_name
+    )
+    _require_marker_owns_transaction(marker, target_name, final_transaction)
+    if (
+        not final_payload.endswith(frame)
+        or final_transaction["temporary_retirement_snapshot"]
+        != temporary_snapshot
+        or final_transaction["retirement_record_incomplete"]
+    ):
+        raise DataError(
+            f"Could not verify bound-write retirement binding: {marker}"
+        )
+    os.fsync(binding.descriptor)
+    _validate_bound_directory(binding)
+    return final_state, final_revision
+
+
+def _move_cas_marker(
+    binding: _DirectoryBinding,
+    marker: str,
+    suffix: str,
+    *,
+    expected_state: _EntryState,
+    expected_revision: str,
+) -> str:
+    destination = marker[: -len(_CAS_PREPARED_SUFFIX)] + suffix
+    expected = expected_state, expected_revision
+    if _bound_snapshot(binding.descriptor, marker) != expected:
+        raise DataError(f"Bound-write marker changed before transition: {marker}")
+    try:
+        _rename_entry_exclusive(
+            binding.descriptor,
+            marker,
+            destination,
+        )
+    except OSError:
+        moved = _bound_snapshot(binding.descriptor, destination)
+        source = _bound_snapshot(binding.descriptor, marker)
+        if moved != expected or source is not None:
+            raise
+    os.fsync(binding.descriptor)
+    _validate_bound_directory(binding)
+    if (
+        _bound_snapshot(binding.descriptor, destination) != expected
+        or _bound_snapshot(binding.descriptor, marker) is not None
+    ):
+        raise DataError(
+            f"Bound-write marker changed during transition: {destination}"
+        )
+    return destination
+
+
+_RETIREMENT_SLOTS = 20
+
+
+def _retirement_names(
+    directory_identity: tuple[int, int],
+    name: str,
+    expected_state: _EntryState,
+    expected_revision: str,
+    expected_ctime_ns: int | None,
+) -> tuple[str, ...]:
+    """Destinations recoverable from the exact already-durable binding.
+
+    The checkout's absolute path is deliberately absent.  A repository can be
+    moved between a forget decision and its retry while the original directory
+    inode remains bound.  Device/inode, the entry's full destructive snapshot,
+    name, and digest are the facts the journal actually persisted.
+    """
+    full_state = (*expected_state, expected_ctime_ns)
+    seed = b"\0".join(
+        (
+            str(directory_identity[0]).encode("ascii"),
+            str(directory_identity[1]).encode("ascii"),
+            os.fsencode(name),
+            *(str(value).encode("ascii") for value in full_state),
+            expected_revision.encode("ascii"),
+        )
+    )
+    token = hashlib.sha256(seed).hexdigest()
+    return tuple(
+        f"entry-{token}-{slot:02d}.retired"
+        for slot in range(_RETIREMENT_SLOTS)
+    )
+
+
+@contextlib.contextmanager
+def _open_retirement_directory(
+    *,
+    create: bool,
+) -> Iterator[_DirectoryBinding | None]:
+    root = Path(os.path.realpath(_path_lock_root())) / "retired-writes"
+    if create:
+        try:
+            root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        except OSError as exc:
+            raise DataError(
+                f"Could not prepare bound-write retirement store {root}: {exc}"
+            ) from exc
+    else:
+        try:
+            observed = os.lstat(root)
+        except FileNotFoundError:
+            yield None
+            return
+        except OSError as exc:
+            raise DataError(
+                f"Could not inspect bound-write retirement store {root}: {exc}"
+            ) from exc
+        if not stat.S_ISDIR(observed.st_mode):
+            raise DataError(f"Bound-write retirement store is not private: {root}")
+    if not _owned_private_directory(root):
+        raise DataError(f"Bound-write retirement store is not private: {root}")
+    with _open_bound_directory(root, create=False) as retirement:
+        yield retirement
+
+
+def _retirement_candidate_snapshot(
+    retirement_fd: int,
+    name: str,
+) -> tuple[_EntryState, str] | None:
+    """Read a regular candidate; an unrelated non-regular occupant is occupied."""
+    try:
+        details = os.stat(name, dir_fd=retirement_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+    if not stat.S_ISREG(details.st_mode):
+        return None
+    return _bound_snapshot(retirement_fd, name)
+
+
+def _retirement_candidate_exists(retirement_fd: int, name: str) -> bool:
+    try:
+        os.stat(name, dir_fd=retirement_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return False
+    return True
+
+
+class _RetirementRestored(Exception):
+    """Internal signal that a reversible confirmation restored its source."""
+
+
+def _restore_retired_entry(
+    retirement: _DirectoryBinding,
+    retired_name: str,
+    source: _DirectoryBinding,
+    source_name: str,
+    expected: tuple[_EntryState, str],
+) -> None:
+    """Restore a moved exact entry without overwriting a raced source name."""
+    try:
+        _rename_entry_exclusive_between(
+            retirement.descriptor,
+            retired_name,
+            source.descriptor,
+            source_name,
+        )
+    except OSError as exc:
+        restored = _bound_snapshot(source.descriptor, source_name)
+        retained = _retirement_candidate_snapshot(
+            retirement.descriptor, retired_name
+        )
+        if restored != expected or retained is not None:
+            raise DataError(
+                "An exact entry could not be restored to "
+                f"{source.path / source_name}; it remains under the private "
+                f"retirement name {retired_name}"
+            ) from exc
+    os.fsync(source.descriptor)
+    os.fsync(retirement.descriptor)
+    _validate_bound_directory(source)
+    _validate_bound_directory(retirement)
+    if (
+        _bound_snapshot(source.descriptor, source_name) != expected
+        or _retirement_candidate_exists(retirement.descriptor, retired_name)
+    ):
+        raise DataError(
+            "An exact entry changed while it was being restored to "
+            f"{source.path / source_name}"
+        )
+
+
+def _finish_retired_entry(
+    retirement: _DirectoryBinding,
+    retired_name: str,
+    expected_state: _EntryState,
+    expected_revision: str,
+    *,
+    confirm_while_reversible: Callable[[], bool] | None,
+    restore_to: tuple[_DirectoryBinding, str] | None,
+) -> bool:
+    """Revalidate and unlink one exact deterministic retirement entry."""
+    descriptor = os.open(
+        retired_name,
+        os.O_RDONLY
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0),
+        dir_fd=retirement.descriptor,
+    )
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode) or _entry_state(before) != expected_state:
+            return False
+        digest = hashlib.sha256()
+        while chunk := os.read(descriptor, 1024 * 1024):
+            digest.update(chunk)
+        after = os.fstat(descriptor)
+        named = os.stat(
+            retired_name,
+            dir_fd=retirement.descriptor,
+            follow_symlinks=False,
+        )
+        if (
+            not stat.S_ISREG(named.st_mode)
+            or digest.hexdigest() != expected_revision
+            or _entry_state(after) != expected_state
+            or _entry_state(named) != expected_state
+        ):
+            return False
+        if confirm_while_reversible is not None:
+            try:
+                confirmed = confirm_while_reversible()
+            except BaseException as exc:
+                os.fsync(retirement.descriptor)
+                _validate_bound_directory(retirement)
+                if restore_to is not None:
+                    _restore_retired_entry(
+                        retirement,
+                        retired_name,
+                        restore_to[0],
+                        restore_to[1],
+                        (expected_state, expected_revision),
+                    )
+                if isinstance(exc, Exception):
+                    raise DataError(
+                        f"Paired retirement failed: {exc}"
+                    ) from exc
+                raise
+            if not confirmed:
+                os.fsync(retirement.descriptor)
+                _validate_bound_directory(retirement)
+                if restore_to is not None:
+                    _restore_retired_entry(
+                        retirement,
+                        retired_name,
+                        restore_to[0],
+                        restore_to[1],
+                        (expected_state, expected_revision),
+                    )
+                    raise _RetirementRestored
+                raise DataError(
+                    "Paired retirement did not remove its second exact name; "
+                    f"the first remains recoverable as {retired_name}"
+                )
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        confirmed_digest = hashlib.sha256()
+        while chunk := os.read(descriptor, 1024 * 1024):
+            confirmed_digest.update(chunk)
+        confirmed_held = os.fstat(descriptor)
+        confirmed_named = os.stat(
+            retired_name,
+            dir_fd=retirement.descriptor,
+            follow_symlinks=False,
+        )
+        if (
+            not stat.S_ISREG(confirmed_named.st_mode)
+            or _entry_state(confirmed_held) != expected_state
+            or _entry_state(confirmed_named) != expected_state
+            or confirmed_digest.hexdigest() != expected_revision
+        ):
+            raise DataError(
+                f"Exact private retirement entry changed: {retired_name}"
+            )
+        os.unlink(retired_name, dir_fd=retirement.descriptor)
+        os.fsync(retirement.descriptor)
+        _validate_bound_directory(retirement)
+        if _retirement_candidate_exists(retirement.descriptor, retired_name):
+            raise DataError(
+                f"Exact private retirement entry remained: {retired_name}"
+            )
+        return True
+    finally:
+        os.close(descriptor)
+
+
+def _retire_detached_entry(
+    directory_identity: tuple[int, int],
+    name: str,
+    expected_state: _EntryState,
+    expected_revision: str,
+    *,
+    expected_ctime_ns: int | None = None,
+    confirm_while_reversible: Callable[[], bool] | None = None,
+    restore_to: tuple[_DirectoryBinding, str] | None = None,
+) -> bool:
+    """Finish a prior move even when its original namespace is unreachable."""
+    candidates = _retirement_names(
+        directory_identity,
+        name,
+        expected_state,
+        expected_revision,
+        expected_ctime_ns,
+    )
+    with _open_retirement_directory(create=False) as retirement:
+        if retirement is None:
+            return False
+        if os.fstat(retirement.descriptor).st_dev != expected_state[0]:
+            return False
+        expected = expected_state, expected_revision
+        for candidate in candidates:
+            if (
+                _retirement_candidate_snapshot(retirement.descriptor, candidate)
+                == expected
+            ):
+                finished = _finish_retired_entry(
+                    retirement,
+                    candidate,
+                    expected_state,
+                    expected_revision,
+                    confirm_while_reversible=confirm_while_reversible,
+                    restore_to=restore_to,
+                )
+                if not finished:
+                    raise DataError(
+                        f"Exact private retirement entry changed: {candidate}"
+                    )
+                return True
+        return False
+
+
+def _retire_exact_entry(
+    binding: _DirectoryBinding,
+    name: str,
+    expected_state: _EntryState,
+    expected_revision: str,
+    *,
+    expected_ctime_ns: int | None = None,
+    retirement_ctime_ns: int | None = None,
+    confirm_while_reversible: Callable[[], bool] | None = None,
+    leave_retired_on_confirmation_failure: bool = False,
+) -> bool:
+    """Move one exact private entry out of the target directory.
+
+    There is no POSIX unlink-if-inode operation.  The exclusive rename makes
+    the name private; if a different entry wins the rename seam, both names are
+    left untouched after inspection. Once the exact name is private, its link
+    is removed rather than its inode being truncated, so an independent
+    hard-link backup stays intact. A host whose private cache is on another
+    filesystem leaves the private source name in place rather than deleting or
+    truncating uncertain data.
+    """
+    directory_fd = binding.descriptor
+    parent = os.fstat(directory_fd)
+    directory_identity = _directory_identity(parent)
+    durable_retirement_ctime = (
+        expected_ctime_ns
+        if retirement_ctime_ns is None
+        else retirement_ctime_ns
+    )
+    candidates = _retirement_names(
+        directory_identity,
+        name,
+        expected_state,
+        expected_revision,
+        durable_retirement_ctime,
+    )
+
+    def still_bound(details: os.stat_result) -> bool:
+        return _entry_state(details) == expected_state and (
+            expected_ctime_ns is None
+            or details.st_ctime_ns == expected_ctime_ns
+        )
+
+    restore_to = (
+        None
+        if leave_retired_on_confirmation_failure
+        else (binding, name)
+    )
+    try:
+        retired_before_source = _retire_detached_entry(
+            directory_identity,
+            name,
+            expected_state,
+            expected_revision,
+            expected_ctime_ns=durable_retirement_ctime,
+            confirm_while_reversible=confirm_while_reversible,
+            restore_to=restore_to,
+        )
+    except _RetirementRestored:
+        return False
+    try:
+        descriptor = os.open(
+            name,
+            os.O_RDONLY
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_NONBLOCK", 0),
+            dir_fd=directory_fd,
+        )
+    except OSError:
+        return retired_before_source
+    try:
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or not still_bound(before)
+        ):
+            return retired_before_source
+        digest = hashlib.sha256()
+        while chunk := os.read(descriptor, 1024 * 1024):
+            digest.update(chunk)
+        after = os.fstat(descriptor)
+        named = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        if (
+            digest.hexdigest() != expected_revision
+            or not still_bound(before)
+            or not still_bound(after)
+            or not still_bound(named)
+        ):
+            return retired_before_source
+        try:
+            with _open_retirement_directory(create=True) as retirement:
+                if retirement is None:  # pragma: no cover - create=True
+                    return retired_before_source
+                if os.fstat(directory_fd).st_dev == os.fstat(
+                    retirement.descriptor
+                ).st_dev:
+                    # Re-prove the durable identity at the destructive seam.
+                    # Once this descriptor is open, its inode cannot be reused;
+                    # post-rename checks intentionally use the four stable CAS
+                    # fields because rename itself changes ctime.
+                    held_before_move = os.fstat(descriptor)
+                    named_before_move = os.stat(
+                        name,
+                        dir_fd=directory_fd,
+                        follow_symlinks=False,
+                    )
+                    if not still_bound(held_before_move) or not still_bound(
+                        named_before_move
+                    ):
+                        return retired_before_source
+                    retired_name = ""
+                    for candidate in candidates:
+                        if _retirement_candidate_exists(
+                            retirement.descriptor, candidate
+                        ):
+                            continue
+                        try:
+                            _rename_entry_exclusive_between(
+                                directory_fd,
+                                name,
+                                retirement.descriptor,
+                                candidate,
+                            )
+                        except FileExistsError:
+                            continue
+                        except OSError:
+                            moved = _retirement_candidate_snapshot(
+                                retirement.descriptor, candidate
+                            )
+                            try:
+                                os.stat(
+                                    name,
+                                    dir_fd=directory_fd,
+                                    follow_symlinks=False,
+                                )
+                            except FileNotFoundError:
+                                source_absent = True
+                            else:
+                                source_absent = False
+                            if moved == (expected_state, expected_revision):
+                                retired_name = candidate
+                                break
+                            if moved is not None and source_absent:
+                                retired_name = candidate
+                                break
+                            break
+                        else:
+                            retired_name = candidate
+                            break
+                    if retired_name:
+                        moved = _retirement_candidate_snapshot(
+                            retirement.descriptor, retired_name
+                        )
+                        held = _entry_state(os.fstat(descriptor))
+                        if (
+                            moved != (expected_state, expected_revision)
+                            or held != expected_state
+                        ):
+                            try:
+                                _rename_entry_exclusive_between(
+                                    retirement.descriptor,
+                                    retired_name,
+                                    directory_fd,
+                                    name,
+                                )
+                            except OSError as exc:
+                                restored = _bound_snapshot(directory_fd, name)
+                                retained = _retirement_candidate_snapshot(
+                                    retirement.descriptor, retired_name
+                                )
+                                if restored != moved or retained is not None:
+                                    raise DataError(
+                                        "A raced entry could not be restored to "
+                                        f"{binding.path / name}; it remains under "
+                                        f"the private retirement name {retired_name}"
+                                    ) from exc
+                            os.fsync(directory_fd)
+                            os.fsync(retirement.descriptor)
+                            _validate_bound_directory(binding)
+                            _validate_bound_directory(retirement)
+                            if (
+                                _bound_snapshot(directory_fd, name) != moved
+                                or _retirement_candidate_snapshot(
+                                    retirement.descriptor, retired_name
+                                )
+                                is not None
+                            ):
+                                raise DataError(
+                                    "A raced entry changed while it was being "
+                                    f"restored to {binding.path / name}"
+                                )
+                            return retired_before_source
+                        try:
+                            finished = _finish_retired_entry(
+                                retirement,
+                                retired_name,
+                                expected_state,
+                                expected_revision,
+                                confirm_while_reversible=confirm_while_reversible,
+                                restore_to=restore_to,
+                            )
+                        except _RetirementRestored:
+                            return False
+                        except DataError:
+                            raise
+                        except OSError as exc:
+                            raise DataError(
+                                "Exact private retirement entry could not be "
+                                f"removed: {retired_name}: {exc}"
+                            ) from exc
+                        if not finished:
+                            raise DataError(
+                                "Exact private retirement entry changed before "
+                                f"removal: {retired_name}"
+                            )
+                        os.fsync(directory_fd)
+                        _validate_bound_directory(binding)
+                        return True
+        except DataError:
+            raise
+        except OSError:
+            pass
+        return False
+    except OSError:
+        return False
+    finally:
+        os.close(descriptor)
+
+
+def _retire_created_entry(
+    binding: _DirectoryBinding,
+    name: str,
+    identity: tuple[int, int] | None,
+) -> bool:
+    """Retire a private entry only when it is still the inode we created."""
+    if not name or identity is None:
+        return False
+    try:
+        snapshot = _bound_snapshot(binding.descriptor, name)
+    except (DataError, OSError):
+        return False
+    if snapshot is None or snapshot[0][:2] != identity:
+        return False
+    return _retire_exact_entry(
+        binding,
+        name,
+        snapshot[0],
+        snapshot[1],
+    )
+
+
+def _parse_cas_marker(payload: bytes, *, target_name: str) -> dict[str, Any]:
+    base_payload, separator, trailing_payload = payload.partition(b"\n")
+    try:
+        raw = json.loads(base_payload)
+    except (UnicodeError, ValueError) as exc:
+        raise DataError(
+            f"Incomplete bound-write marker for {target_name} is unreadable: {exc}"
+        ) from exc
+    required = {
+        "version",
+        "target",
+        "temporary",
+        "temporary_identity",
+        "expected_absent",
+        "expected_state",
+        "expected_sha256",
+        "generated_state",
+        "generated_sha256",
+        "retirement_snapshot_required",
+    }
+    if not isinstance(raw, Mapping) or set(raw) != required:
+        raise DataError(f"Incomplete bound-write marker for {target_name} is invalid")
+    if raw.get("version") != 3 or raw.get("target") != target_name:
+        raise DataError(f"Incomplete bound-write marker for {target_name} is invalid")
+    temporary = raw.get("temporary")
+    temporary_identity = raw.get("temporary_identity")
+    expected_absent = raw.get("expected_absent")
+    expected_state = raw.get("expected_state")
+    expected = raw.get("expected_sha256")
+    generated_state = raw.get("generated_state")
+    generated = raw.get("generated_sha256")
+    retirement_snapshot_required = raw.get("retirement_snapshot_required")
+    try:
+        encoded_temporary = os.fsencode(temporary)
+    except (TypeError, UnicodeError, ValueError):
+        encoded_temporary = b""
+    if (
+        not isinstance(temporary, str)
+        or "/" in temporary
+        or not encoded_temporary
+        or b"\0" in encoded_temporary
+        or not temporary.startswith(f".{target_name}.")
+        or not temporary.endswith(".tmp")
+        or not isinstance(temporary_identity, list)
+        or len(temporary_identity) != 2
+        or any(
+            not isinstance(item, int) or isinstance(item, bool) or item < 0
+            for item in temporary_identity
+        )
+        or not isinstance(expected_absent, bool)
+        or not isinstance(retirement_snapshot_required, bool)
+        or not isinstance(generated, str)
+        or len(generated) != 64
+        or any(character not in "0123456789abcdef" for character in generated)
+    ):
+        raise DataError(f"Incomplete bound-write marker for {target_name} is invalid")
+    def state_is_valid(value: Any) -> bool:
+        return (
+            isinstance(value, list)
+            and len(value) == 4
+            and all(
+                isinstance(item, int) and not isinstance(item, bool) and item >= 0
+                for item in value
+            )
+        )
+
+    def cleanup_state_is_valid(value: Any) -> bool:
+        return (
+            isinstance(value, list)
+            and len(value) == 5
+            and all(
+                isinstance(item, int) and not isinstance(item, bool) and item >= 0
+                for item in value
+            )
+        )
+
+    def digest_is_valid(value: Any) -> bool:
+        return (
+            isinstance(value, str)
+            and len(value) == 64
+            and all(character in "0123456789abcdef" for character in value)
+        )
+    if expected_absent:
+        if (
+            expected_state is not None
+            or expected is not None
+            or generated_state is not None
+        ):
+            raise DataError(
+                f"Incomplete bound-write marker for {target_name} is invalid"
+            )
+    elif (
+        not state_is_valid(expected_state)
+        or not digest_is_valid(expected)
+        or not state_is_valid(generated_state)
+    ):
+        raise DataError(f"Incomplete bound-write marker for {target_name} is invalid")
+    if retirement_snapshot_required and not expected_absent:
+        raise DataError(f"Incomplete bound-write marker for {target_name} is invalid")
+
+    temporary_retirement_snapshot = None
+    retirement_record_incomplete = False
+    if separator:
+        framed_records = trailing_payload.split(b"\n")
+        incomplete_tail = (
+            b"" if trailing_payload.endswith(b"\n") else framed_records.pop()
+        )
+        base_revision = hashlib.sha256(base_payload).hexdigest()
+        for encoded_record in framed_records:
+            if not encoded_record:
+                continue
+            try:
+                record = json.loads(encoded_record)
+                record_snapshot = record["temporary_snapshot"]
+                record_state = record_snapshot["state"]
+                record_revision = record_snapshot["sha256"]
+                valid_record = (
+                    isinstance(record, Mapping)
+                    and set(record)
+                    == {"version", "base_sha256", "temporary_snapshot"}
+                    and record.get("version") == 1
+                    and record.get("base_sha256") == base_revision
+                    and isinstance(record_snapshot, Mapping)
+                    and set(record_snapshot) == {"state", "sha256"}
+                    and cleanup_state_is_valid(record_state)
+                    and digest_is_valid(record_revision)
+                    and tuple(record_state[:2]) == tuple(temporary_identity)
+                    and record_revision == generated
+                    and retirement_snapshot_required
+                )
+            except (KeyError, TypeError, UnicodeError, ValueError):
+                valid_record = False
+            if not valid_record:
+                retirement_record_incomplete = True
+                continue
+            parsed_snapshot = tuple(record_state), record_revision
+            if (
+                temporary_retirement_snapshot is not None
+                and parsed_snapshot != temporary_retirement_snapshot
+            ):
+                raise DataError(
+                    f"Incomplete bound-write marker for {target_name} has "
+                    "conflicting retirement bindings"
+                )
+            temporary_retirement_snapshot = parsed_snapshot
+            retirement_record_incomplete = False
+        if incomplete_tail:
+            retirement_record_incomplete = True
+    return {
+        "temporary": temporary,
+        "temporary_identity": tuple(temporary_identity),
+        "expected_absent": expected_absent,
+        "expected_state": (
+            tuple(expected_state) if expected_state is not None else None
+        ),
+        "expected_sha256": expected,
+        "generated_state": (
+            tuple(generated_state) if generated_state is not None else None
+        ),
+        "generated_sha256": generated,
+        "retirement_snapshot_required": retirement_snapshot_required,
+        "temporary_retirement_snapshot": temporary_retirement_snapshot,
+        "retirement_record_incomplete": retirement_record_incomplete,
+    }
+
+
+def _promote_complete_cas_draft_under_lock(
+    binding: _DirectoryBinding,
+    target: Path,
+) -> None:
+    """Turn a crash-durable marker draft into the active prepared name.
+
+    The draft is written and fsynced before its exclusive rename.  A process
+    death at that seam used to leave a valid intent that every recovery scan
+    ignored.  Recovery validates the exact draft before promoting it; an
+    incomplete or competing marker remains untouched and refuses the write.
+    """
+    prefix = f".{target.name}."
+    suffixes = (
+        _CAS_PREPARED_SUFFIX,
+        _CAS_VALIDATED_SUFFIX,
+        _CAS_RECOVERED_SUFFIX,
+    )
+    active = sorted(
+        name
+        for name in os.listdir(binding.descriptor)
+        if name.startswith(prefix) and name.endswith(suffixes)
+    )
+    drafts = sorted(
+        name
+        for name in os.listdir(binding.descriptor)
+        if name.startswith(prefix) and name.endswith(_CAS_DRAFT_SUFFIX)
+    )
+    if not drafts:
+        return
+    if active or len(drafts) != 1:
+        raise DataError(
+            f"Multiple incomplete bound writes exist for {target}; refusing to "
+            "guess which one owns the public file"
+        )
+    draft = drafts[0]
+    owned = _marker_owned_temporary(draft, target.name)
+    if owned is None:
+        raise DataError(f"Incomplete bound-write marker name is invalid: {draft}")
+    draft_state, draft_revision, payload = _read_bound_bytes(
+        binding.descriptor, draft
+    )
+    try:
+        transaction = _parse_cas_marker(payload, target_name=target.name)
+    except DataError:
+        # The exact draft can be journalled and retired, but an unreadable body
+        # does not prove that the temp derived from its filename belongs to the
+        # same transaction. Preserve that separate name.
+        _validate_bound_directory(binding)
+        return
+    if (
+        transaction["temporary"] != owned[0]
+        or transaction["temporary_identity"] != owned[1]
+    ):
+        # The body is valid JSON but still cannot authorize its filename's
+        # private temp. Keep the draft as exact marker-only evidence, exactly
+        # like an unreadable body, so end/forget can settle without publishing
+        # or retiring the separate temp name.
+        _validate_bound_directory(binding)
+        return
+    prepared = draft[: -len(_CAS_DRAFT_SUFFIX)] + _CAS_PREPARED_SUFFIX
+    try:
+        _rename_entry_exclusive(binding.descriptor, draft, prepared)
+    except OSError:
+        moved = _bound_snapshot(binding.descriptor, prepared)
+        source = _bound_snapshot(binding.descriptor, draft)
+        if moved != (draft_state, draft_revision) or source is not None:
+            raise
+    os.fsync(binding.descriptor)
+    _validate_bound_directory(binding)
+    if (
+        _bound_snapshot(binding.descriptor, prepared)
+        != (draft_state, draft_revision)
+        or _bound_snapshot(binding.descriptor, draft) is not None
+    ):
+        raise DataError(
+            f"Bound-write marker changed while recovering its draft: {prepared}"
+        )
+
+
+def _cleanup_terminal_cas_markers_under_lock(
+    binding: _DirectoryBinding, target: Path
+) -> None:
+    """Finish cleanup after a durable commit or rollback decision.
+
+    A crash after the prepared marker becomes ``validated`` must keep the
+    generated public file.  A crash after it becomes ``recovered`` must keep
+    the restored public file.  These terminal markers therefore authorize
+    cleanup only; they never move the public name.
+    """
+    prefix = f".{target.name}."
+    terminal_suffixes = (_CAS_VALIDATED_SUFFIX, _CAS_RECOVERED_SUFFIX)
+    markers = sorted(
+        name
+        for name in os.listdir(binding.descriptor)
+        if name.startswith(prefix) and name.endswith(terminal_suffixes)
+    )
+    for marker in markers:
+        marker_state, marker_revision, payload = _read_bound_bytes(
+            binding.descriptor, marker
+        )
+        transaction = _parse_cas_marker(payload, target_name=target.name)
+        _require_marker_owns_transaction(marker, target.name, transaction)
+        temporary = transaction["temporary"]
+        temporary_identity = transaction["temporary_identity"]
+        expected_absent = transaction["expected_absent"]
+        expected_snapshot = (
+            transaction["expected_state"],
+            transaction["expected_sha256"],
+        )
+        generated_snapshot = (
+            transaction["generated_state"],
+            transaction["generated_sha256"],
+        )
+        public_snapshot = _bound_snapshot(binding.descriptor, target.name)
+        temporary_snapshot = _bound_snapshot(binding.descriptor, temporary)
+        cleaned_temporary = temporary_snapshot is None
+
+        if expected_absent:
+            if marker.endswith(_CAS_RECOVERED_SUFFIX):
+                raise DataError(
+                    f"Write-once bound write for {target} has an invalid "
+                    "rollback marker"
+                )
+            generated_revision = transaction["generated_sha256"]
+            retirement_snapshot = transaction[
+                "temporary_retirement_snapshot"
+            ]
+            if transaction["retirement_snapshot_required"] and (
+                retirement_snapshot is None
+                or transaction["retirement_record_incomplete"]
+            ):
+                raise DataError(
+                    f"Committed write-once bound write for {target} lacks its "
+                    "complete private retirement binding"
+                )
+            if (
+                public_snapshot is None
+                or public_snapshot[0][:2] != temporary_identity
+                or public_snapshot[1] != generated_revision
+            ):
+                raise DataError(
+                    f"Committed write-once bound write for {target} cannot be "
+                    "cleaned because its public name no longer holds the "
+                    "captured answer"
+                )
+            if retirement_snapshot is not None:
+                parent = os.fstat(binding.descriptor)
+                _retire_detached_entry(
+                    (parent.st_dev, parent.st_ino),
+                    temporary,
+                    retirement_snapshot[0][:4],
+                    retirement_snapshot[1],
+                    expected_ctime_ns=retirement_snapshot[0][4],
+                )
+                temporary_snapshot = _bound_snapshot(
+                    binding.descriptor, temporary
+                )
+                cleaned_temporary = temporary_snapshot is None
+            if temporary_snapshot is not None:
+                if (
+                    temporary_snapshot[0][:2] != temporary_identity
+                    or temporary_snapshot[1] != generated_revision
+                    or temporary_snapshot[0] != public_snapshot[0]
+                ):
+                    raise DataError(
+                        f"Committed write-once bound write for {target} has "
+                        "unrecognized private bytes"
+                    )
+                destructive_snapshot = _cleanup_bound_snapshot(
+                    binding.descriptor, temporary
+                )
+                if (
+                    retirement_snapshot is not None
+                    and destructive_snapshot != retirement_snapshot
+                ):
+                    raise DataError(
+                        f"Committed write-once bound write for {target} has "
+                        "changed its private retirement binding"
+                    )
+                assert destructive_snapshot is not None
+
+                def public_still_holds_answer(
+                    expected_public: tuple[_EntryState, str] = public_snapshot,
+                ) -> bool:
+                    current = _bound_snapshot(
+                        binding.descriptor, target.name
+                    )
+                    _validate_bound_directory(binding)
+                    return current == expected_public
+
+                cleaned_temporary = _retire_exact_entry(
+                    binding,
+                    temporary,
+                    temporary_snapshot[0],
+                    temporary_snapshot[1],
+                    expected_ctime_ns=destructive_snapshot[0][4],
+                    confirm_while_reversible=public_still_holds_answer,
+                )
+                if not cleaned_temporary:
+                    raise DataError(
+                        f"Committed write-once bound write for {target} "
+                        "cannot retire its private answer while the public "
+                        "name is changing"
+                    )
+            if _bound_snapshot(binding.descriptor, target.name) != public_snapshot:
+                raise DataError(
+                    f"Committed write-once bound write for {target} cannot be "
+                    "cleaned because its public name changed during cleanup"
+                )
+            if not _retire_exact_entry(
+                binding,
+                marker,
+                marker_state,
+                marker_revision,
+            ):
+                raise DataError(
+                    f"Committed write-once bound write for {target} cannot "
+                    "retire its terminal marker"
+                )
+            continue
+
+        if marker.endswith(_CAS_VALIDATED_SUFFIX):
+            if temporary_snapshot == generated_snapshot:
+                raise DataError(
+                    f"Committed bound write for {target} has generated bytes "
+                    "under its private name; refusing an ambiguous cleanup"
+                )
+            if temporary_snapshot == expected_snapshot:
+                cleaned_temporary = _retire_exact_entry(
+                    binding,
+                    temporary,
+                    expected_snapshot[0],
+                    expected_snapshot[1],
+                )
+            # A public edit after the commit is authoritative, including an
+            # edit back to the old bytes.  Terminal recovery never rewrites it.
+        else:
+            if public_snapshot == generated_snapshot:
+                raise DataError(
+                    f"Rolled-back bound write for {target} still has generated "
+                    "bytes public; refusing an ambiguous cleanup"
+                )
+            if temporary_snapshot == generated_snapshot:
+                cleaned_temporary = _retire_exact_entry(
+                    binding,
+                    temporary,
+                    generated_snapshot[0],
+                    generated_snapshot[1],
+                )
+
+        if cleaned_temporary:
+            _retire_exact_entry(
+                binding,
+                marker,
+                marker_state,
+                marker_revision,
+            )
+
+
+def _recover_bound_target_under_lock(
+    binding: _DirectoryBinding,
+    target: Path,
+) -> None:
+    _promote_complete_cas_draft_under_lock(binding, target)
+    _cleanup_terminal_cas_markers_under_lock(binding, target)
+    prefix = f".{target.name}."
+    prepared = sorted(
+        name
+        for name in os.listdir(binding.descriptor)
+        if name.startswith(prefix) and name.endswith(_CAS_PREPARED_SUFFIX)
+    )
+    if len(prepared) > 1:
+        raise DataError(
+            f"Multiple incomplete bound writes exist for {target}; refusing to "
+            "guess which one owns the public file"
+        )
+    if not prepared:
+        return
+    marker = prepared[0]
+    _marker_state, _marker_revision, payload = _read_bound_bytes(
+        binding.descriptor, marker
+    )
+    transaction = _parse_cas_marker(payload, target_name=target.name)
+    _require_marker_owns_transaction(marker, target.name, transaction)
+    temporary = transaction["temporary"]
+    temporary_identity = transaction["temporary_identity"]
+    expected_absent = transaction["expected_absent"]
+    generated = transaction["generated_sha256"]
+    public_snapshot = _bound_snapshot(binding.descriptor, target.name)
+    temporary_snapshot = _bound_snapshot(binding.descriptor, temporary)
+
+    if expected_absent:
+        if (
+            temporary_snapshot is None
+            or temporary_snapshot[0][:2] != temporary_identity
+            or temporary_snapshot[1] != generated
+        ):
+            raise DataError(
+                f"Could not recover incomplete write-once publication for {target}: "
+                "the private answer is absent or incomplete"
+            )
+        if public_snapshot is None:
+            try:
+                _link_entry_exclusive(
+                    binding.descriptor,
+                    temporary,
+                    target.name,
+                )
+            except OSError:
+                if _bound_snapshot(
+                    binding.descriptor, target.name
+                ) != temporary_snapshot:
+                    raise
+            os.fsync(binding.descriptor)
+            _validate_bound_directory(binding)
+            public_snapshot = _bound_snapshot(
+                binding.descriptor, target.name
+            )
+        if public_snapshot != temporary_snapshot:
+            raise DataError(
+                f"Could not recover incomplete write-once publication for {target}: "
+                "the public name holds different bytes"
+            )
+        if transaction["retirement_snapshot_required"]:
+            temporary_cleanup_snapshot = _cleanup_bound_snapshot(
+                binding.descriptor, temporary
+            )
+            public_cleanup_snapshot = _cleanup_bound_snapshot(
+                binding.descriptor, target.name
+            )
+            if (
+                temporary_cleanup_snapshot is None
+                or temporary_cleanup_snapshot != public_cleanup_snapshot
+            ):
+                raise DataError(
+                    f"Could not bind private retirement for {target}: the "
+                    "published hard links changed"
+                )
+            persisted_retirement = transaction[
+                "temporary_retirement_snapshot"
+            ]
+            if (
+                persisted_retirement is not None
+                and persisted_retirement != temporary_cleanup_snapshot
+            ):
+                raise DataError(
+                    f"Could not bind private retirement for {target}: its "
+                    "durable snapshot changed"
+                )
+            if (
+                persisted_retirement is None
+                or transaction["retirement_record_incomplete"]
+            ):
+                _marker_state, _marker_revision = (
+                    _append_cas_retirement_snapshot(
+                        binding,
+                        marker,
+                        target.name,
+                        expected_state=_marker_state,
+                        expected_revision=_marker_revision,
+                        temporary_snapshot=temporary_cleanup_snapshot,
+                    )
+                )
+        validated = _move_cas_marker(
+            binding,
+            marker,
+            _CAS_VALIDATED_SUFFIX,
+            expected_state=_marker_state,
+            expected_revision=_marker_revision,
+        )
+        if not validated.endswith(_CAS_VALIDATED_SUFFIX):  # pragma: no cover
+            raise AssertionError(validated)
+        _cleanup_terminal_cas_markers_under_lock(binding, target)
+        os.fsync(binding.descriptor)
+        _validate_bound_directory(binding)
+        return
+
+    expected_snapshot = (
+        transaction["expected_state"],
+        transaction["expected_sha256"],
+    )
+    generated_state = transaction["generated_state"]
+    assert generated_state is not None
+    generated_snapshot = generated_state, generated
+
+    if public_snapshot == generated_snapshot:
+        if temporary_snapshot != expected_snapshot:
+            raise DataError(
+                f"Could not recover incomplete bound write for {target}: "
+                "the displaced file does not match bound evidence"
+            )
+        _exchange_entries(binding.descriptor, temporary, target.name)
+        os.fsync(binding.descriptor)
+        _validate_bound_directory(binding)
+        if (
+            _bound_snapshot(binding.descriptor, temporary) != generated_snapshot
+            or _bound_snapshot(binding.descriptor, target.name)
+            != temporary_snapshot
+        ):
+            raise DataError(f"Could not verify bound-write recovery for {target}")
+        public_snapshot = temporary_snapshot
+        temporary_snapshot = generated_snapshot
+    elif temporary_snapshot != generated_snapshot:
+        raise DataError(
+            f"Could not recover incomplete bound write for {target}: neither "
+            "name holds the generated bytes"
+        )
+
+    if public_snapshot is None:
+        raise DataError(
+            f"Could not recover incomplete bound write for {target}: the public "
+            "file is missing"
+        )
+    _move_cas_marker(
+        binding,
+        marker,
+        _CAS_RECOVERED_SUFFIX,
+        expected_state=_marker_state,
+        expected_revision=_marker_revision,
+    )
+    _cleanup_terminal_cas_markers_under_lock(binding, target)
+    os.fsync(binding.descriptor)
+    _validate_bound_directory(binding)
+
+
+def _recover_bound_path(path: Path) -> None:
+    """Finish a path's WAL transaction without reading its public payload."""
+    target = Path(path).absolute()
+    with (
+        exclusive_path_lock(_cas_lock_path(target)),
+        _open_bound_directory(target.parent, create=False) as binding,
+    ):
+        _recover_bound_target_under_lock(binding, target)
+        _validate_bound_directory(binding)
+
+
+def _bound_write_evidence(path: Path) -> _BoundWriteEvidence | None:
+    """Bind exact write-once WAL names without requiring public recovery.
+
+    A complete private answer can survive while recovery quite correctly
+    refuses to overwrite a changed public name.  Journal settlement still has
+    to see that answer, and later cleanup must retain the exact identities that
+    authorized its removal.
+    """
+    target = Path(path).absolute()
+    try:
+        parent_details = os.lstat(target.parent)
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise DataError(
+            f"Could not inspect bound-write evidence for {target}: "
+            f"{exc.strerror or exc}"
+        ) from exc
+    if not stat.S_ISDIR(parent_details.st_mode):
+        # A symlink/non-directory can never be janki's descriptor-bound
+        # pending store and grants no authority over what it points at.
+        return None
+    try:
+        with (
+            exclusive_path_lock(_cas_lock_path(target)),
+            _open_bound_directory(target.parent, create=False) as binding,
+        ):
+            _promote_complete_cas_draft_under_lock(binding, target)
+            prefix = f".{target.name}."
+            suffixes = (
+                _CAS_DRAFT_SUFFIX,
+                _CAS_PREPARED_SUFFIX,
+                _CAS_VALIDATED_SUFFIX,
+                _CAS_RECOVERED_SUFFIX,
+            )
+            markers = sorted(
+                name
+                for name in os.listdir(binding.descriptor)
+                if name.startswith(prefix) and name.endswith(suffixes)
+            )
+            if len(markers) > 1:
+                raise DataError(
+                    f"Multiple incomplete bound writes exist for {target}; "
+                    "refusing to guess which one owns the public file"
+                )
+            if not markers:
+                _validate_bound_directory(binding)
+                return None
+            marker = markers[0]
+            marker_state, marker_revision, payload = _read_cleanup_bound_bytes(
+                binding.descriptor, marker
+            )
+            marker_owned = _marker_owned_temporary(marker, target.name)
+            try:
+                transaction = _parse_cas_marker(
+                    payload, target_name=target.name
+                )
+            except DataError:
+                transaction = None
+            if (
+                transaction is not None
+                and (
+                    not transaction["expected_absent"]
+                    or marker_owned is None
+                    or transaction["temporary"] != marker_owned[0]
+                    or transaction["temporary_identity"] != marker_owned[1]
+                    or (
+                        marker.endswith(
+                            (_CAS_VALIDATED_SUFFIX, _CAS_RECOVERED_SUFFIX)
+                        )
+                        and transaction["retirement_snapshot_required"]
+                        and (
+                            transaction["temporary_retirement_snapshot"] is None
+                            or transaction["retirement_record_incomplete"]
+                        )
+                    )
+                )
+            ):
+                transaction = None
+            proven_temporary = (
+                marker_owned
+                if transaction is not None and marker_owned is not None
+                else None
+            )
+            temporary = proven_temporary[0] if proven_temporary is not None else ""
+            temporary_identity = (
+                proven_temporary[1] if proven_temporary is not None else None
+            )
+            temporary_snapshot = None
+            temporary_retirement_snapshot = (
+                transaction["temporary_retirement_snapshot"]
+                if transaction is not None
+                else None
+            )
+            temporary_owned = proven_temporary is not None
+            if proven_temporary is not None:
+                try:
+                    observed_temporary = _cleanup_bound_snapshot(
+                        binding.descriptor, temporary
+                    )
+                except (DataError, OSError, UnicodeError, ValueError):
+                    temporary_owned = False
+                else:
+                    if (
+                        observed_temporary is not None
+                        and observed_temporary[0][:2] != temporary_identity
+                    ):
+                        temporary_owned = False
+                    elif temporary_owned:
+                        temporary_snapshot = observed_temporary
+            try:
+                public_snapshot = _cleanup_bound_snapshot(
+                    binding.descriptor, target.name
+                )
+            except (DataError, OSError, UnicodeError, ValueError):
+                public_snapshot = None
+            parent = os.fstat(binding.descriptor)
+            _validate_bound_directory(binding)
+            return _BoundWriteEvidence(
+                target=target,
+                directory_identity=(parent.st_dev, parent.st_ino),
+                marker_name=marker,
+                marker_state=marker_state,
+                marker_revision=marker_revision,
+                temporary_name=temporary,
+                temporary_identity=temporary_identity,
+                temporary_snapshot=temporary_snapshot,
+                temporary_retirement_snapshot=temporary_retirement_snapshot,
+                temporary_owned=temporary_owned,
+                public_snapshot=public_snapshot,
+                generated_revision=(
+                    transaction["generated_sha256"]
+                    if transaction is not None
+                    else ""
+                ),
+            )
+    except FileNotFoundError:
+        if not target.parent.exists():
+            return None
+        raise DataError(
+            f"Bound-write evidence changed while it was being read: {target}"
+        ) from None
+    except DataError:
+        raise
+    except OSError as exc:
+        raise DataError(
+            f"Could not inspect bound-write evidence for {target}: "
+            f"{exc.strerror or exc}"
+        ) from exc
+
+
+def _read_bound_write_evidence(expected: _BoundWriteEvidence) -> bytes | None:
+    """Read the exact complete answer bound by write-ahead evidence."""
+    if not expected.reply_complete:
+        return None
+    target = expected.target
+    try:
+        with (
+            exclusive_path_lock(_cas_lock_path(target)),
+            _open_bound_directory(target.parent, create=False) as binding,
+        ):
+            parent = os.fstat(binding.descriptor)
+            if (parent.st_dev, parent.st_ino) != expected.directory_identity:
+                return None
+            if _cleanup_bound_snapshot(
+                binding.descriptor, expected.marker_name
+            ) != (
+                expected.marker_state,
+                expected.marker_revision,
+            ):
+                return None
+            if expected.private_reply_complete:
+                name = expected.temporary_name
+                expected_snapshot = expected.temporary_snapshot
+            else:
+                name = target.name
+                expected_snapshot = expected.public_snapshot
+            if expected_snapshot is None:
+                return None
+            state, revision, payload = _read_cleanup_bound_bytes(
+                binding.descriptor, name
+            )
+            _validate_bound_directory(binding)
+            if (
+                (state, revision) != expected_snapshot
+                or revision != expected.generated_revision
+            ):
+                return None
+            return payload
+    except (DataError, OSError, UnicodeError, ValueError):
+        return None
+
+
+def _retire_receipted_marker(
+    binding: _DirectoryBinding,
+    *,
+    directory_identity: tuple[int, int],
+    name: str,
+    expected_state: _CleanupEntryState,
+    expected_revision: str,
+) -> None:
+    """Retire a marker receipt without probing a replacement's bytes."""
+    observed_state = _cleanup_bound_entry_state(binding.descriptor, name)
+    if observed_state != expected_state:
+        _retire_detached_entry(
+            directory_identity,
+            name,
+            expected_state[:4],
+            expected_revision,
+            expected_ctime_ns=expected_state[4],
+        )
+        return
+    retired = _retire_exact_entry(
+        binding,
+        name,
+        expected_state[:4],
+        expected_revision,
+        expected_ctime_ns=expected_state[4],
+    )
+    if retired:
+        return
+    if _cleanup_bound_entry_state(binding.descriptor, name) == expected_state:
+        raise DataError(f"Could not retire bound-write marker: {name}")
+    _retire_detached_entry(
+        directory_identity,
+        name,
+        expected_state[:4],
+        expected_revision,
+        expected_ctime_ns=expected_state[4],
+    )
+
+
+def _retire_bound_write_evidence(expected: _BoundWriteEvidence) -> None:
+    """Retire only the marker/private names bound by a journal decision.
+
+    A public name that still holds the bound answer is part of the forced
+    discard.  A missing or replaced public name is preserved: binding the WAL
+    never grants deletion authority over a later occupant of that name.
+    """
+    target = expected.target
+    private_retirement_snapshot = (
+        expected.temporary_retirement_snapshot
+        or expected.temporary_snapshot
+    )
+
+    def retire_detached_names() -> None:
+        """Remove exact prior destinations without opening the old namespace."""
+        if private_retirement_snapshot is not None:
+            _retire_detached_entry(
+                expected.directory_identity,
+                expected.temporary_name,
+                private_retirement_snapshot[0][:4],
+                private_retirement_snapshot[1],
+                expected_ctime_ns=private_retirement_snapshot[0][4],
+            )
+        public_answer = expected.public_answer_snapshot
+        if public_answer is not None:
+            _retire_detached_entry(
+                expected.directory_identity,
+                target.name,
+                public_answer[0][:4],
+                public_answer[1],
+                expected_ctime_ns=public_answer[0][4],
+            )
+        _retire_detached_entry(
+            expected.directory_identity,
+            expected.marker_name,
+            expected.marker_state[:4],
+            expected.marker_revision,
+            expected_ctime_ns=expected.marker_state[4],
+        )
+
+    try:
+        with (
+            exclusive_path_lock(_cas_lock_path(target)),
+            _open_cleanup_directory(
+                target.parent, expected.directory_identity
+            ) as binding,
+        ):
+            if binding is None:
+                # A checkout may make the lexical pending namespace
+                # unreachable after an exact entry was already moved.  That
+                # closes authority over its old child names, but not over the
+                # deterministic private destinations derived from the durable
+                # cleanup binding.
+                retire_detached_names()
+                return
+            temporary_snapshot = None
+            if expected.temporary_owned:
+                observed_temporary = _cleanup_bound_snapshot(
+                    binding.descriptor, expected.temporary_name
+                )
+                # Absence means an earlier cleanup attempt succeeded. A
+                # different occupant is outside the persisted authority and
+                # is preserved while the transaction's marker is retired.
+                if observed_temporary == expected.temporary_snapshot:
+                    temporary_snapshot = observed_temporary
+            _validate_bound_directory(binding)
+
+            # Only the public identity seen by the journal decision is in
+            # scope, and only the private answer's exact hard link proves the
+            # public name belongs to this transaction. If it changed, preserve
+            # the replacement untouched. Public and private can be hard links;
+            # retiring either one legitimately changes the other's ctime. When
+            # both exact links remain, retire the private name while the moved
+            # public link is still open and reversible. That held descriptor
+            # prevents inode reuse and narrowly authorizes the sibling's new
+            # ctime without weakening a later cleanup retry.
+            public_answer = expected.public_answer_snapshot
+            paired_private_snapshot = expected.temporary_snapshot
+            paired_answer = (
+                paired_private_snapshot is not None
+                and public_answer == paired_private_snapshot
+            )
+            if (
+                not paired_answer
+                and expected.temporary_snapshot is None
+                and expected.temporary_retirement_snapshot is not None
+                and public_answer is not None
+                and public_answer[0][:4]
+                == expected.temporary_retirement_snapshot[0][:4]
+                and public_answer[1]
+                == expected.temporary_retirement_snapshot[1]
+            ):
+                paired_private_snapshot = (
+                    expected.temporary_retirement_snapshot
+                )
+                paired_answer = True
+
+            if private_retirement_snapshot is not None and not paired_answer:
+                _retire_detached_entry(
+                    expected.directory_identity,
+                    expected.temporary_name,
+                    private_retirement_snapshot[0][:4],
+                    private_retirement_snapshot[1],
+                    expected_ctime_ns=private_retirement_snapshot[0][4],
+                )
+
+            def retire_paired_temporary() -> bool:
+                nonlocal temporary_snapshot
+                persisted = paired_private_snapshot
+                if persisted is None:
+                    return True
+                _retire_detached_entry(
+                    expected.directory_identity,
+                    expected.temporary_name,
+                    persisted[0][:4],
+                    persisted[1],
+                    expected_ctime_ns=persisted[0][4],
+                )
+                observed = _cleanup_bound_snapshot(
+                    binding.descriptor, expected.temporary_name
+                )
+                if observed is None:
+                    temporary_snapshot = None
+                    return True
+                if (
+                    observed[0][:4] != persisted[0][:4]
+                    or observed[1] != persisted[1]
+                ):
+                    # While the exact public inode is held open in the
+                    # retirement store, a different tuple proves the old
+                    # private name is absent. Preserve that replacement.
+                    temporary_snapshot = None
+                    return True
+                retired = _retire_exact_entry(
+                    binding,
+                    expected.temporary_name,
+                    observed[0][:4],
+                    observed[1],
+                    expected_ctime_ns=observed[0][4],
+                    retirement_ctime_ns=persisted[0][4],
+                )
+                current = _cleanup_bound_snapshot(
+                    binding.descriptor, expected.temporary_name
+                )
+                if retired or current != observed:
+                    temporary_snapshot = None
+                    return True
+                return False
+
+            if public_answer is not None:
+                retired_public = _retire_exact_entry(
+                    binding,
+                    target.name,
+                    public_answer[0][:4],
+                    public_answer[1],
+                    expected_ctime_ns=public_answer[0][4],
+                    confirm_while_reversible=(
+                        retire_paired_temporary if paired_answer else None
+                    ),
+                    leave_retired_on_confirmation_failure=True,
+                )
+                if (
+                    not retired_public
+                    and _cleanup_bound_snapshot(
+                        binding.descriptor, target.name
+                    )
+                    == public_answer
+                ):
+                    raise DataError(
+                        "Could not retire bound-write public answer: "
+                        f"{target.name}"
+                    )
+                if (
+                    retired_public
+                    and paired_answer
+                    and temporary_snapshot is not None
+                ):
+                    current_temporary = _cleanup_bound_snapshot(
+                        binding.descriptor, expected.temporary_name
+                    )
+                    if (
+                        current_temporary is not None
+                        and current_temporary[0][:4]
+                        == temporary_snapshot[0][:4]
+                        and current_temporary[1] == temporary_snapshot[1]
+                    ):
+                        raise DataError(
+                            "Bound-write private answer remained after its "
+                            f"paired public retirement: {expected.temporary_name}"
+                        )
+                    temporary_snapshot = None
+
+            if temporary_snapshot is not None and not paired_answer:
+                retired_temporary = _retire_exact_entry(
+                    binding,
+                    expected.temporary_name,
+                    temporary_snapshot[0][:4],
+                    temporary_snapshot[1],
+                    expected_ctime_ns=temporary_snapshot[0][4],
+                )
+                if (
+                    not retired_temporary
+                    and _cleanup_bound_snapshot(
+                        binding.descriptor, expected.temporary_name
+                    )
+                    == temporary_snapshot
+                ):
+                    raise DataError(
+                        f"Could not retire bound-write private answer: "
+                        f"{expected.temporary_name}"
+                    )
+
+            # A different current marker is a replacement outside the durable
+            # intent. Preserve it exactly as we preserve a replaced public or
+            # private name; only the old bound marker is considered gone.
+            _retire_receipted_marker(
+                binding,
+                directory_identity=expected.directory_identity,
+                name=expected.marker_name,
+                expected_state=expected.marker_state,
+                expected_revision=expected.marker_revision,
+            )
+            os.fsync(binding.descriptor)
+            _validate_bound_directory(binding)
+            if (
+                temporary_snapshot is not None
+                and _cleanup_bound_snapshot(
+                    binding.descriptor, expected.temporary_name
+                )
+                == temporary_snapshot
+                or _cleanup_bound_entry_state(
+                    binding.descriptor, expected.marker_name
+                )
+                == expected.marker_state
+            ):
+                raise DataError(
+                    f"Bound-write evidence remained after cleanup: {target}"
+                )
+    except DataError:
+        raise
+    except OSError as exc:
+        raise DataError(
+            f"Could not retire bound-write evidence for {target}: "
+            f"{exc.strerror or exc}"
+        ) from exc
+
+
+def read_bytes_bound_snapshot(
+    path: Path,
+) -> tuple[_EntryState, str, bytes]:
+    """Read bytes plus their stable state while holding the guarded-read lock."""
+    target = Path(path).absolute()
+    try:
+        with (
+            exclusive_path_lock(_cas_lock_path(target)),
+            _open_bound_directory(target.parent, create=False) as binding,
+        ):
+            _recover_bound_target_under_lock(binding, target)
+            _state, _revision, payload = _read_bound_bytes(
+                binding.descriptor, target.name
+            )
+            _validate_bound_directory(binding)
+            return _state, _revision, payload
+    except FileNotFoundError:
+        raise
+    except DataError:
+        raise
+    except OSError as exc:
+        raise DataError(
+            f"Could not safely read {target}: {exc.strerror or exc}"
+        ) from exc
+
+
+def read_bytes_bound(path: Path) -> bytes:
+    """Read one direct file while excluding/recovering guarded publication."""
+    _state, _revision, payload = read_bytes_bound_snapshot(path)
+    return payload
+
+
+def read_text_bound(path: Path) -> str:
+    """UTF-8 text form of :func:`read_bytes_bound`."""
+    target = Path(path).absolute()
+    try:
+        return read_bytes_bound(target).decode("utf-8", errors="strict")
+    except UnicodeError as exc:
+        raise DataError(f"Could not safely read {target}: {exc}") from exc
+
+
+def _allocate_bound_temporary(
+    binding: _DirectoryBinding,
+    target_name: str,
+    mode: int,
+) -> tuple[int, str, tuple[int, int]]:
+    """Create a temp whose final private name persists its inode identity."""
+    for _attempt in range(20):
+        token = secrets.token_hex(8)
+        allocating = f".{target_name}.{token}.janki-allocating"
+        try:
+            descriptor = os.open(
+                allocating,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                mode,
+                dir_fd=binding.descriptor,
+            )
+        except FileExistsError:
+            continue
+        created = os.fstat(descriptor)
+        identity = created.st_dev, created.st_ino
+        name = (
+            f".{target_name}.{token}.{identity[0]:x}-{identity[1]:x}.tmp"
+        )
+        try:
+            _rename_entry_exclusive(binding.descriptor, allocating, name)
+            os.fsync(binding.descriptor)
+            _validate_bound_directory(binding)
+            named = os.stat(
+                name, dir_fd=binding.descriptor, follow_symlinks=False
+            )
+            if _entry_state(named)[:2] != identity:
+                raise DataError(
+                    f"Bound-write temp changed during allocation: {name}"
+                )
+        except BaseException:
+            os.close(descriptor)
+            for candidate in (allocating, name):
+                _retire_created_entry(binding, candidate, identity)
+            raise
+        return descriptor, name, identity
+    raise DataError(f"Could not allocate a temporary file for {target_name}")
+
+
+def _commit_bound_target(
+    binding: _DirectoryBinding,
+    temporary_name: str,
+    target: Path,
+    *,
+    bound_state: _EntryState | None,
+    expected_revision: str | None,
+    expected_identity: tuple[int, int] | None,
+    expected_absent: bool,
+    prepared_marker: tuple[str, _EntryState, str] | None = None,
+) -> None:
+    """Publish a temp without overwriting a state the caller did not bind."""
+    directory_fd = binding.descriptor
+    target_name = target.name
+    generated_state, generated_revision = _read_bound_entry(
+        directory_fd, temporary_name
+    )
+    temporary_exists = True
+    retain_temporary = False
+    published_hard_link = False
+    try:
+        _validate_bound_directory(binding)
+        if expected_absent:
+            if prepared_marker is None:
+                raise DataError(
+                    f"Write-once publication for {target} has no recovery marker"
+                )
+            marker, marker_state, marker_revision = prepared_marker
+            if _bound_snapshot(directory_fd, marker) != (
+                marker_state,
+                marker_revision,
+            ):
+                raise DataError(
+                    f"Bound-write marker changed before publication: {marker}"
+                )
+            retain_temporary = True
+            try:
+                _link_entry_exclusive(
+                    directory_fd, temporary_name, target_name
+                )
+            except FileExistsError:
+                raise DataError(
+                    f"Bound target changed before replace: {target}"
+                ) from None
+            published_hard_link = True
+            os.fsync(directory_fd)
+            # If the parent was detached during publication, the captured
+            # bytes remain in that held directory but the caller must not
+            # journal a path that does not name them.
+            _validate_bound_directory(binding)
+            if _bound_snapshot(directory_fd, target_name) != (
+                generated_state,
+                generated_revision,
+            ):
+                raise DataError(
+                    f"Could not verify write-once publication for {target}"
+                )
+            _move_cas_marker(
+                binding,
+                marker,
+                _CAS_VALIDATED_SUFFIX,
+                expected_state=marker_state,
+                expected_revision=marker_revision,
+            )
+            _cleanup_terminal_cas_markers_under_lock(binding, target)
+            temporary_exists = False
+            published_hard_link = False
+            retain_temporary = False
+            os.fsync(directory_fd)
+            _validate_bound_directory(binding)
+            return
+
+        guarded = expected_revision is not None or expected_identity is not None
+        if not guarded:
+            os.replace(
+                temporary_name,
+                target_name,
+                src_dir_fd=directory_fd,
+                dst_dir_fd=directory_fd,
+            )
+            temporary_exists = False
+            os.fsync(directory_fd)
+            _validate_bound_directory(binding)
+            return
+
+        if bound_state is None:
+            raise DataError(f"Bound target changed before replace: {target}")
+        observed_state, observed_revision = _read_bound_entry(
+            directory_fd, target_name
+        )
+        if observed_state != bound_state:
+            raise DataError(f"Bound target changed content: {target}")
+        if expected_identity is not None and observed_state[:2] != expected_identity:
+            raise DataError(f"Bound target changed identity: {target}")
+        if (
+            expected_revision is not None
+            and observed_revision != expected_revision
+        ):
+            raise DataError(f"Bound target changed content: {target}")
+        marker, marker_state, marker_revision = _create_cas_marker(
+            binding,
+            target_name,
+            temporary_name,
+            temporary_identity=generated_state[:2],
+            expected_absent=False,
+            expected_state=observed_state,
+            expected_revision=observed_revision,
+            generated_state=generated_state,
+            generated_revision=generated_revision,
+        )
+        # Once the prepared marker exists, retain the generated temp on every
+        # failure. Recovery needs both names.
+        retain_temporary = True
+        try:
+            if _bound_snapshot(directory_fd, marker) != (
+                marker_state,
+                marker_revision,
+            ):
+                raise DataError(
+                    f"Bound-write marker changed before publication: {marker}"
+                )
+            _exchange_entries(directory_fd, temporary_name, target_name)
+            os.fsync(directory_fd)
+            _validate_bound_directory(binding)
+            displaced_state, displaced_revision = _read_bound_entry(
+                directory_fd, temporary_name
+            )
+            live_state, live_revision = _read_bound_entry(
+                directory_fd, target_name
+            )
+            if (live_state, live_revision) != (
+                generated_state,
+                generated_revision,
+            ):
+                raise DataError(f"Bound target changed before replace: {target}")
+            if bound_state is None or displaced_state != bound_state:
+                raise DataError(f"Bound target changed content: {target}")
+            if (
+                expected_identity is not None
+                and displaced_state[:2] != expected_identity
+            ):
+                raise DataError(f"Bound target changed identity: {target}")
+            if (
+                expected_revision is not None
+                and displaced_revision != expected_revision
+            ):
+                raise DataError(f"Bound target changed content: {target}")
+            _move_cas_marker(
+                binding,
+                marker,
+                _CAS_VALIDATED_SUFFIX,
+                expected_state=marker_state,
+                expected_revision=marker_revision,
+            )
+        except BaseException as cause:
+            retain_temporary = True
+            try:
+                _recover_bound_target_under_lock(binding, target)
+                temporary_exists = False
+            except BaseException as recovery_error:
+                raise DataError(
+                    f"{cause}. Could not safely recover {target}; the active "
+                    f"transaction and both names were retained: {recovery_error}"
+                ) from cause
+            raise
+        # The validated marker is the crash-durable commit point. Anything
+        # before its directory fsync rolls back on the next bound read;
+        # anything after keeps the generated public bytes. Terminal cleanup
+        # retains that marker whenever it cannot also retire the exact temp.
+        _cleanup_terminal_cas_markers_under_lock(binding, target)
+        temporary_exists = False
+        retain_temporary = False
+        os.fsync(directory_fd)
+        _validate_bound_directory(binding)
+    finally:
+        if (
+            temporary_exists
+            and not retain_temporary
+            and not published_hard_link
+            and not _has_active_cas_marker(binding, target_name)
+        ):
+            _retire_exact_entry(
+                binding,
+                temporary_name,
+                generated_state,
+                generated_revision,
+            )
+
+
+def _capture_bytes_bound(path: Path, data: bytes) -> _BoundFileReceipt:
+    """Publish one write-once paid reply while retaining its terminal WAL.
+
+    The ordinary bound writer finalizes its WAL before returning.  A paid
+    reply needs one additional durability seam: its journal receipt cannot be
+    written until publication has succeeded, but publication must remain
+    operation-bound until that receipt is durable.  This writer therefore
+    retires the private hard link, captures the public file's final ctime, and
+    leaves the validated marker in place for :func:`_finalize_bound_capture`.
+    """
+    target = Path(path).absolute()
+    generated_revision = hashlib.sha256(data).hexdigest()
+    temporary_name = ""
+    temporary_identity: tuple[int, int] | None = None
+    try:
+        with (
+            exclusive_path_lock(_cas_lock_path(target)),
+            _open_bound_directory(target.parent, create=True) as binding,
+            contextlib.ExitStack() as cleanup,
+        ):
+            directory_fd = binding.descriptor
+
+            # Never settle an earlier capture merely because a callback was
+            # invoked again.  Until its journal receipt exists, the marker is
+            # the only durable proof that the lexical public name is ours.
+            if _has_active_cas_marker(binding, target.name):
+                raise DataError(
+                    f"An incomplete bound write already exists for {target}"
+                )
+            try:
+                before = os.stat(
+                    target.name,
+                    dir_fd=directory_fd,
+                    follow_symlinks=False,
+                )
+            except FileNotFoundError:
+                before = None
+            if before is not None:
+                if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+                    raise DataError(
+                        f"Refusing to replace non-regular target {target}"
+                    )
+                raise DataError(f"Bound target changed before replace: {target}")
+
+            current_umask = os.umask(0)
+            os.umask(current_umask)
+            mode = 0o666 & ~current_umask
+            descriptor, temporary_name, temporary_identity = (
+                _allocate_bound_temporary(binding, target.name, mode)
+            )
+
+            def cleanup_temporary() -> None:
+                if temporary_name and not _has_active_cas_marker(
+                    binding, target.name
+                ):
+                    _retire_created_entry(
+                        binding, temporary_name, temporary_identity
+                    )
+
+            cleanup.callback(cleanup_temporary)
+            marker = ""
+            marker_state: _EntryState | None = None
+            marker_revision = ""
+            with os.fdopen(descriptor, "wb") as handle:
+                marker, marker_state, marker_revision = _create_cas_marker(
+                    binding,
+                    target.name,
+                    temporary_name,
+                    temporary_identity=temporary_identity,
+                    expected_absent=True,
+                    expected_state=None,
+                    expected_revision=None,
+                    generated_state=None,
+                    generated_revision=generated_revision,
+                    retirement_snapshot_required=True,
+                )
+                handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+
+            generated_state, observed_revision = _read_bound_entry(
+                directory_fd, temporary_name
+            )
+            if (
+                temporary_identity is None
+                or generated_state[:2] != temporary_identity
+                or observed_revision != generated_revision
+            ):
+                raise DataError(
+                    f"Could not verify operation-bound capture for {target}"
+                )
+            if _bound_snapshot(directory_fd, marker) != (
+                marker_state,
+                marker_revision,
+            ):
+                raise DataError(
+                    f"Bound-write marker changed before publication: {marker}"
+                )
+            try:
+                _link_entry_exclusive(directory_fd, temporary_name, target.name)
+            except FileExistsError:
+                raise DataError(
+                    f"Bound target changed before replace: {target}"
+                ) from None
+            os.fsync(directory_fd)
+            _validate_bound_directory(binding)
+            if _bound_snapshot(directory_fd, target.name) != (
+                generated_state,
+                generated_revision,
+            ):
+                raise DataError(
+                    f"Could not verify write-once publication for {target}"
+                )
+            temporary_retirement_snapshot = _cleanup_bound_snapshot(
+                directory_fd, temporary_name
+            )
+            public_retirement_snapshot = _cleanup_bound_snapshot(
+                directory_fd, target.name
+            )
+            if (
+                temporary_retirement_snapshot is None
+                or temporary_retirement_snapshot != public_retirement_snapshot
+            ):
+                raise DataError(
+                    f"Could not bind private retirement for captured answer "
+                    f"{target}"
+                )
+            marker_state, marker_revision = _append_cas_retirement_snapshot(
+                binding,
+                marker,
+                target.name,
+                expected_state=marker_state,
+                expected_revision=marker_revision,
+                temporary_snapshot=temporary_retirement_snapshot,
+            )
+            marker = _move_cas_marker(
+                binding,
+                marker,
+                _CAS_VALIDATED_SUFFIX,
+                expected_state=marker_state,
+                expected_revision=marker_revision,
+            )
+
+            def public_still_holds_answer() -> bool:
+                current = _bound_snapshot(directory_fd, target.name)
+                _validate_bound_directory(binding)
+                return current == (generated_state, generated_revision)
+
+            if not _retire_exact_entry(
+                binding,
+                temporary_name,
+                temporary_retirement_snapshot[0][:4],
+                temporary_retirement_snapshot[1],
+                expected_ctime_ns=temporary_retirement_snapshot[0][4],
+                confirm_while_reversible=public_still_holds_answer,
+            ):
+                raise DataError(
+                    f"Committed write-once bound write for {target} cannot "
+                    "retire its private answer while the public name is changing"
+                )
+            temporary_name = ""
+            entry_state, public_revision = _read_cleanup_bound_entry(
+                directory_fd, target.name
+            )
+            if (
+                entry_state[:2] != generated_state[:2]
+                or public_revision != generated_revision
+            ):
+                raise DataError(
+                    f"Committed write-once bound write for {target} lost its "
+                    "public answer before receipt"
+                )
+            # The marker must still be terminal and exact when the receipt is
+            # handed to the journal.  Its retirement is deliberately later.
+            marker_entry_state, final_marker_revision = (
+                _read_cleanup_bound_entry(directory_fd, marker)
+            )
+            if (
+                not marker.endswith(_CAS_VALIDATED_SUFFIX)
+                or marker_entry_state[:4] != marker_state
+                or final_marker_revision != marker_revision
+            ):
+                raise DataError(
+                    f"Bound-write marker changed before receipt: {marker}"
+                )
+            parent = os.fstat(directory_fd)
+            _validate_bound_directory(binding)
+            return _BoundFileReceipt(
+                target=target,
+                directory_identity=(parent.st_dev, parent.st_ino),
+                entry_state=entry_state,
+                content_sha256=public_revision,
+                marker_name=marker,
+                marker_state=marker_entry_state,
+                marker_revision=final_marker_revision,
+            )
+    except DataError:
+        raise
+    except OSError as exc:
+        raise DataError(f"Could not write {target}: {exc.strerror or exc}") from exc
+
+
+def _finalize_bound_capture(expected: _BoundFileReceipt) -> None:
+    """Retire a capture's terminal marker after its journal receipt is durable."""
+    target = expected.target
+
+    def retire_detached_marker() -> None:
+        _retire_detached_entry(
+            expected.directory_identity,
+            expected.marker_name,
+            expected.marker_state[:4],
+            expected.marker_revision,
+            expected_ctime_ns=expected.marker_state[4],
+        )
+
+    try:
+        with (
+            exclusive_path_lock(_cas_lock_path(target)),
+            _open_cleanup_directory(
+                target.parent, expected.directory_identity
+            ) as binding,
+        ):
+            if binding is None:
+                retire_detached_marker()
+                return
+            _retire_receipted_marker(
+                binding,
+                directory_identity=expected.directory_identity,
+                name=expected.marker_name,
+                expected_state=expected.marker_state,
+                expected_revision=expected.marker_revision,
+            )
+            os.fsync(binding.descriptor)
+            _validate_bound_directory(binding)
+    except DataError:
+        raise
+    except OSError as exc:
+        raise DataError(
+            f"Could not finalize captured answer {target}: {exc.strerror or exc}"
+        ) from exc
+
+
+def atomic_write_bytes_bound(
+    path: Path,
+    data: bytes,
+    *,
+    expected_absent: bool = False,
+) -> None:
     """Atomically replace one regular directory entry without following links.
 
     Paid media staging and canonical promotion deliberately do *not* inherit
     the ordinary writer's symlink-through behavior: a malicious or accidental
     symlink would otherwise overwrite a different live clip. The directory
     descriptor also binds the temp and replace operations to the same real
-    directory entry.
+    directory entry. ``expected_absent`` makes a recovery artifact write-once:
+    a reply already captured under that operation ID is evidence, never a
+    target for a later callback to replace.
     """
     target = Path(path).absolute()
-    directory_fd = -1
     temporary_name = ""
+    temporary_identity: tuple[int, int] | None = None
+    prepared_marker: tuple[str, _EntryState, str] | None = None
+    generated_revision = hashlib.sha256(data).hexdigest()
     try:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        parent_details = os.lstat(target.parent)
-        if stat.S_ISLNK(parent_details.st_mode) or not stat.S_ISDIR(
-            parent_details.st_mode
+        with (
+            exclusive_path_lock(_cas_lock_path(target)),
+            _open_bound_directory(target.parent, create=True) as binding,
+            contextlib.ExitStack() as cleanup,
         ):
-            raise DataError(f"Refusing non-directory staging parent {target.parent}")
-        directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
-        directory_flags |= getattr(os, "O_NOFOLLOW", 0)
-        directory_fd = os.open(target.parent, directory_flags)
-        try:
-            before = os.stat(target.name, dir_fd=directory_fd, follow_symlinks=False)
-        except FileNotFoundError:
-            bound_state: tuple[int, int, int, int] | None = None
-            current_umask = os.umask(0)
-            os.umask(current_umask)
-            mode = 0o666 & ~current_umask
-        else:
-            if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
-                raise DataError(f"Refusing to replace non-regular target {target}")
-            bound_state = (
-                before.st_dev,
-                before.st_ino,
-                before.st_size,
-                before.st_mtime_ns,
-            )
-            mode = stat.S_IMODE(before.st_mode)
-        descriptor = -1
-        for _attempt in range(20):
-            temporary_name = f".{target.name}.{secrets.token_hex(8)}.tmp"
+            directory_fd = binding.descriptor
+            _recover_bound_target_under_lock(binding, target)
+
+            def cleanup_temporary() -> None:
+                if temporary_name and not _has_active_cas_marker(
+                    binding, target.name
+                ):
+                    _retire_created_entry(
+                        binding,
+                        temporary_name,
+                        temporary_identity,
+                    )
+
+            cleanup.callback(cleanup_temporary)
             try:
-                descriptor = os.open(
-                    temporary_name,
-                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
-                    mode,
+                before = os.stat(
+                    target.name,
                     dir_fd=directory_fd,
+                    follow_symlinks=False,
                 )
-                break
-            except FileExistsError:
-                continue
-        if descriptor < 0:
-            raise DataError(f"Could not allocate a temporary file for {target}")
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(data)
-            handle.flush()
-            os.fsync(handle.fileno())
-        try:
-            final = os.stat(target.name, dir_fd=directory_fd, follow_symlinks=False)
-        except FileNotFoundError:
-            if bound_state is not None:
-                raise DataError(f"Bound target changed before replace: {target}") from None
-        else:
-            final_state = (
-                final.st_dev,
-                final.st_ino,
-                final.st_size,
-                final.st_mtime_ns,
+            except FileNotFoundError:
+                bound_state: _EntryState | None = None
+                current_umask = os.umask(0)
+                os.umask(current_umask)
+                mode = 0o666 & ~current_umask
+            else:
+                if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+                    raise DataError(
+                        f"Refusing to replace non-regular target {target}"
+                    )
+                if expected_absent:
+                    raise DataError(
+                        f"Bound target changed before replace: {target}"
+                    )
+                bound_state = _entry_state(before)
+                mode = stat.S_IMODE(before.st_mode)
+            descriptor, temporary_name, temporary_identity = (
+                _allocate_bound_temporary(binding, target.name, mode)
             )
-            if (
-                bound_state is None
-                or stat.S_ISLNK(final.st_mode)
-                or not stat.S_ISREG(final.st_mode)
-                or final_state != bound_state
-            ):
-                raise DataError(f"Bound target changed before replace: {target}")
-        os.replace(
-            temporary_name,
-            target.name,
-            src_dir_fd=directory_fd,
-            dst_dir_fd=directory_fd,
-        )
-        temporary_name = ""
-        os.fsync(directory_fd)
+            with os.fdopen(descriptor, "wb") as handle:
+                if expected_absent:
+                    prepared_marker = _create_cas_marker(
+                        binding,
+                        target.name,
+                        temporary_name,
+                        temporary_identity=temporary_identity,
+                        expected_absent=True,
+                        expected_state=None,
+                        expected_revision=None,
+                        generated_state=None,
+                        generated_revision=generated_revision,
+                    )
+                handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            commit_name = temporary_name
+            temporary_name = ""
+            _commit_bound_target(
+                binding,
+                commit_name,
+                target,
+                bound_state=bound_state,
+                expected_revision=None,
+                expected_identity=None,
+                expected_absent=expected_absent,
+                prepared_marker=prepared_marker,
+            )
     except DataError:
         raise
     except OSError as exc:
         raise DataError(f"Could not write {target}: {exc.strerror or exc}") from exc
-    finally:
-        if directory_fd >= 0:
-            if temporary_name:
-                with contextlib.suppress(OSError):
-                    os.unlink(temporary_name, dir_fd=directory_fd)
-            os.close(directory_fd)
 
 
 def atomic_write_text_bound(
@@ -346,50 +3770,78 @@ def atomic_write_text_bound(
     if expected_revision is not None and expected_absent:
         raise DataError("A bound write cannot expect content and absence together")
     target = Path(path).absolute()
-    try:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
-        directory_flags |= getattr(os, "O_NOFOLLOW", 0)
-        directory_fd = os.open(target.parent, directory_flags)
-    except OSError as exc:
-        raise DataError(f"Could not open target directory for {target}: {exc}") from exc
     temporary_name = ""
+    temporary_identity: tuple[int, int] | None = None
+    prepared_marker: tuple[str, _EntryState, str] | None = None
+    generated_revision = hashlib.sha256(text.encode("utf-8")).hexdigest()
     try:
-        try:
-            details = os.stat(target.name, dir_fd=directory_fd, follow_symlinks=False)
-        except FileNotFoundError:
-            current_umask = os.umask(0)
-            os.umask(current_umask)
-            mode = 0o666 & ~current_umask
-        else:
-            if stat.S_ISLNK(details.st_mode) or not stat.S_ISREG(details.st_mode):
-                raise DataError(f"Refusing to replace non-regular target {target}")
-            mode = stat.S_IMODE(details.st_mode)
-        descriptor = -1
-        for _attempt in range(20):
-            temporary_name = f".{target.name}.{secrets.token_hex(8)}.tmp"
+        with (
+            exclusive_path_lock(_cas_lock_path(target)),
+            _open_bound_directory(target.parent, create=True) as binding,
+            contextlib.ExitStack() as cleanup,
+        ):
+            directory_fd = binding.descriptor
+            _recover_bound_target_under_lock(binding, target)
+
+            def cleanup_temporary() -> None:
+                if temporary_name and not _has_active_cas_marker(
+                    binding, target.name
+                ):
+                    _retire_created_entry(
+                        binding,
+                        temporary_name,
+                        temporary_identity,
+                    )
+
+            cleanup.callback(cleanup_temporary)
             try:
-                descriptor = os.open(
-                    temporary_name,
-                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
-                    mode,
+                details = os.stat(
+                    target.name,
                     dir_fd=directory_fd,
+                    follow_symlinks=False,
                 )
-                break
-            except FileExistsError:
-                continue
-        if descriptor < 0:
-            raise DataError(f"Could not allocate a temporary file for {target}")
-        try:
+            except FileNotFoundError:
+                current_umask = os.umask(0)
+                os.umask(current_umask)
+                mode = 0o666 & ~current_umask
+            else:
+                if stat.S_ISLNK(details.st_mode) or not stat.S_ISREG(
+                    details.st_mode
+                ):
+                    raise DataError(
+                        f"Refusing to replace non-regular target {target}"
+                    )
+                if expected_absent:
+                    raise DataError(
+                        f"Bound target changed before replace: {target}"
+                    )
+                mode = stat.S_IMODE(details.st_mode)
+            descriptor, temporary_name, temporary_identity = (
+                _allocate_bound_temporary(binding, target.name, mode)
+            )
             with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+                if expected_absent:
+                    prepared_marker = _create_cas_marker(
+                        binding,
+                        target.name,
+                        temporary_name,
+                        temporary_identity=temporary_identity,
+                        expected_absent=True,
+                        expected_state=None,
+                        expected_revision=None,
+                        generated_state=None,
+                        generated_revision=generated_revision,
+                    )
                 handle.write(text)
                 handle.flush()
                 os.fsync(handle.fileno())
-            bound_state: tuple[int, int, int, int] | None = None
+            bound_state: _EntryState | None = None
             try:
                 current_fd = os.open(
                     target.name,
-                    os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+                    os.O_RDONLY
+                    | getattr(os, "O_NOFOLLOW", 0)
+                    | getattr(os, "O_NONBLOCK", 0),
                     dir_fd=directory_fd,
                 )
             except FileNotFoundError:
@@ -404,12 +3856,7 @@ def atomic_write_text_bound(
                     current_details = os.fstat(current_fd)
                     if expected_absent or not stat.S_ISREG(current_details.st_mode):
                         raise DataError(f"Bound target changed before replace: {target}")
-                    bound_state = (
-                        current_details.st_dev,
-                        current_details.st_ino,
-                        current_details.st_size,
-                        current_details.st_mtime_ns,
-                    )
+                    bound_state = _entry_state(current_details)
                     if (
                         expected_identity is not None
                         and bound_state[:2] != expected_identity
@@ -422,78 +3869,58 @@ def atomic_write_text_bound(
                         if digest.hexdigest() != expected_revision:
                             raise DataError(f"Bound target changed content: {target}")
                     after_hash = os.fstat(current_fd)
-                    if (
-                        after_hash.st_dev,
-                        after_hash.st_ino,
-                        after_hash.st_size,
-                        after_hash.st_mtime_ns,
-                    ) != bound_state:
+                    if _entry_state(after_hash) != bound_state:
                         raise DataError(f"Bound target changed content: {target}")
                 finally:
                     os.close(current_fd)
-            try:
-                final_details = os.stat(
-                    target.name,
-                    dir_fd=directory_fd,
-                    follow_symlinks=False,
-                )
-            except FileNotFoundError:
-                if bound_state is not None:
-                    raise DataError(
-                        f"Bound target changed before replace: {target}"
-                    ) from None
-            else:
-                if bound_state is None or (
-                    final_details.st_dev,
-                    final_details.st_ino,
-                    final_details.st_size,
-                    final_details.st_mtime_ns,
-                ) != bound_state:
-                    raise DataError(f"Bound target changed before replace: {target}")
-            os.replace(
-                temporary_name,
-                target.name,
-                src_dir_fd=directory_fd,
-                dst_dir_fd=directory_fd,
-            )
+            commit_name = temporary_name
             temporary_name = ""
-            os.fsync(directory_fd)
-        finally:
-            if temporary_name:
-                with contextlib.suppress(OSError):
-                    os.unlink(temporary_name, dir_fd=directory_fd)
+            _commit_bound_target(
+                binding,
+                commit_name,
+                target,
+                bound_state=bound_state,
+                expected_revision=expected_revision,
+                expected_identity=expected_identity,
+                expected_absent=expected_absent,
+                prepared_marker=prepared_marker,
+            )
     except DataError:
         raise
     except OSError as exc:
         raise DataError(f"Could not write {target}: {exc.strerror or exc}") from exc
-    finally:
-        os.close(directory_fd)
 
 
-def load_structured(path: Path) -> Any:
+def _parse_structured_text(path: Path, text: str) -> Any:
     suffix = path.suffix.lower()
     try:
-        with path.open("r", encoding="utf-8") as handle:
-            if suffix == ".json":
-                return json.load(handle)
-            if suffix in {".yaml", ".yml"}:
-                return yaml.safe_load(handle)
-    except FileNotFoundError as exc:
-        raise DataError(f"File not found: {path}") from exc
-    except OSError as exc:
-        raise DataError(f"Could not read {path}: {exc.strerror or exc}") from exc
-    except (json.JSONDecodeError, yaml.YAMLError, UnicodeDecodeError) as exc:
-        # `UnicodeDecodeError` alongside the parse errors: it is raised by the
-        # *read*, before either parser sees anything, so a file that is not
-        # UTF-8 at all otherwise escapes every `except JankiError` above this
-        # and takes down whatever was reading it — a dashboard walking staging
-        # files, or a page asking whether a paid call is safe to start.
+        if suffix == ".json":
+            return json.loads(text)
+        if suffix in {".yaml", ".yml"}:
+            return yaml.safe_load(text)
+    except (json.JSONDecodeError, yaml.YAMLError) as exc:
         raise DataError(f"Could not parse {path}: {exc}") from exc
     raise DataError(f"Unsupported file type for {path}; expected JSON or YAML")
 
 
+def load_structured(path: Path) -> Any:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise DataError(f"File not found: {path}") from exc
+    except OSError as exc:
+        raise DataError(f"Could not read {path}: {exc.strerror or exc}") from exc
+    except UnicodeDecodeError as exc:
+        raise DataError(f"Could not parse {path}: {exc}") from exc
+    return _parse_structured_text(path, text)
+
+
 def load_records(path: Path) -> list[VocabularyRecord]:
-    data = load_structured(path)
+    try:
+        text = read_text_bound(path)
+    except FileNotFoundError as exc:
+        raise DataError(f"File not found: {path}") from exc
+    data = _parse_structured_text(path, text)
     if isinstance(data, dict) and "records" in data:
         data = data["records"]
     if not isinstance(data, list):

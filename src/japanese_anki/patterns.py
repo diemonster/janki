@@ -33,6 +33,7 @@ Two uses, and they are different:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from collections.abc import Iterable, Mapping, Sequence
@@ -43,7 +44,11 @@ from uuid import UUID
 
 from japanese_anki.errors import JankiError
 from japanese_anki.identifiers import han_character_class, normalize_identity_part
-from japanese_anki.io import atomic_write_text, exclusive_path_lock
+from japanese_anki.io import (
+    atomic_write_text_bound,
+    exclusive_path_lock,
+    read_text_bound,
+)
 
 __all__ = [
     "CHECKABLE_KINDS",
@@ -52,6 +57,7 @@ __all__ = [
     "Pattern",
     "PatternError",
     "PatternSet",
+    "entry_fingerprint",
     "format_patterns",
     "load_store",
     "load_store_text",
@@ -353,11 +359,17 @@ def load_store_text(
 def load_store(path: Path) -> dict[str, PatternSet]:
     """Every document janki has read, keyed by its file name."""
     file = Path(path)
-    if not file.exists():
-        return {}
+    if file.is_symlink():
+        raise PatternError(f"Refusing a symlinked pattern store: {file}")
+    if file.parent.is_symlink() or (
+        file.parent.exists() and not file.parent.is_dir()
+    ):
+        raise PatternError(f"Refusing non-directory pattern-store parent: {file.parent}")
     try:
-        text = file.read_text(encoding="utf-8")
-    except OSError as exc:
+        text = read_text_bound(file)
+    except FileNotFoundError:
+        return {}
+    except JankiError as exc:
         raise PatternError(f"Could not read {file}: {exc}") from exc
     return load_store_text(text, source=str(file))
 
@@ -422,6 +434,38 @@ def _json_object_members(
         offset = _skip_json_whitespace(text, offset + 1)
 
 
+def entry_fingerprint(
+    captured_text: str,
+    source_key: str,
+    *,
+    source: str = "<captured pattern store>",
+) -> str | None:
+    """Hash one source's exact raw JSON value, or None when it is absent.
+
+    A replacement consent covers this source's grammar, not an unrelated
+    lesson somebody reviews while the page is open. The whole store is still
+    validated before locating the member, so an unreadable entry can never be
+    silently dropped merely because it belongs to another source.
+    """
+    load_store_text(captured_text, source=source)
+    members, end = _json_object_members(captured_text, 0, source=source)
+    if _skip_json_whitespace(captured_text, end) != len(captured_text):
+        raise PatternError(
+            f"{source}: unexpected content after the pattern-store object"
+        )
+    matching = [member for member in members if member.key == source_key]
+    if not matching:
+        return None
+    if len(matching) != 1:
+        raise PatternError(
+            f"{source}: expected at most one pattern-store entry for {source_key!r}"
+        )
+    entry = matching[0]
+    return hashlib.sha256(
+        captured_text[entry.value_start : entry.value_end].encode("utf-8")
+    ).hexdigest()
+
+
 def render_reviewed_update(
     captured_text: str,
     source_key: str,
@@ -478,9 +522,21 @@ def render_reviewed_update(
     return rendered
 
 
-def _save_store_unlocked(path: Path, store: Mapping[str, PatternSet]) -> None:
+def _save_store_unlocked(
+    path: Path,
+    store: Mapping[str, PatternSet],
+    *,
+    expected_revision: str | None = None,
+    expected_absent: bool = False,
+) -> None:
     """Render and atomically replace a store whose caller owns the transaction."""
-    atomic_write_text(Path(path), render_store(store))
+    rendered = render_store(store)
+    atomic_write_text_bound(
+        Path(path),
+        rendered,
+        expected_revision=expected_revision,
+        expected_absent=expected_absent,
+    )
 
 
 def save_store(path: Path, store: Mapping[str, PatternSet]) -> None:
@@ -495,14 +551,27 @@ def save_store(path: Path, store: Mapping[str, PatternSet]) -> None:
         save_store_under_lock(path, store)
 
 
-def save_store_under_lock(path: Path, store: Mapping[str, PatternSet]) -> None:
+def save_store_under_lock(
+    path: Path,
+    store: Mapping[str, PatternSet],
+    *,
+    expected_revision: str | None = None,
+    expected_absent: bool = False,
+) -> None:
     """Write a store when the caller already holds this exact path's lock.
 
     Path locks are not re-entrant. This seam lets a command protect the whole
     load-modify-save transition, and lets a transaction spanning staging and
-    patterns acquire both locks before changing either file.
+    patterns acquire both locks before changing either file. The optional
+    expected wire revision (or expected absence) protects the final replace
+    from an editor that ignores that advisory lock.
     """
-    _save_store_unlocked(path, store)
+    _save_store_unlocked(
+        path,
+        store,
+        expected_revision=expected_revision,
+        expected_absent=expected_absent,
+    )
 
 
 #: The only kind that steers a sentence. A ``pattern`` document is a conjugation

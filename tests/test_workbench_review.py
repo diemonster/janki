@@ -20,6 +20,7 @@ from pathlib import Path
 import pytest
 
 from japanese_anki import extract, patterns, staging
+from japanese_anki import io as data_io
 from japanese_anki.io import atomic_write_text_bound
 from japanese_anki.models import (
     EXAMPLE_AUTHORITY_KEY,
@@ -417,16 +418,17 @@ def test_open_capture_refuses_a_final_symlink_swap(
     moved = tmp_path / f"captured-{target.name}"
     swapped = False
 
-    def swap_before_open(path: Path) -> int:
+    real_read_bound = data_io._read_bound_bytes
+
+    def swap_before_read(directory_fd: int, name: str):
         nonlocal swapped
-        candidate = Path(path)
-        if candidate == target and not swapped:
+        if name == target.name and not swapped:
             target.replace(moved)
             target.symlink_to(moved)
             swapped = True
-        return os.open(candidate, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        return real_read_bound(directory_fd, name)
 
-    monkeypatch.setattr(panel_module, "_open_no_follow", swap_before_open, raising=False)
+    monkeypatch.setattr(data_io, "_read_bound_bytes", swap_before_read)
 
     with pytest.raises(ReviewPanelError, match="regular non-symlink|capture"):
         _open(files)
@@ -445,19 +447,20 @@ def test_open_capture_refuses_a_same_bytes_path_replacement_after_open(
     target = files.staging_path if target_name == "staging" else files.patterns_path
     moved = tmp_path / f"opened-{target.name}"
     original = target.read_bytes()
+    target_identity = (target.stat().st_dev, target.stat().st_ino)
     swapped = False
+    real_read = os.read
 
-    def replace_during_read(descriptor: int) -> bytes:
+    def replace_during_read(descriptor: int, size: int) -> bytes:
         nonlocal swapped
-        target.replace(moved)
-        target.write_bytes(original)
-        swapped = True
-        chunks = []
-        while chunk := os.read(descriptor, 64 * 1024):
-            chunks.append(chunk)
-        return b"".join(chunks)
+        opened = os.fstat(descriptor)
+        if not swapped and (opened.st_dev, opened.st_ino) == target_identity:
+            target.replace(moved)
+            target.write_bytes(original)
+            swapped = True
+        return real_read(descriptor, size)
 
-    monkeypatch.setattr(panel_module, "_read_open_fd", replace_during_read, raising=False)
+    monkeypatch.setattr(data_io.os, "read", replace_during_read)
 
     with pytest.raises(ReviewPanelError, match="capture|path changed"):
         _open(files)

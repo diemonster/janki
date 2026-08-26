@@ -125,6 +125,22 @@ applies to them. The journal moves
 `outcome_unknown`, `failed_before_send`, `canceled_before_send`, and `expired`
 as terminal or holding states. A dispatched call whose outcome is unknown is
 never retried automatically — a fresh charge requires fresh authority.
+`janki operations --show-reply ID` is the only advertised recovery reader: it
+streams the exact bytes revalidated through their public or private
+write-ahead binding, without publishing a private reply, adopting a same-name
+replacement, settling the call, or changing the journal. A recorded artifact
+name is historical metadata, not proof that reply bytes remain accessible.
+Normal capture keeps its terminal operation-bound marker until the
+`result_captured` journal write durably records the relative name, pending
+directory identity, five-field file snapshot (including ctime), and response
+digest, together with the exact terminal marker's direct name, five-field
+snapshot, and digest. The private hard link is retired before that snapshot,
+so its removal cannot immediately stale the receipt; only after the receipt is
+durable may that exact marker be finalized. A missing, replaced, or unreadable
+marker falls back to the receipt-bound public answer and is never freshly
+adopted or retired. Thus a crash before the journal write leaves WAL
+proof, and one after it leaves receipt proof. With neither proof, a lexical
+operation-id filename is never freshly adopted, even when its bytes match.
 
 **One journaled call at a time.** The journal refuses to authorize a new one
 while any entry is live or holds money nobody has accounted for — every state
@@ -136,8 +152,20 @@ check read when a page renders and acted on when a button is clicked is one
 two callers can both pass. Nothing lifts the block automatically, because only
 a person can say a vanished process is gone. `janki operations --end` records
 that — as `canceled_before_send` when nothing was sent, as `outcome_unknown`
-when a request left and no answer came back — and `--forget` drops an entry
-once they have dealt with what it cost.
+when a request left and no answer came back — and `--forget` records that they
+have dealt with what it cost. Forgetting first records the exact
+directory, inode and content bindings it is authorized to retire in that same
+journal entry. A crash retries only those bindings without asking for a new
+force decision or adopting a same-name replacement. The lexical pending
+directory is part of that authority: if it is missing, symlinked/non-directory,
+or stably opens as a different directory inode after a checkout, cleanup
+touches no names there, never searches for the moved inode, preserves the
+replacement namespace, and closes the now-unreachable binding. Other probe or
+I/O failures keep the entry. The entry disappears only after its still-bound
+names retire or their old namespace is proven no longer bound. That durable
+forget decision means the call's money is accounted for and no longer blocks a
+new authorization, while a cleanup-only entry remains listed with its exact
+ordinary `--forget` retry.
 
 ## Surfaces
 

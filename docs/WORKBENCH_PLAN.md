@@ -548,10 +548,10 @@ scope.
 
 ### [~] W3 claimed workbench-w0-w2a 2026-08-25 — Intake and the extraction job
 
-*Progress 2026-08-25: everything except the dispatch itself. **Intake** ships —
+*Progress 2026-08-25: everything except page preview at intake. **Intake** ships —
 upload into the durable inbox, a conflicting basename refused in plain
 language, and "this copies the file and sends it nowhere" on the control.
-**The consent page** (`GET /<token>/extract/<name>`, no POST behind it) plans
+**The consent page** (`GET /<token>/extract/<name>`) plans
 the real run so the request identity it describes is the one that would be
 journalled, and carries every disclosure this task names, plus a sixth the
 plan did not: prose mode also sends the collection's known expressions as a
@@ -560,7 +560,7 @@ only, said rather than implied. Mode choice is a real GET form — the first
 version was radios with no form, a control that controlled nothing. A re-read
 names the review it would destroy ("3 cards, Examples need review — not
 recoverable"), which is the naming half of "separately confirmed"; the
-confirming half arrives with the POST.*
+confirming half is an explicit checkbox on the paid POST.*
 
 *The paid-call machinery underneath is done and hardened: authority journalled
 before dispatch, the exact reply persisted before parsing, `outcome_unknown`
@@ -574,15 +574,35 @@ authority when a process dies between them, which `janki operations --end`
 retires as `canceled_before_send`. A retrospective audit of the journal (three
 commits that had gone in unreviewed) found several paths where a paid answer
 stayed on disk while janki reported the call came back empty; those are fixed
-and pinned.*
+and pinned. Recovery now names an executable
+`janki operations --show-reply ID`, which streams only exact bytes proven by
+their public or private write-ahead binding and changes no state; a recorded
+artifact path alone is never advertised as proof that bytes remain readable.
+Successful capture now retains its terminal write-ahead marker until the
+journal durably stores the public reply's portable name, pending-directory
+identity, five-field snapshot and digest, plus the exact terminal marker's
+direct name, five-field snapshot and digest; only then is that marker
+finalized. A missing, replaced or unreadable marker falls back to the public
+receipt and is neither freshly adopted nor retired. That receipt, never a
+later fresh binding of either lexical name, proves the ordinary
+`result_captured` reply after the WAL is gone.
+Forget cleanup is also journalled before it removes an artifact or write-ahead
+name, so a killed cleanup resumes its exact prior bindings without fresh force
+or authority over a replacement. The pending-directory identity is part of
+that binding: a checkout-created replacement is preserved and janki never
+searches for the moved old namespace.*
 
-*Left: the POST that dispatches, and with it the bound action token and the
-replacement confirmation; the four progress states (**Preparing pages**,
-**Reading the source**, **Checking the answer's shape**, **Saving proposals**);
-page preview at intake. `busy_refusal` is a display of the gate, so the POST
-must still be refused by `authorize` under the lock rather than by that
-value — and an `OperationError` reaching the handler should render as a
-refusal, not a 500.*
+*The dispatch now ships. Its submit button carries a session-only, one-use
+capability bound to the rendered source, mode, model, source hash and request
+fingerprint. The POST consumes it, re-plans from disk with `force` supplied
+only by the explicit replacement confirmation, and refuses if the fresh
+request differs. It reaches `OperationJournal.authorize` under the lock even
+when the earlier `busy_refusal` display was clear, streams **Preparing pages**,
+**Reading the source**, **Checking the answer's shape** and **Saving
+proposals** with no invented percentage, and calls the same
+`complete_extraction` writer as the CLI. A provider refusal or truncation says
+that nothing was staged while preserving the journal's paid-answer state.
+Left: page preview at intake.*
 
 Drag or pick a file; preview its pages; see the permanent filename; save the
 immutable copy under `data/inbox/`. A conflicting basename refuses in plain
@@ -597,9 +617,11 @@ actions, always.** The consent button names exactly what leaves the computer:
 
 with a separate sentence saying the immutable copy stays local, that only this
 named source is being sent, that the call consumes Anthropic API credits, and
-that Claude Max is a different subscription. Closing a dialog, pressing Enter,
-or an unattended request never grants consent. Replacing an existing
-extraction is separately confirmed and names the review it invalidates.
+that Claude Max is a different subscription. Closing a dialog, an implicit
+Enter submission, or an unattended request never grants consent. Deliberately
+focusing and keyboard-activating the named paid button remains an accessible
+direct action. Replacing an existing extraction is separately confirmed and
+names the card and grammar reviews it invalidates.
 
 **Page selection is request scope.** Whole document, or an exact inclusive
 range. The displayed pages, source hash, ordered page numbers, exact provider

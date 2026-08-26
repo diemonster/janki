@@ -33,6 +33,8 @@ from japanese_anki import (
 from japanese_anki.application.extraction import (
     ANSWER_EMPTY,
     ANSWER_SAVED,
+    ANSWER_UNAVAILABLE,
+    FORGOTTEN,
     authorize_dispatch,
     capture_hook,
     classify_dispatch_failure,
@@ -1980,19 +1982,46 @@ def command_extract(args: argparse.Namespace) -> int:
             if failure.outcome == ANSWER_SAVED:
                 print(
                     f"The answer for {item.origin_path.name} arrived and was "
-                    f"saved before it was refused: {failure.artifact}\n"
-                    f"  It has been paid for. Operation {operation_id}.",
+                    "saved before it was refused.\n"
+                    f"  Read the exact paid reply with 'janki operations "
+                    f"--show-reply {operation_id}'. Operation {operation_id}.",
                     file=sys.stderr,
                 )
             elif failure.outcome == ANSWER_EMPTY:
                 print(
                     f"The reply for {item.origin_path.name} was saved, but it "
-                    f"contains no answer — only the model's reasoning: "
-                    f"{failure.artifact}\n"
+                    "contains no answer — only the model's reasoning.\n"
                     f"  It has still been paid for. Operation {operation_id}. "
-                    f"There is nothing in it to recover.",
+                    "There is nothing in it to recover; inspect the exact reply "
+                    f"with 'janki operations --show-reply {operation_id}'.",
                     file=sys.stderr,
                 )
+            elif failure.outcome == ANSWER_UNAVAILABLE:
+                print(
+                    f"The reply for {item.origin_path.name} was recorded as "
+                    "captured, but its exact recovery bytes are unavailable.\n"
+                    f"  It was still paid for. Operation {operation_id}. "
+                    "Nothing was staged; 'janki operations' shows the explicit "
+                    "discard action if you accept that loss.",
+                    file=sys.stderr,
+                )
+            elif failure.outcome == FORGOTTEN:
+                if failure.cleanup_pending:
+                    print(
+                        "The operation's forget decision was already recorded "
+                        f"before this failure was reported. Operation {operation_id}.\n"
+                        "  Nothing was staged. Finish exact cleanup with "
+                        f"'janki operations --forget {operation_id}'.",
+                        file=sys.stderr,
+                    )
+                else:
+                    print(
+                        f"Operation {operation_id} was already forgotten before "
+                        "this failure was reported.\n"
+                        "  Nothing was staged, and no recovery answer remains "
+                        "in janki operations.",
+                        file=sys.stderr,
+                    )
             elif failure.money_may_have_been_spent:
                 # "Nothing was written" is about staging and is true. It is not
                 # the whole answer, and the missing half is the expensive one:
@@ -4053,6 +4082,11 @@ def command_operations(args: argparse.Namespace) -> int:
             "janki operations takes --end or --forget, not both: ending a call "
             "and dropping its record are separate decisions."
         )
+    if args.show_reply and (args.end or args.forget):
+        raise JankiError(
+            "janki operations takes only one of --show-reply, --end, or "
+            "--forget: reading a reply never settles or discards it."
+        )
     if args.reason and not args.end:
         raise JankiError("janki operations --reason only means anything with --end")
     if args.force and not args.forget:
@@ -4060,6 +4094,16 @@ def command_operations(args: argparse.Namespace) -> int:
 
     config = _load_config(args)
     journal = operations.OperationJournal.load(config.operations_file)
+
+    if args.show_reply:
+        payload = journal.read_reply(args.show_reply)
+        # The recovery artifact is exact provider wire data. Text decoding or
+        # an automatic newline would silently change what a redirected export
+        # contains, so write the bytes and nothing else.
+        sys.stdout.flush()
+        sys.stdout.buffer.write(payload)
+        sys.stdout.buffer.flush()
+        return 0
 
     if args.end:
         ended = journal.end(args.end, detail=args.reason)
@@ -4074,8 +4118,9 @@ def command_operations(args: argparse.Namespace) -> int:
             )
             print(
                 "  The next call can start now. "
-                f"'janki operations --forget {ended.operation_id}' drops the "
-                "record when you want it gone."
+                f"'janki operations --forget {ended.operation_id}' records "
+                "the final cleanup decision when you want its journal entry "
+                "retired."
             )
             return 0
         print(
@@ -4083,9 +4128,11 @@ def command_operations(args: argparse.Namespace) -> int:
             "janki cannot know whether that call was billed."
         )
         print(
-            "  It still counts as needing a person. Once you have dealt with "
-            f"it, 'janki operations --forget {ended.operation_id}' drops it "
-            "and lets the next call start."
+            "  It still counts as needing a person and blocks paid calls. "
+            "Once you have dealt with it, "
+            f"'janki operations --forget {ended.operation_id}' records that "
+            "decision; the next call can start once it is durable, while "
+            "interrupted cleanup stays listed for the same retry."
         )
         return 0
 
@@ -4098,7 +4145,9 @@ def command_operations(args: argparse.Namespace) -> int:
         return 0
 
     for line in status.format_operations(
-        journal.blocking(), noun="janki is still tracking"
+        journal.tracked(),
+        journal_path=config.operations_file,
+        noun="janki is still tracking",
     ):
         print(line)
     return 0
@@ -4312,7 +4361,9 @@ def command_status(args: argparse.Namespace) -> int:
             print(line)
     if args.operations:
         for line in status.format_operations(
-            report.attention, noun="not accounted for"
+            report.tracked_operations,
+            journal_path=config.operations_file,
+            noun="janki is still tracking",
         ):
             print(line)
     if args.unsettled is not None:
@@ -4919,14 +4970,25 @@ def build_parser() -> argparse.ArgumentParser:
 
     operations_parser = subparsers.add_parser(
         "operations",
-        help="Show paid model calls needing a decision, and end stuck ones",
+        help="Show paid model calls that block spending or need cleanup",
+    )
+    operations_parser.add_argument(
+        "--show-reply",
+        metavar="ID",
+        help=(
+            "Write the exact currently bound provider reply to stdout without "
+            "settling it. Redirect stdout to export it. Private write-ahead "
+            "evidence is read through its binding; replacement public names "
+            "are never adopted."
+        ),
     )
     operations_parser.add_argument(
         "--end",
         metavar="ID",
         help=(
-            "Say a call that will never finish is over. It is recorded as an "
-            "unknown outcome, because janki cannot know whether it was billed."
+            "Say a call that will never finish is over. It is recorded as "
+            "canceled if nothing was sent, or as an unknown outcome if it may "
+            "have reached the provider."
         ),
     )
     operations_parser.add_argument(
@@ -4938,16 +5000,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--forget",
         metavar="ID",
         help=(
-            "Drop a finished call from the journal, so the next one can start. "
-            "Refuses a call still in flight."
+            "Record that a finished call has been dealt with, then retire its "
+            "still-bound exact recovery names. A missing or replaced pending "
+            "namespace is preserved and never adopted. Once the decision is "
+            "durable the next call can start; interrupted cleanup stays listed "
+            "and this same command resumes it. Refuses a call still in flight."
         ),
     )
     operations_parser.add_argument(
         "--force",
         action="store_true",
         help=(
-            "With --forget, drop an entry that still holds a reply nobody "
-            "turned into staging. That reply was paid for and this deletes it."
+            "With --forget, explicitly confirm discarding a reply nobody "
+            "turned into staging. That paid reply is bound before exact cleanup."
         ),
     )
     operations_parser.set_defaults(handler=command_operations)

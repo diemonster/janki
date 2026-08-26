@@ -7,6 +7,8 @@ imported and then repaired — it has to wait in staging for a human.
 from __future__ import annotations
 
 import difflib
+import errno
+import hashlib
 import io
 import json
 from dataclasses import replace
@@ -15,6 +17,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+import japanese_anki.io as janki_io
 from japanese_anki import cli
 from japanese_anki import staging as staging_module
 from japanese_anki.io import DataError, load_records
@@ -332,34 +335,285 @@ def test_read_staging_reports_a_malformed_file(tmp_path: Path) -> None:
         read_staging(tmp_path / "missing.yaml")
 
 
-def test_a_staging_file_is_written_through_the_atomic_writer(
+def test_a_new_staging_file_is_atomically_bound_to_absence(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # A staging file holds hand-edited readings that exist nowhere else — not
     # in git, not in the source CSV once it is gone. A direct write_text here
     # leaves no .tmp file either, so only the call itself proves the contract.
     path = tmp_path / "candidates.yaml"
-    calls: list[tuple[Path, str]] = []
+    calls: list[tuple[Path, str, dict[str, object]]] = []
+
+    def observed_write(target: Path, text: str, **kwargs: object) -> None:
+        calls.append((target, text, kwargs))
+
     monkeypatch.setattr(
         staging_module,
-        "atomic_write_text",
-        lambda target, text: calls.append((target, text)),
+        "atomic_write_text_bound",
+        observed_write,
     )
 
     write_staging(path, [_record()], {"source_file": "export.csv"})
 
-    assert [target for target, _ in calls] == [path]
+    assert [target for target, _text, _kwargs in calls] == [path]
     assert yaml.safe_load(calls[0][1])["records"][0]["id"] == "word:話す:はなす"
+    assert calls[0][2] == {"expected_revision": None, "expected_absent": True}
     assert not path.exists()
 
 
+def test_forced_staging_write_refuses_a_final_symlink_swap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "candidates.yaml"
+    write_staging(path, [_record()], {"source_file": "export.csv"})
+    outside = tmp_path / "owner-data.yaml"
+    outside.write_bytes(b"must not change\n")
+    real_write = staging_module.atomic_write_text_bound
+
+    def swap_then_write(target: Path, text: str, **kwargs: object) -> None:
+        Path(target).unlink()
+        Path(target).symlink_to(outside)
+        real_write(target, text, **kwargs)
+
+    monkeypatch.setattr(staging_module, "atomic_write_text_bound", swap_then_write)
+
+    with pytest.raises(DataError, match="non-regular|Bound target changed"):
+        write_staging(
+            path,
+            [_record(expression="聞く", reading="きく")],
+            {"source_file": "export.csv"},
+            force=True,
+        )
+
+    assert path.is_symlink()
+    assert outside.read_bytes() == b"must not change\n"
+
+
+def test_expected_revision_retains_an_edit_made_at_the_atomic_commit_seam(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "candidates.yaml"
+    confirmed = b"confirmed review\n"
+    edited = b"new human edit\n"
+    path.write_bytes(confirmed)
+    real_exchange = getattr(janki_io, "_exchange_entries", None)
+    injected = False
+
+    def edit_then_exchange(*args: object, **kwargs: object) -> None:
+        nonlocal injected
+        path.write_bytes(edited)
+        injected = True
+        assert real_exchange is not None
+        real_exchange(*args, **kwargs)
+
+    monkeypatch.setattr(
+        janki_io, "_exchange_entries", edit_then_exchange, raising=False
+    )
+
+    with pytest.raises(DataError, match="both names were retained"):
+        janki_io.atomic_write_text_bound(
+            path,
+            "paid replacement\n",
+            expected_revision=hashlib.sha256(confirmed).hexdigest(),
+        )
+
+    assert injected
+    assert path.read_bytes() == b"paid replacement\n"
+    retained = list(tmp_path.glob(f".{path.name}.*.tmp"))
+    assert len(retained) == 1
+    assert retained[0].read_bytes() == edited
+    with pytest.raises(DataError, match="bound evidence"):
+        janki_io.read_bytes_bound(path)
+
+
+def test_expected_revision_refuses_a_parent_detached_at_the_atomic_commit_seam(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    staging_dir = tmp_path / "staging"
+    staging_dir.mkdir()
+    path = staging_dir / "candidates.yaml"
+    confirmed = b"confirmed review\n"
+    path.write_bytes(confirmed)
+    held = tmp_path / "held-staging"
+    real_exchange = getattr(janki_io, "_exchange_entries", None)
+    swapped = False
+
+    def detach_then_exchange(*args: object, **kwargs: object) -> None:
+        nonlocal swapped
+        if not swapped:
+            staging_dir.rename(held)
+            staging_dir.mkdir()
+            swapped = True
+        assert real_exchange is not None
+        real_exchange(*args, **kwargs)
+
+    monkeypatch.setattr(
+        janki_io, "_exchange_entries", detach_then_exchange, raising=False
+    )
+
+    with pytest.raises(DataError, match="directory changed"):
+        janki_io.atomic_write_text_bound(
+            path,
+            "paid replacement\n",
+            expected_revision=hashlib.sha256(confirmed).hexdigest(),
+        )
+
+    assert swapped
+    assert not path.exists()
+    assert (held / path.name).read_bytes() == confirmed
+
+
+def test_expected_revision_retains_both_files_if_rollback_cannot_be_proven(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "candidates.yaml"
+    confirmed = b"confirmed review\n"
+    replacement = b"paid replacement\n"
+    path.write_bytes(confirmed)
+    real_exchange = janki_io._exchange_entries
+    calls = 0
+
+    def edit_then_block_rollback(*args: object, **kwargs: object) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            real_exchange(*args, **kwargs)
+            return
+        raise OSError(errno.EIO, "rollback unavailable")
+
+    monkeypatch.setattr(janki_io, "_exchange_entries", edit_then_block_rollback)
+
+    def fail_commit_marker(*_args: object, **_kwargs: object) -> str:
+        raise OSError(errno.EIO, "commit marker unavailable")
+
+    monkeypatch.setattr(janki_io, "_move_cas_marker", fail_commit_marker)
+
+    with pytest.raises(DataError, match="both names were retained"):
+        janki_io.atomic_write_text_bound(
+            path,
+            replacement.decode("utf-8"),
+            expected_revision=hashlib.sha256(confirmed).hexdigest(),
+        )
+
+    retained = list(tmp_path.glob(f".{path.name}.*.tmp"))
+    assert calls == 2
+    assert path.read_bytes() == replacement
+    assert len(retained) == 1
+    assert retained[0].read_bytes() == confirmed
+
+
+def test_expected_revision_fails_closed_without_atomic_exchange(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "candidates.yaml"
+    confirmed = b"confirmed review\n"
+    path.write_bytes(confirmed)
+
+    def unavailable(*_args: object, **_kwargs: object) -> None:
+        raise OSError(errno.ENOTSUP, "atomic exchange unavailable")
+
+    monkeypatch.setattr(janki_io, "_exchange_entries", unavailable)
+
+    with pytest.raises(DataError, match="atomic exchange unavailable"):
+        janki_io.atomic_write_text_bound(
+            path,
+            "paid replacement\n",
+            expected_revision=hashlib.sha256(confirmed).hexdigest(),
+        )
+
+    assert path.read_bytes() == confirmed
+    assert list(tmp_path.glob(f".{path.name}.*.tmp")) == []
+
+
+@pytest.mark.parametrize("operation", ["rewrite", "coverage", "prune"])
+def test_in_place_staging_mutations_preserve_a_final_seam_edit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+) -> None:
+    path = tmp_path / "candidates.yaml"
+    first = _record()
+    records = [first]
+    meta: dict[str, object] = {"source_file": "export.csv"}
+    if operation == "coverage":
+        meta["coverage"] = {}
+    if operation == "prune":
+        records.append(
+            _record(
+                id="word:聞く:きく",
+                expression="聞く",
+                reading="きく",
+            )
+        )
+    write_staging(path, records, meta)
+    captured = path.read_bytes()
+    human = captured + b"# final human edit\n"
+    real_write = staging_module.atomic_write_text_bound
+    observed_revision = ""
+
+    def edit_then_write(target: Path, text: str, **kwargs: object) -> None:
+        nonlocal observed_revision
+        observed_revision = str(kwargs.get("expected_revision", ""))
+        path.write_bytes(human)
+        real_write(target, text, **kwargs)
+
+    monkeypatch.setattr(staging_module, "atomic_write_text_bound", edit_then_write)
+
+    with pytest.raises(DataError, match="changed content"):
+        if operation == "rewrite":
+            staging_module.rewrite_staging(
+                path,
+                [replace(first, meanings=["changed meaning"])],
+            )
+        elif operation == "coverage":
+            staging_module.record_coverage_approval(
+                path,
+                {"authority": "human", "reason": "reviewed"},
+            )
+        else:
+            staging_module.prune_staging(path, [True, False])
+
+    assert observed_revision == hashlib.sha256(captured).hexdigest()
+    assert path.read_bytes() == human
+
+
+@pytest.mark.parametrize("operation", ["rewrite", "coverage", "prune"])
+def test_in_place_staging_mutations_report_a_file_removed_after_review(
+    tmp_path: Path,
+    operation: str,
+) -> None:
+    path = tmp_path / "candidates.yaml"
+    first = _record()
+    records = [first]
+    meta: dict[str, object] = {"source_file": "export.csv"}
+    if operation == "coverage":
+        meta["coverage"] = {}
+    if operation == "prune":
+        records.append(
+            _record(id="word:聞く:きく", expression="聞く", reading="きく")
+        )
+    write_staging(path, records, meta)
+    reviewed, _reviewed_meta = read_staging(path)
+    path.unlink()
+
+    with pytest.raises(StagingError, match="no longer exists"):
+        if operation == "rewrite":
+            staging_module.rewrite_staging(path, reviewed)
+        elif operation == "coverage":
+            staging_module.record_coverage_approval(
+                path,
+                {"authority": "human", "reason": "reviewed"},
+            )
+        else:
+            staging_module.prune_staging(path, [True, False])
+
+
 @pytest.mark.parametrize("name", ["candidates.json", "candidates", "candidates.txt"])
-def test_write_staging_refuses_a_suffix_nothing_could_read_back(
+def test_write_staging_refuses_a_name_outside_the_yaml_review_contract(
     tmp_path: Path, name: str
 ) -> None:
-    # The content is YAML whatever the name says, and read_staging dispatches on
-    # the suffix — so a .json staging file writes fine and every read of it
-    # fails with a parse error far from the call that created it.
+    # The repository contract keeps every review artifact visibly YAML even
+    # though the bound reader parses the captured wire rather than its suffix.
     with pytest.raises(StagingError) as error:
         write_staging(tmp_path / name, [_record()], {})
 

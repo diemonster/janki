@@ -25,6 +25,10 @@ __all__ = [
     "STYLE",
     "render_consent",
     "render_dashboard",
+    "render_extraction_failure",
+    "render_extraction_progress_start",
+    "render_extraction_progress_step",
+    "render_extraction_success",
     "render_reidentify",
     "render_source",
 ]
@@ -146,6 +150,11 @@ a.button:active { transform: translateY(1px); }
 .disclosure { margin-block: 1rem; padding-inline-start: 1.25rem; }
 .disclosure li { margin-block: .5rem; }
 .advanced { border: 1px solid GrayText; border-radius: .35rem; padding: .75rem; }
+.implicit-submit-guard { position: absolute; inline-size: 1px; block-size: 1px;
+  padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%);
+  white-space: nowrap; border: 0; }
+.progress { padding-inline-start: 1.5rem; }
+.progress li { margin-block: .65rem; }
 .submit { position: sticky; bottom: 0; padding: 1rem; background: Canvas;
   border-top: 1px solid GrayText; }
 .card, .pattern {
@@ -1019,7 +1028,13 @@ def _mode_choice(prefix: str, name: str, selected: str | None) -> str:
     )
 
 
-def render_consent(consent: Any, *, token: str = "") -> str:
+def render_consent(
+    consent: Any,
+    *,
+    token: str = "",
+    csrf: str = "",
+    dispatch: str = "",
+) -> str:
     """The page that asks whether to spend money, and says what on.
 
     Every sentence here is load-bearing (WORKBENCH_PLAN.md W3). It names the
@@ -1084,10 +1099,15 @@ def render_consent(consent: Any, *, token: str = "") -> str:
     if consent.replaces is not None:
         # Named, not merely flagged: "this will replace your review" is not a
         # decision anybody can make without knowing which review.
-        held = (
+        card_review = (
             f"{consent.replaces_cards} cards, {_escaped(consent.replaces_state)}"
             if consent.replaces_state
             else "a review already on disk"
+        )
+        held = (
+            f"{card_review}; {_escaped(consent.replaces_grammar)}"
+            if consent.replaces_grammar
+            else card_review
         )
         body.append(
             '<p class="status held">Reading this again replaces what you '
@@ -1103,14 +1123,99 @@ def render_consent(consent: Any, *, token: str = "") -> str:
         '<p class=counts>Nothing has been sent. This page only describes what '
         "sending would do.</p>"
     )
-    if consent.sendable:
-        # The page that asks the question must not be the only one without an
-        # answer to it. Sending from here arrives in the next step; until it
-        # does, the way that exists gets named rather than left to be guessed.
+    if consent.sendable and csrf and dispatch and consent.target is not None:
+        action = html.escape(
+            f"{prefix}/extract/{quote(consent.name, safe='')}", quote=True
+        )
+        fingerprint = html.escape(
+            str(consent.target.provenance["request_fingerprint"]), quote=True
+        )
+        escaped_csrf = html.escape(csrf, quote=True)
+        escaped_mode = html.escape(consent.mode or "", quote=True)
+        escaped_model = html.escape(consent.model, quote=True)
+        body.append(f'<form method=post action="{action}" class=submit>')
+        # HTML implicit submission clicks the first submit button. A disabled
+        # default makes an ordinary Enter harmless; the later paid button is
+        # still keyboard-focusable for an intentional activation.
         body.append(
-            "<p class=counts>Sending from this page is not built yet. To go "
-            f"ahead now, run <code>janki extract {_escaped(consent.name)}"
-            "</code> in a terminal.</p>"
+            '<button type=submit disabled class="implicit-submit-guard" '
+            'aria-hidden=true tabindex=-1>Do not send</button>'
+        )
+        body.append('<input type=hidden name=action value="extract">')
+        body.append(
+            f'<input type=hidden name=csrf value="{escaped_csrf}">'
+            f'<input type=hidden name=mode value="{escaped_mode}">'
+            f'<input type=hidden name=model value="{escaped_model}">'
+            f'<input type=hidden name=request_fingerprint value="{fingerprint}">'
+            f'<input type=hidden name=replacement value="{1 if consent.replaces else 0}">'
+        )
+        if consent.replaces is not None:
+            review_scope = (
+                "the card and grammar reviews named above"
+                if consent.replaces_grammar
+                else "the card review named above"
+            )
+            body.append(
+                '<label class=decision><input type=checkbox name=replace '
+                'value="confirmed" required> <span>I confirm that reading '
+                f"this source again replaces {review_scope}, and that work "
+                "is not recoverable.</span></label>"
+            )
+        body.append(
+            '<button type=submit name="dispatch" '
+            f'value="{html.escape(dispatch, quote=True)}">Send {name} to '
+            f"{_escaped(consent.model)} to propose vocabulary cards and "
+            "grammar — paid API call</button></form>"
         )
     body.append("</main></body></html>")
     return "".join(body)
+
+
+def render_extraction_progress_start(name: str, *, token: str) -> str:
+    """Open the streamed extraction page; later chunks close it."""
+    prefix = f"/{html.escape(token, quote=True)}"
+    return (
+        "<!doctype html><html lang=en><head><meta charset=utf-8>"
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        f"<title>Reading {_escaped(name)}</title>"
+        f'<link rel=stylesheet href="{prefix}/style.css">'
+        "</head><body><main>"
+        f"<h1>Reading {_escaped(name)}</h1>"
+        '<p class=saved>Keep this page open. Closing it does not cancel a call '
+        "that has already been sent.</p>"
+        '<ol class=progress aria-live=polite>'
+    )
+
+
+def render_extraction_progress_step(label: str) -> str:
+    """One truthful human phase, appended while the POST is running."""
+    return f'<li role=status><strong>{_escaped(label)}</strong></li>'
+
+
+def render_extraction_success(name: str, outcome: Any, *, token: str) -> str:
+    """Close a streamed progress page with the shared writer's result."""
+    target = f"/{html.escape(token, quote=True)}/source/{quote(name, safe='')}"
+    noun = "proposal" if outcome.records == 1 else "proposals"
+    note = (
+        " The grammar review already on disk was kept."
+        if outcome.kept_reviewed_patterns
+        else ""
+    )
+    return (
+        "</ol>"
+        f'<p class="status reviewed">Saved {outcome.records} card {noun} and '
+        f"the grammar from this source.{note}</p>"
+        f'<p><a class=button href="{html.escape(target, quote=True)}">'
+        "Review proposed cards</a></p>"
+        "</main></body></html>"
+    )
+
+
+def render_extraction_failure(message: str, note: str) -> str:
+    """Close a streamed page without claiming more than the journal proves."""
+    return (
+        "</ol>"
+        f'<p class="status problem" role=alert>{_escaped(message)}</p>'
+        f'<p class=counts>{_escaped(note)}</p>'
+        "</main></body></html>"
+    )

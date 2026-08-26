@@ -119,14 +119,16 @@ janki workbench
 It lists every source and what each is waiting for, and opening one shows its
 proposed cards beside their source evidence. The address it prints carries
 that session's key: the page is served only to this computer, and only to a
-request that presents the key. It makes no model call and loads no remote
-asset. Checking a card immediately
-binds approval to the exact Japanese examples displayed; checking the pattern
-set marks that complete current set reviewed. Unchecked items are unchanged,
-and the panel never edits content or promotes records. Meanings and other card
-fields are source-scoped display context, not part of the example approval. If
-either underlying file changes while the page is open, submission refuses so
-an older page cannot approve newer text.
+request that presents the key. Adding a source sends it nowhere; a separate
+consent page names the source, model and API charge before an explicit button
+can start extraction. The workbench loads no remote asset. Checking a card
+immediately binds approval to the exact Japanese examples displayed; checking
+the pattern set marks that complete current set reviewed. Unchecked items are
+unchanged, and approval never edits content or promotes records; editing and
+removing proposals are separate, named actions. Meanings and other card fields
+are source-scoped display context, not part of the example approval. If either
+underlying file changes while the page is open, submission refuses so an older
+page cannot approve newer text.
 
 The manual equivalent for a card is to type
 `example_authority: staging-review` in that extract row's
@@ -239,7 +241,7 @@ own collection is the newer side. Details and the measurements behind them:
 | Command | What it does |
 | --- | --- |
 | `janki extract FILE...` | Read each PDF or photo once into rich staged cards and unreviewed patterns |
-| `janki workbench` | Open a local page showing every source's state, and approve staged examples and grammar |
+| `janki workbench` | Add and extract sources, inspect their state, and review staged cards and grammar locally |
 | `janki patterns [--review DOCUMENT]` | List or review patterns already emitted by `extract` |
 | `janki import-shirabe FILE.csv` | Import a Shirabe Jisho export |
 | `janki import-jpdb --deck NAME` | Import a jpdb deck (`--all-decks` for every one) |
@@ -254,7 +256,7 @@ own collection is the newer side. Details and the measurements behind them:
 | `janki build [DECK]` | Build one deck, or `--all` |
 | `janki preview DECK` | A browser preview, no Anki needed |
 | `janki status` | Records, ledger, what is missing |
-| `janki operations` | Paid model calls janki is still tracking. `--end ID` retires one that will never finish; `--forget ID` drops a finished one so the next call can start |
+| `janki operations` | Paid model calls that block spending or need cleanup. `--show-reply ID` writes an exact still-bound reply to stdout without changing it; `--end ID` settles one that will never finish; `--forget ID` records the final decision, unblocks spending, and retires still-bound exact recovery names without adopting a replaced pending namespace |
 | `janki refresh` | enrich → audio → build, in order. The jpdb-backed
 stage needs `JPDB_API_KEY`; without it that stage is skipped and the run exits
 non-zero rather than reporting a refresh that enriched nothing |
@@ -266,8 +268,12 @@ bare deck name as well as a path — `janki build verbs` finds
 `refresh` runs four of these. Everything else — the importers, `extract`,
 `patterns`, `promote`, `kanji`, `validate`, `preview` and `status` — is yours to
 run when it applies. `janki operations` is the one you should not need: it
-exists for the day a paid call is interrupted, because janki refuses to start
-a second one until somebody says what happened to the first. Run `janki kanji` after words with new characters arrive:
+exists for the day a paid call or its exact cleanup is interrupted, because
+janki refuses to start a second call until somebody accounts for the first and
+keeps incomplete cleanup visible until it finishes. A reply shown by
+`--show-reply` is streamed exactly and remains tracked; redirect stdout to
+export it before making a forget decision. Run `janki kanji` after words with
+new characters arrive:
 a character nobody looked up simply has no stroke-order block on the card.
 
 ## Configuration

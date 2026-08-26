@@ -40,9 +40,10 @@ from ruamel.yaml.scalarstring import DoubleQuotedScalarString
 
 from japanese_anki.errors import JankiError
 from japanese_anki.io import (
-    atomic_write_text,
+    DataError,
+    atomic_write_text_bound,
     exclusive_path_lock,
-    load_structured,
+    read_text_bound,
     validate_prefer_incoming,
 )
 from japanese_anki.models import EXAMPLE_AUTHORITY_KEY, VocabularyRecord
@@ -181,9 +182,8 @@ def is_model_pass(meta: Mapping[str, Any], *, collection_name: str = "") -> bool
 FIELD_REPLACEMENTS_KEY = "field_replacements"
 FIELD_REPLACEMENTS_VERSION = 1
 
-# ``read_staging`` parses by suffix (via ``load_structured``), so a staging file
-# written under any other suffix would be write-only: the write succeeds and
-# every read of it fails.
+# Staging suffixes remain an explicit writer contract so review files are
+# recognizable as YAML to people and ordinary tools as well as to janki.
 STAGING_SUFFIXES: tuple[str, ...] = (".yaml", ".yml")
 
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -1131,20 +1131,25 @@ def _write_staging_unlocked(
     records: Iterable[VocabularyRecord],
     meta: Mapping[str, Any] | None = None,
     force: bool = False,
+    *,
+    expected_revision: str | None = None,
 ) -> Path:
     """Implementation shared by the ordinary and already-locked writers."""
     path = Path(path)
     review_run_id(meta or {})
     if path.suffix.lower() not in STAGING_SUFFIXES:
         raise StagingError(
-            f"Staging files are YAML: {path} would be written as YAML under a "
-            f"'{path.suffix}' name and read_staging parses by suffix, so nothing "
-            f"could read it back. Use {' or '.join(STAGING_SUFFIXES)}."
+            f"Staging review files use YAML names: {path} has the unsupported "
+            f"suffix '{path.suffix}'. Use {' or '.join(STAGING_SUFFIXES)}."
         )
-    if path.exists() and not force:
+    if (path.exists() or path.is_symlink()) and not force:
         raise StagingError(
             f"Staging file already exists: {path}. It may hold review edits you have "
             "not committed; move it aside or re-run with force to overwrite."
+        )
+    if expected_revision is not None and not force:
+        raise StagingError(
+            "A staging revision can guard only an explicitly forced replacement"
         )
 
     payload: dict[str, Any] = {}
@@ -1169,7 +1174,17 @@ def _write_staging_unlocked(
         default_flow_style=False,
         width=STAGING_YAML_WIDTH,
     )
-    atomic_write_text(path, text)
+    # Even a first write is a compare-and-swap against absence. A staging
+    # target can appear after the preflight above, and the ordinary atomic
+    # writer follows symlinks; neither may turn a paid answer into an
+    # overwrite outside the staging directory. Forced writes without an exact
+    # revision still use the bound writer so a final-seam symlink swap refuses.
+    atomic_write_text_bound(
+        path,
+        text,
+        expected_revision=expected_revision,
+        expected_absent=not force,
+    )
     return path
 
 
@@ -1179,17 +1194,27 @@ def write_staging(
     records: Iterable[VocabularyRecord],
     meta: Mapping[str, Any] | None = None,
     force: bool = False,
+    *,
+    expected_revision: str | None = None,
 ) -> Path:
     """Write ``records`` and ``meta`` to a staging file at ``path``.
 
     Refuses to overwrite an existing file unless ``force`` is true: the file on
-    disk may hold hand-edited readings not yet committed. Also refuses a suffix
+    disk may hold hand-edited readings not yet committed. A forced caller that
+    already showed exact bytes to a person may supply their SHA-256 revision,
+    making the comparison and replacement one transaction. Also refuses a suffix
     :func:`read_staging` could not parse — the content is YAML whatever the name
     says, so any other suffix produces a file only this function can make sense
     of. A metadata key outside :data:`META_KEYS` is written, with a warning: it
     is readable but nothing downstream looks at it.
     """
-    return _write_staging_unlocked(path, records, meta, force)
+    return _write_staging_unlocked(
+        path,
+        records,
+        meta,
+        force,
+        expected_revision=expected_revision,
+    )
 
 
 def write_staging_under_lock(
@@ -1197,6 +1222,8 @@ def write_staging_under_lock(
     records: Iterable[VocabularyRecord],
     meta: Mapping[str, Any] | None = None,
     force: bool = False,
+    *,
+    expected_revision: str | None = None,
 ) -> Path:
     """Write staging when the caller already holds this exact path's lock.
 
@@ -1204,8 +1231,16 @@ def write_staging_under_lock(
     its done archive. Calling :func:`write_staging` while holding the done lock
     would try to acquire that non-reentrant lock again and deadlock; calling an
     unlocked writer without the outer lock would reopen the data-loss race.
+    ``expected_revision`` closes the final seam against an editor that ignores
+    that advisory lock.
     """
-    return _write_staging_unlocked(path, records, meta, force)
+    return _write_staging_unlocked(
+        path,
+        records,
+        meta,
+        force,
+        expected_revision=expected_revision,
+    )
 
 
 #: Line width for every writer that touches a staging file — and the reason
@@ -1248,7 +1283,7 @@ def _parser() -> YAML:
     return parser
 
 
-def _load_document(path: Path) -> Any:
+def _load_document_snapshot(path: Path) -> tuple[Any, str, str]:
     """A staging file as an editable round-trip document.
 
     Every ruamel failure becomes a :class:`StagingError` naming the path. Two
@@ -1261,14 +1296,21 @@ def _load_document(path: Path) -> Any:
     find that out before it spends an API pass.
     """
     try:
-        with Path(path).open(encoding="utf-8") as handle:
-            document = _parser().load(handle)
-    except YAMLError as exc:
-        raise StagingError(f"Could not read {path} for rewriting: {exc}") from exc
-    if not isinstance(document, MutableMapping) or _RECORDS_KEY not in document:
+        text = read_text_bound(Path(path))
+    except FileNotFoundError as exc:
         raise StagingError(
-            f"Expected a staging mapping with a '{_RECORDS_KEY}:' list in {path}"
-        )
+            f"Could not read {path} for rewriting: the staging file no longer exists"
+        ) from exc
+    except JankiError as exc:
+        raise StagingError(f"Could not read {path} for rewriting: {exc}") from exc
+    document = _load_document_text(text, source=str(path))
+    revision = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return document, text, revision
+
+
+def _load_document(path: Path) -> Any:
+    """Document-only convenience for a read-only rewritability check."""
+    document, _text, _revision = _load_document_snapshot(path)
     return document
 
 
@@ -1545,13 +1587,9 @@ def _rewrite_staging_unlocked(
     written.
     """
     path = Path(path)
-    if not path.exists():
-        raise StagingError(
-            f"No staging file to update at {path}; write_staging creates one."
-        )
 
-    original, _meta = read_staging(path)
-    document = _load_document(path)
+    document, captured_text, revision = _load_document_snapshot(path)
+    original, _meta = read_staging_text(captured_text, source=str(path))
     raw_records = document[_RECORDS_KEY] or []
     if not (len(raw_records) == len(original) == len(records)):
         raise StagingError(
@@ -1569,7 +1607,11 @@ def _rewrite_staging_unlocked(
 
     buffer = io.StringIO()
     _parser().dump(document, buffer)
-    atomic_write_text(path, buffer.getvalue())
+    atomic_write_text_bound(
+        path,
+        buffer.getvalue(),
+        expected_revision=revision,
+    )
     return path
 
 
@@ -1582,8 +1624,8 @@ def render_staging_update(path: Path, records: Sequence[VocabularyRecord]) -> st
     Splitting render from write lets both callers share one implementation of
     "change only what changed" instead of growing a second one.
     """
-    original, _meta = read_staging(path)
-    document = _load_document(path)
+    document, captured_text, _revision = _load_document_snapshot(path)
+    original, _meta = read_staging_text(captured_text, source=str(path))
     raw_records = document[_RECORDS_KEY] or []
     if not (len(raw_records) == len(original) == len(records)):
         raise StagingError(
@@ -1648,9 +1690,7 @@ def record_coverage_approval(
     ask for in as many words.
     """
     path = Path(path)
-    if not path.exists():
-        raise StagingError(f"No staging file to approve at {path}.")
-    document = _load_document(path)
+    document, _captured_text, revision = _load_document_snapshot(path)
     block = document.get(_COVERAGE_KEY)
     if not isinstance(block, MutableMapping):
         raise StagingError(f"{path} carries no coverage block to approve.")
@@ -1663,7 +1703,11 @@ def record_coverage_approval(
 
     buffer = io.StringIO()
     _parser().dump(document, buffer)
-    atomic_write_text(path, buffer.getvalue())
+    atomic_write_text_bound(
+        path,
+        buffer.getvalue(),
+        expected_revision=revision,
+    )
     return path
 
 
@@ -1714,7 +1758,7 @@ def _prune_staging_unlocked(path: Path, keep: Sequence[bool]) -> int:
     is finished or wants keeping is the caller's call, not this function's.
     """
     path = Path(path)
-    document = _load_document(path)
+    document, _captured_text, revision = _load_document_snapshot(path)
     raw_records = document[_RECORDS_KEY] or []
     if len(raw_records) != len(keep):
         raise StagingError(
@@ -1731,7 +1775,11 @@ def _prune_staging_unlocked(path: Path, keep: Sequence[bool]) -> int:
     document[_RECORDS_KEY] = raw_records
     buffer = io.StringIO()
     _parser().dump(document, buffer)
-    atomic_write_text(path, buffer.getvalue())
+    atomic_write_text_bound(
+        path,
+        buffer.getvalue(),
+        expected_revision=revision,
+    )
     return removed
 
 
@@ -1785,7 +1833,7 @@ def render_staging_prune(path: Path, keep: Sequence[bool]) -> str | None:
     away, whose provenance would otherwise name a record nothing holds.
     """
     path = Path(path)
-    document = _load_document(path)
+    document, _captured_text, _revision = _load_document_snapshot(path)
     raw_records = document[_RECORDS_KEY] or []
     if len(raw_records) != len(keep):
         raise StagingError(
@@ -1855,7 +1903,7 @@ def read_staging_text(
     try:
         data = yaml.safe_load(text)
     except yaml.YAMLError as exc:
-        raise StagingError(f"Could not parse staging file {source}: {exc}") from exc
+        raise DataError(f"Could not parse staging file {source}: {exc}") from exc
     return _read_staging_data(data, source=source)
 
 
@@ -1866,4 +1914,8 @@ def read_staging(path: Path) -> tuple[list[VocabularyRecord], dict[str, Any]]:
     survives a read/write round trip.
     """
     path = Path(path)
-    return _read_staging_data(load_structured(path), source=str(path))
+    try:
+        text = read_text_bound(path)
+    except FileNotFoundError as exc:
+        raise DataError(f"File not found: {path}") from exc
+    return read_staging_text(text, source=str(path))

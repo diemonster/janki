@@ -172,9 +172,19 @@ below is what is left, and it is the loop every other project already uses.*
    decision about. A captured artifact is a *recovery buffer*, not an archive:
    once its operation reaches `committed` the answer has become staging, and
    `data/staging/done/` holds the durable copy, so the artifact is deleted with
-   the journal entry. Never delete either by hand while an operation is
-   unfinished, and never re-dispatch an `outcome_unknown` one — a fresh charge
-   needs fresh authority.
+   the journal entry. Read an unfinished reply only through
+   `janki operations --show-reply ID`: it streams exact still-bound bytes
+   without publishing a private write-ahead reply, adopting a replacement,
+   or changing the operation. An entry carrying a `cleanup` intent is a durable,
+   retryable forget decision: rerun its ordinary `janki operations --forget`
+   command until the entry disappears; it no longer blocks a new paid call but
+   remains listed until cleanup succeeds. Cleanup retires only exact names in
+   the still-bound pending-directory inode. A checkout that makes that namespace
+   missing or replaces it is preserved: janki touches no replacement names and
+   never searches for the moved directory before closing the unreachable
+   binding. Never delete its evidence or edit the intent by hand. Never delete
+   either by hand while an operation is unfinished, and never re-dispatch an
+   `outcome_unknown` one — a fresh charge needs fresh authority.
 2. `data/normalized/`: mechanical conversion into the canonical schema.
 3. `data/decks/`: curated deck definitions and human edits.
 4. `data/staging/`: rows an import held back for a human — **committed**, so a
@@ -194,8 +204,9 @@ below is what is left, and it is the loop every other project already uses.*
    examples displayed to their content fingerprints, while the manual
    `staging-review` sentinel remains available for a reviewer editing YAML by
    hand. Its separate pattern-set checkbox writes only the matching store
-   entry's existing `reviewed` mark. It never edits content, promotes rows,
-   accepts coverage, or calls a model. Both
+   entry's existing `reviewed` mark. A human can edit or remove proposed cards,
+   and an exact one-use consent can dispatch journaled extraction; it never
+   promotes rows or accepts coverage. Both
    card-writing paths require a nonblank
    meaning list, complete fields on every returned example, and an explicit
    usage note that may be empty. Schema-v5 extraction additionally requires

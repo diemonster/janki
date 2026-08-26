@@ -37,8 +37,10 @@ from japanese_anki import status as status_module
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.io import (
+    DataError,
     exclusive_path_lock,
     load_records,
+    read_bytes_bound,
     records_revision,
 )
 from japanese_anki.models import VocabularyRecord
@@ -622,11 +624,11 @@ class PromotionDecision:
 def staging_wire(path: Path) -> bytes:
     """Read the exact live-review bytes used by pattern-only promotion's CAS."""
     try:
-        return path.read_bytes()
-    except OSError as exc:
+        return read_bytes_bound(path)
+    except (DataError, OSError) as exc:
         raise PromoteError(
             f"[staging-review-stale] could not snapshot {path}: "
-            f"{exc.strerror or exc}. Nothing was archived."
+            f"{getattr(exc, 'strerror', None) or exc}. Nothing was archived."
         ) from exc
 
 
@@ -637,7 +639,11 @@ def record_review_snapshot(
     """Read one exact live-review snapshot while its writer lock is held."""
     with exclusive_path_lock(path):
         wire = staging_wire(path)
-        records, meta = read_staging(path)
+        try:
+            text = wire.decode("utf-8", errors="strict")
+        except UnicodeDecodeError as exc:
+            raise DataError(f"Could not parse staging file {path}: {exc}") from exc
+        records, meta = staging.read_staging_text(text, source=str(path))
     return wire, records, meta
 
 

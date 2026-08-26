@@ -448,14 +448,18 @@ class StatusReport:
     # answer as "no record is missing one".
     missing_pitch_accent: list[str] | None
     staging_dir: Path
-    #: Paid calls a person has to look at before janki spends again.
+    #: Paid calls whose money is not yet accounted for and therefore block a
+    #: new authorization.
     #:
     #: Here because the extract command tells them to be. When a call is sent
     #: and no answer is captured, the message says "Run 'janki status' to see
     #: it" — and until this line `status` did not read the journal at all, so
     #: somebody following that instruction after a call that may have been
     #: billed was shown nothing about it.
-    attention: tuple[Any, ...] = ()
+    blocking_operations: tuple[operations.Operation, ...] = ()
+    #: The complete actionable operations view: blockers plus durable forget
+    #: decisions whose exact recovery-data cleanup still needs a retry.
+    tracked_operations: tuple[operations.Operation, ...] = ()
     #: ``field name -> record ids`` whose value is still a model's claim: the
     #: mark extraction wrote and nobody who can read the card has settled.
     #:
@@ -511,6 +515,7 @@ def build_report(
     staged: Sequence[StagedFile] = (),
 ) -> StatusReport:
     records = universe.records
+    operation_journal = operations.OperationJournal.load(config.operations_file)
     missing_pitch: list[str] | None = None
     if pitch_accent_supported():
         missing_pitch = [
@@ -557,9 +562,10 @@ def build_report(
         # money that may already be gone, and reporting only the states that
         # need a *decision* let `status` print "every call janki made either
         # landed or is recorded as finished" over exactly that entry.
-        attention=tuple(
-            operations.OperationJournal.load(config.operations_file).blocking()
-        ),
+        blocking_operations=tuple(operation_journal.blocking()),
+        # Cleanup tombstones are accounted-for money, but a killed cleanup is
+        # still an actionable journal entry and must remain discoverable.
+        tracked_operations=tuple(operation_journal.tracked()),
         staging_dir=config.staging_dir,
         staged=list(staged),
     )
@@ -730,10 +736,19 @@ def format_report(report: StatusReport) -> list[str]:
         f"Missing enrichment: {len(report.missing_enrichment)} "
         "(no meanings or example sentence)"
     )
-    if report.attention:
+    if report.blocking_operations:
         lines.append(
-            f"Paid calls not accounted for: {len(report.attention)} "
+            f"Paid calls not accounted for: {len(report.blocking_operations)} "
             "(run 'janki operations' for what each one cost)"
+        )
+    cleanup_count = sum(
+        operation.cleanup is not None
+        for operation in report.tracked_operations
+    )
+    if cleanup_count:
+        lines.append(
+            f"Paid-call cleanup pending: {cleanup_count} "
+            "(run 'janki operations' to resume it)"
         )
     if report.provisional:
         lines.append(
@@ -913,18 +928,18 @@ SETTLES = {
 def format_operations(
     attention: Sequence[operations.Operation],
     *,
+    journal_path: Path,
     noun: str = "needing a person",
 ) -> list[str]:
-    """Every paid call in the given set, and what it left behind.
+    """Every actionable paid call in the given set, and its exact next move.
 
-    The state first, because it is what decides the next move: an answer that
-    arrived and was refused has bytes to look at; one that vanished after
-    dispatch is the case where re-running risks paying twice.
+    A durable cleanup intent takes precedence over the old lifecycle state:
+    its money decision is already settled, and only ordinary exact cleanup
+    remains. Otherwise the state decides the next move: an answer that arrived
+    has bytes to inspect, while a vanished reply makes a retry risk paying
+    twice.
 
-    `noun` names what the caller asked for. The two callers ask different
-    questions — "what needs me?" and "what is stopping the next call?" — and a
-    heading that answered the other one would be a list somebody cannot act
-    on.
+    `noun` names the view the caller asked for in the heading.
     """
     if not attention:
         return [
@@ -933,10 +948,40 @@ def format_operations(
         ]
     lines = [f"Paid calls {noun} ({len(attention)}):"]
     for op in attention:
+        quoted_id = shlex.quote(op.operation_id)
         lines.append(f"  {op.operation_id}  {op.kind} · {op.source_file}")
+        if op.cleanup is not None:
+            lines.append(
+                f"    state: cleanup pending (forget recorded from "
+                f"{op.state!r} at {op.updated_at})"
+            )
+            lines.append(
+                "    the forget decision is already recorded; exact "
+                "recovery-data cleanup did not finish, and no new --force "
+                "decision is needed"
+            )
+            lines.append(
+                "    finish cleanup: "
+                f"'janki operations --forget {quoted_id}'"
+            )
+            continue
+        reply = operations.reply_observation(journal_path, op)
         lines.append(f"    state: {op.state}, authorized {op.authorized_at}")
-        if op.artifact:
-            lines.append(f"    the reply is saved at {op.artifact}")
+        if reply.readable:
+            lines.append(
+                "    the exact reply is recoverable: "
+                f"'janki operations --show-reply {quoted_id}'"
+            )
+        elif reply.recorded:
+            lines.append(
+                "    the journal records a captured reply, but its exact "
+                "recovery bytes are unavailable"
+            )
+        elif reply.interrupted:
+            lines.append(
+                "    answer capture was interrupted; operation-bound recovery "
+                "evidence remains, but it does not prove a complete reply"
+            )
         elif op.money_may_have_been_spent:
             # Only when nothing came back. A captured reply was billed too, but
             # its answer is on disk — telling someone a retry "risks a second
@@ -946,16 +991,38 @@ def format_operations(
                 "    it was sent and no answer came back, so re-running it "
                 "risks a second charge"
             )
-        if op.state in operations.IN_FLIGHT:
+        if op.detail:
+            lines.append(f"    {op.detail}")
+        if reply.readable:
+            lines.append(
+                "    after reading the saved reply, explicitly discard its "
+                "recovery copy: "
+                f"'janki operations --forget {quoted_id} --force'"
+            )
+        elif reply.recorded:
+            lines.append(
+                "    if you accept that unavailable recovery copy as lost, "
+                "explicitly discard its record: "
+                f"'janki operations --forget {quoted_id} --force'"
+            )
+        elif op.state == "authorized":
+            lines.append(
+                "    clear this unused authority: "
+                f"'janki operations --end {quoted_id}'"
+            )
+        elif op.state in operations.IN_FLIGHT:
             # The one state whose next move depends on something janki cannot
             # see. A live call finishes on its own; a killed one never will,
             # and only the person at the keyboard knows which this is.
             lines.append(
                 "    if nothing is actually running, that process is gone: "
-                f"'janki operations --end {op.operation_id}'"
+                f"'janki operations --end {quoted_id}'"
             )
-        if op.detail:
-            lines.append(f"    {op.detail}")
+        elif op.state == "outcome_unknown":
+            lines.append(
+                "    once you have dealt with what it may have cost: "
+                f"'janki operations --forget {quoted_id}'"
+            )
     return lines
 
 

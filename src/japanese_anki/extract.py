@@ -1235,7 +1235,16 @@ def staging_targets(
     keeps duplicates rather than discarding them silently; naming the problem
     is how that stays true without one input overwriting the other.
     """
-    targets = [staging_path(staging_dir, item.origin_path.name) for item in prepared]
+    staging_root = Path(staging_dir)
+    if staging_root.is_symlink() or (
+        staging_root.exists() and not staging_root.is_dir()
+    ):
+        raise ExtractError(
+            f"Refusing non-directory staging parent: {staging_root}. Move it "
+            "aside before extracting a source.",
+            code="extract-staging-parent-not-directory",
+        )
+    targets = [staging_path(staging_root, item.origin_path.name) for item in prepared]
     seen: dict[Path, str] = {}
     for target, item in zip(targets, prepared, strict=True):
         if target in seen:
@@ -1246,7 +1255,14 @@ def staging_targets(
                 code="extract-staging-target-collision",
             )
         seen[target] = item.origin_path.name
-        if target.exists() and not force:
+        occupied = target.exists() or target.is_symlink()
+        if occupied and (target.is_symlink() or not target.is_file()):
+            raise ExtractError(
+                f"Refusing non-regular staging target: {target}. Move it aside "
+                "before extracting this source.",
+                code="extract-staging-target-not-regular",
+            )
+        if occupied and not force:
             raise ExtractError(
                 f"Staging file already exists: {target}. It may hold review edits "
                 "you have not committed; move it aside or re-run with force to "

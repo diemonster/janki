@@ -2283,6 +2283,7 @@ def test_the_detail_says_which_call_and_whether_a_retry_costs_again(
     assert "outcome_unknown" in out
     assert "risks a second charge" in out
     assert "connection reset" in out
+    assert f"'janki operations --forget {operation_id}'" in out
 
 
 def test_a_saved_reply_is_named_so_it_can_be_looked_at(
@@ -2298,17 +2299,31 @@ def test_a_saved_reply_is_named_so_it_can_be_looked_at(
         source_sha256="a" * 64, request_fp="b" * 64, model="claude-opus-5",
     )
     journal.advance(operation_id, "dispatching")
-    artifact = operations.capture_artifact(
-        _operations_path(root), operation_id, b'{"content": []}'
+    captured = journal.capture_result(
+        operation_id,
+        lambda: operations.capture_artifact(
+            _operations_path(root), operation_id, b'{"content": []}'
+        ),
     )
-    journal.advance(operation_id, "result_captured", artifact=artifact)
+    artifact = captured.artifact
+    assert artifact is not None
 
     assert _status(root, "--operations") == 0
 
     out = capsys.readouterr().out
-    assert artifact in out
+    assert f"janki operations --show-reply {operation_id}" in out
+    assert artifact.relative_name not in out
+    for private_value in {
+        artifact.content_sha256,
+        *(str(value) for value in artifact.directory_identity),
+        str(artifact.entry_state[1]),
+    }:
+        assert private_value not in out
     # Not the retry warning: this one was answered, and the answer is on disk.
     assert "risks a second charge" not in out
+    assert (
+        f"'janki operations --forget {operation_id} --force'" in out
+    )
 
 
 def test_the_pipe_can_be_narrowed_to_one_field(
@@ -2441,6 +2456,156 @@ def _operations(root: Path, *flags: str) -> int:
     return cli.main(["--root", str(root), "operations", *flags])
 
 
+def _leave_committed_cleanup_pending(
+    root: Path, monkeypatch: pytest.MonkeyPatch
+) -> str:
+    """Leave an exact forget decision whose filesystem cleanup must retry."""
+    path = _operations_path(root)
+    journal = operations.OperationJournal.load(path)
+    operation_id = "op-cleanup"
+    journal.authorize(
+        operation_id,
+        kind="extract",
+        source_file="lesson.pdf",
+        source_sha256="a" * 64,
+        request_fp="b" * 64,
+        model="claude-opus-5",
+    )
+    journal.advance(operation_id, "dispatching")
+    journal.capture_result(
+        operation_id,
+        lambda: operations.capture_artifact(
+            path, operation_id, b'{"content": []}'
+        ),
+    )
+    journal.advance(operation_id, "committed")
+
+    def refuse_cleanup(_binding: Any) -> None:
+        raise operations.OperationError("injected cleanup pause")
+
+    with monkeypatch.context() as cleanup_patch:
+        cleanup_patch.setattr(operations, "_retire_artifact", refuse_cleanup)
+        with pytest.raises(operations.OperationError, match="cleanup pause"):
+            journal.forget([operation_id])
+
+    assert operations.OperationJournal.load(path).operations[
+        operation_id
+    ].cleanup is not None
+    return operation_id
+
+
+def test_operations_lists_pending_cleanup_with_only_its_retry_action(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    operation_id = _leave_committed_cleanup_pending(root, monkeypatch)
+
+    assert _operations(root) == 0
+
+    listed = capsys.readouterr().out
+    assert operation_id in listed
+    assert "state: cleanup pending" in listed
+    assert f"'janki operations --forget {operation_id}'" in listed
+    assert "the reply is saved" not in listed
+    assert f"--end {operation_id}" not in listed
+
+    assert _operations(root, "--forget", operation_id) == 0
+    assert f"Forgot {operation_id}." in capsys.readouterr().out
+
+
+def test_show_reply_refuses_a_durable_forget_before_probing_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    operation_id = _leave_committed_cleanup_pending(root, monkeypatch)
+
+    def stale_evidence_probe(*_args: Any, **_kwargs: Any) -> object:
+        pytest.fail("a durable forget must short-circuit reply evidence")
+
+    monkeypatch.setattr(
+        operations, "_pending_answer_evidence", stale_evidence_probe
+    )
+
+    assert _operations(root, "--show-reply", operation_id) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "being forgotten" in captured.err
+
+
+def test_status_counts_pending_cleanup_separately_and_lists_its_retry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    operation_id = _leave_committed_cleanup_pending(root, monkeypatch)
+
+    assert _status(root) == 0
+    summary = capsys.readouterr().out
+    assert "Paid-call cleanup pending: 1" in summary
+    assert "Paid calls not accounted for: 1" not in summary
+
+    assert _status(root, "--operations") == 0
+    listed = capsys.readouterr().out
+    assert operation_id in listed
+    assert f"'janki operations --forget {operation_id}'" in listed
+
+
+def test_an_unknown_outcome_cleanup_is_listed_once_without_charge_advice(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The money decision is over once forget is durable, even if the old
+    lifecycle state said the provider outcome was unknown."""
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    path = _operations_path(root)
+    journal = operations.OperationJournal.load(path)
+    operation_id = "op-unknown-cleanup"
+    journal.authorize(
+        operation_id,
+        kind="extract",
+        source_file="lesson.pdf",
+        source_sha256="a" * 64,
+        request_fp="b" * 64,
+        model="claude-opus-5",
+    )
+    journal.advance(operation_id, "dispatching")
+    journal.advance(operation_id, "outcome_unknown", detail="connection lost")
+
+    real_write = operations.OperationJournal._write
+    writes = 0
+
+    def fail_final_journal_write(current: operations.OperationJournal) -> None:
+        nonlocal writes
+        writes += 1
+        if writes == 2:
+            raise operations.OperationError("injected final journal write failure")
+        real_write(current)
+
+    with monkeypatch.context() as cleanup_patch:
+        cleanup_patch.setattr(
+            operations.OperationJournal, "_write", fail_final_journal_write
+        )
+        with pytest.raises(
+            operations.OperationError, match="final journal write failure"
+        ):
+            journal.forget([operation_id])
+
+    assert writes == 2
+    assert _operations(root) == 0
+    listed = capsys.readouterr().out
+    assert listed.count(f"  {operation_id}  ") == 1
+    assert "state: cleanup pending" in listed
+    assert f"'janki operations --forget {operation_id}'" in listed
+    assert "risks a second charge" not in listed
+    assert f"--end {operation_id}" not in listed
+
+
 def test_a_stuck_call_is_listed_with_the_way_out_of_it(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -2463,6 +2628,138 @@ def test_a_stuck_call_is_listed_with_the_way_out_of_it(
     assert "janki operations --end op-stuck" in out
 
 
+def test_an_unrecorded_reply_is_listed_with_its_executable_discard_action(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Answer bytes land before their journal pointer. A process killed in
+    that seam must not be shown as a vanished call, and the exact action the
+    view recommends must accept the state it describes."""
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    path = _operations_path(root)
+    journal = operations.OperationJournal.load(path)
+    operation_id = "op-unrecorded-reply"
+    journal.authorize(
+        operation_id,
+        kind="extract",
+        source_file="lesson.pdf",
+        source_sha256="a" * 64,
+        request_fp="b" * 64,
+        model="claude-opus-5",
+    )
+    journal.advance(operation_id, "dispatching")
+    artifact = operations.capture_artifact(
+        path,
+        operation_id,
+        b'{"content":[{"type":"text","text":"cards"}]}',
+    )
+
+    assert _operations(root) == 0
+
+    listed = capsys.readouterr().out
+    assert f"janki operations --show-reply {operation_id}" in listed
+    assert artifact.relative_name not in listed
+    for private_value in {
+        artifact.content_sha256,
+        *(str(value) for value in artifact.directory_identity),
+        str(artifact.entry_state[1]),
+    }:
+        assert private_value not in listed
+    assert "no answer came back" not in listed
+    assert f"--end {operation_id}" not in listed
+    assert (
+        f"'janki operations --forget {operation_id} --force'" in listed
+    )
+
+    assert _operations(root, "--forget", operation_id, "--force") == 0
+    assert f"Forgot {operation_id}." in capsys.readouterr().out
+    assert not operations.OperationJournal.load(path).operations
+    assert not (path.parent / artifact.relative_name).exists()
+
+
+def test_show_reply_streams_exact_bytes_without_settling_the_operation(
+    tmp_path: Path,
+    capfdbinary: pytest.CaptureFixture[bytes],
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    path = _operations_path(root)
+    journal = operations.OperationJournal.load(path)
+    operation_id = "op-readable-reply"
+    journal.authorize(
+        operation_id,
+        kind="extract",
+        source_file="lesson.pdf",
+        source_sha256="a" * 64,
+        request_fp="b" * 64,
+        model="claude-opus-5",
+    )
+    journal.advance(operation_id, "dispatching")
+    payload = b'{"content":[{"type":"text","text":"paid answer"}]}'
+    captured = journal.capture_result(
+        operation_id,
+        lambda: operations.capture_artifact(path, operation_id, payload),
+    )
+    artifact = captured.artifact
+    assert artifact is not None
+    journal_wire = path.read_bytes()
+    target = path.parent / artifact.relative_name
+    target_identity = (target.stat().st_dev, target.stat().st_ino)
+
+    assert _operations(root, "--show-reply", operation_id) == 0
+
+    captured = capfdbinary.readouterr()
+    assert captured.out == payload
+    assert captured.err == b""
+    assert path.read_bytes() == journal_wire
+    assert target.read_bytes() == payload
+    assert (target.stat().st_dev, target.stat().st_ino) == target_identity
+
+
+def test_recorded_reply_with_missing_bytes_is_not_advertised_as_readable(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _project(tmp_path, [_raw("話す", "はなす")], {"vocabulary": _sourced_deck()})
+    path = _operations_path(root)
+    journal = operations.OperationJournal.load(path)
+    operation_id = "op-missing-reply"
+    journal.authorize(
+        operation_id,
+        kind="extract",
+        source_file="lesson.pdf",
+        source_sha256="a" * 64,
+        request_fp="b" * 64,
+        model="claude-opus-5",
+    )
+    journal.advance(operation_id, "dispatching")
+    captured = journal.capture_result(
+        operation_id,
+        lambda: operations.capture_artifact(path, operation_id, b"paid answer"),
+    )
+    artifact = captured.artifact
+    assert artifact is not None
+    (path.parent / artifact.relative_name).unlink()
+
+    assert _operations(root) == 0
+    listed = capsys.readouterr().out
+    assert "exact recovery bytes are unavailable" in listed
+    assert f"--show-reply {operation_id}" not in listed
+    assert artifact.relative_name not in listed
+    for private_value in {
+        artifact.content_sha256,
+        *(str(value) for value in artifact.directory_identity),
+        str(artifact.entry_state[1]),
+    }:
+        assert private_value not in listed
+    assert "no answer came back" not in listed
+    assert f"--forget {operation_id} --force" in listed
+
+    assert _operations(root, "--show-reply", operation_id) == 1
+    shown = capsys.readouterr()
+    assert shown.out == ""
+    assert "exact recovery bytes are unavailable" in shown.err
+
+
 def test_ending_a_call_then_forgetting_it_unblocks_the_next(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -2483,6 +2780,9 @@ def test_ending_a_call_then_forgetting_it_unblocks_the_next(
     assert "cannot know whether that call was billed" in ended
     # Ended is not gone: it still counts, and the message says so.
     assert "still counts as needing a person" in ended
+    assert "blocks paid calls" in ended
+    assert "next call can start once it is durable" in ended
+    assert "interrupted cleanup stays listed" in ended
 
     assert _operations(root, "--forget", "op-stuck") == 0
     assert "Forgot op-stuck" in capsys.readouterr().out
@@ -2525,15 +2825,21 @@ def test_forgetting_a_call_holding_an_unread_reply_needs_saying_twice(
         source_sha256="a" * 64, request_fp="b" * 64, model="claude-opus-5",
     )
     journal.advance("op-paid", "dispatching")
-    artifact = operations.capture_artifact(path, "op-paid", b'{"content": []}')
-    journal.advance("op-paid", "result_captured", artifact=artifact)
+    captured = journal.capture_result(
+        "op-paid",
+        lambda: operations.capture_artifact(
+            path, "op-paid", b'{"content": []}'
+        ),
+    )
+    artifact = captured.artifact
+    assert artifact is not None
 
     assert _operations(root, "--forget", "op-paid") == 1
     assert "paid for and never became staging" in capsys.readouterr().err
-    assert (path.parent / artifact).exists()
+    assert (path.parent / artifact.relative_name).exists()
 
     assert _operations(root, "--forget", "op-paid", "--force") == 0
-    assert not (path.parent / artifact).exists()
+    assert not (path.parent / artifact.relative_name).exists()
 
 
 def test_a_reason_given_for_ending_a_call_is_kept_with_it(
@@ -2578,6 +2884,7 @@ def test_an_orphaned_authority_is_listed_and_can_be_cleared(
     assert "state: authorized" in listed
     # Never "risks a second charge": nothing left the computer.
     assert "second charge" not in listed
+    assert "'janki operations --end op-orphan'" in listed
 
     assert _operations(root, "--end", "op-orphan") == 0
     assert "canceled_before_send" in capsys.readouterr().out
@@ -2624,11 +2931,35 @@ def test_operations_refuses_flags_that_would_be_ignored(
     assert _operations(root, "--end", "a", "--forget", "b") == 1
     assert "not both" in capsys.readouterr().err
 
+    assert _operations(root, "--show-reply", "a", "--forget", "b") == 1
+    assert "only one" in capsys.readouterr().err
+
     assert _operations(root, "--reason", "because") == 1
     assert "only means anything with --end" in capsys.readouterr().err
 
     assert _operations(root, "--force") == 1
     assert "only means anything with --forget" in capsys.readouterr().err
+
+
+def test_operations_help_explains_the_decision_and_cleanup_split(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        cli.build_parser().parse_args(["operations", "--help"])
+
+    assert excinfo.value.code == 0
+    help_text = " ".join(capsys.readouterr().out.lower().split())
+    assert "canceled if nothing was sent" in help_text
+    assert "once the decision is durable the next call can start" in help_text
+    assert (
+        "interrupted cleanup stays listed and this same command resumes it"
+        in help_text
+    )
+    assert "missing or replaced pending namespace is preserved" in help_text
+    assert "explicitly confirm discarding a reply" in help_text
+    assert "write the exact currently bound provider reply to stdout" in help_text
+    assert "redirect stdout to export it" in help_text
+    assert "replacement public names are never adopted" in help_text
 
 
 def test_operations_on_a_project_that_never_paid_for_anything(

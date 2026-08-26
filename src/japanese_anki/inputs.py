@@ -28,12 +28,14 @@ from __future__ import annotations
 import base64
 import contextlib
 import hashlib
+import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
 import unicodedata
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -49,6 +51,7 @@ __all__ = [
     "InputError",
     "PreparedInput",
     "inside",
+    "prepare_corpus_input",
     "prepare_inputs",
 ]
 
@@ -452,6 +455,232 @@ def _heic_to_jpeg(
             raise InputError(
                 f"'sips' reported success but wrote no JPEG for {source.name}: {exc}"
             ) from exc
+
+
+def _heic_bytes_to_jpeg(
+    source_name: str,
+    data: bytes,
+    run: Callable[..., Any],
+    platform: str,
+) -> bytes:
+    """Convert already-bound corpus bytes without reopening their live path."""
+    with tempfile.TemporaryDirectory() as work:
+        captured = Path(work) / Path(source_name).name
+        try:
+            captured.write_bytes(data)
+        except OSError as exc:
+            raise InputError(
+                f"Could not prepare {source_name} for HEIC conversion: {exc}"
+            ) from exc
+        return _heic_to_jpeg(captured, run, platform)
+
+
+def _read_fd_bytes(descriptor: int) -> bytes:
+    chunks: list[bytes] = []
+    while chunk := os.read(descriptor, 1024 * 1024):
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _file_revision(details: os.stat_result) -> tuple[int, int, int, int, int]:
+    return (
+        details.st_dev,
+        details.st_ino,
+        details.st_size,
+        details.st_mtime_ns,
+        details.st_ctime_ns,
+    )
+
+
+def _directory_identity(details: os.stat_result) -> tuple[int, int]:
+    return details.st_dev, details.st_ino
+
+
+def _validate_bound_corpus(
+    *,
+    source: Path,
+    directories: Sequence[tuple[int, str, tuple[int, int]]],
+    file_parent_fd: int,
+    file_name: str,
+    file_fd: int,
+    opened: os.stat_result,
+) -> None:
+    after_fd = os.fstat(file_fd)
+    after_entry = os.stat(file_name, dir_fd=file_parent_fd, follow_symlinks=False)
+    if (
+        not stat.S_ISREG(after_entry.st_mode)
+        or _file_revision(opened) != _file_revision(after_fd)
+        or _file_revision(opened) != _file_revision(after_entry)
+    ):
+        raise InputError(
+            f"The corpus source {source.name} changed while it was being read; "
+            "reload before sending it."
+        )
+    for parent_fd, component, identity in directories:
+        current = os.stat(component, dir_fd=parent_fd, follow_symlinks=False)
+        if not stat.S_ISDIR(current.st_mode) or (
+            _directory_identity(current) != identity
+        ):
+            raise InputError(
+                f"The corpus path for {source.name} changed while it was being "
+                "read; reload before sending it."
+            )
+
+
+@contextlib.contextmanager
+def _bound_corpus_bytes(source: Path, corpus_root: Path) -> Iterator[bytes]:
+    """Hold a no-follow binding to one corpus entry while its bytes are used."""
+    source_abs = Path(os.path.abspath(source))
+    root_abs = Path(os.path.abspath(corpus_root))
+    try:
+        relative = source_abs.relative_to(root_abs)
+    except ValueError as exc:
+        raise InputError(
+            f"{source.name} is not in your corpus yet. Add it first — adding "
+            "a file and sending it to a model are separate steps."
+        ) from exc
+    if not relative.parts or any(part in {"", ".", ".."} for part in relative.parts):
+        raise InputError(f"Refusing a non-direct corpus source: {source}")
+    try:
+        directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        file_flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+    except AttributeError as exc:  # pragma: no cover - platform capability
+        raise InputError(
+            "This platform cannot safely bind a workbench source without "
+            "following links; use janki extract in the terminal instead."
+        ) from exc
+
+    if os.name != "posix":  # pragma: no cover - supported deployment is macOS
+        raise InputError(
+            "This platform cannot safely bind a workbench source without "
+            "following links; use janki extract in the terminal instead."
+        )
+
+    try:
+        with contextlib.ExitStack() as stack:
+            anchor = root_abs.anchor
+            if anchor != "/":  # pragma: no cover - non-POSIX path shape
+                raise InputError(f"Refusing unsupported corpus root: {root_abs}")
+            current_fd = os.open(anchor, directory_flags)
+            stack.callback(os.close, current_fd)
+            directories: list[tuple[int, str, tuple[int, int]]] = []
+            for component in root_abs.parts[1:]:
+                child_fd = os.open(component, directory_flags, dir_fd=current_fd)
+                stack.callback(os.close, child_fd)
+                child_details = os.fstat(child_fd)
+                child_entry = os.stat(
+                    component, dir_fd=current_fd, follow_symlinks=False
+                )
+                if not stat.S_ISDIR(child_details.st_mode) or (
+                    _directory_identity(child_entry)
+                    != _directory_identity(child_details)
+                ):
+                    raise InputError(f"Refusing a replaced corpus root: {root_abs}")
+                directories.append(
+                    (current_fd, component, _directory_identity(child_details))
+                )
+                current_fd = child_fd
+            root_fd = current_fd
+            root_details = os.fstat(root_fd)
+            if not stat.S_ISDIR(root_details.st_mode):
+                raise InputError(f"Refusing a replaced corpus root: {root_abs}")
+
+            for component in relative.parts[:-1]:
+                child_fd = os.open(component, directory_flags, dir_fd=current_fd)
+                stack.callback(os.close, child_fd)
+                child_details = os.fstat(child_fd)
+                child_entry = os.stat(
+                    component, dir_fd=current_fd, follow_symlinks=False
+                )
+                if not stat.S_ISDIR(child_details.st_mode) or (
+                    _directory_identity(child_entry)
+                    != _directory_identity(child_details)
+                ):
+                    raise InputError(f"Refusing a replaced corpus directory: {source}")
+                directories.append(
+                    (current_fd, component, _directory_identity(child_details))
+                )
+                current_fd = child_fd
+
+            name = relative.parts[-1]
+            before = os.stat(name, dir_fd=current_fd, follow_symlinks=False)
+            if not stat.S_ISREG(before.st_mode):
+                raise InputError(f"Refusing a non-regular corpus source: {source}")
+            file_fd = os.open(name, file_flags, dir_fd=current_fd)
+            stack.callback(os.close, file_fd)
+            opened = os.fstat(file_fd)
+            if not stat.S_ISREG(opened.st_mode) or (
+                _directory_identity(before) != _directory_identity(opened)
+            ):
+                raise InputError(f"Refusing a replaced corpus source: {source}")
+
+            data = _read_fd_bytes(file_fd)
+            _validate_bound_corpus(
+                source=source,
+                directories=directories,
+                file_parent_fd=current_fd,
+                file_name=name,
+                file_fd=file_fd,
+                opened=opened,
+            )
+            try:
+                yield data
+            except BaseException:
+                raise
+            else:
+                # HEIC conversion and request encoding happen inside this
+                # context. The provenance entry must still be the one whose
+                # bytes were captured when that work finishes.
+                _validate_bound_corpus(
+                    source=source,
+                    directories=directories,
+                    file_parent_fd=current_fd,
+                    file_name=name,
+                    file_fd=file_fd,
+                    opened=opened,
+                )
+    except InputError:
+        raise
+    except (NotImplementedError, OSError) as exc:
+        raise InputError(f"Could not safely read corpus source {source}: {exc}") from exc
+
+
+def prepare_corpus_input(
+    source: Path,
+    corpus_root: Path,
+    *,
+    run: Callable[..., Any] = subprocess.run,
+    platform: str | None = None,
+) -> PreparedInput:
+    """Capture one existing corpus source without copying or following links.
+
+    This is the workbench reader. Unlike :func:`prepare_inputs`, it never turns
+    an external or replaced path into a new inbox copy: the page is allowed to
+    send only bytes read from the exact direct corpus entry it named.
+    """
+    source = Path(source)
+    kind, media_type, convert = _classify(source)
+    with _bound_corpus_bytes(source, corpus_root) as original:
+        source_sha256 = hashlib.sha256(original).hexdigest()
+        wire = (
+            _heic_bytes_to_jpeg(
+                source.name,
+                original,
+                run,
+                platform if platform is not None else sys.platform,
+            )
+            if convert
+            else original
+        )
+        prepared = PreparedInput(
+            kind=kind,
+            media_type=media_type,
+            data_b64=_encode(wire),
+            origin_path=source,
+            source_sha256=source_sha256,
+            copied=False,
+        )
+    return prepared
 
 
 def prepare_inputs(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import stat
@@ -48,6 +49,128 @@ def test_atomic_write_failure_mid_write_keeps_previous_contents(tmp_path: Path) 
 
     assert target.read_text(encoding="utf-8") == "original\n"
     assert _no_temp_files(tmp_path)
+
+
+def test_guarded_write_opens_the_observed_target_nonblocking(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A regular-file stat followed by a FIFO swap must refuse, not hang."""
+    nonblock = getattr(os, "O_NONBLOCK", None)
+    if nonblock is None:
+        pytest.skip("this platform has no nonblocking open flag")
+    target = tmp_path / "vocabulary.json"
+    old = b"original\n"
+    target.write_bytes(old)
+    real_open = io.os.open
+    observed = 0
+
+    def require_nonblocking(
+        name: object, flags: int, *args: object, **kwargs: object
+    ) -> int:
+        nonlocal observed
+        if name == target.name and kwargs.get("dir_fd") is not None:
+            observed += 1
+            assert flags & nonblock
+        return real_open(name, flags, *args, **kwargs)
+
+    monkeypatch.setattr(io.os, "open", require_nonblocking)
+
+    io.atomic_write_text_bound(
+        target,
+        "replacement\n",
+        expected_revision=hashlib.sha256(old).hexdigest(),
+    )
+
+    assert observed >= 2
+
+
+def test_exact_retirement_unlink_failure_is_retryable_after_the_source_move(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed unlink must not turn the private move into apparent success."""
+    target = tmp_path / "captured-answer.json"
+    payload = b"paid provider answer"
+    target.write_bytes(payload)
+    details = target.stat()
+    expected_state = (
+        details.st_dev,
+        details.st_ino,
+        details.st_size,
+        details.st_mtime_ns,
+    )
+    revision = hashlib.sha256(payload).hexdigest()
+    lock_root = tmp_path / "private-locks"
+    monkeypatch.setattr(io, "_path_lock_root", lambda: lock_root)
+    real_unlink = io.os.unlink
+
+    def refuse_private_unlink(
+        name: object,
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        if isinstance(name, str) and name.endswith(".retired"):
+            raise OSError("injected retirement unlink failure")
+        real_unlink(name, *args, **kwargs)
+
+    monkeypatch.setattr(io.os, "unlink", refuse_private_unlink)
+    with (
+        io._open_bound_directory(tmp_path, create=False) as binding,
+        pytest.raises(DataError, match="could not be removed"),
+    ):
+        io._retire_exact_entry(
+            binding,
+            target.name,
+            expected_state,
+            revision,
+            expected_ctime_ns=details.st_ctime_ns,
+        )
+
+    retirement = lock_root / "retired-writes"
+    assert not target.exists()
+    assert len(list(retirement.iterdir())) == 1
+
+    monkeypatch.setattr(io.os, "unlink", real_unlink)
+    with io._open_bound_directory(tmp_path, create=False) as binding:
+        assert io._retire_exact_entry(
+            binding,
+            target.name,
+            expected_state,
+            revision,
+            expected_ctime_ns=details.st_ctime_ns,
+        )
+    assert list(retirement.iterdir()) == []
+
+
+@pytest.mark.parametrize("replacement_kind", ["symlink", "fifo", "directory"])
+def test_cleanup_classifies_a_nonregular_replacement_without_opening_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    replacement_kind: str,
+) -> None:
+    target = tmp_path / "captured-answer.json"
+    if replacement_kind == "symlink":
+        target.symlink_to(tmp_path / "outside-answer")
+    elif replacement_kind == "fifo":
+        os.mkfifo(target)
+    else:
+        target.mkdir()
+    real_open = io.os.open
+
+    with io._open_bound_directory(tmp_path, create=False) as binding:
+
+        def refuse_target_open(
+            name: object,
+            flags: int,
+            *args: object,
+            **kwargs: object,
+        ) -> int:
+            if name == target.name and kwargs.get("dir_fd") == binding.descriptor:
+                pytest.fail("cleanup opened a non-regular replacement")
+            return real_open(name, flags, *args, **kwargs)
+
+        monkeypatch.setattr(io.os, "open", refuse_target_open)
+        assert io._cleanup_bound_snapshot(binding.descriptor, target.name) is None
 
 
 def test_atomic_byte_write_failed_replace_keeps_previous_contents(

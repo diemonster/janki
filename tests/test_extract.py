@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import threading
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,7 @@ from japanese_anki.application.extraction import (
     capture_hook,
     classify_dispatch_failure,
     complete_extraction,
+    settle_dispatch,
 )
 from japanese_anki.claude_client import CallResult, Refusal
 from japanese_anki.config import ProjectConfig
@@ -1907,7 +1909,9 @@ def test_an_interrupted_call_is_journaled_before_it_is_made(
     stderr = capsys.readouterr().err
     assert "may already have been billed" in stderr
     assert "second charge" in stderr
-    assert not (root / "staging").exists()
+    staging_dir = root / "staging"
+    assert staging_dir.is_dir()
+    assert list(staging_dir.iterdir()) == []
 
 
 def test_a_completed_extraction_leaves_a_committed_operation(
@@ -1927,7 +1931,8 @@ def test_a_completed_extraction_leaves_a_committed_operation(
     operation = next(iter(journal.operations.values()))
     assert operation.state == "committed"
     assert journal.needing_attention() == []
-    assert (root / "data" / operation.artifact).exists()
+    assert operation.artifact is not None
+    assert (root / "data" / operation.artifact.relative_name).exists()
 
 
 def test_the_authority_is_recorded_before_the_request_is_built(
@@ -2034,10 +2039,8 @@ def test_an_answer_refused_after_it_arrived_says_it_was_paid_for(
 ) -> None:
     """The reply arrived, was stored, and something after it refused — a
     schema mismatch here. The bytes are on disk and have been billed, so the
-    message has to name the file: it is the only thing left to act on.
-
-    Untested until now, which is how the artifact path could have been dropped
-    from this branch without anything noticing.
+    message has to name the safe exact reader rather than merely print a path
+    whose current occupant it cannot prove.
     """
     root = project(tmp_path)
     source = source_pdf(tmp_path)
@@ -2060,8 +2063,15 @@ def test_an_answer_refused_after_it_arrived_says_it_was_paid_for(
 
     stderr = capsys.readouterr().err
     assert "arrived and was saved before it was refused" in stderr
-    assert operation.artifact in stderr
-    assert "It has been paid for" in stderr
+    assert f"janki operations --show-reply {operation.operation_id}" in stderr
+    assert operation.artifact.relative_name not in stderr
+    for private_value in {
+        operation.artifact.content_sha256,
+        *(str(value) for value in operation.artifact.directory_identity),
+        str(operation.artifact.entry_state[1]),
+    }:
+        assert private_value not in stderr
+    assert "exact paid reply" in stderr
 
 
 def test_a_reply_of_pure_reasoning_says_there_is_nothing_to_recover(
@@ -2072,7 +2082,7 @@ def test_a_reply_of_pure_reasoning_says_there_is_nothing_to_recover(
     """A call that reaches `max_tokens` while still thinking returns a real,
     billed reply holding no answer. Telling someone it was saved sends them
     looking for cards in a file that has none — so this branch says the
-    opposite, and still names the file."""
+    opposite, while still naming the safe exact reader."""
     root = project(tmp_path)
     source = source_pdf(tmp_path)
 
@@ -2091,7 +2101,15 @@ def test_a_reply_of_pure_reasoning_says_there_is_nothing_to_recover(
 
     stderr = capsys.readouterr().err
     assert "contains no answer — only the model's reasoning" in stderr
-    assert operation.artifact in stderr
+    assert f"janki operations --show-reply {operation.operation_id}" in stderr
+    assert operation.artifact is not None
+    assert operation.artifact.relative_name not in stderr
+    for private_value in {
+        operation.artifact.content_sha256,
+        *(str(value) for value in operation.artifact.directory_identity),
+        str(operation.artifact.entry_state[1]),
+    }:
+        assert private_value not in stderr
     assert "There is nothing in it to recover" in stderr
 
 
@@ -2099,7 +2117,14 @@ def test_a_reply_of_pure_reasoning_says_there_is_nothing_to_recover(
 
 
 def _fixture_result(
-    root: Path, scenario: str, name: str, extra: tuple = (), settle: bool = True
+    root: Path,
+    scenario: str,
+    name: str,
+    extra: tuple = (),
+    settle: bool = True,
+    *,
+    model: str = "claude-opus-5",
+    mode: str | None = None,
 ):
     """One W0 fixture answer, parsed exactly as a live call would deliver it.
 
@@ -2119,9 +2144,9 @@ def _fixture_result(
         parsed = parsed.model_copy(
             update={"candidates": [*parsed.candidates, *extra]}
         )
-    normalized = extract.normalize_response(parsed, None, item.origin_path.name)
+    normalized = extract.normalize_response(parsed, mode, item.origin_path.name)
     provenance = extract.prompt_provenance(
-        item, model="claude-opus-5", style_guide="s", system="y", mode=None,
+        item, model=model, style_guide="s", system="y", mode=mode,
         source_sha256=extract.source_fingerprint(item.origin_path),
     )
     result = dataclasses.replace(
@@ -2133,15 +2158,15 @@ def _fixture_result(
     target = ExtractionTarget(
         item=item,
         staging_path=config.staging_dir / f"{item.origin_path.name}.yaml",
+        patterns_path=config.patterns_file,
         source_sha256=str(provenance["source_sha256"]),
         provenance=provenance,
     )
-    operation_id = authorize_dispatch(journal, target, model="claude-opus-5")
+    operation_id = authorize_dispatch(journal, target, model=model)
     if settle:
-        journal.advance(
+        journal.capture_result(
             operation_id,
-            "result_captured",
-            artifact=operations.capture_artifact(
+            lambda: operations.capture_artifact(
                 config.operations_file, operation_id, b'{"fixture": true}'
             ),
         )
@@ -2163,7 +2188,7 @@ def test_the_journal_commits_only_once_the_answer_is_on_disk(
         raise OSError("disk full")
 
     monkeypatch.setattr(
-        "japanese_anki.application.extraction.write_staging", refuse
+        "japanese_anki.application.extraction.write_staging_under_lock", refuse
     )
     with pytest.raises(OSError):
         complete_extraction(
@@ -2175,6 +2200,133 @@ def test_the_journal_commits_only_once_the_answer_is_on_disk(
         operation_id
     ]
     assert entry.state == "result_captured"
+
+
+def test_forget_between_completion_preflight_and_write_changes_no_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The final state check, staging write, and committed transition are one
+    journal-locked decision. A forget landing after an earlier snapshot must
+    win before any card or pattern output changes."""
+    root = project(tmp_path)
+    config, journal, target, result, operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf"
+    )
+    pattern_before = (
+        config.patterns_file.read_bytes()
+        if config.patterns_file.exists()
+        else None
+    )
+    entered_build = threading.Event()
+    release_build = threading.Event()
+    real_build = extract.build_records
+
+    def pause_after_preflight(*args: Any, **kwargs: Any) -> Any:
+        entered_build.set()
+        if not release_build.wait(5):
+            raise AssertionError("completion race was never released")
+        return real_build(*args, **kwargs)
+
+    monkeypatch.setattr(extract, "build_records", pause_after_preflight)
+    failures: list[BaseException] = []
+
+    def complete() -> None:
+        try:
+            complete_extraction(
+                config,
+                journal,
+                target,
+                result,
+                operation_id=operation_id,
+                known=set(),
+                mode=None,
+                model="claude-opus-5",
+            )
+        except BaseException as exc:  # noqa: BLE001 - asserted across the thread
+            failures.append(exc)
+
+    worker = threading.Thread(target=complete)
+    worker.start()
+    assert entered_build.wait(5), "completion never reached its post-preflight work"
+
+    operations.OperationJournal.load(config.operations_file).forget(
+        [operation_id], force=True
+    )
+    release_build.set()
+    worker.join(5)
+
+    assert not worker.is_alive()
+    assert len(failures) == 1
+    assert isinstance(failures[0], operations.OperationError)
+    assert not target.staging_path.exists()
+    assert (
+        config.patterns_file.read_bytes()
+        if config.patterns_file.exists()
+        else None
+    ) == pattern_before
+
+
+def test_completion_of_a_cleanup_tombstone_changes_no_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A result in memory cannot revive a call whose final forget decision is
+    already durable, even when cleanup has not yet retired its paid artifact."""
+    root = project(tmp_path)
+    config, journal, target, result, operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf"
+    )
+    held = operations.OperationJournal.load(config.operations_file).operations[
+        operation_id
+    ]
+    assert held.artifact is not None
+    artifact = config.operations_file.parent / held.artifact.relative_name
+    artifact_before = artifact.read_bytes()
+    pattern_before = (
+        config.patterns_file.read_bytes()
+        if config.patterns_file.exists()
+        else None
+    )
+
+    def leave_cleanup_pending(_binding: Any) -> None:
+        raise operations.OperationError("injected cleanup pause")
+
+    with monkeypatch.context() as cleanup_patch:
+        cleanup_patch.setattr(
+            operations, "_retire_artifact", leave_cleanup_pending
+        )
+        with pytest.raises(operations.OperationError, match="cleanup pause"):
+            journal.forget([operation_id], force=True)
+
+    tombstone = operations.OperationJournal.load(
+        config.operations_file
+    ).operations[operation_id]
+    assert tombstone.state == "result_captured"
+    assert tombstone.cleanup is not None
+
+    with pytest.raises(operations.OperationError, match="being forgotten"):
+        settle_dispatch(config, journal, operation_id, result)
+
+    with pytest.raises(operations.OperationError, match="being forgotten"):
+        complete_extraction(
+            config,
+            journal,
+            target,
+            result,
+            operation_id=operation_id,
+            known=set(),
+            mode=None,
+            model="claude-opus-5",
+        )
+
+    assert not target.staging_path.exists()
+    assert artifact.read_bytes() == artifact_before
+    assert (
+        config.patterns_file.read_bytes()
+        if config.patterns_file.exists()
+        else None
+    ) == pattern_before
 
 
 def test_a_reviewed_pattern_answer_is_not_replaced_by_a_rerun(
@@ -2285,7 +2437,10 @@ def test_the_model_that_answered_is_the_one_written_down(tmp_path: Path) -> None
     parameter was threaded through but never read."""
     root = project(tmp_path)
     config, journal, target, result, operation_id = _fixture_result(
-        root, "lesson_with_grammar", "lesson.pdf"
+        root,
+        "lesson_with_grammar",
+        "lesson.pdf",
+        model="claude-haiku-4-5-20251001",
     )
 
     outcome = complete_extraction(
@@ -2306,7 +2461,7 @@ def test_the_mode_a_run_was_read_under_reaches_its_coverage_verdict(
     on the way to `coverage_block` and that verdict silently goes lenient."""
     root = project(tmp_path)
     config, journal, target, result, operation_id = _fixture_result(
-        root, "lesson_with_grammar", "lesson.pdf"
+        root, "pattern_only_chart", "chart.pdf", mode="table"
     )
 
     outcome = complete_extraction(
@@ -2384,7 +2539,8 @@ def test_a_dispatch_that_was_never_settled_is_completed_not_discarded(
     # exact provider bytes were never captured — the hook is what captures
     # those — so this is `settle_dispatch`'s normalized fallback, which is
     # still what a person can read and re-enter by hand.
-    artifact = config.operations_file.parent / entry.artifact
+    assert entry.artifact is not None
+    artifact = config.operations_file.parent / entry.artifact.relative_name
     assert "あげる" in artifact.read_text(encoding="utf-8")
 
 
@@ -2404,9 +2560,10 @@ def test_a_journal_that_never_saw_the_capture_still_completes(
     capture_hook(config, client_journal, operation_id)(
         {"content": [{"type": "text", "text": "the exact provider bytes"}]}
     )
+    captured_receipt = client_journal.operations[operation_id].artifact
+    assert captured_receipt is not None
     captured = (
-        config.operations_file.parent
-        / client_journal.operations[operation_id].artifact
+        config.operations_file.parent / captured_receipt.relative_name
     ).read_bytes()
 
     # The handler's journal still says the call is in flight. Only the file
@@ -2433,7 +2590,10 @@ def test_a_journal_that_never_saw_the_capture_still_completes(
     # written. Compared against a value read *before* the run: artifacts are
     # named from the operation id, so re-reading the path the entry names
     # would compare the file to itself and pass however it was clobbered.
-    assert (config.operations_file.parent / entry.artifact).read_bytes() == captured
+    assert entry.artifact is not None
+    assert (
+        config.operations_file.parent / entry.artifact.relative_name
+    ).read_bytes() == captured
 
 
 def test_an_answer_that_arrives_while_the_call_reads_as_running_is_kept(
@@ -2459,9 +2619,10 @@ def test_an_answer_that_arrives_while_the_call_reads_as_running_is_kept(
         operation_id
     ]
     assert entry.state == "committed"
-    assert "あげる" in (config.operations_file.parent / entry.artifact).read_text(
-        encoding="utf-8"
-    )
+    assert entry.artifact is not None
+    assert "あげる" in (
+        config.operations_file.parent / entry.artifact.relative_name
+    ).read_text(encoding="utf-8")
 
 
 def test_an_answer_is_not_recorded_against_another_run_s_operation(
@@ -2503,6 +2664,174 @@ def test_an_answer_is_not_recorded_against_another_run_s_operation(
     ]
     assert entry.state == "committed"
     assert entry.source_file == "table.pdf"
+
+
+@pytest.mark.parametrize(
+    ("field", "wrong"),
+    [
+        ("kind", "enrich"),
+        ("source_file", "other.pdf"),
+        ("source_sha256", "0" * 64),
+        ("request_fp", "1" * 64),
+        ("model", "claude-other-model"),
+    ],
+)
+def test_completion_requires_the_journal_s_full_request_identity(
+    tmp_path: Path,
+    field: str,
+    wrong: str,
+) -> None:
+    root = project(tmp_path)
+    config, journal, target, result, operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf"
+    )
+    current = operations.OperationJournal.load(config.operations_file)
+    current.operations[operation_id] = dataclasses.replace(
+        current.operations[operation_id],
+        **{field: wrong},
+    )
+    current._write()
+
+    with pytest.raises(operations.OperationError, match="different request"):
+        complete_extraction(
+            config,
+            journal,
+            target,
+            result,
+            operation_id=operation_id,
+            known=set(),
+            mode=None,
+            model="claude-opus-5",
+        )
+
+    assert not target.staging_path.exists()
+
+
+@pytest.mark.parametrize(
+    "crosswire",
+    [
+        "prompt_provenance",
+        "result_source_sha256",
+        "result_model",
+        "pattern_source",
+        "target_source",
+        "model",
+        "mode",
+    ],
+)
+def test_completion_binds_the_answer_and_arguments_to_the_target_request(
+    tmp_path: Path,
+    crosswire: str,
+) -> None:
+    root = project(tmp_path)
+    config, journal, target, result, operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf"
+    )
+    model = "claude-opus-5"
+    mode = None
+    if crosswire == "prompt_provenance":
+        provenance = {
+            **result.pattern_set.prompt_provenance,
+            "request_fingerprint": "f" * 64,
+        }
+        result = dataclasses.replace(
+            result,
+            pattern_set=dataclasses.replace(
+                result.pattern_set,
+                prompt_provenance=provenance,
+            ),
+        )
+    elif crosswire in {"result_source_sha256", "result_model"}:
+        field, value = (
+            ("source_sha256", "0" * 64)
+            if crosswire == "result_source_sha256"
+            else ("model", "claude-other-model")
+        )
+        result = dataclasses.replace(
+            result,
+            pattern_set=dataclasses.replace(
+                result.pattern_set,
+                prompt_provenance={
+                    **result.pattern_set.prompt_provenance,
+                    field: value,
+                },
+            ),
+        )
+    elif crosswire == "pattern_source":
+        result = dataclasses.replace(
+            result,
+            pattern_set=dataclasses.replace(result.pattern_set, source="other.pdf"),
+        )
+    elif crosswire == "target_source":
+        target = dataclasses.replace(target, source_sha256="0" * 64)
+    elif crosswire == "model":
+        model = "claude-other-model"
+    elif crosswire == "mode":
+        mode = "prose"
+    else:  # pragma: no cover - closed parametrization
+        raise AssertionError(crosswire)
+
+    with pytest.raises(operations.OperationError, match="answer does not describe"):
+        complete_extraction(
+            config,
+            journal,
+            target,
+            result,
+            operation_id=operation_id,
+            known=set(),
+            mode=mode,
+            model=model,
+        )
+
+    assert not target.staging_path.exists()
+    assert (
+        operations.OperationJournal.load(config.operations_file)
+        .operations[operation_id]
+        .state
+        == "result_captured"
+    )
+
+
+def test_completion_refuses_another_request_s_in_memory_result(
+    tmp_path: Path,
+) -> None:
+    root = project(tmp_path)
+    config, journal, first, other_result, first_operation = _fixture_result(
+        root, "table_exhaustive", "table.pdf"
+    )
+    complete_extraction(
+        config,
+        journal,
+        first,
+        other_result,
+        operation_id=first_operation,
+        known=set(),
+        mode=None,
+        model="claude-opus-5",
+    )
+    config, journal, target, _target_result, operation_id = _fixture_result(
+        root, "lesson_with_grammar", "lesson.pdf"
+    )
+
+    with pytest.raises(operations.OperationError, match="answer does not describe"):
+        complete_extraction(
+            config,
+            journal,
+            target,
+            other_result,
+            operation_id=operation_id,
+            known=set(),
+            mode=None,
+            model="claude-opus-5",
+        )
+
+    assert not target.staging_path.exists()
+    assert (
+        operations.OperationJournal.load(config.operations_file)
+        .operations[operation_id]
+        .state
+        == "result_captured"
+    )
 
 
 def test_completing_an_operation_that_is_already_over_is_refused(
@@ -2549,31 +2878,6 @@ def test_completing_an_operation_the_journal_never_authorized_is_refused(
         )
 
     assert "op-that-never-was" in str(caught.value)
-    assert not target.staging_path.exists()
-
-
-def test_an_answer_recorded_without_its_bytes_is_refused_before_the_write(
-    tmp_path: Path,
-) -> None:
-    """`result_captured` with no artifact: committing means "the exact answer
-    became staging", and there is nothing on disk that could have been it. The
-    refusal is the artifact branch of the pre-flight, and it must fire before
-    the staging write like every other one."""
-    root = project(tmp_path)
-    config, journal, target, result, operation_id = _fixture_result(
-        root, "lesson_with_grammar", "lesson.pdf", settle=False
-    )
-    # Legal, and reachable by any caller that advances without naming what it
-    # captured — `settle_dispatch` then has nothing left to record.
-    journal.advance(operation_id, "result_captured")
-
-    with pytest.raises(operations.OperationError) as caught:
-        complete_extraction(
-            config, journal, target, result, operation_id=operation_id,
-            known=set(), mode=None, model="claude-opus-5",
-        )
-
-    assert "captured provider answer" in str(caught.value)
     assert not target.staging_path.exists()
 
 
@@ -2664,7 +2968,7 @@ def test_a_reply_captured_but_never_recorded_is_reported_as_saved(
         operations.OperationJournal.load(config.operations_file)
         .operations[operation_id]
         .artifact
-        == ""
+        is None
     )
 
     failure = classify_dispatch_failure(
@@ -2672,4 +2976,4 @@ def test_a_reply_captured_but_never_recorded_is_reported_as_saved(
     )
 
     assert failure.outcome == ANSWER_SAVED
-    assert failure.artifact.endswith(f"{operation_id}.json")
+    assert journal.read_reply(operation_id)

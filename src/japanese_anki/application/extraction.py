@@ -26,6 +26,9 @@ somebody who then declines.
 
 from __future__ import annotations
 
+import contextlib
+import hashlib
+import os
 import uuid
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -33,27 +36,48 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from japanese_anki import claude_client, extract, inputs, operations, patterns, prompts
-from japanese_anki.application.journey import source_journeys
+from japanese_anki import (
+    claude_client,
+    extract,
+    inputs,
+    operations,
+    patterns,
+    prompts,
+    staging,
+)
+from japanese_anki.application.journey import (
+    GRAMMAR_NEEDS_REVIEW,
+    GRAMMAR_REVIEWED,
+    source_journeys,
+)
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.inputs import PreparedInput
-from japanese_anki.io import exclusive_path_lock, load_records
+from japanese_anki.io import (
+    exclusive_path_lock,
+    load_records,
+    prepare_bound_directory,
+    read_bytes_bound,
+)
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.staging import (
     CANDIDATE_ACCOUNTING_KEY,
     new_review_run_id,
-    write_staging,
+    write_staging_under_lock,
 )
 
 __all__ = [
     "ANSWER_EMPTY",
     "ANSWER_SAVED",
+    "ANSWER_UNAVAILABLE",
+    "FORGOTTEN",
     "OUTCOME_UNKNOWN",
     "DispatchFailure",
+    "ExtractionCompletionError",
     "ExtractionConsent",
     "ExtractionOutcome",
     "ExtractionPlan",
+    "ExtractionRevision",
     "ExtractionTarget",
     "authorize_dispatch",
     "busy_refusal",
@@ -62,6 +86,8 @@ __all__ = [
     "complete_extraction",
     "describe_extraction",
     "durable_inbox_root",
+    "extraction_replacement_revision",
+    "plan_corpus_extraction",
     "plan_extraction",
     "settle_dispatch",
 ]
@@ -74,6 +100,8 @@ class ExtractionTarget:
     item: PreparedInput
     #: The staging file this input's proposals would be written to.
     staging_path: Path
+    #: The shared pattern store receiving this source's grammar proposals.
+    patterns_path: Path
     source_sha256: str
     #: The exact request identity, including `request_fingerprint`. Journalled
     #: before dispatch so a crash between sending and parsing can still say
@@ -90,6 +118,124 @@ class ExtractionTarget:
     def name(self) -> str:
         """The permanent filename, which is what a person recognizes."""
         return self.item.origin_path.name
+
+
+@dataclass(frozen=True, slots=True)
+class ExtractionRevision:
+    """The exact review a checked replacement is allowed to destroy.
+
+    The staging hash includes every byte, including hand-written comments.
+    The pattern hash covers only this source's raw JSON entry so another
+    lesson's review does not make an otherwise current consent stale.
+    """
+
+    staging_sha256: str | None
+    pattern_entry_sha256: str | None
+    pattern_reviewed: bool | None
+    pattern_has_patterns: bool | None
+
+
+@dataclass(frozen=True, slots=True)
+class _PatternStoreSnapshot:
+    store: dict[str, patterns.PatternSet]
+    wire: bytes
+    entry_sha256: str | None
+    absent: bool
+
+
+@contextlib.contextmanager
+def _replacement_locks(staging_path: Path, patterns_path: Path):
+    """Lock both replacement targets in the review subsystem's order."""
+    real = {Path(os.path.realpath(path)) for path in (staging_path, patterns_path)}
+    if len(real) != 2:
+        raise operations.OperationError(
+            "The staging file and pattern store must be distinct replacement targets"
+        )
+    with contextlib.ExitStack() as stack:
+        for path in sorted(real, key=os.fspath):
+            stack.enter_context(exclusive_path_lock(path))
+        yield
+
+
+def _staging_revision(path: Path) -> str | None:
+    if path.is_symlink():
+        raise staging.StagingError(f"Refusing a symlinked staging replacement: {path}")
+    try:
+        wire = read_bytes_bound(path)
+    except FileNotFoundError:
+        return None
+    except (JankiError, OSError) as exc:
+        raise staging.StagingError(f"Could not read staging review {path}: {exc}") from exc
+    return hashlib.sha256(wire).hexdigest()
+
+
+def _pattern_store_snapshot(path: Path, source_name: str) -> _PatternStoreSnapshot:
+    if path.is_symlink():
+        raise patterns.PatternError(f"Refusing a symlinked pattern store: {path}")
+    if path.parent.is_symlink() or (
+        path.parent.exists() and not path.parent.is_dir()
+    ):
+        raise patterns.PatternError(
+            f"Refusing non-directory pattern-store parent: {path.parent}"
+        )
+    try:
+        wire = read_bytes_bound(path)
+    except FileNotFoundError:
+        return _PatternStoreSnapshot({}, b"", None, True)
+    except (JankiError, OSError) as exc:
+        raise patterns.PatternError(f"Could not read {path}: {exc}") from exc
+    try:
+        text = wire.decode("utf-8", errors="strict")
+    except UnicodeError as exc:
+        raise patterns.PatternError(f"Could not read {path}: {exc}") from exc
+    store = patterns.load_store_text(text, source=str(path))
+    return _PatternStoreSnapshot(
+        store=store,
+        wire=wire,
+        entry_sha256=patterns.entry_fingerprint(
+            text,
+            source_name,
+            source=str(path),
+        ),
+        absent=False,
+    )
+
+
+def _replacement_state_under_lock(
+    config: ProjectConfig,
+    target: ExtractionTarget,
+) -> tuple[ExtractionRevision, _PatternStoreSnapshot]:
+    pattern_snapshot = _pattern_store_snapshot(config.patterns_file, target.name)
+    stored_patterns = pattern_snapshot.store.get(target.name)
+    return (
+        ExtractionRevision(
+            staging_sha256=_staging_revision(target.staging_path),
+            pattern_entry_sha256=pattern_snapshot.entry_sha256,
+            pattern_reviewed=(
+                stored_patterns.reviewed if stored_patterns is not None else None
+            ),
+            pattern_has_patterns=(
+                bool(stored_patterns.patterns) if stored_patterns is not None else None
+            ),
+        ),
+        pattern_snapshot,
+    )
+
+
+def extraction_replacement_revision(
+    config: ProjectConfig,
+    target: ExtractionTarget,
+) -> ExtractionRevision | None:
+    """Capture the exact card and grammar review a forced plan would replace."""
+    if target.replaces is None:
+        return None
+    with _replacement_locks(target.staging_path, config.patterns_file):
+        revision, _snapshot = _replacement_state_under_lock(config, target)
+    if revision.staging_sha256 is None:
+        raise staging.StagingError(
+            f"The review for {target.name} changed while the consent page was loading"
+        )
+    return revision
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,6 +346,7 @@ def plan_extraction(
             ExtractionTarget(
                 item=item,
                 staging_path=staging_path,
+                patterns_path=config.patterns_file,
                 source_sha256=fingerprint,
                 replaces=staging_path if staging_path.exists() else None,
                 provenance=extract.prompt_provenance(
@@ -223,18 +370,52 @@ def plan_extraction(
     )
 
 
+def plan_corpus_extraction(
+    config: ProjectConfig,
+    source: Path,
+    *,
+    mode: str | None,
+    model: str,
+    force: bool = False,
+) -> ExtractionPlan:
+    """Freshly plan one source that must already be in the durable corpus.
+
+    GET uses this with ``force=True`` solely so it can describe an existing
+    review. POST calls it again with only the explicit replacement decision.
+    Keeping the descriptor-bound corpus capture, prompt reload and input
+    preparation here means the two surfaces describe and send by the same
+    rules without ever handing the forced GET plan to dispatch.
+    """
+    prepared = [inputs.prepare_corpus_input(source, config.scan_inbox)]
+    return plan_extraction(
+        config,
+        prepared,
+        mode=mode,
+        model=model,
+        style_guide=claude_client.read_style_guide(config.root),
+        system=prompts.load(config.root, extract.prompt_name(mode)),
+        force=force,
+    )
+
+
 #: What became of a call that failed after the money may already have gone.
 #:
-#: Three states, and the difference between them is what the person is owed.
+#: Five states, and the difference between them is what the person is owed.
 #: `answer_saved` — the bytes are on disk and something after them refused, so
 #: there is paid content to look at. `answer_empty` — a reply arrived carrying
 #: only the model's reasoning, so it was billed and holds nothing to recover;
 #: calling that "the answer was saved" sends somebody hunting for cards in a
-#: file with none. `outcome_unknown` — it was sent and no answer was captured,
-#: which is the one where a retry risks a second charge.
+#: file with none. `answer_unavailable` — the journal records that a reply was
+#: captured, but its exact recovery bytes can no longer be read; this is neither
+#: an empty answer nor a vanished provider outcome. `outcome_unknown` — it was
+#: sent and no answer was captured, which is the one where a retry risks a
+#: second charge. `forgotten` — the user's final discard decision won the race,
+#: so no stale handler may recover or advertise that operation's evidence again.
 ANSWER_SAVED = "answer_saved"
 ANSWER_EMPTY = "answer_empty"
+ANSWER_UNAVAILABLE = "answer_unavailable"
 OUTCOME_UNKNOWN = "outcome_unknown"
+FORGOTTEN = "forgotten"
 
 
 @dataclass(frozen=True, slots=True)
@@ -242,10 +423,8 @@ class DispatchFailure:
     """A dispatch that did not produce usable cards, and what it cost."""
 
     operation_id: str
-    #: One of `ANSWER_SAVED`, `ANSWER_EMPTY`, `OUTCOME_UNKNOWN`.
+    #: One of the five dispatch failure constants above.
     outcome: str
-    #: The stored response, when one was captured.
-    artifact: str = ""
     #: Whether a retry risks paying twice. Read from the journal rather than
     #: guessed from the exception — it is the question a retry turns on.
     #:
@@ -255,10 +434,13 @@ class DispatchFailure:
     #: recovery surface asks, and answering it from the journal keeps it true
     #: if the table ever grows a not-billed terminal state.
     money_may_have_been_spent: bool = False
+    #: The forget decision exists but exact evidence cleanup still needs its
+    #: ordinary retry. False means the entry and its bound evidence are gone.
+    cleanup_pending: bool = False
 
     @property
     def was_paid_for(self) -> bool:
-        return self.outcome in (ANSWER_SAVED, ANSWER_EMPTY)
+        return self.outcome in (ANSWER_SAVED, ANSWER_EMPTY, ANSWER_UNAVAILABLE)
 
 
 def busy_refusal(config: ProjectConfig) -> str:
@@ -347,6 +529,10 @@ class ExtractionConsent:
     #: somebody what they are about to throw away; its state does.
     replaces_state: str = ""
     replaces_cards: int = 0
+    #: The grammar-track state the same force would reset.
+    replaces_grammar: str = ""
+    #: Exact card and grammar revisions behind the description above.
+    replacement_revision: ExtractionRevision | None = None
     #: Why this cannot be sent at all, in a learner's words. Empty when it can.
     refusal: str = ""
     #: True when this run also sends the expressions already in the
@@ -385,43 +571,12 @@ def describe_extraction(
     the second.
     """
     chosen = model or config.extract_model
-    root = durable_inbox_root(config)
-    if not inputs.inside(source, root):
-        return ExtractionConsent(
-            name=source.name,
-            model=chosen,
-            mode=mode,
-            refusal=(
-                f"{source.name} is not in your corpus yet. Add it first — "
-                "adding a file and sending it to a model are separate steps."
-            ),
-        )
-
     try:
-        prepared = inputs.prepare_inputs(
-            [source], config.scan_inbox, inbox_root=root
-        )
-        # A consent page must not be the thing that puts a file in the corpus.
-        # The root check above says it is already there; this says the prepare
-        # agreed — closing the sliver where the file is removed in between and
-        # `_copy_into_inbox` helpfully writes it back.
-        if prepared[0].copied:
-            return ExtractionConsent(
-                name=source.name,
-                model=chosen,
-                mode=mode,
-                refusal=(
-                    f"{source.name} moved while this page was loading. "
-                    "Reload to see where it is now."
-                ),
-            )
-        plan = plan_extraction(
+        plan = plan_corpus_extraction(
             config,
-            prepared,
+            source,
             mode=mode,
             model=chosen,
-            style_guide=claude_client.read_style_guide(config.root),
-            system=prompts.load(config.root, extract.prompt_name(mode)),
             # Planned as though forced so a staging collision comes back as a
             # replacement to confirm rather than an exception. Consenting to
             # the replacement is what supplies `force` to the dispatch; this
@@ -429,8 +584,13 @@ def describe_extraction(
             force=True,
         )
         replaces = plan.targets[0].replaces if plan.targets else None
-        state, cards = "", 0
+        state, cards, grammar = "", 0, ""
+        replacement_revision = None
         if replaces is not None:
+            # Capture around the human-readable journey. If either exact
+            # review moves while that description is being assembled, there
+            # is no single state this page could truthfully ask to replace.
+            before = extraction_replacement_revision(config, plan.targets[0])
             found = next(
                 (
                     journey
@@ -440,7 +600,28 @@ def describe_extraction(
                 None,
             )
             if found is not None:
-                state, cards = found.state, found.card_count
+                state, cards, grammar = found.state, found.card_count, found.grammar
+            replacement_revision = extraction_replacement_revision(
+                config, plan.targets[0]
+            )
+            if replacement_revision != before:
+                raise staging.StagingError(
+                    f"The review for {source.name} changed while the consent page "
+                    "was loading; reload it"
+                )
+            # The dashboard intentionally has no grammar badge when staging's
+            # embedded set is empty or missing. Force still replaces an
+            # existing pattern-store entry, so consent must name that review
+            # independently of whether this staging generation can badge it.
+            if replacement_revision.pattern_reviewed is not None and (
+                replacement_revision.pattern_reviewed
+                or replacement_revision.pattern_has_patterns
+            ):
+                grammar = (
+                    GRAMMAR_REVIEWED
+                    if replacement_revision.pattern_reviewed
+                    else GRAMMAR_NEEDS_REVIEW
+                )
         # `data/operations.json` is exactly the file a killed paid call
         # leaves in interesting shapes, and the one page that manages
         # paid-call state must not be the one that dies when it cannot be
@@ -468,6 +649,8 @@ def describe_extraction(
         replaces=replaces,
         replaces_state=state,
         replaces_cards=cards,
+        replaces_grammar=grammar,
+        replacement_revision=replacement_revision,
         sends_known_words=bool(plan.skip_list),
         busy=busy,
     )
@@ -486,6 +669,16 @@ def authorize_dispatch(
     remembers: a crash between the send and the parse otherwise leaves no way
     to tell "never sent" from "sent and lost".
     """
+    # Refuse an unusable recovery store before authority is written or a
+    # provider can be called. The bound artifact writer checks again at the
+    # actual reply, but finding a static problem only after paying would lose
+    # the answer this journal exists to preserve.
+    operations.prepare_artifact_store(journal.path)
+    for output_parent in {
+        target.staging_path.parent,
+        target.patterns_path.parent,
+    }:
+        prepare_bound_directory(output_parent)
     operation_id = str(uuid.uuid4())
     journal.authorize(
         operation_id,
@@ -511,12 +704,14 @@ def capture_hook(
     """
 
     def _capture(response: Any) -> None:
-        relative = operations.capture_artifact(
-            config.operations_file,
+        journal.capture_result(
             operation_id,
-            operations.serialize_response(response),
+            lambda: operations.capture_artifact(
+                config.operations_file,
+                operation_id,
+                operations.serialize_response(response),
+            ),
         )
-        journal.advance(operation_id, "result_captured", artifact=relative)
 
     return _capture
 
@@ -544,19 +739,14 @@ def settle_dispatch(
     settle without first knowing whether the hook fired.
 
     The artifact this writes is janki's normalized value, not the provider's
-    own reply, so `operations.answer_text` — which reads provider-shaped
-    content blocks — finds nothing in it and reports no answer. What it holds
-    is still readable by a person, which is the promise; a surface that grades
-    artifacts through `answer_text` must not call one of these empty.
+    own reply, so provider-shaped content parsing finds no answer block in it.
+    What it holds is still readable by a person, which is the promise; a
+    surface classifying already-bound reply bytes must not call one of these
+    empty.
     """
-    reloaded = operations.OperationJournal.load(config.operations_file)
-    held = reloaded.operations.get(operation_id)
-    if held is None or held.state not in ("dispatching", "running"):
-        return
-    journal.advance(
+    journal.capture_result(
         operation_id,
-        "result_captured",
-        artifact=operations.capture_artifact(
+        lambda: operations.capture_artifact(
             config.operations_file,
             operation_id,
             operations.serialize_response(result),
@@ -591,42 +781,56 @@ def classify_dispatch_failure(
     replace the provider's error with a journal error and tell the person
     nothing about either.
     """
-    held = operations.OperationJournal.load(config.operations_file).operations.get(
-        operation_id
-    )
-    # The blob under this operation's own id counts as its reply even when the
-    # entry never recorded one. `capture_artifact` writes the bytes before the
-    # journal names them, so a crash — or an `advance` refused because somebody
-    # ended the call meanwhile — leaves the answer on disk under that name and
-    # nothing else looking for it.
-    artifact = (held.artifact if held is not None else "") or operations.pending_artifact(
-        config.operations_file, operation_id
-    )
-    answer = (
-        operations.answer_text(
-            config.operations_file, replace(held, artifact=artifact)
-        )
-        if held is not None and artifact
-        else ""
-    )
-    if held is not None and (held.state == "result_captured" or artifact):
-        return DispatchFailure(
+    # Classification and any outcome transition share the journal lock with
+    # forget. In particular, cleanup/missing short-circuit before probing the
+    # artifact WAL: a stale validation frame must not recover or advertise
+    # evidence after the user's durable discard decision.
+    with exclusive_path_lock(config.operations_file):
+        current = operations.OperationJournal.load(config.operations_file)
+        held = current.operations.get(operation_id)
+        if held is None:
+            return DispatchFailure(
+                operation_id=operation_id,
+                outcome=FORGOTTEN,
+            )
+        if held.cleanup is not None:
+            return DispatchFailure(
+                operation_id=operation_id,
+                outcome=FORGOTTEN,
+                cleanup_pending=True,
+            )
+
+        # The exact bytes may be public or retained only by a bound private WAL
+        # name. A journal path is historical state, never accessibility proof.
+        reply = operations.reply_observation(config.operations_file, held)
+        if reply.readable:
+            answer = operations.response_answer_text(reply.payload)
+            return DispatchFailure(
+                operation_id=operation_id,
+                outcome=ANSWER_SAVED if answer else ANSWER_EMPTY,
+            )
+        if reply.recorded:
+            return DispatchFailure(
+                operation_id=operation_id,
+                outcome=ANSWER_UNAVAILABLE,
+            )
+        if held.state in operations.TERMINAL_STATES:
+            return DispatchFailure(
+                operation_id=operation_id,
+                outcome=OUTCOME_UNKNOWN,
+                money_may_have_been_spent=held.money_may_have_been_spent,
+            )
+        marked = journal._move_under_lock(
+            current,
             operation_id=operation_id,
-            outcome=ANSWER_SAVED if answer else ANSWER_EMPTY,
-            artifact=artifact,
+            state="outcome_unknown",
+            detail=str(exc),
         )
-    if held is not None and held.state in operations.TERMINAL_STATES:
         return DispatchFailure(
             operation_id=operation_id,
             outcome=OUTCOME_UNKNOWN,
-            money_may_have_been_spent=held.money_may_have_been_spent,
+            money_may_have_been_spent=marked.money_may_have_been_spent,
         )
-    marked = journal.advance(operation_id, "outcome_unknown", detail=str(exc))
-    return DispatchFailure(
-        operation_id=operation_id,
-        outcome=OUTCOME_UNKNOWN,
-        money_may_have_been_spent=marked.money_may_have_been_spent,
-    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -646,6 +850,34 @@ class ExtractionOutcome:
     source: str
 
 
+class ExtractionCompletionError(JankiError):
+    """Staging committed, but the answer's separate pattern write failed."""
+
+    def __init__(self, cause: JankiError, staging_path: Path) -> None:
+        self.detail = str(cause)
+        self.staging_path = Path(staging_path)
+        super().__init__(
+            f"{cause} Proposals remain saved at {self.staging_path}, including "
+            "the embedded pattern set."
+        )
+
+
+def _require_current_replacement(
+    current: ExtractionRevision,
+    expected: ExtractionRevision,
+) -> None:
+    if current.staging_sha256 != expected.staging_sha256:
+        raise operations.OperationError(
+            "The review changed while the source was being read; refusing to "
+            "overwrite the newer work."
+        )
+    if current.pattern_entry_sha256 != expected.pattern_entry_sha256:
+        raise operations.OperationError(
+            "The grammar review changed while the source was being read; refusing "
+            "to overwrite the newer work."
+        )
+
+
 def complete_extraction(
     config: ProjectConfig,
     journal: operations.OperationJournal,
@@ -657,6 +889,7 @@ def complete_extraction(
     mode: str | None,
     model: str,
     force: bool = False,
+    expected_revision: ExtractionRevision | None = None,
 ) -> ExtractionOutcome:
     """Turn one paid answer into a staging file, and close its journal entry.
 
@@ -684,11 +917,33 @@ def complete_extraction(
     # Refusing does lose an in-memory answer, which this function otherwise
     # never does. The difference is that here there is no truthful entry to
     # record it against: the pairing itself is what cannot be believed.
+    target_provenance = dict(target.provenance)
+    normalized_mode = mode or "auto"
+    if (
+        target_provenance.get("source_sha256") != target.source_sha256
+        or target_provenance.get("model") != model
+        or target_provenance.get("mode") != normalized_mode
+        or dict(result.pattern_set.prompt_provenance) != target_provenance
+        or result.pattern_set.source != target.name
+    ):
+        raise operations.OperationError(
+            f"The answer does not describe the request for {target.name!r}; "
+            "refusing to record it against that target."
+        )
+
     held = operations.OperationJournal.load(config.operations_file).operations.get(
         operation_id
     )
-    if held is not None and held.request_fp != str(
-        target.provenance["request_fingerprint"]
+    expected_identity = {
+        "kind": "extract",
+        "source_file": target.name,
+        "source_sha256": str(target_provenance["source_sha256"]),
+        "request_fp": str(target_provenance["request_fingerprint"]),
+        "model": str(target_provenance["model"]),
+    }
+    if held is not None and any(
+        getattr(held, field) != value
+        for field, value in expected_identity.items()
     ):
         raise operations.OperationError(
             f"Operation {operation_id!r} authorized a different request than "
@@ -712,13 +967,12 @@ def complete_extraction(
     entry = operations.OperationJournal.load(config.operations_file).operations.get(
         operation_id
     )
-    refusal = (
-        f"No operation {operation_id!r} to complete"
-        if entry is None
-        else operations.advance_refusal(
+    if entry is None:
+        refusal = f"No operation {operation_id!r} to complete"
+    else:
+        refusal = operations.advance_refusal(
             operation_id, entry.state, "committed", entry.artifact
         )
-    )
     if refusal:
         raise operations.OperationError(refusal)
 
@@ -731,7 +985,6 @@ def complete_extraction(
         mode=mode,
         candidate_accounting=built.candidate_accounting,
     )
-    target.staging_path.parent.mkdir(parents=True, exist_ok=True)
     run_id = new_review_run_id()
     run_patterns = replace(result.pattern_set, review_run_id=run_id)
     meta: dict[str, Any] = {
@@ -755,20 +1008,86 @@ def complete_extraction(
     if held:
         meta["review_notes"] = extract.unusable_note(held)
     meta[CANDIDATE_ACCOUNTING_KEY] = built.candidate_accounting
-    write_staging(target.staging_path, records, meta, force=force)
-    # The exact answer became staging, so the journal entry has done its job
-    # and stops being something a person must look at.
-    journal.advance(operation_id, "committed")
-
     kept_reviewed_patterns = False
-    with exclusive_path_lock(config.patterns_file):
-        store = patterns.load_store(config.patterns_file)
-        previous = store.get(run_patterns.source)
-        if previous is not None and previous.reviewed and not force:
-            kept_reviewed_patterns = True
-        else:
-            store[run_patterns.source] = run_patterns
-            patterns.save_store_under_lock(config.patterns_file, store)
+    if expected_revision is None:
+        # Staging's path lock is outside the journal lock, matching the
+        # replacement transaction below. The authoritative state/cleanup
+        # check, write, and committed transition then happen under the journal
+        # lock, so forget cannot land in their seam.
+        with exclusive_path_lock(target.staging_path):
+            journal.commit_result(
+                operation_id,
+                lambda: write_staging_under_lock(
+                    target.staging_path,
+                    records,
+                    meta,
+                    force=force,
+                ),
+            )
+
+        try:
+            with exclusive_path_lock(config.patterns_file):
+                pattern_snapshot = _pattern_store_snapshot(
+                    config.patterns_file, run_patterns.source
+                )
+                previous = pattern_snapshot.store.get(run_patterns.source)
+                if previous is not None and previous.reviewed and not force:
+                    kept_reviewed_patterns = True
+                else:
+                    pattern_snapshot.store[run_patterns.source] = run_patterns
+                    patterns.save_store_under_lock(
+                        config.patterns_file,
+                        pattern_snapshot.store,
+                        expected_revision=(
+                            None
+                            if pattern_snapshot.absent
+                            else hashlib.sha256(pattern_snapshot.wire).hexdigest()
+                        ),
+                        expected_absent=pattern_snapshot.absent,
+                    )
+        except JankiError as exc:
+            raise ExtractionCompletionError(exc, target.staging_path) from exc
+    else:
+        if not force:
+            raise operations.OperationError(
+                "An exact replacement revision requires explicit replacement authority"
+            )
+        # The paid call cannot hold review locks while it waits on a provider.
+        # Reacquire both only for the compare-and-swap and the two writes. The
+        # per-source comparison catches cooperating review changes; the bound
+        # writers close the final seam against an editor that ignores locks.
+        with _replacement_locks(target.staging_path, config.patterns_file):
+            current, pattern_snapshot = _replacement_state_under_lock(config, target)
+            _require_current_replacement(current, expected_revision)
+            assert expected_revision.staging_sha256 is not None
+            journal.commit_result(
+                operation_id,
+                lambda: write_staging_under_lock(
+                    target.staging_path,
+                    records,
+                    meta,
+                    force=True,
+                    expected_revision=expected_revision.staging_sha256,
+                ),
+            )
+            try:
+                previous = pattern_snapshot.store.get(run_patterns.source)
+                if previous is not None and previous.reviewed and not force:
+                    kept_reviewed_patterns = True
+                else:
+                    pattern_snapshot.store[run_patterns.source] = run_patterns
+                    patterns.save_store_under_lock(
+                        config.patterns_file,
+                        pattern_snapshot.store,
+                        expected_revision=(
+                            None
+                            if pattern_snapshot.absent
+                            else hashlib.sha256(pattern_snapshot.wire).hexdigest()
+                        ),
+                        expected_absent=pattern_snapshot.absent,
+                    )
+            except JankiError as exc:
+                raise ExtractionCompletionError(exc, target.staging_path) from exc
 
     return ExtractionOutcome(
         target=target.staging_path,

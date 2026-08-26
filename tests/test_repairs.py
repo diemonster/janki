@@ -388,7 +388,7 @@ def test_bound_replace_rechecks_the_path_after_it_hashes(
 
     monkeypatch.setattr(data_io.os, "stat", swap_on_final_stat)
 
-    with pytest.raises(DataError, match="changed before replace"):
+    with pytest.raises(DataError, match=r"changed (?:identity|before replace)"):
         data_io.atomic_write_text_bound(
             target,
             "new\n",

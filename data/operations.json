@@ -10,7 +10,13 @@
       "model": "claude-opus-5",
       "authorized_at": "2026-08-23T18:42:44+00:00",
       "updated_at": "2026-08-23T18:46:29+00:00",
-      "artifact": ".pending/1a85e6fd-bb25-43fd-aabd-658895bdbaf5.json"
+      "artifact": {
+        "relative_name": ".pending/1a85e6fd-bb25-43fd-aabd-658895bdbaf5.json",
+        "directory_identity": [16777234, 118842689],
+        "entry_state": [16777234, 118842690, 50571, 1787510789230276964, 1787510789230530463],
+        "sha256": "21c61a3d72e09dcf6c00d53a6c1742202546b53bba3713e8a63534c280315c99",
+        "terminal_marker": null
+      }
     },
     "be867ad4-f42e-4dc7-a068-e213cbfeddf8": {
       "kind": "extract",

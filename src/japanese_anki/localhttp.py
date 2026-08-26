@@ -99,9 +99,26 @@ class LocalOnlyHandler(BaseHTTPRequestHandler):
         content_type: str = "text/html; charset=utf-8",
     ) -> None:
         payload = body.encode("utf-8") if isinstance(body, str) else body
+        self._start_response(
+            status,
+            content_type=content_type,
+            content_length=len(payload),
+        )
+        self.wfile.write(payload)
+        self.close_connection = True
+
+    def _start_response(
+        self,
+        status: int,
+        *,
+        content_type: str = "text/html; charset=utf-8",
+        content_length: int | None = None,
+    ) -> None:
+        """Send the shared boundary headers for a fixed or streaming body."""
         self.send_response(status)
         self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(payload)))
+        if content_length is not None:
+            self.send_header("Content-Length", str(content_length))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         # Chrome serializes a same-origin form POST as Origin: null under
@@ -117,7 +134,6 @@ class LocalOnlyHandler(BaseHTTPRequestHandler):
         )
         self.send_header("Connection", "close")
         self.end_headers()
-        self.wfile.write(payload)
         self.close_connection = True
 
     def _error(self, status: int, message: str) -> None:

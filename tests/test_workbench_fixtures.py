@@ -109,6 +109,7 @@ def materialize(tmp_path: Path, scenario: str, *, filename: str | None = None) -
     target = ExtractionTarget(
         item=item,
         staging_path=config.staging_dir / f"{item.origin_path.name}.yaml",
+        patterns_path=config.patterns_file,
         source_sha256=str(provenance["source_sha256"]),
         provenance=provenance,
     )
@@ -117,10 +118,9 @@ def materialize(tmp_path: Path, scenario: str, *, filename: str | None = None) -
     # exists. The fixture JSON *is* this run's provider answer, and a journal
     # pointing at a file nobody wrote is the state the journal exists to
     # prevent.
-    journal.advance(
+    journal.capture_result(
         operation_id,
-        "result_captured",
-        artifact=operations.capture_artifact(
+        lambda: operations.capture_artifact(
             config.operations_file,
             operation_id,
             (RESPONSES / f"{scenario}.json").read_bytes(),

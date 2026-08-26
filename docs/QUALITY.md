@@ -74,10 +74,15 @@ crash cannot lose an answer you already paid for. janki will not start a
 second paid call while one is unaccounted for — a call still in flight, a
 reply nobody turned into staging, or an outcome nothing could determine. That
 block never lifts on its own, because only you can say a vanished process is
-gone: `janki operations --end ID` records that, and `--forget ID` drops the
-entry once you have dealt with what it cost. If a run is interrupted and the
-next one refuses, that is this, and `janki operations` names the call and what
-to do about it.
+gone: `janki operations --end ID` records that, and `--forget ID` journals the
+final decision once you have dealt with what it cost. That durable decision
+immediately unblocks a new paid call; forget then retires exact recovery names
+only while their pending-directory inode remains bound. A missing or replaced
+namespace is preserved and never searched for elsewhere. If cleanup is
+interrupted, the entry stays listed and the same ordinary `--forget ID` resumes
+it without another `--force` decision. If a run is interrupted and the next
+one refuses, that is this, and `janki operations` names the call and its
+executable recovery action.
 
 `janki status` reads both and summarizes them:
 
