@@ -203,9 +203,25 @@ def test_owner_coverage_then_promotion_lands_the_previewed_deck(
         server.server_close()
 
     assert promote_status == 303
-    assert promote_headers["location"].startswith(f"/{session.token}/?")
-    assert "source=table.pdf" in promote_headers["location"]
+    assert promote_headers["location"].startswith(f"/{session.token}/finish/")
+    receipt_id = promote_headers["location"].rsplit("/", 1)[-1]
+    assert len(receipt_id) == 64
     assert api.bodies, "the browser promotion must run the jpdb reading check"
+
+    finish_server, _thread = _running(session)
+    try:
+        finish_status, _headers, finish_page = _request(
+            finish_server,
+            "GET",
+            promote_headers["location"],
+        )
+    finally:
+        finish_server.shutdown()
+        finish_server.server_close()
+    assert finish_status == 200
+    assert b"3 promoted card record(s)" in finish_page
+    assert b"Check dictionary facts with jpdb" in finish_page
+    assert b"Add the missing kanji reference" in finish_page
 
     canonical = load_records(session.config.normalized_file)
     assert tuple(record.id for record in canonical) == expected_ids

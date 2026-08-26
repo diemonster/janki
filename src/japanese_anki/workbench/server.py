@@ -85,6 +85,16 @@ from japanese_anki.application.deck_creation import (
     create_study_deck,
     plan_study_deck,
 )
+from japanese_anki.application.enrichment import (
+    DictionaryEnrichmentDecision,
+    commit_dictionary_enrichment,
+    plan_dictionary_enrichment,
+)
+from japanese_anki.application.finish import FinishScope, resolve_finish_scope
+from japanese_anki.application.kanji_addition import (
+    execute_kanji_addition,
+    plan_kanji_addition,
+)
 from japanese_anki.application.promotion import (
     POST_READING_GATES,
     PromotionDecision,
@@ -123,6 +133,15 @@ from japanese_anki.workbench.dispatch import (
     ExtractionActions,
     parse_dispatch_form,
 )
+from japanese_anki.workbench.finish import (
+    DictionaryAction,
+    DictionaryActions,
+    DictionaryCommitSubmission,
+    DictionaryPlanSubmission,
+    FinishFormError,
+    KanjiAddSubmission,
+    parse_finish_form,
+)
 from japanese_anki.workbench.render import (
     INTAKE_SCRIPT_SOURCE,
     STYLE,
@@ -135,6 +154,7 @@ from japanese_anki.workbench.render import (
     render_extraction_progress_start,
     render_extraction_progress_step,
     render_extraction_success,
+    render_finish,
     render_reidentify,
     render_source,
 )
@@ -143,6 +163,7 @@ __all__ = ["WorkbenchSession", "make_server", "serve"]
 
 _SOURCE_PREFIX = "/source/"
 _EXTRACT_PREFIX = "/extract/"
+_FINISH_PREFIX = "/finish/"
 _DECK_CREATOR_ROUTE = "/decks/new"
 
 #: An uploaded source is orders of magnitude larger than a form. It is
@@ -150,6 +171,13 @@ _DECK_CREATOR_ROUTE = "/decks/new"
 #: and an unbounded read is a way to exhaust memory from another local
 #: process that guessed the token.
 MAX_UPLOAD_BYTES = 64 * 1024 * 1024
+
+
+def _is_lower_sha256(value: str) -> bool:
+    """Whether a path handle is one exact lowercase SHA-256 digest."""
+    return len(value) == 64 and all(
+        character in "0123456789abcdef" for character in value
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -487,6 +515,13 @@ class WorkbenchSession:
     coverage_actions: CoverageActions = field(
         default_factory=CoverageActions, repr=False, compare=False
     )
+    #: A dictionary result is shown before it can rewrite canonical records.
+    #: This one-use capability carries that exact immutable decision between
+    #: the two POSTs; losing the browser session merely requires another
+    #: non-paid lookup.
+    dictionary_actions: DictionaryActions = field(
+        default_factory=DictionaryActions, repr=False, compare=False
+    )
 
     @classmethod
     def open(cls, config: ProjectConfig) -> WorkbenchSession:
@@ -572,6 +607,16 @@ class WorkbenchSession:
 
     def consume_coverage_action(self, token: str) -> CoverageAction | None:
         return self.coverage_actions.consume(token)
+
+    def issue_dictionary_action(
+        self,
+        scope: FinishScope,
+        decision: DictionaryEnrichmentDecision,
+    ) -> str:
+        return self.dictionary_actions.issue(scope, decision)
+
+    def consume_dictionary_action(self, token: str) -> DictionaryAction | None:
+        return self.dictionary_actions.consume(token)
 
     def panel(self, source: str) -> review.ReviewPanel | None:
         """A freshly opened review panel for one source, or None.
@@ -804,6 +849,36 @@ class _WorkbenchHandler(LocalOnlyHandler):
             return None
         return fields["source"], promoted, held
 
+    def _finish_banner(self) -> str:
+        """Display-only result of the immediately preceding finish POST."""
+        query = self.path.split("?", 1)
+        if len(query) != 2:
+            return ""
+        fields = dict(parse_qsl(query[1]))
+        if fields.get("dictionary") in {"committed", "nothing"}:
+            try:
+                changed = max(int(fields.get("changed", "0")), 0)
+                cleared = max(int(fields.get("cleared", "0")), 0)
+            except ValueError:
+                return ""
+            if fields["dictionary"] == "nothing":
+                return "Dictionary facts were already current; nothing was written."
+            return (
+                f"Saved dictionary facts on {changed} card(s) and "
+                f"updated provisional marks on {cleared} card(s)."
+            )
+        if fields.get("kanji") == "saved":
+            try:
+                added = max(int(fields.get("added", "0")), 0)
+                current = max(int(fields.get("current", "0")), 0)
+            except ValueError:
+                return ""
+            return (
+                f"Saved {added} kanji lookup(s); {current} concurrent/current "
+                "lookup(s) were preserved."
+            )
+        return ""
+
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         if not self._request_is_local():
             self._error(403, "The workbench accepts only its exact localhost origin.")
@@ -838,6 +913,13 @@ class _WorkbenchHandler(LocalOnlyHandler):
                     csrf=self.server.session.csrf_token,
                 ),
             )
+            return
+        if route.startswith(_FINISH_PREFIX):
+            receipt_id = unquote(route[len(_FINISH_PREFIX) :])
+            if not _is_lower_sha256(receipt_id):
+                self._error(404, "No such finish page.")
+                return
+            self._finish_page(receipt_id)
             return
         if route.startswith(_EXTRACT_PREFIX):
             # Same discipline as the source route: the name is matched against
@@ -945,6 +1027,38 @@ class _WorkbenchHandler(LocalOnlyHandler):
             )
             return
         self._error(404, "No such workbench page.")
+
+    def _finish_page(
+        self,
+        receipt_id: str,
+        *,
+        dictionary_decision: DictionaryEnrichmentDecision | None = None,
+        dictionary_action: str = "",
+        scope: FinishScope | None = None,
+    ) -> None:
+        """Reconstruct and render one exact post-promotion finish scope."""
+        session = self.server.session
+        try:
+            current = scope or resolve_finish_scope(session.config, receipt_id)
+            kanji_plan = plan_kanji_addition(
+                session.config,
+                current.record_ids,
+            )
+        except (JankiError, TypeError, ValueError) as exc:
+            self._error(409, f"Could not open this finish workflow: {exc}")
+            return
+        self._send(
+            200,
+            render_finish(
+                current,
+                kanji_plan,
+                token=session.token,
+                csrf=session.csrf_token,
+                dictionary_decision=dictionary_decision,
+                dictionary_action=dictionary_action,
+                banner=self._finish_banner(),
+            ),
+        )
 
     def _addition_page(self, name: str) -> None:
         """Plan one exact source for coverage or promotion; write nothing."""
@@ -1161,6 +1275,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
             and route != _DECK_CREATOR_ROUTE
             and not route.startswith(_SOURCE_PREFIX)
             and not route.startswith(_EXTRACT_PREFIX)
+            and not route.startswith(_FINISH_PREFIX)
         ):
             self._error(404, "No such workbench action.")
             return
@@ -1175,6 +1290,16 @@ class _WorkbenchHandler(LocalOnlyHandler):
             if body is None:
                 return
             self._study_deck(body)
+            return
+        if route.startswith(_FINISH_PREFIX):
+            receipt_id = unquote(route[len(_FINISH_PREFIX) :])
+            if not _is_lower_sha256(receipt_id):
+                self._error(404, "No such workbench action.")
+                return
+            body = self._read_body()
+            if body is None:
+                return
+            self._finish(receipt_id, body)
             return
         if route.startswith(_EXTRACT_PREFIX):
             name = unquote(route[len(_EXTRACT_PREFIX) :])
@@ -1215,6 +1340,190 @@ class _WorkbenchHandler(LocalOnlyHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.close_connection = True
+
+    def _finish(self, receipt_id: str, body: bytes) -> None:
+        """Plan or consume one exact finish-page dictionary/kanji action."""
+        session = self.server.session
+        try:
+            submission = parse_finish_form(body)
+        except FinishFormError as exc:
+            self._error(400, str(exc))
+            return
+        if not secrets.compare_digest(
+            submission.csrf.encode("utf-8"), session.csrf_token.encode("utf-8")
+        ):
+            self._error(403, "That form did not come from this workbench session.")
+            return
+
+        if isinstance(submission, DictionaryPlanSubmission):
+            self._finish_dictionary_plan(receipt_id, submission)
+        elif isinstance(submission, DictionaryCommitSubmission):
+            self._finish_dictionary_commit(receipt_id, submission)
+        else:
+            assert isinstance(submission, KanjiAddSubmission)
+            self._finish_kanji(receipt_id, submission)
+
+    def _finish_dictionary_plan(
+        self,
+        receipt_id: str,
+        submission: DictionaryPlanSubmission,
+    ) -> None:
+        """Run the networked jpdb lookup, then render its exact write diff."""
+        session = self.server.session
+        try:
+            scope = resolve_finish_scope(session.config, receipt_id)
+            if not secrets.compare_digest(
+                submission.scope_fingerprint, scope.fingerprint
+            ):
+                raise FinishFormError(
+                    "This exact finish scope changed after the page was rendered. "
+                    "Nothing was looked up; reload the current finish page."
+                )
+            decision = plan_dictionary_enrichment(
+                session.config,
+                jpdb.JpdbClient(jpdb.api_key_from_env()),
+                scope.record_ids,
+            )
+            fresh = resolve_finish_scope(session.config, receipt_id)
+            if not secrets.compare_digest(scope.fingerprint, fresh.fingerprint):
+                raise FinishFormError(
+                    "The cards or study-deck ownership changed during the "
+                    "dictionary lookup. Nothing was written; check again."
+                )
+            action = (
+                session.issue_dictionary_action(fresh, decision)
+                if decision.result.changes or decision.result.cleared
+                else ""
+            )
+        except (JankiError, TypeError, ValueError) as exc:
+            self._error(409, str(exc))
+            return
+        self._finish_page(
+            receipt_id,
+            dictionary_decision=decision,
+            dictionary_action=action,
+            scope=fresh,
+        )
+
+    def _finish_dictionary_commit(
+        self,
+        receipt_id: str,
+        submission: DictionaryCommitSubmission,
+    ) -> None:
+        """Consume only the dictionary decision the preceding page showed."""
+        session = self.server.session
+        action = session.consume_dictionary_action(submission.dictionary_action)
+        if action is None:
+            self._error(
+                409,
+                "This dictionary decision has already been used or expired. "
+                "Nothing was written; check the current facts again.",
+            )
+            return
+        decision = action.decision
+        if not (
+            secrets.compare_digest(receipt_id, action.receipt_id)
+            and secrets.compare_digest(
+                submission.scope_fingerprint, action.scope_fingerprint
+            )
+            and secrets.compare_digest(
+                submission.plan_fingerprint, decision.fingerprint
+            )
+        ):
+            self._error(
+                409,
+                "This form does not match the dictionary result it displayed. "
+                "Nothing was written; check the current facts again.",
+            )
+            return
+        try:
+            scope = resolve_finish_scope(session.config, receipt_id)
+            if (
+                not secrets.compare_digest(scope.fingerprint, action.scope_fingerprint)
+                or decision.record_ids != scope.record_ids
+                or decision.output_path != scope.canonical_path
+                or decision.force_fields
+            ):
+                raise FinishFormError(
+                    "The exact cards or their study-deck ownership changed after "
+                    "the dictionary preview. Nothing was written; check again."
+                )
+            committed = commit_dictionary_enrichment(
+                session.config,
+                decision,
+                expected_fingerprint=submission.plan_fingerprint,
+            )
+        except (JankiError, TypeError, ValueError) as exc:
+            self._error(409, str(exc))
+            return
+        if committed.state == "committed_ledger_incomplete":
+            self._error(
+                409,
+                f"Dictionary facts reached {committed.output_path}, but their "
+                f"ledger attribution did not: {committed.ledger_error}. The "
+                "records are saved; status --rebuild cannot recreate this "
+                "attribution.",
+            )
+            return
+        self._redirect(
+            f"/{session.token}/finish/{receipt_id}?"
+            f"dictionary={committed.state}&"
+            f"changed={len(committed.changed_record_ids)}&"
+            f"cleared={len(committed.cleared_record_ids)}"
+        )
+
+    def _finish_kanji(
+        self,
+        receipt_id: str,
+        submission: KanjiAddSubmission,
+    ) -> None:
+        """Re-plan and execute only the missing characters this page named."""
+        session = self.server.session
+        try:
+            scope = resolve_finish_scope(session.config, receipt_id)
+            if not secrets.compare_digest(
+                submission.scope_fingerprint, scope.fingerprint
+            ):
+                raise FinishFormError(
+                    "This exact finish scope changed after the page was rendered. "
+                    "Nothing was looked up; reload it."
+                )
+            plan = plan_kanji_addition(
+                session.config,
+                scope.record_ids,
+            )
+            if not secrets.compare_digest(
+                submission.plan_fingerprint, plan.fingerprint
+            ):
+                raise FinishFormError(
+                    "The missing kanji changed after the page was rendered. "
+                    "Nothing was looked up; reload it."
+                )
+            result = execute_kanji_addition(
+                session.config,
+                plan,
+                expected_fingerprint=submission.plan_fingerprint,
+            )
+        except (JankiError, TypeError, ValueError) as exc:
+            self._error(409, str(exc))
+            return
+        if result.failures:
+            failures = "; ".join(
+                f"{failure.character}: {failure.message}"
+                for failure in result.failures
+            )
+            self._error(
+                409,
+                f"Saved {len(result.added)} new kanji lookup(s), but "
+                f"{len(result.failures)} lookup(s) failed: {failures}. Reload "
+                "and retry the remaining characters.",
+            )
+            return
+        current = len(plan.already_known) + len(result.preserved_concurrent)
+        self._redirect(
+            f"/{session.token}/finish/{receipt_id}?kanji=saved&"
+            f"added={len(result.added)}&current={current}"
+        )
 
     def _addition(self, name: str, body: bytes) -> None:
         """Check readings, record coverage, or consume an exact promotion."""
@@ -1504,10 +1813,15 @@ class _WorkbenchHandler(LocalOnlyHandler):
                 f"ledger did not save: {result.ledger_error}. {kept}",
             )
             return
-        self._redirect(
-            f"/{session.token}/?source={quote(name, safe='')}&"
-            f"promoted={len(result.promoted)}&held={len(result.held)}"
-        )
+        if result.receipt_id is not None:
+            self._redirect(
+                f"/{session.token}/finish/{result.receipt_id}"
+            )
+        else:
+            self._redirect(
+                f"/{session.token}/?source={quote(name, safe='')}&"
+                f"promoted={len(result.promoted)}&held={len(result.held)}"
+            )
 
     def _study_deck(self, body: bytes) -> None:
         """Preview or explicitly create one exact thematic study deck."""

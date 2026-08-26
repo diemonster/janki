@@ -30,6 +30,10 @@ from japanese_anki.application import (
     PromotionPlan,
     SourceJourney,
 )
+from japanese_anki.application.enrichment import DictionaryEnrichmentDecision
+from japanese_anki.application.finish import FinishScope
+from japanese_anki.application.kanji_addition import KanjiAdditionPlan
+from japanese_anki.enrich import format_field_diff
 
 __all__ = [
     "STYLE",
@@ -44,6 +48,7 @@ __all__ = [
     "render_extraction_progress_start",
     "render_extraction_progress_step",
     "render_extraction_success",
+    "render_finish",
     "render_reidentify",
     "render_source",
 ]
@@ -449,6 +454,143 @@ def render_dashboard(
             "the workbench will show the separate reading step.</p>"
         )
     body.extend(_source_html(journey, prefix) for journey in journeys)
+    body.append("</main></body></html>")
+    return "".join(body)
+
+
+def render_finish(
+    scope: FinishScope,
+    kanji_plan: KanjiAdditionPlan,
+    *,
+    token: str,
+    csrf: str,
+    dictionary_decision: DictionaryEnrichmentDecision | None = None,
+    dictionary_action: str = "",
+    banner: str = "",
+) -> str:
+    """The exact post-promotion steps for one durable receipt."""
+    prefix = f"/{html.escape(token, quote=True)}"
+    action = f"{prefix}/finish/{scope.receipt_id}"
+    deck_count = len(scope.owner_groups)
+    body = [
+        "<!doctype html><html lang=en><head><meta charset=utf-8>",
+        '<meta name="viewport" content="width=device-width, initial-scale=1">',
+        f"<title>Finish {_escaped(scope.source_file)} · janki workbench</title>",
+        f'<link rel=stylesheet href="{prefix}/style.css">',
+        "</head><body><main>",
+        f'<p><a href="{prefix}/">&larr; All sources</a></p>',
+        f"<h1>Finish {_escaped(scope.source_file)}</h1>",
+        f'<p class=saved>{len(scope.record_ids)} promoted card record(s) in '
+        f"{deck_count} study deck(s). Each step below stays limited to those "
+        "exact cards.</p>",
+    ]
+    if banner:
+        body.append(f'<p class="status reviewed">{_escaped(banner)}</p>')
+    body.append('<section class=source><h2>Study decks</h2><ul>')
+    body.extend(
+        f"<li>{_escaped(group.stem)} — {len(group.record_ids)} card(s) in this "
+        "finish batch</li>"
+        for group in scope.owner_groups
+    )
+    body.append("</ul></section>")
+
+    body.extend(
+        [
+            '<section class=source><h2>1. Add dictionary facts</h2>',
+            "<p><b>Networked · jpdb API · no model call.</b> This can fill "
+            "word facts such as part of speech, furigana, pitch accent and "
+            "frequency. It never replaces the lesson meaning.</p>",
+        ]
+    )
+    if dictionary_decision is None:
+        body.extend(
+            [
+                f'<form method=post action="{html.escape(action, quote=True)}">',
+                _hidden("action", "dictionary-plan"),
+                _hidden("csrf", csrf),
+                _hidden("scope_fingerprint", scope.fingerprint),
+                "<button type=submit>Check dictionary facts with jpdb</button>",
+                "</form>",
+            ]
+        )
+    else:
+        result = dictionary_decision.result
+        body.append(
+            f"<p>jpdb looked up {_escaped(result.looked_up)} card(s) and skipped "
+            f"{_escaped(result.skipped)} with no empty dictionary fields.</p>"
+        )
+        if result.warnings:
+            body.append("<details><summary>Dictionary notes</summary><ul>")
+            body.extend(f"<li>{_escaped(warning)}</li>" for warning in result.warnings)
+            body.append("</ul></details>")
+        if result.changes or result.cleared:
+            lines = format_field_diff(result.changes)
+            if lines:
+                body.append(
+                    "<p>Review the exact proposed changes:</p>"
+                    f"<pre>{_escaped(chr(10).join(lines))}</pre>"
+                )
+            if result.cleared:
+                marks = sum(len(names) for names in result.cleared.values())
+                body.append(
+                    f"<p>This also clears {_escaped(marks)} stale or confirmed "
+                    "provisional field mark(s).</p>"
+                )
+            if dictionary_action:
+                body.extend(
+                    [
+                        f'<form method=post action="{html.escape(action, quote=True)}">',
+                        _hidden("action", "dictionary-commit"),
+                        _hidden("csrf", csrf),
+                        _hidden("scope_fingerprint", scope.fingerprint),
+                        _hidden("dictionary_action", dictionary_action),
+                        _hidden("plan_fingerprint", dictionary_decision.fingerprint),
+                        "<button type=submit>Save these dictionary facts</button>",
+                        "</form>",
+                    ]
+                )
+        else:
+            body.append(
+                '<p class="status reviewed">Nothing new to fill for these cards.</p>'
+            )
+    body.append("</section>")
+
+    body.extend(
+        [
+            '<section class=source><h2>2. Add kanji reference</h2>',
+            "<p><b>Networked · KANJIDIC/KanjiVG sources · no model call.</b> "
+            "This adds meanings, readings, stroke count and available stroke "
+            "diagrams for the characters on these cards.</p>",
+        ]
+    )
+    if kanji_plan.characters:
+        body.append(
+            f'<p class=ja lang=ja>{_escaped(" ".join(kanji_plan.characters))}</p>'
+        )
+    if kanji_plan.to_fetch:
+        body.extend(
+            [
+                f"<p>{len(kanji_plan.to_fetch)} of {len(kanji_plan.characters)} "
+                "character(s) still need a lookup.</p>",
+                f'<form method=post action="{html.escape(action, quote=True)}">',
+                _hidden("action", "kanji-add"),
+                _hidden("csrf", csrf),
+                _hidden("scope_fingerprint", scope.fingerprint),
+                _hidden("plan_fingerprint", kanji_plan.fingerprint),
+                "<button type=submit>Add the missing kanji reference</button>",
+                "</form>",
+            ]
+        )
+    else:
+        body.append(
+            '<p class="status reviewed">The kanji reference is current for '
+            "these cards.</p>"
+        )
+    body.append("</section>")
+    body.append(
+        '<section class=source><h2>Next</h2><p>Create word and example audio, '
+        "preview these cards, then build each named study deck.</p></section>"
+    )
     body.append("</main></body></html>")
     return "".join(body)
 
