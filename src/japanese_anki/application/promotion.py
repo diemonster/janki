@@ -1,15 +1,15 @@
-"""What promoting a staging file would do, decided before anything is written.
+"""The shared promotion decision and execution service.
 
 `WORKBENCH_PLAN.md` W1.1b. Two kinds of thing live here.
 
-**Promote's own orchestration**, lifted out of `cli.py` unchanged: which
+**Promote's own orchestration**, lifted out of `cli.py`: which
 durable archive a staging run belongs to and which of its rows are already
 there (`archive_for_run`), whether a path is the archive itself
 (`inside_archive`), and the gates that refuse a file before anything is
 written (`validate_record_archive`, `staged_ai_enrichment`,
-`check_pattern_review`). These are not previews — `promote` calls every one of
-them — but they are the pieces both the command and the preview need, and a
-second copy would answer differently the first time either changed.
+`check_pattern_review`). `execute_promotion` is the one mutation path for both
+surfaces: it writes canonical records and ledger state, completes pattern-only
+reviews, and holds the live/archive locks through archive and pruning.
 
 `plan_promotion` is the preview. It answers "what would adding this source do"
 without doing it: which cards are new, which merge into a card you already
@@ -27,10 +27,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from japanese_anki import enrich, jpdb, ledger, patterns, promote, staging
 from japanese_anki import status as status_module
@@ -38,24 +38,30 @@ from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.io import (
     DataError,
+    MergeOutcome,
+    RecordsRevision,
     exclusive_path_lock,
     load_records,
     read_bytes_bound,
     records_revision,
+    save_records_json,
 )
 from japanese_anki.models import VocabularyRecord
 from japanese_anki.promote import PromoteError
 from japanese_anki.staging import (
     STAGING_SUFFIXES,
     check_rewritable,
+    prune_staging_under_lock,
     read_staging,
     review_run_id,
+    rewrite_staging_under_lock,
     rich_extraction_review_run_id,
     validate_coverage_facts,
+    write_staging_under_lock,
 )
 
 __all__ = [
-    "AiLedgerHandoffIncomplete",
+    "PromotionExecutionResult",
     "HeldCard",
     "LandingCard",
     "PromotionDecision",
@@ -69,6 +75,7 @@ __all__ = [
     "staging_wire",
     "inside_archive",
     "decide_promotion",
+    "execute_promotion",
     "plan_promotion",
     "project_promotion",
     "unreadable_deck_warning",
@@ -186,7 +193,7 @@ def validate_record_archive(
         # exists only in the done copy. A later record-bearing live file must
         # not turn absence of rows into absence of an archive and overwrite it.
         # Exact pattern-only retries are routed to their stricter validator by
-        # command_promote before the record-archive validator is called.
+        # execute_promotion before the record-archive validator is called.
         raise PromoteError(
             "[record-archive-divergent] the same review run already has a "
             "completed zero-record archive; later record rows cannot be appended "
@@ -224,7 +231,7 @@ def validate_record_archive(
         )
 
 
-class AiLedgerHandoffIncomplete(Exception):
+class _AiLedgerHandoffIncomplete(Exception):
     """Keep the live review after records landed but AI attribution did not."""
 
 
@@ -390,6 +397,29 @@ class HeldCard:
 
 
 @dataclass(frozen=True, slots=True)
+class _PromotionRepositoryBinding:
+    """The repository paths one decision was derived from."""
+
+    root: Path
+    normalized_file: Path
+    deck_dir: Path
+    ledger_file: Path
+    staging_dir: Path
+    patterns_file: Path
+
+
+def _repository_binding(config: ProjectConfig) -> _PromotionRepositoryBinding:
+    return _PromotionRepositoryBinding(
+        root=config.root.resolve(),
+        normalized_file=config.normalized_file.resolve(),
+        deck_dir=config.deck_dir.resolve(),
+        ledger_file=config.ledger_file.resolve(),
+        staging_dir=config.staging_dir.resolve(),
+        patterns_file=config.patterns_file.resolve(),
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class PromotionPlan:
     """What adding this source would do. Computed without writing anything."""
 
@@ -493,6 +523,237 @@ def check_pattern_review(
         )
 
 
+def _pattern_only_archive_meta(
+    meta: Mapping[str, Any], reviewed: patterns.PatternSet
+) -> dict[str, Any]:
+    """Keep the paid answer raw and add the corrected human-reviewed snapshot."""
+    archived = dict(meta)
+    archived["reviewed_pattern_set"] = reviewed.to_dict()
+    note = "Reviewed pattern-only extraction; no records were promoted."
+    existing = str(archived.get("review_notes") or "").strip()
+    archived["review_notes"] = f"{existing}\n\n{note}" if existing else note
+    return archived
+
+
+def _complete_pattern_only_review(
+    config: ProjectConfig,
+    path: Path,
+    done: Path,
+    expected_meta: Mapping[str, Any],
+    expected_wire: bytes,
+    run_id: str,
+) -> tuple[Path, bool]:
+    """Archive one reviewed zero-record v3 run as a locked CAS transaction."""
+    with exclusive_path_lock(path):
+        current_wire = staging_wire(path)
+        records, meta = read_staging(path)
+        if current_wire != expected_wire or records or dict(meta) != dict(expected_meta):
+            raise PromoteError(
+                "[staging-review-stale] the live staging file changed while its "
+                "pattern review was being completed. The replacement was kept; "
+                "nothing was archived."
+            )
+
+        # Re-check inside the lock. The first check happened before the CAS so
+        # coverage acceptance could run without holding a file lock across a
+        # paid call; this one binds the archive to the bytes about to be removed.
+        promote.check_coverage(meta)
+        if rich_extraction_review_run_id(meta) != run_id:
+            raise PromoteError(
+                "[staging-review-stale] the rich extraction run changed. "
+                "Nothing was archived."
+            )
+
+        source = meta.get("source_file")
+        raw_pattern_set = meta.get("pattern_set")
+        if not isinstance(source, str) or not source.strip() or not isinstance(
+            raw_pattern_set, Mapping
+        ):
+            raise PromoteError(
+                "[pattern-review-invalid] a rich pattern-only extraction needs "
+                "its source_file and pattern_set. Nothing was archived."
+            )
+        # Structural parsing only. Human corrections belong in the store and
+        # deliberately need not equal this immutable paid proposal.
+        patterns.PatternSet.from_dict(source, dict(raw_pattern_set))
+        stored_patterns = patterns.load_store(config.patterns_file).get(source)
+        if stored_patterns is None or not stored_patterns.reviewed:
+            raise PromoteError(
+                f"[patterns-unreviewed] {source} has not been reviewed. Run "
+                f"'janki patterns --review {source}' first; nothing was archived."
+            )
+        provenance = meta.get("prompt_provenance")
+        if (
+            stored_patterns.review_run_id != run_id
+            or not isinstance(provenance, Mapping)
+            or stored_patterns.prompt_provenance != dict(provenance)
+        ):
+            raise PromoteError(
+                f"[patterns-review-stale] the reviewed {source} pattern-store "
+                "entry belongs to a different extraction run. Nothing was archived."
+            )
+
+        check_rewritable(path)
+        if path.suffix.lower() not in STAGING_SUFFIXES:
+            raise PromoteError(_unrewritable(path))
+        archived_meta = _pattern_only_archive_meta(meta, stored_patterns)
+        archive_base = done
+        while True:
+            selected, _archived, _archived_meta = archive_for_run(archive_base, meta)
+            with exclusive_path_lock(selected):
+                # Selection itself reads existing archives. Confirm after the
+                # selected path is locked: another completion may have created
+                # the base or candidate between those two operations.
+                confirmed, _archived, _archived_meta = archive_for_run(
+                    archive_base, meta
+                )
+                if confirmed != selected:
+                    continue
+                done = selected
+                retried = done.exists()
+                if retried:
+                    archive_records, existing_meta = read_staging(done)
+                    if archive_records or existing_meta != archived_meta:
+                        raise PromoteError(
+                            f"[pattern-archive-divergent] {done} already names this "
+                            "review run but is not the exact completed archive. "
+                            "Both files were kept; nothing was overwritten."
+                        )
+                else:
+                    done.parent.mkdir(parents=True, exist_ok=True)
+                    # `selected` is already locked. The ordinary writer would
+                    # acquire this non-reentrant lock again and deadlock.
+                    write_staging_under_lock(done, [], archived_meta)
+                    archive_records, written_meta = read_staging(done)
+                    if archive_records or written_meta != archived_meta:
+                        raise PromoteError(
+                            f"[pattern-archive-divergent] {done} did not read "
+                            "back as the exact completed archive. The live "
+                            "review was kept."
+                        )
+
+                # Last, while both the live staging path and selected done path
+                # remain locked. Neither a failed archive write, a concurrent
+                # forced extraction, nor a force-write to the verified archive
+                # can remove the only recoverable review artifact in between.
+                path.unlink()
+                return done, retried
+
+
+def _finish_record_review(
+    path: Path,
+    archive_base: Path,
+    *,
+    expected_wire: bytes,
+    expected_meta: Mapping[str, Any],
+    expected_archived: Sequence[VocabularyRecord],
+    expected_archived_meta: Mapping[str, Any] | None,
+    promoted: Sequence[VocabularyRecord],
+    retry_records: Sequence[VocabularyRecord],
+    keep: Sequence[bool],
+    held: Sequence[VocabularyRecord],
+    canonical_commit: Callable[[], None] | None = None,
+) -> tuple[Path, int]:
+    """Commit, archive, and retire rows as one live/done locked transaction.
+
+    The optional canonical commit runs only after both snapshots have been
+    revalidated and while the selected done path remains locked. This closes
+    the window where a same-run zero-row completion could appear after
+    preflight but before vocabulary and ledger writes.
+    """
+    if len(keep) - sum(keep) != len(promoted) + len(retry_records):
+        raise PromoteError(
+            "[record-promotion-invalid] row disposition does not match the "
+            "archive transaction"
+        )
+
+    with exclusive_path_lock(path):
+        if staging_wire(path) != expected_wire:
+            raise PromoteError(
+                "[staging-review-stale] the live staging file changed while "
+                "promotion was completing. The replacement was kept."
+            )
+        current_records, current_meta = read_staging(path)
+        if dict(current_meta) != dict(expected_meta) or len(current_records) != len(keep):
+            raise PromoteError(
+                "[staging-review-stale] the live staging review no longer "
+                "matches the validated snapshot. The replacement was kept."
+            )
+
+        validate_coverage_facts(current_meta)
+        promote.check_coverage(current_meta)
+        while True:
+            selected, _rows, _meta = archive_for_run(archive_base, current_meta)
+            with exclusive_path_lock(selected):
+                confirmed, archived, archived_meta = archive_for_run(
+                    archive_base, current_meta
+                )
+                if confirmed != selected:
+                    continue
+                if list(archived) != list(expected_archived) or (
+                    None if archived_meta is None else dict(archived_meta)
+                ) != (
+                    None
+                    if expected_archived_meta is None
+                    else dict(expected_archived_meta)
+                ):
+                    raise PromoteError(
+                        "[record-archive-stale] the done archive changed while "
+                        "promotion was completing. The live review was kept."
+                    )
+                validate_record_archive(current_meta, archived, archived_meta)
+                retry_flags = promote.check_candidate_accounting(
+                    current_meta,
+                    retry_records,
+                    archived,
+                    archived_meta=archived_meta,
+                )
+                if retry_records and not all(retry_flags):
+                    raise PromoteError(
+                        "[archive-retry-divergent] rows marked as archive retries "
+                        "are not exact promoted rows in the done archive"
+                    )
+                if any(
+                    promote.check_candidate_accounting(
+                        current_meta,
+                        promoted,
+                        archived,
+                        archived_meta=archived_meta,
+                    )
+                ):
+                    raise PromoteError(
+                        "[archive-retry-divergent] a pending row already exists "
+                        "in the done archive"
+                    )
+
+                if canonical_commit is not None:
+                    canonical_commit()
+
+                done = confirmed
+                combined = list(archived) + list(promoted)
+                if promoted:
+                    done.parent.mkdir(parents=True, exist_ok=True)
+                    completed_meta = promote.archive_meta(
+                        dict(current_meta), len(combined)
+                    )
+                    write_staging_under_lock(
+                        done, combined, completed_meta, force=True
+                    )
+                    written, written_meta = read_staging(done)
+                    if written != combined or written_meta != completed_meta:
+                        raise PromoteError(
+                            f"[record-archive-divergent] {done} did not read back "
+                            "as the exact completed archive. The live review was kept."
+                        )
+
+                removed = prune_staging_under_lock(path, keep)
+                if held:
+                    rewrite_staging_under_lock(path, held)
+                else:
+                    path.unlink()
+                return done, removed
+
+
 #: What a decide pass concluded, in one word.
 #:
 #: `blocked` — a gate refused; `error` carries it.
@@ -527,8 +788,8 @@ class PromotionDecision:
     """Everything `promote` works out before it writes a byte.
 
     The shared middle of the command and the preview. `plan_promotion`
-    projects it into something safe to hand a browser; `command_promote`
-    consumes it and performs the transaction.
+    projects it into something safe to render; `execute_promotion` consumes it
+    and performs the transaction for either surface.
 
     Why a projection rather than one public value: this carries the raw wire
     snapshot, the resolved merge and the compare-and-swap token — which is
@@ -537,16 +798,19 @@ class PromotionDecision:
     authority gate the CLI enforces, so the boundary between this and
     `PromotionPlan` is a safety boundary and not a matter of taste.
 
-    Nothing here is written. The staging snapshot — the bytes and the parse —
-    is taken under the writer lock, because the write path's compare-and-swap
-    trusts the two to describe each other. Nothing else is locked: the
-    compare-and-swap is the protection for the collection, and holding a lock
-    across the dictionary lookups would be worse than the race it closed.
+    Constructing this decision writes nothing. The staging snapshot — the
+    bytes and the parse — is taken under the writer lock, because the execution
+    service's compare-and-swap trusts the two to describe each other. Nothing
+    else is locked: the compare-and-swap is the protection for the collection,
+    and holding a lock across the dictionary lookups would be worse than the
+    race it closed.
     """
 
     source: str
     staging_path: Path
     state: str
+    repository: _PromotionRepositoryBinding
+    reading_check: Literal["preview", "explicit_skip", "consulted"]
     #: The refusal itself, not its text. The command re-raises it, so stderr
     #: and the exit code are what they always were, and its *type* survives —
     #: different gates raise different classes, and flattening them changes
@@ -598,7 +862,7 @@ class PromotionDecision:
     #: The collection as it was read, and the token proving it has not moved.
     existing: tuple[VocabularyRecord, ...] = ()
     output_path: Path | None = None
-    output_revision: Any = None
+    output_revision: RecordsRevision | None = None
     #: Decks whose ids could not be read, verbatim — the two warning streams
     #: stay separate because the command prints these *before* the readings
     #: warnings and the plan reports them after.
@@ -606,7 +870,7 @@ class PromotionDecision:
 
     ai_provenance: Any = None
     merged: tuple[VocabularyRecord, ...] = ()
-    outcomes: Mapping[str, Any] = field(default_factory=dict)
+    outcomes: Mapping[str, MergeOutcome] = field(default_factory=dict)
 
     @property
     def is_blocked(self) -> bool:
@@ -619,6 +883,82 @@ class PromotionDecision:
     @property
     def deck_warnings(self) -> tuple[str, ...]:
         return tuple(unreadable_deck_warning(one) for one in self.unreadable_decks)
+
+
+PromotionExecutionState = Literal[
+    "nothing",
+    "pattern_only",
+    "archive_retry",
+    "nothing_lands",
+    "landed",
+    "landed_ledger_incomplete",
+    "landed_ai_ledger_incomplete",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class PromotionExecutionResult:
+    """The durable result of consuming one validated promotion decision.
+
+    It contains facts, not terminal prose. The CLI formats these fields while
+    the workbench can render the same committed transaction without parsing a
+    command transcript.
+    """
+
+    state: PromotionExecutionState
+    staging_path: Path
+    archive_path: Path | None = None
+    output_path: Path | None = None
+    promoted: tuple[VocabularyRecord, ...] = ()
+    held: tuple[VocabularyRecord, ...] = ()
+    retry_records: tuple[VocabularyRecord, ...] = ()
+    removed: int = 0
+    empty_live_retry: bool = False
+    archive_was_retry: bool = False
+    reminted: Mapping[str, str] = field(default_factory=dict)
+    outcomes: Mapping[str, MergeOutcome] = field(default_factory=dict)
+    ledger_added: int = 0
+    ledger_sources: int = 0
+    ledger_error: ledger.LedgerError | None = None
+
+    @property
+    def promoted_ids(self) -> tuple[str, ...]:
+        """The exact newly landed scope, in transaction order."""
+        return tuple(record.id for record in self.promoted)
+
+    def __post_init__(self) -> None:
+        archive_required = self.state in {
+            "pattern_only",
+            "archive_retry",
+            "landed",
+            "landed_ledger_incomplete",
+        } or (self.state == "nothing_lands" and bool(self.retry_records))
+        if (self.archive_path is not None) != archive_required:
+            raise ValueError(
+                f"Promotion result {self.state!r} has an inconsistent archive path"
+            )
+
+        landed = self.state in {
+            "landed",
+            "landed_ledger_incomplete",
+            "landed_ai_ledger_incomplete",
+        }
+        output_expected = landed or self.state == "nothing_lands"
+        if landed != bool(self.promoted) or output_expected != (
+            self.output_path is not None
+        ):
+            raise ValueError(
+                f"Promotion result {self.state!r} has an inconsistent landing scope"
+            )
+
+        ledger_failed = self.state in {
+            "landed_ledger_incomplete",
+            "landed_ai_ledger_incomplete",
+        }
+        if (self.ledger_error is not None) != ledger_failed:
+            raise ValueError(
+                f"Promotion result {self.state!r} has an inconsistent ledger result"
+            )
 
 
 def staging_wire(path: Path) -> bytes:
@@ -685,6 +1025,7 @@ def decide_promotion(
     and writes an approval into the staging file, so the command runs it
     between two decide passes rather than having a read-only function do it.
     """
+    requested_skip = skip_reading_check
     if skip_reading_check is None:
         # Handing over a client and still getting the offline answer is the
         # shape a caller would never intend, so it is not spellable by
@@ -701,6 +1042,10 @@ def decide_promotion(
             "skip_reading_check alone to get the offline plan."
         )
 
+    reading_check: Literal["preview", "explicit_skip", "consulted"] = (
+        "explicit_skip" if requested_skip is True else "preview"
+    )
+    repository = _repository_binding(config)
     staging_path = staging_path.resolve()
     name = source or staging_path.name
     consulted = False
@@ -717,6 +1062,7 @@ def decide_promotion(
         assert state in DECISION_STATES, state
         return PromotionDecision(
             source=name, staging_path=staging_path, state=state,
+            repository=repository, reading_check=reading_check,
             consulted=consulted, **fields,
         )
 
@@ -844,6 +1190,8 @@ def decide_promotion(
         return blocked(exc, "collection")
 
     consulted = not skip_reading_check
+    if consulted:
+        reading_check = "consulted"
     readings = promote.check_readings(
         work,
         client=client,
@@ -904,6 +1252,292 @@ def decide_promotion(
         return blocked(exc, "merge")
 
     return at("lands", **common, merged=tuple(merged), outcomes=outcomes)
+
+
+def _save_execution_ledger(book: ledger.Ledger) -> ledger.LedgerError | None:
+    """Save the promotion ledger without hiding already-landed records."""
+    try:
+        book.save()
+    except ledger.LedgerError as exc:
+        return exc
+    return None
+
+
+def execute_promotion(
+    config: ProjectConfig, decision: PromotionDecision
+) -> PromotionExecutionResult:
+    """Consume a validated decision through the one promotion transaction.
+
+    All mutation formerly in ``cli.command_promote`` lives here: canonical and
+    ledger writes, exact archive retries, the live/archive CAS, held-row
+    rewriting, and pattern-only completion. A caller may format the returned
+    facts differently; it may not reproduce this writer.
+    """
+    if decision.repository != _repository_binding(config):
+        raise PromoteError(
+            "[promotion-config-mismatch] this promotion decision belongs to a "
+            "different repository configuration. Nothing was promoted."
+        )
+    if decision.is_blocked:
+        if decision.error is None:
+            raise PromoteError("A blocked promotion decision has no refusal")
+        raise decision.error
+
+    path = decision.staging_path
+    archive_base = (config.staging_dir / "done" / path.name).resolve()
+    meta = decision.meta
+    archived = decision.archived
+    archived_meta = decision.archived_meta
+    expected_wire = decision.wire
+
+    if decision.state == "nothing":
+        return PromotionExecutionResult(state="nothing", staging_path=path)
+
+    if decision.state == "pattern_only":
+        run_id = rich_extraction_review_run_id(meta)
+        if run_id is None:
+            raise PromoteError(
+                "A pattern-only promotion decision has no rich extraction run"
+            )
+        done, retried = _complete_pattern_only_review(
+            config, path, archive_base, meta, expected_wire, run_id
+        )
+        return PromotionExecutionResult(
+            state="pattern_only",
+            staging_path=path,
+            archive_path=done,
+            archive_was_retry=retried,
+        )
+
+    if decision.state == "archive_retry":
+        # The archive is written before the live review is pruned and deleted.
+        # A crash after the prune leaves an empty extraction file; it is
+        # completion evidence, not a new pattern-only review.
+        empty_live = not decision.records
+        done, removed = _finish_record_review(
+            path,
+            archive_base,
+            expected_wire=expected_wire,
+            expected_meta=meta,
+            expected_archived=archived,
+            expected_archived_meta=archived_meta,
+            promoted=(),
+            retry_records=() if empty_live else list(decision.records),
+            keep=() if empty_live else [False] * len(decision.records),
+            held=(),
+        )
+        return PromotionExecutionResult(
+            state="archive_retry",
+            staging_path=path,
+            archive_path=done,
+            retry_records=() if empty_live else decision.records,
+            removed=removed,
+            empty_live_retry=empty_live,
+        )
+
+    if decision.reading_check == "preview":
+        raise PromoteError(
+            "[reading-check-required] an offline promotion preview cannot be "
+            "executed. Consult jpdb or explicitly authorize skipping the "
+            "reading check. Nothing was promoted."
+        )
+
+    result = decision.readings
+    if result is None:
+        raise PromoteError(
+            f"Promotion decision {decision.state!r} has no reading disposition"
+        )
+
+    records = decision.records
+    raw_archive_retry = decision.retry_flags
+    work_records = list(decision.work)
+    existing = list(decision.existing)
+    output_path = decision.output_path
+    output_revision = decision.output_revision
+    ai_provenance = decision.ai_provenance
+    if output_path is None or output_revision is None:
+        raise PromoteError(
+            f"Promotion decision {decision.state!r} has no collection snapshot"
+        )
+
+    retry_records: list[VocabularyRecord] = [
+        record
+        for record, is_retry in zip(records, raw_archive_retry, strict=True)
+        if is_retry
+    ]
+    exact_promoted = decision.promoted_retry_flags
+    pending_promoted = [
+        record
+        for record, is_retry in zip(result.promoted, exact_promoted, strict=True)
+        if not is_retry
+    ]
+    retry_records.extend(
+        record
+        for record, is_retry in zip(result.promoted, exact_promoted, strict=True)
+        if is_retry
+    )
+    promoted_flags = iter(exact_promoted)
+    retry_by_work = [
+        False if stays else next(promoted_flags) for stays in result.keep
+    ]
+    work_keep = [
+        stays and not is_retry
+        for stays, is_retry in zip(result.keep, retry_by_work, strict=True)
+    ]
+    work_keep_iter = iter(work_keep)
+    keep = [
+        False if is_retry else next(work_keep_iter)
+        for is_retry in raw_archive_retry
+    ]
+    pending_records = [
+        record
+        for record, is_retry in zip(work_records, retry_by_work, strict=True)
+        if not is_retry
+    ]
+    pending_reminted: dict[str, str] = {}
+    promoted_iter = iter(result.promoted)
+    retry_iter = iter(exact_promoted)
+    for original, stays in zip(work_records, result.keep, strict=True):
+        if stays:
+            continue
+        transformed = next(promoted_iter)
+        is_retry = next(retry_iter)
+        if not is_retry and transformed.id != original.id:
+            pending_reminted[original.id] = transformed.id
+
+    if not pending_promoted:
+        # Held reasons still land in the live review; exact retries are pruned.
+        done, removed = _finish_record_review(
+            path,
+            archive_base,
+            expected_wire=expected_wire,
+            expected_meta=meta,
+            expected_archived=archived,
+            expected_archived_meta=archived_meta,
+            promoted=(),
+            retry_records=retry_records,
+            keep=keep,
+            held=result.held,
+        )
+        return PromotionExecutionResult(
+            state="nothing_lands",
+            staging_path=path,
+            archive_path=done if retry_records else None,
+            output_path=output_path,
+            held=tuple(result.held),
+            retry_records=tuple(retry_records),
+            removed=removed,
+        )
+
+    # Deciding proved the ledger parses; load it here for the object this
+    # transaction will mutate and attempt to save.
+    book = ledger.load(config.ledger_file)
+    merged, outcomes = promote.merge_staged_records(
+        existing,
+        pending_promoted,
+        dict(meta),
+        validate_incoming=pending_records,
+    )
+    already_landed_fields = (
+        promote.already_landed_staged_fields(existing, pending_promoted, meta)
+        if ai_provenance is not None
+        else {}
+    )
+
+    added = sum(
+        book.record_added(record_id)
+        for record_id, outcome in outcomes.items()
+        if outcome.label == "added"
+    )
+    seen = sum(
+        book.record_source_seen(record_id, source_type, source_ref)
+        for record_id, source_type, source_ref in promote.source_references(
+            pending_promoted
+        )
+    )
+    if ai_provenance is not None:
+        ai_provider, ai_model, provenance = ai_provenance
+        for record_id, outcome in outcomes.items():
+            request_fp, proposed_fields = provenance[record_id]
+            written_fields = (
+                proposed_fields
+                if outcome.label == "added"
+                else tuple(
+                    name
+                    for name in proposed_fields
+                    if name in outcome.filled_fields
+                    or name in already_landed_fields.get(record_id, ())
+                )
+            )
+            if written_fields:
+                book.record_enriched(
+                    record_id,
+                    kind="ai",
+                    model=ai_model,
+                    provider=ai_provider,
+                    fields=written_fields,
+                    request_fingerprint=request_fp,
+                )
+    ledger_error: ledger.LedgerError | None = None
+
+    def commit_canonical_state() -> None:
+        nonlocal ledger_error
+        save_records_json(output_path, merged, expected=output_revision)
+        ledger_error = _save_execution_ledger(book)
+        if ledger_error is not None and ai_provenance is not None:
+            # The reviewed proposal remains the only recoverable attribution.
+            # Raising before archive/prune keeps it live while the outer locks
+            # still guarantee no competing completion changed either copy.
+            raise _AiLedgerHandoffIncomplete
+
+    # Canonical writes, archive append, and live pruning/deletion share the
+    # same live/done transaction. A same-run zero-row completion that wins the
+    # lock is refused before `commit_canonical_state`; one that loses cannot
+    # appear between validation and the canonical writes.
+    try:
+        done, removed = _finish_record_review(
+            path,
+            archive_base,
+            expected_wire=expected_wire,
+            expected_meta=meta,
+            expected_archived=archived,
+            expected_archived_meta=archived_meta,
+            promoted=pending_promoted,
+            retry_records=retry_records,
+            keep=keep,
+            held=result.held,
+            canonical_commit=commit_canonical_state,
+        )
+    except _AiLedgerHandoffIncomplete:
+        return PromotionExecutionResult(
+            state="landed_ai_ledger_incomplete",
+            staging_path=path,
+            output_path=output_path,
+            promoted=tuple(pending_promoted),
+            held=tuple(result.held),
+            retry_records=tuple(retry_records),
+            reminted=pending_reminted,
+            outcomes=dict(outcomes),
+            ledger_added=added,
+            ledger_sources=seen,
+            ledger_error=ledger_error,
+        )
+
+    return PromotionExecutionResult(
+        state=("landed" if ledger_error is None else "landed_ledger_incomplete"),
+        staging_path=path,
+        archive_path=done,
+        output_path=output_path,
+        promoted=tuple(pending_promoted),
+        held=tuple(result.held),
+        retry_records=tuple(retry_records),
+        removed=removed,
+        reminted=pending_reminted,
+        outcomes=dict(outcomes),
+        ledger_added=added,
+        ledger_sources=seen,
+        ledger_error=ledger_error,
+    )
 
 
 def plan_promotion(

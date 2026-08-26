@@ -19,6 +19,8 @@ import yaml
 
 from japanese_anki import cli, enrich, extract, patterns, promote
 from japanese_anki import staging as staging_module
+from japanese_anki.application import promotion as promotion_application
+from japanese_anki.config import ProjectConfig
 from japanese_anki.io import load_records
 from japanese_anki.jpdb import JpdbClient
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
@@ -677,6 +679,145 @@ def test_promote_lands_records_the_archive_and_the_ledger(
     assert "Promoted 1 record(s)" in capsys.readouterr().out
 
 
+def test_the_cli_calls_the_shared_promotion_writer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The command may format the result; it may not own a second writer."""
+    root = project(tmp_path, [])
+    path = staging_file(root, ONE_GOOD)
+    calls: list[promotion_application.PromotionExecutionResult] = []
+    real_execute = promotion_application.execute_promotion
+
+    def observe(
+        config: ProjectConfig, decision: promotion_application.PromotionDecision
+    ) -> promotion_application.PromotionExecutionResult:
+        result = real_execute(config, decision)
+        calls.append(result)
+        return result
+
+    monkeypatch.setattr(promotion_application, "execute_promotion", observe)
+
+    assert cli.main([
+        "--root", str(root), "promote", str(path), "--skip-reading-check",
+    ]) == 0
+
+    assert len(calls) == 1
+    assert calls[0].state == "landed"
+    assert calls[0].promoted_ids == ("word:話す:はなす",)
+
+
+def test_the_shared_writer_and_cli_land_identical_state(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A browser service call and the command commit the same transaction."""
+    direct_root = tmp_path / "direct"
+    cli_root = tmp_path / "cli"
+    direct_root.mkdir()
+    cli_root.mkdir()
+    project(direct_root, [])
+    project(cli_root, [])
+    direct_path = staging_file(direct_root, ONE_GOOD)
+    cli_path = staging_file(cli_root, ONE_GOOD)
+
+    config = ProjectConfig.load(direct_root)
+    decision = promotion_application.decide_promotion(
+        config, direct_path, skip_reading_check=True
+    )
+    result = promotion_application.execute_promotion(config, decision)
+    assert result.state == "landed"
+    assert result.promoted_ids == ("word:話す:はなす",)
+
+    assert cli.main([
+        "--root", str(cli_root), "promote", str(cli_path),
+        "--skip-reading-check",
+    ]) == 0
+    capsys.readouterr()
+
+    direct_records = load_records(direct_root / "vocabulary.json")
+    assert [item.id for item in direct_records] == ["word:話す:はなす"]
+    assert direct_records == load_records(cli_root / "vocabulary.json")
+    assert json.loads((direct_root / "ledger.json").read_text(encoding="utf-8")) == (
+        json.loads((cli_root / "ledger.json").read_text(encoding="utf-8"))
+    )
+    assert read_staging(direct_root / "staging" / "done" / direct_path.name) == (
+        read_staging(cli_root / "staging" / "done" / cli_path.name)
+    )
+    assert not direct_path.exists()
+    assert not cli_path.exists()
+
+
+def test_the_shared_writer_refuses_a_decision_from_another_project(
+    tmp_path: Path,
+) -> None:
+    first_root = tmp_path / "first"
+    second_root = tmp_path / "second"
+    first_root.mkdir()
+    second_root.mkdir()
+    project(first_root, [])
+    project(second_root, [])
+    path = staging_file(first_root, ONE_GOOD)
+    first_config = ProjectConfig.load(first_root)
+    decision = promotion_application.decide_promotion(
+        first_config, path, skip_reading_check=True
+    )
+    staging_before = path.read_bytes()
+    records_before = (first_root / "vocabulary.json").read_bytes()
+
+    with pytest.raises(promote.PromoteError, match="promotion-config-mismatch"):
+        promotion_application.execute_promotion(
+            ProjectConfig.load(second_root), decision
+        )
+
+    assert path.read_bytes() == staging_before
+    assert (first_root / "vocabulary.json").read_bytes() == records_before
+    assert not (first_root / "ledger.json").exists()
+    assert not (second_root / "ledger.json").exists()
+    assert not (second_root / "staging" / "done").exists()
+
+
+def test_the_shared_writer_refuses_an_unchecked_preview(
+    tmp_path: Path,
+) -> None:
+    root = project(tmp_path, [])
+    path = staging_file(root, ONE_GOOD)
+    config = ProjectConfig.load(root)
+    decision = promotion_application.decide_promotion(config, path)
+    staging_before = path.read_bytes()
+    records_before = (root / "vocabulary.json").read_bytes()
+
+    with pytest.raises(promote.PromoteError, match="reading-check-required"):
+        promotion_application.execute_promotion(config, decision)
+
+    assert path.read_bytes() == staging_before
+    assert (root / "vocabulary.json").read_bytes() == records_before
+    assert not (root / "ledger.json").exists()
+    assert not (root / "staging" / "done").exists()
+
+
+def test_the_shared_result_names_a_partial_ledger_commit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = project(tmp_path, [])
+    path = staging_file(root, ONE_GOOD)
+    config = ProjectConfig.load(root)
+    decision = promotion_application.decide_promotion(
+        config, path, skip_reading_check=True
+    )
+    monkeypatch.setattr(
+        cli.ledger.Ledger,
+        "save",
+        lambda self: (_ for _ in ()).throw(cli.ledger.LedgerError("disk full")),
+    )
+
+    result = promotion_application.execute_promotion(config, decision)
+
+    assert result.state == "landed_ledger_incomplete"
+    assert str(result.ledger_error) == "disk full"
+    assert result.archive_path is not None and result.archive_path.exists()
+    assert result.promoted_ids == ("word:話す:はなす",)
+    assert not path.exists()
+
+
 def test_the_ledger_reference_is_the_records_own_source(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -850,7 +991,9 @@ def _pattern_only_meta(
 def _completed_pattern_archive_meta(meta: dict[str, Any]) -> dict[str, Any]:
     source = str(meta["source_file"])
     proposed = patterns.PatternSet.from_dict(source, meta["pattern_set"])
-    return cli._pattern_only_archive_meta(meta, replace(proposed, reviewed=True))
+    return promotion_application._pattern_only_archive_meta(
+        meta, replace(proposed, reviewed=True)
+    )
 
 
 def accounted_extract(
@@ -1221,7 +1364,9 @@ def test_a_pattern_archive_write_failure_keeps_the_live_review(
             raise cli.StagingError("archive write failed")
         raise AssertionError(f"unexpected unlocked archive target: {target}")
 
-    monkeypatch.setattr(cli, "write_staging_under_lock", fail_archive)
+    monkeypatch.setattr(
+        promotion_application, "write_staging_under_lock", fail_archive
+    )
 
     assert cli.main(["--root", str(root), "promote", str(path)]) == 1
 
@@ -1244,14 +1389,16 @@ def test_a_concurrent_forced_replacement_is_not_deleted_as_the_review_finishes(
         run_id=REVIEW_RUN_B,
         request_fingerprint="b" * 64,
     )
-    real_complete = cli._complete_pattern_only_review
+    real_complete = promotion_application._complete_pattern_only_review
 
-    def replace_before_completion(*args: Any, **kwargs: Any) -> int:
+    def replace_before_completion(*args: Any, **kwargs: Any) -> tuple[Path, bool]:
         write_staging(path, [], replacement, force=True)
         return real_complete(*args, **kwargs)
 
     monkeypatch.setattr(
-        cli, "_complete_pattern_only_review", replace_before_completion
+        promotion_application,
+        "_complete_pattern_only_review",
+        replace_before_completion,
     )
 
     assert cli.main(["--root", str(root), "promote", str(path)]) == 1
@@ -1527,18 +1674,22 @@ def test_exact_archive_retry_prunes_live_row_without_appending_it_twice(
     path = root / "staging" / "lesson.yaml"
     write_staging(path, records, meta)
     command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
-    real_prune = cli.prune_staging_under_lock
+    real_prune = promotion_application.prune_staging_under_lock
 
     def fail_after_archive(*_args: Any, **_kwargs: Any) -> int:
         raise staging_module.StagingError("simulated prune failure")
 
-    monkeypatch.setattr(cli, "prune_staging_under_lock", fail_after_archive)
+    monkeypatch.setattr(
+        promotion_application, "prune_staging_under_lock", fail_after_archive
+    )
     assert cli.main(command) == 1
     archive = root / "staging" / "done" / "lesson.yaml"
     assert path.exists() and archive.exists()
     first_archive = archive.read_bytes()
 
-    monkeypatch.setattr(cli, "prune_staging_under_lock", real_prune)
+    monkeypatch.setattr(
+        promotion_application, "prune_staging_under_lock", real_prune
+    )
     assert cli.main(command) == 0
 
     assert not path.exists()
@@ -1559,14 +1710,18 @@ def test_candidate_accounting_caps_new_rows_across_an_exact_archive_retry(
     path = root / "staging" / "lesson.yaml"
     write_staging(path, records, meta)
     command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
-    real_prune = cli.prune_staging_under_lock
+    real_prune = promotion_application.prune_staging_under_lock
 
     def fail_after_archive(*_args: Any, **_kwargs: Any) -> int:
         raise staging_module.StagingError("simulated prune failure")
 
-    monkeypatch.setattr(cli, "prune_staging_under_lock", fail_after_archive)
+    monkeypatch.setattr(
+        promotion_application, "prune_staging_under_lock", fail_after_archive
+    )
     assert cli.main(command) == 1
-    monkeypatch.setattr(cli, "prune_staging_under_lock", real_prune)
+    monkeypatch.setattr(
+        promotion_application, "prune_staging_under_lock", real_prune
+    )
 
     archive = root / "staging" / "done" / "lesson.yaml"
     archived_before = archive.read_bytes()
@@ -1699,17 +1854,19 @@ def test_schema_v3_exact_archive_retry_does_not_append_the_row_twice(
     path = root / "staging" / "lesson.yaml"
     write_staging(path, [row], meta)
     command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
-    real_prune = cli.prune_staging_under_lock
+    real_prune = promotion_application.prune_staging_under_lock
 
     monkeypatch.setattr(
-        cli,
+        promotion_application,
         "prune_staging_under_lock",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             staging_module.StagingError("simulated prune failure")
         ),
     )
     assert cli.main(command) == 1
-    monkeypatch.setattr(cli, "prune_staging_under_lock", real_prune)
+    monkeypatch.setattr(
+        promotion_application, "prune_staging_under_lock", real_prune
+    )
 
     assert cli.main(command) == 0
 
@@ -1766,17 +1923,19 @@ def test_exact_archive_retry_matches_the_post_remint_record(
     path = root / "staging" / "lesson.yaml"
     write_staging(path, [reviewed], meta)
     command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
-    real_prune = cli.prune_staging_under_lock
+    real_prune = promotion_application.prune_staging_under_lock
 
     monkeypatch.setattr(
-        cli,
+        promotion_application,
         "prune_staging_under_lock",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             staging_module.StagingError("simulated prune failure")
         ),
     )
     assert cli.main(command) == 1
-    monkeypatch.setattr(cli, "prune_staging_under_lock", real_prune)
+    monkeypatch.setattr(
+        promotion_application, "prune_staging_under_lock", real_prune
+    )
 
     assert cli.main(command) == 0
 
@@ -1799,17 +1958,19 @@ def test_exact_remint_retry_is_independent_of_later_collection_state(
     path = root / "staging" / "lesson.yaml"
     write_staging(path, [reviewed], meta)
     command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
-    real_prune = cli.prune_staging_under_lock
+    real_prune = promotion_application.prune_staging_under_lock
 
     monkeypatch.setattr(
-        cli,
+        promotion_application,
         "prune_staging_under_lock",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             staging_module.StagingError("simulated prune failure")
         ),
     )
     assert cli.main(command) == 1
-    monkeypatch.setattr(cli, "prune_staging_under_lock", real_prune)
+    monkeypatch.setattr(
+        promotion_application, "prune_staging_under_lock", real_prune
+    )
 
     # Mutable collection state must not change what the already-archived
     # transaction means. This stale id appearing later makes ordinary remint()
@@ -1839,29 +2000,33 @@ def test_exact_retry_does_not_delete_a_concurrent_forced_replacement(
     path = root / "staging" / "lesson.yaml"
     write_staging(path, records, meta)
     command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
-    real_prune = cli.prune_staging_under_lock
+    real_prune = promotion_application.prune_staging_under_lock
 
     monkeypatch.setattr(
-        cli,
+        promotion_application,
         "prune_staging_under_lock",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             staging_module.StagingError("simulated prune failure")
         ),
     )
     assert cli.main(command) == 1
-    monkeypatch.setattr(cli, "prune_staging_under_lock", real_prune)
+    monkeypatch.setattr(
+        promotion_application, "prune_staging_under_lock", real_prune
+    )
 
     replacement_records, replacement_meta = accounted_extract(
         tmp_path,
         parsed_candidate(expression="食べる", reading="たべる"),
     )
-    real_finish = cli._finish_record_review
+    real_finish = promotion_application._finish_record_review
 
     def replace_before_finish(*args: Any, **kwargs: Any) -> tuple[Path, int]:
         write_staging(path, replacement_records, replacement_meta, force=True)
         return real_finish(*args, **kwargs)
 
-    monkeypatch.setattr(cli, "_finish_record_review", replace_before_finish)
+    monkeypatch.setattr(
+        promotion_application, "_finish_record_review", replace_before_finish
+    )
 
     assert cli.main(command) == 1
 
@@ -1883,13 +2048,15 @@ def test_normal_promotion_does_not_delete_a_concurrent_forced_replacement(
         tmp_path,
         parsed_candidate(expression="食べる", reading="たべる"),
     )
-    real_finish = cli._finish_record_review
+    real_finish = promotion_application._finish_record_review
 
     def replace_before_finish(*args: Any, **kwargs: Any) -> tuple[Path, int]:
         write_staging(path, replacement_records, replacement_meta, force=True)
         return real_finish(*args, **kwargs)
 
-    monkeypatch.setattr(cli, "_finish_record_review", replace_before_finish)
+    monkeypatch.setattr(
+        promotion_application, "_finish_record_review", replace_before_finish
+    )
 
     assert cli.main(
         ["--root", str(root), "promote", str(path), "--skip-reading-check"]
@@ -1920,7 +2087,7 @@ def test_late_zero_row_archive_refuses_before_canonical_writes(
     live_before = path.read_bytes()
     archive = root / "staging" / "done" / "lesson.yaml"
     completed_pattern_meta = _completed_pattern_archive_meta(meta)
-    real_finish = cli._finish_record_review
+    real_finish = promotion_application._finish_record_review
 
     def complete_pattern_run_before_finish(
         *args: Any, **kwargs: Any
@@ -1929,7 +2096,9 @@ def test_late_zero_row_archive_refuses_before_canonical_writes(
         return real_finish(*args, **kwargs)
 
     monkeypatch.setattr(
-        cli, "_finish_record_review", complete_pattern_run_before_finish
+        promotion_application,
+        "_finish_record_review",
+        complete_pattern_run_before_finish,
     )
 
     assert cli.main(
@@ -1972,7 +2141,9 @@ def test_record_promotion_holds_the_done_lock_through_canonical_writes(
             with cli.exclusive_path_lock(archive):
                 writer_acquired.set()
                 if not archive.exists():
-                    cli.write_staging_under_lock(archive, [], completed_pattern_meta)
+                    promotion_application.write_staging_under_lock(
+                        archive, [], completed_pattern_meta
+                    )
         except BaseException as exc:  # pragma: no cover - asserted in parent thread
             writer_errors.append(exc)
         finally:
@@ -1980,7 +2151,7 @@ def test_record_promotion_holds_the_done_lock_through_canonical_writes(
 
     writer = Thread(target=complete_zero_row_archive)
     writer.start()
-    real_save_records = cli.save_records_json
+    real_save_records = promotion_application.save_records_json
     acquired_before_save: list[bool] = []
 
     def observe_canonical_save(*args: Any, **kwargs: Any) -> None:
@@ -1989,7 +2160,9 @@ def test_record_promotion_holds_the_done_lock_through_canonical_writes(
         acquired_before_save.append(writer_acquired.wait(0.5))
         real_save_records(*args, **kwargs)
 
-    monkeypatch.setattr(cli, "save_records_json", observe_canonical_save)
+    monkeypatch.setattr(
+        promotion_application, "save_records_json", observe_canonical_save
+    )
 
     assert cli.main(
         ["--root", str(root), "promote", str(path), "--skip-reading-check"]
@@ -2022,7 +2195,7 @@ def test_record_archive_selection_is_rechecked_under_its_lock(
     )
     other_meta["review_run_id"] = REVIEW_RUN_B
     other_meta["pattern_set"]["review_run_id"] = REVIEW_RUN_B
-    real_finish = cli._finish_record_review
+    real_finish = promotion_application._finish_record_review
 
     def occupy_base_before_finish(*args: Any, **kwargs: Any) -> tuple[Path, int]:
         write_staging(
@@ -2032,7 +2205,9 @@ def test_record_archive_selection_is_rechecked_under_its_lock(
         )
         return real_finish(*args, **kwargs)
 
-    monkeypatch.setattr(cli, "_finish_record_review", occupy_base_before_finish)
+    monkeypatch.setattr(
+        promotion_application, "_finish_record_review", occupy_base_before_finish
+    )
 
     assert cli.main(
         ["--root", str(root), "promote", str(path), "--skip-reading-check"]
@@ -2058,10 +2233,10 @@ def test_exact_retry_keeps_live_when_the_done_metadata_is_damaged(
     path = root / "staging" / "lesson.yaml"
     write_staging(path, records, meta)
     command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
-    real_prune = cli.prune_staging_under_lock
+    real_prune = promotion_application.prune_staging_under_lock
 
     monkeypatch.setattr(
-        cli,
+        promotion_application,
         "prune_staging_under_lock",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             staging_module.StagingError("simulated prune failure")
@@ -2073,7 +2248,9 @@ def test_exact_retry_keeps_live_when_the_done_metadata_is_damaged(
     del archived_meta["coverage"]
     write_staging(archive, archived, archived_meta, force=True)
     live_before = path.read_bytes()
-    monkeypatch.setattr(cli, "prune_staging_under_lock", real_prune)
+    monkeypatch.setattr(
+        promotion_application, "prune_staging_under_lock", real_prune
+    )
 
     assert cli.main(command) == 1
 
@@ -2110,10 +2287,10 @@ def test_divergent_live_copy_of_an_archived_candidate_refuses_retry(
     path = root / "staging" / "lesson.yaml"
     write_staging(path, records, meta)
     command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
-    real_prune = cli.prune_staging_under_lock
+    real_prune = promotion_application.prune_staging_under_lock
 
     monkeypatch.setattr(
-        cli,
+        promotion_application,
         "prune_staging_under_lock",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             staging_module.StagingError("simulated prune failure")
@@ -2131,7 +2308,9 @@ def test_divergent_live_copy_of_an_archived_candidate_refuses_retry(
     )
     live_before = path.read_bytes()
 
-    monkeypatch.setattr(cli, "prune_staging_under_lock", real_prune)
+    monkeypatch.setattr(
+        promotion_application, "prune_staging_under_lock", real_prune
+    )
     assert cli.main(command) == 1
 
     assert path.read_bytes() == live_before
@@ -2242,6 +2421,17 @@ records:
 """,
     )
     patch_jpdb(monkeypatch, hanasu_jpdb())
+    results: list[promotion_application.PromotionExecutionResult] = []
+    real_execute = promotion_application.execute_promotion
+
+    def capture(
+        config: ProjectConfig, decision: promotion_application.PromotionDecision
+    ) -> promotion_application.PromotionExecutionResult:
+        result = real_execute(config, decision)
+        results.append(result)
+        return result
+
+    monkeypatch.setattr(promotion_application, "execute_promotion", capture)
 
     code = cli.main(["--root", str(root), "promote", str(path)])
 
@@ -2249,6 +2439,9 @@ records:
     assert not (root / "vocabulary.json").exists() or stored(root) == {}
     survivors, _ = read_staging(path)
     assert held_reason(survivors[0]) == HOLD_MISSING_READING
+    assert results[0].state == "nothing_lands"
+    assert results[0].archive_path is None
+    assert not (root / "staging" / "done").exists()
     assert "Nothing promoted" in capsys.readouterr().out
 
 

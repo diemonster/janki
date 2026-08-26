@@ -70,9 +70,11 @@ from japanese_anki.application.journey import (
 from japanese_anki.application.promotion import (
     HeldCard,
     LandingCard,
+    PromotionExecutionResult,
     PromotionPlan,
     archive_for_run,
     archive_run_provenance,
+    execute_promotion,
     plan_promotion,
     project_promotion,
 )
@@ -105,6 +107,7 @@ __all__ = [
     "ExtractionTarget",
     "HeldCard",
     "LandingCard",
+    "PromotionExecutionResult",
     "PromotionPlan",
     "ValidationReport",
     "JOURNEY_STATES",
@@ -129,6 +132,7 @@ __all__ = [
     "describe_extraction",
     "durable_inbox_root",
     "extraction_replacement_revision",
+    "execute_promotion",
     "plan_corpus_extraction",
     "plan_extraction",
     "settle_dispatch",
