@@ -5,7 +5,7 @@ import os
 import re
 import unicodedata
 import urllib.parse
-from collections.abc import Container
+from collections.abc import Container, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -748,6 +748,54 @@ def resolve_deck_records(deck_path: Path) -> tuple[dict[str, Any], list[Vocabula
     selection = deck_selection(deck_config, deck_path)
     records = [record for record in by_id.values() if selection.includes(record)]
 
+    records.sort(key=lambda record: (record.expression, record.reading, record.id))
+    return deck_config, records
+
+
+def project_deck_records(
+    deck_path: Path,
+    source_path: Path,
+    source_records: Sequence[VocabularyRecord],
+) -> tuple[dict[str, Any], list[VocabularyRecord]]:
+    """Resolve a deck against a prospective version of its declared source.
+
+    A workbench assignment and promotion preview need to ask what a build
+    *would* ship after ``vocabulary.json`` changes, without writing that file
+    just to run :func:`resolve_deck_records`.  This keeps the projection inside
+    the resolver that owns inline-note overrides and the real four-way deck
+    selector.  It refuses when ``source_path`` is not the deck's actual source;
+    substituting records into an unrelated or inline-only deck would answer a
+    question that build never asks.
+
+    The ordinary resolver runs first as the complete deck-shape validation.
+    The second pass changes only where its declared source records come from;
+    inline overrides and filtering are then applied exactly as above.
+    """
+    deck_path = Path(deck_path)
+    deck_config, _current = resolve_deck_records(deck_path)
+    source_value = deck_config.get("source")
+    configured_source = (
+        (deck_path.parent / str(source_value)).resolve() if source_value else None
+    )
+    if configured_source != Path(source_path).resolve():
+        raise DataError(
+            f"Deck {deck_path} reads {configured_source or 'no source file'}, not "
+            f"the projected source {Path(source_path).resolve()}"
+        )
+
+    raw = load_structured(deck_path)
+    by_id = {record.id: record for record in source_records}
+    for item in raw.get("notes") or []:
+        record_id = str(item.get("id", "")).strip()
+        base = by_id.get(record_id) if record_id else None
+        # The validation pass above already translated a malformed inline note
+        # into a deck-named DataError. Reusing the same merge here is what makes
+        # an override affect a projection exactly as it affects a real build.
+        merged = _merge_inline_record(base, item)
+        by_id[merged.id] = merged
+
+    selection = deck_selection(deck_config, deck_path)
+    records = [record for record in by_id.values() if selection.includes(record)]
     records.sort(key=lambda record: (record.expression, record.reading, record.id))
     return deck_config, records
 
