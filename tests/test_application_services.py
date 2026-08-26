@@ -42,6 +42,10 @@ from japanese_anki.application import (
     settle_dispatch,
 )
 from japanese_anki.application import promotion as promotion_module
+from japanese_anki.application.assignment import (
+    DeckMembership as AssignmentDeckMembership,
+)
+from japanese_anki.application.assignment import DeckOwnershipEvaluation
 from japanese_anki.application.promotion import (
     DECISION_STATES,
     decide_promotion,
@@ -2056,9 +2060,9 @@ def test_a_reading_correction_onto_an_archived_id_is_caught_before_the_remint(
     plan = plan_promotion(ProjectConfig.load(tmp_path), path)
 
     assert not plan.is_blocked, plan.blocked
-    # Caught by the first call: reported as already landed, never offered as a
-    # card to add.
-    assert records[0].id in plan.already_archived
+    # Caught by the first call and reported under the canonical id that is
+    # actually in the archive, never offered as a card to add.
+    assert reminted.id in plan.already_archived
     assert reminted.id not in {card.landing.id for card in plan.landing}
     assert records[0].id not in {card.staged.id for card in plan.landing}
 
@@ -2394,7 +2398,21 @@ def test_the_swap_token_and_records_come_from_one_bound_read(
     monkeypatch.setattr(
         promotion_module,
         "require_exact_deck_ownership",
-        lambda *_args, **_kwargs: (),
+        lambda _config, records, _collection: tuple(
+            DeckOwnershipEvaluation(
+                record_id=record.id,
+                state="exactly_one",
+                memberships=(
+                    AssignmentDeckMembership(
+                        stem="all",
+                        name="Promotion fixture",
+                        takes=True,
+                        refusal=None,
+                    ),
+                ),
+            )
+            for record in records
+        ),
     )
 
     def aba_read(target: Path) -> str:

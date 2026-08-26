@@ -91,6 +91,7 @@ from japanese_anki.application.journey import (
 from japanese_anki.application.promotion import (
     HeldCard,
     LandingCard,
+    PromotionBatch,
     PromotionExecutionResult,
     PromotionPlan,
     archive_for_run,
@@ -98,6 +99,7 @@ from japanese_anki.application.promotion import (
     execute_promotion,
     plan_promotion,
     project_promotion,
+    promotion_batches,
 )
 from japanese_anki.application.promotion_action import (
     PromotionActionError,
@@ -144,6 +146,7 @@ __all__ = [
     "ExtractionTarget",
     "HeldCard",
     "LandingCard",
+    "PromotionBatch",
     "PromotionExecutionResult",
     "PromotionActionError",
     "PromotionPlan",
@@ -180,6 +183,7 @@ __all__ = [
     "settle_dispatch",
     "project_coverage",
     "plan_promotion",
+    "promotion_batches",
     "validate_project",
     "project_promotion",
     "promotion_preview_fingerprint",

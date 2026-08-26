@@ -102,6 +102,11 @@ NON_READING_HOLDS: frozenset[str] = frozenset({HOLD_UNVERIFIABLE_ID})
 # inventing a key nothing downstream reads.
 CANDIDATE_ACCOUNTING_KEY = "candidate_accounting"
 
+#: Archive-only receipts for exact nonempty promotion transactions. Live review
+#: files may never carry this key: only the shared promotion writer can say
+#: which rows actually reached the canonical collection and done archive.
+PROMOTION_BATCHES_KEY = "promotion_batches"
+
 #: The block an `enrich --ai` review writes beside its rows. Named once: three
 #: modules ask whether a staging file carries it, and the question decides
 #: whether its rows may be re-identified and whether they are evidence about
@@ -122,6 +127,7 @@ META_KEYS: tuple[str, ...] = (
     AI_ENRICHMENT_KEY,
     "field_replacements",
     CANDIDATE_ACCOUNTING_KEY,
+    PROMOTION_BATCHES_KEY,
 )
 
 _RECORDS_KEY = "records"

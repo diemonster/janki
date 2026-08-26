@@ -64,6 +64,7 @@ from japanese_anki.staging import (
 )
 
 __all__ = [
+    "PromotionBatch",
     "PromotionExecutionResult",
     "HeldCard",
     "LandingCard",
@@ -80,6 +81,7 @@ __all__ = [
     "decide_promotion",
     "execute_promotion",
     "plan_promotion",
+    "promotion_batches",
     "project_promotion",
     "unreadable_deck_warning",
     "staged_ai_enrichment",
@@ -120,6 +122,24 @@ def archive_run_provenance(meta: Mapping[str, Any]) -> dict[str, Any]:
     return identity
 
 
+def _archive_run_fingerprint(meta: Mapping[str, Any]) -> str:
+    """Canonical digest of the full provenance used to select a done file."""
+    try:
+        encoded = json.dumps(
+            archive_run_provenance(meta),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise PromoteError(
+            "This staging file has model-run provenance that cannot name a "
+            f"durable archive: {exc}. Nothing was promoted."
+        ) from exc
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def _select_archive_for_run(
     base: Path, meta: Mapping[str, Any], *, bind_read: bool
 ) -> tuple[Path, list[VocabularyRecord], dict[str, Any] | None, bytes | None]:
@@ -138,20 +158,7 @@ def _select_archive_for_run(
     if archive_run_provenance(previous_meta) == identity:
         return base, list(previous), previous_meta, wire
 
-    try:
-        encoded = json.dumps(
-            identity,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-            allow_nan=False,
-        ).encode("utf-8")
-    except (TypeError, ValueError) as exc:
-        raise PromoteError(
-            "This staging file has model-run provenance that cannot name a "
-            f"durable archive: {exc}. Nothing was promoted."
-        ) from exc
-    digest = hashlib.sha256(encoded).hexdigest()
+    digest = _archive_run_fingerprint(meta)
     candidate = base.with_name(f"{base.stem}.{digest}{base.suffix}")
     if not candidate.exists():
         return candidate, [], None, None
@@ -250,10 +257,360 @@ def _require_deck_inputs(
         )
 
 
+@dataclass(frozen=True, slots=True)
+class PromotionBatch:
+    """One exact, durable transaction recorded only in the done archive."""
+
+    receipt_id: str
+    archive_file: str
+    archive_run_fingerprint: str
+    archive_start_index: int
+    source_file: str
+    review_run_id: str | None
+    promoted_ids: tuple[str, ...]
+    owner_stems: Mapping[str, str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "receipt_id": self.receipt_id,
+            "archive_file": self.archive_file,
+            "archive_run_fingerprint": self.archive_run_fingerprint,
+            "archive_start_index": self.archive_start_index,
+            "source_file": self.source_file,
+            "review_run_id": self.review_run_id,
+            "promoted_ids": list(self.promoted_ids),
+            "owner_stems": {
+                record_id: self.owner_stems[record_id]
+                for record_id in self.promoted_ids
+            },
+        }
+
+
+def _promotion_receipt_id(
+    archive_file: str,
+    archive_run_fingerprint: str,
+    archive_start_index: int,
+    source_file: str,
+    promoted_ids: Sequence[str],
+    owner_stems: Mapping[str, str],
+) -> str:
+    payload = {
+        "archive_file": archive_file,
+        "archive_run_fingerprint": archive_run_fingerprint,
+        "archive_start_index": archive_start_index,
+        "source_file": source_file,
+        "promoted_ids": list(promoted_ids),
+        "owner_stems": [
+            [record_id, owner_stems[record_id]] for record_id in promoted_ids
+        ],
+    }
+    wire = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(wire).hexdigest()
+
+
+def promotion_batches(
+    meta: Mapping[str, Any],
+    *,
+    archived: Sequence[VocabularyRecord],
+    archive_file: str,
+) -> tuple[PromotionBatch, ...]:
+    """Parse and validate the archive-only exact promotion receipts."""
+    if staging.PROMOTION_BATCHES_KEY not in meta:
+        return ()
+    raw_batches = meta[staging.PROMOTION_BATCHES_KEY]
+    if not isinstance(raw_batches, list):
+        raise PromoteError(
+            "[promotion-batches-invalid] promotion_batches must be a list"
+        )
+    if not raw_batches:
+        raise PromoteError(
+            "[promotion-batches-invalid] promotion_batches must be omitted when "
+            "there are no receipts"
+        )
+
+    archive_source = meta.get("source_file")
+    if "source_file" in meta and (
+        not isinstance(archive_source, str) or not archive_source.strip()
+    ):
+        raise PromoteError(
+            "[promotion-batches-invalid] archive source_file must be nonblank text"
+        )
+    try:
+        archive_run_id = review_run_id(meta)
+    except JankiError as exc:
+        raise PromoteError(str(exc)) from exc
+    archive_run_fingerprint = _archive_run_fingerprint(meta)
+
+    parsed: list[PromotionBatch] = []
+    seen_receipts: set[str] = set()
+    seen_ids: set[str] = set()
+    archived_ids = {record.id for record in archived}
+    expected_keys = {
+        "receipt_id",
+        "archive_file",
+        "archive_run_fingerprint",
+        "archive_start_index",
+        "source_file",
+        "review_run_id",
+        "promoted_ids",
+        "owner_stems",
+    }
+    for position, raw in enumerate(raw_batches, start=1):
+        if not isinstance(raw, Mapping) or set(raw) != expected_keys:
+            raise PromoteError(
+                "[promotion-batches-invalid] each promotion batch must contain "
+                f"exactly {', '.join(sorted(expected_keys))}; batch {position} does not"
+            )
+        receipt = raw.get("receipt_id")
+        batch_archive_file = raw.get("archive_file")
+        batch_run_fingerprint = raw.get("archive_run_fingerprint")
+        batch_start_index = raw.get("archive_start_index")
+        source_file = raw.get("source_file")
+        batch_run_id = raw.get("review_run_id")
+        ids = raw.get("promoted_ids")
+        owners = raw.get("owner_stems")
+        if (
+            not isinstance(receipt, str)
+            or len(receipt) != 64
+            or any(character not in "0123456789abcdef" for character in receipt)
+        ):
+            raise PromoteError(
+                f"[promotion-batches-invalid] batch {position} receipt_id must be "
+                "lowercase SHA-256 text"
+            )
+        if (
+            not isinstance(batch_archive_file, str)
+            or not batch_archive_file.strip()
+            or Path(batch_archive_file).name != batch_archive_file
+            or batch_archive_file in {".", ".."}
+        ):
+            raise PromoteError(
+                f"[promotion-batches-invalid] batch {position} archive_file must "
+                "be one plain nonblank filename"
+            )
+        if batch_archive_file != archive_file:
+            raise PromoteError(
+                f"[promotion-batches-invalid] batch {position} names a different "
+                "done archive file"
+            )
+        if parsed and batch_archive_file != parsed[0].archive_file:
+            raise PromoteError(
+                "[promotion-batches-invalid] every promotion batch in one archive "
+                "must name that same archive file"
+            )
+        if batch_run_fingerprint != archive_run_fingerprint:
+            raise PromoteError(
+                f"[promotion-batches-invalid] batch {position} belongs to different "
+                "archive-run provenance"
+            )
+        if (
+            not isinstance(batch_start_index, int)
+            or isinstance(batch_start_index, bool)
+            or batch_start_index < 0
+        ):
+            raise PromoteError(
+                f"[promotion-batches-invalid] batch {position} "
+                "archive_start_index must be a nonnegative integer"
+            )
+        if parsed and batch_start_index != parsed[0].archive_start_index:
+            raise PromoteError(
+                "[promotion-batches-invalid] every promotion batch in one archive "
+                "must preserve the same receipt start index"
+            )
+        if not isinstance(source_file, str) or not source_file.strip():
+            raise PromoteError(
+                f"[promotion-batches-invalid] batch {position} source_file must be "
+                "nonblank text"
+            )
+        if batch_run_id is not None:
+            try:
+                batch_run_id = review_run_id({"review_run_id": batch_run_id})
+            except JankiError as exc:
+                raise PromoteError(str(exc)) from exc
+        if archive_source is not None and source_file != archive_source.strip():
+            raise PromoteError(
+                f"[promotion-batches-invalid] batch {position} names a different "
+                "source_file from its archive"
+            )
+        if batch_run_id != archive_run_id:
+            raise PromoteError(
+                f"[promotion-batches-invalid] batch {position} belongs to a "
+                "different review run from its archive"
+            )
+        if (
+            not isinstance(ids, list)
+            or not ids
+            or any(not isinstance(item, str) or not item for item in ids)
+            or len(set(ids)) != len(ids)
+        ):
+            raise PromoteError(
+                f"[promotion-batches-invalid] batch {position} promoted_ids must "
+                "be a nonempty list of unique record ids"
+            )
+        if not isinstance(owners, Mapping) or set(owners) != set(ids):
+            raise PromoteError(
+                f"[promotion-batches-invalid] batch {position} owner_stems must "
+                "exactly key its promoted_ids"
+            )
+        if any(
+            not isinstance(owners[record_id], str) or not owners[record_id].strip()
+            for record_id in ids
+        ):
+            raise PromoteError(
+                f"[promotion-batches-invalid] batch {position} owner stems must "
+                "be nonblank text"
+            )
+        if receipt != _promotion_receipt_id(
+            batch_archive_file,
+            batch_run_fingerprint,
+            batch_start_index,
+            source_file,
+            ids,
+            owners,
+        ):
+            raise PromoteError(
+                f"[promotion-batches-invalid] batch {position} receipt_id does not "
+                "bind its exact source, run, ids, and owners"
+            )
+        overlap = seen_ids.intersection(ids)
+        if receipt in seen_receipts or overlap:
+            raise PromoteError(
+                "[promotion-batches-invalid] promotion batches must have distinct "
+                "receipt ids and disjoint promoted ids"
+            )
+        if not set(ids) <= archived_ids:
+            raise PromoteError(
+                f"[promotion-batches-invalid] batch {position} names a record not "
+                "present in the cumulative archive"
+            )
+        batch = PromotionBatch(
+            receipt_id=receipt,
+            archive_file=batch_archive_file,
+            archive_run_fingerprint=batch_run_fingerprint,
+            archive_start_index=batch_start_index,
+            source_file=source_file,
+            review_run_id=batch_run_id,
+            promoted_ids=tuple(ids),
+            owner_stems={record_id: str(owners[record_id]) for record_id in ids},
+        )
+        parsed.append(batch)
+        seen_receipts.add(receipt)
+        seen_ids.update(ids)
+    archived_order = tuple(record.id for record in archived)
+    if len(set(archived_order)) != len(archived_order):
+        raise PromoteError(
+            "[promotion-batches-invalid] the cumulative archive must contain "
+            "unique record ids"
+        )
+    batch_order = tuple(
+        record_id for batch in parsed for record_id in batch.promoted_ids
+    )
+    start_index = parsed[0].archive_start_index
+    if archived_order[start_index:] != batch_order:
+        raise PromoteError(
+            "[promotion-batches-invalid] promotion batches must name every "
+            "receipted archive row in exact append order"
+        )
+    return tuple(parsed)
+
+
+def _latest_retry_batch(
+    archived_meta: Mapping[str, Any] | None,
+    archived: Sequence[VocabularyRecord],
+    retry_ids: Sequence[str],
+    *,
+    empty_live: bool = False,
+    archive_file: str,
+) -> PromotionBatch | None:
+    """Recover only the latest completed batch from an exact cleanup retry."""
+    batches = promotion_batches(
+        archived_meta or {}, archived=archived, archive_file=archive_file
+    )
+    if not batches:
+        return None
+    latest = batches[-1]
+    if empty_live or set(latest.promoted_ids) <= set(retry_ids):
+        return latest
+    return None
+
+
+def _new_promotion_batch(
+    meta: Mapping[str, Any],
+    *,
+    source: str,
+    promoted: Sequence[VocabularyRecord],
+    ownership: Sequence[DeckOwnershipEvaluation],
+    archive_file: str,
+    archive_start_index: int,
+) -> PromotionBatch:
+    raw_source = meta.get("source_file") if "source_file" in meta else source
+    if not isinstance(raw_source, str) or not raw_source.strip():
+        raise PromoteError(
+            "[promotion-batches-invalid] a promotion receipt needs a canonical "
+            "source_file"
+        )
+    source_file = raw_source.strip()
+    run_id = review_run_id(meta)
+    run_fingerprint = _archive_run_fingerprint(meta)
+    promoted_ids = tuple(record.id for record in promoted)
+    if not promoted_ids or len(set(promoted_ids)) != len(promoted_ids):
+        raise PromoteError(
+            "[promotion-batches-invalid] a promotion receipt needs nonempty, "
+            "unique promoted ids"
+        )
+    by_id = {item.record_id: item for item in ownership}
+    if set(by_id) != set(promoted_ids):
+        raise PromoteError(
+            "[promotion-batches-invalid] re-proved deck ownership does not exactly "
+            "cover the promoted ids"
+        )
+    owner_stems: dict[str, str] = {}
+    for record_id in promoted_ids:
+        stems = by_id[record_id].owner_stems
+        if by_id[record_id].state != "exactly_one" or len(stems) != 1:
+            raise PromoteError(
+                f"[promotion-batches-invalid] {record_id} has no single re-proved "
+                "study-deck owner"
+            )
+        stem = stems[0]
+        if not isinstance(stem, str) or not stem.strip():
+            raise PromoteError(
+                f"[promotion-batches-invalid] {record_id}'s re-proved study-deck "
+                "owner has no usable filename stem"
+            )
+        owner_stems[record_id] = stem
+    receipt = _promotion_receipt_id(
+        archive_file,
+        run_fingerprint,
+        archive_start_index,
+        source_file,
+        promoted_ids,
+        owner_stems,
+    )
+    return PromotionBatch(
+        receipt_id=receipt,
+        archive_file=archive_file,
+        archive_run_fingerprint=run_fingerprint,
+        archive_start_index=archive_start_index,
+        source_file=source_file,
+        review_run_id=run_id,
+        promoted_ids=promoted_ids,
+        owner_stems=owner_stems,
+    )
+
+
 def validate_record_archive(
     live_meta: Mapping[str, Any],
     archived: Sequence[VocabularyRecord],
     archived_meta: Mapping[str, Any] | None,
+    *,
+    archive_file: str,
 ) -> None:
     """Prove a same-run record archive is intact before relying on it."""
     if archived_meta is None:
@@ -283,12 +640,17 @@ def validate_record_archive(
     promote.check_candidate_accounting(
         live_meta, (), archived, archived_meta=archived_meta
     )
+    promotion_batches(
+        archived_meta, archived=archived, archive_file=archive_file
+    )
 
     live_core = {
         key: value for key, value in live_meta.items() if key != "review_notes"
     }
     archive_core = {
-        key: value for key, value in archived_meta.items() if key != "review_notes"
+        key: value
+        for key, value in archived_meta.items()
+        if key not in {"review_notes", staging.PROMOTION_BATCHES_KEY}
     }
     if archive_core != live_core:
         raise PromoteError(
@@ -743,8 +1105,8 @@ def _finish_record_review(
     retry_records: Sequence[VocabularyRecord],
     keep: Sequence[bool],
     held: Sequence[VocabularyRecord],
-    canonical_commit: Callable[[], None] | None = None,
-) -> tuple[Path, int]:
+    canonical_commit: Callable[[Path, int], PromotionBatch | None] | None = None,
+) -> tuple[Path, int, PromotionBatch | None]:
     """Commit, archive, and retire rows as one live/done locked transaction.
 
     The optional canonical commit runs only after both snapshots have been
@@ -799,7 +1161,12 @@ def _finish_record_review(
                         "[record-archive-stale] the done archive changed while "
                         "promotion was completing. The live review was kept."
                     )
-                validate_record_archive(current_meta, archived, archived_meta)
+                validate_record_archive(
+                    current_meta,
+                    archived,
+                    archived_meta,
+                    archive_file=confirmed.name,
+                )
                 retry_flags = promote.check_candidate_accounting(
                     current_meta,
                     retry_records,
@@ -824,8 +1191,21 @@ def _finish_record_review(
                         "in the done archive"
                     )
 
-                if canonical_commit is not None:
-                    canonical_commit()
+                prior_batches = promotion_batches(
+                    archived_meta or {},
+                    archived=archived,
+                    archive_file=confirmed.name,
+                )
+                archive_start_index = (
+                    prior_batches[0].archive_start_index
+                    if prior_batches
+                    else len(archived)
+                )
+                completed_batch = (
+                    canonical_commit(confirmed, archive_start_index)
+                    if canonical_commit is not None
+                    else None
+                )
 
                 done = confirmed
                 combined = list(archived) + list(promoted)
@@ -834,6 +1214,24 @@ def _finish_record_review(
                         completed_meta = promote.archive_meta(
                             dict(current_meta), len(combined)
                         )
+                        if completed_batch is not None:
+                            if completed_batch.promoted_ids != tuple(
+                                record.id for record in promoted
+                            ):
+                                raise PromoteError(
+                                    "[promotion-batches-invalid] committed receipt "
+                                    "does not exactly name this archive append"
+                                )
+                            prior_batches = (*prior_batches, completed_batch)
+                        if prior_batches:
+                            completed_meta[staging.PROMOTION_BATCHES_KEY] = [
+                                batch.to_dict() for batch in prior_batches
+                            ]
+                            promotion_batches(
+                                completed_meta,
+                                archived=combined,
+                                archive_file=confirmed.name,
+                            )
                         write_staging_under_lock(
                             done,
                             combined,
@@ -893,7 +1291,7 @@ def _finish_record_review(
                         "live staging review was retired unchanged. Inspect it "
                         "and retry; do not delete staging by hand."
                     ) from exc
-                return done, removed
+                return done, removed, completed_batch
 
 
 #: What a decide pass concluded, in one word.
@@ -1078,6 +1476,10 @@ class PromotionExecutionResult:
     ledger_added: int = 0
     ledger_sources: int = 0
     ledger_error: ledger.LedgerError | None = None
+    #: Opaque handle for the exact archive batch. Absent when canonical records
+    #: landed but archive completion was deliberately deferred for AI-ledger
+    #: recovery.
+    receipt_id: str | None = None
 
     @property
     def promoted_ids(self) -> tuple[str, ...]:
@@ -1117,6 +1519,27 @@ class PromotionExecutionResult:
             raise ValueError(
                 f"Promotion result {self.state!r} has an inconsistent ledger result"
             )
+        receipt_required = self.state in {"landed", "landed_ledger_incomplete"}
+        receipt_allowed = receipt_required or self.state in {
+            "archive_retry",
+            "nothing_lands",
+        }
+        if receipt_required and self.receipt_id is None:
+            raise ValueError(
+                f"Promotion result {self.state!r} has an inconsistent archive receipt"
+            )
+        if not receipt_allowed and self.receipt_id is not None:
+            raise ValueError(
+                f"Promotion result {self.state!r} has an inconsistent archive receipt"
+            )
+        if self.receipt_id is not None and (
+            len(self.receipt_id) != 64
+            or any(
+                character not in "0123456789abcdef"
+                for character in self.receipt_id
+            )
+        ):
+            raise ValueError("Promotion receipt ids must be lowercase SHA-256 text")
 
 
 def staging_wire(path: Path) -> bytes:
@@ -1252,6 +1675,19 @@ def decide_promotion(
         # produced a traceback where the old code returned a refusal.
         wire, records, meta = record_review_snapshot(staging_path)
         snapshot.update(wire=wire, records=tuple(records), meta=meta)
+        if staging.PROMOTION_BATCHES_KEY in meta:
+            raise PromoteError(
+                "[promotion-batches-live] promotion_batches is archive-only; a live "
+                "review cannot claim that rows were promoted"
+            )
+        if "source_file" in meta and (
+            not isinstance(meta["source_file"], str)
+            or not meta["source_file"].strip()
+        ):
+            raise PromoteError(
+                "[promotion-source-invalid] source_file must be nonblank text "
+                "when present"
+            )
         promote.check_coverage_facts(meta)
         done, archived, archived_meta, archive_revision = (
             _archive_for_run_snapshot(archive_base, meta)
@@ -1263,10 +1699,16 @@ def decide_promotion(
             archive_revision=archive_revision,
         )
         if records or archived:
-            validate_record_archive(meta, archived, archived_meta)
-        retry_flags = promote.check_candidate_accounting(
+            validate_record_archive(
+                meta,
+                archived,
+                archived_meta,
+                archive_file=done.name,
+            )
+        retry_targets = promote.candidate_archive_retry_ids(
             meta, records, archived, archived_meta=archived_meta
         )
+        retry_flags = tuple(target is not None for target in retry_targets)
     except JankiError as exc:
         return blocked(exc, "structure")
     coverage_error: JankiError | None = None
@@ -1287,11 +1729,7 @@ def decide_promotion(
         "already_archived": (
             tuple(record.id for record in archived)
             if not records
-            else tuple(
-                record.id
-                for record, is_retry in zip(records, retry_flags, strict=True)
-                if is_retry
-            )
+            else tuple(target for target in retry_targets if target is not None)
         ),
     }
     # A refusal after this point still has to carry the exact repository
@@ -1559,7 +1997,16 @@ def execute_promotion(
         # A crash after the prune leaves an empty extraction file; it is
         # completion evidence, not a new pattern-only review.
         empty_live = not decision.records
-        done, removed = _finish_record_review(
+        recovered_batch = _latest_retry_batch(
+            archived_meta,
+            archived,
+            decision.already_archived,
+            empty_live=empty_live,
+            archive_file=(
+                decision.done.name if decision.done is not None else archive_base.name
+            ),
+        )
+        done, removed, _batch = _finish_record_review(
             path,
             archive_base,
             expected_wire=expected_wire,
@@ -1579,6 +2026,11 @@ def execute_promotion(
             retry_records=() if empty_live else decision.records,
             removed=removed,
             empty_live_retry=empty_live,
+            receipt_id=(
+                recovered_batch.receipt_id
+                if recovered_batch is not None
+                else None
+            ),
         )
 
     if decision.reading_check == "preview":
@@ -1653,7 +2105,15 @@ def execute_promotion(
 
     if not pending_promoted:
         # Held reasons still land in the live review; exact retries are pruned.
-        done, removed = _finish_record_review(
+        recovered_batch = _latest_retry_batch(
+            archived_meta,
+            archived,
+            decision.already_archived,
+            archive_file=(
+                decision.done.name if decision.done is not None else archive_base.name
+            ),
+        )
+        done, removed, _batch = _finish_record_review(
             path,
             archive_base,
             expected_wire=expected_wire,
@@ -1674,6 +2134,11 @@ def execute_promotion(
             held=tuple(result.held),
             retry_records=tuple(retry_records),
             removed=removed,
+            receipt_id=(
+                recovered_batch.receipt_id
+                if recovered_batch is not None
+                else None
+            ),
         )
 
     # Deciding proved the ledger parses; load it here for the object this
@@ -1727,7 +2192,9 @@ def execute_promotion(
                 )
     ledger_error: ledger.LedgerError | None = None
 
-    def commit_canonical_state() -> None:
+    def commit_canonical_state(
+        archive_path: Path, archive_start_index: int
+    ) -> PromotionBatch:
         nonlocal ledger_error
         # A checked decision may live in a browser capability while deck YAML
         # changes. Re-prove the exact selector verdict at the canonical commit
@@ -1752,6 +2219,14 @@ def execute_promotion(
                 unreadable_decks=decision.unreadable_decks,
                 deck_revision=decision.deck_revision,
             )
+            completed_batch = _new_promotion_batch(
+                meta,
+                source=decision.source,
+                promoted=pending_promoted,
+                ownership=fresh_ownership,
+                archive_file=archive_path.name,
+                archive_start_index=archive_start_index,
+            )
             save_records_json(output_path, merged, expected=output_revision)
             ledger_error = _save_execution_ledger(book)
             if ledger_error is not None and ai_provenance is not None:
@@ -1759,13 +2234,14 @@ def execute_promotion(
                 # Raising before archive/prune keeps it live while the outer locks
                 # still guarantee no competing completion changed either copy.
                 raise _AiLedgerHandoffIncomplete
+            return completed_batch
 
     # Canonical writes, archive append, and live pruning/deletion share the
     # same live/done transaction. A same-run zero-row completion that wins the
     # lock is refused before `commit_canonical_state`; one that loses cannot
     # appear between validation and the canonical writes.
     try:
-        done, removed = _finish_record_review(
+        done, removed, completed_batch = _finish_record_review(
             path,
             archive_base,
             expected_wire=expected_wire,
@@ -1808,6 +2284,9 @@ def execute_promotion(
         ledger_added=added,
         ledger_sources=seen,
         ledger_error=ledger_error,
+        receipt_id=(
+            completed_batch.receipt_id if completed_batch is not None else None
+        ),
     )
 
 

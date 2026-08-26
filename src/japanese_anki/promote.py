@@ -186,14 +186,14 @@ def check_coverage_facts(
     return pending
 
 
-def check_candidate_accounting(
+def _candidate_accounting_retry_targets(
     meta: Mapping[str, Any],
     live: Sequence[VocabularyRecord],
     archived: Sequence[VocabularyRecord] = (),
     *,
     archived_meta: Mapping[str, Any] | None = None,
-) -> tuple[bool, ...]:
-    """Authenticate candidate accounting and classify transformed archive retries.
+) -> tuple[str | None, ...]:
+    """Authenticate accounting and name each exact archived retry target.
 
     Reviewed record content, identity, and selection remain editable. The
     immutable block describes what the model proposed, not what the human must
@@ -241,7 +241,7 @@ def check_candidate_accounting(
             "canonical record id; resolve them explicitly before promotion"
         )
     unmatched_archive = set(range(len(archived)))
-    exact_retry: list[bool] = []
+    retry_targets: list[str | None] = []
     for record in live:
         resolved = _accept_examples(_resolved(record))
         stable = replace(
@@ -260,7 +260,7 @@ def check_candidate_accounting(
                 "the same-run archive"
             )
         match = matches[0] if matches else None
-        exact_retry.append(match is not None)
+        retry_targets.append(archived[match].id if match is not None else None)
         if match is not None:
             unmatched_archive.remove(match)
             continue
@@ -271,7 +271,7 @@ def check_candidate_accounting(
             )
 
     if isinstance(accounting, Mapping):
-        accepted_population = len(archived) + exact_retry.count(False)
+        accepted_population = len(archived) + retry_targets.count(None)
         parsed_population = accounting["parsed_candidate_count"]
         if accepted_population > parsed_population:
             raise PromoteError(
@@ -283,7 +283,36 @@ def check_candidate_accounting(
                 "records. Remove the appended row(s); do not edit candidate_accounting."
             )
 
-    return tuple(exact_retry)
+    return tuple(retry_targets)
+
+
+def candidate_archive_retry_ids(
+    meta: Mapping[str, Any],
+    live: Sequence[VocabularyRecord],
+    archived: Sequence[VocabularyRecord] = (),
+    *,
+    archived_meta: Mapping[str, Any] | None = None,
+) -> tuple[str | None, ...]:
+    """Return each live row's exact canonical archive id, when it is a retry."""
+    return _candidate_accounting_retry_targets(
+        meta, live, archived, archived_meta=archived_meta
+    )
+
+
+def check_candidate_accounting(
+    meta: Mapping[str, Any],
+    live: Sequence[VocabularyRecord],
+    archived: Sequence[VocabularyRecord] = (),
+    *,
+    archived_meta: Mapping[str, Any] | None = None,
+) -> tuple[bool, ...]:
+    """Authenticate candidate accounting and classify exact archive retries."""
+    return tuple(
+        target is not None
+        for target in _candidate_accounting_retry_targets(
+            meta, live, archived, archived_meta=archived_meta
+        )
+    )
 
 
 def _verify_coverage_facts(meta: dict[str, Any], block: dict[str, Any]) -> None:

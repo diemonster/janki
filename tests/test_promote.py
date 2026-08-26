@@ -829,6 +829,13 @@ def test_the_shared_result_names_a_partial_ledger_commit(
     assert str(result.ledger_error) == "disk full"
     assert result.archive_path is not None and result.archive_path.exists()
     assert result.promoted_ids == ("word:話す:はなす",)
+    archived, archived_meta = read_staging(result.archive_path)
+    (batch,) = promotion_application.promotion_batches(
+        archived_meta,
+        archived=archived,
+        archive_file=result.archive_path.name,
+    )
+    assert result.receipt_id == batch.receipt_id
     assert not path.exists()
 
 
@@ -939,6 +946,357 @@ def test_re_promoting_a_half_done_file_is_safe(
     archived, _ = read_staging(root / "staging" / "done" / "lesson.pdf.yaml")
     assert {item.id for item in archived} == {"word:話す:はなす", "word:食べ物:たべもの"}
     assert not path.exists()
+
+
+def test_partial_promotions_append_disjoint_durable_batch_receipts(
+    tmp_path: Path,
+) -> None:
+    """Each click keeps its exact scope; the cumulative archive is not the scope."""
+    first = record()
+    second = record(
+        id="word:聞く:", expression="聞く", reading="", meanings=["to hear"]
+    )
+    root = project(tmp_path, [])
+    path = root / "staging" / "lesson.pdf.yaml"
+    write_staging(
+        path,
+        [first, second],
+        {"source_file": "lesson.pdf"},
+    )
+    config = ProjectConfig.load(root)
+
+    first_result = promotion_application.execute_promotion(
+        config,
+        promotion_application.decide_promotion(
+            config, path, skip_reading_check=True
+        ),
+    )
+
+    archive = root / "staging" / "done" / path.name
+    first_archived, first_meta = read_staging(archive)
+    (first_batch,) = promotion_application.promotion_batches(
+        first_meta, archived=first_archived, archive_file=archive.name
+    )
+    assert first_result.receipt_id == first_batch.receipt_id
+    assert first_batch.archive_file == archive.name
+    assert first_batch.archive_start_index == 0
+    assert first_batch.promoted_ids == (first.id,)
+    assert first_batch.owner_stems == {first.id: "all"}
+
+    [held], live_meta = read_staging(path)
+    write_staging(
+        path,
+        [replace(held, reading="きく")],
+        live_meta,
+        force=True,
+    )
+    second_result = promotion_application.execute_promotion(
+        config,
+        promotion_application.decide_promotion(
+            config, path, skip_reading_check=True
+        ),
+    )
+
+    archived, archived_meta = read_staging(archive)
+    batches = promotion_application.promotion_batches(
+        archived_meta, archived=archived, archive_file=archive.name
+    )
+    assert len(batches) == 2
+    assert batches[0] == first_batch, "the second append keeps the first receipt"
+    assert batches[1].promoted_ids == ("word:聞く:きく",)
+    assert batches[1].owner_stems == {"word:聞く:きく": "all"}
+    assert batches[1].archive_start_index == first_batch.archive_start_index
+    assert second_result.receipt_id == batches[1].receipt_id
+    assert first_result.receipt_id != second_result.receipt_id
+    assert not set(batches[0].promoted_ids) & set(batches[1].promoted_ids)
+
+    reordered = json.loads(json.dumps(archived_meta))
+    reordered[staging_module.PROMOTION_BATCHES_KEY].reverse()
+    with pytest.raises(promote.PromoteError, match="exact append order"):
+        promotion_application.promotion_batches(
+            reordered, archived=archived, archive_file=archive.name
+        )
+
+    missing_first = json.loads(json.dumps(archived_meta))
+    del missing_first[staging_module.PROMOTION_BATCHES_KEY][0]
+    with pytest.raises(promote.PromoteError, match="every receipted archive row"):
+        promotion_application.promotion_batches(
+            missing_first, archived=archived, archive_file=archive.name
+        )
+
+    changed_start = json.loads(json.dumps(archived_meta))
+    second_raw = changed_start[staging_module.PROMOTION_BATCHES_KEY][1]
+    second_raw["archive_start_index"] += 1
+    second_raw["receipt_id"] = promotion_application._promotion_receipt_id(
+        second_raw["archive_file"],
+        second_raw["archive_run_fingerprint"],
+        second_raw["archive_start_index"],
+        second_raw["source_file"],
+        second_raw["promoted_ids"],
+        second_raw["owner_stems"],
+    )
+    with pytest.raises(promote.PromoteError, match="same receipt start index"):
+        promotion_application.promotion_batches(
+            changed_start, archived=archived, archive_file=archive.name
+        )
+
+    write_staging(path, [first], {"source_file": "lesson.pdf"})
+    older_retry = promotion_application.execute_promotion(
+        config,
+        promotion_application.decide_promotion(
+            config, path, skip_reading_check=True
+        ),
+    )
+    assert older_retry.state == "archive_retry"
+    assert older_retry.receipt_id is None, "an older batch cannot resume the finish"
+
+    with pytest.raises(promote.PromoteError, match="unique record ids"):
+        promotion_application.promotion_batches(
+            first_meta, archived=[first, first], archive_file=archive.name
+        )
+
+
+def test_promotion_receipts_are_archive_only_and_bind_cumulative_rows(
+    tmp_path: Path,
+) -> None:
+    root = project(tmp_path, [])
+    path = root / "staging" / "lesson.pdf.yaml"
+    write_staging(
+        path,
+        [record()],
+        {
+            "source_file": "lesson.pdf",
+            staging_module.PROMOTION_BATCHES_KEY: [],
+        },
+    )
+    config = ProjectConfig.load(root)
+
+    decision = promotion_application.decide_promotion(
+        config, path, skip_reading_check=True
+    )
+
+    assert decision.is_blocked
+    assert decision.error is not None
+    assert "promotion-batches-live" in str(decision.error)
+    assert load_records(root / "vocabulary.json") == []
+    assert not (root / "staging" / "done").exists()
+
+    pattern_path = root / "staging" / "patterns.yaml"
+    pattern_meta = _pattern_only_meta(
+        patterns.PatternSet(source="patterns.pdf", kind="pattern")
+    )
+    pattern_meta[staging_module.PROMOTION_BATCHES_KEY] = []
+    write_staging(pattern_path, [], pattern_meta)
+
+    pattern_decision = promotion_application.decide_promotion(
+        config, pattern_path, skip_reading_check=True
+    )
+
+    assert pattern_decision.is_blocked
+    assert pattern_decision.error is not None
+    assert "promotion-batches-live" in str(pattern_decision.error)
+
+    for invalid_source in ("  ", 42):
+        write_staging(
+            path, [record()], {"source_file": invalid_source}, force=True
+        )
+        invalid_source_decision = promotion_application.decide_promotion(
+            config, path, skip_reading_check=True
+        )
+        assert invalid_source_decision.is_blocked
+        assert invalid_source_decision.error is not None
+        assert "promotion-source-invalid" in str(invalid_source_decision.error)
+        assert load_records(root / "vocabulary.json") == []
+        assert not (root / "staging" / "done").exists()
+
+    (root / "decks" / "all.yaml").unlink()
+    (root / "decks" / "   .yaml").write_text(
+        "deck:\n"
+        "  name: Blank owner fixture\n"
+        '  source: "../vocabulary.json"\n',
+        encoding="utf-8",
+    )
+    write_staging(path, [record()], {"source_file": "lesson.pdf"}, force=True)
+    blank_owner = promotion_application.decide_promotion(
+        config, path, skip_reading_check=True
+    )
+    assert blank_owner.state == "lands"
+    with pytest.raises(promote.PromoteError, match="no usable filename stem"):
+        promotion_application.execute_promotion(config, blank_owner)
+    assert load_records(root / "vocabulary.json") == []
+    assert not (root / "ledger.json").exists()
+    assert path.exists()
+    assert not (root / "staging" / "done").exists()
+    (root / "decks" / "   .yaml").unlink()
+    _promotion_fixture_deck(root)
+
+    clean_meta = {"source_file": "lesson.pdf"}
+    write_staging(path, [record()], clean_meta, force=True)
+    result = promotion_application.execute_promotion(
+        config,
+        promotion_application.decide_promotion(
+            config, path, skip_reading_check=True
+        ),
+    )
+    assert result.archive_path is not None
+    archived, archived_meta = read_staging(result.archive_path)
+    (batch,) = promotion_application.promotion_batches(
+        archived_meta,
+        archived=archived,
+        archive_file=result.archive_path.name,
+    )
+
+    other_path = root / "staging" / "other.yaml"
+    write_staging(other_path, [record()], clean_meta)
+    other_result = promotion_application.execute_promotion(
+        config,
+        promotion_application.decide_promotion(
+            config, other_path, skip_reading_check=True
+        ),
+    )
+    assert other_result.archive_path is not None
+    other_archived, other_meta = read_staging(other_result.archive_path)
+    (other_batch,) = promotion_application.promotion_batches(
+        other_meta,
+        archived=other_archived,
+        archive_file=other_result.archive_path.name,
+    )
+    assert batch.archive_file != other_batch.archive_file
+    assert batch.receipt_id != other_batch.receipt_id
+
+    with pytest.raises(promote.PromoteError, match="cumulative archive"):
+        promotion_application.promotion_batches(
+            archived_meta,
+            archived=[],
+            archive_file=result.archive_path.name,
+        )
+
+    for malformed in (None, []):
+        damaged = json.loads(json.dumps(archived_meta))
+        damaged[staging_module.PROMOTION_BATCHES_KEY] = malformed
+        with pytest.raises(promote.PromoteError, match="promotion_batches"):
+            promotion_application.promotion_batches(
+                damaged,
+                archived=archived,
+                archive_file=result.archive_path.name,
+            )
+
+    damaged = json.loads(json.dumps(archived_meta))
+    damaged["source_file"] = None
+    with pytest.raises(promote.PromoteError, match="archive source_file"):
+        promotion_application.promotion_batches(
+            damaged,
+            archived=archived,
+            archive_file=result.archive_path.name,
+        )
+
+    damaged = json.loads(json.dumps(archived_meta))
+    damaged[staging_module.PROMOTION_BATCHES_KEY][0]["owner_stems"] = {}
+    with pytest.raises(promote.PromoteError, match="exactly key"):
+        promotion_application.promotion_batches(
+            damaged,
+            archived=archived,
+            archive_file=result.archive_path.name,
+        )
+
+    damaged = json.loads(json.dumps(archived_meta))
+    damaged[staging_module.PROMOTION_BATCHES_KEY][0]["owner_stems"][
+        archived[0].id
+    ] = "a-different-deck"
+    with pytest.raises(promote.PromoteError, match="does not bind"):
+        promotion_application.promotion_batches(
+            damaged,
+            archived=archived,
+            archive_file=result.archive_path.name,
+        )
+
+    damaged = json.loads(json.dumps(archived_meta))
+    raw_batch = damaged[staging_module.PROMOTION_BATCHES_KEY][0]
+    original_receipt = raw_batch["receipt_id"]
+    raw_batch["source_file"] = "different.pdf"
+    raw_batch["receipt_id"] = promotion_application._promotion_receipt_id(
+        raw_batch["archive_file"],
+        raw_batch["archive_run_fingerprint"],
+        raw_batch["archive_start_index"],
+        raw_batch["source_file"],
+        raw_batch["promoted_ids"],
+        raw_batch["owner_stems"],
+    )
+    assert raw_batch["receipt_id"] != original_receipt
+    with pytest.raises(promote.PromoteError, match="different source_file"):
+        promotion_application.promotion_batches(
+            damaged,
+            archived=archived,
+            archive_file=result.archive_path.name,
+        )
+
+    damaged = json.loads(json.dumps(archived_meta))
+    raw_batch = damaged[staging_module.PROMOTION_BATCHES_KEY][0]
+    original_receipt = raw_batch["receipt_id"]
+    raw_batch["archive_file"] = "different.yaml"
+    raw_batch["receipt_id"] = promotion_application._promotion_receipt_id(
+        raw_batch["archive_file"],
+        raw_batch["archive_run_fingerprint"],
+        raw_batch["archive_start_index"],
+        raw_batch["source_file"],
+        raw_batch["promoted_ids"],
+        raw_batch["owner_stems"],
+    )
+    assert raw_batch["receipt_id"] != original_receipt
+    with pytest.raises(promote.PromoteError, match="different done archive"):
+        promotion_application.promotion_batches(
+            damaged,
+            archived=archived,
+            archive_file=result.archive_path.name,
+        )
+
+    damaged = json.loads(json.dumps(archived_meta))
+    raw_batch = damaged[staging_module.PROMOTION_BATCHES_KEY][0]
+    original_receipt = raw_batch["receipt_id"]
+    raw_batch["archive_start_index"] += 1
+    raw_batch["receipt_id"] = promotion_application._promotion_receipt_id(
+        raw_batch["archive_file"],
+        raw_batch["archive_run_fingerprint"],
+        raw_batch["archive_start_index"],
+        raw_batch["source_file"],
+        raw_batch["promoted_ids"],
+        raw_batch["owner_stems"],
+    )
+    assert raw_batch["receipt_id"] != original_receipt
+    with pytest.raises(promote.PromoteError, match="every receipted archive row"):
+        promotion_application.promotion_batches(
+            damaged,
+            archived=archived,
+            archive_file=result.archive_path.name,
+        )
+
+    run_a = promotion_application._archive_run_fingerprint(
+        {"review_run_id": REVIEW_RUN_A}
+    )
+    run_b = promotion_application._archive_run_fingerprint(
+        {"review_run_id": REVIEW_RUN_B}
+    )
+    assert run_a != run_b
+
+    damaged = json.loads(json.dumps(archived_meta))
+    raw_batch = damaged[staging_module.PROMOTION_BATCHES_KEY][0]
+    original_receipt = raw_batch["receipt_id"]
+    raw_batch["archive_run_fingerprint"] = run_b
+    raw_batch["receipt_id"] = promotion_application._promotion_receipt_id(
+        raw_batch["archive_file"],
+        raw_batch["archive_run_fingerprint"],
+        raw_batch["archive_start_index"],
+        raw_batch["source_file"],
+        raw_batch["promoted_ids"],
+        raw_batch["owner_stems"],
+    )
+    assert raw_batch["receipt_id"] != original_receipt
+    with pytest.raises(promote.PromoteError, match="archive-run provenance"):
+        promotion_application.promotion_batches(
+            damaged,
+            archived=archived,
+            archive_file=result.archive_path.name,
+        )
 
 
 def _rich_prompt_provenance(request_fingerprint: str) -> dict[str, Any]:
@@ -1716,12 +2074,23 @@ def test_exact_archive_retry_prunes_live_row_without_appending_it_twice(
     monkeypatch.setattr(
         promotion_application, "atomic_unlink_bound", real_prune
     )
-    assert cli.main(command) == 0
+    config = ProjectConfig.load(root)
+    retry_result = promotion_application.execute_promotion(
+        config,
+        promotion_application.decide_promotion(
+            config, path, skip_reading_check=True
+        ),
+    )
 
     assert not path.exists()
     archived, archived_meta = read_staging(archive)
     assert [item.id for item in archived] == ["word:話す:はなす"]
     assert archived_meta["candidate_accounting"] == meta["candidate_accounting"]
+    (batch,) = promotion_application.promotion_batches(
+        archived_meta, archived=archived, archive_file=archive.name
+    )
+    assert retry_result.state == "archive_retry"
+    assert retry_result.receipt_id == batch.receipt_id
     assert archive.read_bytes() == first_archive, "an exact retry need not rewrite evidence"
 
 
@@ -1963,12 +2332,66 @@ def test_exact_archive_retry_matches_the_post_remint_record(
         promotion_application, "atomic_unlink_bound", real_prune
     )
 
-    assert cli.main(command) == 0
-
-    archived, _archived_meta = read_staging(
-        root / "staging" / "done" / "lesson.yaml"
+    config = ProjectConfig.load(root)
+    decision = promotion_application.decide_promotion(
+        config, path, skip_reading_check=True
     )
+    assert decision.already_archived == ("word:聞く:きく",)
+    retry_result = promotion_application.execute_promotion(config, decision)
+
+    archive = root / "staging" / "done" / "lesson.yaml"
+    archived, archived_meta = read_staging(archive)
     assert [item.id for item in archived] == ["word:聞く:きく"]
+    (batch,) = promotion_application.promotion_batches(
+        archived_meta, archived=archived, archive_file=archive.name
+    )
+    assert retry_result.receipt_id == batch.receipt_id
+
+
+def test_reminted_retry_with_a_held_remainder_recovers_the_latest_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = project(tmp_path, [])
+    records, meta = accounted_extract(
+        tmp_path,
+        parsed_candidate(expression="聞く", reading=""),
+        parsed_candidate(expression="食べる", reading="", page=2),
+    )
+    reviewed = [replace(records[0], reading="きく"), records[1]]
+    path = root / "staging" / "lesson.yaml"
+    write_staging(path, reviewed, meta)
+    command = ["--root", str(root), "promote", str(path), "--skip-reading-check"]
+    real_finish = promotion_application.finish_staging_under_lock
+
+    monkeypatch.setattr(
+        promotion_application,
+        "finish_staging_under_lock",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            staging_module.StagingError("simulated held-row prune failure")
+        ),
+    )
+    assert cli.main(command) == 1
+    monkeypatch.setattr(
+        promotion_application, "finish_staging_under_lock", real_finish
+    )
+
+    config = ProjectConfig.load(root)
+    decision = promotion_application.decide_promotion(
+        config, path, skip_reading_check=True
+    )
+    assert decision.state == "nothing_lands"
+    assert decision.already_archived == ("word:聞く:きく",)
+    retry_result = promotion_application.execute_promotion(config, decision)
+
+    archive = root / "staging" / "done" / "lesson.yaml"
+    archived, archived_meta = read_staging(archive)
+    (batch,) = promotion_application.promotion_batches(
+        archived_meta, archived=archived, archive_file=archive.name
+    )
+    assert retry_result.receipt_id == batch.receipt_id
+    [held], _live_meta = read_staging(path)
+    assert held.id == records[1].id
 
 
 def test_exact_remint_retry_is_independent_of_later_collection_state(
@@ -2263,7 +2686,7 @@ def test_record_archive_writer_cas_preserves_a_final_seam_edit(
             retry_records=[],
             keep=[False],
             held=[],
-            canonical_commit=lambda: committed.append(True),
+            canonical_commit=lambda _archive, _start: committed.append(True),
         )
 
     assert committed == [True]
@@ -2345,7 +2768,7 @@ def test_record_completion_preserves_a_final_seam_workbench_edit(
             retry_records=[],
             keep=keep,
             held=held,
-            canonical_commit=lambda: committed.append(True),
+            canonical_commit=lambda _archive, _start: committed.append(True),
         )
 
     assert committed == [True]
@@ -2471,10 +2894,22 @@ def test_retry_removes_empty_live_file_left_after_archive_and_prune(
     # Crash boundary: pruning committed its empty document, unlink did not.
     write_staging(path, [], meta)
 
-    assert cli.main(command) == 0
+    config = ProjectConfig.load(root)
+    retry_result = promotion_application.execute_promotion(
+        config,
+        promotion_application.decide_promotion(
+            config, path, skip_reading_check=True
+        ),
+    )
 
     assert not path.exists()
     assert archive.read_bytes() == archive_before
+    archived, archived_meta = read_staging(archive)
+    (batch,) = promotion_application.promotion_batches(
+        archived_meta, archived=archived, archive_file=archive.name
+    )
+    assert retry_result.state == "archive_retry"
+    assert retry_result.receipt_id == batch.receipt_id
 
 
 def test_divergent_live_copy_of_an_archived_candidate_refuses_retry(
@@ -4944,16 +5379,27 @@ def test_a_row_the_second_accounting_call_flags_is_not_promoted(
 
     from japanese_anki.application import promotion as promotion_module
 
-    real = promotion_module.promote.check_candidate_accounting
+    real_targets = promotion_module.promote.candidate_archive_retry_ids
+    real_check = promotion_module.promote.check_candidate_accounting
     seen: list[int] = []
 
+    def observe_first(meta, live, archived, **kwargs):
+        answer = real_targets(meta, live, archived, **kwargs)
+        seen.append(1)
+        return answer
+
     def flag_the_second(meta, live, archived, **kwargs):
-        answer = real(meta, live, archived, **kwargs)
+        answer = real_check(meta, live, archived, **kwargs)
         seen.append(1)
         # The first call partitions the live rows; the second judges what
         # would land. Only the second is forced.
         return [True] * len(answer) if len(seen) > 1 else answer
 
+    monkeypatch.setattr(
+        promotion_module.promote,
+        "candidate_archive_retry_ids",
+        observe_first,
+    )
     monkeypatch.setattr(
         promotion_module.promote, "check_candidate_accounting", flag_the_second
     )
