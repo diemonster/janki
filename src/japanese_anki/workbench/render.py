@@ -92,6 +92,11 @@ input[type=file] { font: inherit; padding: .4rem; }
    as a disabled input, which is how the removal control came to look inert. */
 .actions button { justify-self: start; text-align: start; }
 .actions .counts { margin: 0; }
+.assignment { border-block-start: 1px solid ButtonBorder; margin-block-start: 1rem;
+  padding-block-start: .75rem; }
+.assignment-choice { border: 1px solid GrayText; border-radius: .35rem;
+  padding: .75rem; margin-block-start: .75rem; }
+.assignment-choice h5 { font-size: 1rem; margin: 0 0 .5rem; }
 .remove button { border-color: GrayText; background: Canvas; color: CanvasText; }
 .edit { display: grid; gap: .25rem; margin: .5rem 0 .75rem; }
 .edit label { font-size: .85rem; font-weight: 700; color: GrayText; }
@@ -467,6 +472,7 @@ def _card_html(
     index: int = 0,
     remove_action: str = "",
     reidentify_action: str = "",
+    assignment_action: str = "",
 ) -> str:
     record = card.record
     parts = [
@@ -518,6 +524,8 @@ def _card_html(
     else:
         parts.append(_approval_html(card))
     parts.append(_evidence_html(card))
+    if assignment_action:
+        parts.append(assignment_action)
     if remove_action or reidentify_action:
         # One row, so the two actions read as siblings. Stacked, the
         # full-width removal button looked like a field rather than a
@@ -531,6 +539,89 @@ def _card_html(
         )
     parts.append("</article>")
     return "".join(parts)
+
+
+def _tag_diff(values: Sequence[str]) -> str:
+    return ", ".join(values) if values else "none"
+
+
+def _assignment_html(offer: Any) -> str:
+    """One card's configured destinations and the exact planned tag diffs."""
+    if not offer.choices:
+        return (
+            '<section class=assignment><h4>Choose a study deck</h4>'
+            '<p class="status problem">No assignable word deck is configured.</p>'
+            "</section>"
+        )
+    parts = [
+        '<section class=assignment><h4>Choose a study deck</h4>',
+        "<p class=counts>Each choice is checked against the configured deck "
+        "selectors before it can change this proposal.</p>",
+    ]
+    proposals = offer.proposals
+    if len(proposals) > 1:
+        count = "two" if len(proposals) == 2 else str(len(proposals))
+        retained = "both sources" if len(proposals) == 2 else "all of those sources"
+        parts.append(
+            f'<p class="status held">This word is proposed by {count} sources. '
+            f"Choose which word deck should teach it; {retained} can still "
+            "remain in its history.</p>"
+        )
+    for choice in offer.choices:
+        plan = choice.plan
+        parts.extend(
+            [
+                '<article class="assignment-choice">',
+                f"<h5>{_escaped(choice.name)}</h5>",
+            ]
+        )
+        if plan is None:
+            parts.append(
+                '<button type=button disabled>Cannot assign to this deck</button>'
+                f'<p class="status problem">{_escaped(choice.refusal)}</p>'
+            )
+        else:
+            parts.append(
+                f'<button type=submit form="assign-{offer.card}" '
+                f'name=destination value="{html.escape(choice.stem, quote=True)}">'
+                f"Assign to {_escaped(choice.name)}</button>"
+            )
+            parts.append(
+                "<details><summary>Technical details</summary><dl class=fields>"
+                '<div class=field><dt>Tags added</dt>'
+                f"<dd>{_escaped(_tag_diff(plan.tag_diff.added))}</dd></div>"
+                '<div class=field><dt>Tags removed</dt>'
+                f"<dd>{_escaped(_tag_diff(plan.tag_diff.removed))}</dd></div>"
+                '<div class=field><dt>Tags after assignment</dt>'
+                f"<dd>{_escaped(_tag_diff(plan.tag_diff.after))}</dd></div>"
+                "</dl></details>"
+            )
+        parts.append("</article>")
+    parts.append("</section>")
+    return "".join(parts)
+
+
+def _assignment_forms(
+    offers: Sequence[Any], source_path: str, csrf: str, snapshot: str
+) -> str:
+    """Hidden owners for the form-associated destination buttons."""
+    action = html.escape(source_path + "/assign", quote=True)
+    forms = []
+    for offer in offers:
+        if not any(choice.plan is not None for choice in offer.choices):
+            continue
+        forms.append(
+            f'<form id="assign-{offer.card}" method=post action="{action}" hidden>'
+            '<input type=hidden name=action value="assign">'
+            f'<input type=hidden name=csrf value="{html.escape(csrf, quote=True)}">'
+            '<input type=hidden name=staging_snapshot '
+            f'value="{html.escape(snapshot, quote=True)}">'
+            f'<input type=hidden name=card value="{offer.card}">'
+            '<input type=hidden name=plan_fingerprint '
+            f'value="{html.escape(offer.fingerprint, quote=True)}">'
+            "</form>"
+        )
+    return "".join(forms)
 
 
 def _checkbox_html(card: Any) -> str:
@@ -684,10 +775,12 @@ def render_source(
     csrf: str = "",
     staging_snapshot: str = "",
     patterns_snapshot: str = "",
-    saved: tuple[int, bool, int, int, int] | None = None,
+    saved: tuple[int, bool, int, int, int, int] | None = None,
     editing: bool = False,
     approvable: bool = True,
     reidentifiable: bool = True,
+    assignment_offers: Sequence[Any] = (),
+    assignment_error: str = "",
 ) -> str:
     """One source's cards and grammar.
 
@@ -726,6 +819,11 @@ def render_source(
     ]
     if saved is not None:
         body.append(_saved_banner(*saved))
+    if assignment_error:
+        body.append(
+            '<p class="status problem">Study-deck choices are unavailable: '
+            f"{_escaped(assignment_error)}</p>"
+        )
     if waiting:
         body.append(
             f"<p class=counts>{waiting} of {len(detail.cards)} cards still need "
@@ -775,6 +873,11 @@ def render_source(
                 if editing and reidentifiable
                 else ""
             ),
+            assignment_action=(
+                _assignment_html(assignment_offers[index])
+                if not editing and index < len(assignment_offers)
+                else ""
+            ),
         )
         for index, card in enumerate(detail.cards)
     )
@@ -801,6 +904,15 @@ def render_source(
         body.append(
             _reidentify_forms(detail, source_path, csrf, staging_snapshot)
         )
+    if not editing and csrf and assignment_offers:
+        body.append(
+            _assignment_forms(
+                assignment_offers,
+                source_path,
+                csrf,
+                staging_snapshot,
+            )
+        )
     body.append("</main></body></html>")
     return "".join(body)
 
@@ -811,12 +923,17 @@ def _saved_banner(
     edited: int = 0,
     removed: int = 0,
     reidentified: int = 0,
+    assigned: int = 0,
 ) -> str:
     saved = []
     if reidentified:
         saved.append("a card's identity")
     if removed:
         saved.append(f"{removed} card{'s' if removed != 1 else ''} removed")
+    if assigned:
+        saved.append(
+            f"a study deck for {assigned} card{'s' if assigned != 1 else ''}"
+        )
     if edited:
         saved.append(f"corrections to {edited} card{'s' if edited != 1 else ''}")
     if records:

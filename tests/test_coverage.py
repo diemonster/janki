@@ -723,10 +723,12 @@ def test_an_accepted_file_is_then_promoted(
     and the promote that follows has to see it — which means deciding again
     against the file as it now stands, not against the copy read before the
     approval existed."""
+    from conftest import seed_promotion_deck
     from japanese_anki import cli
     from japanese_anki.io import load_records
 
     root, staged = project_with_source(tmp_path)
+    seed_promotion_deck(root)
     monkeypatch.setattr(
         cli.coverage, "review_coverage",
         lambda *a, **k: coverage.CoverageVerdict(True, "Accounted for.", "m", "f"),

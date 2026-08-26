@@ -24,6 +24,7 @@ from japanese_anki.application import (
     ADDED,
     CARDS_NEED_EDITS,
     COVERAGE_NEEDS_DECISION,
+    DECK_NEEDS_DECISION,
     EXAMPLES_NEED_REVIEW,
     GRAMMAR_NEEDS_REVIEW,
     GRAMMAR_NONE,
@@ -130,6 +131,33 @@ def _approve_examples(tmp_path: Path, staging_name: str) -> None:
     )
 
 
+def _assign_to_fixture_deck(
+    tmp_path: Path, staging_name: str, *, tag: str = "lesson"
+) -> None:
+    """Make one real selector the staged cards' exact prospective owner."""
+    (tmp_path / "decks" / "lesson.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "deck": {
+                    "name": "Lesson deck",
+                    "source": "../vocabulary.json",
+                    "intake_tag": tag,
+                    "include_tags": [tag],
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    staging_path = tmp_path / "staging" / staging_name
+    data = yaml.safe_load(staging_path.read_text(encoding="utf-8"))
+    for record in data["records"]:
+        record.setdefault("tags", []).append(tag)
+    staging_path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
+
+
 def test_approving_examples_advances_the_table_to_the_coverage_gate(
     tmp_path: Path,
 ) -> None:
@@ -147,17 +175,61 @@ def test_approving_examples_advances_the_table_to_the_coverage_gate(
     assert "coverage" in journey.detail
 
 
-def test_a_selection_covered_lesson_reaches_ready_to_add(tmp_path: Path) -> None:
-    """Selection coverage resolves on its own, so approving the sentences is
-    the last card-track gate."""
+def test_a_selection_covered_lesson_still_needs_a_deck(tmp_path: Path) -> None:
+    """Approving sentences cannot silently decide where the cards belong."""
     _stage(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
     _approve_examples(tmp_path, "lesson-8.pdf.yaml")
 
     journey = _journeys(tmp_path)["lesson-8.pdf"]
 
-    assert journey.state == READY_TO_ADD
+    assert journey.state == DECK_NEEDS_DECISION
     assert journey.example_review_count == 0
+    assert journey.deck_decision_count == 2
+    assert journey.next_action == "Choose a study deck for 2 cards"
+
+
+def test_exact_deck_ownership_advances_the_lesson_to_ready(tmp_path: Path) -> None:
+    _stage(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    _approve_examples(tmp_path, "lesson-8.pdf.yaml")
+    _assign_to_fixture_deck(tmp_path, "lesson-8.pdf.yaml")
+
+    journey = _journeys(tmp_path)["lesson-8.pdf"]
+
+    assert journey.state == READY_TO_ADD
+    assert journey.deck_decision_count == 0
     assert journey.next_action == "Add 2 cards to your collection"
+
+
+def test_an_unreadable_deck_asks_for_repair_not_a_choice(tmp_path: Path) -> None:
+    _stage(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    _approve_examples(tmp_path, "lesson-8.pdf.yaml")
+    (tmp_path / "decks" / "broken.yaml").write_text(
+        "deck: [not, a, mapping]\n",
+        encoding="utf-8",
+    )
+
+    journey = _journeys(tmp_path)["lesson-8.pdf"]
+
+    assert journey.state == DECK_NEEDS_DECISION
+    assert journey.deck_decision_count == 2
+    assert journey.next_action == "Repair the study deck configuration"
+    assert "broken.yaml" in journey.detail
+
+
+def test_an_unreadable_collection_does_not_blame_the_deck_config(
+    tmp_path: Path,
+) -> None:
+    _stage(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
+    _approve_examples(tmp_path, "lesson-8.pdf.yaml")
+    (tmp_path / "vocabulary.json").write_text("{not json\n", encoding="utf-8")
+
+    journeys, warnings = source_journeys(ProjectConfig.load(tmp_path))
+    assert warnings == []
+    journey = {item.source: item for item in journeys}["lesson-8.pdf"]
+
+    assert journey.state == DECK_NEEDS_DECISION
+    assert journey.next_action == "Repair the collection or staged cards"
+    assert "vocabulary.json" in journey.detail
 
 
 def test_a_structurally_broken_card_outranks_example_review(tmp_path: Path) -> None:
@@ -469,6 +541,7 @@ def test_ready_to_add_counts_as_waiting_on_the_person(tmp_path: Path) -> None:
     `Ready to add` did not — the same work, counted two ways."""
     _stage(tmp_path, "lesson_with_grammar", filename="lesson-8.pdf")
     _approve_examples(tmp_path, "lesson-8.pdf.yaml")
+    _assign_to_fixture_deck(tmp_path, "lesson-8.pdf.yaml")
     # Grammar reviewed too, so the grammar track cannot be what makes this
     # count as waiting — the `Ready to add` cards have to do it on their own.
     store_path = tmp_path / "patterns.json"

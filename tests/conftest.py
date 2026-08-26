@@ -105,3 +105,17 @@ def seed_prompts(root: Path) -> Path:
     for source in (REPO_ROOT / prompts.DIRECTORY).glob("*.md"):
         shutil.copy2(source, target / source.name)
     return target
+
+
+def seed_promotion_deck(root: Path) -> Path:
+    """Give an isolated promotion fixture exactly one word-deck owner."""
+    deck_dir = Path(root) / "data" / "decks"
+    deck_dir.mkdir(parents=True, exist_ok=True)
+    path = deck_dir / "all.yaml"
+    path.write_text(
+        "deck:\n"
+        "  name: Promotion fixture\n"
+        '  source: "../../vocabulary.json"\n',
+        encoding="utf-8",
+    )
+    return path

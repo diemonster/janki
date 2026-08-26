@@ -15,9 +15,9 @@ must not wait on a pattern review that will never come. Reporting one combined
 state is what traps both.
 
 **The priority is structural.** Holds, then edits, then example review, then
-coverage, then add. It ranks by which gate stops the source first, and never by
-reading the Japanese — picking "this looks like the important word" is the
-rules-engine anti-pattern `docs/DESIGN.md` names.
+coverage, deck ownership, then add. It ranks by which gate stops the source
+first, and never by reading the Japanese — picking "this looks like the
+important word" is the rules-engine anti-pattern `docs/DESIGN.md` names.
 """
 
 from __future__ import annotations
@@ -28,6 +28,9 @@ from pathlib import Path
 from typing import Any
 
 from japanese_anki import extract, patterns, staging, validation
+from japanese_anki.application.assignment import (
+    evaluate_prospective_deck_ownership,
+)
 from japanese_anki.application.authority import needs_example_review
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
@@ -37,6 +40,7 @@ __all__ = [
     "ADDED",
     "CARDS_NEED_EDITS",
     "COVERAGE_NEEDS_DECISION",
+    "DECK_NEEDS_DECISION",
     "EXAMPLES_NEED_REVIEW",
     "GRAMMAR_NEEDS_REVIEW",
     "GRAMMAR_NONE",
@@ -63,6 +67,7 @@ READING_HOLD = "Some cards held for a reading decision"
 CARDS_NEED_EDITS = "Cards need edits"
 EXAMPLES_NEED_REVIEW = "Examples need review"
 COVERAGE_NEEDS_DECISION = "Coverage needs a decision"
+DECK_NEEDS_DECISION = "Deck needs a decision"
 READY_TO_ADD = "Ready to add"
 GRAMMAR_ONLY = "Grammar saved — no word cards to build"
 ADDED = "Added — dictionary/audio/build steps remain"
@@ -76,6 +81,7 @@ JOURNEY_STATES: tuple[str, ...] = (
     CARDS_NEED_EDITS,
     EXAMPLES_NEED_REVIEW,
     COVERAGE_NEEDS_DECISION,
+    DECK_NEEDS_DECISION,
     GRAMMAR_ONLY,
     READY_TO_ADD,
     ADDED,
@@ -101,6 +107,7 @@ class SourceJourney:
     held_count: int = 0
     example_review_count: int = 0
     invalid_count: int = 0
+    deck_decision_count: int = 0
     detail: str = ""
     grammar_detail: str = ""
 
@@ -182,11 +189,48 @@ def _coverage_unresolved(meta: Mapping[str, Any]) -> str:
     return ""
 
 
+def _deck_decisions(
+    config: ProjectConfig, records: Sequence[VocabularyRecord]
+) -> tuple[int, str, str]:
+    """How many prospective cards lack one proven word-deck owner."""
+    if not records:
+        return 0, "", ""
+    try:
+        ownership = evaluate_prospective_deck_ownership(config, records)
+    except JankiError as exc:
+        # Deck-reading failures are represented by unreadable evaluations
+        # below. An exception here instead means canonical or staged card data
+        # could not be loaded or prospectively merged.
+        return len(records), str(exc), "Repair the collection or staged cards"
+    count = sum(item.state != "exactly_one" for item in ownership)
+    unreadable = tuple(
+        dict.fromkeys(
+            problem
+            for item in ownership
+            for problem in item.unreadable_decks
+        )
+    )
+    if unreadable:
+        return count, "; ".join(unreadable), "Repair the study deck configuration"
+    return (
+        count,
+        (
+            "Every card must belong to exactly one word deck before it can be added."
+            if count
+            else ""
+        ),
+        "",
+    )
+
+
 def _card_state(
     records: Sequence[VocabularyRecord],
     meta: Mapping[str, Any],
     *,
     grammar: str,
+    deck_decision_count: int,
+    deck_detail: str,
+    deck_repair_action: str,
 ) -> tuple[str, str, str]:
     """`(state, next_action, detail)` for the word-card track."""
     held = [record for record in records if _held(record)]
@@ -225,6 +269,18 @@ def _card_state(
             COVERAGE_NEEDS_DECISION,
             "Decide whether the extraction covered this source",
             coverage,
+        )
+    if deck_repair_action:
+        return (
+            DECK_NEEDS_DECISION,
+            deck_repair_action,
+            deck_detail,
+        )
+    if deck_decision_count:
+        return (
+            DECK_NEEDS_DECISION,
+            f"Choose a study deck for {_cards(deck_decision_count)}",
+            deck_detail,
         )
     return READY_TO_ADD, f"Add {_cards(len(records))} to your collection", ""
 
@@ -272,7 +328,17 @@ def _staged_journeys(
         source = named if isinstance(named, str) and named.strip() else path.name
         accounted.add(source)
         grammar, grammar_detail = _grammar_state(meta, store, store_issue)
-        state, action, detail = _card_state(records, meta, grammar=grammar)
+        deck_decision_count, deck_detail, deck_repair_action = _deck_decisions(
+            config, records
+        )
+        state, action, detail = _card_state(
+            records,
+            meta,
+            grammar=grammar,
+            deck_decision_count=deck_decision_count,
+            deck_detail=deck_detail,
+            deck_repair_action=deck_repair_action,
+        )
         journeys.append(
             SourceJourney(
                 source=source,
@@ -290,6 +356,7 @@ def _staged_journeys(
                     for record in records
                     if validation.has_errors(validation.validate_record(record))
                 ),
+                deck_decision_count=deck_decision_count,
                 detail=detail,
                 grammar_detail=grammar_detail,
             )
@@ -377,11 +444,12 @@ def source_journeys(
     calling it again must produce the same answer, which is what lets the
     dashboard survive a refresh without a server-side session.
 
-    States that need machinery later milestones add — *Waiting for paid
-    extraction consent*, *Extraction running*, *Recovery needed* (all W3's
-    journal) and *Deck needs a decision* (W4's deck model) — are deliberately
-    absent rather than guessed at. A queue that invents "Extraction running"
-    from a file's mtime would be lying at exactly the moment it matters.
+    Transient dispatch states are deliberately absent rather than guessed at.
+    A queue that invents "Extraction running" from a file's mtime would be
+    lying at exactly the moment it matters; journal recovery needs its own
+    durable projection. Deck ownership, by contrast, is reconstructed from
+    the staged records, canonical collection, and real deck selectors on every
+    call.
     """
     store: dict[str, patterns.PatternSet] = {}
     store_issue = ""

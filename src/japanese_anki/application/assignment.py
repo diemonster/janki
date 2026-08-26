@@ -15,6 +15,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import Literal
 
 from japanese_anki import status as status_module
 from japanese_anki.config import ProjectConfig
@@ -34,10 +35,15 @@ __all__ = [
     "AssignmentError",
     "DeckAssignmentPlan",
     "DeckMembership",
+    "DeckOwnershipEvaluation",
+    "DeckOwnershipState",
     "DeckTagDiff",
     "ProposalOccurrence",
     "assignable_word_decks",
+    "evaluate_deck_ownership",
+    "evaluate_prospective_deck_ownership",
     "plan_deck_assignment",
+    "require_exact_deck_ownership",
 ]
 
 
@@ -97,6 +103,32 @@ class DeckMembership:
     refusal: str | None
 
 
+DeckOwnershipState = Literal[
+    "exactly_one",
+    "unassigned",
+    "multiple",
+    "unreadable",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class DeckOwnershipEvaluation:
+    """The real word-deck partition result for one prospective record."""
+
+    record_id: str
+    state: DeckOwnershipState
+    memberships: tuple[DeckMembership, ...]
+    unreadable_decks: tuple[str, ...] = ()
+
+    @property
+    def owners(self) -> tuple[DeckMembership, ...]:
+        return tuple(item for item in self.memberships if item.takes)
+
+    @property
+    def owner_stems(self) -> tuple[str, ...]:
+        return tuple(item.stem for item in self.owners)
+
+
 @dataclass(frozen=True, slots=True)
 class DeckAssignmentPlan:
     """A chosen destination and the exact canonical record it would produce."""
@@ -111,15 +143,30 @@ class DeckAssignmentPlan:
     memberships: tuple[DeckMembership, ...]
 
 
-def _word_deck_rules(config: ProjectConfig) -> tuple[_WordDeckRule, ...]:
-    """Read every real word-deck rule through the build's authorities."""
+def _word_deck_census(
+    config: ProjectConfig,
+) -> tuple[tuple[_WordDeckRule, ...], tuple[str, ...]]:
+    """Read every word-deck rule and retain anything that could not be read."""
     rules: list[_WordDeckRule] = []
-    for path in status_module.deck_files(config):
-        kind = deck_kind(path)
+    unreadable: list[str] = []
+    try:
+        paths = status_module.deck_files(config)
+    except JankiError as exc:
+        return (), (str(exc),)
+    for path in paths:
+        try:
+            kind = deck_kind(path)
+        except JankiError as exc:
+            unreadable.append(f"{path}: {exc}")
+            continue
         if kind not in ("", "vocabulary"):
             continue
-        deck_config, records = resolve_deck_records(path)
-        selection = deck_selection(deck_config, path)
+        try:
+            deck_config, records = resolve_deck_records(path)
+            selection = deck_selection(deck_config, path)
+        except JankiError as exc:
+            unreadable.append(f"{path}: {exc}")
+            continue
         source_value = deck_config.get("source")
         rules.append(
             _WordDeckRule(
@@ -135,7 +182,17 @@ def _word_deck_rules(config: ProjectConfig) -> tuple[_WordDeckRule, ...]:
                 resolved_ids=frozenset(record.id for record in records),
             )
         )
-    return tuple(rules)
+    return tuple(rules), tuple(unreadable)
+
+
+def _word_deck_rules(config: ProjectConfig) -> tuple[_WordDeckRule, ...]:
+    """Read every real word-deck rule through the build's authorities."""
+    rules, unreadable = _word_deck_census(config)
+    if unreadable:
+        raise AssignmentError(
+            "Could not read every configured word deck: " + "; ".join(unreadable)
+        )
+    return rules
 
 
 def _assignable_from_rules(
@@ -179,11 +236,18 @@ def _occurrence(record: VocabularyRecord) -> ProposalOccurrence:
 def _prospective_collection(
     canonical: Sequence[VocabularyRecord], assigned: VocabularyRecord
 ) -> tuple[list[VocabularyRecord], VocabularyRecord]:
+    records = _merge_prospective_collection(canonical, [assigned])
+    return records, next(record for record in records if record.id == assigned.id)
+
+
+def _merge_prospective_collection(
+    canonical: Sequence[VocabularyRecord], incoming: Sequence[VocabularyRecord]
+) -> list[VocabularyRecord]:
     try:
-        records, _outcomes = merge_records(list(canonical), [assigned])
+        records, _outcomes = merge_records(list(canonical), list(incoming))
     except JankiError as exc:
         raise AssignmentError(str(exc)) from exc
-    return records, next(record for record in records if record.id == assigned.id)
+    return records
 
 
 def _tag_diff(
@@ -240,6 +304,122 @@ def _memberships(
             )
         )
     return tuple(found)
+
+
+def evaluate_deck_ownership(
+    config: ProjectConfig,
+    records: Sequence[VocabularyRecord],
+    prospective_collection: Sequence[VocabularyRecord],
+) -> tuple[DeckOwnershipEvaluation, ...]:
+    """Evaluate exact word-deck ownership against a prospective collection.
+
+    The caller supplies the records whose landing matters and the already
+    merged collection they would land in. The records are resolved back out of
+    that collection by stable id, so a stale pre-merge value cannot be tested
+    accidentally. Deck paths, selectors, inline overrides, and static-source
+    membership all remain configuration-owned and are read through the same
+    resolver a build uses.
+    """
+    by_id: dict[str, VocabularyRecord] = {}
+    for record in prospective_collection:
+        if record.id in by_id:
+            raise AssignmentError(
+                f"The prospective collection has more than one {record.id}; "
+                "deck ownership cannot be evaluated."
+            )
+        by_id[record.id] = record
+    targets: list[VocabularyRecord] = []
+    for record in records:
+        target = by_id.get(record.id)
+        if target is None:
+            raise AssignmentError(
+                f"The prospective collection does not contain {record.id}; "
+                "deck ownership cannot be evaluated."
+            )
+        targets.append(target)
+
+    rules, census_problems = _word_deck_census(config)
+    configuration_problems = list(census_problems)
+    try:
+        _assignable_from_rules(config, rules)
+    except JankiError as exc:
+        configuration_problems.append(str(exc))
+
+    evaluations: list[DeckOwnershipEvaluation] = []
+    for record in targets:
+        problems = list(configuration_problems)
+        try:
+            memberships = _memberships(
+                config, rules, record, prospective_collection
+            )
+        except JankiError as exc:
+            memberships = ()
+            problems.append(str(exc))
+        owner_count = sum(item.takes for item in memberships)
+        if problems:
+            state: DeckOwnershipState = "unreadable"
+        elif owner_count == 0:
+            state = "unassigned"
+        elif owner_count == 1:
+            state = "exactly_one"
+        else:
+            state = "multiple"
+        evaluations.append(
+            DeckOwnershipEvaluation(
+                record_id=record.id,
+                state=state,
+                memberships=memberships,
+                unreadable_decks=tuple(dict.fromkeys(problems)),
+            )
+        )
+    return tuple(evaluations)
+
+
+def evaluate_prospective_deck_ownership(
+    config: ProjectConfig,
+    incoming: Sequence[VocabularyRecord],
+) -> tuple[DeckOwnershipEvaluation, ...]:
+    """Load canonical state, merge ``incoming``, and evaluate its ownership."""
+    try:
+        canonical = (
+            load_records(config.normalized_file)
+            if config.normalized_file.exists()
+            else []
+        )
+    except JankiError as exc:
+        raise AssignmentError(str(exc)) from exc
+    collection = _merge_prospective_collection(canonical, incoming)
+    return evaluate_deck_ownership(config, incoming, collection)
+
+
+def require_exact_deck_ownership(
+    config: ProjectConfig,
+    records: Sequence[VocabularyRecord],
+    prospective_collection: Sequence[VocabularyRecord],
+) -> tuple[DeckOwnershipEvaluation, ...]:
+    """Refuse unless every named prospective record has exactly one owner."""
+    evaluations = evaluate_deck_ownership(config, records, prospective_collection)
+    for evaluation in evaluations:
+        if evaluation.state == "exactly_one":
+            continue
+        if evaluation.state == "unreadable":
+            raise AssignmentError(
+                "[deck-ownership-unreadable] Could not prove exactly one word "
+                f"deck owns {evaluation.record_id}: "
+                + "; ".join(evaluation.unreadable_decks)
+            )
+        if evaluation.state == "unassigned":
+            raise AssignmentError(
+                f"[deck-unassigned] {evaluation.record_id} is not selected by "
+                "any configured word deck. Choose a study deck before promotion."
+            )
+        names = ", ".join(item.name for item in evaluation.owners)
+        raise AssignmentError(
+            f"[deck-overlap] {evaluation.record_id} is selected by more than "
+            f"one configured word deck ({names}). Choose one study deck before "
+            "promotion."
+        )
+    return evaluations
 
 
 def plan_deck_assignment(

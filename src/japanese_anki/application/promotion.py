@@ -34,6 +34,10 @@ from typing import Any, Literal
 
 from japanese_anki import enrich, jpdb, ledger, patterns, promote, staging
 from japanese_anki import status as status_module
+from japanese_anki.application.assignment import (
+    DeckOwnershipEvaluation,
+    require_exact_deck_ownership,
+)
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
 from japanese_anki.io import (
@@ -771,7 +775,7 @@ def _finish_record_review(
 #: landing id offline that a consulted run would never have brought together.
 #: A caller that decides offline first has to come back with the client before
 #: believing a refusal from here.
-POST_READING_GATES = frozenset({"accounting", "merge", "ledger"})
+POST_READING_GATES = frozenset({"accounting", "deck", "merge", "ledger"})
 
 DECISION_STATES = (
     "blocked",
@@ -871,6 +875,10 @@ class PromotionDecision:
     ai_provenance: Any = None
     merged: tuple[VocabularyRecord, ...] = ()
     outcomes: Mapping[str, MergeOutcome] = field(default_factory=dict)
+    #: The exact selector verdicts proved immediately before this decision.
+    #: Execution re-proves them at the canonical commit seam, because a
+    #: checked browser action may sit open while a deck file changes.
+    deck_ownership: tuple[DeckOwnershipEvaluation, ...] = ()
 
     @property
     def is_blocked(self) -> bool:
@@ -1250,8 +1258,27 @@ def decide_promotion(
         )
     except JankiError as exc:
         return blocked(exc, "merge")
+    try:
+        newly_landing = [
+            record
+            for record, is_retry in zip(
+                readings.promoted, promoted_retry, strict=True
+            )
+            if not is_retry
+        ]
+        deck_ownership = require_exact_deck_ownership(
+            config, newly_landing, merged
+        )
+    except JankiError as exc:
+        return blocked(exc, "deck")
 
-    return at("lands", **common, merged=tuple(merged), outcomes=outcomes)
+    return at(
+        "lands",
+        **common,
+        merged=tuple(merged),
+        outcomes=outcomes,
+        deck_ownership=deck_ownership,
+    )
 
 
 def _save_execution_ledger(book: ledger.Ledger) -> ledger.LedgerError | None:
@@ -1482,13 +1509,29 @@ def execute_promotion(
 
     def commit_canonical_state() -> None:
         nonlocal ledger_error
-        save_records_json(output_path, merged, expected=output_revision)
-        ledger_error = _save_execution_ledger(book)
-        if ledger_error is not None and ai_provenance is not None:
-            # The reviewed proposal remains the only recoverable attribution.
-            # Raising before archive/prune keeps it live while the outer locks
-            # still guarantee no competing completion changed either copy.
-            raise _AiLedgerHandoffIncomplete
+        # A checked decision may live in a browser capability while deck YAML
+        # changes. Re-prove the exact selector verdict at the canonical commit
+        # seam, under the lock used by janki's deck creator, so a stale plan
+        # cannot land zero-owner or overlapping rows.
+        with exclusive_path_lock(config.deck_dir):
+            fresh_ownership = require_exact_deck_ownership(
+                config,
+                pending_promoted,
+                merged,
+            )
+            if fresh_ownership != decision.deck_ownership:
+                raise PromoteError(
+                    "[deck-ownership-stale] study-deck rules changed after "
+                    "these cards were checked. Nothing was promoted. Check "
+                    "the current deck membership and try again."
+                )
+            save_records_json(output_path, merged, expected=output_revision)
+            ledger_error = _save_execution_ledger(book)
+            if ledger_error is not None and ai_provenance is not None:
+                # The reviewed proposal remains the only recoverable attribution.
+                # Raising before archive/prune keeps it live while the outer locks
+                # still guarantee no competing completion changed either copy.
+                raise _AiLedgerHandoffIncomplete
 
     # Canonical writes, archive append, and live pruning/deletion share the
     # same live/done transaction. A same-run zero-row completion that wins the

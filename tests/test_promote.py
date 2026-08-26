@@ -612,19 +612,32 @@ def test_a_reviewed_row_keeps_its_old_id_only_until_promote() -> None:
 # --- the CLI -----------------------------------------------------------------
 
 
+def _promotion_fixture_deck(root: Path) -> None:
+    """Give promotion-mechanics fixtures one configured word-deck owner."""
+    deck_dir = root / "decks"
+    deck_dir.mkdir(exist_ok=True)
+    (deck_dir / "all.yaml").write_text(
+        "deck:\n"
+        "  name: Promotion fixture\n"
+        '  source: "../vocabulary.json"\n',
+        encoding="utf-8",
+    )
+
+
 def project(tmp_path: Path, records: list[VocabularyRecord] | None = None) -> Path:
     (tmp_path / "janki.toml").write_text(
         "[paths]\n"
         'normalized_file = "vocabulary.json"\n'
+        'deck_dir = "decks"\n'
         'ledger_file = "ledger.json"\n'
         'staging_dir = "staging"\n',
         encoding="utf-8",
     )
-    if records is not None:
-        (tmp_path / "vocabulary.json").write_text(
-            json.dumps([item.to_dict() for item in records], ensure_ascii=False),
-            encoding="utf-8",
-        )
+    (tmp_path / "vocabulary.json").write_text(
+        json.dumps([item.to_dict() for item in (records or [])], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    _promotion_fixture_deck(tmp_path)
     return tmp_path
 
 
@@ -4208,6 +4221,7 @@ def test_a_note_a_filter_drops_is_still_in_the_collection(
         "    furigana: 辛[つら]い\n",
         encoding="utf-8",
     )
+    _promotion_fixture_deck(root)
     staged = root / "staging" / "ai.yaml"
     staged.parent.mkdir(parents=True, exist_ok=True)
     write_staging(
@@ -4326,6 +4340,7 @@ def test_a_source_backed_decks_filtered_out_ids_still_count(
         "    - word:話す:はなす\n",
         encoding="utf-8",
     )
+    _promotion_fixture_deck(root)
     staged = root / "staging" / "ai.yaml"
     staged.parent.mkdir(parents=True, exist_ok=True)
     write_staging(
@@ -4400,13 +4415,10 @@ def test_a_deck_janki_calls_broken_is_broken_here_too(
     assert staged.is_file(), "the row waits rather than taking an unrepairable id"
 
 
-def test_a_proved_id_is_promoted_even_when_another_deck_will_not_parse(
+def test_a_proved_id_still_waits_when_deck_ownership_is_unreadable(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """`remint_blocked` means the id set is incomplete, not wrong. An id in it
-    was positively proved present, so holding that row would block a run over
-    something nothing was ever uncertain about — and record the reason as
-    "cannot check this id", which is false for it."""
+    """A proved stable id cannot prove which deck owns the merged record."""
     root = tmp_path
     (root / "janki.toml").write_text(
         "[paths]\n"
@@ -4436,13 +4448,16 @@ def test_a_proved_id_is_promoted_even_when_another_deck_will_not_parse(
         {"source_file": "vocabulary.json", "model": "m", "review_notes": "n"},
     )
 
-    assert cli.main(["--root", str(root), "promote", str(staged), "--skip-reading-check"]) == 0
+    before = (root / "vocabulary.json").read_bytes()
 
-    stored = json.loads((root / "vocabulary.json").read_text(encoding="utf-8"))
-    assert [item["id"] for item in stored] == ["word:辛い:からい"]
-    assert stored[0]["usage_notes"] == "written by a model", "the run was not blocked"
-    assert "Re-minted" not in capsys.readouterr().out
-    assert not staged.exists(), "the row was promoted, not held"
+    assert cli.main([
+        "--root", str(root), "promote", str(staged), "--skip-reading-check",
+    ]) == 1
+
+    captured = capsys.readouterr()
+    assert "deck-ownership-unreadable" in captured.err
+    assert (root / "vocabulary.json").read_bytes() == before
+    assert staged.exists(), "the unresolved review remains recoverable"
 
 
 def test_a_hold_reason_janki_does_not_recognise_still_needs_a_reading(
@@ -4672,6 +4687,11 @@ def test_a_row_the_second_accounting_call_flags_is_not_promoted(
     assumption nobody checked.
     """
     root = project(tmp_path, [])
+    # A completed archive retry only prunes staging. A later unreadable deck
+    # cannot retroactively block the row it no longer writes.
+    (root / "decks" / "broken.yaml").write_text(
+        "deck: [not, a, mapping]\n", encoding="utf-8"
+    )
     staged = root / "staging" / "in.yaml"
     staged.parent.mkdir(parents=True, exist_ok=True)
     incoming = record(meanings=["to speak"])

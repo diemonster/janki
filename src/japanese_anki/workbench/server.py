@@ -28,6 +28,8 @@ that leaves the file untouched rather than half-applied.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import secrets
 import stat
@@ -58,6 +60,14 @@ from japanese_anki.application import (
     plan_corpus_extraction,
     source_detail,
     source_journeys,
+)
+from japanese_anki.application.assignment import (
+    AssignableWordDeck,
+    AssignmentError,
+    DeckAssignmentPlan,
+    ProposalOccurrence,
+    assignable_word_decks,
+    plan_deck_assignment,
 )
 from japanese_anki.config import ProjectConfig
 from japanese_anki.errors import JankiError
@@ -98,6 +108,218 @@ _EXTRACT_PREFIX = "/extract/"
 #: and an unbounded read is a way to exhaust memory from another local
 #: process that guessed the token.
 MAX_UPLOAD_BYTES = 64 * 1024 * 1024
+
+
+@dataclass(frozen=True, slots=True)
+class _DeckAssignmentChoice:
+    """One configured destination as it was truthfully planned for a card."""
+
+    stem: str
+    name: str
+    intake_tag: str
+    plan: DeckAssignmentPlan | None
+    refusal: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class _DeckAssignmentOffer:
+    """The complete picker rendered for one exact staging-row position."""
+
+    card: int
+    record_id: str
+    proposals: tuple[ProposalOccurrence, ...]
+    choices: tuple[_DeckAssignmentChoice, ...]
+    fingerprint: str
+
+
+def _assignment_claim(choice: _DeckAssignmentChoice) -> dict[str, object]:
+    """The exact planned facts a deck button displays and may persist."""
+    common: dict[str, object] = {
+        "stem": choice.stem,
+        "name": choice.name,
+        "intake_tag": choice.intake_tag,
+        "refusal": choice.refusal,
+    }
+    plan = choice.plan
+    if plan is None:
+        return common
+    common.update(
+        {
+            "record_id": plan.record_id,
+            "existing_owner": plan.existing_owner,
+            "tag_diff": {
+                "before": plan.tag_diff.before,
+                "after": plan.tag_diff.after,
+                "removed": plan.tag_diff.removed,
+                "added": plan.tag_diff.added,
+            },
+            "assigned_record": plan.assigned_record.to_dict(),
+            "prospective_record": plan.prospective_record.to_dict(),
+            "memberships": [
+                {
+                    "stem": membership.stem,
+                    "name": membership.name,
+                    "takes": membership.takes,
+                    "refusal": membership.refusal,
+                }
+                for membership in plan.memberships
+            ],
+            "proposals": [
+                {
+                    "imported_from": proposal.imported_from,
+                    "row": proposal.row,
+                    "source_type": proposal.source_type,
+                }
+                for proposal in plan.proposals
+            ],
+        }
+    )
+    return common
+
+
+def _assignment_offer(
+    config: ProjectConfig,
+    record: VocabularyRecord,
+    card: int,
+    decks: Sequence[AssignableWordDeck],
+    *,
+    sibling_proposals: Sequence[VocabularyRecord] = (),
+) -> _DeckAssignmentOffer:
+    """Re-plan every rendered destination and bind their exact claims."""
+    proposals = tuple(
+        ProposalOccurrence(
+            imported_from=proposal.source.imported_from,
+            row=proposal.source.row,
+            source_type=proposal.source.type,
+        )
+        for proposal in (record, *sibling_proposals)
+    )
+    choices: list[_DeckAssignmentChoice] = []
+    for deck in decks:
+        try:
+            plan = plan_deck_assignment(
+                config,
+                record,
+                deck.stem,
+                sibling_proposals=sibling_proposals,
+            )
+        except AssignmentError as exc:
+            choices.append(
+                _DeckAssignmentChoice(
+                    stem=deck.stem,
+                    name=deck.name,
+                    intake_tag=deck.intake_tag,
+                    plan=None,
+                    refusal=str(exc),
+                )
+            )
+        else:
+            choices.append(
+                _DeckAssignmentChoice(
+                    stem=deck.stem,
+                    name=deck.name,
+                    intake_tag=deck.intake_tag,
+                    plan=plan,
+                    refusal=None,
+                )
+            )
+    claims = {
+        "card": card,
+        "record_id": record.id,
+        "proposals": [
+            {
+                "imported_from": proposal.imported_from,
+                "row": proposal.row,
+                "source_type": proposal.source_type,
+            }
+            for proposal in proposals
+        ],
+        "choices": [_assignment_claim(choice) for choice in choices],
+    }
+    encoded = json.dumps(
+        claims,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return _DeckAssignmentOffer(
+        card=card,
+        record_id=record.id,
+        proposals=proposals,
+        choices=tuple(choices),
+        fingerprint=hashlib.sha256(encoded).hexdigest(),
+    )
+
+
+def _assignment_offers(
+    config: ProjectConfig,
+    records: Sequence[VocabularyRecord],
+    current_path: Path,
+) -> tuple[_DeckAssignmentOffer, ...]:
+    decks = assignable_word_decks(config)
+    siblings = _staged_sibling_proposals(
+        config,
+        current_path,
+        frozenset(record.id for record in records),
+    )
+    return tuple(
+        _assignment_offer(
+            config,
+            record,
+            card,
+            decks,
+            sibling_proposals=siblings.get(record.id, ()),
+        )
+        for card, record in enumerate(records)
+    )
+
+
+def _staged_sibling_proposals(
+    config: ProjectConfig,
+    current_path: Path,
+    record_ids: frozenset[str],
+) -> dict[str, tuple[VocabularyRecord, ...]]:
+    """Matching rows in every other readable live review.
+
+    A broken sibling cannot be silently omitted: its unreadable rows might
+    contain the same stable id, which would make the page's duplicate claim
+    and its bound assignment plan incomplete.
+    """
+    found: dict[str, list[VocabularyRecord]] = {
+        record_id: [] for record_id in record_ids
+    }
+    active = Path(os.path.abspath(config.staging_dir))
+    current = Path(os.path.abspath(current_path))
+    try:
+        candidates = sorted(active.iterdir())
+    except OSError as exc:
+        raise AssignmentError(
+            f"Could not inspect live reviews for duplicate proposals: {exc}"
+        ) from exc
+    for candidate in candidates:
+        candidate = Path(os.path.abspath(candidate))
+        if candidate == current or candidate.suffix.lower() not in staging.STAGING_SUFFIXES:
+            continue
+        try:
+            details = os.lstat(candidate)
+        except OSError as exc:
+            raise AssignmentError(
+                f"Could not inspect live review {candidate}: {exc}"
+            ) from exc
+        if not stat.S_ISREG(details.st_mode):
+            raise AssignmentError(
+                f"Live review {candidate} is not a direct regular file."
+            )
+        try:
+            records, _meta = staging.read_staging(candidate)
+        except JankiError as exc:
+            raise AssignmentError(
+                f"Could not inspect live review {candidate}: {exc}"
+            ) from exc
+        for record in records:
+            if record.id in found:
+                found[record.id].append(record)
+    return {record_id: tuple(items) for record_id, items in found.items()}
 
 
 @dataclass(frozen=True, slots=True)
@@ -376,7 +598,7 @@ class _WorkbenchHandler(LocalOnlyHandler):
         query = self.path.split("?", 1)
         return len(query) == 2 and dict(parse_qsl(query[1])).get("edit") == "1"
 
-    def _saved_banner(self) -> tuple[int, bool, int, int, int] | None:
+    def _saved_banner(self) -> tuple[int, bool, int, int, int, int] | None:
         """The post-redirect-get result, if this is one. Display only."""
         query = self.path.split("?", 1)
         if len(query) != 2:
@@ -402,12 +624,17 @@ class _WorkbenchHandler(LocalOnlyHandler):
             reidentified = int(fields.get("reidentified", "0"))
         except ValueError:
             reidentified = 0
+        try:
+            assigned = int(fields.get("assigned", "0"))
+        except ValueError:
+            assigned = 0
         return (
             max(records, 0),
             fields.get("grammar") == "1",
             max(edited, 0),
             max(removed, 0),
             max(reidentified, 0),
+            max(assigned, 0),
         )
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
@@ -461,7 +688,11 @@ class _WorkbenchHandler(LocalOnlyHandler):
             # the staging path comes from that journey — the request never
             # names a path, so it cannot name one outside the corpus. Do not
             # "improve" this into a join against staging_dir.
-            name = unquote(route[len(_SOURCE_PREFIX) :])
+            encoded_name = route[len(_SOURCE_PREFIX) :]
+            if not encoded_name or "/" in encoded_name:
+                self._error(404, "No such source.")
+                return
+            name = unquote(encoded_name)
             detail = self.server.session.detail(name)
             if detail is None:
                 self._error(404, "No such source.")
@@ -470,6 +701,26 @@ class _WorkbenchHandler(LocalOnlyHandler):
             # fingerprints go into the form, and the approval is refused later
             # unless the file is still byte-identical to them.
             panel = self.server.session.panel(name)
+            assignments: tuple[_DeckAssignmentOffer, ...] = ()
+            assignment_error = ""
+            if panel is not None:
+                # Do not attach row-indexed controls to a detail projection and
+                # a write snapshot that saw different ordered records.
+                shown = [card.record for card in detail.cards]
+                if shown != panel.records:
+                    assignment_error = (
+                        "This source changed while the page was opening. Reload "
+                        "before choosing a study deck."
+                    )
+                else:
+                    try:
+                        assignments = _assignment_offers(
+                            self.server.session.config,
+                            panel.records,
+                            panel.staging_path,
+                        )
+                    except JankiError as exc:
+                        assignment_error = str(exc)
             self._send(
                 200,
                 render_source(
@@ -482,6 +733,8 @@ class _WorkbenchHandler(LocalOnlyHandler):
                     editing=self._wants_edit(),
                     approvable=bool(panel and panel.has_extraction_lineage),
                     reidentifiable=bool(panel and panel.reidentifiable),
+                    assignment_offers=assignments,
+                    assignment_error=assignment_error,
                 ),
             )
             return
@@ -619,7 +872,8 @@ class _WorkbenchHandler(LocalOnlyHandler):
             return
         rest = route[len(_SOURCE_PREFIX) :]
         name, _, action = rest.rpartition("/")
-        if action not in {"approve", "edit", "remove", "reidentify"} or not name:
+        actions = {"approve", "edit", "remove", "reidentify", "assign"}
+        if action not in actions or not name:
             self._error(404, "No such workbench action.")
             return
         body = self._read_body()
@@ -631,6 +885,8 @@ class _WorkbenchHandler(LocalOnlyHandler):
             self._edit(unquote(name), body)
         elif action == "remove":
             self._remove(unquote(name), body)
+        elif action == "assign":
+            self._assign(unquote(name), body)
         else:
             self._reidentify(unquote(name), body)
 
@@ -1062,6 +1318,135 @@ class _WorkbenchHandler(LocalOnlyHandler):
             return
         self._redirect_to_source(source, removed=1)
 
+    def _assign(self, source: str, body: bytes) -> None:
+        """Persist one exact, freshly re-planned thematic deck assignment."""
+        session = self.server.session
+        try:
+            pairs = parse_qsl(
+                body.decode("utf-8", errors="strict"),
+                keep_blank_values=True,
+                strict_parsing=True,
+                encoding="utf-8",
+                errors="strict",
+                max_num_fields=64,
+            )
+        except (UnicodeError, ValueError) as exc:
+            self._error(400, f"The submitted form is malformed: {exc}")
+            return
+        fields: dict[str, list[str]] = {}
+        for key, value in pairs:
+            fields.setdefault(key, []).append(value)
+        expected = {
+            "action",
+            "card",
+            "csrf",
+            "destination",
+            "plan_fingerprint",
+            "staging_snapshot",
+        }
+        if set(fields) != expected or any(
+            len(values) != 1 for values in fields.values()
+        ):
+            self._error(400, "That deck assignment form is not one this page offered.")
+            return
+        if fields["action"][0] != "assign":
+            self._error(400, "The form action must be 'assign'")
+            return
+        if not secrets.compare_digest(fields["csrf"][0], session.csrf_token):
+            self._error(403, "That form did not come from this workbench session.")
+            return
+
+        # Fresh per click: both the exact staging bytes and every real deck
+        # selector may have changed since the source page rendered.
+        panel = session.panel(source)
+        if panel is None:
+            self._error(404, "No such source.")
+            return
+        if fields["staging_snapshot"][0] != panel.staging_fingerprint:
+            self._error(
+                409,
+                "This source changed after the page was rendered. Nothing was "
+                "assigned. Reload and review the current card.",
+            )
+            return
+        try:
+            card = int(fields["card"][0])
+        except ValueError:
+            self._error(400, "That assignment names no card.")
+            return
+        if not 0 <= card < len(panel.records):
+            self._error(400, "That assignment names a card which is not on this page.")
+            return
+        try:
+            decks = assignable_word_decks(session.config)
+            siblings = _staged_sibling_proposals(
+                session.config,
+                panel.staging_path,
+                frozenset({panel.records[card].id}),
+            )
+            offer = _assignment_offer(
+                session.config,
+                panel.records[card],
+                card,
+                decks,
+                sibling_proposals=siblings.get(panel.records[card].id, ()),
+            )
+        except JankiError as exc:
+            self._error(
+                409,
+                f"The study-deck plan could not be refreshed: {exc} Nothing "
+                "was assigned.",
+            )
+            return
+        if not secrets.compare_digest(
+            fields["plan_fingerprint"][0], offer.fingerprint
+        ):
+            self._error(
+                409,
+                "The study-deck plan changed after this page was rendered. "
+                "Nothing was assigned. Reload and review the current tag diff.",
+            )
+            return
+        destination = fields["destination"][0]
+        choice = next(
+            (candidate for candidate in offer.choices if candidate.stem == destination),
+            None,
+        )
+        if choice is None:
+            self._error(400, "That assignment names no configured study deck.")
+            return
+        if choice.plan is None:
+            self._error(
+                409,
+                f"That study deck cannot take this card: {choice.refusal} "
+                "Nothing was assigned.",
+            )
+            return
+
+        updated = list(panel.records)
+        updated[card] = choice.plan.assigned_record
+        try:
+            text = staging.render_staging_update(panel.staging_path, updated)
+            review.bound_replace(
+                panel.staging_path,
+                text,
+                panel.staging_bytes,
+                label="staging file",
+            )
+        except review.StaleReviewError as exc:
+            self._error(409, f"{exc}. Nothing was assigned by this attempt.")
+            return
+        except review.IndeterminateWriteError as exc:
+            self._error(
+                409,
+                f"{exc} Reload this source and check the card's study deck.",
+            )
+            return
+        except JankiError as exc:
+            self._error(500, f"{exc}. Nothing was proven assigned.")
+            return
+        self._redirect_to_source(source, assigned=1)
+
     def _reidentify(self, source: str, body: bytes) -> None:
         """Two passes over one route: preview, then apply.
 
@@ -1200,12 +1585,14 @@ class _WorkbenchHandler(LocalOnlyHandler):
         edited: int = 0,
         removed: int = 0,
         reidentified: int = 0,
+        assigned: int = 0,
     ) -> None:
         """Post/redirect/get, so a reload cannot resubmit a write."""
         target = (
             f"/{self.server.session.token}/source/{quote(source, safe='')}"
             f"?saved={saved}&grammar={'1' if grammar else '0'}"
             f"&edited={edited}&removed={removed}&reidentified={reidentified}"
+            f"&assigned={assigned}"
         )
         self.send_response(303)
         self.send_header("Location", target)

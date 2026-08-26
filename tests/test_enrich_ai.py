@@ -19,7 +19,7 @@ from typing import Any
 import pytest
 import yaml
 
-from conftest import seed_prompts
+from conftest import seed_promotion_deck, seed_prompts
 from japanese_anki import ai_schema as ai_schema_module
 from japanese_anki import claude_client, cli, codex_client, enrich, prompts, staging
 from japanese_anki.claude_client import CallResult, Refusal
@@ -1968,6 +1968,7 @@ def test_the_staging_route_settles_marks_itself_and_stages_only_proposals(
     assert staged
 
     # And the file it did write is one promote accepts.
+    seed_promotion_deck(root)
     assert cli.main([
         "--root", str(root), "promote",
         str(root / "staging" / "ai-enrichment.yaml"), "--skip-reading-check",

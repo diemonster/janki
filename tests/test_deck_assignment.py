@@ -2,19 +2,30 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 import yaml
 
+import japanese_anki.application.promotion as promotion_application
 from japanese_anki.application.assignment import (
     AssignmentError,
     assignable_word_decks,
+    evaluate_deck_ownership,
+    evaluate_prospective_deck_ownership,
     plan_deck_assignment,
+)
+from japanese_anki.application.promotion import (
+    POST_READING_GATES,
+    decide_promotion,
+    execute_promotion,
 )
 from japanese_anki.config import ProjectConfig
 from japanese_anki.io import save_records_json
 from japanese_anki.models import SourceReference, VocabularyRecord
+from japanese_anki.promote import PromoteError
+from japanese_anki.staging import write_staging
 
 CONFIG = """
 [paths]
@@ -234,3 +245,207 @@ def test_plan_proves_exactly_one_destination_with_real_deck_rules(
 
     with pytest.raises(AssignmentError, match=message):
         plan_deck_assignment(config, _record(tags=proposal_tags), "week-a")
+
+
+def test_ownership_evaluation_distinguishes_exact_zero_multiple_and_unreadable(
+    tmp_path: Path,
+) -> None:
+    config = _project(
+        tmp_path,
+        {
+            "week-a": _word_deck("Week A", "week-a"),
+            "week-b": _word_deck("Week B", "week-b"),
+        },
+    )
+    exact = _record(tags=["week-a"])
+    unassigned = VocabularyRecord.from_dict(
+        {
+            **_record(tags=[]).to_dict(),
+            "id": "word:聞く:きく",
+            "expression": "聞く",
+            "reading": "きく",
+        }
+    )
+    multiple = VocabularyRecord.from_dict(
+        {
+            **_record(tags=["week-a", "week-b"]).to_dict(),
+            "id": "word:読む:よむ",
+            "expression": "読む",
+            "reading": "よむ",
+        }
+    )
+    collection = [exact, unassigned, multiple]
+
+    evaluations = evaluate_deck_ownership(config, collection, collection)
+
+    assert [item.state for item in evaluations] == [
+        "exactly_one",
+        "unassigned",
+        "multiple",
+    ]
+    assert evaluations[0].owner_stems == ("week-a",)
+    assert evaluations[2].owner_stems == ("week-a", "week-b")
+
+    save_records_json(config.normalized_file, [exact])
+    merged = evaluate_prospective_deck_ownership(
+        config, [_record(tags=["week-b"])]
+    )
+    assert merged[0].state == "multiple"
+
+    (config.deck_dir / "week-b.yaml").write_text(
+        "deck: [not, a, mapping]\n", encoding="utf-8"
+    )
+    [unreadable] = evaluate_deck_ownership(config, [exact], [exact])
+    assert unreadable.state == "unreadable"
+    assert "week-b.yaml" in " ".join(unreadable.unreadable_decks)
+
+
+@pytest.mark.parametrize(
+    ("existing_tags", "incoming_tags", "state", "gate"),
+    [
+        (["week-a"], ["week-a"], "lands", ""),
+        ([], [], "blocked", "deck"),
+        (["week-a"], ["week-b"], "blocked", "deck"),
+    ],
+)
+def test_promotion_requires_one_owner_after_the_actual_merge(
+    tmp_path: Path,
+    existing_tags: list[str],
+    incoming_tags: list[str],
+    state: str,
+    gate: str,
+) -> None:
+    config = _project(
+        tmp_path,
+        {
+            "week-a": _word_deck("Week A", "week-a"),
+            "week-b": _word_deck("Week B", "week-b"),
+        },
+    )
+    save_records_json(config.normalized_file, [_record(tags=existing_tags)])
+    path = config.staging_dir / "page.yaml"
+    write_staging(
+        path,
+        [_record(tags=incoming_tags)],
+        {"source_file": "page-a.pdf", "review_notes": "reviewed"},
+    )
+
+    decision = decide_promotion(config, path, skip_reading_check=True)
+
+    assert decision.state == state
+    assert decision.gate == gate
+    if gate:
+        assert gate in POST_READING_GATES
+        if existing_tags:
+            assert "Week A" in str(decision.error)
+            assert "Week B" in str(decision.error)
+        else:
+            assert "deck-unassigned" in str(decision.error)
+
+
+def test_execution_refuses_deck_rules_changed_after_the_decision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _project(
+        tmp_path,
+        {
+            "week-a": _word_deck("Week A", "week-a"),
+            "week-b": _word_deck("Week B", "week-b"),
+        },
+    )
+    path = config.staging_dir / "page.yaml"
+    write_staging(
+        path,
+        [_record(tags=["week-a"])],
+        {"source_file": "page-a.pdf", "review_notes": "reviewed"},
+    )
+    decision = decide_promotion(config, path, skip_reading_check=True)
+    before_collection = config.normalized_file.read_bytes()
+    before_staging = path.read_bytes()
+
+    (config.deck_dir / "week-b.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "deck": _word_deck(
+                    "Week B",
+                    "week-b",
+                    include_tags=["week-a", "week-b"],
+                )
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AssignmentError, match="deck-overlap"):
+        execute_promotion(config, decision)
+
+    assert config.normalized_file.read_bytes() == before_collection
+    assert path.read_bytes() == before_staging
+
+    (config.deck_dir / "week-a.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "deck": {
+                    "name": "Week A",
+                    "source": "../vocabulary.json",
+                    "include_tags": ["other"],
+                }
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(PromoteError, match="deck-ownership-stale"):
+        execute_promotion(config, decision)
+
+    assert config.normalized_file.read_bytes() == before_collection
+    assert path.read_bytes() == before_staging
+
+    for stem, deck in {
+        "week-a": _word_deck("Week A", "week-a"),
+        "week-b": _word_deck("Week B", "week-b"),
+    }.items():
+        (config.deck_dir / f"{stem}.yaml").write_text(
+            yaml.safe_dump({"deck": deck}, sort_keys=False),
+            encoding="utf-8",
+        )
+
+    real_lock = promotion_application.exclusive_path_lock
+    real_require = promotion_application.require_exact_deck_ownership
+    real_save = promotion_application.save_records_json
+    deck_lock_held = False
+
+    @contextmanager
+    def tracking_lock(target: Path):
+        nonlocal deck_lock_held
+        with real_lock(target):
+            is_deck_lock = target == config.deck_dir
+            if is_deck_lock:
+                deck_lock_held = True
+            try:
+                yield
+            finally:
+                if is_deck_lock:
+                    deck_lock_held = False
+
+    def tracking_require(*args: object, **kwargs: object):
+        assert deck_lock_held
+        return real_require(*args, **kwargs)
+
+    def tracking_save(*args: object, **kwargs: object) -> None:
+        assert deck_lock_held
+        real_save(*args, **kwargs)
+
+    monkeypatch.setattr(promotion_application, "exclusive_path_lock", tracking_lock)
+    monkeypatch.setattr(
+        promotion_application,
+        "require_exact_deck_ownership",
+        tracking_require,
+    )
+    monkeypatch.setattr(promotion_application, "save_records_json", tracking_save)
+
+    result = execute_promotion(config, decision)
+
+    assert result.state == "landed"

@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from conftest import seed_prompts
+from conftest import seed_promotion_deck, seed_prompts
 from japanese_anki import claude_client, cli, enrich, ledger
 from japanese_anki.errors import JankiError
 from japanese_anki.models import ExampleSentence, SourceReference, VocabularyRecord
@@ -1619,6 +1619,7 @@ def test_a_staged_batch_is_not_re_applied_over_what_was_promoted(
     # The reviewer fixes a segmentation and promotes.
     staged = target.read_text(encoding="utf-8").replace("毎日話す0。", "毎日話す0。 (checked)")
     target.write_text(staged, encoding="utf-8")
+    seed_promotion_deck(root)
     assert cli.main(["--root", str(root), "promote", str(target), "--skip-reading-check"]) == 0
     capsys.readouterr()
 

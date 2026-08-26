@@ -381,13 +381,27 @@ def test_the_preview_answers_for_a_record_the_collection_does_not_have(
 # writes rather than hand-typed YAML that could drift from them.
 
 
+def _promotion_fixture_deck(tmp_path: Path) -> None:
+    """Give promotion-mechanics fixtures one configured word-deck owner."""
+    deck_dir = tmp_path / "decks"
+    deck_dir.mkdir(exist_ok=True)
+    (deck_dir / "all.yaml").write_text(
+        "deck:\n"
+        "  name: Promotion fixture\n"
+        '  source: "../vocabulary.json"\n',
+        encoding="utf-8",
+    )
+
+
 def _staged(tmp_path: Path, scenario: str, *, filename: str | None = None) -> Path:
     (tmp_path / "janki.toml").write_text(CONFIG, encoding="utf-8")
     if not (tmp_path / "vocabulary.json").exists():
         (tmp_path / "vocabulary.json").write_text("[]", encoding="utf-8")
     (tmp_path / "decks").mkdir(exist_ok=True)
     (tmp_path / "inbox").mkdir(exist_ok=True)
-    return Path(materialize(tmp_path, scenario, filename=filename)["staging_path"])
+    staged = Path(materialize(tmp_path, scenario, filename=filename)["staging_path"])
+    _promotion_fixture_deck(tmp_path)
+    return staged
 
 
 def test_a_fresh_source_is_all_new_cards(tmp_path: Path) -> None:
@@ -2295,6 +2309,7 @@ def test_the_decision_carries_the_ai_attribution(tmp_path: Path) -> None:
     """
     (tmp_path / "janki.toml").write_text(CONFIG, encoding="utf-8")
     (tmp_path / "decks").mkdir(exist_ok=True)
+    _promotion_fixture_deck(tmp_path)
     (tmp_path / "staging").mkdir(exist_ok=True)
     from japanese_anki.staging import write_staging
 
